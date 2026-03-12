@@ -10,20 +10,22 @@ use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::*;
-use dbt_schemas::schemas::relations::base::*;
+use dbt_schemas::schemas::relations::base::RelationPattern;
 use dbt_xdbc::*;
 use indexmap::IndexMap;
-use minijinja::State;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use crate::metadata::list_objects::*;
+
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -52,7 +54,7 @@ where table_schema ilike '{}'",
         &db_schema.resolved_schema, &db_schema.resolved_schema
     );
 
-    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -77,12 +79,170 @@ where table_schema ilike '{}'",
             Some(table_name.to_string()),
             Some(RelationType::from(table_type)),
             None,
-            adapter.quoting(),
+            engine.quoting(),
         )) as Arc<dyn BaseRelation>;
         relations.push(relation);
     }
 
     Ok(relations)
+}
+
+pub(crate) struct RedshiftListRelationsSchemasStrategy {
+    adapter: ConcreteAdapter,
+    max_connections: usize,
+}
+
+impl RedshiftListRelationsSchemasStrategy {
+    pub(crate) fn new(adapter: ConcreteAdapter, max_connections: usize) -> Self {
+        Self {
+            adapter,
+            max_connections,
+        }
+    }
+}
+
+impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
+    fn run(
+        &self,
+        relations: Arc<Vec<Arc<dyn BaseRelation>>>,
+        unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, HashMap<String, AdapterResult<Arc<Schema>>>> {
+        type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
+
+        let adapter = self.adapter.clone();
+        let new_connection_f = Box::new(move || {
+            adapter
+                .engine()
+                .new_connection(None, None)
+                .map_err(Cancellable::Error)
+        });
+
+        let adapter = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          relation: &Arc<dyn BaseRelation>|
+              -> AdapterResult<Arc<Schema>> {
+            let catalog = relation.database_as_str()?;
+            let schema = relation.schema_as_str()?;
+            let identifier = relation.identifier_as_str()?;
+
+            // Use EXISTS with r_SVV_EXTERNAL_TABLES (presumably small, only external tables compared to SVV_TABLES)
+            // https://docs.aws.amazon.com/redshift/latest/dg/r_SVV_EXTERNAL_TABLES.html
+            // SUBQUERY is more performant, it's 650 ms vs 3.3 s from JOIN on the redshift_spectrum_path test project
+            let sql = format!(
+                "SELECT
+    column_name,
+    data_type,
+    is_nullable,
+    remarks,
+    EXISTS(SELECT 1 FROM SVV_EXTERNAL_TABLES
+           WHERE schemaname = '{schema}'
+           AND tablename = '{identifier}') AS is_external
+FROM SVV_ALL_COLUMNS
+WHERE database_name = '{catalog}'
+AND schema_name = '{schema}'
+AND table_name = '{identifier}'"
+            );
+
+            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
+            if let Some(node_id) = unique_id.clone() {
+                ctx = ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase.as_str());
+            }
+            let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let batch = table.original_record_batch();
+            // Build fields from the response
+            let mut fields = Vec::new();
+            let column_names = get_column_values::<StringArray>(&batch, "column_name")?;
+            let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
+            let is_nullables = get_column_values::<StringArray>(&batch, "is_nullable")?;
+            let comments = get_column_values::<StringArray>(&batch, "remarks")?;
+            let is_external_flags = get_column_values::<BooleanArray>(&batch, "is_external")?;
+
+            let is_external = if batch.num_rows() > 0 {
+                is_external_flags.value(0)
+            } else {
+                false
+            };
+
+            for i in 0..batch.num_rows() {
+                let name = column_names.value(i);
+                let data_type = data_types.value(i);
+                let is_nullable = is_nullables.value(i) == "YES";
+                let comment = match comments.value(i) {
+                    "" => None,
+                    c => Some(c.to_string()),
+                };
+
+                let field = make_arrow_field_v2(
+                    adapter.engine().type_ops(),
+                    String::from(name),
+                    data_type,
+                    Some(is_nullable),
+                    comment,
+                )?;
+
+                fields.push(field);
+            }
+
+            // Some pg_ tables contain an "invisible" oid column
+            // See: https://docs.aws.amazon.com/redshift/latest/dg/c_join_PG.html
+            if schema == "pg_catalog" && TABLES_WITH_OID.contains(&identifier.as_str()) {
+                let field = make_arrow_field_v2(
+                    adapter.engine().type_ops(),
+                    String::from("oid"),
+                    "oid",
+                    Some(false),
+                    None,
+                )?;
+                fields.push(field);
+            }
+
+            if fields.is_empty() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    format!("No schema in SVV_COLUMNS for {catalog}.{schema}.{identifier}"),
+                ));
+            }
+
+            let table_schema = if is_external {
+                // Add Redshift Spectrum pseudo columns for external tables
+                // https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#r_spectrum_pseudo_columns
+                fields.push(Field::new("$path", DataType::Utf8, true));
+                fields.push(Field::new("$size", DataType::Int64, true));
+                Arc::new(Schema::new(fields))
+            } else {
+                Arc::new(Schema::new(fields))
+            };
+
+            Ok(table_schema)
+        };
+        let reduce_f = |acc: &mut Acc,
+                        relation: Arc<dyn BaseRelation>,
+                        schema: AdapterResult<Arc<Schema>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            acc.insert(relation.semantic_fqn(), schema);
+            Ok(())
+        };
+        let map_reduce = MapReduce::new(
+            Box::new(new_connection_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            self.max_connections,
+        );
+        map_reduce.run(Arc::new(relations.to_vec()), token)
+    }
+
+    fn run_by_patterns(
+        &self,
+        _patterns: Arc<Vec<RelationPattern>>,
+        _token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
+        todo!("list_relations_schemas_by_patterns for Redshift")
+    }
 }
 
 /// Builds and returns ([WhereClausesByDb], [RelationsByDb]) from a list of [BaseRelation]
@@ -128,6 +288,122 @@ const TABLES_WITH_OID: [&str; 10] = [
     "pg_proc",
     "pg_type",
 ];
+
+pub(crate) struct RedshiftFreshnessStrategy {
+    adapter: ConcreteAdapter,
+    max_connections: usize,
+}
+
+impl RedshiftFreshnessStrategy {
+    pub(crate) fn new(adapter: ConcreteAdapter, max_connections: usize) -> Self {
+        Self {
+            adapter,
+            max_connections,
+        }
+    }
+}
+
+impl FreshnessStrategy for RedshiftFreshnessStrategy {
+    fn run(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
+        let (where_clauses_by_database, relations_by_database) =
+            match build_relation_clauses_redshift(relations) {
+                Ok(result) => result,
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            };
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let adapter = self.adapter.clone();
+        let new_connection_f = move || {
+            adapter
+                .engine()
+                .new_connection(None, None)
+                .map_err(Cancellable::Error)
+        };
+
+        let adapter = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          database_and_where_clauses: &(String, Vec<String>)|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let (_, where_clauses) = &database_and_where_clauses;
+            // Query to get last modified times.
+            // Sourced from dbt-core at https://github.com/dbt-labs/dbt-adapters/blob/0d2ad15e54bbb0da1ecadcea661e3338e148a558/dbt-redshift/src/dbt/include/redshift/macros/metadata/relation_last_modified.sql
+            // Note that the trim is necessary to remove
+            // the trailing whitespace from the schema and identifier columns. During testing
+            // it was discovered that these fields are of type `name` which is a kind of padded
+            // char type. See the Special Character Types section of the PostgreSQL documentation
+            // for more details: https://www.postgresql.org/docs/current/datatype-character.html
+            // With this padding, the function find_matching_relation was unable to
+            // find the correct relation and ended up causing a "no freshness data available" error.
+            let sql = format!(
+                "select
+                 trim(trailing from ns.nspname) as schema,
+                 trim(trailing from c.relname) as identifier,
+                 max(qd.start_time) as last_modified,
+                 getdate() as snapshotted_at
+                 from pg_class c
+                 join pg_namespace ns
+                     on ns.oid = c.relnamespace
+                 join sys_query_detail qd
+                     on qd.table_id = c.oid
+                 where qd.step_name = 'insert'
+                 and (
+                 {}
+                 )
+                 group by 1, 2, 4",
+                where_clauses.join(" OR ")
+            );
+
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let batch = agate_table.original_record_batch();
+            Ok(batch)
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             database_and_where_clauses: (String, Vec<String>),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let schemas = get_column_values::<StringArray>(&batch, "schema")?;
+            let tables = get_column_values::<StringArray>(&batch, "identifier")?;
+            let timestamps =
+                get_column_values::<TimestampMicrosecondArray>(&batch, "last_modified")?;
+
+            let (database, _where_clauses) = &database_and_where_clauses;
+            for i in 0..batch.num_rows() {
+                let schema = schemas.value(i);
+                let table = tables.value(i);
+                let timestamp = timestamps.value(i);
+                let relations = &relations_by_database[database];
+                let is_view = false; // TODO: figure out if we can get this from the query
+
+                for table_name in find_matching_relation(schema, table, relations)? {
+                    acc.insert(
+                        table_name,
+                        MetadataFreshness::from_micros(timestamp, is_view)?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(
+            Box::new(new_connection_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            self.max_connections,
+        );
+        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
+        map_reduce.run(Arc::new(keys), token)
+    }
+}
 
 pub struct RedshiftMetadataAdapter {
     adapter: ConcreteAdapter,
@@ -631,141 +907,24 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         &self,
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
-        relations: &[Arc<dyn BaseRelation>],
+        relations: &[Arc<dyn BaseRelation>], // TODO: change to an Arc<Vec<..>>
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
-        type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
-
-        let adapter = self.adapter.clone();
-        let new_connection_f = Box::new(move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
-        });
-
-        let adapter = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          relation: &Arc<dyn BaseRelation>|
-              -> AdapterResult<Arc<Schema>> {
-            let catalog = relation.database_as_str()?;
-            let schema = relation.schema_as_str()?;
-            let identifier = relation.identifier_as_str()?;
-
-            // Use EXISTS with r_SVV_EXTERNAL_TABLES (presumably small, only external tables compared to SVV_TABLES)
-            // https://docs.aws.amazon.com/redshift/latest/dg/r_SVV_EXTERNAL_TABLES.html
-            // SUBQUERY is more performant, it's 650 ms vs 3.3 s from JOIN on the redshift_spectrum_path test project
-            let sql = format!(
-                "SELECT
-    column_name,
-    data_type,
-    is_nullable,
-    remarks,
-    EXISTS(SELECT 1 FROM SVV_EXTERNAL_TABLES
-           WHERE schemaname = '{schema}'
-           AND tablename = '{identifier}') AS is_external
-FROM SVV_ALL_COLUMNS
-WHERE database_name = '{catalog}'
-AND schema_name = '{schema}'
-AND table_name = '{identifier}'"
-            );
-
-            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
-            if let Some(node_id) = unique_id.clone() {
-                ctx = ctx.with_node_id(&node_id);
-            }
-            if let Some(phase) = phase {
-                ctx = ctx.with_phase(phase.as_str());
-            }
-            let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
-            let batch = table.original_record_batch();
-            // Build fields from the response
-            let mut fields = Vec::new();
-            let column_names = get_column_values::<StringArray>(&batch, "column_name")?;
-            let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
-            let is_nullables = get_column_values::<StringArray>(&batch, "is_nullable")?;
-            let comments = get_column_values::<StringArray>(&batch, "remarks")?;
-            let is_external_flags = get_column_values::<BooleanArray>(&batch, "is_external")?;
-
-            let is_external = if batch.num_rows() > 0 {
-                is_external_flags.value(0)
-            } else {
-                false
-            };
-
-            for i in 0..batch.num_rows() {
-                let name = column_names.value(i);
-                let data_type = data_types.value(i);
-                let is_nullable = is_nullables.value(i) == "YES";
-                let comment = match comments.value(i) {
-                    "" => None,
-                    c => Some(c.to_string()),
-                };
-
-                let field = make_arrow_field_v2(
-                    adapter.engine().type_ops(),
-                    String::from(name),
-                    data_type,
-                    Some(is_nullable),
-                    comment,
-                )?;
-
-                fields.push(field);
-            }
-
-            // Some pg_ tables contain an "invisible" oid column
-            // See: https://docs.aws.amazon.com/redshift/latest/dg/c_join_PG.html
-            if schema == "pg_catalog" && TABLES_WITH_OID.contains(&identifier.as_str()) {
-                let field = make_arrow_field_v2(
-                    adapter.engine().type_ops(),
-                    String::from("oid"),
-                    "oid",
-                    Some(false),
-                    None,
-                )?;
-                fields.push(field);
-            }
-
-            if fields.is_empty() {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::UnexpectedResult,
-                    format!("No schema in SVV_COLUMNS for {catalog}.{schema}.{identifier}"),
-                ));
-            }
-
-            let table_schema = if is_external {
-                // Add Redshift Spectrum pseudo columns for external tables
-                // https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#r_spectrum_pseudo_columns
-                fields.push(Field::new("$path", DataType::Utf8, true));
-                fields.push(Field::new("$size", DataType::Int64, true));
-                Arc::new(Schema::new(fields))
-            } else {
-                Arc::new(Schema::new(fields))
-            };
-
-            Ok(table_schema)
-        };
-        let reduce_f = |acc: &mut Acc,
-                        relation: Arc<dyn BaseRelation>,
-                        schema: AdapterResult<Arc<Schema>>|
-         -> Result<(), Cancellable<AdapterError>> {
-            acc.insert(relation.semantic_fqn(), schema);
-            Ok(())
-        };
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-        );
         let token = self.adapter.cancellation_token();
-        map_reduce.run(Arc::new(relations.to_vec()), token)
+        let strategy =
+            RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        let relations = Arc::new(relations.to_vec());
+        strategy.run(relations, unique_id, phase, token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
-        _patterns: &[RelationPattern],
+        patterns: &[RelationPattern],
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        todo!("list_relations_schemas_by_patterns for Redshift")
+        let token = self.adapter.cancellation_token();
+        let strategy =
+            RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        let patterns = Arc::new(patterns.to_vec());
+        strategy.run_by_patterns(patterns, token)
     }
 
     fn create_schemas_if_not_exists(
@@ -780,100 +939,9 @@ AND table_name = '{identifier}'"
         &self,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        let (where_clauses_by_database, relations_by_database) =
-            match build_relation_clauses_redshift(relations) {
-                Ok(result) => result,
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            };
-        type Acc = BTreeMap<String, MetadataFreshness>;
-
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
-        };
-
-        let adapter = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          database_and_where_clauses: &(String, Vec<String>)|
-              -> AdapterResult<Arc<RecordBatch>> {
-            let (_, where_clauses) = &database_and_where_clauses;
-            // Query to get last modified times.
-            // Sourced from dbt-core at https://github.com/dbt-labs/dbt-adapters/blob/0d2ad15e54bbb0da1ecadcea661e3338e148a558/dbt-redshift/src/dbt/include/redshift/macros/metadata/relation_last_modified.sql
-            // Note that the trim is necessary to remove
-            // the trailing whitespace from the schema and identifier columns. During testing
-            // it was discovered that these fields are of type `name` which is a kind of padded
-            // char type. See the Special Character Types section of the PostgreSQL documentation
-            // for more details: https://www.postgresql.org/docs/current/datatype-character.html
-            // With this padding, the function find_matching_relation was unable to
-            // find the correct relation and ended up causing a "no freshness data available" error.
-            let sql = format!(
-                "select
-                 trim(trailing from ns.nspname) as schema,
-                 trim(trailing from c.relname) as identifier,
-                 max(qd.start_time) as last_modified,
-                 getdate() as snapshotted_at
-                 from pg_class c
-                 join pg_namespace ns
-                     on ns.oid = c.relnamespace
-                 join sys_query_detail qd
-                     on qd.table_id = c.oid
-                 where qd.step_name = 'insert'
-                 and (
-                 {}
-                 )
-                 group by 1, 2, 4",
-                where_clauses.join(" OR ")
-            );
-
-            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
-            let batch = agate_table.original_record_batch();
-            Ok(batch)
-        };
-
-        let reduce_f = move |acc: &mut Acc,
-                             database_and_where_clauses: (String, Vec<String>),
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
-              -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
-            let schemas = get_column_values::<StringArray>(&batch, "schema")?;
-            let tables = get_column_values::<StringArray>(&batch, "identifier")?;
-            let timestamps =
-                get_column_values::<TimestampMicrosecondArray>(&batch, "last_modified")?;
-
-            let (database, _where_clauses) = &database_and_where_clauses;
-            for i in 0..batch.num_rows() {
-                let schema = schemas.value(i);
-                let table = tables.value(i);
-                let timestamp = timestamps.value(i);
-                let relations = &relations_by_database[database];
-                let is_view = false; // TODO: figure out if we can get this from the query
-
-                for table_name in find_matching_relation(schema, table, relations)? {
-                    acc.insert(
-                        table_name,
-                        MetadataFreshness::from_micros(timestamp, is_view)?,
-                    );
-                }
-            }
-            Ok(())
-        };
-
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-        );
-        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         let token = self.adapter.cancellation_token();
-        map_reduce.run(Arc::new(keys), token)
+        let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        strategy.run(relations, token)
     }
 
     fn list_relations_in_parallel_inner(

@@ -38,6 +38,7 @@ pub use metadata_adapter::*;
 
 /// Implementation of the `get_relation` function for all adapters.
 pub(crate) mod get_relation;
+pub(crate) mod list_objects;
 
 pub const ARROW_FIELD_COMMENT_METADATA_KEY: &str = "comment";
 // XXX: use original_type_string() instead of querying for this constant

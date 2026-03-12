@@ -2834,13 +2834,21 @@ impl ConcreteAdapter {
                 }
                 Ok(relations)
             }
-            Impl(Snowflake, _) => snowflake::list_relations(self, query_ctx, conn, db_schema),
-            Impl(Bigquery, _) => bigquery::list_relations(self, query_ctx, conn, db_schema),
-            Impl(Databricks | Spark, _) => {
-                databricks::list_relations(self, query_ctx, conn, db_schema)
+            Impl(Snowflake, engine) => {
+                snowflake::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
             }
-            Impl(Redshift, _) => redshift::list_relations(self, query_ctx, conn, db_schema),
-            Impl(DuckDB, _) => duckdb::list_relations(self, query_ctx, conn, db_schema),
+            Impl(Bigquery, engine) => {
+                bigquery::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+            }
+            Impl(Databricks | Spark, engine) => {
+                databricks::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+            }
+            Impl(Redshift, engine) => {
+                redshift::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+            }
+            Impl(DuckDB, engine) => {
+                duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+            }
             Impl(
                 adapter_type @ (Postgres | Salesforce | Sidecar | Fabric | ClickHouse | Starburst
                 | Athena | Trino | Dremio | Oracle),

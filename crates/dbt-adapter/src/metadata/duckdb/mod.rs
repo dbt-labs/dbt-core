@@ -254,7 +254,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            list_relations(&adapter, &ctx, conn, db_schema)
+            list_relations(adapter.engine().as_ref(), &ctx, conn, db_schema)
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -297,12 +297,12 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
 /// Queries DuckDB's `information_schema.tables` and maps the results to
 /// `BaseRelation` objects suitable for populating the adapter relation cache.
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-    let query_schema = if adapter.quoting().schema {
+    let query_schema = if engine.quoting().schema {
         db_schema.resolved_schema.clone()
     } else {
         db_schema.resolved_schema.to_lowercase()
@@ -314,7 +314,7 @@ pub fn list_relations(
          WHERE table_schema = '{query_schema}'"
     );
 
-    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -335,16 +335,16 @@ pub fn list_relations(
             "BASE TABLE" => RelationType::Table,
             "VIEW" => RelationType::View,
             "LOCAL TEMPORARY" => RelationType::Table,
-            other => RelationType::from_adapter_type(adapter.adapter_type(), other),
+            other => RelationType::from_adapter_type(engine.adapter_type(), other),
         };
 
         let relation = do_create_relation(
-            adapter.adapter_type(),
+            engine.adapter_type(),
             database.to_string(),
             schema.to_string(),
             Some(name.to_string()),
             Some(relation_type),
-            adapter.quoting(),
+            engine.quoting(),
         )
         .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
 

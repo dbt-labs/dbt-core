@@ -18,7 +18,8 @@ pub enum RelationType {
     /// An enum for ephemeral relations.
     Ephemeral,
     /// An enum for any relation that dbt is aware of.
-    // Note (copied from dbt-adapters): this is a "catch all" that is better than `None` == external to anything dbt is aware of
+    // Note (copied from dbt-adapters): this is a "catch all" that is better than
+    // `None` == external to anything dbt is aware of
     External,
     /// An enum for pointer table
     PointerTable,
@@ -85,6 +86,7 @@ impl From<&str> for RelationType {
             "materialized_view" => RelationType::MaterializedView,
             "ephemeral" => RelationType::Ephemeral,
             "external" => RelationType::External,
+            "pointer_table" => RelationType::PointerTable,
             "dynamic_table" => RelationType::DynamicTable,
             "streaming_table" => RelationType::StreamingTable,
             "function" => RelationType::Function,

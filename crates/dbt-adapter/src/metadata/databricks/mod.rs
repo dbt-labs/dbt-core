@@ -42,7 +42,7 @@ pub(crate) mod version;
 
 // Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -71,7 +71,7 @@ WHERE table_catalog = '{}'
                             &db_schema.resolved_catalog,
                             &db_schema.resolved_schema);
 
-    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -93,7 +93,7 @@ WHERE table_catalog = '{}'
         let is_delta = file_formats.value(i) == "delta";
 
         let relation = Arc::new(DatabricksRelation::new(
-            adapter.adapter_type(),
+            engine.adapter_type(),
             Some(catalog.to_string()),
             Some(schema.to_string()),
             Some(name.to_string()),
@@ -102,7 +102,7 @@ WHERE table_catalog = '{}'
                 table_type.as_str(),
             )),
             None,
-            adapter.quoting(),
+            engine.quoting(),
             None,
             is_delta,
             false,

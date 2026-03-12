@@ -91,7 +91,7 @@ fn build_relations_from_show_objects(
 }
 
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -109,7 +109,7 @@ pub fn list_relations(
                 .map(|name| format!(" FROM '{name}'"))
                 .unwrap_or_default()
         );
-        let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+        let batch = engine.execute(None, conn, ctx, &sql)?;
 
         // From the RecordBatch, get the last row of the vector of name 'name'
         let names = get_column_values::<StringArray>(&batch, "name")?;

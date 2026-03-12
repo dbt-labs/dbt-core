@@ -26,7 +26,7 @@ use std::sync::Arc;
 pub mod object_options;
 
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -41,7 +41,7 @@ FROM
     {db_schema}.INFORMATION_SCHEMA.TABLES"
     );
 
-    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql)?;
     let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
     let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
     let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
@@ -61,7 +61,7 @@ FROM
             Some(identifier.to_string()),
             Some(relation_type),
             None,
-            adapter.quoting(),
+            engine.quoting(),
         )) as Arc<dyn BaseRelation>);
     }
     Ok(result)
