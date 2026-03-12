@@ -7,6 +7,7 @@ use crate::schemas::{
     common::{Expect, Given},
     project::UnitTestConfig,
 };
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -21,6 +22,8 @@ pub struct UnitTestProperties {
     pub model: String,
     pub name: String,
     pub overrides: Option<UnitTestOverrides>,
+    #[serde(skip_deserializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub versions: Option<YmlValue>,
 }
 

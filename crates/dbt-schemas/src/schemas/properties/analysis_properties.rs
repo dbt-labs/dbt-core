@@ -1,3 +1,4 @@
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -13,6 +14,8 @@ pub struct AnalysesProperties {
     pub description: Option<String>,
     pub config: Option<AnalysesConfig>,
     pub columns: Option<Vec<ColumnProperties>>, // this column is much more permissive than whats actually allowed on the analysis
+    #[serde(skip_deserializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
 impl AnalysesProperties {
@@ -22,6 +25,7 @@ impl AnalysesProperties {
             description: None,
             config: None,
             columns: None,
+            static_analysis_off_reason: None,
         }
     }
 }

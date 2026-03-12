@@ -17,6 +17,7 @@ use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::string_or_array;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -55,6 +56,8 @@ pub struct ModelProperties {
     pub identifier: Option<String>,
     pub latest_version: Option<FloatOrString>,
     pub name: String,
+    #[serde(skip_deserializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub tests: Option<Vec<DataTests>>,
     pub time_spine: Option<ModelPropertiesTimeSpine>,
     pub versions: Option<Vec<Versions>>,
@@ -106,6 +109,7 @@ impl ModelProperties {
             description: None,
             identifier: None,
             latest_version: None,
+            static_analysis_off_reason: None,
             tests: None,
             time_spine: None,
             versions: None,

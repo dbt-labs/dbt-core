@@ -1,5 +1,6 @@
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::project::FunctionConfig;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -61,6 +62,8 @@ pub struct FunctionProperties {
     pub description: Option<String>,
     pub identifier: Option<String>,
     pub name: String,
+    #[serde(skip_deserializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub tests: Option<Vec<DataTests>>,
     #[serde(default = "default_language")]
     pub language: Option<String>,
@@ -76,6 +79,7 @@ impl FunctionProperties {
             data_tests: None,
             description: None,
             identifier: None,
+            static_analysis_off_reason: None,
             tests: None,
             language: default_language(),
             returns: None,

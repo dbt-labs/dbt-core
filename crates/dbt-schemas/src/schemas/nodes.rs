@@ -4201,7 +4201,7 @@ pub struct NodeBaseAttributes {
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
     pub static_analysis: Spanned<StaticAnalysisKind>,
-    #[serde(skip_serializing, default)]
+    #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub enabled: bool,
     #[serde(skip_serializing, default = "default_false")]

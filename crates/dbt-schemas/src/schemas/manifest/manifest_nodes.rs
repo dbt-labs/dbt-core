@@ -58,7 +58,7 @@ use crate::schemas::{
     serde::{StringOrArrayOfStrings, StringOrInteger},
 };
 
-use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 
 fn default_analysis_materialized() -> DbtMaterialization {
     DbtMaterialization::Analysis
@@ -159,6 +159,10 @@ pub struct ManifestNodeBaseAttributes {
     #[serde(default)]
     pub unrendered_config: BTreeMap<String, YmlValue>,
 
+    // Static analysis
+    #[serde(skip_deserializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
+
     // Metadata
     pub doc_blocks: Option<Vec<YmlValue>>,
     pub extra_ctes_injected: Option<bool>,
@@ -226,6 +230,7 @@ impl From<DbtSeed> for ManifestSeed {
                 compiled_path: Default::default(),
                 build_path: Default::default(),
                 contract: Default::default(),
+                static_analysis_off_reason: seed.__base_attr__.static_analysis_off_reason,
             },
             config: seed.deprecated_config.into(),
             root_path: seed.__seed_attr__.root_path,
@@ -296,6 +301,7 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 compiled_path: Default::default(),
                 build_path: Default::default(),
                 contract: Default::default(),
+                static_analysis_off_reason: unit_test.__base_attr__.static_analysis_off_reason,
             },
             config: unit_test.deprecated_config,
             model: unit_test.__unit_test_attr__.model,
@@ -376,6 +382,7 @@ impl From<DbtTest> for ManifestDataTest {
                 compiled_path: Default::default(),
                 build_path: Default::default(),
                 contract: Default::default(),
+                static_analysis_off_reason: test.__base_attr__.static_analysis_off_reason,
             },
             config: test.deprecated_config,
             column_name: test.__test_attr__.column_name,
@@ -577,6 +584,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 compiled_path: Default::default(),
                 build_path: Default::default(),
                 contract: Default::default(),
+                static_analysis_off_reason: snapshot.__base_attr__.static_analysis_off_reason,
             },
             config: snapshot.deprecated_config.into(),
             __other__: snapshot.__other__,
@@ -1080,6 +1088,7 @@ impl From<DbtModel> for ManifestModel {
                 compiled_path: Default::default(),
                 build_path: Default::default(),
                 contract: model.__model_attr__.contract.unwrap_or_default(),
+                static_analysis_off_reason: model.__base_attr__.static_analysis_off_reason,
             },
             access: Some(model.__model_attr__.access),
             group: model.__model_attr__.group,
@@ -1162,6 +1171,7 @@ impl From<DbtAnalysis> for ManifestAnalysis {
                 build_path: Default::default(),
                 contract: Default::default(),
                 functions: analysis.__base_attr__.functions,
+                static_analysis_off_reason: analysis.__base_attr__.static_analysis_off_reason,
             },
             materialized: analysis.__base_attr__.materialized,
             static_analysis: analysis.__base_attr__.static_analysis.into_inner(),
@@ -1219,6 +1229,7 @@ impl From<DbtOperation> for ManifestOperation {
                 compiled_code: None,
                 checksum: operation.__common_attr__.checksum,
                 language: operation.__common_attr__.language,
+                static_analysis_off_reason: operation.__base_attr__.static_analysis_off_reason,
                 ..Default::default()
             },
             __other__: operation.__other__,
@@ -1275,6 +1286,7 @@ impl From<DbtFunction> for ManifestFunction {
                 raw_code: function.__common_attr__.raw_code,
                 checksum: function.__common_attr__.checksum,
                 compiled: None,
+                static_analysis_off_reason: function.__base_attr__.static_analysis_off_reason,
                 ..Default::default()
             },
             config: function.deprecated_config,
