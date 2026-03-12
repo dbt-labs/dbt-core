@@ -33,6 +33,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
+from dbt.exceptions import DbtSelectorsError
 from dbt.node_types import NodeType
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
@@ -975,7 +976,7 @@ class SelectorSelectorMethod(SelectorMethod):
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self._selectors is None or self._get_selected_callback is None:
-            raise DbtRuntimeError("Cannot use selector: method if selectors.yml is not provided")
+            raise DbtSelectorsError("Cannot use selector: method if selectors.yml is not provided")
         matched_selector_dfns = []
 
         # ensure that selectors are sorted to make the execution deterministic
@@ -988,7 +989,7 @@ class SelectorSelectorMethod(SelectorMethod):
                 matched_selector_dfns.append(s_value["definition"])
 
         if not matched_selector_dfns:
-            raise DbtRuntimeError(
+            raise DbtSelectorsError(
                 f"Selector '{selector}' did not match any selector in selectors.yml"
             )
 
