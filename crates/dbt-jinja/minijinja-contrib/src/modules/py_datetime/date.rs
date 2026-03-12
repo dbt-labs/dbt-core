@@ -1,10 +1,22 @@
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
-use minijinja::arg_utils::ArgParser;
-use minijinja::{value::Object, Error, ErrorKind, Value};
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
+use minijinja::arg_utils::{ArgParser, ArgsIter};
+use minijinja::{value::Object, Error, ErrorKind, Value};
+
 use super::timedelta::PyTimeDelta;
+
+#[derive(Debug)]
+enum DateCmp {
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct PyDateClass;
@@ -281,6 +293,46 @@ impl PyDate {
         // Return the tuple (ISO year, ISO week number, ISO weekday)
         Ok(Value::from(vec![iso_year, iso_week_number, iso_weekday]))
     }
+
+    fn cmp_op(&self, args: &[Value], cmp: DateCmp) -> Result<Value, Error> {
+        let iter = ArgsIter::new(
+            match cmp {
+                DateCmp::Eq => "__eq__",
+                DateCmp::Neq => "__ne__",
+                DateCmp::Lt => "__lt__",
+                DateCmp::Le => "__le__",
+                DateCmp::Gt => "__gt__",
+                DateCmp::Ge => "__ge__",
+            },
+            &["other"],
+            args,
+        );
+        let rhs = iter.next_arg::<Value>()?;
+        iter.finish()?;
+        if let Some(other_date) = rhs.downcast_object_ref::<PyDate>() {
+            let o = self.date.cmp(&other_date.date);
+            match cmp {
+                DateCmp::Eq => Ok(Value::from(o == Ordering::Equal)),
+                DateCmp::Neq => Ok(Value::from(o != Ordering::Equal)),
+                DateCmp::Lt => Ok(Value::from(matches!(o, Ordering::Less))),
+                DateCmp::Le => Ok(Value::from(matches!(o, Ordering::Less | Ordering::Equal))),
+                DateCmp::Gt => Ok(Value::from(matches!(o, Ordering::Greater))),
+                DateCmp::Ge => Ok(Value::from(matches!(
+                    o,
+                    Ordering::Greater | Ordering::Equal
+                ))),
+            }
+        } else {
+            match cmp {
+                DateCmp::Eq => Ok(Value::from(false)),
+                DateCmp::Neq => Ok(Value::from(true)),
+                _ => Err(Error::new(
+                    ErrorKind::InvalidArgument,
+                    "Can only compare date objects",
+                )),
+            }
+        }
+    }
 }
 
 impl Object for PyDate {
@@ -322,6 +374,14 @@ impl Object for PyDate {
             // Add arithmetic operations
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
+
+            // Comparison
+            "__eq__" => self.cmp_op(args, DateCmp::Eq),
+            "__ne__" => self.cmp_op(args, DateCmp::Neq),
+            "__lt__" => self.cmp_op(args, DateCmp::Lt),
+            "__le__" => self.cmp_op(args, DateCmp::Le),
+            "__gt__" => self.cmp_op(args, DateCmp::Gt),
+            "__ge__" => self.cmp_op(args, DateCmp::Ge),
 
             "today" => PyDateClass::date_today(args).map(Value::from_object),
             "fromtimestamp" => PyDateClass::from_timestamp(args).map(Value::from_object),

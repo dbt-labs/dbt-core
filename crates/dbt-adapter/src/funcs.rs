@@ -1332,7 +1332,7 @@ pub fn dispatch_adapter_calls(
             adapter.location_exists(state, location)
         }
         _ => Err(minijinja::Error::new(
-            minijinja::ErrorKind::InvalidOperation,
+            minijinja::ErrorKind::UnknownMethod,
             format!("Unknown method on adapter object: '{name}'"),
         )),
     }

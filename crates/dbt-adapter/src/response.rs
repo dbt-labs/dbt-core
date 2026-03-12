@@ -156,7 +156,7 @@ impl Object for ResultObject {
             Ok(Value::from_iter(["response", "table", "data"]))
         } else {
             Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on ResultObject: '{method}'"),
             ))
         }

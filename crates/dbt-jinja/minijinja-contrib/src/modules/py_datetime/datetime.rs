@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
@@ -30,6 +31,16 @@ pub struct PyDateTime {
     /// If `Some(...)`, this is an aware datetime with the given tzinfo object (pytz or fixed offset).
     /// If `None`, this is naive.
     pub tzinfo: Option<PytzTimezone>,
+}
+
+#[derive(Debug)]
+enum DateTimeCmp {
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 /// The module object that the user calls as `datetime(...)`, or `datetime.now()`, etc.
@@ -694,6 +705,59 @@ impl PyDateTime {
         }
     }
 
+    fn cmp_op(&self, args: &[Value], cmp: DateTimeCmp) -> Result<Value, Error> {
+        let iter = ArgsIter::new(
+            match cmp {
+                DateTimeCmp::Eq => "__eq__",
+                DateTimeCmp::Neq => "__ne__",
+                DateTimeCmp::Lt => "__lt__",
+                DateTimeCmp::Le => "__le__",
+                DateTimeCmp::Gt => "__gt__",
+                DateTimeCmp::Ge => "__ge__",
+            },
+            &["other"],
+            args,
+        );
+        let rhs = iter.next_arg::<Value>()?;
+        iter.finish()?;
+
+        let other_dt = rhs.downcast_object_ref::<PyDateTime>();
+        let result = other_dt.and_then(|other| match (&self.state, &other.state) {
+            (DateTimeState::Naive(l), DateTimeState::Naive(r)) => Some(l.cmp(r)),
+            (DateTimeState::Aware(l), DateTimeState::Aware(r)) => Some(l.cmp(r)),
+            (DateTimeState::FixedOffset(l), DateTimeState::FixedOffset(r)) => Some(l.cmp(r)),
+            _ => None,
+        });
+
+        if let Some(o) = result {
+            match cmp {
+                DateTimeCmp::Eq => Ok(Value::from(o == Ordering::Equal)),
+                DateTimeCmp::Neq => Ok(Value::from(o != Ordering::Equal)),
+                DateTimeCmp::Lt => Ok(Value::from(matches!(o, Ordering::Less))),
+                DateTimeCmp::Le => Ok(Value::from(matches!(o, Ordering::Less | Ordering::Equal))),
+                DateTimeCmp::Gt => Ok(Value::from(matches!(o, Ordering::Greater))),
+                DateTimeCmp::Ge => Ok(Value::from(matches!(
+                    o,
+                    Ordering::Greater | Ordering::Equal
+                ))),
+            }
+        } else {
+            // If not an eq/neq comparison, they must be the same type and state
+            match cmp {
+                DateTimeCmp::Eq => Ok(Value::from(false)),
+                DateTimeCmp::Neq => Ok(Value::from(true)),
+                _ => Err(Error::new(
+                    ErrorKind::InvalidArgument,
+                    if other_dt.is_some() {
+                        "Can't compare offset-naive and offset-aware datetimes"
+                    } else {
+                        "Can only compare datetime objects"
+                    },
+                )),
+            }
+        }
+    }
+
     pub fn weekday(&self) -> u32 {
         // Python's weekday() returns 0 for Monday, ... 6 for Sunday
         self.chrono_dt().weekday().num_days_from_monday()
@@ -942,6 +1006,14 @@ impl Object for PyDateTime {
             // Arithmetic
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
+
+            // Comparison
+            "__eq__" => self.cmp_op(args, DateTimeCmp::Eq),
+            "__ne__" => self.cmp_op(args, DateTimeCmp::Neq),
+            "__gt__" => self.cmp_op(args, DateTimeCmp::Gt),
+            "__ge__" => self.cmp_op(args, DateTimeCmp::Ge),
+            "__lt__" => self.cmp_op(args, DateTimeCmp::Lt),
+            "__le__" => self.cmp_op(args, DateTimeCmp::Le),
 
             "fromtimestamp" => Ok(Value::from_object(PyDateTimeClass::from_timestamp(args)?)),
             "now" => Ok(Value::from_object(PyDateTimeClass::now(args)?)),

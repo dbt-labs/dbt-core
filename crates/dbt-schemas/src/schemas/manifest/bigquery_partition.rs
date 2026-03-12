@@ -340,7 +340,7 @@ impl Object for BigqueryPartitionConfig {
             "render_wrapped" => self.render_wrapped(args),
             "insertable_time_partitioning_field" => self.insertable_time_partitioning_field(),
             _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
+                MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on PartitionConfig object: '{name}'"),
             )),
         }

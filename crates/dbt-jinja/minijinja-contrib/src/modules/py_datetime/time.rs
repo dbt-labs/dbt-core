@@ -1,10 +1,23 @@
-use chrono::{Local, NaiveDate, NaiveTime, Timelike};
-use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
+use chrono::{Local, NaiveDate, NaiveTime, Timelike};
+use minijinja::arg_utils::{ArgParser, ArgsIter};
+use minijinja::{value::Object, Error, ErrorKind, Value};
+
 use crate::modules::py_datetime::timedelta::PyTimeDelta;
 use crate::modules::pytz::PytzTimezone;
+
+#[derive(Debug)]
+enum TimeCmp {
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
 
 #[derive(Clone, Debug)]
 pub struct PyTimeClass;
@@ -253,6 +266,46 @@ impl PyTime {
             },
         ))
     }
+
+    fn cmp_op(&self, args: &[Value], cmp: TimeCmp) -> Result<Value, Error> {
+        let iter = ArgsIter::new(
+            match cmp {
+                TimeCmp::Eq => "__eq__",
+                TimeCmp::Neq => "__ne__",
+                TimeCmp::Lt => "__lt__",
+                TimeCmp::Le => "__le__",
+                TimeCmp::Gt => "__gt__",
+                TimeCmp::Ge => "__ge__",
+            },
+            &["other"],
+            args,
+        );
+        let rhs = iter.next_arg::<Value>()?;
+        iter.finish()?;
+        if let Some(other_time) = rhs.downcast_object_ref::<PyTime>() {
+            let o = self.time.cmp(&other_time.time);
+            match cmp {
+                TimeCmp::Eq => Ok(Value::from(o == Ordering::Equal)),
+                TimeCmp::Neq => Ok(Value::from(o != Ordering::Equal)),
+                TimeCmp::Lt => Ok(Value::from(matches!(o, Ordering::Less))),
+                TimeCmp::Le => Ok(Value::from(matches!(o, Ordering::Less | Ordering::Equal))),
+                TimeCmp::Gt => Ok(Value::from(matches!(o, Ordering::Greater))),
+                TimeCmp::Ge => Ok(Value::from(matches!(
+                    o,
+                    Ordering::Greater | Ordering::Equal
+                ))),
+            }
+        } else {
+            match cmp {
+                TimeCmp::Eq => Ok(Value::from(false)),
+                TimeCmp::Neq => Ok(Value::from(true)),
+                _ => Err(Error::new(
+                    ErrorKind::InvalidArgument,
+                    "Can only compare time objects",
+                )),
+            }
+        }
+    }
 }
 
 impl Object for PyTime {
@@ -296,6 +349,14 @@ impl Object for PyTime {
             // Add arithmetic operations
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
+
+            // Comparison
+            "__eq__" => self.cmp_op(args, TimeCmp::Eq),
+            "__ne__" => self.cmp_op(args, TimeCmp::Neq),
+            "__lt__" => self.cmp_op(args, TimeCmp::Lt),
+            "__le__" => self.cmp_op(args, TimeCmp::Le),
+            "__gt__" => self.cmp_op(args, TimeCmp::Gt),
+            "__ge__" => self.cmp_op(args, TimeCmp::Ge),
 
             "now" => PyTimeClass::now(args).map(Value::from_object),
             "fromisoformat" => PyTimeClass::fromisoformat(args).map(Value::from_object),

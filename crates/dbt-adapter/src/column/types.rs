@@ -110,7 +110,7 @@ impl Object for ColumnStatic {
                 Ok(Value::from(self.dbx_get_name(&column)))
             }
             _ => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on ColumnStatic: '{name}'"),
             )),
         }
@@ -1126,7 +1126,7 @@ impl Object for Column {
             "render_for_create" => Ok(Value::from(self.render_for_create())),
 
             _ => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on Column: '{name}'"),
             )),
         }

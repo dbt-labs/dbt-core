@@ -202,7 +202,7 @@ impl Object for RelationObject {
             // Below are available for BigQuery and Redshift
             "materialized_view_config_changeset" => self.materialized_view_config_changeset(args),
             _ => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on BaseRelationObject: '{name}'"),
             )),
         }
@@ -489,7 +489,7 @@ impl Object for StaticBaseRelationObject {
                 }
             }
             _ => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on StaticBaseRelationObject: '{name}'"),
             )),
         }

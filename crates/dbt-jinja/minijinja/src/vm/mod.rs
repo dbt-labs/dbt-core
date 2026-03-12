@@ -416,10 +416,18 @@ impl<'env> Vm<'env> {
             }
 
             macro_rules! op_binop {
-                ($op:tt) => {{
+                ($op:tt, $obj_method:expr, $span:expr) => {{
                     let b = stack.pop();
                     let a = stack.pop();
-                    stack.push(Value::from(a $op b));
+                    let naive_result = Value::from(a $op b);
+                    let rv = match call_wrapper(listeners, || {
+                        a.call_method(state, $obj_method, &[b], listeners)
+                    }) {
+                        Ok(rv) => rv,
+                        Err(e) if e.kind() == ErrorKind::UnknownMethod => naive_result,
+                        Err(e) => return Err(state.with_span_error(e, &$span))
+                    };
+                    stack.push(rv);
                 }};
             }
 
@@ -661,23 +669,23 @@ impl<'env> Vm<'env> {
                 Instruction::Pow(span) => {
                     func_binop!(pow, "__pow__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Eq(_span) => {
-                    op_binop!(==)
+                Instruction::Eq(span) => {
+                    op_binop!(==, "__eq__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Ne(_span) => {
-                    op_binop!(!=)
+                Instruction::Ne(span) => {
+                    op_binop!(!=, "__ne__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Gt(_span) => {
-                    op_binop!(>)
+                Instruction::Gt(span) => {
+                    op_binop!(>, "__gt__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Gte(_span) => {
-                    op_binop!(>=)
+                Instruction::Gte(span) => {
+                    op_binop!(>=, "__ge__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Lt(_span) => {
-                    op_binop!(<)
+                Instruction::Lt(span) => {
+                    op_binop!(<, "__lt__", span.with_offset(&state.ctx.current_span))
                 }
-                Instruction::Lte(_span) => {
-                    op_binop!(<=)
+                Instruction::Lte(span) => {
+                    op_binop!(<=, "__le__", span.with_offset(&state.ctx.current_span))
                 }
                 Instruction::Not(_span) => {
                     let a = stack.pop();

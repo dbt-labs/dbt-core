@@ -958,7 +958,7 @@ impl Object for VarProvider {
                 Ok(minijinja::Value::from(self.0.clone()))
             }
             _ => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on VarProvider: '{method}'"),
             )),
         }

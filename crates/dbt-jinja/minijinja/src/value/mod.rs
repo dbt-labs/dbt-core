@@ -1672,7 +1672,13 @@ impl Value {
         if (self.is_undefined() || self.is_none())
             && state.env().undefined_behavior() == UndefinedBehavior::AllowAll
         {
-            return Ok(Value::UNDEFINED);
+            // Delegate ordering comparisons back to the value implementation
+            return match name {
+                "__eq__" | "__ne__" | "__lt__" | "__le__" | "__gt__" | "__ge__" => {
+                    Err(Error::from(ErrorKind::UnknownMethod))
+                }
+                _ => Ok(Value::UNDEFINED),
+            };
         }
 
         Err(Error::from(ErrorKind::UnknownMethod))
