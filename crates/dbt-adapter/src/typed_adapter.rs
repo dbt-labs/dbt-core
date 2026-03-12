@@ -2425,11 +2425,9 @@ impl ConcreteAdapter {
         ctx: &QueryCtx,
         sql: &str,
     ) -> AdapterResult<Vec<Column>> {
-        match self.adapter_type() {
-            // TODO: generalize these branches and invoke replay once it's deemed safe (i.e.
-            // doesn't break tests as they are now)
-            Bigquery if !matches!(self.inner_adapter(), Replay(_, _)) => {
-                let engine = self.engine();
+        match self.inner_adapter() {
+            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx),
+            Impl(Bigquery, engine) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
                 let batch = engine.execute(Some(state), conn, ctx, sql)?;
                 let schema = batch.schema();
@@ -2449,15 +2447,12 @@ impl ConcreteAdapter {
                     columns.iter().flat_map(|column| column.flatten()).collect();
                 Ok(flattened_columns)
             }
-            _ => match self.inner_adapter() {
-                Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx),
-                Impl(_, engine) => {
-                    let batch = engine.execute(Some(state), conn, ctx, sql)?;
-                    let original_schema = Some(batch.schema());
-                    let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
-                    self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
-                }
-            },
+            Impl(_, engine) => {
+                let batch = engine.execute(Some(state), conn, ctx, sql)?;
+                let original_schema = Some(batch.schema());
+                let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
+                self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
+            }
         }
     }
 
