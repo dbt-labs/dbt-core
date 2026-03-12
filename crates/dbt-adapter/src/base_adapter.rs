@@ -1198,9 +1198,14 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// redact_credentials
     fn redact_credentials(&self, _state: &State, _sql: &str) -> Result<Value, minijinja::Error>;
 
-    fn is_motherduck(&self) -> bool;
+    /// Returns true if the adapter supports the given feature.
+    fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value>;
 
-    fn disable_transactions(&self) -> bool;
+    /// DEPRECATED: in favor of [`BaseAdapter::has_feature`]
+    fn is_motherduck(&self, state: &State) -> AdapterResult<Value>;
+
+    /// DEPRECATED: in favor of [`BaseAdapter::has_feature`]
+    fn disable_transactions(&self, state: &State) -> AdapterResult<Value>;
 
     fn get_temp_relation_path(
         &self,

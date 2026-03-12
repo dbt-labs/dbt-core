@@ -1083,17 +1083,38 @@ impl ConcreteAdapter {
         Ok(false)
     }
 
-    /// Check if the current DuckDB connection targets MotherDuck.
-    pub fn is_motherduck(&self) -> bool {
-        self.engine()
-            .config("path")
-            .map(|p| dbt_auth::is_motherduck_path(&p))
-            .unwrap_or(false)
-    }
-
-    /// MotherDuck does not support explicit transactions.
-    pub fn disable_transactions(&self) -> bool {
-        self.is_motherduck()
+    /// Returns true if the adapter supports the given feature.
+    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<bool> {
+        match (self.adapter_type(), name) {
+            (DuckDB, "motherduck") => Ok(self
+                .engine()
+                .config("path")
+                .map(|p| dbt_auth::is_motherduck_path(&p))
+                .unwrap_or(false)),
+            (DuckDB, "transactions") => Ok(!self
+                .engine()
+                .config("path")
+                // MotherDuck does not support explicit transactions
+                .map(|p| !dbt_auth::is_motherduck_path(&p))
+                .unwrap_or(true)),
+            (Databricks, _) => {
+                let mut conn =
+                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                self.has_dbr_capability(state, conn.as_mut(), name)
+            }
+            _ => {
+                emit_warn_log_message(
+                    ErrorCode::InvalidArgument,
+                    format!(
+                        "Unrecognized feature: {} for {} adapter",
+                        name,
+                        self.adapter_type()
+                    ),
+                    None,
+                );
+                Ok(false)
+            }
+        }
     }
 
     /// Returns a dict with database/schema/identifier for temp tables on MotherDuck.

@@ -1008,15 +1008,22 @@ pub fn dispatch_adapter_calls(
             iter.finish()?;
             Ok(Value::from(false))
         }
-        "is_motherduck" => {
-            let iter = ArgsIter::new(name, &[], args);
+        // DEPRECATED: in favor of "has_feature"
+        "is_motherduck" => Ok(adapter
+            .is_motherduck(state)
+            .map_err(minijinja::Error::from)?),
+        // DEPRECATED: in favor of "has_feature"
+        "disable_transactions" => Ok(adapter
+            .disable_transactions(state)
+            .map_err(minijinja::Error::from)?),
+        "has_feature" => {
+            let iter = ArgsIter::new(name, &["name"], args);
+            let feature_name = iter.next_arg::<&str>()?;
             iter.finish()?;
-            Ok(Value::from(adapter.is_motherduck()))
-        }
-        "disable_transactions" => {
-            let iter = ArgsIter::new(name, &[], args);
-            iter.finish()?;
-            Ok(Value::from(adapter.disable_transactions()))
+            let result = adapter
+                .has_feature(state, feature_name)
+                .map_err(minijinja::Error::from)?;
+            Ok(result)
         }
         "get_temp_relation_path" => {
             // model: Any, batch_id: str = ""

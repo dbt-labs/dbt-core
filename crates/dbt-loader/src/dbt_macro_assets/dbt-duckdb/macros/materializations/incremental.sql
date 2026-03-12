@@ -2,7 +2,8 @@
 
   {%- set language = model['language'] -%}
   -- only create temp tables if using local duckdb, as it is not currently supported for remote databases
-  {%- set temporary = not adapter.is_motherduck() -%}
+  {# DIVERGENCE: we use adapter.has_feature instead of adapter.is_motherduck #}
+  {%- set temporary = not adapter.has_feature("motherduck") -%}
 
   -- relations
   {%- set existing_relation = load_cached_relation(this) -%}
@@ -39,7 +40,8 @@
     {%- endif -%}
     {% set temp_relation = temp_relation.incorporate(path=adapter.get_temp_relation_path(this, batch_id)) %}
     {% do run_query(create_schema(temp_relation)) %}
-    {% if not adapter.disable_transactions() %}
+    {# DIVERGENCE: we use adapter.has_feature instead of adapter.disable_transactions #}
+    {% if adapter.has_feature("transactions") %}
       {% do adapter.commit() %}
     {% endif %}
     -- then drop the temp relation after we insert the incremental data into the target relation
@@ -114,7 +116,7 @@
 
   {% for rel in to_drop %}
       {# On MotherDuck the temp relation is a real table; dropping it cascades indexes. Avoid extra ALTERs. #}
-      {% if not adapter.is_motherduck() %}
+      {% if not adapter.has_feature("motherduck") %}
         {% do drop_indexes_on_relation(rel) %}
       {% endif %}
       {% do adapter.drop_relation(rel) %}

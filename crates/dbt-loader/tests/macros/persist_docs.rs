@@ -33,9 +33,7 @@ mod databricks {
             .build()
             .expect("harness should build");
 
-        harness
-            .mock()
-            .on("has_dbr_capability", |_| Ok(Value::from(false)));
+        harness.mock().on("has_feature", |_| Ok(Value::from(false)));
 
         harness
     }

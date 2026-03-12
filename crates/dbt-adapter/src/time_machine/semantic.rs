@@ -121,6 +121,7 @@ impl SemanticCategory {
             | "get_hard_deletes_behavior"
             | "is_cluster"
             | "is_ducklake"
+            | "has_feature"
             | "is_motherduck"
             | "disable_transactions"
             | "build_catalog_relation"

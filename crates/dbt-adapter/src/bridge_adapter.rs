@@ -1491,20 +1491,23 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self), level = "trace")]
-    fn is_motherduck(&self) -> bool {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.is_motherduck(),
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
+        let result = match &self.inner {
+            Typed { adapter, .. } => adapter.has_feature(state, name)?,
             Parse(_) => false,
-        }
+        };
+        Ok(Value::from(result))
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
-    fn disable_transactions(&self) -> bool {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.disable_transactions(),
-            Parse(_) => false,
-        }
+    fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
+        self.has_feature(state, "motherduck")
+    }
+
+    #[tracing::instrument(skip(self), level = "trace")]
+    fn disable_transactions(&self, state: &State) -> AdapterResult<Value> {
+        self.has_feature(state, "transactions")
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
