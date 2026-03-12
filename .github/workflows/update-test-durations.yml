@@ -202,7 +202,7 @@ jobs:
 
       - name: "Create Pull Request"
         id: cpr
-        uses: peter-evans/create-pull-request@c0f553fee5fe477594c15b259288f72874e0d33a # peter-evans/create-pull-request@v8.1.0
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # peter-evans/create-pull-request@v8.1.0
         with:
           token: ${{ secrets.FISHTOWN_BOT_PAT }}
           commit-message: "Update test durations for pytest-split"
