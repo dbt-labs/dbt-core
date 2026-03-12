@@ -500,6 +500,7 @@ fn render_jinja_str<S: Serialize>(
         } else {
             compiled
         };
+
         Ok(Value::string(compiled))
     }
 }

@@ -2428,7 +2428,7 @@ impl ConcreteAdapter {
         match self.adapter_type() {
             // TODO: generalize these branches and invoke replay once it's deemed safe (i.e.
             // doesn't break tests as they are now)
-            Bigquery => {
+            Bigquery if !matches!(self.inner_adapter(), Replay(_, _)) => {
                 let engine = self.engine();
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
                 let batch = engine.execute(Some(state), conn, ctx, sql)?;

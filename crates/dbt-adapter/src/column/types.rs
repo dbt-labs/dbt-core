@@ -963,7 +963,54 @@ impl Column {
     pub fn data_type(&self) -> String {
         // FIXME: replace all implementations with core_data_type
         match self._adapter_type {
-            AdapterType::Bigquery => self.core_data_type.clone(),
+            AdapterType::Bigquery => {
+                fn bigquery_data_type_inner(col: &Column) -> String {
+                    let base = if col._fields.is_empty() {
+                        // `core_data_type` may already include an ARRAY wrapper (e.g. "ARRAY<INT64>")
+                        // for repeated columns due to how BigQuery models arrays via `mode=REPEATED`.
+                        // Render the element type as the base and then re-apply `mode` uniformly.
+                        if matches!(col.mode(), BigqueryColumnMode::Repeated) {
+                            let backend = backend_of(AdapterType::Bigquery);
+                            let inner = SqlType::parse(backend, col.core_data_type.as_str())
+                                .ok()
+                                .and_then(|(sql_type, _nullable)| match sql_type {
+                                    SqlType::Array(Some(inner)) => Some(inner),
+                                    _ => None,
+                                });
+
+                            if let Some(inner) = inner {
+                                Column::make_degenerate_types_from_parsed_sqltype(
+                                    AdapterType::Bigquery,
+                                    inner.as_ref(),
+                                )
+                                .1
+                            } else {
+                                col.core_data_type.clone()
+                            }
+                        } else {
+                            col.core_data_type.clone()
+                        }
+                    } else {
+                        let fields_str = col
+                            ._fields
+                            .iter()
+                            .map(|f| {
+                                let field_type = bigquery_data_type_inner(f);
+                                format!("{} {field_type}", col.as_static().quote(f.name()))
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!("STRUCT<{fields_str}>")
+                    };
+
+                    if matches!(col.mode(), BigqueryColumnMode::Repeated) {
+                        format!("ARRAY<{base}>")
+                    } else {
+                        base
+                    }
+                }
+                bigquery_data_type_inner(self)
+            }
             _ => {
                 if self.is_string() {
                     self.as_static().string_type(Some(
@@ -1356,6 +1403,67 @@ mod tests {
                 )
                 .all(|(a, b)| a.cmp_column(b))
         );
+    }
+
+    #[test]
+    fn test_bigquery_data_type_should_render_struct_fields_when_present() {
+        let city = Column::new_bigquery(
+            "city".to_string(),
+            "STRING".to_string(),
+            &[],
+            BigqueryColumnMode::Nullable,
+        );
+
+        let coords = Column::new_bigquery(
+            "coords".to_string(),
+            "STRUCT".to_string(),
+            &[
+                Column::new_bigquery(
+                    "lat".to_string(),
+                    "FLOAT64".to_string(),
+                    &[],
+                    BigqueryColumnMode::Nullable,
+                ),
+                Column::new_bigquery(
+                    "lon".to_string(),
+                    "FLOAT64".to_string(),
+                    &[],
+                    BigqueryColumnMode::Nullable,
+                ),
+            ],
+            BigqueryColumnMode::Nullable,
+        );
+
+        let location = Column::new_bigquery(
+            "location_entity".to_string(),
+            "STRUCT".to_string(),
+            &[city, coords],
+            BigqueryColumnMode::Nullable,
+        );
+
+        assert_eq!(
+            location.data_type(),
+            "STRUCT<`city` STRING, `coords` STRUCT<`lat` FLOAT64, `lon` FLOAT64>>"
+        );
+    }
+
+    #[test]
+    fn test_bigquery_data_type_should_render_repeated_struct_fields_as_array() {
+        let authors = Column::new_bigquery(
+            "authors".to_string(),
+            "STRING".to_string(),
+            &[],
+            BigqueryColumnMode::Repeated,
+        );
+
+        let content = Column::new_bigquery(
+            "content_entity".to_string(),
+            "STRUCT".to_string(),
+            &[authors],
+            BigqueryColumnMode::Nullable,
+        );
+
+        assert_eq!(content.data_type(), "STRUCT<`authors` ARRAY<STRING>>");
     }
 
     #[test]
