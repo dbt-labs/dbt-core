@@ -431,7 +431,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Documentation: {
             "paths": project.docs_paths,
-            "extensions": [".md"],
+            "extensions": [".md", ".jinja", ".jinja2", ".j2"],
             "parser": "DocumentationParser",
         },
         ParseFileType.Schema: {

@@ -213,3 +213,49 @@ class DocumentationParserTest(unittest.TestCase):
             docs_values[1].block_contents,
             "```\n    {% docs %}some doc{% enddocs %}\n    ```",
         )
+
+    def test_load_file_jinja_extensions(self):
+        """Test that .jinja, .jinja2, and .j2 extensions work for doc files."""
+        parser = docs.DocumentationParser(
+            root_project=self.root_project_config,
+            manifest=Manifest(),
+            project=self.subdir_project_config,
+        )
+
+        # Test .jinja extension
+        file_block = self._build_file(TEST_DOCUMENTATION_FILE, "test_file.jinja")
+        parser.parse_file(file_block)
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        self.assertEqual(docs_values[0].name, "snowplow_sessions")
+        self.assertEqual(docs_values[1].name, "snowplow_sessions__session_id")
+
+    def test_load_file_jinja2_extension(self):
+        """Test that .jinja2 extension works for doc files."""
+        parser = docs.DocumentationParser(
+            root_project=self.root_project_config,
+            manifest=Manifest(),
+            project=self.subdir_project_config,
+        )
+
+        file_block = self._build_file(TEST_DOCUMENTATION_FILE, "test_file.jinja2")
+        parser.parse_file(file_block)
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        self.assertEqual(docs_values[0].name, "snowplow_sessions")
+        self.assertEqual(docs_values[1].name, "snowplow_sessions__session_id")
+
+    def test_load_file_j2_extension(self):
+        """Test that .j2 extension works for doc files."""
+        parser = docs.DocumentationParser(
+            root_project=self.root_project_config,
+            manifest=Manifest(),
+            project=self.subdir_project_config,
+        )
+
+        file_block = self._build_file(TEST_DOCUMENTATION_FILE, "test_file.j2")
+        parser.parse_file(file_block)
+        docs_values = sorted(parser.manifest.docs.values(), key=lambda n: n.name)
+        self.assertEqual(len(docs_values), 2)
+        self.assertEqual(docs_values[0].name, "snowplow_sessions")
+        self.assertEqual(docs_values[1].name, "snowplow_sessions__session_id")
