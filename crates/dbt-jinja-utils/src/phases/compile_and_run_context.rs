@@ -326,10 +326,11 @@ pub struct RefFunction {
     runtime_config: Arc<DbtRuntimeConfig>,
     /// Optional validation configuration - None means no validation
     validation_config: Option<RefValidationConfig>,
-    /// Only meaningful for node contexts; base context leaves this unset
-    static_analysis_unsafe: Option<bool>,
     /// Optional microbatch context for filtering refs during batch execution
     microbatch_context: Option<MicrobatchRefContext>,
+    /// The unique_id of the node that owns this ref context.
+    /// Used for O(1) defer decisions via `NodeResolver::prefers_deferred`.
+    current_node_unique_id: String,
 }
 
 #[derive(Debug)]
@@ -352,8 +353,8 @@ impl RefFunction {
             package_name,
             runtime_config,
             validation_config: None,
-            static_analysis_unsafe: None,
             microbatch_context: None,
+            current_node_unique_id: String::new(),
         }
     }
 
@@ -364,7 +365,7 @@ impl RefFunction {
         runtime_config: Arc<DbtRuntimeConfig>,
         allowed_dependencies: Arc<BTreeSet<String>>,
         skip_validation: bool,
-        static_analysis_unsafe: bool,
+        current_node_unique_id: String,
     ) -> Self {
         Self {
             node_resolver,
@@ -374,8 +375,8 @@ impl RefFunction {
                 allowed_dependencies,
                 skip_validation,
             }),
-            static_analysis_unsafe: Some(static_analysis_unsafe),
             microbatch_context: None,
+            current_node_unique_id,
         }
     }
 
@@ -383,14 +384,15 @@ impl RefFunction {
     ///
     /// This is used during microbatch execution to filter refs to models
     /// with event_time configured to only include rows within the batch window.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_microbatch_context(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
         allowed_dependencies: Arc<BTreeSet<String>>,
         skip_validation: bool,
-        static_analysis_unsafe: bool,
         microbatch_context: MicrobatchRefContext,
+        current_node_unique_id: String,
     ) -> Self {
         Self {
             node_resolver,
@@ -400,8 +402,8 @@ impl RefFunction {
                 allowed_dependencies,
                 skip_validation,
             }),
-            static_analysis_unsafe: Some(static_analysis_unsafe),
             microbatch_context: Some(microbatch_context),
+            current_node_unique_id,
         }
     }
 
@@ -412,14 +414,6 @@ impl RefFunction {
         Self {
             microbatch_context: Some(microbatch_context),
             ..self
-        }
-    }
-
-    fn should_use_deferred(&self) -> bool {
-        if self.node_resolver.compile_or_test() {
-            self.static_analysis_unsafe.unwrap_or(false)
-        } else {
-            true
         }
     }
 
@@ -508,11 +502,13 @@ impl Object for RefFunction {
             Ok((unique_id, relation, _, deferred_relation)) => {
                 // Validate that this ref is allowed (only if validation is configured)
                 self.validate_dependency(&unique_id, &package_name, &model_name)?;
-                // Here, we check if we should use the deferred relation or the normal relation
-                // This is only relevant for the compile or test command
-                // If we are compiling or testing, and the static analysis is unsafe, we use the deferred relation
-                // Otherwise, we use the normal relation
-                let resolved_relation = match (self.should_use_deferred(), deferred_relation) {
+                // Use phase-aware defer logic: check if we should use the deferred
+                // (production) relation for this specific upstream node.
+                let resolved_relation = match (
+                    self.node_resolver
+                        .prefers_deferred(&self.current_node_unique_id, &unique_id),
+                    deferred_relation,
+                ) {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };

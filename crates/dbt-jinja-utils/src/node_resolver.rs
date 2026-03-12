@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     iter::Iterator,
     sync::Arc,
 };
@@ -21,7 +21,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        DbtFunction, DbtSource, InternalDbtNodeAttributes, Nodes,
+        DbtFunction, DbtSource, InternalDbtNodeAttributes, IntrospectionKind, Nodes,
         common::{DbtMaterialization, DbtQuoting},
         ref_and_source::{DbtRef, DbtSourceWrapper},
         telemetry::NodeType,
@@ -55,6 +55,15 @@ pub struct NodeResolver {
     pub renaming: BTreeMap<String, (String, String, String)>,
     /// Whether this is a compile or test command
     pub compile_or_test: bool,
+    /// Per-node introspection kind for O(1) lookup by unique_id.
+    /// Populated during `set_defer_context`.
+    pub node_introspections: HashMap<String, IntrospectionKind>,
+    /// Nodes that will produce analyzed schemas (strict SA, not frontier, not source).
+    /// For compile safe-introspection: defer upstream if NOT in this set.
+    pub has_analyzed_schema: HashSet<String>,
+    /// Nodes that will be materialized (selected, not frontier, not source).
+    /// For run path: defer upstream if NOT in this set.
+    pub nodes_materialized: HashSet<String>,
 }
 
 impl NodeResolver {
@@ -733,6 +742,38 @@ impl NodeResolverTracker for NodeResolver {
 
     fn compile_or_test(&self) -> bool {
         self.compile_or_test
+    }
+
+    fn set_defer_context(
+        &mut self,
+        node_introspections: HashMap<String, IntrospectionKind>,
+        has_analyzed_schema: HashSet<String>,
+        nodes_materialized: HashSet<String>,
+    ) {
+        self.node_introspections = node_introspections;
+        self.has_analyzed_schema = has_analyzed_schema;
+        self.nodes_materialized = nodes_materialized;
+    }
+
+    fn prefers_deferred(&self, current_node_id: &str, upstream_id: &str) -> bool {
+        if self.compile_or_test {
+            let ik = self
+                .node_introspections
+                .get(current_node_id)
+                .copied()
+                .unwrap_or_default();
+            if ik == IntrospectionKind::None {
+                return false;
+            }
+            if ik.is_unsafe() {
+                return true;
+            }
+            // Safe introspection: defer if upstream won't have analyzed schema
+            !self.has_analyzed_schema.contains(upstream_id)
+        } else {
+            // Run path: defer if upstream won't be materialized
+            !self.nodes_materialized.contains(upstream_id)
+        }
     }
 }
 

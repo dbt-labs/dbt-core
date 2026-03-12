@@ -321,6 +321,23 @@ pub trait NodeResolverTracker: fmt::Debug + Send + Sync {
         adapter_type: AdapterType,
         is_frontier: bool,
     ) -> FsResult<()>;
+
+    /// Store pre-computed defer context for O(1) per-ref evaluation.
+    /// Called once after defer phases + SA classification, before compilation.
+    fn set_defer_context(
+        &mut self,
+        _node_introspections: HashMap<String, crate::schemas::IntrospectionKind>,
+        _has_analyzed_schema: HashSet<String>,
+        _nodes_materialized: HashSet<String>,
+    ) {
+        // No-op default for resolvers that don't need defer support
+    }
+
+    /// Returns whether the deferred (production) relation should be used for
+    /// the given upstream node when referenced from `current_node_id`.
+    fn prefers_deferred(&self, _current_node_id: &str, _upstream_id: &str) -> bool {
+        false
+    }
 }
 
 // test only

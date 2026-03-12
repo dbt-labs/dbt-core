@@ -846,7 +846,6 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             &root_project_name,
             Arc::new(node_resolver.clone()),
             runtime_config.clone(),
-            StaticAnalysisKind::Strict.into(),
             true,
         );
 
