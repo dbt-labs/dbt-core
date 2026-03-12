@@ -10,7 +10,7 @@ from dbt.artifacts.resources.v1.components import (
     HasRelationMetadata,
     Quoting,
 )
-from dbt.artifacts.resources.v1.config import BaseConfig, MergeBehavior
+from dbt.artifacts.resources.v1.config import BaseConfig, MergeBehavior, ContractConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import CompilationError
@@ -25,6 +25,10 @@ class SourceConfig(BaseConfig):
     loaded_at_query: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
+    schema: Optional[str] = None
+    database: Optional[str] = None
+    quoting: Quoting = field(default_factory=Quoting)
+    contract: ContractConfig = field(default_factory=ContractConfig)
 
 
 @dataclass
