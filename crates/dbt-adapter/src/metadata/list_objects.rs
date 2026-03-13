@@ -18,12 +18,14 @@ pub trait ListRelationsSchemasStrategy: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         token: CancellationToken,
+        node_id: String,
     ) -> AsyncAdapterResult<'static, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
     fn run_by_patterns(
         &self,
         patterns: Arc<Vec<RelationPattern>>,
         token: CancellationToken,
+        node_id: String,
     ) -> AsyncAdapterResult<'static, Vec<(String, AdapterResult<RelationSchemaPair>)>>;
 }
 
@@ -41,5 +43,6 @@ pub trait FreshnessStrategy: Send + Sync {
         &self,
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
+        node_id: String,
     ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>>;
 }

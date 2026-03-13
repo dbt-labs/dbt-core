@@ -151,6 +151,7 @@ impl MetadataAdapter for PostgresMetadataAdapter {
         _unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
         _relations: &[Arc<dyn BaseRelation>],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let future = async move { todo!("PostgreSQL's list_relations_schemas") };
         Box::pin(future)
@@ -159,6 +160,7 @@ impl MetadataAdapter for PostgresMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("PostgresAdapter::list_relations_schemas_by_patterns")
     }
@@ -166,6 +168,7 @@ impl MetadataAdapter for PostgresMetadataAdapter {
     fn freshness_inner(
         &self,
         _relations: &[Arc<dyn BaseRelation>],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         todo!("PostgresAdapter::freshness")
     }
@@ -181,6 +184,7 @@ impl MetadataAdapter for PostgresMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         _db_schemas: &[CatalogAndSchema],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         // FIXME: Implement cache hydration
         let future = async move { Ok(BTreeMap::new()) };

@@ -160,13 +160,13 @@ impl DatabricksMetadataAdapter {
     /// Get the Databricks Runtime version, caching the result for subsequent calls.
     ///
     /// To bypass the cache, use [`get_dbr_version()`](Self::get_dbr_version) directly.
-    pub(crate) fn dbr_version(&self) -> AdapterResult<DbrVersion> {
+    pub(crate) fn dbr_version(&self, node_id: String) -> AdapterResult<DbrVersion> {
         static CACHED_DBR_VERSION: OnceLock<AdapterResult<DbrVersion>> = OnceLock::new();
 
         CACHED_DBR_VERSION
-            .get_or_init(|| {
+            .get_or_init(move || {
                 let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
-                let mut conn = self.adapter.borrow_tlocal_connection(None, None)?;
+                let mut conn = self.adapter.borrow_tlocal_connection(None, node_id)?;
                 Self::get_dbr_version(&self.adapter, &query_ctx, conn.as_mut())
             })
             .clone()
@@ -739,12 +739,13 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
         let dbr_version = match self.adapter.adapter_type() {
             AdapterType::Spark => None,
-            AdapterType::Databricks => match self.dbr_version() {
+            AdapterType::Databricks => match self.dbr_version(node_id.clone()) {
                 Ok(version) => Some(version),
                 Err(e) => {
                     return Box::pin(future::ready(Err(Cancellable::Error(e))));
@@ -757,7 +758,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let new_connection_f = Box::new(move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         });
 
@@ -854,6 +855,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("DatabricksAdapter::list_relations_schemas_by_patterns")
     }
@@ -861,6 +863,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -878,7 +881,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 
@@ -956,13 +959,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 

@@ -19,7 +19,7 @@ use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
-use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
+use crate::query_ctx::{node_id_for_connection, node_id_from_state, query_ctx_from_state};
 use crate::record_batch_utils::{
     RenamedColumn, disambiguate_column_names, extract_first_value_as_i64, get_column_values,
 };
@@ -187,7 +187,7 @@ impl ConcreteAdapter {
         &self,
         conn: &'_ mut dyn Connection,
         warehouse: String,
-        node_id: &str,
+        node_id: String,
     ) -> FsResult<()> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_use_warehouse(conn, warehouse, node_id),
@@ -206,7 +206,7 @@ impl ConcreteAdapter {
 
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
-    pub fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: &str) -> FsResult<()> {
+    pub fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: String) -> FsResult<()> {
         match self.adapter_type() {
             Snowflake => {
                 let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
@@ -350,7 +350,7 @@ impl ConcreteAdapter {
     pub fn borrow_tlocal_connection(
         &self,
         state: Option<&State>,
-        node_id: Option<String>,
+        node_id: String,
     ) -> Result<ConnectionGuard<'_>, minijinja::Error> {
         borrow_tlocal_connection(self.engine().as_ref(), state, node_id)
     }
@@ -1103,7 +1103,7 @@ impl ConcreteAdapter {
             (_, "transactions") => Ok(Some(true)),
             (Databricks, _) => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    self.borrow_tlocal_connection(Some(state), node_id_for_connection(state))?;
                 let has_capability = self.has_dbr_capability(state, conn.as_mut(), name)?;
                 Ok(Some(has_capability))
             }
@@ -4060,7 +4060,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         &self,
         conn: &'_ mut dyn Connection,
         warehouse: String,
-        node_id: &str,
+        node_id: String,
     ) -> FsResult<()>;
 
     fn replay_verify_database(&self, database: &str) -> AdapterResult<Value>;

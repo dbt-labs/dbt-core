@@ -146,13 +146,14 @@ impl MetadataAdapter for FabricMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let new_conn_f = Box::new({
             let adapter = self.adapter.clone();
             move || {
                 adapter
                     .engine()
-                    .new_connection(None, None)
+                    .new_connection(None, node_id.clone())
                     .map_err(Cancellable::Error)
             }
         });
@@ -205,6 +206,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         patterns: &[RelationPattern],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         let _ = patterns;
 
@@ -214,6 +216,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         let _ = relations;
 
@@ -223,6 +226,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         let _ = db_schemas;
 

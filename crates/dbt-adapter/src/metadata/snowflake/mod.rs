@@ -376,6 +376,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
     fn list_user_defined_functions_inner(
         &self,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+        node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
         type Acc = Vec<UDF>;
 
@@ -395,7 +396,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 
@@ -483,6 +484,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -496,7 +498,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let new_connection_f = Box::new(move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         });
 
@@ -538,6 +540,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         relations_pattern: &[RelationPattern],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         // All results are accumulated in a Vec of pairs
         type Acc = Vec<(String, AdapterResult<RelationSchemaPair>)>;
@@ -587,7 +590,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 
@@ -636,6 +639,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -653,7 +657,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 
@@ -725,13 +729,14 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 

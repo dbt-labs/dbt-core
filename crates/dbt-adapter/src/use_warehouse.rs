@@ -13,11 +13,11 @@ pub struct UseWarehouseGuard<'a> {
 }
 
 impl<'a> UseWarehouseGuard<'a> {
-    pub fn new(adapter: &'a BridgeAdapter, original_wh: Option<String>, node_id: &str) -> Self {
+    pub fn new(adapter: &'a BridgeAdapter, original_wh: Option<String>, node_id: String) -> Self {
         Self {
             adapter,
             original_wh,
-            node_id: node_id.to_string(),
+            node_id,
         }
     }
 }
@@ -28,7 +28,7 @@ impl Drop for UseWarehouseGuard<'_> {
             // This is best effort
             let _ = self
                 .adapter
-                .use_warehouse(Some(original_wh.to_string()), &self.node_id);
+                .use_warehouse(Some(original_wh.to_string()), self.node_id.clone());
         }
     }
 }

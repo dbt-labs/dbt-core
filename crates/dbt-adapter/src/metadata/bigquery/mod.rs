@@ -869,6 +869,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -880,7 +881,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             let node_id = unique_id.clone().unwrap_or_else(|| "sources".to_string());
             adapter
                 .engine()
-                .new_connection(None, Some(node_id))
+                .new_connection(None, node_id)
                 .map_err(Cancellable::Error)
         });
 
@@ -970,6 +971,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("list_relations_schemas_by_patterns for BigQuery")
     }
@@ -977,6 +979,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -994,7 +997,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 
@@ -1051,13 +1054,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, None)
+                .new_connection(None, node_id.clone())
                 .map_err(Cancellable::Error)
         };
 

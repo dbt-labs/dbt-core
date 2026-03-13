@@ -93,7 +93,7 @@ impl Connection for NoopConnection {
         ))
     }
 
-    fn update_node_id(&mut self, _node_id: Option<String>) {}
+    fn update_node_id(&mut self, _node_id: String) {}
 }
 
 /// Behavior flags from dbt-core that have been removed in Fusion.
@@ -184,13 +184,14 @@ pub trait AdapterEngine: Send + Sync {
     fn new_connection(
         &self,
         state: Option<&State>,
-        node_id: Option<String>,
+        node_id: String,
     ) -> AdapterResult<Box<dyn Connection>>;
 
     /// Create a new connection to the warehouse with the given config.
     fn new_connection_with_config(
         &self,
         config: &AdapterConfig,
+        node_id: String,
     ) -> AdapterResult<Box<dyn Connection>>;
 
     /// Execute the given SQL query or statement with options.
@@ -843,7 +844,7 @@ impl AdapterEngine for XdbcEngine {
     fn new_connection(
         &self,
         state: Option<&State>,
-        node_id: Option<String>,
+        node_id: String,
     ) -> AdapterResult<Box<dyn Connection>> {
         let do_create_connection =
             |adapter_type: AdapterType| -> AdapterResult<Box<dyn Connection>> {
@@ -865,7 +866,7 @@ impl AdapterEngine for XdbcEngine {
                     }
                     _ => Cow::Borrowed(&self.config),
                 };
-                self.new_connection_with_config(config.as_ref())
+                self.new_connection_with_config(config.as_ref(), node_id.clone())
             };
 
         match &self.mode {
@@ -886,9 +887,10 @@ impl AdapterEngine for XdbcEngine {
     fn new_connection_with_config(
         &self,
         config: &AdapterConfig,
+        node_id: String,
     ) -> AdapterResult<Box<dyn Connection>> {
         if let EngineMode::Replay(path) = &self.mode {
-            return Ok(Box::new(ReplayEngineConnection::new(path.clone(), None)));
+            return Ok(Box::new(ReplayEngineConnection::new(path.clone(), node_id)));
         }
         if !self.mode.has_real_connections() {
             return Ok(Box::new(NoopConnection));
@@ -1028,7 +1030,7 @@ impl AdapterEngine for SidecarEngine {
     fn new_connection(
         &self,
         state: Option<&State>,
-        node_id: Option<String>,
+        node_id: String,
     ) -> AdapterResult<Box<dyn Connection>> {
         self.client.new_connection(state, node_id)
     }
@@ -1036,6 +1038,7 @@ impl AdapterEngine for SidecarEngine {
     fn new_connection_with_config(
         &self,
         _config: &AdapterConfig,
+        _node_id: String,
     ) -> AdapterResult<Box<dyn Connection>> {
         // Sidecar mode doesn't use config-based connections
         Ok(Box::new(NoopConnection) as Box<dyn Connection>)

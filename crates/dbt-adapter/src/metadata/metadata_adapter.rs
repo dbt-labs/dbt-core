@@ -143,6 +143,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_user_defined_functions_inner(
         &self,
         _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
         Box::pin(async move { Ok(vec![]) })
     }
@@ -154,12 +155,13 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_user_defined_functions<'a>(
         &'a self,
         catalog_schemas: &'a BTreeMap<String, BTreeSet<String>>,
+        node_id: String,
     ) -> AsyncAdapterResult<'a, Vec<UDF>> {
         with_time_machine_metadata_wrapper(
             "global",
             "list_user_defined_functions",
             args_list_udfs(catalog_schemas),
-            self.list_user_defined_functions_inner(catalog_schemas),
+            self.list_user_defined_functions_inner(catalog_schemas, node_id),
         )
     }
 
@@ -172,6 +174,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
     /// List relations and their schemas.
@@ -183,6 +186,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let caller_id = unique_id.clone().unwrap_or_else(|| "global".to_string());
         with_time_machine_metadata_wrapper(
@@ -193,7 +197,7 @@ pub trait MetadataAdapter: Send + Sync {
                 phase.map(|p| p.as_str().to_string()),
                 relations.iter().map(|r| r.semantic_fqn()),
             ),
-            self.list_relations_schemas_inner(unique_id, phase, relations),
+            self.list_relations_schemas_inner(unique_id, phase, relations, node_id),
         )
     }
 
@@ -206,9 +210,10 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<SdfSchema>>> {
         let future = async move {
-            self.list_relations_schemas(unique_id, phase, relations)
+            self.list_relations_schemas(unique_id, phase, relations, node_id)
                 .await
                 .map(|map| {
                     map.into_iter()
@@ -232,6 +237,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         patterns: &[RelationPattern],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>>;
 
     /// List relations and their schemas by patterns.
@@ -242,6 +248,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_relations_schemas_by_patterns<'a>(
         &'a self,
         patterns: &'a [RelationPattern],
+        node_id: String,
     ) -> AsyncAdapterResult<'a, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         with_time_machine_metadata_wrapper(
             "global",
@@ -251,7 +258,7 @@ pub trait MetadataAdapter: Send + Sync {
                     .iter()
                     .map(|p| format!("{}.{}.{}", p.database, p.schema_pattern, p.table_pattern)),
             ),
-            self.list_relations_schemas_by_patterns_inner(patterns),
+            self.list_relations_schemas_by_patterns_inner(patterns, node_id),
         )
     }
 
@@ -262,6 +269,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>>;
 
     /// Get freshness of relations.
@@ -271,12 +279,13 @@ pub trait MetadataAdapter: Send + Sync {
     fn freshness<'a>(
         &'a self,
         relations: &'a [Arc<dyn BaseRelation>],
+        node_id: String,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         with_time_machine_metadata_wrapper(
             "global",
             "freshness",
             args_freshness(relations.iter().map(|r| r.semantic_fqn())),
-            self.freshness_inner(relations),
+            self.freshness_inner(relations, node_id),
         )
     }
 
@@ -290,6 +299,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
 
     /// List relations in the specified [CatalogAndSchema] in parallel.
@@ -302,6 +312,7 @@ pub trait MetadataAdapter: Send + Sync {
     fn list_relations_in_parallel<'a>(
         &'a self,
         db_schemas: &'a [CatalogAndSchema],
+        node_id: String,
     ) -> AsyncAdapterResult<'a, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         with_time_machine_metadata_wrapper(
             "global",
@@ -311,7 +322,7 @@ pub trait MetadataAdapter: Send + Sync {
                     .iter()
                     .map(|s| (s.resolved_catalog.clone(), s.resolved_schema.clone())),
             ),
-            self.list_relations_in_parallel_inner(db_schemas),
+            self.list_relations_in_parallel_inner(db_schemas, node_id),
         )
     }
 }
