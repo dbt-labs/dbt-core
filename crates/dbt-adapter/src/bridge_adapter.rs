@@ -1456,6 +1456,8 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// Use `has_feature(capability_name)` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn has_dbr_capability(
         &self,
@@ -1464,10 +1466,18 @@ impl BaseAdapter for BridgeAdapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let mut conn =
-                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.has_dbr_capability(state, conn.as_mut(), capability_name)?;
-                Ok(Value::from(result))
+                match adapter.adapter_type() {
+                    AdapterType::Databricks => {
+                        let has_feature = adapter.has_feature(state, capability_name)?;
+                        Ok(Value::from(has_feature.unwrap_or(false)))
+                    },
+                    _ => {
+                        Err(AdapterError::new(
+                            AdapterErrorKind::NotSupported,
+                            format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
+                        ).into())
+                    }
+                }
             }
             Parse(_) => Ok(Value::from(false)),
         }
@@ -1495,19 +1505,44 @@ impl BaseAdapter for BridgeAdapter {
     fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
         let result = match &self.inner {
             Typed { adapter, .. } => adapter.has_feature(state, name)?,
-            Parse(_) => false,
+            Parse(_) => None,
         };
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self), level = "trace")]
+    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// Use `has_feature("motherduck")` instead.
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
-        self.has_feature(state, "motherduck")
+        match self.adapter_type() {
+            AdapterType::DuckDB => self.has_feature(state, "motherduck"),
+            _ => Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "is_motherduck() is only available for the DuckDB adapter. Use the portable adapter.has_feature(\"motherduck\") instead.",
+            )),
+        }
     }
 
-    #[tracing::instrument(skip(self), level = "trace")]
+    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// Use `!has_feature("transactions")` instead.
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn disable_transactions(&self, state: &State) -> AdapterResult<Value> {
-        self.has_feature(state, "transactions")
+        let result = match &self.inner {
+            Typed { adapter, .. } => match adapter.adapter_type() {
+                AdapterType::DuckDB => {
+                    let transactions_enabled = adapter.has_feature(state, "transactions")?;
+                    Ok(!transactions_enabled.unwrap_or(true))
+                }
+                _ => Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    "disable_transactions() is only available for the DuckDB adapter. Use the portable !has_feature(\"transactions\") instead.",
+                )),
+            },
+            // Assume transactions are enabled (!disable_transactions) during parse phase.
+            // It's unlikelye that parse phase code would depend on this result for anything.
+            Parse(_) => Ok(false),
+        };
+        Ok(Value::from(result?))
     }
 
     #[tracing::instrument(skip(self), level = "trace")]

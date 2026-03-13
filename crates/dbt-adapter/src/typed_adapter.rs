@@ -1084,23 +1084,28 @@ impl ConcreteAdapter {
     }
 
     /// Returns true if the adapter supports the given feature.
-    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<bool> {
-        match (self.adapter_type(), name) {
-            (DuckDB, "motherduck") => Ok(self
-                .engine()
+    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Option<bool>> {
+        // PRE-CONDITION: adapter_type is DuckDB
+        let is_motherduck = |engine: &dyn AdapterEngine| {
+            engine
                 .config("path")
                 .map(|p| dbt_auth::is_motherduck_path(&p))
-                .unwrap_or(false)),
-            (DuckDB, "transactions") => Ok(!self
-                .engine()
-                .config("path")
+                .unwrap_or(false)
+        };
+
+        match (self.adapter_type(), name) {
+            (DuckDB, "motherduck") => Ok(Some(is_motherduck(self.engine().as_ref()))),
+            (DuckDB, "transactions") => {
                 // MotherDuck does not support explicit transactions
-                .map(|p| !dbt_auth::is_motherduck_path(&p))
-                .unwrap_or(true)),
+                Ok(Some(!is_motherduck(self.engine().as_ref())))
+            }
+            // Assume that all other adapters support transactions for now.
+            (_, "transactions") => Ok(Some(true)),
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                self.has_dbr_capability(state, conn.as_mut(), name)
+                let has_capability = self.has_dbr_capability(state, conn.as_mut(), name)?;
+                Ok(Some(has_capability))
             }
             _ => {
                 emit_warn_log_message(
@@ -1112,7 +1117,9 @@ impl ConcreteAdapter {
                     ),
                     None,
                 );
-                Ok(false)
+                // None is falsy, so features should be named in such a way that
+                // `false` is the most reasonable assumption.
+                Ok(None)
             }
         }
     }
@@ -2891,36 +2898,29 @@ impl ConcreteAdapter {
     /// Check if a DBR capability is available for current compute.
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
-    pub fn has_dbr_capability(
+    ///
+    /// PRE-CONDITION: adapter_type must be Databricks
+    fn has_dbr_capability(
         &self,
         state: &State,
         conn: &mut dyn Connection,
         capability_name: &str,
     ) -> AdapterResult<bool> {
-        match self.adapter_type() {
-            Databricks => {
-                let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
-                    .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
+        debug_assert!(self.adapter_type() == Databricks);
+        let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
 
-                let is_cluster = self.is_cluster()?;
-                let is_sql_warehouse = !is_cluster;
+        let is_cluster = self.is_cluster()?;
+        let is_sql_warehouse = !is_cluster;
 
-                let query_ctx =
-                    query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
-                let dbr_version =
-                    DatabricksMetadataAdapter::get_dbr_version(self, &query_ctx, conn)?;
+        let query_ctx = query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
+        let dbr_version = DatabricksMetadataAdapter::get_dbr_version(self, &query_ctx, conn)?;
 
-                Ok(dbr_capabilities::has_capability(
-                    capability,
-                    dbr_version,
-                    is_sql_warehouse,
-                ))
-            }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | DuckDB | Spark
-            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
-                unimplemented!("has_dbr_capability: Only available for Databricks Adapter")
-            }
-        }
+        Ok(dbr_capabilities::has_capability(
+            capability,
+            dbr_version,
+            is_sql_warehouse,
+        ))
     }
 
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
