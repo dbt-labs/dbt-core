@@ -31,6 +31,7 @@ from dbt.graph.selector_methods import (
     UnitTestSelectorMethod,
     VersionSelectorMethod,
 )
+from dbt_common.ui import warning_tag
 from tests.unit.utils import replace_config
 from tests.unit.utils.manifest import (
     make_exposure,
@@ -780,7 +781,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedExceedsLimitSamePath"
         msg = event.message()
-        assert msg.startswith("Found a seed (pkg.seed) >1MB in size")
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
@@ -793,7 +794,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedExceedsLimitSamePath"
         msg = event.message()
-        assert msg.startswith("Found a seed (pkg.seed) >1MB in size")
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
 
 
 def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state, seed):
@@ -807,7 +808,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedIncreased"
         msg = event.message()
-        assert msg.startswith("Found a seed (pkg.seed) >1MB in size")
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
@@ -820,7 +821,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedIncreased"
         msg = event.message()
-        assert msg.startswith("Found a seed (pkg.seed) >1MB in size")
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
 
 
 def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state, seed):
