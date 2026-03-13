@@ -318,7 +318,7 @@ impl Constraints {
 pub(crate) struct ConstraintsLoader;
 
 impl ConstraintsLoader {
-    pub fn new(
+    pub fn new_component_type_erased(
         set_non_nulls: IndexSet<String>,
         unset_non_nulls: IndexSet<String>,
         set_constraints: IndexSet<TypedConstraint>,

@@ -20,7 +20,7 @@ pub(crate) struct Config {
 /// Component for Databricks liquid clustering
 pub(crate) type LiquidClustering = SimpleComponentConfigImpl<Config>;
 
-fn new(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClustering {
+fn new_component(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClustering {
     LiquidClustering {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -34,19 +34,22 @@ fn new(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClustering {
 
 fn from_remote_state(_state: &DatabricksRelationMetadata) -> LiquidClustering {
     // TODO: this currently just returns an empty config
-    new(false, Vec::new())
+    new_component(false, Vec::new())
 }
 
 fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> LiquidClustering {
     // TODO: this currently just returns an empty config
-    new(false, Vec::new())
+    new_component(false, Vec::new())
 }
 
 pub(crate) struct LiquidClusteringLoader;
 
 impl LiquidClusteringLoader {
-    pub fn new(auto_cluster: bool, cluster_by: Vec<String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(auto_cluster, cluster_by))
+    pub fn new_component_type_erased(
+        auto_cluster: bool,
+        cluster_by: Vec<String>,
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(auto_cluster, cluster_by))
     }
 
     pub fn type_name() -> &'static str {

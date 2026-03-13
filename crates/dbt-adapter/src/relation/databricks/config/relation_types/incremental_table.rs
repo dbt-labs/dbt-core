@@ -134,69 +134,86 @@ mod tests {
                     // TODO: add liquid clustering to changeset here once that gets implemented
                     (
                         components::ColumnCommentsLoader::type_name(),
-                        ComponentConfigChange::Some(components::ColumnCommentsLoader::new(
-                            IndexMap::from_iter([(
-                                "`a_column`".to_string(),
-                                "new comment".to_string(),
-                            )]),
-                        )),
+                        ComponentConfigChange::Some(
+                            components::ColumnCommentsLoader::new_component_type_erased(
+                                IndexMap::from_iter([(
+                                    "`a_column`".to_string(),
+                                    "new comment".to_string(),
+                                )]),
+                            ),
+                        ),
                     ),
                     (
                         components::ColumnTagsLoader::type_name(),
-                        ComponentConfigChange::Some(components::ColumnTagsLoader::new(
-                            IndexMap::from_iter([(
-                                "b_column".to_string(),
-                                IndexMap::from_iter([("col_tag".to_string(), "new".to_string())]),
-                            )]),
-                        )),
+                        ComponentConfigChange::Some(
+                            components::ColumnTagsLoader::new_component_type_erased(
+                                IndexMap::from_iter([(
+                                    "b_column".to_string(),
+                                    IndexMap::from_iter([(
+                                        "col_tag".to_string(),
+                                        "new".to_string(),
+                                    )]),
+                                )]),
+                            ),
+                        ),
                     ),
                     (
                         components::ConstraintsLoader::type_name(),
-                        ComponentConfigChange::Some(components::ConstraintsLoader::new(
-                            // set non-nulls
-                            IndexSet::from_iter(["a_column".to_string()]),
-                            // unset non-nulls
-                            IndexSet::from_iter(["b_column".to_string()]),
-                            IndexSet::new(),
-                            IndexSet::new(),
-                        )),
+                        ComponentConfigChange::Some(
+                            components::ConstraintsLoader::new_component_type_erased(
+                                // set non-nulls
+                                IndexSet::from_iter(["a_column".to_string()]),
+                                // unset non-nulls
+                                IndexSet::from_iter(["b_column".to_string()]),
+                                IndexSet::new(),
+                                IndexSet::new(),
+                            ),
+                        ),
                     ),
                     (
                         components::RelationCommentLoader::type_name(),
-                        ComponentConfigChange::Some(components::RelationCommentLoader::new(Some(
-                            "new comment".to_string(),
-                        ))),
+                        ComponentConfigChange::Some(
+                            components::RelationCommentLoader::new_component_type_erased(Some(
+                                "new comment".to_string(),
+                            )),
+                        ),
                     ),
                     (
                         components::RelationTagsLoader::type_name(),
-                        ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                            IndexMap::from_iter([
-                                ("a_tag".to_string(), "new".to_string()),
-                                ("b_tag".to_string(), "old".to_string()),
-                            ]),
-                        )),
+                        ComponentConfigChange::Some(
+                            components::RelationTagsLoader::new_component_type_erased(
+                                IndexMap::from_iter([
+                                    ("a_tag".to_string(), "new".to_string()),
+                                    ("b_tag".to_string(), "old".to_string()),
+                                ]),
+                            ),
+                        ),
                     ),
                     (
                         components::TblPropertiesLoader::type_name(),
-                        ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                            IndexMap::from_iter([
-                                ("customKey".to_string(), "new".to_string()),
-                                ("customKey2".to_string(), "value".to_string()),
-                            ]),
-                        )),
+                        ComponentConfigChange::Some(
+                            components::TblPropertiesLoader::new_component_type_erased(
+                                IndexMap::from_iter([
+                                    ("customKey".to_string(), "new".to_string()),
+                                    ("customKey2".to_string(), "value".to_string()),
+                                ]),
+                            ),
+                        ),
                     ),
                     (
                         components::ColumnMasksLoader::type_name(),
-                        ComponentConfigChange::Some(components::ColumnMasksLoader::new(
-                            IndexMap::from_iter([(
-                                "a_column".to_string(),
-                                ColumnMask {
-                                    function: "other function".to_string(),
-                                    using_columns: None,
-                                },
-                            )]),
-                            vec!["b_column".to_string()],
-                        )),
+                        ComponentConfigChange::Some(
+                            components::ColumnMasksLoader::new_component_type_erased(
+                                IndexMap::from_iter([(
+                                    "a_column".to_string(),
+                                    ColumnMask {
+                                        function: "other function".to_string(),
+                                        using_columns: None,
+                                    },
+                                )]),
+                                vec!["b_column".to_string()],
+                            ),
+                        ),
                     ),
                 ],
                 requires_full_refresh,

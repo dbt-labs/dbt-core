@@ -15,7 +15,7 @@ pub(crate) const TYPE_NAME: &str = "query";
 /// Holds a string representing the SQL query.
 pub type Query = SimpleComponentConfigImpl<String>;
 
-fn new(query: &str) -> Query {
+fn new_component(query: &str) -> Query {
     Query {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -26,19 +26,19 @@ fn new(query: &str) -> Query {
 
 fn from_remote_state(_results: &DatabricksRelationMetadata) -> Query {
     // TODO: implement
-    new("")
+    new_component("")
 }
 
 fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> Query {
     // TODO: implement
-    new("")
+    new_component("")
 }
 
 pub(crate) struct QueryLoader;
 
 impl QueryLoader {
-    pub fn new(query: &str) -> Box<dyn ComponentConfig> {
-        Box::new(new(query))
+    pub fn new_component_type_erased(query: &str) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(query))
     }
 
     pub fn type_name() -> &'static str {

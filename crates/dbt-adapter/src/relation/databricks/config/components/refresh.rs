@@ -55,7 +55,7 @@ fn diff(desired_state: &Config, current_state: &Config) -> Option<Config> {
     }
 }
 
-fn new(cron: Option<String>, time_zone_value: Option<String>) -> Refresh {
+fn new_component(cron: Option<String>, time_zone_value: Option<String>) -> Refresh {
     Refresh {
         type_name: TYPE_NAME,
         diff_fn: diff,
@@ -71,7 +71,7 @@ fn new(cron: Option<String>, time_zone_value: Option<String>) -> Refresh {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> Refresh {
     let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
     else {
-        return new(None, None);
+        return new_component(None, None);
     };
 
     // Parse CRON schedule format: "CRON '0 */6 * * *' AT TIME ZONE 'UTC'"
@@ -84,23 +84,23 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> Refresh {
             && key_str == "Refresh Schedule"
         {
             if value_str == "MANUAL" {
-                return new(None, None);
+                return new_component(None, None);
             }
 
             if let Some(captures) = schedule_regex.captures(value_str) {
                 let cron = captures.get(1).map(|m| m.as_str().to_string());
                 let time_zone_value = captures.get(2).map(|m| m.as_str().to_string());
 
-                return new(cron, time_zone_value);
+                return new_component(cron, time_zone_value);
             }
 
             // Unparseable schedule format
-            return new(None, None);
+            return new_component(None, None);
         }
     }
 
     // Default to manual refresh if no schedule found
-    new(None, None)
+    new_component(None, None)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Refresh {
@@ -112,14 +112,17 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Refresh
         .map(|schedule| (schedule.cron.clone(), schedule.time_zone_value.clone()))
         .unwrap_or((None, None));
 
-    new(cron, time_zone_value)
+    new_component(cron, time_zone_value)
 }
 
 pub(crate) struct RefreshLoader;
 
 impl RefreshLoader {
-    pub fn new(cron: Option<String>, time_zone_value: Option<String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(cron, time_zone_value))
+    pub fn new_component_type_erased(
+        cron: Option<String>,
+        time_zone_value: Option<String>,
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(cron, time_zone_value))
     }
 
     pub fn type_name() -> &'static str {

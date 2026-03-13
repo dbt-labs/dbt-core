@@ -70,7 +70,7 @@ fn to_jinja(v: &IndexMap<String, String>) -> Value {
     ]))
 }
 
-fn new(properties: IndexMap<String, String>) -> TblProperties {
+fn new_component(properties: IndexMap<String, String>) -> TblProperties {
     TblProperties {
         type_name: TYPE_NAME,
         diff_fn: diff,
@@ -110,7 +110,7 @@ fn diff(
 
 fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
     let Some(table) = results.get(&DatabricksRelationMetadataKey::ShowTblProperties) else {
-        return new(IndexMap::new());
+        return new_component(IndexMap::new());
     };
 
     let mut tblproperties = IndexMap::new();
@@ -125,12 +125,12 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
         }
     }
 
-    new(tblproperties)
+    new_component(tblproperties)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProperties {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new(IndexMap::new());
+        return new_component(IndexMap::new());
     };
 
     let mut tblproperties = IndexMap::new();
@@ -164,14 +164,16 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProp
         );
     }
 
-    new(tblproperties)
+    new_component(tblproperties)
 }
 
 pub(crate) struct TblPropertiesLoader;
 
 impl TblPropertiesLoader {
-    pub fn new(properties: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(properties))
+    pub fn new_component_type_erased(
+        properties: IndexMap<String, String>,
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(properties))
     }
 
     pub fn type_name() -> &'static str {

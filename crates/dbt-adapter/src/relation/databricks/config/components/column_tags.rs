@@ -26,7 +26,7 @@ fn to_jinja(v: &IndexMap<String, IndexMap<String, String>>) -> Value {
     )]))
 }
 
-fn new(tags: IndexMap<String, IndexMap<String, String>>) -> ColumnTags {
+fn new_component(tags: IndexMap<String, IndexMap<String, String>>) -> ColumnTags {
     ColumnTags {
         type_name: TYPE_NAME,
         diff_fn: merge_tags_diff,
@@ -78,7 +78,7 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnTags {
         }
     }
 
-    new(column_tags)
+    new_component(column_tags)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnTags {
@@ -100,14 +100,16 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnT
         }
     }
 
-    new(column_tags)
+    new_component(column_tags)
 }
 
 pub(crate) struct ColumnTagsLoader;
 
 impl ColumnTagsLoader {
-    pub fn new(tags: IndexMap<String, IndexMap<String, String>>) -> Box<dyn ComponentConfig> {
-        Box::new(new(tags))
+    pub fn new_component_type_erased(
+        tags: IndexMap<String, IndexMap<String, String>>,
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(tags))
     }
 
     pub fn type_name() -> &'static str {

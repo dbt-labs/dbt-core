@@ -106,37 +106,43 @@ mod tests {
                     [
                         (
                             components::ColumnCommentsLoader::type_name(),
-                            ComponentConfigChange::Some(components::ColumnCommentsLoader::new(
-                                IndexMap::from_iter([(
-                                    "`a_column`".to_string(),
-                                    "new comment".to_string(),
-                                )]),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::ColumnCommentsLoader::new_component_type_erased(
+                                    IndexMap::from_iter([(
+                                        "`a_column`".to_string(),
+                                        "new comment".to_string(),
+                                    )]),
+                                ),
+                            ),
                         ),
                         (
                             components::RelationTagsLoader::type_name(),
-                            ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                IndexMap::from_iter([
-                                    ("a_tag".to_string(), "new".to_string()),
-                                    ("b_tag".to_string(), "old".to_string()),
-                                ]),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::RelationTagsLoader::new_component_type_erased(
+                                    IndexMap::from_iter([
+                                        ("a_tag".to_string(), "new".to_string()),
+                                        ("b_tag".to_string(), "old".to_string()),
+                                    ]),
+                                ),
+                            ),
                         ),
                         // TODO: query is not implemented
                         // (
                         //     components::QueryLoader::type_name(),
-                        //     ComponentConfigChange::Some(components::QueryLoader::new(
+                        //     ComponentConfigChange::Some(components::QueryLoader::new_component_type_erased(
                         //         "SELECT 1000",
                         //     )),
                         // ),
                         (
                             components::TblPropertiesLoader::type_name(),
-                            ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                                IndexMap::from_iter([
-                                    ("customKey".to_string(), "new".to_string()),
-                                    ("customKey2".to_string(), "value".to_string()),
-                                ]),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::TblPropertiesLoader::new_component_type_erased(
+                                    IndexMap::from_iter([
+                                        ("customKey".to_string(), "new".to_string()),
+                                        ("customKey2".to_string(), "value".to_string()),
+                                    ]),
+                                ),
+                            ),
                         ),
                     ],
                     requires_full_refresh,
@@ -160,9 +166,11 @@ mod tests {
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     [(
                         components::RelationCommentLoader::type_name(),
-                        ComponentConfigChange::Some(components::RelationCommentLoader::new(Some(
-                            "new comment".to_string(),
-                        ))),
+                        ComponentConfigChange::Some(
+                            components::RelationCommentLoader::new_component_type_erased(Some(
+                                "new comment".to_string(),
+                            )),
+                        ),
                     )],
                     requires_full_refresh,
                 ),

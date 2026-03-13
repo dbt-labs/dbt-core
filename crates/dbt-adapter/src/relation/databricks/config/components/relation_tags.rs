@@ -27,7 +27,7 @@ fn to_jinja(v: &IndexMap<String, String>) -> Value {
     )]))
 }
 
-fn new(tags: IndexMap<String, String>) -> RelationTags {
+fn new_component(tags: IndexMap<String, String>) -> RelationTags {
     RelationTags {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -39,7 +39,7 @@ fn new(tags: IndexMap<String, String>) -> RelationTags {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
     let Some(remote_tags) = results.get(&DatabricksRelationMetadataKey::InfoSchemaRelationTags)
     else {
-        return new(IndexMap::new());
+        return new_component(IndexMap::new());
     };
 
     let mut tags = IndexMap::new();
@@ -54,12 +54,12 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
         }
     }
 
-    new(tags)
+    new_component(tags)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> RelationTags {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new(IndexMap::new());
+        return new_component(IndexMap::new());
     };
 
     let mut tags = IndexMap::new();
@@ -74,14 +74,14 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
         }
     }
 
-    new(tags)
+    new_component(tags)
 }
 
 pub(crate) struct RelationTagsLoader;
 
 impl RelationTagsLoader {
-    pub fn new(tags: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(tags))
+    pub fn new_component_type_erased(tags: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(tags))
     }
 
     pub fn type_name() -> &'static str {
@@ -124,8 +124,8 @@ mod tests {
         new_tags.insert("b".to_string(), "3".to_string());
         new_tags.insert("c".to_string(), "4".to_string());
 
-        let old_config = new(old_tags);
-        let new_config = new(new_tags);
+        let old_config = new_component(old_tags);
+        let new_config = new_component(new_tags);
 
         let diff = RelationTags::diff_from(&new_config, Some(&old_config)).unwrap();
         let diff = diff.as_any().downcast_ref::<RelationTags>().unwrap();
@@ -140,7 +140,7 @@ mod tests {
         tags.insert("a".to_string(), "1".to_string());
         tags.insert("b".to_string(), "2".to_string());
 
-        let config = new(tags);
+        let config = new_component(tags);
         let diff = RelationTags::diff_from(&config, Some(&config));
 
         assert!(diff.is_none());

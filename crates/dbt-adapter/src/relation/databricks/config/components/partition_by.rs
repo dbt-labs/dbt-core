@@ -26,7 +26,7 @@ fn to_jinja(v: &Vec<String>) -> Value {
     )]))
 }
 
-fn new(partition_by: Vec<String>) -> PartitionBy {
+fn new_component(partition_by: Vec<String>) -> PartitionBy {
     PartitionBy {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -38,7 +38,7 @@ fn new(partition_by: Vec<String>) -> PartitionBy {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> PartitionBy {
     let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
     else {
-        return new(Vec::new());
+        return new_component(Vec::new());
     };
 
     let mut partition_cols = Vec::new();
@@ -65,33 +65,35 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> PartitionBy {
         }
     }
 
-    new(partition_cols)
+    new_component(partition_cols)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> PartitionBy {
-    new(relation_config
-        .as_any()
-        .downcast_ref::<DbtModel>()
-        .and_then(|model| model.__adapter_attr__.databricks_attr.as_ref())
-        .and_then(|dbx_attr| dbx_attr.partition_by.as_ref())
-        .map(|p| {
-            match p {
-                PartitionConfig::String(s) => vec![s.clone()],
-                PartitionConfig::List(list) => list.clone(),
-                // FIXME(serramatutu): this will silently ignore BigQuery config
-                // in Databricks. We should be able to just accept this to reduce
-                // divergence between adapter types
-                PartitionConfig::BigqueryPartitionConfig(_) => Vec::new(),
-            }
-        })
-        .unwrap_or_default())
+    new_component(
+        relation_config
+            .as_any()
+            .downcast_ref::<DbtModel>()
+            .and_then(|model| model.__adapter_attr__.databricks_attr.as_ref())
+            .and_then(|dbx_attr| dbx_attr.partition_by.as_ref())
+            .map(|p| {
+                match p {
+                    PartitionConfig::String(s) => vec![s.clone()],
+                    PartitionConfig::List(list) => list.clone(),
+                    // FIXME(serramatutu): this will silently ignore BigQuery config
+                    // in Databricks. We should be able to just accept this to reduce
+                    // divergence between adapter types
+                    PartitionConfig::BigqueryPartitionConfig(_) => Vec::new(),
+                }
+            })
+            .unwrap_or_default(),
+    )
 }
 
 pub(crate) struct PartitionByLoader;
 
 impl PartitionByLoader {
-    pub fn new(partition_by: Vec<String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(partition_by))
+    pub fn new_component_type_erased(partition_by: Vec<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(partition_by))
     }
 
     pub fn type_name() -> &'static str {

@@ -63,7 +63,7 @@ fn normalized_keys_diff(
     })
 }
 
-fn new(column_comments: IndexMap<String, String>) -> ColumnComments {
+fn new_component(column_comments: IndexMap<String, String>) -> ColumnComments {
     let normalized_comments = column_comments
         .into_iter()
         .map(|(column_name, comment)| {
@@ -83,7 +83,7 @@ fn new(column_comments: IndexMap<String, String>) -> ColumnComments {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnComments {
     let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
     else {
-        return new(IndexMap::new());
+        return new_component(IndexMap::new());
     };
     let mut comments = IndexMap::new();
 
@@ -116,7 +116,7 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnComments {
     // The engine might return them in random order so sorting to always be consistent
     comments.sort_keys();
 
-    new(comments)
+    new_component(comments)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnComments {
@@ -146,14 +146,16 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnC
         }
     }
 
-    new(comments)
+    new_component(comments)
 }
 
 pub(crate) struct ColumnCommentsLoader;
 
 impl ColumnCommentsLoader {
-    pub fn new(column_comments: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(column_comments))
+    pub fn new_component_type_erased(
+        column_comments: IndexMap<String, String>,
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(column_comments))
     }
 
     pub fn type_name() -> &'static str {
@@ -399,7 +401,7 @@ email,string,\n\
         let mut comments = IndexMap::new();
         comments.insert("id".to_string(), "Primary key".to_string());
         comments.insert("name".to_string(), "User name".to_string());
-        let config = new(comments);
+        let config = new_component(comments);
         let diff = ColumnComments::diff_from(&config, Some(&config));
 
         assert!(diff.is_none());
@@ -411,13 +413,13 @@ email,string,\n\
         new_comments.insert("id".to_string(), "Updated primary key".to_string());
         new_comments.insert("NAME".to_string(), "User name".to_string());
         new_comments.insert("age".to_string(), "10".to_string());
-        let new_config = new(new_comments);
+        let new_config = new_component(new_comments);
 
         let mut old_comments = IndexMap::new();
         old_comments.insert("id".to_string(), "Primary key".to_string());
         old_comments.insert("name".to_string(), "User name".to_string());
         old_comments.insert("`age`".to_string(), "20".to_string());
-        let old_config = new(old_comments);
+        let old_config = new_component(old_comments);
 
         let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
         assert!(diff.is_some());
@@ -438,12 +440,12 @@ email,string,\n\
     fn test_column_comments_diff_with_dropped_comment() {
         let mut new_comments = IndexMap::new();
         new_comments.insert("id".to_string(), "Primary key".to_string());
-        let new_config = new(new_comments);
+        let new_config = new_component(new_comments);
 
         let mut old_comments = IndexMap::new();
         old_comments.insert("id".to_string(), "Primary key".to_string());
         old_comments.insert("name".to_string(), "User name".to_string());
-        let old_config = new(old_comments);
+        let old_config = new_component(old_comments);
 
         let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
         assert!(diff.is_some());

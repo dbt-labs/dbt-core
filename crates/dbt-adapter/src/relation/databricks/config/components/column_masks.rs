@@ -159,7 +159,7 @@ impl ComponentConfig for ColumnMasks {
 pub(crate) struct ColumnMasksLoader;
 
 impl ColumnMasksLoader {
-    pub fn new(
+    pub fn new_component_type_erased(
         set_column_masks: IndexMap<String, ColumnMask>,
         unset_column_masks: Vec<String>,
     ) -> Box<dyn ComponentConfig> {

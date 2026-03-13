@@ -77,18 +77,22 @@ mod tests {
                     [
                         (
                             components::TblPropertiesLoader::type_name(),
-                            ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                                IndexMap::from_iter([(
-                                    "custom.key".to_string(),
-                                    "new".to_string(),
-                                )]),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::TblPropertiesLoader::new_component_type_erased(
+                                    IndexMap::from_iter([(
+                                        "custom.key".to_string(),
+                                        "new".to_string(),
+                                    )]),
+                                ),
+                            ),
                         ),
                         (
                             components::PartitionByLoader::type_name(),
-                            ComponentConfigChange::Some(components::PartitionByLoader::new(vec![
-                                "partition_column_new".to_string(),
-                            ])),
+                            ComponentConfigChange::Some(
+                                components::PartitionByLoader::new_component_type_erased(vec![
+                                    "partition_column_new".to_string(),
+                                ]),
+                            ),
                         ),
                     ],
                     requires_full_refresh,
@@ -117,15 +121,17 @@ mod tests {
                     [
                         (
                             components::RefreshLoader::type_name(),
-                            ComponentConfigChange::Some(components::RefreshLoader::new(
-                                Some("*/60 * * * *".to_string()),
-                                Some("UTC".to_string()),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::RefreshLoader::new_component_type_erased(
+                                    Some("*/60 * * * *".to_string()),
+                                    Some("UTC".to_string()),
+                                ),
+                            ),
                         ),
                         // TODO: re-add tags
                         // (
                         //     components::RelationTagsLoader::type_name(),
-                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new(
+                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
                         //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
                         //     )),
                         // ),

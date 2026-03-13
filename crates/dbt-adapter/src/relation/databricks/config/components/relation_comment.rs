@@ -25,7 +25,7 @@ fn to_jinja(v: &Option<String>) -> Value {
     ]))
 }
 
-fn new(comment: Option<String>) -> RelationComment {
+fn new_component(comment: Option<String>) -> RelationComment {
     RelationComment {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -37,7 +37,7 @@ fn new(comment: Option<String>) -> RelationComment {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationComment {
     let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
     else {
-        return new(None);
+        return new_component(None);
     };
 
     for row in describe_extended.rows() {
@@ -52,11 +52,11 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationComment {
                 None
             };
 
-            return new(comment);
+            return new_component(comment);
         }
     }
 
-    new(None)
+    new_component(None)
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> RelationComment {
@@ -73,14 +73,14 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
         None
     };
 
-    new(comment_str)
+    new_component(comment_str)
 }
 
 pub(crate) struct RelationCommentLoader;
 
 impl RelationCommentLoader {
-    pub fn new(comment: Option<String>) -> Box<dyn ComponentConfig> {
-        Box::new(new(comment))
+    pub fn new_component_type_erased(comment: Option<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(comment))
     }
 
     pub fn type_name() -> &'static str {

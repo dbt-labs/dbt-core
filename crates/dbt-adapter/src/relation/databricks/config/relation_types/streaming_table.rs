@@ -92,21 +92,25 @@ mod tests {
                         // TODO: add liquid clustering to changeset here once that gets implemented
                         (
                             components::RefreshLoader::type_name(),
-                            ComponentConfigChange::Some(components::RefreshLoader::new(
-                                Some("*/60 * * * *".to_string()),
-                                Some("UTC".to_string()),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::RefreshLoader::new_component_type_erased(
+                                    Some("*/60 * * * *".to_string()),
+                                    Some("UTC".to_string()),
+                                ),
+                            ),
                         ),
                         (
                             components::RelationCommentLoader::type_name(),
-                            ComponentConfigChange::Some(components::RelationCommentLoader::new(
-                                Some("new comment".to_string()),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::RelationCommentLoader::new_component_type_erased(Some(
+                                    "new comment".to_string(),
+                                )),
+                            ),
                         ),
                         // TODO: re-add tags
                         // (
                         //     components::RelationTagsLoader::type_name(),
-                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new(
+                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
                         //         IndexMap::from_iter([
                         //             ("a_tag".to_string(), "new".to_string()),
                         //             ("b_tag".to_string(), "old".to_string()),
@@ -115,12 +119,14 @@ mod tests {
                         // ),
                         (
                             components::TblPropertiesLoader::type_name(),
-                            ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                                IndexMap::from_iter([
-                                    ("customKey".to_string(), "new".to_string()),
-                                    ("customKey2".to_string(), "value".to_string()),
-                                ]),
-                            )),
+                            ComponentConfigChange::Some(
+                                components::TblPropertiesLoader::new_component_type_erased(
+                                    IndexMap::from_iter([
+                                        ("customKey".to_string(), "new".to_string()),
+                                        ("customKey2".to_string(), "value".to_string()),
+                                    ]),
+                                ),
+                            ),
                         ),
                     ],
                     requires_full_refresh,
@@ -141,9 +147,11 @@ mod tests {
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     [(
                         components::PartitionByLoader::type_name(),
-                        ComponentConfigChange::Some(components::PartitionByLoader::new(vec![
-                            "partition_by_new".to_string(),
-                        ])),
+                        ComponentConfigChange::Some(
+                            components::PartitionByLoader::new_component_type_erased(vec![
+                                "partition_by_new".to_string(),
+                            ]),
+                        ),
                     )],
                     requires_full_refresh,
                 ),
