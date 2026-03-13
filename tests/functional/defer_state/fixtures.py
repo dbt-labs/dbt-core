@@ -657,6 +657,46 @@ sources:
       - name: customers
 """
 
+schema_source_with_env_var_as_external_location_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    tables:
+      - name: customers
+        external:
+          location: "@{{ env_var('DBT_TEST_STATE_MODIFIED') }}/my_data/"
+"""
+
+schema_source_with_updated_env_var_as_external_location_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    tables:
+      - name: customers
+        external:
+          location: "@updated_stage/my_data/"
+"""
+
+schema_source_with_jinja_as_external_location_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    tables:
+      - name: customers
+        external:
+          location: "@{{ ('foo' if execute else 'bar') }}_stage/my_data/"
+"""
+
+schema_source_with_updated_jinja_as_external_location_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    tables:
+      - name: customers
+        external:
+          location: "@{{ ('bar' if execute else 'foo') }}_stage/my_data/"
+"""
+
 # Fixtures for test_removed_test_state.py
 sample_test_sql = """
 {% test sample_test(model, column_name) %}

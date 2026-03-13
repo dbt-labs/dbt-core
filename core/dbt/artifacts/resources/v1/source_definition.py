@@ -46,6 +46,7 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
     row_format: Optional[str] = None
     tbl_properties: Optional[str] = None
     partitions: Optional[Union[List[str], List[ExternalPartition]]] = None
+    unrendered_location: Optional[str] = None
 
     def __bool__(self):
         return self.location is not None
