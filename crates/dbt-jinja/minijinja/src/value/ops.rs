@@ -412,9 +412,18 @@ pub fn int_div(lhs: &Value, rhs: &Value) -> Result<Value, Error> {
 pub fn pow(lhs: &Value, rhs: &Value) -> Result<Value, Error> {
     match coerce(lhs, rhs, true) {
         Some(CoerceResult::I128(a, b)) => {
-            match TryFrom::try_from(b).ok().and_then(|b| a.checked_pow(b)) {
-                Some(val) => Ok(int_as_value(val)),
-                None => Err(failed_op("**", lhs, rhs)),
+            if b < 0 {
+                // Negative exponents yield fractions; promote to f64 (Python/Jinja2 behavior).
+                // as_f64(lossy=false) round-trips to catch precision loss on huge integers.
+                match as_f64(lhs, false).zip(as_f64(rhs, false)) {
+                    Some((a_f, b_f)) => Ok(a_f.powf(b_f).into()),
+                    None => Err(failed_op("**", lhs, rhs)),
+                }
+            } else {
+                match TryFrom::try_from(b).ok().and_then(|b| a.checked_pow(b)) {
+                    Some(val) => Ok(int_as_value(val)),
+                    None => Err(failed_op("**", lhs, rhs)),
+                }
             }
         }
         Some(CoerceResult::F64(a, b)) => Ok((a.powf(b)).into()),
@@ -719,5 +728,42 @@ mod tests {
                 "Invalid value for on_schema_change () specified. Setting default value of ignore."
             )
         );
+    }
+
+    #[test]
+    fn test_pow_negative_exponent() {
+        // Negative integer exponents should produce float results to match
+        // Python/Jinja2 behavior (e.g. used in dbt macros like conversion_factors).
+        assert_eq!(
+            pow(&Value::from(10i64), &Value::from(-9i64)).unwrap(),
+            Value::from(1e-9_f64)
+        );
+        assert_eq!(
+            pow(&Value::from(10i64), &Value::from(-6i64)).unwrap(),
+            Value::from(1e-6_f64)
+        );
+        assert_eq!(
+            pow(&Value::from(10i64), &Value::from(-3i64)).unwrap(),
+            Value::from(1e-3_f64)
+        );
+
+        // Positive integer exponents should still return integers.
+        assert_eq!(
+            pow(&Value::from(10i64), &Value::from(2i64)).unwrap(),
+            Value::from(100i64)
+        );
+        assert_eq!(
+            pow(&Value::from(2i64), &Value::from(8i64)).unwrap(),
+            Value::from(256i64)
+        );
+
+        // Float exponents should continue to work.
+        assert_eq!(
+            pow(&Value::from(2.0f64), &Value::from(-1.0f64)).unwrap(),
+            Value::from(0.5f64)
+        );
+
+        // Huge integers that lose precision in f64 should return Err, not panic.
+        assert!(pow(&Value::from(i128::MAX - 1), &Value::from(-1i64)).is_err());
     }
 }
