@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix --warn-error-options only raising first error when multiple NoNodeForYamlKey warnings exist
+time: 2026-02-28T22:15:44.2252809Z
+custom:
+    Author: kalluripradeep
+    Issue: "12339"
