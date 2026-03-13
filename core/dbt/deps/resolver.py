@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, NoReturn, Set, Type
+from typing import Dict, Iterator, List, NoReturn, Set, Type
 
 from dbt.config import Project
 from dbt.config.renderer import PackageRenderer
@@ -22,6 +22,8 @@ from dbt.exceptions import (
     DuplicateProjectDependencyError,
     MismatchedDependencyTypeError,
 )
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Formatting
 
 
 @dataclass
@@ -113,15 +115,28 @@ def _check_for_duplicate_project_names(
         seen.add(project_name)
 
 
+def get_package_identifier(pkg: PackageSpec) -> str:
+    """Get the identifying string for a package spec."""
+    if isinstance(pkg, RegistryPackage):
+        return pkg.package
+    elif isinstance(pkg, GitPackage):
+        return pkg.git
+    elif isinstance(pkg, LocalPackage):
+        return pkg.local
+    elif isinstance(pkg, TarballPackage):
+        return pkg.name
+    elif isinstance(pkg, PrivatePackage):
+        return pkg.private
+    return ""
+
+
 def resolve_packages(
     packages: List[PackageSpec],
     project: Project,
-    cli_vars: Dict[str, Any],
+    renderer: PackageRenderer,
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
-
-    renderer = PackageRenderer(cli_vars)
 
     while pending:
         next_pending = PackageListing()
@@ -129,7 +144,15 @@ def resolve_packages(
         for package in pending:
             final.incorporate(package)
             target = final[package].resolved().fetch_metadata(project, renderer)
-            next_pending.update_from(target.packages)
+            transitive = []
+            for p in target.packages:
+                if p.enabled is False:
+                    fire_event(
+                        Formatting(msg=f"Skipping disabled package {get_package_identifier(p)}")
+                    )
+                else:
+                    transitive.append(p)
+            next_pending.update_from(transitive)
         pending = next_pending
 
     resolved = final.resolved()
