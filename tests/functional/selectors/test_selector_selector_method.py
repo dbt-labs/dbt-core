@@ -2,8 +2,10 @@ from typing import Any
 
 import pytest
 
+from dbt.events.types import SelectExcludeIgnoredWithSelectorWarning
 from dbt.exceptions import DbtSelectorsError
 from dbt.tests.util import run_dbt
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.exceptions import RecursionError as DbtRecursionError
 
 models__model_a_sql = """
@@ -241,3 +243,57 @@ class TestSelectorSelectorMethod:
     def test_raises_if_no_selector_matches(self, project):
         with pytest.raises(DbtSelectorsError):
             run_dbt(["ls", "--select", "selector:nonexistent_selector"])
+
+
+class TestSelectExcludeIgnoredWithSelectorWarning:
+    """Test that SelectExcludeIgnoredWithSelectorWarning is raised when CLI is invoked with
+    --selector together with --select or --exclude.
+    """
+
+    def test_warning_raised_when_selector_and_select(self, project):
+        event_catcher = EventCatcher(SelectExcludeIgnoredWithSelectorWarning)
+        run_dbt(
+            ["ls", "--selector", "model_a_selector", "--select", "model_a"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+    def test_warning_raised_when_selector_and_exclude(self, project):
+        event_catcher = EventCatcher(SelectExcludeIgnoredWithSelectorWarning)
+        run_dbt(
+            ["ls", "--selector", "model_a_selector", "--exclude", "model_b"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+    def test_no_warning_when_selector_only(self, project):
+        event_catcher = EventCatcher(SelectExcludeIgnoredWithSelectorWarning)
+        run_dbt(
+            ["ls", "--selector", "model_a_selector"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
+    def test_warning_raised_when_selector_and_select_and_exclude(self, project):
+        event_catcher = EventCatcher(SelectExcludeIgnoredWithSelectorWarning)
+        run_dbt(
+            [
+                "ls",
+                "--selector",
+                "model_a_selector",
+                "--select",
+                "model_a",
+                "--exclude",
+                "model_b",
+            ],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+    def test_no_warning_when_no_selector(self, project):
+        event_catcher = EventCatcher(SelectExcludeIgnoredWithSelectorWarning)
+        run_dbt(
+            ["ls", "--select", "model_a", "--exclude", "model_b"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
