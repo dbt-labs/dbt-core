@@ -31,17 +31,20 @@ pub fn format_test_failure(node: &NodeProcessed, colorize: bool) -> Option<Strin
     };
 
     let test_name = &node.name;
-    let prefix = maybe_apply_color(&RED, "Test failed: ", colorize);
+    let prefix = maybe_apply_color(&RED, "Test failed", colorize);
 
     if let Some(diff_table) = &test_detail.diff_table {
-        Some(format!("{prefix}{test_name}\n{diff_table}"))
+        Some(format!("{prefix}: {test_name}\n{diff_table}"))
     } else if test_detail.store_failures.unwrap_or(false)
         && let Some(db) = &node.database
         && let Some(schema) = &node.schema
         && let Some(ident) = &node.identifier
     {
         let sql = format!("select * from {db}.{schema}.{ident}");
-        Some(format!("{prefix}{test_name}\nSee test failures:\n{sql}"))
+        let failing_rows = test_detail.failing_rows;
+        Some(format!(
+            "{prefix} ({failing_rows} failed row(s)): {test_name}\nSee test failures:\n{sql}"
+        ))
     } else {
         None
     }
