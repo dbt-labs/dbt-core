@@ -39,7 +39,6 @@ const AUTH_PARAMS_USED_FOR_LEGACY_CONFIG: [&str; 6] = [
 
 const DEFAULT_CONNECT_TIMEOUT: &str = "10s";
 const DEFAULT_REQUEST_TIMEOUT: &str = "600s";
-const OAUTH_STUB_USER: &str = "fs_user";
 const ADBC_STUB_PASSWORD: &str = "fs_pass";
 
 /// dbt Core expects durations in seconds only so this utility appends that s
@@ -89,15 +88,13 @@ enum SnowflakeAuthIR<'a> {
         private_key_passphrase: Option<&'a str>,
     },
     NativeOauth {
-        user: &'a str,
-        password: &'a str,
         client_id: &'a str,
         client_secret: &'a str,
         refresh_token: &'a str,
     },
     NativeOauthJWT {
-        user: &'a str,
-        password: &'a str,
+        user: Option<&'a str>,
+        password: Option<&'a str>,
         jwt_token: &'a str,
     },
     Sso {
@@ -110,14 +107,10 @@ impl<'a> SnowflakeAuthIR<'a> {
     pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::NativeOauth {
-                user,
-                password,
                 client_id,
                 client_secret,
                 refresh_token,
             } => {
-                builder.with_username(user);
-                builder.with_password(password);
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
                 builder.with_named_option(snowflake::CLIENT_ID, client_id)?;
                 builder.with_named_option(snowflake::CLIENT_SECRET, client_secret)?;
@@ -129,8 +122,13 @@ impl<'a> SnowflakeAuthIR<'a> {
                 password,
                 jwt_token,
             } => {
-                builder.with_username(user);
-                builder.with_password(password);
+                // TODO: Verify whether Snowflake JWT needs stubbed user/password when absent.
+                if let Some(user) = user {
+                    builder.with_username(user);
+                }
+                if let Some(password) = password {
+                    builder.with_password(password);
+                }
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
                 builder.with_named_option(snowflake::AUTH_TOKEN, jwt_token)?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
@@ -277,42 +275,36 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                 if config.contains_key("password") {
                     warn_ignored_auth_field("OAuth", "password");
                 }
-                if config.contains_key("token") {
-                    return Err(AuthError::config(
-                        "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
-                    ));
-                };
+
+                // TODO(versusfacit): update upstream to allow for refresh_token
+                // if config.contains_key("token") {
+                //     return Err(AuthError::config(
+                //         "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
+                //     ));
+                // };
 
                 let cid = config.get_str("oauth_client_id");
                 let sec = config.get_str("oauth_client_secret");
-                let tok = config.get_str("refresh_token");
+                let tok = config.get_str("token");
 
                 match (cid, sec, tok) {
                     (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                         Ok(SnowflakeAuthIR::NativeOauth {
-                            user: OAUTH_STUB_USER,
-                            password: ADBC_STUB_PASSWORD,
                             client_id,
                             client_secret,
                             refresh_token,
                         })
                     }
                     _ => Err(AuthError::config(
-                        "Profile requires 'oauth_client_id', 'oauth_client_secret', and 'refresh_token' for method: snowflake_oauth.",
+                        "Profile requires 'oauth_client_id', 'oauth_client_secret', and 'token' for method: snowflake_oauth.",
                     )),
                 }
             }
             "snowflake_oauth_jwt" => {
-                if config.contains_key("user") {
-                    warn_ignored_auth_field("OAuth JWT", "user");
-                }
-                if config.contains_key("password") {
-                    warn_ignored_auth_field("OAuth JWT", "password");
-                }
                 if let Some(jwt_token) = config.get_str("jwt_token") {
                     Ok(SnowflakeAuthIR::NativeOauthJWT {
-                        user: OAUTH_STUB_USER,
-                        password: ADBC_STUB_PASSWORD,
+                        user: config.get_str("user"),
+                        password: config.get_str("password"),
                         jwt_token,
                     })
                 } else {
@@ -438,8 +430,8 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                         match (cid, sec, tok) {
                             (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                                 Ok(SnowflakeAuthIR::NativeOauth {
-                                    user: OAUTH_STUB_USER,
-                                    password: ADBC_STUB_PASSWORD,
+                                    // Unlike other auth methods, oauth does NOT want to be stubbed
+                                    // with user/password
                                     client_id,
                                     client_secret,
                                     refresh_token,
@@ -482,8 +474,6 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                             match (cid, sec, tok) {
                                 (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                                     Ok(SnowflakeAuthIR::NativeOauth {
-                                        user: OAUTH_STUB_USER,
-                                        password: ADBC_STUB_PASSWORD,
                                         client_id,
                                         client_secret,
                                         refresh_token,
@@ -494,18 +484,11 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                                 )),
                             }
                         } else if value == "jwt" {
-                            if config.contains_key("user") {
-                                warn_ignored_auth_field("OAuth JWT", "user");
-                            }
-                            if config.contains_key("password") {
-                                warn_ignored_auth_field("OAuth JWT", "password");
-                            }
-
                             config
                                 .get_str("token")
                                 .map(|jwt_token| SnowflakeAuthIR::NativeOauthJWT {
-                                    user: OAUTH_STUB_USER,
-                                    password: ADBC_STUB_PASSWORD,
+                                    user: config.get_str("user"),
+                                    password: config.get_str("password"),
                                     jwt_token,
                                 })
                                 .ok_or_else(|| {
@@ -1152,8 +1135,6 @@ mod tests {
         config.insert("oauth_client_secret".into(), "S".into());
         config.insert("token".into(), "R".into());
         let expected = [
-            ("user", OAUTH_STUB_USER),
-            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -1176,10 +1157,8 @@ mod tests {
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "C".into());
         config.insert("oauth_client_secret".into(), "S".into());
-        config.insert("refresh_token".into(), "R".into());
+        config.insert("token".into(), "R".into());
         let expected = [
-            ("user", OAUTH_STUB_USER),
-            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -1197,6 +1176,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_oauth_fails_with_token_instead_of_refresh_token() {
         let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth".into());
@@ -1215,7 +1195,7 @@ mod tests {
         if let Err(e) = result {
             let msg = format!("{e:?}");
             assert!(
-                msg.contains("Rename") && msg.contains("refresh_token"),
+                msg.contains("Rename") && msg.contains("token"),
                 "Unexpected error message: {msg}"
             );
         }
@@ -1227,10 +1207,8 @@ mod tests {
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "C".into());
         config.insert("oauth_client_secret".into(), "S".into());
-        config.insert("refresh_token".into(), "R".into());
+        config.insert("token".into(), "R".into());
         let expected = [
-            ("user", OAUTH_STUB_USER),
-            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -1281,7 +1259,7 @@ mod tests {
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "client_id".into());
         // oauth_client_secret OMITTED ON PURPOSE
-        config.insert("refresh_token".into(), "refresh_token".into());
+        config.insert("token".into(), "token".into());
 
         let cfg = AdapterConfig::new(config);
         let result = parse_auth(&cfg);
@@ -1403,8 +1381,36 @@ mod tests {
         );
 
         let expected = [
-            ("user", OAUTH_STUB_USER),
-            ("password", ADBC_STUB_PASSWORD),
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH),
+            (
+                snowflake::AUTH_TOKEN,
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+            ),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_jwt_oauth_without_user_and_password() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "jwt".into());
+        config.insert(
+            "token".into(),
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".into(),
+        );
+
+        let expected = [
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -1470,13 +1476,33 @@ mod tests {
     }
 
     #[test]
-    fn test_oauth_jwt_method_ignores_user_and_password() {
+    fn test_oauth_jwt_method_uses_user_and_password_if_present() {
         let mut config = base_config();
         config.insert("method".into(), "snowflake_oauth_jwt".into());
         config.insert("jwt_token".into(), "jwt".into());
         let expected = [
-            ("user", OAUTH_STUB_USER),
-            ("password", ADBC_STUB_PASSWORD),
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH),
+            (snowflake::AUTH_TOKEN, "jwt"),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_oauth_jwt_method_works_without_user_and_password() {
+        let mut config = base_config_without_user_password();
+        config.insert("method".into(), "snowflake_oauth_jwt".into());
+        config.insert("jwt_token".into(), "jwt".into());
+        let expected = [
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
