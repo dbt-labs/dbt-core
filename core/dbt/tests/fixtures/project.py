@@ -134,7 +134,7 @@ def dbt_profile_target():
         "host": "localhost",
         "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
         "user": os.getenv("POSTGRES_TEST_USER", "root"),
-        "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
+        "password": os.getenv("POSTGRES_TEST_PASS", "password"),
         "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
     }
 

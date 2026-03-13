@@ -152,6 +152,38 @@ class NodeConfig(NodeAndTestConfig):
 
     @classmethod
     def __pre_deserialize__(cls, data):
+        # Coerce None to defaults for non-Optional collection fields.
+        # Some external producers (e.g. dbt-fusion) serialize unset fields as
+        # null, but mashumaro cannot deserialize None into non-Optional types.
+        _none_defaults: Dict[str, Any] = {
+            "tags": [],
+            "meta": {},
+            "persist_docs": {},
+            "post_hook": [],
+            "pre_hook": [],
+            "column_types": {},
+            "packages": [],
+            "quoting": {},
+            "grants": {},
+            "access": "protected",
+            "on_configuration_change": "apply",
+            "docs": {
+                "node_color": None,
+                "show": None
+            },
+            "contract": {
+                "alias_types": True,
+                "enforced": False,
+            },
+        }
+        for key, default in _none_defaults.items():
+            if key in data and data[key] is None:
+                data[key] = default
+
+        # Handle "+grants" -> "grants" (merge-operator prefix in config dicts)
+        if "+grants" in data:
+            data["grants"] = data.pop("+grants")
+
         data = super().__pre_deserialize__(data)
         for key in ModelHookType:
             if key in data:
