@@ -996,4 +996,31 @@ mod tests {
         println!("res: {res:?}");
         assert!(res.is_err());
     }
+
+    /// Regression test for GitHub issue #998: doc block names starting with a digit
+    /// previously caused a parse error: `'_' may not occur at end of number`.
+    /// dbt Core allows this; Fusion should too.
+    /// https://github.com/dbt-labs/dbt-fusion/issues/998
+    #[test]
+    fn test_process_markdown_doc_name_starting_with_digit() {
+        let sql = r#"
+        {% docs 3_months_prior_date %}
+        The date 3 months prior to today.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(doc_names, vec!["3_months_prior_date".to_string()]);
+    }
 }

@@ -454,13 +454,12 @@ impl<'s> Tokenizer<'s> {
             State::RadixInteger
         };
 
-        let mut num_len = self
-            .rest_bytes()
-            .iter()
-            .take_while(|&c| c.is_ascii_digit())
-            .count();
+        let rest = self.rest_bytes();
+        let mut num_len = rest.iter().take_while(|&c| c.is_ascii_digit()).count();
         let mut has_underscore = false;
-        for c in self.rest_bytes()[num_len..].iter().copied() {
+        let mut i = num_len;
+        while i < rest.len() {
+            let c = rest[i];
             state = match (c, state) {
                 (b'.', State::Integer) => State::Fraction,
                 (b'E' | b'e', State::Integer | State::Fraction) => State::Exponent,
@@ -469,13 +468,21 @@ impl<'s> Tokenizer<'s> {
                 (b'0'..=b'9', state) => state,
                 (b'a'..=b'f' | b'A'..=b'F', State::RadixInteger) if radix == 16 => state,
                 (b'_', _) => {
+                    let next_is_valid_digit = rest.get(i + 1).is_some_and(|&next| {
+                        next.is_ascii_digit()
+                            || (radix == 16 && matches!(next, b'a'..=b'f' | b'A'..=b'F'))
+                    });
+                    if !next_is_valid_digit {
+                        break;
+                    }
                     has_underscore = true;
                     state
                 }
                 _ => break,
             };
-            num_len += 1;
+            i += 1;
         }
+        num_len = i;
         let is_float = !matches!(state, State::Integer | State::RadixInteger);
 
         let mut num = Cow::Borrowed(self.advance(num_len));

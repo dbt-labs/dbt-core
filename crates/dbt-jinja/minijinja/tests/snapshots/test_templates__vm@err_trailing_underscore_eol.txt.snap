@@ -16,9 +16,9 @@ input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_trailing_underscor
 
 Error {
     kind: SyntaxError,
-    detail: "'_' may not occur at end of number",
+    detail: "unexpected identifier, expected end of variable block",
     name: "err_trailing_underscore_eol.txt",
 }
 
-syntax error: '_' may not occur at end of number
-(in err_trailing_underscore_eol.txt:1:7)
+syntax error: unexpected identifier, expected end of variable block
+(in err_trailing_underscore_eol.txt:1:6)

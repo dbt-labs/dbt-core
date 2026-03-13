@@ -1598,7 +1598,29 @@ impl<'a> Parser<'a> {
 
     #[cfg(feature = "macros")]
     fn parse_doc(&mut self) -> Result<ast::Macro<'a>, Error> {
-        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        // Doc names may start with a digit (e.g., `3_months_prior_date`).
+        // dbt-core allows this; see https://github.com/dbt-labs/dbt-fusion/issues/998
+        let (name, span) = match ok!(self.stream.next()) {
+            Some((Token::Ident(name), span)) => (name, span),
+            Some((Token::Int(n), span)) => {
+                let mut full_name = n.to_string();
+                let end_offset = span.end_offset;
+                // Consume adjacent identifier tokens that continue the name
+                // (e.g., Int(3) + Ident("_months_prior_date") → "3_months_prior_date")
+                if let Ok(Some((&Token::Ident(ident), ident_span))) = self.stream.current() {
+                    if ident_span.start_offset == end_offset {
+                        let _ = self.stream.next();
+                        full_name.push_str(ident);
+                    }
+                }
+                (self.intern_string(&full_name), span)
+            }
+            Some((token, span)) => {
+                return Err(unexpected(token, "identifier")
+                    .with_span(&PathBuf::from(self.filename()), &span))
+            }
+            None => return Err(unexpected_eof("identifier")),
+        };
 
         // Skip everything until BlockEnd, advancing on Token Errors
         // This is specifically because doc macros can have random
