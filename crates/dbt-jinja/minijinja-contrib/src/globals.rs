@@ -5,7 +5,7 @@ use std::sync::Arc;
 use minijinja::listener::RenderingEventListener;
 #[allow(unused)]
 use minijinja::value::Value;
-use minijinja::value::{from_args, Object, ObjectRepr};
+use minijinja::value::{from_args, Object, ObjectRepr, Rest};
 use minijinja::{Error, ErrorKind, State};
 
 /// Returns the current time in UTC as unix timestamp.
@@ -35,7 +35,7 @@ pub fn now() -> Value {
 /// {% endfor %}
 /// </ul>
 /// ```
-pub fn cycler(items: Vec<Value>) -> Result<Value, Error> {
+pub fn cycler(items: Rest<Value>) -> Result<Value, Error> {
     #[derive(Debug)]
     pub struct Cycler {
         items: Vec<Value>,
@@ -77,7 +77,7 @@ pub fn cycler(items: Vec<Value>) -> Result<Value, Error> {
         ))
     } else {
         Ok(Value::from_object(Cycler {
-            items,
+            items: items.0,
             pos: AtomicUsize::new(0),
         }))
     }

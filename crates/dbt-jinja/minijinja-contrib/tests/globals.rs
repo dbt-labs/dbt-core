@@ -7,7 +7,7 @@ fn test_cycler() {
     let mut env = Environment::new();
     env.add_function("cycler", cycler);
 
-    assert_snapshot!(render!(in env, r"{% set c = cycler([1, 2]) -%}
+    assert_snapshot!(render!(in env, r"{% set c = cycler(1, 2) -%}
 next(): {{ c.next() }}
 next(): {{ c.next() }}
 next(): {{ c.next() }}
