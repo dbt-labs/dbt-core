@@ -113,6 +113,7 @@ pub enum ErrorCode {
     GenericExecError = 1067,
     LicenseError = 1068,
     MangledRef = 1069,
+    BaselineIntrospectionSyntaxWarning = 1070,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
