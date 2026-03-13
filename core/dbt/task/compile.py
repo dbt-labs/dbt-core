@@ -88,7 +88,7 @@ class CompileTask(GraphRunnableTask):
         elif self.selection_arg:
             matched_results = []
             for result in results:
-                if result.node.name in self.selection_arg[0]:
+                if result.node.name in self.selection_arg:
                     matched_results.append(result)
                 else:
                     fire_event(
@@ -158,3 +158,4 @@ class CompileTask(GraphRunnableTask):
             and (self.args.select or getattr(self.args, "inline", None))
         ):
             self.node_results.append(result)
+
