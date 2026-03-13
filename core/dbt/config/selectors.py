@@ -157,11 +157,6 @@ class SelectorDict:
             definition = {key: value}
         elif len(definition) == 1:
             definition = {"method": key, "value": value}
-        elif key == "method" and value == "selector":
-            sel_def = definition.get("value")
-            if sel_def not in selector_dict:
-                raise DbtSelectorsError(f"Existing selector definition for {sel_def} not found.")
-            return selector_dict[definition["value"]]["definition"]
         return definition
 
     @classmethod

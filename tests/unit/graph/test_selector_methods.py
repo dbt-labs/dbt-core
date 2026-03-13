@@ -6,10 +6,12 @@ from unittest import mock
 
 import pytest
 
+import dbt.compilation
 import dbt_common.exceptions
 from dbt.artifacts.resources import ColumnInfo, FileHash
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.state import PreviousState
+from dbt.graph import NodeSelector
 from dbt.graph.selector_methods import (
     AccessSelectorMethod,
     ConfigSelectorMethod,
@@ -22,6 +24,7 @@ from dbt.graph.selector_methods import (
     PathSelectorMethod,
     QualifiedNameSelectorMethod,
     SavedQuerySelectorMethod,
+    SelectorSelectorMethod,
     SemanticModelSelectorMethod,
     SourceSelectorMethod,
     StateSelectorMethod,
@@ -30,6 +33,11 @@ from dbt.graph.selector_methods import (
     TestTypeSelectorMethod,
     UnitTestSelectorMethod,
     VersionSelectorMethod,
+)
+from dbt.graph.selector_spec import (
+    SelectionCriteria,
+    SelectionIntersection,
+    SelectionUnion,
 )
 from tests.unit.utils import replace_config
 from tests.unit.utils.manifest import (
@@ -163,6 +171,47 @@ def test_select_tag(manifest):
         "view_model",
         "table_model",
     }
+
+
+def test_select_selector(manifest, runtime_config):
+    compiler = dbt.compilation.Compiler(runtime_config)
+    graph = compiler.compile(manifest)
+    selectors = {
+        "union_selector": {
+            "definition": SelectionUnion(
+                components=[
+                    SelectionCriteria.from_single_spec("fqn:table_model"),
+                    SelectionCriteria.from_single_spec("fqn:view_model"),
+                ]
+            ),
+        },
+        "intersection_selector": {
+            "definition": SelectionIntersection(
+                components=[
+                    SelectionCriteria.from_single_spec("selector:union_selector"),
+                    SelectionCriteria.from_single_spec("fqn:table_model"),
+                ]
+            ),
+        },
+    }
+    selector = NodeSelector(graph, manifest, selectors=selectors)
+    methods = MethodManager(manifest, None)
+    method = methods.get_method(
+        "selector", [], selectors=selectors, get_selected_callback=selector.get_selected
+    )
+    assert isinstance(method, SelectorSelectorMethod)
+
+    assert search_manifest_using_method(manifest, method, "union_selector").issuperset(
+        {
+            "table_model",
+            "view_model",
+        }
+    )
+    assert search_manifest_using_method(manifest, method, "intersection_selector").issuperset(
+        {
+            "table_model",
+        }
+    )
 
 
 def test_select_group(manifest, view_model):
