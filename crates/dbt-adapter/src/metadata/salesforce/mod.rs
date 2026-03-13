@@ -38,7 +38,6 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
     fn list_user_defined_functions_inner(
         &self,
         _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
         let future = async move { Ok(Vec::new()) };
         Box::pin(future)
@@ -49,7 +48,6 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
         _unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
         _relations: &[Arc<dyn BaseRelation>],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let future = async move { Ok(HashMap::new()) };
         Box::pin(future)
@@ -59,7 +57,6 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _relations_pattern: &[RelationPattern],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         let future = async move { Ok(Vec::new()) };
         Box::pin(future)
@@ -76,7 +73,6 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
     fn freshness_inner(
         &self,
         _relations: &[Arc<dyn BaseRelation>],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         let future = async move { Ok(BTreeMap::new()) };
         Box::pin(future)
@@ -86,7 +82,6 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         _db_schemas: &[CatalogAndSchema],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         let future = async move { Ok(BTreeMap::new()) };
         Box::pin(future)

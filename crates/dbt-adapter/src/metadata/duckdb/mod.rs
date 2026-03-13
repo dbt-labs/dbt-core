@@ -159,7 +159,6 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
-        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
@@ -172,7 +171,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         let new_connection_f = Box::new(move || {
             adapter
                 .engine()
-                .new_connection(None, node_id.clone())
+                .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
 
@@ -217,7 +216,6 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("DuckDBAdapter::list_relations_schemas_by_patterns")
     }
@@ -225,7 +223,6 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     fn freshness_inner(
         &self,
         _relations: &[Arc<dyn BaseRelation>],
-        _node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         todo!("DuckDBAdapter::freshness")
     }
@@ -241,7 +238,6 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
-        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
 
@@ -249,7 +245,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, node_id.clone())
+                .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 

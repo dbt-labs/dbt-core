@@ -656,14 +656,14 @@ impl SqliteHandler {
 pub(crate) struct RecordEngineConnection {
     recordings_path: PathBuf,
     inner: Box<dyn Connection>,
-    node_id: String,
+    node_id: Option<String>,
 }
 
 impl RecordEngineConnection {
     pub(crate) fn new(
         recordings_path: PathBuf,
         inner: Box<dyn Connection>,
-        node_id: String,
+        node_id: Option<String>,
     ) -> Self {
         Self {
             recordings_path,
@@ -736,7 +736,7 @@ impl Connection for RecordEngineConnection {
         Some(&self.recordings_path)
     }
 
-    fn update_node_id(&mut self, node_id: String) {
+    fn update_node_id(&mut self, node_id: Option<String>) {
         self.node_id = node_id
     }
 }
@@ -905,11 +905,11 @@ impl Statement for RecordEngineStatement {
 
 pub(crate) struct ReplayEngineConnection {
     recordings_path: PathBuf,
-    node_id: String,
+    node_id: Option<String>,
 }
 
 impl ReplayEngineConnection {
-    pub(crate) fn new(recordings_path: PathBuf, node_id: String) -> Self {
+    pub(crate) fn new(recordings_path: PathBuf, node_id: Option<String>) -> Self {
         Self {
             recordings_path,
             node_id,
@@ -1011,7 +1011,7 @@ impl Connection for ReplayEngineConnection {
         Some(&self.recordings_path)
     }
 
-    fn update_node_id(&mut self, node_id: String) {
+    fn update_node_id(&mut self, node_id: Option<String>) {
         self.node_id = node_id
     }
 }

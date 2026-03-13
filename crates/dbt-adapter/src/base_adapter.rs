@@ -1226,13 +1226,13 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// # Returns
     ///
     /// Returns true if the warehouse was overridden, false otherwise
-    fn use_warehouse(&self, _warehouse: Option<String>, _node_id: String) -> FsResult<bool>;
+    fn use_warehouse(&self, _warehouse: Option<String>, _node_id: &str) -> FsResult<bool>;
 
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement from BridgeAdapter
     ///
     /// To restore to the warehouse configured in profiles.yml
     /// For other BaseAdapter types, this is noop
-    fn restore_warehouse(&self, _node_id: String) -> FsResult<()>;
+    fn restore_warehouse(&self, _node_id: &str) -> FsResult<()>;
 
     /// Used internally to hydrate the relation cache with the given schema -> relation map
     ///

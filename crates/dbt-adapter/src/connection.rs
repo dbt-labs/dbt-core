@@ -14,12 +14,6 @@ use std::task::{Poll, Waker};
 
 use crate::AdapterEngine;
 
-/// The node ID used for ad-hoc connections that are not associated with any particular DAG node.
-///
-/// This is used to reserve a separate connection for operations that can't
-/// provide a node ID.
-pub const ADHOC_CONNECTION_NODE_ID: &str = "dbt-fusion.adhoc_conn";
-
 /// Global atomic counting active/borrowed connections.
 static ACTIVE_CONNECTIONS: AtomicIsize = AtomicIsize::new(0);
 /// Wakers registered by [`ConnectionBackpressure`] futures waiting for capacity.
@@ -33,7 +27,7 @@ static BACKPRESSURE_WAKERS: Mutex<VecDeque<Waker>> = Mutex::new(VecDeque::new())
 // 3. This approach ensures proper transaction management within a DAG node
 // 4. The ConnectionGuard wrapper ensures connections are returned to the thread-local
 thread_local! {
-    static CONNECTION: pri::ConnectionContainer = pri::ConnectionContainer::new();
+    static CONNECTION: pri::TlsConnectionContainer = pri::TlsConnectionContainer::new();
 }
 
 fn will_activate_connection() {
@@ -63,7 +57,7 @@ fn num_active_connections() -> isize {
 pub(crate) fn borrow_tlocal_connection<'a>(
     engine: &dyn AdapterEngine,
     state: Option<&State>,
-    node_id: String,
+    node_id: Option<String>,
 ) -> Result<ConnectionGuard<'a>, minijinja::Error> {
     let _span = span!("borrow_thread_local_connection");
     let conn = match CONNECTION.with(|c| c.take()) {
@@ -206,17 +200,16 @@ impl Drop for NextBackpressureWakerGuard {
 mod pri {
     use super::*;
 
-    /// A wrapper around a [Connection] that never drops the connection when the wrapper is
-    /// dropped.
+    /// A wrapper around a [Connection] stored in thread-local storage
     ///
     /// The point of this struct is to avoid calling the `Drop` destructor on
     /// the wrapped [Connection] during process exit, which dead locks on
-    /// Windows if the connection is a part of a thread-local/static variable.
-    pub(super) struct ConnectionContainer(RefCell<Option<Box<dyn Connection>>>);
+    /// Windows.
+    pub(super) struct TlsConnectionContainer(RefCell<Option<Box<dyn Connection>>>);
 
-    impl ConnectionContainer {
+    impl TlsConnectionContainer {
         pub(super) fn new() -> Self {
-            ConnectionContainer(RefCell::new(None))
+            TlsConnectionContainer(RefCell::new(None))
         }
 
         pub(super) fn replace(&self, conn: Option<Box<dyn Connection>>) {
@@ -252,7 +245,7 @@ mod pri {
         }
     }
 
-    impl Drop for ConnectionContainer {
+    impl Drop for TlsConnectionContainer {
         fn drop(&mut self) {
             std::mem::forget(self.take());
         }

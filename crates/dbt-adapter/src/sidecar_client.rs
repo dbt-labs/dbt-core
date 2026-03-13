@@ -88,7 +88,7 @@ pub trait SidecarClient: Debug + Send + Sync {
     fn new_connection(
         &self,
         state: Option<&State>,
-        node_id: String,
+        node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>>;
 
     /// Gracefully shutdown the session.

@@ -1,6 +1,5 @@
 //! Util methods for creating query context.
 
-use crate::connection::ADHOC_CONNECTION_NODE_ID;
 use crate::errors::AdapterResult;
 
 use dbt_common::adapter::DBT_EXECUTION_PHASES;
@@ -60,10 +59,6 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     } else {
         None
     }
-}
-
-pub fn node_id_for_connection(state: &State) -> String {
-    node_id_from_state(state).unwrap_or_else(|| ADHOC_CONNECTION_NODE_ID.to_string())
 }
 
 pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {

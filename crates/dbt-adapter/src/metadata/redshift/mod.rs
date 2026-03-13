@@ -108,7 +108,6 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         token: CancellationToken,
-        node_id: String,
     ) -> AsyncAdapterResult<'static, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
@@ -116,7 +115,7 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
         let new_connection_f = Box::new(move || {
             adapter
                 .engine()
-                .new_connection(None, node_id.clone())
+                .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
 
@@ -241,7 +240,6 @@ AND table_name = '{identifier}'"
         &self,
         _patterns: Arc<Vec<RelationPattern>>,
         _token: CancellationToken,
-        _node_id: String,
     ) -> AsyncAdapterResult<'static, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("list_relations_schemas_by_patterns for Redshift")
     }
@@ -310,7 +308,6 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         &self,
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
-        node_id: String,
     ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
         let (where_clauses_by_database, relations_by_database) =
             match build_relation_clauses_redshift(relations) {
@@ -326,7 +323,7 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, node_id.clone())
+                .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
@@ -911,25 +908,23 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>], // TODO: change to an Arc<Vec<..>>
-        node_id: String,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let token = self.adapter.cancellation_token();
         let strategy =
             RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
         let relations = Arc::new(relations.to_vec());
-        strategy.run(relations, unique_id, phase, token, node_id)
+        strategy.run(relations, unique_id, phase, token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
         patterns: &[RelationPattern],
-        node_id: String,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         let token = self.adapter.cancellation_token();
         let strategy =
             RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
         let patterns = Arc::new(patterns.to_vec());
-        strategy.run_by_patterns(patterns, token, node_id)
+        strategy.run_by_patterns(patterns, token)
     }
 
     fn create_schemas_if_not_exists(
@@ -943,24 +938,22 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
-        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         let token = self.adapter.cancellation_token();
         let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
-        strategy.run(relations, token, node_id)
+        strategy.run(relations, token)
     }
 
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
-        node_id: String,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .engine()
-                .new_connection(None, node_id.clone())
+                .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
