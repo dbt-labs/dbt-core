@@ -1,0 +1,6 @@
+models:
+  - name: stg_orders
+    meta:
+      rationale:
+        intent: "Staging layer for raw orders"
+        owner: "data-engineering@company.com"

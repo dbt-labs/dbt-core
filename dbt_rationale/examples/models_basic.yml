@@ -1,0 +1,15 @@
+# Basic model rationale — minimal required fields only.
+models:
+  - name: stg_orders
+    description: "Staging layer for raw orders from the source system"
+    meta:
+      rationale:
+        intent: "Clean and deduplicate raw order records for downstream use"
+        owner: "data-engineering@acme.com"
+
+  - name: stg_payments
+    description: "Staging layer for payment transactions"
+    meta:
+      rationale:
+        intent: "Normalize payment amounts and currencies from the raw feed"
+        owner: "data-engineering@acme.com"

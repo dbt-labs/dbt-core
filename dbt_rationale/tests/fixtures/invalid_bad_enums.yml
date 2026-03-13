@@ -1,0 +1,12 @@
+models:
+  - name: bad_enums_model
+    meta:
+      rationale:
+        intent: "Some intent"
+        owner: "team@company.com"
+        decision_type: "Not A Real Type"
+        exceptions:
+          - rule: "POLICY_1"
+            justification: "reason"
+            approved_by: "someone@company.com"
+            expires: "not-a-date"

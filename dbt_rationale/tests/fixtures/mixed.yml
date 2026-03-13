@@ -1,0 +1,24 @@
+models:
+  - name: covered_model
+    meta:
+      rationale:
+        intent: "Has rationale"
+        owner: "team@company.com"
+
+  - name: uncovered_model
+    description: "No rationale"
+
+sources:
+  - name: raw_payments
+    meta:
+      rationale:
+        intent: "Raw payment data from Stripe"
+        owner: "payments-team@company.com"
+    tables:
+      - name: charges
+        meta:
+          rationale:
+            intent: "Individual charge records"
+            owner: "payments-team@company.com"
+      - name: refunds
+        description: "No rationale on this table"
