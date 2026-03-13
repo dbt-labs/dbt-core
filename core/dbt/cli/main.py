@@ -144,6 +144,7 @@ def global_flags(func):
     @p.write_json
     @p.use_fast_test_edges
     @p.upload_artifacts
+    @p.project_id
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
