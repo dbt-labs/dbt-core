@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from itertools import chain
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
 
 import msgpack
 from jinja2.nodes import Call
@@ -32,6 +32,8 @@ from dbt.artifacts.resources import (
     NodeRelation,
     NodeVersion,
 )
+from dbt.artifacts.resources.v1.metric import MetricInputMeasure
+from dbt.artifacts.resources.v1.semantic_layer_components import WhereFilterIntersection
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.base import Writable
 from dbt.clients.jinja import MacroStack, get_rendered
@@ -85,6 +87,7 @@ from dbt.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingNotEnabled,
     PartialParsingSkipParsing,
+    SemanticValidationFailure,
     SpacesInResourceNameDeprecation,
     StateCheckVarsHash,
     UnableToPartialParse,
@@ -135,6 +138,7 @@ from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_e
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
+from dbt_semantic_interfaces.call_parameter_sets import ParseJinjaObjectException
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
 from dbt_semantic_interfaces.type_enums import MetricType
 
@@ -2031,6 +2035,84 @@ def _process_multiple_metric_inputs(
         metric.depends_on.add_node(target_metric.unique_id)
 
 
+def _maybe_append_where_filter(
+    where_filters: List[WhereFilterIntersection],
+    filter_value: Optional[WhereFilterIntersection],
+) -> None:
+    if filter_value:
+        where_filters.append(filter_value)
+
+
+def _maybe_append_metric_input_filter(
+    where_filters: List[WhereFilterIntersection],
+    metric_input: Optional[MetricInput],
+) -> None:
+    if metric_input is not None and metric_input.filter is not None:
+        where_filters.append(metric_input.filter)
+
+
+def _maybe_append_metric_input_measure_filter(
+    where_filters: List[WhereFilterIntersection],
+    metric_input_measure: Optional[MetricInputMeasure],
+) -> None:
+    if metric_input_measure is not None and metric_input_measure.filter is not None:
+        where_filters.append(metric_input_measure.filter)
+
+
+def _collect_metric_where_filters(metric: Metric) -> List[WhereFilterIntersection]:
+    where_filters: List[WhereFilterIntersection] = []
+    _maybe_append_where_filter(where_filters, metric.filter)
+    _maybe_append_metric_input_measure_filter(where_filters, metric.type_params.measure)
+    for input_measure in metric.type_params.input_measures:
+        _maybe_append_metric_input_measure_filter(where_filters, input_measure)
+    _maybe_append_metric_input_filter(where_filters, metric.type_params.numerator)
+    _maybe_append_metric_input_filter(where_filters, metric.type_params.denominator)
+    cumulative_type_params = metric.type_params.cumulative_type_params
+    if cumulative_type_params is not None:
+        _maybe_append_metric_input_filter(where_filters, cumulative_type_params.metric)
+    conversion_type_params = metric.type_params.conversion_type_params
+    if conversion_type_params is not None:
+        _maybe_append_metric_input_filter(where_filters, conversion_type_params.base_metric)
+        _maybe_append_metric_input_filter(where_filters, conversion_type_params.conversion_metric)
+    for input_metric in metric.input_metrics:
+        _maybe_append_metric_input_filter(where_filters, input_metric)
+    return where_filters
+
+
+def _metric_dependency_names_from_filters(
+    manifest: Manifest,
+    where_filters: Sequence[WhereFilterIntersection],
+    node: Union[Metric, SavedQuery],
+) -> Set[str]:
+    metric_names: Set[str] = set()
+    if not where_filters:
+        return metric_names
+    custom_granularity_names = manifest.get_custom_granularity_names()
+    for intersection in where_filters:
+        for filter_clause in intersection.where_filters:
+            try:
+                parameter_sets = filter_clause.call_parameter_sets(
+                    custom_granularity_names=custom_granularity_names
+                )
+            except ParseJinjaObjectException as exc:
+                fire_event(
+                    SemanticValidationFailure(
+                        msg=f"Unable to parse semantic filter on {node.unique_id}: {exc}"
+                    ),
+                    EventLevel.WARN,
+                )
+                continue
+            for metric_call in parameter_sets.metric_call_parameter_sets:
+                metric_names.add(metric_call.metric_reference.element_name)
+    return metric_names
+
+
+def _metric_inputs_from_filters(manifest: Manifest, metric: Metric) -> List[MetricInput]:
+    where_filters = _collect_metric_where_filters(metric)
+    metric_names = _metric_dependency_names_from_filters(manifest, where_filters, metric)
+    return [MetricInput(name=name) for name in sorted(metric_names)]
+
+
 def _process_metric_node(
     manifest: Manifest,
     current_project: str,
@@ -2179,6 +2261,15 @@ def _process_metric_node(
     else:
         assert_values_exhausted(metric.type)
 
+    filter_metric_inputs = _metric_inputs_from_filters(manifest, metric)
+    if filter_metric_inputs:
+        _process_multiple_metric_inputs(
+            manifest=manifest,
+            current_project=current_project,
+            metric=metric,
+            metric_inputs=filter_metric_inputs,
+        )
+
 
 def _process_metrics_for_node(
     manifest: Manifest,
@@ -2232,6 +2323,34 @@ def _process_metrics_for_node(
         target_metric_id = target_metric.unique_id
 
         node.depends_on.add_node(target_metric_id)
+
+    if isinstance(node, SavedQuery) and node.query_params.where is not None:
+        referenced_metric_names = _metric_dependency_names_from_filters(
+            manifest, [node.query_params.where], node
+        )
+        existing_metric_names = set(node.metrics)
+        for metric_name in sorted(referenced_metric_names):
+            if metric_name in existing_metric_names:
+                # Already processed above via explicit metrics list.
+                continue
+            target_metric = manifest.resolve_metric(
+                metric_name,
+                None,
+                current_project,
+                node.package_name,
+            )
+
+            if target_metric is None or isinstance(target_metric, Disabled):
+                node.config.enabled = False
+                invalid_target_fail_unless_test(
+                    node=node,
+                    target_name=metric_name,
+                    target_kind="metric",
+                    disabled=(isinstance(target_metric, Disabled)),
+                )
+                continue
+
+            node.depends_on.add_node(target_metric.unique_id)
 
 
 def remove_dependent_project_references(manifest, external_node_unique_id):
