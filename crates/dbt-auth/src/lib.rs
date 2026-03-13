@@ -38,7 +38,7 @@ macro_rules! auth_configure_pipeline {
     ($backend:expr, $cfg:expr, $parse_auth:path, $apply_connection_args:path) => {{
         let authentication_args = $parse_auth($cfg)?;
 
-        let builder = DatabaseBuilder::new($backend);
+        let builder = database::Builder::new($backend);
         let builder = authentication_args.apply(builder)?;
         let builder = $apply_connection_args($cfg, builder)?;
 

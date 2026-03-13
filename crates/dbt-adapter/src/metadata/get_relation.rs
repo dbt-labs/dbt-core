@@ -43,7 +43,7 @@ pub fn get_relation(
         AdapterType::Bigquery => {
             bigquery_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
-        AdapterType::Databricks | AdapterType::Spark => {
+        AdapterType::Databricks => {
             databricks_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
         AdapterType::Redshift => {
@@ -55,6 +55,7 @@ pub fn get_relation(
         AdapterType::Salesforce => {
             salesforce_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
+        AdapterType::Spark => spark_get_relation(adapter, state, ctx, conn, schema, identifier),
         AdapterType::DuckDB => {
             duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
@@ -265,6 +266,55 @@ fn bigquery_get_relation(
     Ok(Some(relation))
 }
 
+fn spark_get_relation(
+    adapter: &ConcreteAdapter,
+    state: &State,
+    ctx: &QueryCtx,
+    conn: &mut dyn Connection,
+    schema: &str,
+    identifier: &str,
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
+    let query_schema = if adapter.quoting().schema {
+        adapter.quote(schema)
+    } else {
+        schema.to_string()
+    };
+    let query_identifier = if adapter.quoting().identifier {
+        adapter.quote(identifier)
+    } else {
+        identifier.to_string()
+    };
+
+    // Spark 3.5 does not support AS JSON
+    let sql = format!("DESCRIBE TABLE EXTENDED {query_schema}.{query_identifier}");
+    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql);
+    if let Err(e) = &batch
+        && (e.to_string().contains("cannot be found")
+            || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))
+    {
+        return Ok(None);
+    }
+    let _batch = batch?;
+
+    let is_delta = false;
+    let relation_type = RelationType::Table;
+    // TODO(serramatutu): populate table metadata.
+    let json_metadata = BTreeMap::new();
+
+    Ok(Some(Box::new(DatabricksRelation::new(
+        AdapterType::Spark,
+        Some("".to_string()),
+        Some(schema.to_string()),
+        Some(identifier.to_string()),
+        Some(relation_type),
+        None,
+        adapter.quoting(),
+        Some(json_metadata),
+        is_delta,
+        false,
+    ))))
+}
+
 fn databricks_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -276,7 +326,7 @@ fn databricks_get_relation(
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     use crate::metadata::MetadataProcessor as _;
     use crate::metadata::databricks::DatabricksMetadataAdapter;
-    use crate::metadata::databricks::version::DbrVersion;
+    use crate::metadata::databricks::version::EngineVersion;
     use crate::relation::databricks::{INFORMATION_SCHEMA_SCHEMA, SYSTEM_DATABASE};
 
     // This function is only called when full metadata is needed. See https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L418
@@ -305,7 +355,7 @@ fn databricks_get_relation(
     // See also: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L423
     let dbr_version = match adapter.adapter_type() {
         AdapterType::Spark => None,
-        AdapterType::Databricks => Some(DatabricksMetadataAdapter::get_dbr_version(
+        AdapterType::Databricks => Some(DatabricksMetadataAdapter::get_engine_version(
             adapter, ctx, conn,
         )?),
         _ => unreachable!(),
@@ -316,7 +366,7 @@ fn databricks_get_relation(
 
     let as_json_unsupported = is_external_system
         || dbr_version
-            .map(|v| v < DbrVersion::Full(16, 2))
+            .map(|v| v < EngineVersion::Full(16, 2))
             .unwrap_or(false);
 
     let fqn = if database.is_empty() {

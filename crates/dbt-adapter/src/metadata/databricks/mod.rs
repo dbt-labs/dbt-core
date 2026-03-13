@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::future;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -23,7 +24,7 @@ use regex::Regex;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
-use crate::metadata::databricks::version::DbrVersion;
+use crate::metadata::databricks::version::EngineVersion;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::DatabricksRelation;
@@ -157,51 +158,71 @@ impl DatabricksMetadataAdapter {
         Self { adapter }
     }
 
-    /// Get the Databricks Runtime version, caching the result for subsequent calls.
+    /// Get the engine runtime version, caching the result for subsequent calls.
     ///
-    /// To bypass the cache, use [`get_dbr_version()`](Self::get_dbr_version) directly.
-    pub(crate) fn dbr_version(&self, node_id: String) -> AdapterResult<DbrVersion> {
-        static CACHED_DBR_VERSION: OnceLock<AdapterResult<DbrVersion>> = OnceLock::new();
+    /// To bypass the cache, use [`get_engine_version()`](Self::get_engine_version) directly.
+    pub(crate) fn engine_version(&self, node_id: String) -> AdapterResult<EngineVersion> {
+        static CACHED_ENGINE_VERSION: OnceLock<AdapterResult<EngineVersion>> = OnceLock::new();
 
-        CACHED_DBR_VERSION
+        CACHED_ENGINE_VERSION
             .get_or_init(move || {
-                let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
+                let query_ctx = QueryCtx::default().with_desc("get_engine_version adapter call");
                 let mut conn = self.adapter.borrow_tlocal_connection(None, node_id)?;
-                Self::get_dbr_version(&self.adapter, &query_ctx, conn.as_mut())
+                Self::get_engine_version(&self.adapter, &query_ctx, conn.as_mut())
             })
             .clone()
     }
 
-    /// Get the Databricks Runtime version without caching.
+    /// Get the Databricks/Spark Runtime version without caching.
     ///
+    /// Databricks:
     /// This follows the dbt-databricks implementation:
     /// - For clusters: queries `SET spark.databricks.clusterUsageTags.sparkVersion`
-    /// - For SQL Warehouses: returns `DbrVersion::Unset` (treated as latest/max version)
+    /// - For SQL Warehouses: returns `EngineVersion::Unset` (treated as latest/max version)
     ///
     /// See: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/handle.py#L129
-    pub fn get_dbr_version(
+    ///
+    /// Spark:
+    /// This runs a `SELECT version()`
+    pub fn get_engine_version(
         adapter: &ConcreteAdapter,
         ctx: &QueryCtx,
         conn: &mut dyn Connection,
-    ) -> AdapterResult<DbrVersion> {
-        let is_cluster = adapter.is_cluster()?;
+    ) -> AdapterResult<EngineVersion> {
+        match adapter.adapter_type() {
+            AdapterType::Databricks => {
+                let is_cluster = adapter.is_cluster()?;
 
-        if !is_cluster {
-            return Ok(DbrVersion::Unset);
+                if !is_cluster {
+                    return Ok(EngineVersion::Unset);
+                }
+
+                // For clusters, query the spark version tag
+                // Returns a row like: (key, value) = ("spark.databricks.clusterUsageTags.sparkVersion", "15.4.x-scala2.12")
+                let sql = "SET spark.databricks.clusterUsageTags.sparkVersion";
+                let (_response, table) =
+                    adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
+                let batch = table.original_record_batch();
+
+                // The result has two columns: "key" and "value"
+                let values = get_column_values::<StringArray>(&batch, "value")?;
+                debug_assert_eq!(values.len(), 1);
+
+                let version_str = values.value(0);
+                extract_dbr_version(version_str)
+            }
+            AdapterType::Spark => {
+                let sql = "SELECT version() AS version";
+                let (_response, table) =
+                    adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
+                let batch = table.original_record_batch();
+                let values = get_column_values::<StringArray>(&batch, "version")?;
+                debug_assert_eq!(values.len(), 1);
+                let version_str = values.value(0);
+                EngineVersion::from_str(version_str)
+            }
+            _ => unreachable!(),
         }
-
-        // For clusters, query the spark version tag
-        // Returns a row like: (key, value) = ("spark.databricks.clusterUsageTags.sparkVersion", "15.4.x-scala2.12")
-        let sql = "SET spark.databricks.clusterUsageTags.sparkVersion";
-        let (_response, table) = adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
-        let batch = table.original_record_batch();
-
-        // The result has two columns: "key" and "value"
-        let values = get_column_values::<StringArray>(&batch, "value")?;
-        debug_assert_eq!(values.len(), 1);
-
-        let version_str = values.value(0);
-        extract_dbr_version(version_str)
     }
 
     /// Given the relation, fetch its config from the remote data warehouse
@@ -743,15 +764,11 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let dbr_version = match self.adapter.adapter_type() {
-            AdapterType::Spark => None,
-            AdapterType::Databricks => match self.dbr_version(node_id.clone()) {
-                Ok(version) => Some(version),
-                Err(e) => {
-                    return Box::pin(future::ready(Err(Cancellable::Error(e))));
-                }
-            },
-            _ => unreachable!(),
+        let engine_version = match self.engine_version(node_id.clone()) {
+            Ok(version) => Some(version),
+            Err(e) => {
+                return Box::pin(future::ready(Err(Cancellable::Error(e))));
+            }
         };
 
         let adapter = self.adapter.clone(); // clone needed to move it into lambda
@@ -792,11 +809,18 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             let is_external_system =
                 relation.is_system() && matches!(relation_type, Some(RelationType::External));
 
-            // TODO(serramatutu/spark): Spark also supports AS JSON, not sure which version is the minimum version
-            let as_json_unsupported = is_external_system
-                || dbr_version
-                    .map(|v| v < DbrVersion::Full(16, 2))
-                    .unwrap_or(false);
+            let as_json_unsupported = match adapter.adapter_type() {
+                AdapterType::Databricks => {
+                    is_external_system
+                        || engine_version
+                            .map(|v| v < EngineVersion::Full(16, 2))
+                            .unwrap_or(false)
+                }
+                AdapterType::Spark => engine_version
+                    .map(|v| v < EngineVersion::Full(4, 0))
+                    .unwrap_or(false),
+                _ => unreachable!(),
+            };
 
             let fqn = match adapter.adapter_type() {
                 AdapterType::Spark => {
@@ -1034,7 +1058,7 @@ static DBR_VERSION_REGEX: Lazy<Regex> =
 /// Extract DBR version from a spark version string using regex.
 ///
 /// See: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/handle.py#L273
-fn extract_dbr_version(version_str: &str) -> AdapterResult<DbrVersion> {
+fn extract_dbr_version(version_str: &str) -> AdapterResult<EngineVersion> {
     let caps = DBR_VERSION_REGEX.captures(version_str).ok_or_else(|| {
         AdapterError::new(
             AdapterErrorKind::Internal,
@@ -1048,12 +1072,12 @@ fn extract_dbr_version(version_str: &str) -> AdapterResult<DbrVersion> {
 
     let minor_str = &caps[2];
     if minor_str == "x" {
-        Ok(DbrVersion::Full(major, i64::MAX))
+        Ok(EngineVersion::Full(major, i64::MAX))
     } else {
         let minor: i64 = minor_str.parse().map_err(|_| {
             AdapterError::new(AdapterErrorKind::Internal, "Minor version is not a number")
         })?;
-        Ok(DbrVersion::Full(major, minor))
+        Ok(EngineVersion::Full(major, minor))
     }
 }
 
@@ -1193,28 +1217,28 @@ mod tests {
     fn test_extract_dbr_version_with_scala() {
         // Format: "15.4.x-scala2.12" → regex finds "15.4" first → (15, 4)
         let result = extract_dbr_version("15.4.x-scala2.12").unwrap();
-        assert_eq!(result, DbrVersion::Full(15, 4));
+        assert_eq!(result, EngineVersion::Full(15, 4));
     }
 
     #[test]
     fn test_extract_dbr_version_with_gpu_ml() {
         // Format: "15.4.x-gpu-ml-scala2.12" → regex finds "15.4" first → (15, 4)
         let result = extract_dbr_version("15.4.x-gpu-ml-scala2.12").unwrap();
-        assert_eq!(result, DbrVersion::Full(15, 4));
+        assert_eq!(result, EngineVersion::Full(15, 4));
     }
 
     #[test]
     fn test_extract_dbr_version_full_version() {
         // Format: "16.2-scala2.12" → (16, 2)
         let result = extract_dbr_version("16.2-scala2.12").unwrap();
-        assert_eq!(result, DbrVersion::Full(16, 2));
+        assert_eq!(result, EngineVersion::Full(16, 2));
     }
 
     #[test]
     fn test_extract_dbr_version_simple() {
         // Simple format without suffix
         let result = extract_dbr_version("16.2").unwrap();
-        assert_eq!(result, DbrVersion::Full(16, 2));
+        assert_eq!(result, EngineVersion::Full(16, 2));
     }
 
     #[test]
@@ -1222,6 +1246,6 @@ mod tests {
         // Format: "16.x-scala2.12" → minor is "x" → (16, i64::MAX)
         // This matches Python's (16, sys.maxsize) behavior
         let result = extract_dbr_version("16.x-scala2.12").unwrap();
-        assert_eq!(result, DbrVersion::Full(16, i64::MAX));
+        assert_eq!(result, EngineVersion::Full(16, i64::MAX));
     }
 }

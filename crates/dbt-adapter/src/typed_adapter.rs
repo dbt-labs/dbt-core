@@ -11,7 +11,7 @@ use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
-use crate::metadata::databricks::version::DbrVersion;
+use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
 use crate::metadata::fabric::FabricMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
@@ -2914,7 +2914,7 @@ impl ConcreteAdapter {
         let is_sql_warehouse = !is_cluster;
 
         let query_ctx = query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
-        let dbr_version = DatabricksMetadataAdapter::get_dbr_version(self, &query_ctx, conn)?;
+        let dbr_version = DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn)?;
 
         Ok(dbr_capabilities::has_capability(
             capability,
@@ -2937,8 +2937,8 @@ impl ConcreteAdapter {
                     query_ctx_from_state(state)?.with_desc("compare_dbr_version adapter call");
 
                 let current_version =
-                    DatabricksMetadataAdapter::get_dbr_version(self, &query_ctx, conn)?;
-                let expected_version = DbrVersion::Full(major, minor);
+                    DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn)?;
+                let expected_version = EngineVersion::Full(major, minor);
 
                 let result = match current_version.cmp(&expected_version) {
                     std::cmp::Ordering::Greater => 1,

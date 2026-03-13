@@ -7,7 +7,7 @@
 
 use std::str::FromStr;
 
-use crate::metadata::databricks::version::DbrVersion;
+use crate::metadata::databricks::version::EngineVersion;
 
 /// Named capabilities that depend on DBR version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,12 +113,12 @@ fn capability_spec(capability: DbrCapability) -> CapabilitySpec {
 
 /// Check if a capability is available for the given compute.
 ///
-/// - `dbr_version`: The DBR version tuple (major, minor). Use `DbrVersion::Unset` for SQL warehouses
+/// - `dbr_version`: The DBR version tuple (major, minor). Use `EngineVersion::Unset` for SQL warehouses
 ///   (treated as "latest" - all sql_warehouse_supported capabilities return true).
 /// - `is_sql_warehouse`: Whether this is a SQL warehouse (vs cluster).
 pub fn has_capability(
     capability: DbrCapability,
-    dbr_version: DbrVersion,
+    dbr_version: EngineVersion,
     is_sql_warehouse: bool,
 ) -> bool {
     let spec = capability_spec(capability);
@@ -132,10 +132,10 @@ pub fn has_capability(
     }
 
     // For clusters, we need a known version
-    if matches!(dbr_version, DbrVersion::Unset) {
+    if matches!(dbr_version, EngineVersion::Unset) {
         return false;
     }
 
-    let min_version = DbrVersion::Full(spec.min_version.0, spec.min_version.1);
+    let min_version = EngineVersion::Full(spec.min_version.0, spec.min_version.1);
     dbr_version >= min_version
 }

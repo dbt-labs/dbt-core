@@ -1,83 +1,278 @@
 use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
-use database::Builder as DatabaseBuilder;
-
 use dbt_xdbc::{Backend, database, spark};
+pub use dbt_yaml::Value as YmlValue;
 
-/// User agent name provided to Spark by Fusion.
-#[expect(dead_code)]
-const USER_AGENT_NAME: &str = "dbt";
-
-const DEFAULT_AUTH: &str = "NONE";
-const DEFAULT_PORT: &str = "10000";
+use std::collections::HashMap;
 
 #[derive(Debug)]
-enum SparkAuthIR<'a> {
+enum SparkPlatformHint {
+    None,
+    AwsEmrServerless,
+    AwsEmrEks,
+}
+
+#[derive(Debug)]
+enum ThriftTransportType {
+    Binary,
+    Http,
+}
+
+#[derive(Debug)]
+enum ThriftAuthType<'a> {
     Plain,
-    Nosasl,
+    NoSasl,
     Ldap,
     Kerberos { service_name: &'a str },
 }
 
+#[derive(Debug)]
+enum LivyAuthType {
+    Basic,
+    AwsSigV4,
+}
+
+#[derive(Debug)]
+enum SparkAuthIR<'a> {
+    Thrift {
+        host: &'a str,
+        port: Option<u64>,
+        auth: ThriftAuthType<'a>,
+        transport: ThriftTransportType,
+        session_params: HashMap<&'a str, String>,
+    },
+    Livy {
+        host: &'a str,
+        port: Option<u64>,
+        auth: LivyAuthType,
+        session_ttl: Option<String>,
+        session_params: HashMap<&'a str, String>,
+    },
+}
+
+fn apply_session_params(
+    params: &HashMap<&str, String>,
+    builder: &mut database::Builder,
+) -> Result<(), AuthError> {
+    for (key, value) in params {
+        builder.with_named_option(spark::SESSION_CONFIG_PREFIX.to_owned() + key, value)?;
+    }
+    Ok(())
+}
+
 impl<'a> SparkAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let auth_type = match self {
-            Self::Nosasl => spark::auth_type::NOSASL,
-            Self::Plain => spark::auth_type::PLAIN,
-            Self::Ldap => spark::auth_type::LDAP,
-            Self::Kerberos { service_name } => {
-                builder.with_named_option(spark::KERBEROS_SERVICE_NAME, service_name)?;
-                spark::auth_type::KERBEROS
+    pub fn apply(self, mut builder: database::Builder) -> Result<database::Builder, AuthError> {
+        match self {
+            SparkAuthIR::Thrift {
+                host,
+                port,
+                auth,
+                transport,
+                session_params,
+            } => {
+                builder.with_named_option(spark::HOST, host)?;
+                if let Some(port) = port {
+                    builder.with_named_option(spark::PORT, port.to_string())?;
+                }
+
+                let auth_type = match auth {
+                    ThriftAuthType::Plain => spark::auth_type::PLAIN,
+                    ThriftAuthType::NoSasl => spark::auth_type::NOSASL,
+                    ThriftAuthType::Ldap => spark::auth_type::LDAP,
+                    ThriftAuthType::Kerberos { service_name } => {
+                        builder.with_named_option(spark::KERBEROS_SERVICE_NAME, service_name)?;
+                        spark::auth_type::KERBEROS
+                    }
+                };
+                builder.with_named_option(spark::AUTH_TYPE, auth_type)?;
+
+                let transport_api = match transport {
+                    ThriftTransportType::Http => spark::transport_api::THRIFT_HTTP,
+                    ThriftTransportType::Binary => spark::transport_api::THRIFT_BINARY,
+                };
+                builder.with_named_option(spark::TRANSPORT_API, transport_api)?;
+
+                apply_session_params(&session_params, &mut builder)?;
+            }
+
+            SparkAuthIR::Livy {
+                host,
+                port,
+                auth,
+                session_ttl,
+                session_params,
+            } => {
+                builder.with_named_option(spark::TRANSPORT_API, spark::transport_api::LIVY)?;
+                builder
+                    .with_named_option(spark::livy::SESSION_KIND, spark::livy::session_kind::SQL)?;
+
+                builder.with_named_option(spark::HOST, host)?;
+                if let Some(port) = port {
+                    builder.with_named_option(spark::PORT, port.to_string())?;
+                }
+
+                let auth_type = match auth {
+                    LivyAuthType::Basic => spark::auth_type::BASIC,
+                    LivyAuthType::AwsSigV4 => spark::auth_type::AWS_SIGV4,
+                };
+                builder.with_named_option(spark::AUTH_TYPE, auth_type)?;
+
+                if let Some(ttl) = session_ttl {
+                    builder.with_named_option(spark::livy::SESSION_TTL, ttl)?;
+                }
+
+                apply_session_params(&session_params, &mut builder)?;
             }
         };
 
-        builder.with_named_option(spark::AUTH_TYPE, auth_type)?;
         Ok(builder)
     }
 }
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthError> {
-    let raw_auth = config.get_string("auth");
-    let auth = raw_auth.as_deref().unwrap_or(DEFAULT_AUTH);
-
-    match auth {
-        "NOSASL" => Ok(SparkAuthIR::Nosasl),
-        "NONE" => Ok(SparkAuthIR::Plain),
-        "LDAP" => Ok(SparkAuthIR::Ldap),
-        "KERBEROS" => {
-            let service_name = config.get_str("kerberos_service_name").ok_or_else(|| {
-                AuthError::config("'kerberos_service_name' is required when auth is 'KERBEROS'")
-            })?;
-            Ok(SparkAuthIR::Kerberos { service_name })
-        }
-        _ => Err(AuthError::config("Invalid 'auth' method for Spark")),
-    }
-}
-
-fn apply_connection_args(
-    config: &AdapterConfig,
-    mut builder: DatabaseBuilder,
-) -> Result<DatabaseBuilder, AuthError> {
-    let host = config
-        .get_str("host")
-        .ok_or_else(|| AuthError::config("'host' is a required Spark configuration"))?;
-    builder.with_named_option(spark::HOST, host)?;
-
-    let raw_port = config.get_string("port");
-    let port = raw_port.as_deref().unwrap_or(DEFAULT_PORT);
-    builder.with_named_option(spark::PORT, port)?;
-
-    // method in Spark is not an authentication field
     let method = config
         .get_str("method")
         .ok_or_else(|| AuthError::config("'method' is a required Spark configuration"))?;
-    let transport_api = match method {
-        "thrift" => Ok(spark::transport_api::THRIFT_BINARY),
-        "http" => Ok(spark::transport_api::THRIFT_HTTP),
-        "livy" => unimplemented!("livy"),
-        _ => Err(AuthError::config("unsupported Spark method")),
-    }?;
-    builder.with_named_option(spark::TRANSPORT_API, transport_api)?;
 
+    let host = config
+        .get_str("host")
+        .ok_or_else(|| AuthError::config("'host' is a required Spark configuration"))?;
+
+    let port = match config.get("port") {
+        None => Ok(None),
+        Some(YmlValue::String(v, _)) => v
+            .parse::<u64>()
+            .map_err(|_| AuthError::config("'port' must be number"))
+            .map(Some),
+        Some(YmlValue::Number(v, _)) => v
+            .as_u64()
+            .map(|v| Ok(Some(v)))
+            .unwrap_or_else(|| Err(AuthError::config("'port' must be number"))),
+        _ => return Err(AuthError::config("'port' must be number")),
+    }?;
+
+    let auth = config.get_str("auth");
+
+    let platform_hint = match config.get_str("platform_hint") {
+        None => SparkPlatformHint::None,
+        Some(hint) => match hint {
+            "aws_emr_serverless" => SparkPlatformHint::AwsEmrServerless,
+            "aws_emr_eks" => SparkPlatformHint::AwsEmrEks,
+            _ => return Err(AuthError::config("invalid platform hint")),
+        },
+    };
+
+    let mut session_params = HashMap::new();
+    if let Some(ssp) = config.get("server_side_parameters") {
+        let YmlValue::Mapping(ssp, _) = ssp else {
+            return Err(AuthError::config(
+                "'server_side_parameters' must be mapping",
+            ));
+        };
+
+        for (key, value) in ssp {
+            let YmlValue::String(key, _) = key else {
+                return Err(AuthError::config(
+                    "'server_side_parameters' key must be string",
+                ));
+            };
+
+            let value = match value {
+                YmlValue::String(v, _) => v.to_string(),
+                YmlValue::Number(v, _) => v.to_string(),
+                _ => {
+                    return Err(AuthError::config(
+                        "'server_side_parameters' value must be string or number",
+                    ));
+                }
+            };
+
+            session_params.insert(key.as_str(), value);
+        }
+    }
+
+    let ir = match method {
+        "thrift" | "http" => SparkAuthIR::Thrift {
+            host,
+            port,
+            session_params,
+            transport: match method {
+                "thrift" => ThriftTransportType::Binary,
+                "http" => ThriftTransportType::Http,
+                _ => unreachable!(),
+            },
+            auth: match auth {
+                Some("NONE") | None => Ok(ThriftAuthType::Plain),
+                Some("NOSASL") => Ok(ThriftAuthType::NoSasl),
+                Some("LDAP") => Ok(ThriftAuthType::Ldap),
+                Some("KERBEROS") => {
+                    let service_name =
+                        config.get_str("kerberos_service_name").ok_or_else(|| {
+                            AuthError::config(
+                                "'kerberos_service_name' is required when auth is 'KERBEROS'",
+                            )
+                        })?;
+                    Ok(ThriftAuthType::Kerberos { service_name })
+                }
+                Some(_) => Err(AuthError::config("invalid 'auth' for Spark Thrift")),
+            }?,
+        },
+        "livy" => {
+            let session_ttl = session_params.remove("livy.server.session.ttl");
+
+            let auth = match auth {
+                Some("BASIC") | None => Ok(LivyAuthType::Basic),
+                Some("AWS_SIGV4") => Ok(LivyAuthType::AwsSigV4),
+                Some(_) => Err(AuthError::config("invalid 'auth' for Spark Livy")),
+            }?;
+
+            match platform_hint {
+                SparkPlatformHint::None => {}
+                SparkPlatformHint::AwsEmrServerless => {
+                    if !session_params.contains_key("emr-serverless.session.executionRoleArn") {
+                        return Err(AuthError::config(
+                            "AWS EMR Serverless requires 'emr-serverless.session.executionRoleArn' Spark session option",
+                        ));
+                    }
+
+                    if !matches!(auth, LivyAuthType::AwsSigV4) {
+                        return Err(AuthError::config(
+                            "AWS EMR Serverless requires AWS_SIGV4 auth type",
+                        ));
+                    }
+                }
+                SparkPlatformHint::AwsEmrEks => {
+                    if !session_params.contains_key("spark.kubernetes.namespace") {
+                        return Err(AuthError::config(
+                            "AWS EMR on EKS requires 'spark.kubernetes.namespace' Spark session option",
+                        ));
+                    }
+
+                    if session_ttl.is_some() {
+                        return Err(AuthError::config(
+                            "AWS EMR on EKS does not support Livy session TTL",
+                        ));
+                    }
+                }
+            }
+
+            SparkAuthIR::Livy {
+                host,
+                port,
+                auth,
+                session_ttl,
+                session_params,
+            }
+        }
+        _ => return Err(AuthError::config("unsupported Spark method")),
+    };
+
+    Ok(ir)
+}
+
+fn apply_connection_args(
+    _config: &AdapterConfig,
+    builder: database::Builder,
+) -> Result<database::Builder, AuthError> {
     Ok(builder)
 }
 
@@ -98,34 +293,231 @@ mod tests {
     use super::*;
     use crate::test_options::other_option_value;
     use dbt_yaml::Mapping;
-    use dbt_yaml::Value as YmlValue;
 
     #[test]
-    fn test_numeric_port_is_respected() {
+    fn connection_param_defaults() {
+        let cases = [
+            ("thrift", spark::transport_api::THRIFT_BINARY),
+            ("http", spark::transport_api::THRIFT_HTTP),
+            ("livy", spark::transport_api::LIVY),
+        ];
+
+        for (method, api) in cases {
+            let config = Mapping::from_iter([
+                ("host".into(), "myhost".into()),
+                ("port".into(), 1234.into()),
+                ("method".into(), method.into()),
+            ]);
+
+            let builder = SparkAuth {}
+                .configure(&AdapterConfig::new(config))
+                .expect("configure");
+
+            assert_eq!(other_option_value(&builder, spark::HOST), Some("myhost"));
+            assert_eq!(other_option_value(&builder, spark::PORT), Some("1234"));
+            assert_eq!(
+                other_option_value(&builder, spark::TRANSPORT_API),
+                Some(api)
+            );
+        }
+    }
+
+    #[test]
+    fn thrift_auth_ok() {
+        let cases = [
+            ("NONE", spark::auth_type::PLAIN, [].as_slice()),
+            ("NOSASL", spark::auth_type::NOSASL, [].as_slice()),
+            ("LDAP", spark::auth_type::LDAP, [].as_slice()),
+            (
+                "KERBEROS",
+                spark::auth_type::KERBEROS,
+                [("kerberos_service_name", "asdf")].as_slice(),
+            ),
+        ];
+
+        for (auth, option, extra_keys) in cases {
+            let config = Mapping::from_iter(
+                [
+                    ("host".into(), "myhost".into()),
+                    ("method".into(), "thrift".into()),
+                    ("auth".into(), auth.into()),
+                ]
+                .into_iter()
+                .chain(
+                    extra_keys
+                        .iter()
+                        .map(|(k, v)| ((*k).to_string().into(), (*v).to_string().into())),
+                ),
+            );
+
+            let builder = SparkAuth {}
+                .configure(&AdapterConfig::new(config))
+                .expect("configure");
+
+            assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
+        }
+    }
+
+    #[test]
+    fn thrift_auth_err() {
         let config = Mapping::from_iter([
-            ("host".into(), "H".into()),
+            ("host".into(), "myhost".into()),
             ("method".into(), "thrift".into()),
-            ("port".into(), YmlValue::number(10001i64.into())),
+            ("auth".into(), "invalid".into()),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert_eq!(err.msg(), "invalid 'auth' for Spark Thrift");
+    }
+
+    #[test]
+    fn livy_auth_ok() {
+        let cases = [
+            ("BASIC", spark::auth_type::BASIC),
+            ("AWS_SIGV4", spark::auth_type::AWS_SIGV4),
+        ];
+
+        for (auth, option) in cases {
+            let config = Mapping::from_iter([
+                ("host".into(), "myhost".into()),
+                ("method".into(), "livy".into()),
+                ("auth".into(), auth.into()),
+            ]);
+
+            let builder = SparkAuth {}
+                .configure(&AdapterConfig::new(config))
+                .expect("configure");
+
+            assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
+            assert_eq!(
+                other_option_value(&builder, spark::livy::SESSION_KIND),
+                Some(spark::livy::session_kind::SQL)
+            );
+        }
+    }
+
+    #[test]
+    fn livy_auth_err() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "thrift".into()),
+            ("auth".into(), "invalid".into()),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert_eq!(err.msg(), "invalid 'auth' for Spark Thrift");
+    }
+
+    #[test]
+    fn livy_ttl() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "BASIC".into()),
+            (
+                "server_side_parameters".into(),
+                Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
+            ),
         ]);
 
         let builder = SparkAuth {}
             .configure(&AdapterConfig::new(config))
             .expect("configure");
 
-        assert_eq!(other_option_value(&builder, spark::PORT), Some("10001"));
+        assert_eq!(
+            other_option_value(&builder, spark::livy::SESSION_TTL),
+            Some("1h")
+        );
     }
 
     #[test]
-    fn test_non_string_auth_does_not_silently_default() {
+    fn invalid_platform_hint() {
         let config = Mapping::from_iter([
-            ("host".into(), "H".into()),
+            ("host".into(), "myhost".into()),
             ("method".into(), "thrift".into()),
-            ("auth".into(), YmlValue::number(1i64.into())),
+            ("auth".into(), "NOSASL".into()),
+            ("platform_hint".into(), "invalid".into()),
         ]);
-
         let err = SparkAuth {}
             .configure(&AdapterConfig::new(config))
             .expect_err("configure should fail");
-        assert_eq!(err.msg(), "Invalid 'auth' method for Spark");
+        assert_eq!(err.msg(), "invalid platform hint");
+    }
+
+    #[test]
+    fn emr_serverless_no_execution_role_arn() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "BASIC".into()),
+            ("platform_hint".into(), "aws_emr_serverless".into()),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert!(
+            err.msg()
+                .contains("emr-serverless.session.executionRoleArn")
+        );
+    }
+
+    #[test]
+    fn emr_serverless_no_sigv4() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "BASIC".into()),
+            ("platform_hint".into(), "aws_emr_serverless".into()),
+            (
+                "server_side_parameters".into(),
+                Mapping::from_iter([(
+                    "emr-serverless.session.executionRoleArn".into(),
+                    "arn::my_role".into(),
+                )])
+                .into(),
+            ),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert!(err.msg().contains("AWS_SIGV4"));
+    }
+
+    #[test]
+    fn emr_eks_no_kubernetes_namespace() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "AWS_SIGV4".into()),
+            ("platform_hint".into(), "aws_emr_eks".into()),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert!(err.msg().contains("spark.kubernetes.namespace"));
+    }
+
+    #[test]
+    fn emr_eks_livy_ttl() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "AWS_SIGV4".into()),
+            ("platform_hint".into(), "aws_emr_eks".into()),
+            (
+                "server_side_parameters".into(),
+                Mapping::from_iter([
+                    ("spark.kubernetes.namespace".into(), "asdf".into()),
+                    ("livy.server.session.ttl".into(), "1h".into()),
+                ])
+                .into(),
+            ),
+        ]);
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert!(err.msg().contains("TTL"));
     }
 }

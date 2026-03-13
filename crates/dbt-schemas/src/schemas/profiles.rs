@@ -375,7 +375,7 @@ impl DbConfig {
                 }
             }
             DbConfig::Databricks(_) => DEFAULT_DATABRICKS_DATABASE.to_string(),
-            _ => "dbt".to_string(),
+            _ => "".to_string(),
         }
     }
 
@@ -983,15 +983,24 @@ pub enum SparkMethod {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
-#[serde(rename_all = "UPPERCASE")]
 pub enum SparkAuth {
+    #[serde(rename = "NOSASL")]
     NoSasl,
+    #[serde(rename = "CUSTOM")]
     SaslCustom,
+    #[serde(rename = "KERBEROS")]
     SaslKerberos,
+    #[serde(rename = "LDAP")]
     SaslLdap,
     #[default]
+    #[serde(rename = "NONE")]
     SaslNone,
+    #[serde(rename = "PLAIN")]
     SaslPlain,
+    #[serde(rename = "BASIC")]
+    Basic,
+    #[serde(rename = "AWS_SIGV4")]
+    AwsSigV4,
 }
 
 impl Display for SparkAuth {
@@ -1003,6 +1012,8 @@ impl Display for SparkAuth {
             Self::SaslLdap => write!(f, "LDAP"),
             Self::SaslNone => write!(f, "NONE"),
             Self::SaslPlain => write!(f, "PLAIN"),
+            Self::Basic => write!(f, "BASIC"),
+            Self::AwsSigV4 => write!(f, "AWS_SIGV4"),
         }
     }
 }
@@ -1018,6 +1029,8 @@ impl std::str::FromStr for SparkAuth {
             "NONE" => Ok(Self::SaslNone),
             "NOSASL" => Ok(Self::NoSasl),
             "PLAIN" => Ok(Self::SaslPlain),
+            "BASIC" => Ok(Self::Basic),
+            "AWS_SIGV4" => Ok(Self::AwsSigV4),
             _ => Err(format!("Invalid Spark auth mode: {s}")),
         }
     }
@@ -1043,6 +1056,11 @@ pub struct SparkDbConfig {
     pub user: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kerberos_service_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub server_side_parameters: Option<HashMap<String, YmlValue>>,
     // TODO: python supports some extra properties:
     // - cluster
     // - connect_retries
@@ -1056,7 +1074,6 @@ pub struct SparkDbConfig {
     // - query_retries
     // - query_timeout
     // - retry_all
-    // - server_side_parameters
     // - token
 }
 

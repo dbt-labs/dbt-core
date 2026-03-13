@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::errors::{AdapterError, AdapterErrorKind};
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DbrVersion {
+pub enum EngineVersion {
     /// A NULL version
     #[default]
     Unset,
@@ -13,8 +13,8 @@ pub enum DbrVersion {
     Full(i64, i64),
 }
 
-impl DbrVersion {
-    /// Creates a new `DbrVersion` with the given major and optional minor version.
+impl EngineVersion {
+    /// Creates a new `EngineVersion` with the given major and optional minor version.
     pub fn new(major: i64, minor: Option<i64>) -> Self {
         match minor {
             Some(minor) => Self::Full(major, minor),
@@ -23,13 +23,13 @@ impl DbrVersion {
     }
 }
 
-impl PartialOrd for DbrVersion {
+impl PartialOrd for EngineVersion {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for DbrVersion {
+impl Ord for EngineVersion {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
 
@@ -49,7 +49,7 @@ impl Ord for DbrVersion {
     }
 }
 
-impl FromStr for DbrVersion {
+impl FromStr for EngineVersion {
     type Err = AdapterError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Parse the string as the result from `current_version().dbr_version`
@@ -71,7 +71,7 @@ impl FromStr for DbrVersion {
         let (Some(major), Some(minor)) = (parts.next(), parts.next()) else {
             return Err(AdapterError::new(
                 AdapterErrorKind::Internal,
-                format!("Invalid DBR version string: {dbr_version:?}"),
+                format!("Invalid Databricks/Spark version string: {dbr_version:?}"),
             ));
         };
 
@@ -96,40 +96,58 @@ mod tests {
 
     #[test]
     fn test_parse_unset() {
-        let expected = DbrVersion::Unset;
+        let expected = EngineVersion::Unset;
 
-        let actual: DbrVersion = "".parse().unwrap();
+        let actual: EngineVersion = "".parse().unwrap();
         assert_eq!(actual, expected);
 
-        let actual: DbrVersion = " ".parse().unwrap();
+        let actual: EngineVersion = " ".parse().unwrap();
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_parse_major_only() {
-        let expected = DbrVersion::new(16, None);
+        let expected = EngineVersion::new(16, None);
 
-        let actual: DbrVersion = "16.x".parse().unwrap();
+        let actual: EngineVersion = "16.x".parse().unwrap();
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_parse_major_minor() {
-        let expected = DbrVersion::new(16, Some(2));
+        let expected = EngineVersion::new(16, Some(2));
 
-        let actual: DbrVersion = "16.2".parse().unwrap();
+        let actual: EngineVersion = "16.2".parse().unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_parse_major_minor_patch() {
+        let expected = EngineVersion::new(4, Some(1));
+
+        let actual: EngineVersion = "4.1.2".parse().unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_parse_major_minor_patch_commit() {
+        let expected = EngineVersion::new(3, Some(5));
+
+        let actual: EngineVersion = "3.5.7 ed00d046951a7ecda6429accd3b9c5b2dc792b65"
+            .parse()
+            .unwrap();
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_compare() {
-        let unset = DbrVersion::default();
-        let v16_0 = DbrVersion::new(16, Some(0));
-        let v16_2 = DbrVersion::new(16, Some(2));
-        let v16_3 = DbrVersion::new(16, Some(3));
-        let v16_x = DbrVersion::new(16, None);
-        let v17_0 = DbrVersion::new(17, Some(0));
-        let v17_x = DbrVersion::new(17, None);
+        let unset = EngineVersion::default();
+        let v16_0 = EngineVersion::new(16, Some(0));
+        let v16_2 = EngineVersion::new(16, Some(2));
+        let v16_3 = EngineVersion::new(16, Some(3));
+        let v16_x = EngineVersion::new(16, None);
+        let v17_0 = EngineVersion::new(17, Some(0));
+        let v17_x = EngineVersion::new(17, None);
 
         for v in [v16_0, v16_2, v16_3, v16_x, v17_0, v17_x] {
             assert!(unset > v, "{unset:?} should be less than {v:?}");
