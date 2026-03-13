@@ -23,6 +23,7 @@ def models():
 def test_basic(project, logs_dir):
     results = run_dbt(["--log-format=json", "run"])
     assert len(results) == 1
+    timing_info_seen = False                          
     manifest = get_manifest(project.project_root)
     assert "model.test.my_model" in manifest.nodes
 
@@ -59,6 +60,9 @@ def test_basic(project, logs_dir):
             if log_event == "TimingInfoCollected":
                 assert "node_info" in log_data
                 assert "timing_info" in log_data
+                timing_info_seen = True               
+
+    assert timing_info_seen, "TimingInfoCollected event was never fired"   
 
     # windows doesn't have the same thread/connection flow so the ConnectionReused
     # events don't show up
