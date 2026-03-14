@@ -1,0 +1,5 @@
+kind: Features
+custom:
+  Author: chinar-amrutkar
+  Issue: "11097"
+body: Support `.jinja`, `.jinja2`, and `.j2` file extensions for documentation files, in addition to `.md`
