@@ -1,0 +1,6 @@
+kind: Features
+body: Expose macros in the Jinja graph context by adding macros to Manifest.build_flat_graph().T
+time: 2026-03-16T01:10:07.389475+05:30
+custom:
+    Author: chinmaypandya
+    Issue: "12656"
