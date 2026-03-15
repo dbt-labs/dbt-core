@@ -2,6 +2,7 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Generic, List, Optional, Tuple
 
+from dbt import deprecations
 from dbt.artifacts.resources import NodeVersion
 from dbt.clients.jinja import GENERIC_TEST_KWARGS_NAME, get_rendered
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
@@ -18,6 +19,7 @@ from dbt.exceptions import (
     TestTypeError,
     UnexpectedTestNamePatternError,
 )
+from dbt.flags import get_flags
 from dbt.parser.common import Testable
 from dbt.utils import md5
 from dbt_common.exceptions.macros import UndefinedMacroError
@@ -92,6 +94,7 @@ class TestBuilder(Generic[Testable]):
         "fail_calc",
         "store_failures",
         "store_failures_as",
+        "sql_header",
         "meta",
         "database",
         "schema",
@@ -107,7 +110,9 @@ class TestBuilder(Generic[Testable]):
         column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
-        test_name, test_args = self.extract_test_args(data_test, column_name)
+        test_name, test_args = self.extract_test_args(
+            data_test, target.original_file_path, target.name, column_name, package_name
+        )
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
             raise TestArgIncludesModelError()
@@ -132,6 +137,18 @@ class TestBuilder(Generic[Testable]):
         # Process config args if present
         if "config" in self.args:
             self.config.update(self._render_values(self.args.pop("config", {})))
+
+        # Gate sql_header behind behavior change flag
+        if (
+            self.config.get("sql_header") is not None
+            and not get_flags().require_sql_header_in_test_configs
+        ):
+            deprecations.warn(
+                "custom-key-in-config-deprecation",
+                key="sql_header",
+                file=target.original_file_path,
+                key_path="models.config",
+            )
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -201,7 +218,9 @@ class TestBuilder(Generic[Testable]):
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
     @staticmethod
-    def extract_test_args(data_test, name=None) -> Tuple[str, Dict[str, Any]]:
+    def extract_test_args(
+        data_test, file_path, resource_name=None, column_name=None, package_name=None
+    ) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(data_test, dict):
             raise TestTypeError(data_test)
 
@@ -225,95 +244,33 @@ class TestBuilder(Generic[Testable]):
         if not isinstance(test_name, str):
             raise TestNameNotStringError(test_name)
         test_args = deepcopy(test_args)
-        if name is not None:
-            test_args["column_name"] = name
+        if column_name is not None:
+            test_args["column_name"] = column_name
+
+        # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
+        if get_flags().require_generic_test_arguments_property:
+            arguments = test_args.pop("arguments", {})
+            if not arguments and any(
+                k not in ("config", "column_name", "description", "name") for k in test_args.keys()
+            ):
+                resource = (
+                    f"'{resource_name}' in package '{package_name}'"
+                    if package_name
+                    else f"'{resource_name}'"
+                )
+                deprecations.warn(
+                    "missing-arguments-property-in-generic-test-deprecation",
+                    test_name=f"`{test_name}` defined on {resource} ({file_path})",
+                )
+            if isinstance(arguments, dict):
+                test_args = {**test_args, **arguments}
+        elif "arguments" in test_args:
+            deprecations.warn(
+                "arguments-property-in-generic-test-deprecation",
+                test_name=f"`{test_name}` ({test_args['arguments']})",
+            )
+
         return test_name, test_args
-
-    @property
-    def enabled(self) -> Optional[bool]:
-        return self.config.get("enabled")
-
-    @property
-    def alias(self) -> Optional[str]:
-        return self.config.get("alias")
-
-    @property
-    def severity(self) -> Optional[str]:
-        sev = self.config.get("severity")
-        if sev:
-            return sev.upper()
-        else:
-            return None
-
-    @property
-    def store_failures(self) -> Optional[bool]:
-        return self.config.get("store_failures")
-
-    @property
-    def store_failures_as(self) -> Optional[bool]:
-        return self.config.get("store_failures_as")
-
-    @property
-    def where(self) -> Optional[str]:
-        return self.config.get("where")
-
-    @property
-    def limit(self) -> Optional[int]:
-        return self.config.get("limit")
-
-    @property
-    def warn_if(self) -> Optional[str]:
-        return self.config.get("warn_if")
-
-    @property
-    def error_if(self) -> Optional[str]:
-        return self.config.get("error_if")
-
-    @property
-    def fail_calc(self) -> Optional[str]:
-        return self.config.get("fail_calc")
-
-    @property
-    def meta(self) -> Optional[dict]:
-        return self.config.get("meta")
-
-    @property
-    def database(self) -> Optional[str]:
-        return self.config.get("database")
-
-    @property
-    def schema(self) -> Optional[str]:
-        return self.config.get("schema")
-
-    def get_static_config(self):
-        config = {}
-        if self.alias is not None:
-            config["alias"] = self.alias
-        if self.severity is not None:
-            config["severity"] = self.severity
-        if self.enabled is not None:
-            config["enabled"] = self.enabled
-        if self.where is not None:
-            config["where"] = self.where
-        if self.limit is not None:
-            config["limit"] = self.limit
-        if self.warn_if is not None:
-            config["warn_if"] = self.warn_if
-        if self.error_if is not None:
-            config["error_if"] = self.error_if
-        if self.fail_calc is not None:
-            config["fail_calc"] = self.fail_calc
-        if self.store_failures is not None:
-            config["store_failures"] = self.store_failures
-        if self.store_failures_as is not None:
-            config["store_failures_as"] = self.store_failures_as
-        if self.meta is not None:
-            config["meta"] = self.meta
-        if self.database is not None:
-            config["database"] = self.database
-        if self.schema is not None:
-            config["schema"] = self.schema
-        return config
 
     def tags(self) -> List[str]:
         tags = self.config.get("tags", [])

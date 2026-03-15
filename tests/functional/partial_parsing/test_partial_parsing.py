@@ -9,6 +9,7 @@ import yaml
 import dbt.flags as flags
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.events.types import UnableToPartialParse
 from dbt.exceptions import CompilationError
 from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 from dbt.tests.fixtures.project import write_project_files
@@ -20,6 +21,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from dbt_common.events.event_catcher import EventCatcher
 from tests.functional.partial_parsing.fixtures import (
     custom_schema_tests1_sql,
     custom_schema_tests2_sql,
@@ -39,7 +41,10 @@ from tests.functional.partial_parsing.fixtures import (
     local_dependency__models__model_to_import_sql,
     local_dependency__models__schema_yml,
     local_dependency__seeds__seed_csv,
+    macros_schema1_yml,
+    macros_schema2_yml,
     macros_schema_yml,
+    macros_sql,
     macros_yml,
     model_a_sql,
     model_b_sql,
@@ -52,6 +57,8 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
+    model_two_sql_extra_whitespace,
+    model_two_sql_missing_space,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
@@ -62,7 +69,9 @@ from tests.functional.partial_parsing.fixtures import (
     my_macro2_sql,
     my_macro_sql,
     my_test_sql,
+    orders_singular_test_sql,
     orders_sql,
+    orders_sql_modified,
     raw_customers_csv,
     ref_override2_sql,
     ref_override_sql,
@@ -101,10 +110,21 @@ class TestModels:
         results = run_dbt(["run"])
         assert len(results) == 1
 
-        # add a model file
+        # add a model file with missing space
+        write_file(model_two_sql_missing_space, project.project_root, "models", "model_two.sql")
+        run_dbt(["--partial-parse", "run"], expect_pass=False)
+
+        # update model file - fix missing space issue
         write_file(model_two_sql, project.project_root, "models", "model_two.sql")
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 2
+
+        # update model file - add additional spaces, should not change prior checksum
+        manifest = get_manifest(project.project_root)
+        model_two_checksum = manifest.nodes["model.test.model_two"].checksum
+        write_file(model_two_sql_extra_whitespace, project.project_root, "models", "model_two.sql")
+        manifest = run_dbt(["--partial-parse", "parse"])
+        assert manifest.nodes["model.test.model_two"].checksum == model_two_checksum
 
         # add a schema file
         write_file(models_schema1_yml, project.project_root, "models", "schema.yml")
@@ -255,12 +275,23 @@ class TestModels:
         with pytest.raises(CompilationError):
             results = run_dbt(["--partial-parse", "--warn-error", "run"])
 
-        # put back macro file, got back to schema file with no macro
+        # put back macro file, go back to schema file with no macro
         # add separate macro patch schema file
         write_file(models_schema2_yml, project.project_root, "models", "schema.yml")
         write_file(my_macro_sql, project.project_root, "macros", "my_macro.sql")
         write_file(macros_yml, project.project_root, "macros", "macros.yml")
         results = run_dbt(["--partial-parse", "run"])
+
+        # add macro file with two macros and schema file with patches for both
+        write_file(macros_schema1_yml, project.project_root, "macros", "macros_x.yml")
+        write_file(macros_sql, project.project_root, "macros", "macros_x.sql")
+        results = run_dbt(["--partial-parse", "parse"])
+
+        # modify one of the patches
+        write_file(macros_schema2_yml, project.project_root, "macros", "macros_x.yml")
+        results = run_dbt(["--partial-parse", "parse"])
+        rm_file(project.project_root, "macros", "macros_x.sql")
+        rm_file(project.project_root, "macros", "macros_x.yml")
 
         # delete macro and schema file
         rm_file(project.project_root, "macros", "my_macro.sql")
@@ -565,6 +596,58 @@ class TestSkipMacros:
         assert "Starting full parse." in log_output
 
 
+class TestMacroDescriptionUpdate:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": model_one_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": macros_sql,
+            "schema.yml": macros_schema1_yml,
+        }
+
+    def test_pp_macro_description_update(self, project):
+        # initial parse
+        run_dbt(["parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+
+        # edit YAML in macros-path
+        write_file(macros_schema2_yml, project.project_root, "macros", "schema.yml")
+
+        # parse again
+        run_dbt(["--partial-parse", "parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem ipsum."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+
+        # compile
+        run_dbt(["--partial-parse", "compile"])
+
+
 class TestSnapshots:
     @pytest.fixture(scope="class")
     def models(self):
@@ -603,7 +686,7 @@ class TestSnapshots:
         assert len(results) == 1
 
 
-class TestTests:
+class TestGenericTests:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -657,6 +740,39 @@ class TestTests:
         assert expected_nodes == list(manifest.nodes.keys())
 
 
+class TestSingularTests:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "orders.sql": orders_sql,
+            "schema.yml": generic_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        # Make sure "generic" directory is created
+        return {"generic": {"readme.md": ""}}
+
+    def test_pp_singular_tests(self, project):
+
+        # initial run
+        results = run_dbt()
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders", "test.test.unique_orders_id.1360ecc70e"]
+        assert expected_nodes == list(manifest.nodes.keys())
+
+        # add singular test in test-path
+        write_file(orders_singular_test_sql, project.project_root, "tests", "singular_test.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+
+        # modify model being tested by singular test
+        write_file(orders_sql_modified, project.project_root, "models", "orders.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+
+
 class TestExternalModels:
     @pytest.fixture(scope="class")
     def external_model_node(self):
@@ -703,6 +819,7 @@ class TestExternalModels:
             package_name="test",
             identifier="test_identifier",
             schema="test_schema",
+            database="dbt",
         )
 
     @pytest.fixture(scope="class")
@@ -881,3 +998,17 @@ class TestProfileChanges:
         write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
         _, stdout = run_dbt_and_capture(["parse"])
         assert "Unable to do partial parsing" not in stdout
+
+
+class TestExplicitDefaultProfileAndTarget:
+    def test_explicit_default_profile_allows_partial_parse(self, project):
+        event_catcher = EventCatcher(UnableToPartialParse)
+        run_dbt(["parse"])
+        run_dbt(["parse", "--profile", "test"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
+
+    def test_explicit_default_target_allows_partial_parse(self, project):
+        event_catcher = EventCatcher(UnableToPartialParse)
+        run_dbt(["parse"])
+        run_dbt(["parse", "--target", "default"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve error message clarity when detecting nodes with space in name
+time: 2025-12-10T14:39:35.107841-08:00
+custom:
+    Author: michelleark
+    Issue: "11835"

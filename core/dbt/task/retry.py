@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.results import NodeStatus
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
 from dbt.graph import GraphQueue
@@ -74,7 +75,7 @@ class RetryTask(ConfiguredTask):
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(
-            Path(config.project_root) / Path(state_path) / "run_results.json"
+            Path(config.project_root) / Path(state_path) / RUN_RESULTS_FILE_NAME
         )
         if not self.previous_results:
             raise DbtRuntimeError(
@@ -92,7 +93,7 @@ class RetryTask(ConfiguredTask):
         args_to_remove = {
             "show": lambda x: True,
             "resource_types": lambda x: x == [],
-            "warn_error_options": lambda x: x == {"exclude": [], "include": []},
+            "warn_error_options": lambda x: x == {"warn": [], "error": [], "silence": []},
         }
         for k, v in args_to_remove.items():
             if k in self.previous_args and v(self.previous_args[k]):
@@ -116,7 +117,7 @@ class RetryTask(ConfiguredTask):
         retry_config = RuntimeConfig.from_args(args=retry_flags)
 
         # Parse manifest using resolved config/flags
-        manifest = parse_manifest(retry_config, False, True, retry_flags.write_json)  # type: ignore
+        manifest = parse_manifest(retry_config, False, True, retry_flags.write_json, [])  # type: ignore
         super().__init__(args, retry_config, manifest)
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
@@ -125,6 +126,7 @@ class RetryTask(ConfiguredTask):
             result.unique_id
             for result in self.previous_results.results
             if result.status in RETRYABLE_STATUSES
+            # Avoid retrying operation nodes unless we are retrying the run-operation command
             and not (
                 self.previous_command_name != "run-operation"
                 and result.unique_id.startswith("operation.")
@@ -149,6 +151,11 @@ class RetryTask(ConfiguredTask):
             )
         }
 
+        # Tasks without get_graph_queue (e.g. run-operation) and no failed nodes to retry.
+        if not unique_ids and not hasattr(self.task_class, "get_graph_queue"):
+            # Return early with the previous results as the past invocation was successful
+            return self.previous_results
+
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
                 new_graph = self.graph.get_subset_graph(unique_ids)
@@ -164,8 +171,12 @@ class RetryTask(ConfiguredTask):
             self.manifest,
         )
 
-        if self.task_class == RunTask:
+        if self.task_class == RunTask or self.task_class == BuildTask:
             task.batch_map = batch_map
+            task.original_invocation_started_at = (
+                self.previous_results.metadata.invocation_started_at
+                or self.previous_results.metadata.generated_at
+            )
 
         return_value = task.run()
         return return_value

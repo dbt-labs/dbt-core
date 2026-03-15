@@ -10,7 +10,7 @@ from dbt.artifacts.resources.v1.components import (
     HasRelationMetadata,
     Quoting,
 )
-from dbt.artifacts.resources.v1.config import BaseConfig
+from dbt.artifacts.resources.v1.config import BaseConfig, MergeBehavior
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import CompilationError
@@ -20,6 +20,11 @@ from dbt_common.exceptions import CompilationError
 class SourceConfig(BaseConfig):
     enabled: bool = True
     event_time: Any = None
+    freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
+    loaded_at_field: Optional[str] = None
+    loaded_at_query: Optional[str] = None
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
+    tags: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -74,3 +79,4 @@ class SourceDefinition(ParsedSourceMandatory):
     created_at: float = field(default_factory=lambda: time.time())
     unrendered_database: Optional[str] = None
     unrendered_schema: Optional[str] = None
+    doc_blocks: List[str] = field(default_factory=list)

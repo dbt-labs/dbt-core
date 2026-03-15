@@ -4,7 +4,7 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -41,6 +41,7 @@ from dbt.events.types import (
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
+from dbt.task import group_lookup
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
@@ -108,8 +109,9 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
 
 def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
     nearest_project_dir = get_nearest_project_dir(project_dir)
-    os.chdir(nearest_project_dir)
-    return nearest_project_dir
+    resolved_nearest_project_dir = nearest_project_dir.resolve()
+    os.chdir(resolved_nearest_project_dir)
+    return resolved_nearest_project_dir
 
 
 # TODO: look into deprecating this class in favor of several small functions that
@@ -209,7 +211,8 @@ class BaseRunner(metaclass=ABCMeta):
 
         result = self.safe_run(manifest)
         self.node.update_event_status(
-            node_status=result.status, finished_at=datetime.utcnow().isoformat()
+            node_status=result.status,
+            finished_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         )
 
         if not self.node.is_ephemeral_model:
@@ -424,6 +427,8 @@ class BaseRunner(metaclass=ABCMeta):
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             # Include skip_cause NodeStatus
+            group = group_lookup.get(self.node.unique_id)
+
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
                     LogSkipBecauseError(
@@ -432,6 +437,7 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         status=self.skip_cause.status,
+                        group=group,
                     )
                 )
                 # skip_cause here should be the run_result from the ephemeral model
@@ -459,6 +465,7 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         node_info=self.node.node_info,
+                        group=group,
                     )
                 )
 

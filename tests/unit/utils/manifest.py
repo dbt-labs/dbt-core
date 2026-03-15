@@ -11,6 +11,7 @@ from dbt.artifacts.resources import (
     Owner,
     QueryParams,
     RefArgs,
+    SnapshotConfig,
     TestConfig,
     TestMetadata,
     WhereFilter,
@@ -18,6 +19,12 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources.types import ModelLanguage
 from dbt.artifacts.resources.v1.model import ModelConfig
+from dbt.artifacts.resources.v1.semantic_model import (
+    Defaults,
+    Dimension,
+    DimensionTypeParams,
+    Measure,
+)
 from dbt.contracts.files import AnySourceFile, FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
@@ -37,12 +44,18 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SemanticModel,
     SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
     UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    MetricType,
+    TimeGranularity,
+)
 
 
 def make_model(
@@ -483,6 +496,21 @@ def make_semantic_model(
         unique_id=f"semantic_model.{pkg}.{name}",
         original_file_path=path,
         fqn=[pkg, "semantic_models", name],
+        defaults=Defaults(agg_time_dimension="created_at"),
+        dimensions=[
+            Dimension(
+                name="created_at",
+                type=DimensionType.TIME,
+                type_params=DimensionTypeParams(time_granularity=TimeGranularity.DAY),
+            )
+        ],
+        measures=[
+            Measure(
+                name="a_measure",
+                agg=AggregationType.COUNT,
+                expr="1",
+            )
+        ],
     )
 
 
@@ -505,6 +533,35 @@ def make_saved_query(pkg: str, name: str, metric: str, path=None):
         unique_id=f"saved_query.{pkg}.{name}",
         original_file_path=path,
         fqn=[pkg, "saved_queries", name],
+    )
+
+
+def make_source_snapshot(pkg: str, name: str, source: SourceDefinition, path=None) -> SnapshotNode:
+    if path is None:
+        path = "schema.yml"
+
+    return SnapshotNode(
+        database=source.database,
+        schema=source.schema,
+        name=name,
+        resource_type=NodeType.Snapshot,
+        package_name=source.package_name,
+        path=path,
+        original_file_path=path,
+        unique_id=f"snapshot.{pkg}.{name}",
+        fqn=[pkg, "snapshot", name],
+        alias=None,
+        checksum="",
+        sources=[[source.source_name, source.name]],
+        depends_on=DependsOn(
+            nodes=[source.unique_id],
+            macros=[],
+        ),
+        config=SnapshotConfig(
+            strategy="check",
+            unique_key="'dummy'",
+            check_cols="all",
+        ),
     )
 
 
@@ -1016,7 +1073,7 @@ def make_manifest(
     groups: List[Group] = [],
     macros: List[Macro] = [],
     metrics: List[Metric] = [],
-    nodes: List[ModelNode] = [],
+    nodes: List[ManifestNode] = [],
     saved_queries: List[SavedQuery] = [],
     selectors: Dict[str, Any] = {},
     semantic_models: List[SemanticModel] = [],

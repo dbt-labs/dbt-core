@@ -27,8 +27,10 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions.macros import UndefinedMacroError
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
-dbt_function_key_words = set(["ref", "source", "config", "get"])
-dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
+dbt_function_key_words = set(["ref", "source", "config", "get", "meta_get"])
+dbt_function_full_names = set(
+    ["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get", "dbt.config.meta_get"]
+)
 
 
 class PythonValidationVisitor(ast.NodeVisitor):
@@ -188,6 +190,8 @@ class ModelParser(SimpleSQLParser[ModelNode]):
     def parse_python_model(self, node, config, context):
         config_keys_used = []
         config_keys_defaults = []
+        meta_keys_used = []
+        meta_keys_defaults = []
 
         try:
             tree = ast.parse(node.raw_code, filename=node.original_file_path)
@@ -224,16 +228,38 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                     config_keys_defaults.append(default_value)
                     continue
 
+                if func == "meta_get":
+                    num_args = len(args)
+                    if num_args == 0:
+                        raise ParsingError(
+                            "dbt.config.meta_get() requires at least one argument",
+                            node=node,
+                        )
+                    if num_args > 2:
+                        raise ParsingError(
+                            f"dbt.config.meta_get() takes at most 2 arguments ({num_args} given)",
+                            node=node,
+                        )
+                    key = args[0]
+                    default_value = args[1] if num_args == 2 else None
+                    meta_keys_used.append(key)
+                    meta_keys_defaults.append(default_value)
+                    continue
+
                 context[func](*args, **kwargs)
 
-        if config_keys_used:
+        if config_keys_used or meta_keys_used:
             # this is being used in macro build_config_dict
             context["config"](
                 config_keys_used=config_keys_used,
                 config_keys_defaults=config_keys_defaults,
+                meta_keys_used=meta_keys_used,
+                meta_keys_defaults=meta_keys_defaults,
             )
 
-    def render_update(self, node: ModelNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: ModelNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
         flags = get_flags()
         if node.language == ModelLanguage.python:
@@ -241,7 +267,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 verify_python_model_code(node)
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
-                self.update_parsed_node_config(node, config, context=context)
+                self.update_parsed_node_config(
+                    node, config, context=context, validate_config_call_dict=True
+                )
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -346,7 +374,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
-            super().render_update(node, config)
+            super().render_update(node, config, validate_config_call_dict=True)
 
             # if sampling, add the correct messages for tracking
             if exp_sample and isinstance(experimental_sample, str):
@@ -438,7 +466,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
-        self.update_parsed_node_config(node, config)
+        self.update_parsed_node_config(node, config, validate_config_call_dict=True)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already

@@ -553,6 +553,12 @@ select * from renamed
 
 """
 
+customers_yml = """
+models:
+  - name: customers
+    description: "This table contains customer data"
+"""
+
 model_four2_sql = """
 select fun from {{ ref('model_one') }}
 
@@ -689,6 +695,17 @@ select 1 as id, 101 as user_id, 'pending' as status
 
 """
 
+orders_sql_modified = """
+select 1 as id, 101 as user_id, 'completed' as status
+
+"""
+
+orders_singular_test_sql = """
+select * from {{ ref('orders') }}
+where status = 'invalid'
+
+"""
+
 orders_downstream_sql = """
 select * from {{ ref('orders') }}
 
@@ -757,6 +774,15 @@ models:
 
 model_two_sql = """
 select 1 as notfun
+
+"""
+
+model_two_sql_missing_space = """
+select1asnotfun
+"""
+
+model_two_sql_extra_whitespace = """
+select 1        as notfun
 
 """
 
@@ -1287,4 +1313,66 @@ sources_tests1_sql = """
 {% endtest %}
 
 
+"""
+
+macros_sql = """
+{% macro foo() %}
+    foo
+{% endmacro %}
+
+{% macro bar() %}
+    bar
+{% endmacro %}
+"""
+
+macros_schema1_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem.
+"""
+
+macros_schema2_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem ipsum.
+"""
+
+my_func_sql = """
+value * 2
+"""
+
+my_func_yml = """
+functions:
+  - name: my_func
+    description: "Doubles an integer"
+    arguments:
+      - name: value
+        data_type: int
+        description: "An integer to be doubled"
+    returns:
+      data_type: int
+"""
+
+updated_my_func_sql = """
+number * 2.0
+"""
+
+updated_my_func_yml = """
+functions:
+  - name: my_func
+    description: "Doubles a float"
+    arguments:
+      - name: number
+        data_type: float
+        description: "A float to be doubled"
+    returns:
+      data_type: float
+"""
+
+model_using_function_sql = """
+SELECT {{ function('my_func') }}(1) as result
 """

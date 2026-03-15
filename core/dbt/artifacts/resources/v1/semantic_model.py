@@ -5,6 +5,11 @@ from typing import Any, Dict, List, Optional, Sequence
 from dbt.artifacts.resources import SourceFileMetadata
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt.artifacts.resources.v1.metric import Metric
+from dbt.artifacts.resources.v1.semantic_layer_components import (
+    MeasureAggregationParameters,
+    NonAdditiveDimension,
+)
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import (
@@ -19,6 +24,7 @@ from dbt_semantic_interfaces.type_enums import (
     AggregationType,
     DimensionType,
     EntityType,
+    MetricType,
     TimeGranularity,
 )
 
@@ -127,23 +133,9 @@ class Entity(dbtClassMixin):
 
 
 # ====================================
-# Measure objects
+# Measure object
 # Measure protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/measure.py
 # ====================================
-
-
-@dataclass
-class MeasureAggregationParameters(dbtClassMixin):
-    percentile: Optional[float] = None
-    use_discrete_percentile: bool = False
-    use_approximate_percentile: bool = False
-
-
-@dataclass
-class NonAdditiveDimension(dbtClassMixin):
-    name: str
-    window_choice: AggregationType
-    window_groupings: List[str]
 
 
 @dataclass
@@ -271,6 +263,45 @@ class SemanticModel(GraphResource):
             f"Aggregation time dimension for measure {measure.name} on semantic model {self.name} is not set! "
             "To fix this either specify a default `agg_time_dimension` for the semantic model or define an "
             "`agg_time_dimension` on the measure directly."
+        )
+        return TimeDimensionReference(element_name=agg_time_dimension_name)
+
+    def checked_agg_time_dimension_for_simple_metric(
+        self, metric: Metric
+    ) -> TimeDimensionReference:
+        assert (
+            metric.type == MetricType.SIMPLE
+        ), "Only simple metrics can have an agg time dimension."
+        metric_agg_params = metric.type_params.metric_aggregation_params
+        # There are validations elsewhere to check this for metrics and provide messaging for it.
+        assert metric_agg_params, "Simple metrics must have metric_aggregation_params."
+        # This indicates a validation bug / dev error, not a user error that should appear
+        # in a user's YAML.
+        assert (
+            metric_agg_params.semantic_model == self.name
+        ), "Cannot retrieve the agg time dimension for a metric from a different model "
+        f"than the one that the metric belongs to. Metric `{metric.name}` belongs to model "
+        f"`{metric_agg_params.semantic_model}`, but we requested the agg time dimension from model `{self.name}`."
+
+        metric_time_dimension_name = None
+        if (
+            metric.type_params
+            and metric.type_params.metric_aggregation_params
+            and metric.type_params.metric_aggregation_params.agg_time_dimension
+        ):
+            metric_time_dimension_name = (
+                metric.type_params.metric_aggregation_params.agg_time_dimension
+            )
+
+        default_agg_time_dimension = (
+            self.defaults.agg_time_dimension if self.defaults is not None else None
+        )
+        agg_time_dimension_name = metric_time_dimension_name or default_agg_time_dimension
+
+        assert agg_time_dimension_name is not None, (
+            f"Aggregation time dimension for metric {metric.name} is not set! This should either be set directly on "
+            f"the metric specification in the model, or else defaulted to the time dimension in the data "
+            f"source containing the metric."
         )
         return TimeDimensionReference(element_name=agg_time_dimension_name)
 

@@ -1,0 +1,7 @@
+kind: Fixes
+body: ':bug: :snowman: Add exception when using --state and referring to a removed
+  test'
+time: 2025-11-25T12:02:46.635026-05:00
+custom:
+  Author: emmyoop
+  Issue: "10630"

@@ -128,9 +128,8 @@ class ShowTaskDirect(ConfiguredTask):
     def run(self):
         adapter = get_adapter(self.config)
         with adapter.connection_named("show", should_release_connection=False):
-            response, table = adapter.execute(
-                self.args.inline_direct, fetch=True, limit=self.args.limit
-            )
+            limit = None if self.args.limit < 0 else self.args.limit
+            response, table = adapter.execute(self.args.inline_direct, fetch=True, limit=limit)
 
             output = io.StringIO()
             if self.args.output == "json":

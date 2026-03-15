@@ -1,6 +1,6 @@
 import dataclasses
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 
 from mashumaro.jsonschema import build_json_schema
@@ -12,7 +12,7 @@ from dbt_common.clients.system import read_json, write_json
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
-from dbt_common.invocation import get_invocation_id
+from dbt_common.invocation import get_invocation_id, get_invocation_started_at
 
 BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
 SCHEMA_PATH = "dbt/{name}/v{version}.json"
@@ -55,8 +55,13 @@ class Readable:
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
-    generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
+    generated_at: datetime = dataclasses.field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
+    invocation_started_at: Optional[datetime] = dataclasses.field(
+        default_factory=get_invocation_started_at
+    )
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
@@ -176,3 +181,11 @@ def get_artifact_schema_version(dct: dict) -> int:
     # 4. Convert to int
     # TODO: If this gets more complicated, turn into a regex
     return int(schema_version.split("/")[-1].split(".")[0][1:])
+
+
+def get_artifact_dbt_version(dct: dict) -> Optional[str]:
+    dbt_version = dct.get("metadata", {}).get("dbt_version", None)
+    if dbt_version is None:
+        return None
+
+    return str(dbt_version)

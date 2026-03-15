@@ -1,7 +1,7 @@
 import os
 import shutil
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import chain
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -30,7 +30,7 @@ from dbt.artifacts.schemas.catalog import (
     TableMetadata,
 )
 from dbt.artifacts.schemas.results import NodeStatus
-from dbt.constants import MANIFEST_FILE_NAME
+from dbt.constants import CATALOG_FILENAME, MANIFEST_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.types import ArtifactWritten
@@ -41,12 +41,11 @@ from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import write_manifest
 from dbt.task.compile import CompileTask
 from dbt.task.docs import DOCS_INDEX_FILE_PATH
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
-
-CATALOG_FILENAME = "catalog.json"
 
 
 def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
@@ -223,7 +222,7 @@ class GenerateTask(CompileTask):
                 return CatalogArtifact.from_results(
                     nodes={},
                     sources={},
-                    generated_at=datetime.utcnow(),
+                    generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     errors=None,
                     compile_results=compile_results,
                 )
@@ -238,8 +237,10 @@ class GenerateTask(CompileTask):
             if os.path.exists(to_asset_path):
                 shutil.rmtree(to_asset_path)
 
-            if os.path.exists(asset_path):
-                shutil.copytree(asset_path, to_asset_path)
+            from_asset_path = os.path.join(self.config.project_root, asset_path)
+
+            if os.path.exists(from_asset_path):
+                shutil.copytree(from_asset_path, to_asset_path)
 
         if self.manifest is None:
             raise DbtInternalError("self.manifest was None in run!")
@@ -303,13 +304,14 @@ class GenerateTask(CompileTask):
         results = self.get_catalog_results(
             nodes=nodes,
             sources=sources,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             compile_results=compile_results,
             errors=errors,
         )
 
         catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
         results.write(catalog_path)
+        add_artifact_produced(catalog_path)
         fire_event(
             ArtifactWritten(artifact_type=results.__class__.__name__, artifact_path=catalog_path)
         )

@@ -8,14 +8,20 @@ from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.selectors import SelectorDict
 from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
     DBT_PROJECT_FILE_NAME,
     DEPENDENCIES_FILE_NAME,
+    PACKAGE_LOCK_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
     PACKAGES_FILE_NAME,
+    VARS_FILE_NAME,
 )
 from dbt.contracts.project import PackageConfig
 from dbt.contracts.project import Project as ProjectContract
@@ -86,9 +92,14 @@ class IsFQNResource(Protocol):
     package_name: str
 
 
-def _load_yaml(path):
+def _load_yaml(path, validate: bool = False):
     contents = load_file_contents(path)
-    return load_yaml_text(contents)
+    if validate:
+        result, failures = checked_load(contents)
+        issue_deprecation_warnings_for_failures(failures=failures, file=path)
+        return result
+    else:
+        return load_yaml_text(contents)
 
 
 def load_yml_dict(file_path):
@@ -96,6 +107,31 @@ def load_yml_dict(file_path):
     if path_exists(file_path):
         ret = _load_yaml(file_path) or {}
     return ret
+
+
+def vars_data_from_root(project_root: str) -> Dict[str, Any]:
+    """Load vars from vars.yml file if it exists.
+
+    Returns the contents of the 'vars' key, or empty dict if file doesn't exist or has no vars key.
+    """
+    vars_yml_path = os.path.join(project_root, VARS_FILE_NAME)
+    vars_file_dict = load_yml_dict(vars_yml_path)
+    if not vars_file_dict:
+        return {}
+    return vars_file_dict.get("vars", {})
+
+
+def validate_vars_not_in_both(
+    project_dict: Dict[str, Any],
+    has_vars_file: bool,
+) -> None:
+    """Raise error if vars defined in both vars.yml and dbt_project.yml."""
+    has_project_vars = "vars" in project_dict and project_dict["vars"]
+
+    if has_vars_file and has_project_vars:
+        raise DbtProjectError(
+            f"Variables cannot be defined in both {VARS_FILE_NAME} and {DBT_PROJECT_FILE_NAME}. "
+        )
 
 
 def package_and_project_data_from_root(project_root):
@@ -143,6 +179,12 @@ def package_config_from_data(
     return packages
 
 
+def load_package_lock_config(project_root: str) -> PackageConfig:
+    locked_packages = load_yml_dict(f"{project_root}/{PACKAGE_LOCK_FILE_NAME}") or {"packages": []}
+
+    return PackageConfig.from_dict(locked_packages)
+
+
 def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     """Parse multiple versions as read from disk. The versions value may be any
     one of:
@@ -182,7 +224,7 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def load_raw_project(project_root: str) -> Dict[str, Any]:
+def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
@@ -194,7 +236,14 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
             )
         )
 
-    project_dict = _load_yaml(project_yaml_filepath)
+    project_dict = _load_yaml(project_yaml_filepath, validate=validate)
+
+    if validate:
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate, project_schema
+
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
+        )
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
@@ -315,10 +364,14 @@ class PartialProject(RenderComponents):
         )
 
     # Called by Project.from_project_root which first calls PartialProject.from_project_root
-    def render(self, renderer: DbtProjectYamlRenderer) -> "Project":
+    def render(
+        self,
+        renderer: DbtProjectYamlRenderer,
+        vars_from_file: Optional[Dict[str, Any]] = None,
+    ) -> "Project":
         try:
             rendered = self.get_rendered(renderer)
-            return self.create_project(rendered)
+            return self.create_project(rendered, vars_from_file=vars_from_file)
         except DbtProjectError as exc:
             if exc.path is None:
                 exc.path = os.path.join(self.project_root, DBT_PROJECT_FILE_NAME)
@@ -353,7 +406,11 @@ class PartialProject(RenderComponents):
                     kwargs.update({"exp_path": expected_path})
                 deprecations.warn(f"project-config-{deprecated_path}", **kwargs)
 
-    def create_project(self, rendered: RenderComponents) -> "Project":
+    def create_project(
+        self,
+        rendered: RenderComponents,
+        vars_from_file: Optional[Dict[str, Any]] = None,
+    ) -> "Project":
         unrendered = RenderComponents(
             project_dict=self.project_dict,
             packages_dict=self.packages_dict,
@@ -404,9 +461,16 @@ class PartialProject(RenderComponents):
         test_paths: List[str] = value_or(cfg.test_paths, ["tests"])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ["analyses"])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
+        function_paths: List[str] = value_or(cfg.function_paths, ["functions"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
+            model_paths,
+            seed_paths,
+            snapshot_paths,
+            analysis_paths,
+            macro_paths,
+            test_paths,
+            function_paths,
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -437,6 +501,7 @@ class PartialProject(RenderComponents):
         semantic_models: Dict[str, Any]
         saved_queries: Dict[str, Any]
         exposures: Dict[str, Any]
+        functions: Dict[str, Any]
         vars_value: VarProvider
         dbt_cloud: Dict[str, Any]
 
@@ -453,10 +518,14 @@ class PartialProject(RenderComponents):
         semantic_models = cfg.semantic_models
         saved_queries = cfg.saved_queries
         exposures = cfg.exposures
-        if cfg.vars is None:
-            vars_dict: Dict[str, Any] = {}
+        functions = cfg.functions
+
+        # Use vars from vars.yml if provided, otherwise use vars from dbt_project.yml
+        # Mutual exclusivity ensures only one source is populated
+        if vars_from_file:
+            vars_dict = vars_from_file
         else:
-            vars_dict = cfg.vars
+            vars_dict = cfg.vars or {}
 
         vars_value = VarProvider(vars_dict)
         # There will never be any project_env_vars when it's first created
@@ -493,6 +562,7 @@ class PartialProject(RenderComponents):
             asset_paths=asset_paths,
             target_path=target_path,
             snapshot_paths=snapshot_paths,
+            function_paths=function_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             packages_install_path=packages_install_path,
@@ -516,6 +586,7 @@ class PartialProject(RenderComponents):
             semantic_models=semantic_models,
             saved_queries=saved_queries,
             exposures=exposures,
+            functions=functions,
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
@@ -523,6 +594,7 @@ class PartialProject(RenderComponents):
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
             flags=flags,
+            vars_from_file=vars_from_file or {},
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -534,7 +606,7 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        selectors_dict: Dict[str, Any],
+        selectors_dict: Optional[Dict[str, Any]],
         *,
         verify_version: bool = False,
         packages_specified_path: str = PACKAGES_FILE_NAME,
@@ -550,17 +622,17 @@ class PartialProject(RenderComponents):
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
-            selectors_dict=selectors_dict,
+            selectors_dict=selectors_dict,  # type: ignore
             verify_version=verify_version,
             packages_specified_path=packages_specified_path,
         )
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, *, verify_version: bool = False
+        cls, project_root: str, *, verify_version: bool = False, validate: bool = False
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
-        project_dict = load_raw_project(project_root)
+        project_dict = load_raw_project(project_root, validate=validate)
         (
             packages_dict,
             packages_specified_path,
@@ -610,6 +682,7 @@ class Project:
     asset_paths: List[str]
     target_path: str
     snapshot_paths: List[str]
+    function_paths: List[str]
     clean_targets: List[str]
     log_path: str
     packages_install_path: str
@@ -628,6 +701,7 @@ class Project:
     semantic_models: Dict[str, Any]
     saved_queries: Dict[str, Any]
     exposures: Dict[str, Any]
+    functions: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: PackageConfig
@@ -640,6 +714,7 @@ class Project:
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
     flags: Dict[str, Any]
+    vars_from_file: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -650,6 +725,7 @@ class Project:
             self.analysis_paths,
             self.macro_paths,
             self.test_paths,
+            self.function_paths,
         )
 
     @property
@@ -716,6 +792,7 @@ class Project:
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,
                 "exposures": self.exposures,
+                "functions": self.functions,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
@@ -747,9 +824,17 @@ class Project:
         renderer: DbtProjectYamlRenderer,
         *,
         verify_version: bool = False,
+        validate: bool = False,
+        vars_from_file: Optional[Dict[str, Any]] = None,
     ) -> "Project":
-        partial = PartialProject.from_project_root(project_root, verify_version=verify_version)
-        return partial.render(renderer)
+        partial = PartialProject.from_project_root(
+            project_root, verify_version=verify_version, validate=validate
+        )
+
+        # Check mutual exclusivity before rendering
+        validate_vars_not_in_both(partial.project_dict, bool(vars_from_file))
+
+        return partial.render(renderer, vars_from_file=vars_from_file)
 
     def hashed_name(self):
         return md5(self.project_name)

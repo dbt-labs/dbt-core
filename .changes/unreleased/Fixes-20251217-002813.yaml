@@ -1,0 +1,6 @@
+kind: Fixes
+body: Adds omitted return statement to RuntimeConfigObject.meta_require method
+time: 2025-12-17T00:28:13.015416197Z
+custom:
+    Author: mjsqu
+    Issue: "12288"

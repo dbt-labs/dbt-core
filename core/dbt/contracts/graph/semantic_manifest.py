@@ -14,6 +14,7 @@ from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
+from dbt_common.ui import error_tag
 from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.node_relation import PydanticNodeRelation
 from dbt_semantic_interfaces.implementations.project_configuration import (
@@ -113,8 +114,28 @@ class SemanticManifest:
         for warning in validation_results.warnings:
             fire_event(SemanticValidationFailure(msg=warning.message))
 
+        for deprecation in validation_results.future_errors:
+            if (
+                "time dimension" in deprecation.message
+                and "must have a time granularity set" in deprecation.message
+            ):
+                deprecations.warn(
+                    "time-dimensions-require-granularity-deprecation", deprecation.message
+                )
+            else:
+                # We have three options for this case:
+                # 1. Swallow it (don't send any event)
+                # 2. Raise a generic deprecation
+                # 3. Raise an error about an unknown SL future error
+                #
+                # (1) is the easiest, but useless to the user and also to us for debugging.
+                # (3) is not safe because if a new deprecation is added in a DSI patch, then
+                # suddenly dbt core would be broken.
+                # This leaves (2) only remaining option, which is what we do.
+                deprecations.warn("generic-semantic-layer-deprecation", deprecation.message)
+
         for error in validation_result_errors:
-            fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
+            fire_event(SemanticValidationFailure(msg=error_tag(error.message)), EventLevel.ERROR)
 
         return not validation_result_errors
 
@@ -193,6 +214,7 @@ class SemanticManifest:
                 PydanticSavedQuery.parse_obj(saved_query.to_dict())
             )
 
+        legacy_time_spine_model: Optional[ModelNode] = None
         if self.manifest.semantic_models:
             legacy_time_spine_model = self.manifest.ref_lookup.find(
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
@@ -217,8 +239,8 @@ class SemanticManifest:
                     "(https://docs.getdbt.com/docs/build/metricflow-time-spine)."
                 )
 
-            # For backward compatibility: if legacy time spine exists, include it in the manifest.
-            if legacy_time_spine_model:
+            # For backward compatibility: if legacy time spine exists without config, include it in the manifest.
+            if legacy_time_spine_model and legacy_time_spine_model.time_spine is None:
                 legacy_time_spine = LegacyTimeSpine(
                     location=legacy_time_spine_model.relation_name,
                     column_name="date_day",

@@ -26,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     UnitTestDefinition,
     UnitTestNode,
+    UnitTestSourceDefinition,
 )
 from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
@@ -44,6 +45,7 @@ from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
+from dbt_common.exceptions import CompilationError
 from dbt_common.invocation import get_invocation_id
 
 graph_file_name = "graph.gpickle"
@@ -181,6 +183,8 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
             elif dependency in manifest.semantic_models:
                 self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
+            elif dependency in manifest.functions:
+                self.dependency(node.unique_id, (manifest.functions[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
@@ -193,6 +197,8 @@ class Linker:
             self.link_node(semantic_model, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(exposure, manifest)
+        for function in manifest.functions.values():
+            self.link_node(function, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
         for unit_test in manifest.unit_tests.values():
@@ -461,6 +467,10 @@ class Linker:
 class Compiler:
     def __init__(self, config) -> None:
         self.config = config
+        # Set of unique_ids for nodes selected in the current run.
+        # Used to determine whether FK constraint targets should use
+        # deferred relations or current relations during compilation.
+        self.selected_node_ids: Set[str] = set()
 
     def initialize(self):
         make_directory(self.config.project_target_path)
@@ -562,7 +572,12 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
+            cte_name = (
+                cte_model.cte_name
+                if isinstance(cte_model, UnitTestSourceDefinition)
+                else cte_model.identifier
+            )
+            new_cte_name = self.add_ephemeral_prefix(cte_name)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
@@ -595,7 +610,7 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        if node.language == ModelLanguage.python:
+        if node.language == ModelLanguage.python and node.resource_type == NodeType.Model:
             context = self._create_node_context(node, manifest, extra_context)
 
             postfix = jinja.get_rendered(
@@ -650,8 +665,23 @@ class Compiler:
             raise GraphDependencyNotFoundError(node, to_expression)
 
         adapter = get_adapter(self.config)
-        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
-        return relation_name
+
+        # Use deferred relation only if:
+        # 1. The foreign key node has a defer_relation (from previous state)
+        # 2. The --defer flag is set
+        # 3. The foreign key node is NOT being built in the current run
+        #    (i.e., not in selected_node_ids)
+        # This mirrors the logic in RuntimeRefResolver.create_relation() for
+        # model body refs, ensuring FK constraints behave consistently.
+        if (
+            hasattr(foreign_key_node, "defer_relation")
+            and foreign_key_node.defer_relation
+            and self.config.args.defer
+            and foreign_key_node.unique_id not in self.selected_node_ids
+        ):
+            return str(adapter.Relation.create_from(self.config, foreign_key_node.defer_relation))
+        else:
+            return str(adapter.Relation.create_from(self.config, foreign_key_node))
 
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,
@@ -711,10 +741,7 @@ class Compiler:
     def _write_node(
         self, node: ManifestSQLNode, split_suffix: Optional[str] = None
     ) -> ManifestSQLNode:
-        if not node.extra_ctes_injected or node.resource_type in (
-            NodeType.Snapshot,
-            NodeType.Seed,
-        ):
+        if not node.extra_ctes_injected or node.resource_type in (NodeType.Seed,):
             return node
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
@@ -790,7 +817,22 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     if len(ctes) == 0:
         return sql
 
-    parsed_stmts = sqlparse.parse(sql)
+    try:
+        parsed_stmts = sqlparse.parse(sql)
+    except Exception as e:
+        compilation_exception_msg = str(e)
+        if "grouping depth exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = (
+                f"{compilation_exception_msg} You may raise the limit via "
+                f'--sqlparse \'{{"MAX_GROUPING_DEPTH": "<value>"}}\'.'
+            )
+        if "number of tokens exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = (
+                f"{compilation_exception_msg} You may raise the limit via "
+                f'--sqlparse \'{{"MAX_GROUPING_TOKENS": "<value>"}}\'.'
+            )
+        raise CompilationError(compilation_exception_msg)
+
     parsed = parsed_stmts[0]
 
     with_stmt = None

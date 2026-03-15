@@ -100,7 +100,8 @@ class MicrobatchBuilder:
 
         return batches
 
-    def build_jinja_context_for_batch(self, incremental_batch: bool) -> Dict[str, Any]:
+    @staticmethod
+    def build_jinja_context_for_batch(model: ModelNode, incremental_batch: bool) -> Dict[str, Any]:
         """
         Create context with entries that reflect microbatch model + incremental execution state
 
@@ -109,9 +110,9 @@ class MicrobatchBuilder:
         jinja_context: Dict[str, Any] = {}
 
         # Microbatch model properties
-        jinja_context["model"] = self.model.to_dict()
-        jinja_context["sql"] = self.model.compiled_code
-        jinja_context["compiled_code"] = self.model.compiled_code
+        jinja_context["model"] = model.to_dict()
+        jinja_context["sql"] = model.compiled_code
+        jinja_context["compiled_code"] = model.compiled_code
 
         # Add incremental context variables for batches running incrementally
         if incremental_batch:
@@ -198,9 +199,21 @@ class MicrobatchBuilder:
 
     @staticmethod
     def format_batch_start(batch_start: datetime, batch_size: BatchSize) -> str:
-        return str(
-            batch_start.date() if (batch_start and batch_size != BatchSize.hour) else batch_start
-        )
+        """Format the passed in datetime based on the batch_size.
+
+        2024-09-17 16:06:00 + Batchsize.hour  -> 2024-09-17T16
+        2024-09-17 16:06:00 + Batchsize.day   -> 2024-09-17
+        2024-09-17 16:06:00 + Batchsize.month -> 2024-09
+        2024-09-17 16:06:00 + Batchsize.year  -> 2024
+        """
+        if batch_size == BatchSize.year:
+            return batch_start.strftime("%Y")
+        elif batch_size == BatchSize.month:
+            return batch_start.strftime("%Y-%m")
+        elif batch_size == BatchSize.day:
+            return batch_start.strftime("%Y-%m-%d")
+        else:  # batch_size == BatchSize.hour
+            return batch_start.strftime("%Y-%m-%dT%H")
 
     @staticmethod
     def ceiling_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:

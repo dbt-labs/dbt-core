@@ -1,0 +1,6 @@
+kind: Fixes
+body: Begin emitting deprecation warnings for DSI produced ValidationFutureError issues
+time: 2026-01-13T16:17:42.988355-06:00
+custom:
+  Author: QMalcolm
+  Issue: NA

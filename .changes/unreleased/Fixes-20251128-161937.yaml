@@ -1,0 +1,7 @@
+kind: Fixes
+body: ':bug: :snowman: Fix `dbt deps --add-package` crash when packages.yml contains `warn-unpinned:
+  false`'
+time: 2025-11-28T16:19:37.608722-05:00
+custom:
+  Author: emmyoop
+  Issue: "9104"

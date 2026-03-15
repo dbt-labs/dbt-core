@@ -5,6 +5,7 @@
   <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml">
     <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml/badge.svg?event=push" alt="CI Badge"/>
   </a>
+  <a href="https://www.bestpractices.dev/projects/11095"><img src="https://www.bestpractices.dev/projects/11095/badge"></a>
 </p>
 
 **[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
@@ -36,4 +37,4 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Code of Conduct
 
-Everyone interacting in the dbt project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [dbt Code of Conduct](https://community.getdbt.com/code-of-conduct).
+Everyone interacting in the dbt project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [dbt Code of Conduct](https://docs.getdbt.com/community/resources/code-of-conduct).

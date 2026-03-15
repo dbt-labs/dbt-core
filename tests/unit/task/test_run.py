@@ -1,5 +1,6 @@
 from argparse import Namespace
 from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from typing import Optional, Type, Union
 from unittest import mock
@@ -9,6 +10,7 @@ import pytest
 from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
 
+from core.dbt.task.run import MicrobatchBatchRunner
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
@@ -27,8 +29,8 @@ from dbt.flags import get_flags, set_from_args
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from tests.utils import EventCatcher
 
 
 @pytest.mark.parametrize(
@@ -174,6 +176,25 @@ class TestMicrobatchModelRunner:
             num_nodes=1,
         )
 
+    @pytest.fixture
+    def batch_runner(
+        self,
+        postgres_adapter: PostgresAdapter,
+        table_model: ModelNode,
+        runtime_config: RuntimeConfig,
+    ) -> MicrobatchBatchRunner:
+        return MicrobatchBatchRunner(
+            config=runtime_config,
+            adapter=postgres_adapter,
+            node=table_model,
+            node_index=1,
+            num_nodes=1,
+            batch_idx=0,
+            batches=[],
+            relation_exists=False,
+            incremental_batch=False,
+        )
+
     @pytest.mark.parametrize(
         "has_relation,relation_type,materialized,full_refresh_config,full_refresh_flag,expectation",
         [
@@ -267,22 +288,94 @@ class TestMicrobatchModelRunner:
     def test_should_run_in_parallel(
         self,
         mocker: MockerFixture,
-        model_runner: MicrobatchModelRunner,
+        batch_runner: MicrobatchBatchRunner,
         adapter_microbatch_concurrency: bool,
         has_relation: bool,
         concurrent_batches: Optional[bool],
         has_this: bool,
         expectation: bool,
     ) -> None:
-        model_runner.node._has_this = has_this
-        model_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
-        model_runner.set_relation_exists(has_relation)
+        batch_runner.node._has_this = has_this
+        batch_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
+        batch_runner.relation_exists = has_relation
 
-        mocked_supports = mocker.patch.object(model_runner.adapter, "supports")
+        mocked_supports = mocker.patch.object(batch_runner.adapter, "supports")
         mocked_supports.return_value = adapter_microbatch_concurrency
 
         # Assert result of should_run_in_parallel
-        assert model_runner.should_run_in_parallel() == expectation
+        assert batch_runner.should_run_in_parallel() == expectation
+
+    def test_get_microbatch_builder_uses_original_invocation_time_on_retry(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+    ) -> None:
+        """When retrying, get_microbatch_builder should use the original invocation
+        time from the previous run rather than the current invocation time."""
+        original_time = datetime(2025, 3, 21, 7, 55, 0)
+        current_time = datetime(2025, 3, 25, 1, 4, 0)
+
+        # Set up a mock parent task with original_invocation_started_at
+        mock_parent = mocker.Mock(spec=RunTask)
+        mock_parent.original_invocation_started_at = original_time
+        model_runner._parent_task = mock_parent
+
+        # Mock _is_incremental to avoid adapter calls
+        mocker.patch.object(model_runner, "_is_incremental", return_value=True)
+
+        # Mock get_invocation_started_at to return the "current" (retry) time
+        mocker.patch(
+            "dbt.task.run.get_invocation_started_at",
+            return_value=current_time,
+        )
+
+        model = model_runner.node
+        model.config.materialized = "incremental"
+        model.config.incremental_strategy = "microbatch"
+        model.config.batch_size = "day"
+        model.config.begin = "2024-12-01"
+        model.config.event_time = "_event_date"
+        model_runner.config.args = Namespace(
+            EVENT_TIME_START=None, EVENT_TIME_END=None, SAMPLE=None
+        )
+
+        builder = model_runner.get_microbatch_builder(model)
+        assert builder.default_end_time == original_time
+
+    def test_get_microbatch_builder_uses_current_time_without_retry(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+    ) -> None:
+        """When not retrying (normal run), get_microbatch_builder should use
+        the current invocation time."""
+        current_time = datetime(2025, 3, 25, 1, 4, 0)
+
+        # Set up a mock parent task with no original_invocation_started_at
+        mock_parent = mocker.Mock(spec=RunTask)
+        mock_parent.original_invocation_started_at = None
+        model_runner._parent_task = mock_parent
+
+        # Mock _is_incremental to avoid adapter calls
+        mocker.patch.object(model_runner, "_is_incremental", return_value=True)
+
+        mocker.patch(
+            "dbt.task.run.get_invocation_started_at",
+            return_value=current_time,
+        )
+
+        model = model_runner.node
+        model.config.materialized = "incremental"
+        model.config.incremental_strategy = "microbatch"
+        model.config.batch_size = "day"
+        model.config.begin = "2024-12-01"
+        model.config.event_time = "_event_date"
+        model_runner.config.args = Namespace(
+            EVENT_TIME_START=None, EVENT_TIME_END=None, SAMPLE=None
+        )
+
+        builder = model_runner.get_microbatch_builder(model)
+        assert builder.default_end_time == current_time
 
 
 class TestRunTask:

@@ -54,11 +54,11 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
-        # pre- and post-hooks
+        # config: pre- and post-hooks, and loaded_at_query
         if (
             len(keypath) >= 2
             and keypath[0] == "config"
-            and keypath[1] in ("pre_hook", "post_hook")
+            and keypath[1] in ("pre_hook", "post_hook", "loaded_at_query")
         ):
             return True
 
@@ -68,8 +68,17 @@ class SchemaYamlRenderer(BaseRenderer):
 
         if (
             len(keypath) >= 3
-            and keypath[0] in ("columns", "dimensions", "measures", "entities")
+            and keypath[0] in ("columns", "dimensions", "measures", "entities", "metrics")
             and keypath[2] in ("tests", "data_tests", "description")
+        ):
+            return True
+
+        # derived_semantics descriptions (v2 semantic layer)
+        if (
+            len(keypath) >= 4
+            and keypath[0] == "derived_semantics"
+            and keypath[1] in ("dimensions", "entities")
+            and keypath[3] in ("tests", "data_tests", "description")
         ):
             return True
 
@@ -81,6 +90,8 @@ class SchemaYamlRenderer(BaseRenderer):
             return True
         if self.key == "sources":
             if keypath[0] in ("description", "loaded_at_query"):
+                return False
+            if len(keypath) >= 2 and keypath[0] == "config" and keypath[1] == "loaded_at_query":
                 return False
             if keypath[0] == "tables":
                 if self._is_norender_key(keypath[2:]):
@@ -104,6 +115,14 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
+            # Skip metric filters — consistent with the "metrics" branch above,
+            # using positional checks to avoid over-matching.
+            # metrics is always at keypath[0] in this branch (model-relative path),
+            # and filter is always at [-1] (string) or [-2] (list item).
+            if keypath[0] == "metrics" and (
+                keypath[-1] == "filter" or (len(keypath) > 1 and keypath[-2] == "filter")
+            ):
+                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True

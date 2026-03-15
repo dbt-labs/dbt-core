@@ -7,6 +7,7 @@ version: "3.5"
 services:
   database:
     image: postgres
+    shm_size: 1gb
     environment:
       POSTGRES_USER: "root"
       POSTGRES_PASSWORD: "password"
@@ -22,7 +23,7 @@ services:
         # Run `make .env` to set $USER_ID and $GROUP_ID
         USER_ID: ${USER_ID:-}
         GROUP_ID: ${GROUP_ID:-}
-    command: "/root/.virtualenvs/dbt/bin/pytest"
+    command: "bash -c 'cd core && hatch run ci:unit-tests'"
     environment:
       POSTGRES_TEST_HOST: "database"
     volumes:

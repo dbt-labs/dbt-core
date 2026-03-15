@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure recent deprecation warnings include event name in message
+time: 2025-12-09T17:50:31.334618-06:00
+custom:
+  Author: QMalcolm
+  Issue: "12264"

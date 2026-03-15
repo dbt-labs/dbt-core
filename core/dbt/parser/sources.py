@@ -1,7 +1,7 @@
 import itertools
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
@@ -25,7 +25,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
 )
-from dbt.events.types import FreshnessConfigProblem, UnusedTables
+from dbt.events.types import FreshnessConfigProblem, UnusedTables, ValidationWarning
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.common import ParserRef
@@ -53,6 +53,7 @@ class SourcePatcher:
         self.generic_test_parsers: Dict[str, SchemaGenericTestParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
         self.sources: Dict[str, SourceDefinition] = {}
+        self._deprecations: Set[Any] = set()
 
     # This method calls the 'parse_source' method which takes
     # the UnpatchedSourceDefinitions in the manifest and combines them
@@ -129,40 +130,9 @@ class SourcePatcher:
         description = table.description or ""
         source_description = source.description or ""
 
-        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
-        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
-        # specific table can default to metadata-based freshness.
-        if table.loaded_at_field_present and table.loaded_at_query:
-            raise ParsingError(
-                "Cannot specify both loaded_at_field and loaded_at_query at table level."
-            )
-        if source.loaded_at_field and source.loaded_at_query:
-            raise ParsingError(
-                "Cannot specify both loaded_at_field and loaded_at_query at source level."
-            )
-
-        if table.loaded_at_field_present or table.loaded_at_field is not None:
-            loaded_at_field = table.loaded_at_field
-        else:
-            loaded_at_field = source.loaded_at_field  # may be None, that's okay
-
-        loaded_at_query: Optional[str]
-        if table.loaded_at_query is not None:
-            loaded_at_query = table.loaded_at_query
-        else:
-            if table.loaded_at_field_present:
-                loaded_at_query = None
-            else:
-                loaded_at_query = source.loaded_at_query
-        freshness = merge_freshness(source.freshness, table.freshness)
         quoting = source.quoting.merged(table.quoting)
-        # path = block.path.original_file_path
-        table_meta = table.meta or {}
-        source_meta = source.meta or {}
-        meta = {**source_meta, **table_meta}
-
-        # make sure we don't do duplicate tags from source + table
-        tags = sorted(set(itertools.chain(source.tags, table.tags)))
+        # Retain original source meta prior to merge with table meta
+        source_meta = {**source.meta, **source.config.get("meta", {})}
 
         config = self._generate_source_config(
             target=target,
@@ -200,15 +170,15 @@ class SourcePatcher:
             source_name=source.name,
             source_description=source_description,
             source_meta=source_meta,
-            meta=meta,
+            meta=config.meta,
             loader=source.loader,
-            loaded_at_field=loaded_at_field,
-            loaded_at_query=loaded_at_query,
-            freshness=freshness,
+            loaded_at_field=config.loaded_at_field,
+            loaded_at_query=config.loaded_at_query,
+            freshness=config.freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
             fqn=target.fqn,
-            tags=tags,
+            tags=config.tags,
             config=config,
             unrendered_config=unrendered_config,
         )
@@ -216,6 +186,7 @@ class SourcePatcher:
         if (
             parsed_source.freshness
             and not parsed_source.loaded_at_field
+            and not parsed_source.loaded_at_query
             and not get_adapter(self.root_project).supports(Capability.TableLastModifiedMetadata)
         ):
             # Metadata-based freshness is being used by default for this node,
@@ -292,6 +263,11 @@ class SourcePatcher:
         tags_sources = [target.source.tags, target.table.tags]
         if column is not None:
             tags_sources.append(column.tags)
+            if column_config_tags := column.config.get("tags", []):
+                if isinstance(column_config_tags, list):
+                    tags_sources.append(column_config_tags)
+                elif isinstance(column_config_tags, str):
+                    tags_sources.append([column_config_tags])
         tags = list(itertools.chain.from_iterable(tags_sources))
 
         generic_test_parser = self.get_generic_test_parser_for(target.package_name)
@@ -321,6 +297,32 @@ class SourcePatcher:
         # it works while source configs can only include `enabled`.
         precedence_configs.update(target.table.config)
 
+        precedence_freshness = self.calculate_freshness_from_raw_target(target)
+        if precedence_freshness:
+            precedence_configs["freshness"] = precedence_freshness.to_dict()
+        elif precedence_freshness is None:
+            precedence_configs["freshness"] = None
+        else:
+            # this means that the user did not set a freshness threshold in the source schema file, as such
+            # there should be no freshness precedence
+            precedence_configs.pop("freshness", None)
+
+        precedence_loaded_at_field, precedence_loaded_at_query = (
+            self.calculate_loaded_at_field_query_from_raw_target(target)
+        )
+        precedence_configs["loaded_at_field"] = precedence_loaded_at_field
+        precedence_configs["loaded_at_query"] = precedence_loaded_at_query
+
+        # Handle merges across source, table, and config for meta and tags
+        precedence_meta = self.calculate_meta_from_raw_target(target)
+        precedence_configs["meta"] = precedence_meta
+
+        precedence_tags = self.calculate_tags_from_raw_target(target)
+        precedence_configs["tags"] = precedence_tags
+
+        # Because freshness is a "object" config, the freshness from the dbt_project.yml and the freshness
+        # from the schema file _won't_ get merged by this process. The result will be that the freshness will
+        # come from the schema file if provided, and if not, it'll fall back to the dbt_project.yml freshness.
         return generator.calculate_node_config(
             config_call_dict={},
             fqn=target.fqn,
@@ -373,6 +375,138 @@ class SourcePatcher:
                     )
         return unused_tables_formatted
 
+    def calculate_freshness_from_raw_target(
+        self,
+        target: UnpatchedSourceDefinition,
+    ) -> Optional[FreshnessThreshold]:
+        source: UnparsedSourceDefinition = target.source
+
+        source_freshness = source.freshness
+
+        source_config_freshness_raw: Optional[Dict] = source.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        source_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(source_config_freshness_raw)
+            if source_config_freshness_raw is not None
+            else None
+        )
+
+        table: UnparsedSourceTableDefinition = target.table
+        table_freshness = table.freshness
+
+        table_config_freshness_raw: Optional[Dict] = table.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        table_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(table_config_freshness_raw)
+            if table_config_freshness_raw is not None
+            else None
+        )
+
+        return merge_source_freshness(
+            source_freshness,
+            source_config_freshness,
+            table_freshness,
+            table_config_freshness,
+        )
+
+    def calculate_loaded_at_field_query_from_raw_target(
+        self, target: UnpatchedSourceDefinition
+    ) -> Tuple[Optional[str], Optional[str]]:
+        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
+        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
+        # specific table can default to metadata-based freshness.
+
+        # loaded_at_field and loaded_at_query are supported both at top-level (deprecated) and config-level (preferred) on sources and tables.
+        if target.table.loaded_at_field_present and (
+            target.table.loaded_at_query or target.table.config.get("loaded_at_query")
+        ):
+            raise ParsingError(
+                "Cannot specify both loaded_at_field and loaded_at_query at table level."
+            )
+        if (target.source.loaded_at_field or target.source.config.get("loaded_at_field")) and (
+            target.source.loaded_at_query or target.source.config.get("loaded_at_query")
+        ):
+            raise ParsingError(
+                "Cannot specify both loaded_at_field and loaded_at_query at source level."
+            )
+
+        if (
+            target.table.loaded_at_field_present
+            or target.table.loaded_at_field is not None
+            or target.table.config.get("loaded_at_field") is not None
+        ):
+            loaded_at_field = target.table.loaded_at_field or target.table.config.get(
+                "loaded_at_field"
+            )
+        else:
+            loaded_at_field = target.source.loaded_at_field or target.source.config.get(
+                "loaded_at_field"
+            )  # may be None, that's okay
+
+        loaded_at_query: Optional[str]
+        if (
+            target.table.loaded_at_query is not None
+            or target.table.config.get("loaded_at_query") is not None
+        ):
+            loaded_at_query = target.table.loaded_at_query or target.table.config.get(
+                "loaded_at_query"
+            )
+        else:
+            if target.table.loaded_at_field_present:
+                loaded_at_query = None
+            else:
+                loaded_at_query = target.source.loaded_at_query or target.source.config.get(
+                    "loaded_at_query"
+                )
+
+        return loaded_at_field, loaded_at_query
+
+    def calculate_meta_from_raw_target(self, target: UnpatchedSourceDefinition) -> Dict[str, Any]:
+        source_meta = target.source.meta or {}
+        source_config_meta = target.source.config.get("meta", {})
+        source_config_meta = source_config_meta if isinstance(source_config_meta, dict) else {}
+
+        table_meta = target.table.meta or {}
+        table_config_meta = target.table.config.get("meta", {})
+        table_config_meta = table_config_meta if isinstance(table_config_meta, dict) else {}
+
+        return {**source_meta, **source_config_meta, **table_meta, **table_config_meta}
+
+    def calculate_tags_from_raw_target(self, target: UnpatchedSourceDefinition) -> List[str]:
+        source_tags = target.source.tags or []
+        source_config_tags = self._get_config_tags(
+            target.source.config.get("tags", []), target.source.name
+        )
+
+        table_tags = target.table.tags or []
+        table_config_tags = self._get_config_tags(
+            target.table.config.get("tags", []), target.table.name
+        )
+
+        return sorted(
+            set(itertools.chain(source_tags, source_config_tags, table_tags, table_config_tags))
+        )
+
+    def _get_config_tags(self, tags: Any, source_name: str) -> List[str]:
+        config_tags = tags if isinstance(tags, list) else [tags]
+
+        config_tags_valid: List[str] = []
+        for tag in config_tags:
+            if not isinstance(tag, str):
+                warn_or_error(
+                    ValidationWarning(
+                        field_name=f"`config.tags`: {tags}",
+                        resource_type=NodeType.Source.value,
+                        node_name=source_name,
+                    )
+                )
+            else:
+                config_tags_valid.append(tag)
+
+        return config_tags_valid
+
 
 def merge_freshness_time_thresholds(
     base: Optional[Time], update: Optional[Time]
@@ -385,19 +519,38 @@ def merge_freshness_time_thresholds(
         return update or base
 
 
-def merge_freshness(
-    base: Optional[FreshnessThreshold], update: Optional[FreshnessThreshold]
+def merge_source_freshness(
+    *thresholds: Optional[FreshnessThreshold],
 ) -> Optional[FreshnessThreshold]:
-    if base is not None and update is not None:
-        merged_freshness = base.merged(update)
-        # merge one level deeper the error_after and warn_after thresholds
-        merged_error_after = merge_freshness_time_thresholds(base.error_after, update.error_after)
-        merged_warn_after = merge_freshness_time_thresholds(base.warn_after, update.warn_after)
-
-        merged_freshness.error_after = merged_error_after
-        merged_freshness.warn_after = merged_warn_after
-        return merged_freshness
-    elif base is None and update is not None:
-        return update
-    else:
+    if not thresholds:
         return None
+
+    # Initialize with the first threshold.
+    # If the first threshold is None, current_merged_value will be None,
+    # and subsequent merges will correctly follow the original logic.
+    current_merged_value: Optional[FreshnessThreshold] = thresholds[0]
+
+    # Iterate through the rest of the thresholds, applying the original pairwise logic
+    for i in range(1, len(thresholds)):
+        base = current_merged_value
+        update = thresholds[i]
+
+        if base is not None and update is not None:
+            merged_freshness_obj = base.merged(update)
+            # merge one level deeper the error_after and warn_after thresholds
+            merged_error_after = merge_freshness_time_thresholds(
+                base.error_after, update.error_after
+            )
+            merged_warn_after = merge_freshness_time_thresholds(base.warn_after, update.warn_after)
+
+            merged_freshness_obj.error_after = merged_error_after
+            merged_freshness_obj.warn_after = merged_warn_after
+            current_merged_value = merged_freshness_obj
+        elif base is None and bool(update):
+            # If current_merged_value (base) is None, the update becomes the new value
+            current_merged_value = update
+        else:  # This covers cases where 'update' is None, or both 'base' and 'update' are None.
+            # Following original logic, if 'update' is None, the result of the pair-merge is None.
+            current_merged_value = None
+
+    return current_merged_value

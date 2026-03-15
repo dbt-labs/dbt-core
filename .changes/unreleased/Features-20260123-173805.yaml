@@ -1,0 +1,6 @@
+kind: Features
+body: Added ability to parse semantic layer dimensions added to columns as part of new YAML. (Not ready for use until more of the new yaml is implemented.)
+time: 2026-01-23T17:38:05.847998-08:00
+custom:
+    Author: theyostalservice
+    Issue: .

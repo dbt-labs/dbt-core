@@ -286,7 +286,7 @@ class SchemaGenericTestParser(SimpleParser):
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
-            config_call_dict = builder.get_static_config()
+            config_call_dict = builder.config
             config._config_call_dict = config_call_dict
             # This sets the config from dbt_project
             self.update_parsed_node_config(node, config)
@@ -383,7 +383,11 @@ class SchemaGenericTestParser(SimpleParser):
             should_quote = column.quote or (column.quote is None and target_block.quote_columns)
             if should_quote:
                 column_name = get_adapter(self.root_project).quote(column_name)
-            column_tags = column.tags
+
+            column_config_tags = column.config.get("tags", [])
+            if isinstance(column_config_tags, str):
+                column_config_tags = [column_config_tags]
+            column_tags = list(set(column.tags + column_config_tags))
 
         block = GenericTestBlock.from_test_block(
             src=target_block,

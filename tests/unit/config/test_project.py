@@ -14,9 +14,17 @@ from dbt.adapters.factory import load_plugin
 from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
+from dbt.deprecations import (
+    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
+)
+from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
+from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import get_event_manager
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 from tests.unit.config import (
@@ -43,7 +51,7 @@ class TestProjectMethods:
     def test__str__(self, project: Project):
         assert (
             str(project)
-            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'flags': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
+            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'functions': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'flags': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
         )
 
     def test_get_selector(self, project: Project):
@@ -100,7 +108,7 @@ class TestProjectInitialization(BaseConfigTest):
         self.assertEqual(project.analysis_paths, ["analyses"])
         self.assertEqual(
             set(project.docs_paths),
-            {"models", "seeds", "snapshots", "analyses", "macros", "tests"},
+            {"models", "seeds", "snapshots", "analyses", "macros", "tests", "functions"},
         )
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, "target")
@@ -129,7 +137,7 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(
             set(project.docs_paths),
-            {"other-models", "seeds", "snapshots", "analyses", "macros", "tests"},
+            {"other-models", "seeds", "snapshots", "analyses", "macros", "tests", "functions"},
         )
 
     def test_all_overrides(self):
@@ -145,7 +153,7 @@ class TestProjectInitialization(BaseConfigTest):
                 "asset-paths": ["other-assets"],
                 "clean-targets": ["another-target"],
                 "packages-install-path": "other-dbt_packages",
-                "quoting": {"identifier": False},
+                "quoting": {"identifier": False, "snowflake_ignore_case": True},
                 "models": {
                     "pre-hook": ["{{ logging.log_model_start_event() }}"],
                     "post-hook": ["{{ logging.log_model_end_event() }}"],
@@ -206,7 +214,7 @@ class TestProjectInitialization(BaseConfigTest):
         self.assertEqual(project.asset_paths, ["other-assets"])
         self.assertEqual(project.clean_targets, ["another-target"])
         self.assertEqual(project.packages_install_path, "other-dbt_packages")
-        self.assertEqual(project.quoting, {"identifier": False})
+        self.assertEqual(project.quoting, {"identifier": False, "snowflake_ignore_case": True})
         self.assertEqual(
             project.models,
             {
@@ -346,7 +354,7 @@ class TestProjectInitialization(BaseConfigTest):
 
         assert "Cycle detected" in str(exc.exception)
 
-    def test_query_comment_disabled(self):
+    def test_query_comment_empty(self):
         self.default_project_data.update(
             {
                 "query-comment": None,
@@ -356,7 +364,7 @@ class TestProjectInitialization(BaseConfigTest):
             self.default_project_data, project_root=self.project_dir
         )
         self.assertEqual(project.query_comment.comment, "")
-        self.assertEqual(project.query_comment.append, False)
+        self.assertEqual(project.query_comment.append, QueryComment().append)
 
         self.default_project_data.update(
             {
@@ -367,7 +375,7 @@ class TestProjectInitialization(BaseConfigTest):
             self.default_project_data, project_root=self.project_dir
         )
         self.assertEqual(project.query_comment.comment, "")
-        self.assertEqual(project.query_comment.append, False)
+        self.assertEqual(project.query_comment.append, QueryComment().append)
 
     def test_default_query_comment(self):
         project = project_from_config_norender(
@@ -398,6 +406,30 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
+
+    def test_default_query_comment_append_False(self):
+        self.default_project_data.update(
+            {
+                "query-comment": {"append": False},
+            }
+        )
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
+        self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
+        self.assertEqual(project.query_comment.append, False)
+
+    def test_custom_query_comment_append_false(self):
+        self.default_project_data.update(
+            {
+                "query-comment": {"comment": "run by user test", "append": False},
+            }
+        )
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
+        self.assertEqual(project.query_comment.comment, "run by user test")
+        self.assertEqual(project.query_comment.append, False)
 
     def test_packages_from_dependencies(self):
         packages = {
@@ -586,3 +618,31 @@ class TestGetRequiredVersion:
             match="The package version requirement can never be satisfied",
         ):
             _get_required_version(project_dict=project_dict, verify_version=True)
+
+
+class TestDeprecations:
+
+    def test_jsonschema_validate(self) -> None:
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate
+
+        project_dict: Dict[str, Any] = {}
+
+        event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        note_catcher = EventCatcher(Note)
+        get_event_manager().add_callback(event_catcher.catch)
+        get_event_manager().add_callback(note_catcher.catch)
+
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
+        )
+
+        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
+            assert len(note_catcher.caught_events) == 1
+            assert len(event_catcher.caught_events) == 0
+            event = note_catcher.caught_events[0]
+        else:
+            assert len(event_catcher.caught_events) == 1
+            assert len(note_catcher.caught_events) == 0
+            event = event_catcher.caught_events[0]
+
+        assert "'name' is a required property at top level" in event.info.msg

@@ -22,6 +22,7 @@ class ParseFileType(StrEnum):
     Schema = "schema"
     Hook = "hook"  # not a real filetype, from dbt_project.yml
     Fixture = "fixture"
+    Function = "function"
 
 
 parse_file_type_to_parser = {
@@ -36,6 +37,7 @@ parse_file_type_to_parser = {
     ParseFileType.Schema: "SchemaParser",
     ParseFileType.Hook: "HookParser",
     ParseFileType.Fixture: "FixtureParser",
+    ParseFileType.Function: "FunctionParser",
 }
 
 
@@ -157,6 +159,7 @@ class SourceFile(BaseSourceFile):
     docs: List[str] = field(default_factory=list)
     macros: List[str] = field(default_factory=list)
     env_vars: List[str] = field(default_factory=list)
+    functions: List[str] = field(default_factory=list)
 
     @classmethod
     def big_seed(cls, path: FilePath) -> "SourceFile":
@@ -189,6 +192,7 @@ class SchemaSourceFile(BaseSourceFile):
     data_tests: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
+    functions: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
     snapshots: List[str] = field(default_factory=list)
     # The following field will no longer be used. Leaving

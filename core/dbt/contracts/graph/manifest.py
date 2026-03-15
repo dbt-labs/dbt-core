@@ -32,8 +32,14 @@ from dbt.adapters.exceptions import (
 from dbt.adapters.factory import get_adapter_package_names
 
 # to preserve import paths
-from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion, RefArgs
-from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt.artifacts.resources import (
+    BaseResource,
+    DeferFunction,
+    DeferRelation,
+    NodeConfig,
+    NodeVersion,
+    RefArgs,
+)
 from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.contracts.files import (
@@ -48,6 +54,7 @@ from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
     Exposure,
+    FunctionNode,
     GenericTestNode,
     GraphMemberNode,
     Group,
@@ -172,8 +179,41 @@ class SourceLookup(dbtClassMixin):
         return manifest.sources[unique_id]
 
 
+class FunctionLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_function(self, function: FunctionNode):
+        if function.search_name not in self.storage:
+            self.storage[function.search_name] = {}
+
+        self.storage[function.search_name][function.package_name] = function.unique_id
+
+    def populate(self, manifest):
+        for function in manifest.functions.values():
+            if hasattr(function, "name"):
+                self.add_function(function)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> FunctionNode:
+        if unique_id not in manifest.functions:
+            raise dbt_common.exceptions.DbtInternalError(
+                f"Function {unique_id} found in cache but not found in manifest"
+            )
+        return manifest.functions[unique_id]
+
+
 class RefableLookup(dbtClassMixin):
-    # model, seed, snapshot
+    # model, seed, snapshot, function
     _lookup_types: ClassVar[set] = set(REFABLE_NODE_TYPES)
     _versioned_types: ClassVar[set] = set(VERSIONED_NODE_TYPES)
 
@@ -519,7 +559,10 @@ def _packages_to_search(
     elif current_project == node_package:
         return [current_project, None]
     else:
-        return [current_project, node_package, None]
+        if get_flags().require_ref_searches_node_package_before_root:
+            return [node_package, current_project, None]
+        else:
+            return [current_project, node_package, None]
 
 
 def _sort_values(dct):
@@ -679,6 +722,9 @@ D = TypeVar("D")
 @dataclass
 class Disabled(Generic[D]):
     target: D
+
+
+MaybeFunctionNode = Optional[Union[FunctionNode, Disabled[FunctionNode]]]
 
 
 MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
@@ -877,6 +923,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     macros: MutableMapping[str, Macro] = field(default_factory=dict)
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
+    functions: MutableMapping[str, FunctionNode] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
@@ -919,6 +966,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     _singular_test_lookup: Optional[SingularTestLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    _function_lookup: Optional[FunctionLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
@@ -955,6 +1005,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         """
         self.flat_graph = {
             "exposures": {k: v.to_dict(omit_none=False) for k, v in self.exposures.items()},
+            "functions": {k: v.to_dict(omit_none=False) for k, v in self.functions.items()},
             "groups": {k: v.to_dict(omit_none=False) for k, v in self.groups.items()},
             "metrics": {k: v.to_dict(omit_none=False) for k, v in self.metrics.items()},
             "nodes": {k: v.to_dict(omit_none=False) for k, v in self.nodes.items()},
@@ -965,6 +1016,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             "saved_queries": {
                 k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
             },
+            "unit_tests": {k: v.to_dict(omit_none=False) for k, v in self.unit_tests.items()},
         }
 
     def build_disabled_by_file_id(self):
@@ -1048,6 +1100,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         all_resources = chain(
             self.exposures.values(),
+            self.functions.values(),
             self.nodes.values(),
             self.sources.values(),
             self.metrics.values(),
@@ -1081,6 +1134,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
+            functions={k: _deepcopy(v) for k, v in self.functions.items()},
             metrics={k: _deepcopy(v) for k, v in self.metrics.items()},
             groups={k: _deepcopy(v) for k, v in self.groups.items()},
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
@@ -1101,6 +1155,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.nodes.values(),
                 self.sources.values(),
                 self.exposures.values(),
+                self.functions.values(),
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
@@ -1157,6 +1212,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
             docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
             exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            functions=cls._map_resources_to_map_nodes(writable_manifest.functions),
             metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
             groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
             semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
@@ -1165,6 +1221,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()
             },
+            metadata=writable_manifest.metadata,
         )
 
         return manifest
@@ -1213,6 +1270,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=self._map_nodes_to_map_resources(self.macros),
             docs=self._map_nodes_to_map_resources(self.docs),
             exposures=self._map_nodes_to_map_resources(self.exposures),
+            functions=self._map_nodes_to_map_resources(self.functions),
             metrics=self._map_nodes_to_map_resources(self.metrics),
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
@@ -1240,6 +1298,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             return self.sources[unique_id]
         elif unique_id in self.exposures:
             return self.exposures[unique_id]
+        elif unique_id in self.functions:
+            return self.functions[unique_id]
         elif unique_id in self.metrics:
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
@@ -1323,6 +1383,12 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self._singular_test_lookup
 
     @property
+    def function_lookup(self) -> FunctionLookup:
+        if self._function_lookup is None:
+            self._function_lookup = FunctionLookup(self)
+        return self._function_lookup
+
+    @property
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
 
@@ -1387,6 +1453,29 @@ class Manifest(MacroMethods, dbtClassMixin):
                     f"{target_source_name}.{target_table_name}", pkg
                 )
 
+        if disabled:
+            return Disabled(disabled[0])
+        return None
+
+    def resolve_function(
+        self,
+        target_function_name: str,
+        target_function_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeFunctionNode:
+        package_candidates = _packages_to_search(
+            current_project, node_package, target_function_package
+        )
+        disabled: Optional[List[FunctionNode]] = None
+        for package in package_candidates:
+            function = self.function_lookup.find(target_function_name, package, self)
+            if function is not None and function.config.enabled:
+                return function
+
+            # it's possible that the function is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(target_function_name, package)
         if disabled:
             return Disabled(disabled[0])
         return None
@@ -1497,6 +1586,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
@@ -1523,6 +1614,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
@@ -1537,6 +1630,8 @@ class Manifest(MacroMethods, dbtClassMixin):
         with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
+        Function nodes from the deferred manifest are merged so that models
+        depending on functions can resolve them via deferral.
         """
         refables = set(REFABLE_NODE_TYPES)
         for unique_id, node in other.nodes.items():
@@ -1557,6 +1652,29 @@ class Manifest(MacroMethods, dbtClassMixin):
                     config=node.config,
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
+
+        for unique_id, function in other.functions.items():
+            current = self.functions.get(unique_id)
+            if current:
+                defer_fn = DeferFunction(
+                    database=function.database,
+                    schema=function.schema,
+                    alias=function.alias,
+                    arguments=function.arguments,
+                    returns=function.returns,
+                    resource_type=function.resource_type,
+                    name=function.name,
+                    description=function.description,
+                    compiled_code=function.compiled_code,
+                    meta=function.meta,
+                    tags=function.tags,
+                    config=function.config,
+                )
+                self.functions[unique_id] = replace(current, defer_function=defer_fn)
+            else:
+                self.functions[unique_id] = function
+        # invalidate function lookup cache
+        self._function_lookup = None
 
         # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()
@@ -1631,6 +1749,11 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
+    def add_function(self, source_file: SourceFile, function: FunctionNode):
+        _check_duplicates(function, self.functions)
+        self.functions[function.unique_id] = function
+        source_file.functions.append(function.unique_id)
+
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
     ):
@@ -1667,6 +1790,8 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, FunctionNode):
+                source_file.functions.append(node.unique_id)
             if isinstance(node, UnitTestDefinition):
                 source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
@@ -1733,6 +1858,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.macros,
             self.docs,
             self.exposures,
+            self.functions,
             self.metrics,
             self.groups,
             self.selectors,

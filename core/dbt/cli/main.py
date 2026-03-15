@@ -56,6 +56,7 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
+                "dbt_runner_command_args": args,
             }
 
             for key, value in kwargs.items():
@@ -130,6 +131,7 @@ def global_flags(func):
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
+    @p.show_all_deprecations
     @p.state
     @p.static_parser
     @p.target
@@ -142,6 +144,7 @@ def global_flags(func):
     @p.warn_error_options
     @p.write_json
     @p.use_fast_test_edges
+    @p.upload_artifacts
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -180,6 +183,8 @@ def cli(ctx, **kwargs):
 @p.project_dir
 @p.resource_type
 @p.exclude_resource_type
+@p.sqlparse_options
+@p.sample
 @p.select
 @p.selector
 @p.show
@@ -191,6 +196,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -245,6 +251,7 @@ def docs(ctx, **kwargs):
 @global_flags
 @p.compile_docs
 @p.exclude
+@p.sqlparse_options
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -320,6 +327,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.compile_inject_ephemeral_ctes
+@p.sqlparse_options
 @p.target_path
 @p.threads
 @p.vars
@@ -327,6 +335,7 @@ def docs_serve(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def compile(ctx, **kwargs):
@@ -360,6 +369,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.inline_direct
+@p.sqlparse_options
 @p.target_path
 @p.threads
 @p.vars
@@ -468,6 +478,7 @@ def deps(ctx, **kwargs):
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
+@p.skip_debug
 @p.vars
 @requires.postflight
 @requires.preflight
@@ -537,6 +548,7 @@ cli.add_command(ls, "ls")
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
@@ -556,6 +568,8 @@ def parse(ctx, **kwargs):
 @p.empty
 @p.event_time_start
 @p.event_time_end
+@p.sqlparse_options
+@p.sample
 @p.select
 @p.selector
 @p.target_path
@@ -565,6 +579,7 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):
@@ -688,6 +703,7 @@ def run_operation(ctx, **kwargs):
 @p.full_refresh
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.show
@@ -698,6 +714,7 @@ def run_operation(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def seed(ctx, **kwargs):
@@ -722,6 +739,7 @@ def seed(ctx, **kwargs):
 @p.exclude
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.target_path
@@ -731,6 +749,7 @@ def seed(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def snapshot(ctx, **kwargs):
@@ -762,6 +781,7 @@ def source(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
+@p.sqlparse_options
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -805,6 +825,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.exclude_resource_type
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.store_failures

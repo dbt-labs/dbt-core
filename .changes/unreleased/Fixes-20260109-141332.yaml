@@ -1,0 +1,6 @@
+kind: Fixes
+body: Avoid deadlock edgecases of concurret microbatch/batch execution
+time: 2026-01-09T14:13:32.777942-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11420"

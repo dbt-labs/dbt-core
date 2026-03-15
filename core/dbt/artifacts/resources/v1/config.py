@@ -9,6 +9,7 @@ from dbt import hooks
 from dbt.artifacts.resources.base import Docs
 from dbt.artifacts.resources.types import ModelHookType
 from dbt.artifacts.utils.validation import validate_color
+from dbt.flags import get_flags
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
@@ -175,13 +176,14 @@ class TestConfig(NodeAndTestConfig):
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
     store_failures_as: Optional[str] = None
+    sql_header: Any = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
     warn_if: str = "!= 0"
     error_if: str = "!= 0"
 
-    def __post_init__(self):
+    def finalize_and_validate(self):
         """
         The presence of a setting for `store_failures_as` overrides any existing setting for `store_failures`,
         regardless of level of granularity. If `store_failures_as` is not set, then `store_failures` takes effect.
@@ -207,6 +209,7 @@ class TestConfig(NodeAndTestConfig):
         but still allow for backwards compatibility for `store_failures`.
         See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
         """
+        super().finalize_and_validate()
 
         # if `store_failures_as` is not set, it gets set by `store_failures`
         # the settings below mimic existing behavior prior to `store_failures_as`
@@ -229,6 +232,8 @@ class TestConfig(NodeAndTestConfig):
         else:
             self.store_failures = get_store_failures_map.get(self.store_failures_as, True)
 
+        return self
+
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:
         """This is like __eq__, except it explicitly checks certain fields."""
@@ -241,6 +246,7 @@ class TestConfig(NodeAndTestConfig):
             "error_if",
             "store_failures",
             "store_failures_as",
+            "sql_header",
         ]
 
         seen = set()
@@ -263,3 +269,10 @@ class TestConfig(NodeAndTestConfig):
 
         if data.get("materialized") and data.get("materialized") != "test":
             raise ValidationError("A test must have a materialized value of 'test'")
+
+        sql_header = data.get("sql_header")
+        if sql_header is not None and get_flags().require_sql_header_in_test_configs:
+            if not isinstance(sql_header, str):
+                raise ValidationError(
+                    f"sql_header must be a string. Got '{type(sql_header).__name__}'"
+                )

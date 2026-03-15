@@ -1,7 +1,13 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
-from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt.artifacts.resources import (
+    ColumnConfig,
+    ColumnDimension,
+    ColumnEntity,
+    ColumnInfo,
+    NodeVersion,
+)
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -9,7 +15,10 @@ from dbt.contracts.graph.unparsed import (
     HasColumnTests,
     UnparsedAnalysisUpdate,
     UnparsedColumn,
+    UnparsedColumnEntityV2,
+    UnparsedDimensionV2,
     UnparsedExposure,
+    UnparsedFunctionUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
@@ -20,7 +29,11 @@ from dbt.node_types import NodeType
 from dbt.parser.search import FileBlock
 from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
 
 schema_file_keys_to_resource_types = {
     "models": NodeType.Model,
@@ -33,6 +46,7 @@ schema_file_keys_to_resource_types = {
     "metrics": NodeType.Metric,
     "semantic_models": NodeType.SemanticModel,
     "saved_queries": NodeType.SavedQuery,
+    "functions": NodeType.Function,
 }
 
 resource_types_to_schema_file_keys = {
@@ -59,6 +73,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedFunctionUpdate,
     UnparsedSingularTestUpdate,
 )
 
@@ -211,9 +226,41 @@ class ParserRef:
         tags: List[str] = getattr(column, "tags", [])
         quote: Optional[bool] = None
         granularity: Optional[TimeGranularity] = None
+        dimension: Optional[Union[DimensionType, ColumnDimension]] = None
+        entity: Optional[Union[EntityType, ColumnEntity]] = None
         if isinstance(column, UnparsedColumn):
             quote = column.quote
             granularity = TimeGranularity(column.granularity) if column.granularity else None
+            if isinstance(column.dimension, UnparsedDimensionV2):
+                dimension = ColumnDimension(
+                    name=column.dimension.name or column.name,
+                    type=(DimensionType(column.dimension.type)),
+                    description=column.dimension.description or column.description,
+                    label=column.dimension.label,
+                    is_partition=column.dimension.is_partition,
+                    config=column.dimension.config or {},
+                    validity_params=(
+                        ColumnDimension.ColumnDimensionValidityParams(
+                            is_start=column.dimension.validity_params.is_start,
+                            is_end=column.dimension.validity_params.is_end,
+                        )
+                        if column.dimension.validity_params
+                        else None
+                    ),
+                )
+            elif isinstance(column.dimension, str):
+                dimension = DimensionType(column.dimension)
+
+            if isinstance(column.entity, UnparsedColumnEntityV2):
+                entity = ColumnEntity(
+                    name=column.entity.name,
+                    type=EntityType(column.entity.type),
+                    description=column.entity.description or column.description,
+                    label=column.entity.label,
+                    config=column.entity.config or {},
+                )
+            elif isinstance(column.entity, str):
+                entity = EntityType(column.entity)
 
         if any(
             c
@@ -222,16 +269,32 @@ class ParserRef:
         ):
             raise ParsingError(f"Invalid constraint type on column {column.name}")
 
+        # Merge meta and tags from column and config
+        column_config_meta = (
+            column.config["meta"] if isinstance(column.config.get("meta"), dict) else {}
+        )
+        column_config_tags = []
+        if "tags" in column.config:
+            if isinstance(column.config["tags"], list):
+                column_config_tags = column.config["tags"]
+            elif isinstance(column.config["tags"], str):
+                column_config_tags = [column.config["tags"]]
+
+        column_meta = {**column.meta, **column_config_meta}
+        column_tags = list(set(tags + column_config_tags))
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
             description=column.description,
             data_type=column.data_type,
             constraints=[ColumnLevelConstraint.from_dict(c) for c in column.constraints],
-            meta=column.meta,
-            tags=tags,
+            meta=column_meta,
+            tags=column_tags,
             quote=quote,
             _extra=column.extra,
             granularity=granularity,
+            dimension=dimension,
+            entity=entity,
+            config=ColumnConfig(meta=column_meta, tags=column_tags),
         )
 
     @classmethod

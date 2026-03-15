@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optio
 # approaches which will extend well to potentially many modules
 import pytz
 
+import dbt.deprecations as deprecations
 import dbt.flags as flags_module
 from dbt import tracking, utils
 from dbt.clients.jinja import get_rendered
@@ -83,7 +84,14 @@ def get_itertools_module_context() -> Dict[str, Any]:
         "combinations_with_replacement",
     ]
 
-    return {name: getattr(itertools, name) for name in context_exports}
+    def deprecation_wrapper(fn):
+        def deprecation_wrapper_inner(*args, **kwargs):
+            deprecations.warn("modules-itertools-usage-deprecation")
+            return fn(*args, **kwargs)
+
+        return deprecation_wrapper_inner
+
+    return {name: deprecation_wrapper(getattr(itertools, name)) for name in context_exports}
 
 
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
@@ -144,10 +152,12 @@ class Var:
         context: Mapping[str, Any],
         cli_vars: Mapping[str, Any],
         node: Optional[Resource] = None,
+        require_vars: bool = True,
     ) -> None:
         self._context: Mapping[str, Any] = context
         self._cli_vars: Mapping[str, Any] = cli_vars
         self._node: Optional[Resource] = node
+        self._require_vars: bool = require_vars
         self._merged: Mapping[str, Any] = self._generate_merged()
 
     def _generate_merged(self) -> Mapping[str, Any]:
@@ -160,9 +170,11 @@ class Var:
         else:
             return "<Configuration>"
 
-    def get_missing_var(self, var_name: str) -> NoReturn:
-        # TODO function name implies a non exception resolution
-        raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
+    def get_missing_var(self, var_name: str) -> None:
+        # Only raise an error if vars are _required_
+        if self._require_vars:
+            # TODO function name implies a non exception resolution
+            raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
 
     def has_var(self, var_name: str) -> bool:
         return var_name in self._merged
@@ -190,10 +202,11 @@ class BaseContext(metaclass=ContextMeta):
     _context_attrs_: Dict[str, Any]
 
     # subclass is TargetContext
-    def __init__(self, cli_vars: Dict[str, Any]) -> None:
+    def __init__(self, cli_vars: Dict[str, Any], require_vars: bool = True) -> None:
         self._ctx: Dict[str, Any] = {}
         self.cli_vars: Dict[str, Any] = cli_vars
         self.env_vars: Dict[str, Any] = {}
+        self.require_vars: bool = require_vars
 
     def generate_builtins(self) -> Dict[str, Any]:
         builtins: Dict[str, Any] = {}
@@ -299,7 +312,7 @@ class BaseContext(metaclass=ContextMeta):
             from events
             where event_type = '{{ var("event_type", "activation") }}'
         """
-        return Var(self._ctx, self.cli_vars)
+        return Var(self._ctx, self.cli_vars, require_vars=self.require_vars)
 
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:

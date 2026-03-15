@@ -61,8 +61,8 @@ body:
       label: Environment
       description: |
         examples:
-          - **OS**: Ubuntu 20.04
-          - **Python**: 3.9.12 (`python3 --version`)
+          - **OS**: Ubuntu 24.04
+          - **Python**: 3.10.12 (`python3 --version`)
           - **dbt-core**: 1.1.1 (`dbt --version`)
       value: |
         - OS:

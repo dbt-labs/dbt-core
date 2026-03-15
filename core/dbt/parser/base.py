@@ -3,9 +3,9 @@ import itertools
 import os
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from dbt import hooks, utils
+from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
-from dbt.artifacts.resources import Contract
+from dbt.artifacts.resources import Contract, Export
 from dbt.clients.jinja import MacroGenerator, get_rendered
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -22,11 +22,14 @@ from dbt.exceptions import (
     DbtInternalError,
     DictParseError,
     InvalidAccessTypeError,
+    ParsingError,
 )
 from dbt.flags import get_flags
+from dbt.jsonschemas.jsonschemas import validate_model_config
 from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
+from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.utils import deep_merge
 
@@ -62,6 +65,9 @@ class BaseParser(Generic[FinalValue]):
         return ".".join(
             filter(None, [self.resource_type, self.project.project_name, resource_name, hash])
         )
+
+    def _handle_extract_warning(self, warning: ExtractWarning, file: str) -> None:
+        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg, file=file)
 
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
@@ -236,13 +242,19 @@ class ConfiguredParser(
             "path": path,
             "original_file_path": block.path.original_file_path,
             "package_name": self.project.project_name,
-            "raw_code": block.contents,
+            "raw_code": block.contents or "",
             "language": language,
             "unique_id": self.generate_unique_id(name),
             "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
+
+        # TODO: we're doing this becaus return type is _required_ for the FunctionNode
+        # but we don't get the return type until we patch the node with the yml definition
+        # so we need to set it to a default value here.
+        if self.resource_type == NodeType.Function:
+            dct["returns"] = {"data_type": "INVALID_TYPE"}
 
         try:
             return self.parse_from_dict(dct, validate=True)
@@ -291,6 +303,17 @@ class ConfiguredParser(
         # These call the RelationUpdate callable to go through generate_name macros
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
+        if not isinstance(parsed_node, Export) and parsed_node.schema is None:
+            if not get_flags().require_valid_schema_from_generate_schema_name:
+                deprecations.warn(
+                    "generate-schema-name-null-value-deprecation",
+                    resource_unique_id=parsed_node.unique_id,
+                )
+            else:
+                raise ParsingError(
+                    f"Node '{parsed_node.unique_id}' has a schema set to None as a result of a generate_schema_name call.\nPlease set a valid schema name, or preserve the legacy behavior by setting the behavior flag 'require_valid_schema_from_generate_schema_name' to True."
+                )
+
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
         # Snapshot nodes use special "target_database" and "target_schema" fields
@@ -312,6 +335,7 @@ class ConfiguredParser(
         context=None,
         patch_config_dict=None,
         patch_file_id=None,
+        validate_config_call_dict: bool = False,
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
@@ -384,21 +408,36 @@ class ConfiguredParser(
 
         if get_flags().state_modified_compare_more_unrendered_values:
             # Use the patch_file.unrendered_configs if available to update patch_dict_config,
-            # as provided patch_config_dict may actuallly already be rendered and thus sensitive to jinja evaluations
+            # as provided patch_config_dict may actually already be rendered and thus sensitive to jinja evaluations
             if patch_file_id:
                 patch_file = self.manifest.files.get(patch_file_id, None)
                 if patch_file and isinstance(patch_file, SchemaSourceFile):
-                    schema_key = resource_types_to_schema_file_keys[parsed_node.resource_type]
-                    if unrendered_patch_config := patch_file.get_unrendered_config(
-                        schema_key, parsed_node.name, getattr(parsed_node, "version", None)
-                    ):
-                        patch_config_dict = deep_merge(patch_config_dict, unrendered_patch_config)
+                    schema_key = resource_types_to_schema_file_keys.get(parsed_node.resource_type)
+                    if schema_key:
+                        if unrendered_patch_config := patch_file.get_unrendered_config(
+                            schema_key, parsed_node.name, getattr(parsed_node, "version", None)
+                        ):
+                            patch_config_dict = deep_merge(
+                                patch_config_dict, unrendered_patch_config
+                            )
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
         parsed_node.unrendered_config = config.build_config_dict(
             rendered=False, patch_config_dict=patch_config_dict
         )
+
+        # We validate the _config_call_dict here because there is more than
+        # one way that the _config_call_dict can be set and also, later it gets
+        # read multiple times. Doing the validation here ensures that the config
+        # is only validated once.
+        if parsed_node.resource_type == NodeType.Model and validate_config_call_dict:
+            python_model = parsed_node.language == ModelLanguage.python
+            validate_model_config(
+                config._config_call_dict,
+                parsed_node.original_file_path,
+                is_python_model=python_model,
+            )
 
         parsed_node.config_call_dict = config._config_call_dict
         parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict
@@ -447,10 +486,14 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: FinalNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         try:
             context = self.render_with_context(node, config)
-            self.update_parsed_node_config(node, config, context=context)
+            self.update_parsed_node_config(
+                node, config, context=context, validate_config_call_dict=validate_config_call_dict
+            )
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             raise ConfigUpdateError(exc, node=node) from exc

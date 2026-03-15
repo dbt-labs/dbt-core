@@ -1,0 +1,6 @@
+kind: Fixes
+body: Validate and filter out non-existent columns from seed column types
+time: 2026-01-25T11:32:44.5200661+05:30
+custom:
+    Author: abhishek09827
+    Issue: 12379

@@ -123,6 +123,10 @@ exposures:
     type: dashboard
     config:
       enabled: True
+      tags: ['local_tag', 'common_tag']
+      meta:
+        some_key: 'some_value'
+        type_change: 123
     depends_on:
       - ref('model')
     owner:

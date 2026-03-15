@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dbt.adapters.contracts.connection import QueryComment
+from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.config import RuntimeConfig
 from dbt.config.project import Project, RenderComponents, VarProvider
 from dbt.config.selectors import SelectorConfig
@@ -35,6 +35,7 @@ def project(selector_config: SelectorConfig) -> Project:
         model_paths=["models"],
         macro_paths=["macros"],
         seed_paths=["seeds"],
+        function_paths=["functions"],
         test_paths=["tests"],
         analysis_paths=["analyses"],
         docs_paths=["docs"],
@@ -59,18 +60,21 @@ def project(selector_config: SelectorConfig) -> Project:
         semantic_models={},
         saved_queries={},
         exposures={},
+        functions={},
         vars=VarProvider({}),
         dbt_version=[VersionSpecifier.from_version_string("0.0.0")],
         packages=PackageConfig([]),
         manifest_selectors={},
         selectors=selector_config,
-        query_comment=QueryComment(),
+        # QueryComment contract defaults are defined by dbt-adapters, so not hard-coding this fixture to rely on particular settings of their defaults.
+        query_comment=QueryComment(comment=DEFAULT_QUERY_COMMENT, append=False, job_label=False),
         config_version=1,
         unrendered=RenderComponents({}, {}, {}),
         project_env_vars={},
         restrict_access=False,
         dbt_cloud={},
         flags={},
+        vars_from_file={},
     )
 
 
@@ -79,6 +83,8 @@ def mock_project():
     mock_project = MagicMock(RuntimeConfig)
     mock_project.cli_vars = {}
     mock_project.args = MagicMock()
+    mock_project.profile_name = "test"
+    mock_project.target_name = "test"
     mock_project.args.profile = "test"
     mock_project.args.target = "test"
     mock_project.project_env_vars = {}
@@ -86,4 +92,5 @@ def mock_project():
     mock_project.project_target_path = "mock_target_path"
     mock_project.credentials = MagicMock()
     mock_project.clear_dependencies = MagicMock()
+    mock_project.vars_from_file = {}
     return mock_project

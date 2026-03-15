@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional, Union
 
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 
 
 @dataclass
 class Owner(AdditionalPropertiesAllowed):
-    email: Optional[str] = None
+    email: Union[str, List[str], None] = None
     name: Optional[str] = None

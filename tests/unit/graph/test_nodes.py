@@ -11,6 +11,9 @@ from dbt.artifacts.resources import (
     Entity,
     FileHash,
     Measure,
+    Metric,
+    MetricAggregationParams,
+    MetricTypeParams,
     TestMetadata,
 )
 from dbt.artifacts.resources.v1.semantic_model import NodeRelation
@@ -22,11 +25,12 @@ from dbt_common.contracts.constraints import (
     ConstraintType,
     ModelLevelConstraint,
 )
-from dbt_semantic_interfaces.references import MeasureReference
+from dbt_semantic_interfaces.references import MeasureReference, TimeDimensionReference
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
     DimensionType,
     EntityType,
+    MetricType,
 )
 from tests.unit.fixtures import generic_test_node, model_node
 
@@ -146,6 +150,27 @@ class TestSemanticModel:
             ),
         )
 
+    @pytest.fixture(scope="function")
+    def default_simple_metric(self) -> Metric:
+        return Metric(
+            name="test_metric",
+            resource_type=NodeType.Metric,
+            package_name="test",
+            path="test_path",
+            original_file_path="test_fixture",
+            unique_id=f"{NodeType.Metric}.test.test_metric",
+            fqn=[],
+            description="",
+            label="",
+            type=MetricType.SIMPLE,
+            type_params=MetricTypeParams(
+                metric_aggregation_params=MetricAggregationParams(
+                    semantic_model="test_semantic_model",
+                    agg=AggregationType.COUNT,
+                )
+            ),
+        )
+
     def test_checked_agg_time_dimension_for_measure_via_defaults(
         self,
         default_semantic_model: SemanticModel,
@@ -181,6 +206,41 @@ class TestSemanticModel:
 
         assert (
             f"Aggregation time dimension for measure {measure.name} on semantic model {default_semantic_model.name}"
+            in str(execinfo.value)
+        )
+
+    def test_checked_agg_time_dimension_for_simple_metric(
+        self, default_semantic_model: SemanticModel, default_simple_metric: Metric
+    ):
+        time_dimension_reference = (
+            default_semantic_model.checked_agg_time_dimension_for_simple_metric(
+                default_simple_metric
+            )
+        )
+        assert time_dimension_reference == TimeDimensionReference(element_name="ds")
+
+    def test_checked_agg_time_dimension_for_simple_metric_missing_metric_aggregation_params(
+        self, default_semantic_model: SemanticModel, default_simple_metric: Metric
+    ):
+        default_simple_metric.type_params.metric_aggregation_params = None
+        with pytest.raises(AssertionError) as execinfo:
+            default_semantic_model.checked_agg_time_dimension_for_simple_metric(
+                default_simple_metric
+            )
+
+        assert "Simple metrics must have metric_aggregation_params." in str(execinfo.value)
+
+    def test_check_agg_time_dimension_for_simple_metric_missing_agg_time_dimension(
+        self, default_semantic_model: SemanticModel, default_simple_metric: Metric
+    ):
+        default_semantic_model.defaults.agg_time_dimension = None
+        with pytest.raises(AssertionError) as execinfo:
+            default_semantic_model.checked_agg_time_dimension_for_simple_metric(
+                default_simple_metric
+            )
+
+        assert (
+            f"Aggregation time dimension for metric {default_simple_metric.name} is not set!"
             in str(execinfo.value)
         )
 

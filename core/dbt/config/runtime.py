@@ -1,8 +1,7 @@
 import itertools
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Any,
@@ -16,8 +15,6 @@ from typing import (
     Type,
 )
 
-import pytz
-
 from dbt import tracking
 from dbt.adapters.contracts.connection import (
     AdapterRequiredConfig,
@@ -26,7 +23,12 @@ from dbt.adapters.contracts.connection import (
 )
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
-from dbt.config.project import load_raw_project
+from dbt.artifacts.resources import Quoting
+from dbt.config.project import (
+    load_package_lock_config,
+    load_raw_project,
+    vars_data_from_root,
+)
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
 from dbt.events.types import UnusedResourceConfigPath
@@ -53,11 +55,27 @@ def load_project(
     version_check: bool,
     profile: HasCredentials,
     cli_vars: Optional[Dict[str, Any]] = None,
+    validate: bool = False,
+    require_vars: bool = True,
 ) -> Project:
-    # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+
+    if cli_vars is None:
+        cli_vars = {}
+
+    # Load vars.yml first (before rendering dbt_project.yml)
+    vars_from_file = vars_data_from_root(project_root)
+
+    # Merge: CLI vars take precedence over file vars
+    merged_vars = {**vars_from_file, **cli_vars}
+
+    # Renderer receives merged vars for Jinja in dbt_project.yml
+    project_renderer = DbtProjectYamlRenderer(profile, merged_vars, require_vars=require_vars)
     project = Project.from_project_root(
-        project_root, project_renderer, verify_version=version_check
+        project_root,
+        project_renderer,
+        verify_version=version_check,
+        validate=validate,
+        vars_from_file=vars_from_file,
     )
 
     # Save env_vars encountered in rendering for partial parsing
@@ -101,7 +119,6 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     profile_name: str
     cli_vars: Dict[str, Any]
     dependencies: Optional[Mapping[str, "RuntimeConfig"]] = None
-    invoked_at: datetime = field(default_factory=lambda: datetime.now(pytz.UTC))
 
     def __post_init__(self):
         self.validate()
@@ -157,6 +174,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             asset_paths=project.asset_paths,
+            function_paths=project.function_paths,
             target_path=project.target_path,
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
@@ -182,6 +200,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
             exposures=project.exposures,
+            functions=project.functions,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
@@ -198,6 +217,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
             flags=project.flags,
+            vars_from_file=project.vars_from_file,
         )
 
     # Called by 'load_projects' in this class
@@ -267,7 +287,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             args,
         )
         flags = get_flags()
-        project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
+        # For dbt deps, use lenient var validation to allow missing vars
+        # For all other commands, use strict validation for helpful error messages
+        # If command is not set (e.g., during test setup), default to strict mode
+        # unless the command is explicitly "deps"
+        require_vars = getattr(flags, "WHICH", None) != "deps"
+        project = load_project(
+            project_root, bool(flags.VERSION_CHECK), profile, cli_vars, require_vars=require_vars
+        )
         return project, profile
 
     # Called in task/base.py, in BaseTask.from_args
@@ -299,6 +326,15 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
             ),
             adapter_type=self.credentials.type,
+            quoting=Quoting(
+                database=self.quoting.get("database", None),
+                schema=self.quoting.get("schema", None),
+                identifier=self.quoting.get("identifier", None),
+                column=self.quoting.get("column", None),
+            ),
+            run_started_at=(
+                tracking.active_user.run_started_at if tracking.active_user is not None else None
+            ),
         )
 
     def _get_v2_config_paths(
@@ -346,6 +382,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "semantic_models": self._get_config_paths(self.semantic_models),
             "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
+            "functions": self._get_config_paths(self.functions),
         }
 
     def warn_for_unused_resource_config_paths(
@@ -382,15 +419,30 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 # Test setup -- we want to load macros without dependencies
                 project_paths = itertools.chain(internal_packages)
             else:
-                # raise exception if fewer installed packages than in packages.yml
-                count_packages_specified = len(self.packages.packages)  # type: ignore
-                count_packages_installed = len(tuple(self._get_project_directories()))
-                if count_packages_specified > count_packages_installed:
+                locked_packages = load_package_lock_config(self.project_root)
+                specified_packages = locked_packages.packages
+
+                if not specified_packages:
+                    specified_packages = self.packages.packages
+
+                specified_package_names = {
+                    p.name for p in locked_packages.packages if p.name is not None
+                }
+                installed_package_names = {p.stem for p in self._get_project_directories()}
+
+                count_packages_specified = len(specified_packages)
+                count_packages_installed = len(installed_package_names)
+
+                uninstalled_packages = specified_package_names - installed_package_names
+
+                # we expect same number of packages specified and installed
+                if count_packages_specified != count_packages_installed:
                     raise UninstalledPackagesFoundError(
-                        count_packages_specified,
                         count_packages_installed,
-                        self.packages_specified_path,
-                        self.packages_install_path,
+                        count_packages_specified,
+                        packages_specified_path=self.packages_specified_path,
+                        packages_install_path=self.packages_install_path,
+                        uninstalled_packages=tuple(uninstalled_packages),
                     )
                 project_paths = itertools.chain(internal_packages, self._get_project_directories())
             for project_name, project in self.load_projects(project_paths):

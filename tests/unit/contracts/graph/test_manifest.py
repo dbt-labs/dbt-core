@@ -3,14 +3,13 @@ import unittest
 from argparse import Namespace
 from collections import namedtuple
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 from unittest import mock
 
 import freezegun
 import pytest
 
-import dbt.flags
 import dbt.version
 import dbt_common.invocation
 from dbt import tracking
@@ -22,6 +21,7 @@ from dbt.artifacts.resources import (
     MetricTypeParams,
     Owner,
     RefArgs,
+    UnitTestOutputFixture,
     WhereFilter,
     WhereFilterIntersection,
 )
@@ -36,6 +36,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     SeedNode,
     SourceDefinition,
+    UnitTestDefinition,
 )
 from dbt.exceptions import AmbiguousResourceNameRefError, ParsingError
 from dbt.flags import set_from_args
@@ -62,6 +63,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "refs",
         "sources",
         "metrics",
+        "functions",
         "meta",
         "depends_on",
         "database",
@@ -82,6 +84,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "compiled_path",
         "patch_path",
         "docs",
+        "doc_blocks",
         "checksum",
         "unrendered_config",
         "unrendered_config_call_dict",
@@ -373,14 +376,18 @@ class ManifestTest(unittest.TestCase):
             disabled={},
             files={},
             exposures={},
+            functions={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             semantic_models={},
             saved_queries={},
         )
 
         invocation_id = dbt_common.invocation._INVOCATION_ID
+        invocation_started_at = dbt_common.invocation._INVOCATION_STARTED_AT
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         self.assertEqual(
@@ -390,6 +397,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -402,8 +410,10 @@ class ManifestTest(unittest.TestCase):
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -429,7 +439,9 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
@@ -500,17 +512,20 @@ class ManifestTest(unittest.TestCase):
         flat_sources = flat_graph["sources"]
         flat_semantic_models = flat_graph["semantic_models"]
         flat_saved_queries = flat_graph["saved_queries"]
+        flat_unit_tests = flat_graph["unit_tests"]
         self.assertEqual(
             set(flat_graph),
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "nodes",
                     "sources",
                     "metrics",
                     "semantic_models",
                     "saved_queries",
+                    "unit_tests",
                 ]
             ),
         )
@@ -521,19 +536,73 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(set(flat_sources), set(self.sources))
         self.assertEqual(set(flat_semantic_models), set(self.semantic_models))
         self.assertEqual(set(flat_saved_queries), set(self.saved_queries))
+        self.assertEqual(set(flat_unit_tests), set())
         for node in flat_nodes.values():
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
+
+    def test_build_flat_graph_with_unit_tests(self):
+        """Test that unit tests are included in flat_graph."""
+        nodes = deepcopy(self.nested_nodes)
+        # Create a unit test for the events model
+        unit_test = UnitTestDefinition(
+            name="test_events",
+            model="events",
+            package_name="root",
+            resource_type=NodeType.Unit,
+            path="unit_tests.yml",
+            original_file_path="models/unit_tests.yml",
+            unique_id="unit_test.root.events.test_events",
+            given=[],
+            expect=UnitTestOutputFixture(rows=[{"id": 1}]),
+            fqn=["root", "events", "test_events"],
+            depends_on=DependsOn(nodes=["model.root.events"]),
+        )
+        unit_tests = {unit_test.unique_id: unit_test}
+
+        manifest = Manifest(
+            nodes=nodes,
+            sources=deepcopy(self.sources),
+            macros={},
+            docs={},
+            disabled={},
+            files={},
+            exposures=deepcopy(self.exposures),
+            metrics=deepcopy(self.metrics),
+            groups=deepcopy(self.groups),
+            selectors={},
+            unit_tests=unit_tests,
+        )
+        manifest.build_flat_graph()
+        flat_graph = manifest.flat_graph
+
+        # Verify unit_tests key exists
+        self.assertIn("unit_tests", flat_graph)
+        flat_unit_tests = flat_graph["unit_tests"]
+
+        # Verify the unit test is in flat_graph
+        self.assertEqual(set(flat_unit_tests), set(unit_tests))
+        self.assertIn("unit_test.root.events.test_events", flat_unit_tests)
+
+        # Verify the unit test data is serialized correctly
+        flat_unit_test = flat_unit_tests["unit_test.root.events.test_events"]
+        self.assertEqual(flat_unit_test["name"], "test_events")
+        self.assertEqual(flat_unit_test["model"], "events")
+        self.assertEqual(flat_unit_test["package_name"], "root")
 
     @mock.patch.object(tracking, "active_user")
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
+        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            invocation_started_at=dbt_common.invocation._INVOCATION_STARTED_AT,
             user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
             send_anonymous_usage_stats=False,
         )
@@ -547,10 +616,14 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            functions={},
             semantic_models={},
             saved_queries={},
         )
 
+        invocation_started_at = (
+            str(dbt_common.invocation._INVOCATION_STARTED_AT).replace(" ", "T") + "Z"
+        )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -558,6 +631,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -574,7 +648,9 @@ class ManifestTest(unittest.TestCase):
                     "send_anonymous_usage_stats": False,
                     "adapter_type": "postgres",
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": invocation_started_at,
                     "env": {ENV_KEY_NAME: "value"},
+                    "quoting": {},
                 },
                 "disabled": {},
                 "semantic_models": {},
@@ -882,8 +958,11 @@ class MixedManifestTest(unittest.TestCase):
     def test_no_nodes(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+        invocation_started_at = datetime.now(timezone.utc).replace(tzinfo=None)
         metadata = ManifestMetadata(
-            generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            invocation_id="01234567-0123-0123-0123-0123456789ab",
+            invocation_started_at=invocation_started_at,
         )
         manifest = Manifest(
             nodes={},
@@ -905,6 +984,7 @@ class MixedManifestTest(unittest.TestCase):
                 "macros": {},
                 "sources": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -916,9 +996,11 @@ class MixedManifestTest(unittest.TestCase):
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "env": {ENV_KEY_NAME: "value"},
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -938,7 +1020,9 @@ class MixedManifestTest(unittest.TestCase):
             docs={},
             disabled={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             files={},
             exposures={},
         )
@@ -986,6 +1070,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest = Manifest(
             nodes=nodes,
             sources={},
+            functions={},
             macros={},
             docs={},
             disabled={},
@@ -1003,16 +1088,19 @@ class MixedManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "metrics",
                     "nodes",
                     "sources",
                     "semantic_models",
                     "saved_queries",
+                    "unit_tests",
                 ]
             ),
         )
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
+        self.assertEqual(set(flat_graph["unit_tests"]), set())
         compiled_count = 0
         for node in flat_nodes.values():
             if node.get("compiled"):
@@ -1066,9 +1154,9 @@ class MixedManifestTest(unittest.TestCase):
 
 
 class TestManifestSearch(unittest.TestCase):
-    _macros = []
-    _nodes = []
-    _docs = []
+    _macros: list = []
+    _nodes: list = []
+    _docs: list = []
 
     @property
     def macros(self):
@@ -1755,6 +1843,19 @@ def _ambiguous_ref_parameter_sets():
     return sets
 
 
+def _duplicate_node_name_across_packages_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("root", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=("project_a", "my_model"),
+        ),
+    ]
+    return sets
+
+
 def id_nodes(arg):
     if isinstance(arg, list):
         node_names = "__".join(f"{n.package_name}_{n.search_name}" for n in arg)
@@ -1814,6 +1915,60 @@ def test_resolve_ref_ambiguous_resource_name_across_packages(
             current_project="root",
             node_package="root",
         )
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _duplicate_node_name_across_packages_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_with_node_package_legacy(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=False,
+        ),
+        None,
+    )
+    manifest = make_manifest(nodes=nodes, sources=sources)
+    result = manifest.resolve_ref(
+        source_node=None,
+        target_model_name="my_model",
+        target_model_package=package,
+        target_model_version=version,
+        current_project="root",
+        node_package="project_a",
+    )
+
+    assert result.name == "my_model"
+    assert result.package_name == "root"
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _duplicate_node_name_across_packages_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_with_node_package(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=True,
+        ),
+        None,
+    )
+    manifest = make_manifest(nodes=nodes, sources=sources)
+    result = manifest.resolve_ref(
+        source_node=None,
+        target_model_name="my_model",
+        target_model_package=package,
+        target_model_version=version,
+        current_project="root",
+        node_package="project_a",
+    )
+
+    assert result.name == "my_model"
+    assert result.package_name == "project_a"
 
 
 def _source_parameter_sets():
@@ -1898,6 +2053,13 @@ def _source_parameter_sets():
     ids=id_nodes,
 )
 def test_resolve_source(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=False,
+        ),
+        None,
+    )
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_source(
         target_source_name="my_source",

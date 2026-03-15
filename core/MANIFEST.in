@@ -1,3 +1,0 @@
-recursive-include dbt/include *.py *.sql *.yml *.html *.md .gitkeep .gitignore
-include dbt/py.typed
-recursive-include dbt/task/docs *.html

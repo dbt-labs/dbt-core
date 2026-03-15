@@ -20,7 +20,7 @@ class SnapshotMetaColumnNames(dbtClassMixin):
 class SnapshotConfig(NodeConfig):
     materialized: str = "snapshot"
     strategy: Optional[str] = None
-    unique_key: Optional[Union[str, List[str]]] = None
+    unique_key: Union[str, List[str], None] = None
     target_schema: Optional[str] = None
     target_database: Optional[str] = None
     updated_at: Optional[str] = None

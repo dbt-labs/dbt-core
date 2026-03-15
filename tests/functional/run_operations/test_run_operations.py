@@ -13,10 +13,14 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
-from dbt_common.exceptions import DbtInternalError
+from dbt_common.exceptions import UndefinedMacroError
 from tests.functional.run_operations.fixtures import (
+    groups_yml,
     happy_macros_sql,
     model_sql,
+    private_model_schema_yml,
+    private_model_sql,
+    ref_private_model_macro_sql,
     sad_macros_sql,
 )
 
@@ -81,7 +85,7 @@ class TestOperations:
 
     def test_macro_missing(self, project):
         with pytest.raises(
-            DbtInternalError,
+            UndefinedMacroError,
             match="dbt could not find a macro with the name 'this_macro_does_not_exist' in any package",
         ):
             self.run_operation("this_macro_does_not_exist", False)
@@ -159,3 +163,28 @@ name: 'pkg'
 
         rm_dir("pkg")
         rm_file("packages.yml")
+
+
+class TestRunOperationRefPrivateModel:
+    """Regression test for https://github.com/dbt-labs/dbt-core/issues/8248
+
+    Macros invoked via run-operation should be able to ref() private models,
+    since macros are outside the group/access control system.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "private_model.sql": private_model_sql,
+            "schema.yml": private_model_schema_yml,
+            "groups.yml": groups_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"ref_private_model.sql": ref_private_model_macro_sql}
+
+    def test_run_operation_ref_private_model(self, project):
+        run_dbt(["run"])
+        results = run_dbt(["run-operation", "ref_private_model"])
+        assert results.results[0].status == RunStatus.Success

@@ -5,9 +5,16 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import rm_file, run_dbt, update_config_file, write_file
+from dbt.tests.util import (
+    rm_file,
+    run_dbt,
+    run_dbt_and_capture,
+    update_config_file,
+    write_file,
+)
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
+    macros__success_macro_sql,
     models__sample_model,
     models__second_model,
     models__union_model,
@@ -52,7 +59,7 @@ class TestCustomTargetRetry:
         write_file(models__sample_model, "models", "sample_model.sql")
 
 
-class TestRetry:
+class BaseTestRetry:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -64,8 +71,13 @@ class TestRetry:
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {"alter_timezone.sql": macros__alter_timezone_sql}
+        return {
+            "alter_timezone.sql": macros__alter_timezone_sql,
+            "success_macro.sql": macros__success_macro_sql,
+        }
 
+
+class TestRetryNoPreviousRun(BaseTestRetry):
     def test_no_previous_run(self, project):
         with pytest.raises(
             DbtRuntimeError, match="Could not find previous run in 'target' target directory"
@@ -77,6 +89,8 @@ class TestRetry:
         ):
             run_dbt(["retry", "--state", "walmart"])
 
+
+class TestRetryPreviousRun(BaseTestRetry):
     def test_previous_run(self, project):
         # Regular build
         results = run_dbt(["build"], expect_pass=False)
@@ -126,6 +140,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryWarnError(BaseTestRetry):
     def test_warn_error(self, project):
         # Our test command should succeed when run normally...
         results = run_dbt(["build", "--select", "second_model"])
@@ -146,10 +162,13 @@ class TestRetry:
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
 
+
+class TestRetryRunOperation(BaseTestRetry):
     def test_run_operation(self, project):
-        results = run_dbt(
+        results, log_output = run_dbt_and_capture(
             ["run-operation", "alter_timezone", "--args", "{timezone: abc}"], expect_pass=False
         )
+        assert "running a macro!" in log_output
 
         expected_statuses = {
             "macro.test.alter_timezone": RunStatus.Error,
@@ -157,9 +176,28 @@ class TestRetry:
 
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
 
-        results = run_dbt(["retry"], expect_pass=False)
+        results, log_output = run_dbt_and_capture(["retry"], expect_pass=False)
+        assert "running a macro!" in log_output
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
 
+
+class TestRetrySuccessfulRunOperation(BaseTestRetry):
+    def test_run_operation(self, project):
+        results, log_output = run_dbt_and_capture(["run-operation", "success_macro"])
+        assert "running a macro!" in log_output
+
+        expected_statuses = {
+            "macro.test.success_macro": RunStatus.Success,
+        }
+
+        assert {n.unique_id: n.status for n in results.results} == expected_statuses
+
+        results, log_output = run_dbt_and_capture(["retry"])
+        assert "running a macro!" not in log_output
+        assert {n.unique_id: n.status for n in results.results} == expected_statuses
+
+
+class TestRetryRemovedFile(BaseTestRetry):
     def test_removed_file(self, project):
         run_dbt(["build"], expect_pass=False)
 
@@ -172,6 +210,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryRemovedFileLeafNode(BaseTestRetry):
     def test_removed_file_leaf_node(self, project):
         write_file(models__sample_model, "models", "third_model.sql")
         run_dbt(["build"], expect_pass=False)

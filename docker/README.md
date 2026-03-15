@@ -7,7 +7,7 @@ This Dockerfile can create images for the following targets, each named after th
 * `dbt-core` _(no db-adapter support)_
 * `dbt-third-party` _(requires additional build-arg)_
 
-For platform-specific images, please refer to that platform's repository (eg. `dbt-labs/dbt-postgres`)
+For platform-specific images, please refer to that platform's repository (eg. [dbt-postgres](https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/docker/README.md))
 
 In order to build a new image, run the following docker command.
 ```

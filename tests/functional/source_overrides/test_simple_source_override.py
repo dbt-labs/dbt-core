@@ -1,9 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 import pytest
 
 from dbt.tests.fixtures.project import write_project_files
-from dbt.tests.util import check_relations_equal, run_dbt, update_config_file
+from dbt.tests.util import (
+    check_relations_equal,
+    run_dbt,
+    run_dbt_and_capture,
+    update_config_file,
+)
 from tests.functional.source_overrides.fixtures import (  # noqa: F401
     local_dependency,
     models__schema_yml,
@@ -62,7 +68,7 @@ class TestSourceOverride:
         }
 
     def _set_updated_at_to(self, insert_id, delta, project):
-        insert_time = datetime.utcnow() + delta
+        insert_time = datetime.now(timezone.utc).replace(tzinfo=None) + delta
         timestr = insert_time.strftime("%Y-%m-%d %H:%M:%S")
         # favorite_color,id,first_name,email,ip_address,updated_at
 
@@ -91,6 +97,7 @@ class TestSourceOverride:
 
         return insert_id + 1
 
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_source_overrides(self, project):
         insert_id = 101
 
@@ -103,8 +110,12 @@ class TestSourceOverride:
         test_results = run_dbt(["test"])
         assert len(test_results) == 7
 
-        results = run_dbt(["run"])
+        results, logs = run_dbt_and_capture(["run"])
         assert len(results) == 1
+
+        # Since source overrides are now deprecated, shoehorn a check for the
+        # deprecation warning into this existing test.
+        assert "SourceOverrideDeprecation: 1 occurrence" in logs
 
         check_relations_equal(project.adapter, ["expected_result", "my_model"])
 

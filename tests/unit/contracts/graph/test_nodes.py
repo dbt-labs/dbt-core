@@ -166,6 +166,7 @@ def basic_compiled_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -209,6 +210,7 @@ def basic_compiled_dict():
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -490,6 +492,7 @@ def basic_compiled_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -529,6 +532,7 @@ def basic_compiled_schema_test_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 

@@ -14,6 +14,8 @@ on:
       - "*.latest"
       - "releases/*"
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions: read-all
@@ -21,7 +23,7 @@ permissions: read-all
 # top-level adjustments can be made here
 env:
   # number of parallel processes to spawn for python testing
-  PYTHON_INTEGRATION_TEST_WORKERS: 5
+  PYTHON_INTEGRATION_TEST_WORKERS: 15
 
 jobs:
   integration-metadata:
@@ -45,8 +47,8 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-20.04
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs:
       - integration-metadata
     strategy:
@@ -67,26 +69,45 @@ jobs:
       DBT_TEST_USER_2: dbt_test_user_2
       DBT_TEST_USER_3: dbt_test_user_3
 
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.10"
 
-      - name: Install python dependencies
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
+      - name: Run postgres setup script
         run: |
-          pip install --user --upgrade pip
-          pip --version
-          pip install tox
-          tox --version
-
-      - name: Set up postgres
-        uses: ./.github/actions/setup-postgres-linux
+          ./scripts/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
 
       - name: ls
         run: ls
@@ -94,13 +115,11 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -e integration -- -nauto
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          command: cd core && hatch -v run ci:integration-tests -- --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
   test-schema-report:
     name: Log Schema Test Suite

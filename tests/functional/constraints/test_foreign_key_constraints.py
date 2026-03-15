@@ -1,3 +1,6 @@
+import os
+import shutil
+
 import pytest
 
 from dbt.artifacts.resources import RefArgs
@@ -17,6 +20,7 @@ from tests.functional.constraints.fixtures import (
     model_foreign_key_model_node_not_found_schema_yml,
     model_foreign_key_model_schema_yml,
     model_foreign_key_source_schema_yml,
+    stateful_generate_alias_name_macros_sql,
 )
 
 
@@ -239,3 +243,89 @@ class TestColumnLevelForeignKeyConstraintRefSyntaxError:
             match="Invalid 'ref' or 'source' syntax on foreign key constraint 'to' on model my_model: invalid.",
         ):
             run_dbt(["parse"])
+
+
+class BaseForeignKeyDeferState:
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "generate_alias_name.sql": stateful_generate_alias_name_macros_sql,
+        }
+
+    def copy_state(self, project_root):
+        state_path = os.path.join(project_root, "state")
+        if not os.path.exists(state_path):
+            os.makedirs(state_path)
+        shutil.copyfile(
+            f"{project_root}/target/manifest.json", f"{project_root}/state/manifest.json"
+        )
+
+
+class TestModelLevelForeignKeyConstraintRefToDeferRelation(BaseForeignKeyDeferState):
+    """Test FK constraint uses deferred relation when FK target is NOT selected."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "constraints_schema.yml": model_foreign_key_model_schema_yml,
+            "my_model.sql": "select 1 as id",
+            "my_model_to.sql": "select 1 as id",
+        }
+
+    def test_model_level_fk_to_defer_relation_when_target_not_selected(self, project):
+        """When FK target is NOT selected, use deferred (prod) relation."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Only select my_model, not my_model_to - FK should use deferred relation
+        results = run_dbt(["compile", "-s", "my_model", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        assert my_model_node.constraints[0].to.split(".")[-1] == '"my_model_to_prod"'
+
+    def test_model_level_fk_to_current_relation_when_target_selected(self, project):
+        """When FK target IS selected (being built), use current relation, not deferred."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Select both models - FK should use current (dev) relation since target is being built
+        results = run_dbt(["compile", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        # When both models are selected, FK should point to current (dev) relation
+        assert my_model_node.constraints[0].to.split(".")[-1] == '"my_model_to_dev"'
+
+
+class TestColumnLevelForeignKeyConstraintToRefDeferRelation(BaseForeignKeyDeferState):
+    """Test column-level FK constraint uses deferred relation when FK target is NOT selected."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "constraints_schema.yml": model_foreign_key_model_column_schema_yml,
+            "my_model.sql": "select 1 as id",
+            "my_model_to.sql": "select 1 as id",
+        }
+
+    def test_column_level_fk_to_defer_relation_when_target_not_selected(self, project):
+        """When FK target is NOT selected, use deferred (prod) relation."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Only select my_model, not my_model_to - FK should use deferred relation
+        results = run_dbt(["compile", "-s", "my_model", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        assert my_model_node.columns["id"].constraints[0].to.split(".")[-1] == '"my_model_to_prod"'
+
+    def test_column_level_fk_to_current_relation_when_target_selected(self, project):
+        """When FK target IS selected (being built), use current relation, not deferred."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Select both models - FK should use current (dev) relation since target is being built
+        results = run_dbt(["compile", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        # When both models are selected, FK should point to current (dev) relation
+        assert my_model_node.columns["id"].constraints[0].to.split(".")[-1] == '"my_model_to_dev"'

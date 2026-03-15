@@ -14,6 +14,7 @@ from dbt.artifacts.resources import (
     ExposureType,
     FreshnessThreshold,
     Hook,
+    MacroConfig,
     MacroDependsOn,
     MaturityType,
     Measure,
@@ -168,6 +169,7 @@ def base_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -207,6 +209,7 @@ def base_parsed_model_dict():
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -279,6 +282,7 @@ def complex_parsed_model_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
@@ -315,6 +319,8 @@ def complex_parsed_model_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "checksum": {
@@ -330,6 +336,7 @@ def complex_parsed_model_dict():
         "config_call_dict": {},
         "access": AccessType.Protected.value,
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -538,6 +545,7 @@ def basic_parsed_seed_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -632,6 +640,8 @@ def complex_parsed_seed_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             }
         },
         "meta": {"foo": 1000},
@@ -644,6 +654,7 @@ def complex_parsed_seed_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -809,6 +820,7 @@ def base_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -844,6 +856,7 @@ def base_parsed_hook_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -891,6 +904,7 @@ def complex_parsed_hook_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
@@ -925,6 +939,11 @@ def complex_parsed_hook_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
+                "config": {
+                    "meta": {},
+                    "tags": [],
+                },
             },
         },
         "index": 13,
@@ -938,6 +957,7 @@ def complex_parsed_hook_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1051,6 +1071,7 @@ def basic_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -1083,6 +1104,7 @@ def basic_parsed_schema_test_dict():
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1130,6 +1152,7 @@ def complex_parsed_schema_test_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": ["model.test.bar"]},
         "database": "test_db",
         "description": "My parsed node",
@@ -1158,6 +1181,8 @@ def complex_parsed_schema_test_dict():
                 "meta": {},
                 "tags": [],
                 "constraints": [],
+                "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "column_name": "id",
@@ -1172,6 +1197,7 @@ def complex_parsed_schema_test_dict():
         "unrendered_config": {"materialized": "table", "severity": "WARN"},
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1520,6 +1546,7 @@ def basic_timestamp_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -1567,6 +1594,7 @@ def basic_timestamp_snapshot_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1625,6 +1653,7 @@ def basic_check_snapshot_dict():
         "refs": [],
         "sources": [],
         "metrics": [],
+        "functions": [],
         "depends_on": {"macros": [], "nodes": []},
         "database": "test_db",
         "description": "",
@@ -1672,6 +1701,7 @@ def basic_check_snapshot_dict():
         },
         "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 
@@ -1761,6 +1791,10 @@ class TestParsedMacro(ContractTestCase):
             "unique_id": "macro.test.foo",
             "depends_on": {"macros": []},
             "meta": {},
+            "config": {
+                "meta": {},
+                "docs": {"show": True},
+            },
             "description": "my macro description",
             "docs": {"show": True},
             "arguments": [],
@@ -1778,6 +1812,7 @@ class TestParsedMacro(ContractTestCase):
             unique_id="macro.test.foo",
             depends_on=MacroDependsOn(),
             meta={},
+            config=MacroConfig(),
             description="my macro description",
             arguments=[],
         )
@@ -1879,8 +1914,15 @@ def basic_parsed_source_definition_dict():
         "tags": [],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
+            "tags": [],
+            "meta": {},
         },
         "unrendered_config": {},
+        "doc_blocks": [],
     }
 
 
@@ -1909,10 +1951,17 @@ def complex_parsed_source_definition_dict():
         "tags": ["my_tag"],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
+            "tags": [],
+            "meta": {},
         },
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",
         "unrendered_config": {},
+        "doc_blocks": [],
     }
 
 
@@ -2090,6 +2139,8 @@ def basic_parsed_exposure_dict():
         "created_at": 1.0,
         "config": {
             "enabled": True,
+            "tags": [],
+            "meta": {},
         },
         "unrendered_config": {},
     }
@@ -2145,6 +2196,8 @@ def complex_parsed_exposure_dict():
         "original_file_path": "models/something.yml",
         "config": {
             "enabled": True,
+            "tags": [],
+            "meta": {},
         },
         "unrendered_config": {},
     }

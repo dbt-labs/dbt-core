@@ -38,17 +38,26 @@ class Quoting(dbtClassMixin, Mergeable):
     database: Optional[bool] = None
     project: Optional[bool] = None
     identifier: Optional[bool] = None
+    snowflake_ignore_case: Optional[bool] = None
 
 
 @dataclass
 class Package(dbtClassMixin):
-    pass
+
+    # Exclude {'name': None} from to_dict result to avoid changing sha1_hash result
+    # when user has not changed their 'packages' configuration.
+    def __post_serialize__(self, data, context: Optional[Dict]):
+        if "name" in data.keys() and data["name"] is None:
+            data.pop("name")
+            return data
+        return data
 
 
 @dataclass
 class LocalPackage(Package):
     local: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -69,6 +78,7 @@ class GitPackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -85,6 +95,7 @@ class PrivatePackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
 
 @dataclass
@@ -93,6 +104,7 @@ class RegistryPackage(Package):
     version: Union[RawVersion, List[RawVersion]]
     install_prerelease: Optional[bool] = False
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_versions(self) -> List[str]:
         if isinstance(self.version, list):
@@ -225,6 +237,7 @@ class Project(dbtClassMixin):
     analysis_paths: Optional[List[str]] = None
     docs_paths: Optional[List[str]] = None
     asset_paths: Optional[List[str]] = None
+    function_paths: Optional[List[str]] = None
     target_path: Optional[str] = None
     snapshot_paths: Optional[List[str]] = None
     clean_targets: Optional[List[str]] = None
@@ -248,6 +261,7 @@ class Project(dbtClassMixin):
     semantic_models: Dict[str, Any] = field(default_factory=dict)
     saved_queries: Dict[str, Any] = field(default_factory=dict)
     exposures: Dict[str, Any] = field(default_factory=dict)
+    functions: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(
@@ -274,6 +288,7 @@ class Project(dbtClassMixin):
             "analysis_paths": "analysis-paths",
             "docs_paths": "docs-paths",
             "asset_paths": "asset-paths",
+            "function_paths": "function-paths",
             "target_path": "target-path",
             "snapshot_paths": "snapshot-paths",
             "clean_targets": "clean-targets",
@@ -340,14 +355,22 @@ class ProjectFlags(ExtensibleDbtClassMixin):
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_batched_execution_for_custom_microbatch_strategy: bool = False
+    require_event_names_in_deprecations: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
-    require_resource_names_without_spaces: bool = False
-    source_freshness_run_project_hooks: bool = False
+    require_resource_names_without_spaces: bool = True
+    source_freshness_run_project_hooks: bool = True
     skip_nodes_if_on_run_start_fails: bool = False
     state_modified_compare_more_unrendered_values: bool = False
     state_modified_compare_vars: bool = False
     require_yaml_configuration_for_mf_time_spines: bool = False
     require_nested_cumulative_type_params: bool = False
+    validate_macro_args: bool = False
+    require_all_warnings_handled_by_warn_error: bool = False
+    require_generic_test_arguments_property: bool = True
+    require_unique_project_resource_names: bool = False
+    require_ref_searches_node_package_before_root: bool = False
+    require_valid_schema_from_generate_schema_name: bool = False
+    require_sql_header_in_test_configs: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -361,6 +384,13 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "state_modified_compare_vars": self.state_modified_compare_vars,
             "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
             "require_nested_cumulative_type_params": self.require_nested_cumulative_type_params,
+            "validate_macro_args": self.validate_macro_args,
+            "require_all_warnings_handled_by_warn_error": self.require_all_warnings_handled_by_warn_error,
+            "require_generic_test_arguments_property": self.require_generic_test_arguments_property,
+            "require_unique_project_resource_names": self.require_unique_project_resource_names,
+            "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
+            "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
         }
 
 
@@ -379,6 +409,7 @@ class ConfiguredQuoting(Quoting):
     schema: bool = True
     database: Optional[bool] = None
     project: Optional[bool] = None
+    snowflake_ignore_case: Optional[bool] = None
 
 
 @dataclass

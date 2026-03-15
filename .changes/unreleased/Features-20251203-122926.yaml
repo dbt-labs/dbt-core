@@ -1,0 +1,6 @@
+kind: Features
+body: ':bug: :snowman: Disable unit tests whose model is disabled'
+time: 2025-12-03T12:29:26.209248-05:00
+custom:
+    Author: michelleark
+    Issue: "10540"

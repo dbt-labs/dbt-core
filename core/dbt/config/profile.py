@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from dbt.adapters.contracts.connection import Credentials, HasCredentials
-from dbt.cli.resolvers import default_profiles_dir
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.project import ProfileConfig
 from dbt.events.types import MissingProfileTarget
@@ -69,7 +68,9 @@ class Profile(HasCredentials):
         threads: int,
         credentials: Credentials,
     ) -> None:
-        """Explicitly defining `__init__` to work around bug in Python 3.9.7
+        """
+        TODO: Is this no longer needed now that 3.9 is no longer supported?
+        Explicitly defining `__init__` to work around bug in Python 3.9.7
         https://bugs.python.org/issue45081
         """
         self.profile_name = profile_name
@@ -165,6 +166,15 @@ class Profile(HasCredentials):
         args_profile_name: Optional[str],
         project_profile_name: Optional[str] = None,
     ) -> str:
+        # TODO: Duplicating this method as direct copy of the implementation in dbt.cli.resolvers
+        # dbt.cli.resolvers implementation can't be used because it causes a circular dependency.
+        # This should be removed and use a safe default access on the Flags module when
+        # https://github.com/dbt-labs/dbt-core/issues/6259 is closed.
+        def default_profiles_dir():
+            from pathlib import Path
+
+            return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
+
         profile_name = project_profile_name
         if args_profile_name is not None:
             profile_name = args_profile_name

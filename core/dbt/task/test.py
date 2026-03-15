@@ -37,17 +37,16 @@ from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import TEST_NODE_TYPES, NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.compile import CompileRunner
+from dbt.task.run import RunTask
 from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt_common.ui import green, red
-
-from . import group_lookup
-from .compile import CompileRunner
-from .run import RunTask
 
 if TYPE_CHECKING:
     import agate
@@ -357,6 +356,8 @@ class TestRunner(CompileRunner):
         self.print_result_line(result)
 
     def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
+        # lower case the column names as platforms like snowflake can sometimes return columns in uppercase
+        result_table = result_table.rename([col.lower() for col in result_table.column_names])
         unit_test_table = result_table.where(
             lambda row: row["actual_or_expected"] == actual_or_expected
         )
