@@ -131,9 +131,17 @@ pub struct GroupConfig {
 }
 
 #[skip_serializing_none]
+#[derive(Deserialize, Default, Serialize, Debug, Clone, DbtSchema)]
+pub struct MacrosConfig {
+    pub docs: Option<DocsConfig>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
+}
+
+#[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct MacrosProperties {
     pub arguments: Option<Vec<MacrosArguments>>,
+    pub config: Option<MacrosConfig>,
     pub description: Option<String>,
     pub docs: Option<DocsConfig>,
     pub meta: Option<IndexMap<String, YmlValue>>,

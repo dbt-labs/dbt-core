@@ -310,14 +310,27 @@ pub fn apply_macro_patches(
                 dbt_macro.description = description;
             }
 
-            // Update meta if provided
-            if let Some(meta) = macro_props.meta {
-                dbt_macro.meta = meta.into_iter().collect();
+            // Merge meta: top-level and config.meta are merged, config.meta wins on conflicts
+            let top_meta = macro_props.meta.unwrap_or_default();
+            let config_meta = macro_props
+                .config
+                .as_ref()
+                .and_then(|c| c.meta.clone())
+                .unwrap_or_default();
+            if !top_meta.is_empty() || !config_meta.is_empty() {
+                let mut merged = top_meta;
+                merged.extend(config_meta);
+                dbt_macro.meta = merged.into_iter().collect();
             }
 
-            // Update docs if provided
-            if macro_props.docs.is_some() {
-                dbt_macro.docs = macro_props.docs;
+            // Update docs if provided (config.docs takes precedence over top-level docs)
+            let docs = macro_props
+                .config
+                .as_ref()
+                .and_then(|c| c.docs.clone())
+                .or(macro_props.docs);
+            if docs.is_some() {
+                dbt_macro.docs = docs;
             }
 
             // Update arguments if provided in YAML
