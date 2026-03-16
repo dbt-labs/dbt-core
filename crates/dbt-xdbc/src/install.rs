@@ -12,7 +12,7 @@ use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-static INSTALLABLE_DRIVERS: &[Backend; 7] = &[
+static INSTALLABLE_DRIVERS: &[Backend; 8] = &[
     Backend::Snowflake,
     Backend::BigQuery,
     Backend::Postgres,
@@ -20,8 +20,7 @@ static INSTALLABLE_DRIVERS: &[Backend; 7] = &[
     Backend::Redshift,
     Backend::DuckDB,
     Backend::Salesforce,
-    // TODO(serramatutu): work in progress
-    // Backend::Spark,
+    Backend::Spark,
 ];
 
 #[derive(Debug)]
@@ -652,8 +651,7 @@ mod tests {
             ("redshift", REDSHIFT_DRIVER_VERSION),
             ("duckdb", DUCKDB_DRIVER_VERSION),
             ("salesforce", SALESFORCE_DRIVER_VERSION),
-            // TODO: spark
-            // ("spark", SPARK_DRIVER_VERSION),
+            ("spark", SPARK_DRIVER_VERSION),
         ];
         debug_assert!(
             backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),

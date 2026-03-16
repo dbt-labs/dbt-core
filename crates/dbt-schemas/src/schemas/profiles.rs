@@ -978,6 +978,7 @@ pub struct DuckDbConfig {
 #[serde(rename_all = "snake_case")]
 pub enum SparkMethod {
     Thrift,
+    Http,
     Livy,
     // TODO: HTTP, Spark Connect, EMR StartJob, Session (?)
 }
