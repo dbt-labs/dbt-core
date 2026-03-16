@@ -396,7 +396,7 @@ pub struct EvalArgs {
     pub internal_packages_install_path: Option<PathBuf>,
     pub update_deps: bool,
     pub replay: Option<ReplayMode>,
-    pub static_analysis: StaticAnalysisKind,
+    pub static_analysis: Option<StaticAnalysisKind>,
     pub interactive: bool,
     pub check_conformance: bool,
     pub skip_semantic_manifest_validation: bool,
@@ -541,7 +541,7 @@ impl EvalArgsBuilder {
                     adapter_type
                 );
             }
-            self.args.static_analysis = StaticAnalysisKind::Off;
+            self.args.static_analysis = Some(StaticAnalysisKind::Off);
         }
 
         self
@@ -1031,9 +1031,9 @@ pub enum StaticAnalysisKind {
     #[value(hide = true)]
     Unsafe,
     Off,
-    Baseline,
-    #[default]
     Strict,
+    #[default]
+    Baseline,
     #[value(hide = true)]
     On,
 }

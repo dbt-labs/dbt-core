@@ -44,6 +44,7 @@ pub fn resolve_operations(
     project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
     io: &IoArgs,
+    global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
     schema: &str,
@@ -63,6 +64,7 @@ pub fn resolve_operations(
             project_root,
             jinja_env,
             io,
+            global_static_analysis,
             adapter_type,
             database,
             schema,
@@ -81,6 +83,7 @@ pub fn resolve_operations(
             project_root,
             jinja_env,
             io,
+            global_static_analysis,
             adapter_type,
             database,
             schema,
@@ -101,6 +104,7 @@ fn new_operation(
     project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
     io: &IoArgs,
+    global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
     schema: &str,
@@ -167,6 +171,7 @@ fn new_operation(
                 execute_exists,
                 &operation.__common_attr__.original_file_path,
                 io,
+                global_static_analysis,
             ));
 
             // Set TARGET_PACKAGE_NAME for var lookups

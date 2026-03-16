@@ -305,7 +305,8 @@ pub fn resolve_sources(
                 );
                 static_analysis
             } else {
-                StaticAnalysisKind::Strict.into()
+                // If global override is set, use it. Otherwise default
+                arg.static_analysis.unwrap_or_default().into()
             };
         // Create a config that respects the table-level overrides of
         // the source-level config.

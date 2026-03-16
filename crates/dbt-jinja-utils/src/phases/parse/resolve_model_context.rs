@@ -81,6 +81,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     execute_exists: Arc<AtomicBool>,
     display_path: &Path,
     io_args: &IoArgs,
+    global_static_analysis: Option<StaticAnalysisKind>,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
     let mut context = BTreeMap::new();
@@ -237,7 +238,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             alias: model_name.to_string(),
             relation_name: None,
             materialized: DbtMaterialization::View,
-            static_analysis: StaticAnalysisKind::Strict.into(),
+            static_analysis: global_static_analysis.unwrap_or_default().into(),
             static_analysis_off_reason: None,
             enabled: true,
             extended_model: false,

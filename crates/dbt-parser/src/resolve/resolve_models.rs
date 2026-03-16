@@ -792,7 +792,8 @@ pub async fn resolve_models(
             );
             static_analysis
         } else {
-            StaticAnalysisKind::Strict.into()
+            // If global override is set, use it. Otherwise default
+            arg.static_analysis.unwrap_or_default().into()
         };
 
         // Hydrate time_spine from model properties

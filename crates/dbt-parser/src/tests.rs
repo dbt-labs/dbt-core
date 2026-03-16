@@ -6,6 +6,7 @@ mod tests {
     use dbt_adapter::{BaseAdapter, BridgeAdapter};
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
+    use dbt_common::io_args::StaticAnalysisKind;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -62,6 +63,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from("test"),
             &IoArgs::default(),
+            Some(StaticAnalysisKind::Strict),
         );
         context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
         context

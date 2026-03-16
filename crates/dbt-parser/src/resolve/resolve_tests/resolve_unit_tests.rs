@@ -54,6 +54,7 @@ use std::sync::atomic::AtomicBool;
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_unit_tests(
     io_args: &IoArgs,
+    global_static_analysis: Option<StaticAnalysisKind>,
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
@@ -227,7 +228,8 @@ pub fn resolve_unit_tests(
                 );
                 static_analysis
             } else {
-                StaticAnalysisKind::Strict.into()
+                // If global override is set, use it. Otherwise default
+                global_static_analysis.unwrap_or_default().into()
             };
 
         let base_unit_test = DbtUnitTest {

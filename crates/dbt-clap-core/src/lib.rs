@@ -310,6 +310,9 @@ got {:?}, expected an instance of {}",
         };
         arg.from_main = from_main;
         arg.interactive = self.is_interactive();
+        if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
+            arg.static_analysis = Some(StaticAnalysisKind::Strict);
+        }
 
         Ok(arg)
     }
@@ -567,13 +570,8 @@ pub struct CompileArgs {
     pub output: Option<DisplayFormat>,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
@@ -597,7 +595,7 @@ impl CompileArgs {
         eval_args.static_analysis = if eval_args.introspect {
             self.static_analysis
         } else {
-            StaticAnalysisKind::Off
+            Some(StaticAnalysisKind::Off)
         };
         eval_args.full_refresh = self.full_refresh;
         eval_args.format = self.output.unwrap_or(DEFAULT_FORMAT);
@@ -639,13 +637,8 @@ pub struct SeedArgs {
     pub no_run_cache: bool,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
@@ -750,13 +743,8 @@ pub struct ShowArgs {
     pub output: Option<DisplayFormat>,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Do not perform any local type checking on the show target
     ///
@@ -834,13 +822,8 @@ pub struct SnapshotArgs {
     pub no_run_cache: bool,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 }
 
 impl SnapshotArgs {
@@ -903,13 +886,8 @@ pub struct TestArgs {
     pub output: Option<DisplayFormat>,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Use the samples as given in this YAML/JSON file.
     #[arg(long, value_name = "default|FILE", alias = "with-sample")]
@@ -989,13 +967,8 @@ pub struct BuildArgs {
     pub output: Option<DisplayFormat>,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Run models using time-based filters (only applicable to relations created via `ref` or `source`)
     /// reference: https://docs.getdbt.com/docs/build/sample-flag
@@ -1132,13 +1105,8 @@ pub struct RunArgs {
     pub output: Option<DisplayFormat>,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(
-        global = true,
-        long,
-        default_value = "strict",
-        env = "DBT_STATIC_ANALYSIS"
-    )]
-    pub static_analysis: StaticAnalysisKind,
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
 
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
@@ -1320,9 +1288,7 @@ impl RetryArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::All;
         // Note: static_analysis is applied later in retry handling based on original run settings
-        if let Some(sa) = self.static_analysis {
-            eval_args.static_analysis = sa;
-        }
+        eval_args.static_analysis = self.static_analysis;
         eval_args
     }
 }
@@ -1988,7 +1954,7 @@ impl CommonArgs {
             refresh_sources: false,
             run_cache_mode: RunCacheMode::Noop,
             task_cache_url: self.task_cache_url.clone(),
-            static_analysis: StaticAnalysisKind::default(),
+            static_analysis: None,
             full_refresh: false,
             store_failures: self.store_failures,
             check_all: false,

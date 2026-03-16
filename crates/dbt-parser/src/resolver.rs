@@ -350,6 +350,7 @@ pub async fn resolve(
             &arg.io.in_dir,
             &jinja_env,
             &arg.io,
+            arg.static_analysis,
             adapter_type,
             &dbt_state.dbt_profile.database,
             &dbt_state.dbt_profile.schema,
@@ -842,6 +843,7 @@ pub async fn resolve_inner(
 
     let (unit_tests, disabled_unit_tests) = resolve_unit_tests(
         &arg.io,
+        arg.static_analysis,
         min_properties.unit_tests,
         package,
         package_quoting,

@@ -368,7 +368,8 @@ pub async fn resolve_data_tests(
             );
             static_analysis
         } else {
-            StaticAnalysisKind::Strict.into()
+            // If global override is set, use it. Otherwise default
+            arg.static_analysis.unwrap_or_default().into()
         };
 
         // For generic tests, only add the test macro itself to depends_on_macros

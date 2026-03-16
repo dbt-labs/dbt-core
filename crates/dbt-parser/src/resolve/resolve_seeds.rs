@@ -177,7 +177,8 @@ pub fn resolve_seeds(
                 );
                 static_analysis
             } else {
-                StaticAnalysisKind::Strict.into()
+                // If global override is set, use it. Otherwise default
+                arg.static_analysis.unwrap_or_default().into()
             };
 
         // XXX: normalize column_types to uppercase if it is snowflake

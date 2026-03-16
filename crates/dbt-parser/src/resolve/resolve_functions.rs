@@ -3,7 +3,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
@@ -157,7 +156,8 @@ pub async fn resolve_functions(
             );
             static_analysis
         } else {
-            StaticAnalysisKind::Strict
+            // If global override is set, use it. Otherwise default
+            arg.static_analysis.unwrap_or_default()
         };
 
         let fqn = get_node_fqn(

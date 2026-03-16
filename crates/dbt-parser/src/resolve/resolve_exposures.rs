@@ -3,7 +3,7 @@ use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 use dbt_common::adapter::AdapterType;
 use dbt_common::error::AbstractLocation;
-use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -134,6 +134,7 @@ pub async fn resolve_exposures(
                     fqn.clone(),
                     &mpe.relative_path.to_string_lossy(),
                     &args.io,
+                    args.static_analysis,
                 )?
             } else {
                 (vec![], vec![], vec![])
@@ -224,6 +225,7 @@ pub fn resolve_yaml_depends_on(
     fqn: Vec<String>,
     relative_path: &str,
     io_args: &IoArgs,
+    global_static_analysis: Option<StaticAnalysisKind>,
 ) -> FsResult<(Vec<DbtRef>, Vec<DbtSourceWrapper>, Vec<Vec<String>>)> {
     let mut dependent_refs = vec![];
     let mut dependent_sources = vec![];
@@ -250,6 +252,7 @@ pub fn resolve_yaml_depends_on(
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from(relative_path),
             io_args,
+            global_static_analysis,
         ));
 
         let sql_resource = render_extract_ref_or_source_expr(

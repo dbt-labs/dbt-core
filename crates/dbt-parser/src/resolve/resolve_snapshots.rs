@@ -344,7 +344,8 @@ pub async fn resolve_snapshots(
                     );
                     static_analysis
                 } else {
-                    StaticAnalysisKind::Strict.into()
+                    // If global override is set, use it. Otherwise default
+                    arg.static_analysis.unwrap_or_default().into()
                 };
 
             let macro_depends_on = all_depends_on

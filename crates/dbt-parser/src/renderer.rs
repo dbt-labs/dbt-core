@@ -288,6 +288,7 @@ where
         execute_exists.clone(),
         &display_path,
         &args.io,
+        args.static_analysis,
     ));
 
     if let Some(status_reporter) = &args.io.status_reporter {
@@ -296,7 +297,7 @@ where
 
     // Check if mangled ref checking is enabled via global static_analysis settings.
     // Per node suppression is applied later based on the final config for the node.
-    let check_mangled_refs = args.static_analysis != StaticAnalysisKind::Off;
+    let check_mangled_refs = args.static_analysis.unwrap_or_default() != StaticAnalysisKind::Off;
 
     // Run typecheck
     if let Some(model) = resolve_model_context.get("model")

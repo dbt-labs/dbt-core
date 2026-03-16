@@ -37,7 +37,7 @@ pub struct ResolveArgs {
     /// For remapping unique_is to (database, schema, table) when sampling is enabled
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
     /// Global static analysis settings
-    pub static_analysis: StaticAnalysisKind,
+    pub static_analysis: Option<StaticAnalysisKind>,
     /// Store failures?
     pub store_failures: bool,
 }
