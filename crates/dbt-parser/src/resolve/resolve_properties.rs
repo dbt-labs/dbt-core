@@ -130,7 +130,15 @@ impl MinimalProperties {
             }
         }
         if let Some(sources) = other.sources {
-            for source_value in sources {
+            for mut source_value in sources {
+                // Pre-render the `tables` field if it is a single Jinja expression
+                // (e.g. `{{ var('source_tables') }}`). MinimalSchemaValue wraps
+                // `tables` in `Verbatim` so that table *contents* are not rendered
+                // prematurely, but this also blocks expanding the field value itself
+                // from a string into a sequence.
+                // See: https://github.com/dbt-labs/dbt-fusion/issues/982
+                pre_render_tables_field(&mut source_value, jinja_env, base_ctx);
+
                 let source = into_typed_with_jinja::<MinimalSchemaValue, _>(
                     io_args,
                     source_value.clone(),
@@ -807,5 +815,39 @@ pub fn collect_model_version_info(
             .collect()
     } else {
         vec![(model.name.clone(), None)]
+    }
+}
+
+/// If the `tables` field of a source YAML mapping is a single Jinja expression
+/// (e.g. `"{{ var('source_tables') }}"`), evaluate it and replace the string
+/// with the rendered sequence in-place. This is necessary because
+/// `MinimalSchemaValue.tables` is wrapped in `Verbatim` (to protect table
+/// *contents* from premature rendering), which also blocks the field-level
+/// Jinja transform that would normally expand the string into a sequence.
+fn pre_render_tables_field(
+    source_value: &mut dbt_yaml::Value,
+    jinja_env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, MinijinjaValue>,
+) {
+    let Some(mapping) = source_value.as_mapping_mut() else {
+        return;
+    };
+    let tables_key = dbt_yaml::Value::string("tables".to_string());
+    let jinja_expr = mapping
+        .get(&tables_key)
+        .and_then(|v| v.as_str())
+        .filter(|s| dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control(s))
+        .map(|s| s[2..s.len() - 2].trim().to_string());
+
+    if let Some(expr) = jinja_expr {
+        if let Ok(compiled) = jinja_env.compile_expression(&expr) {
+            if let Ok(result) = compiled.eval(base_ctx, &[]) {
+                if let Ok(val) = dbt_yaml::to_value(&result) {
+                    if val.is_sequence() {
+                        mapping.insert(tables_key, val);
+                    }
+                }
+            }
+        }
     }
 }
