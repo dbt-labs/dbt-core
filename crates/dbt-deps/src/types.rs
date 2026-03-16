@@ -14,6 +14,34 @@ use super::semver::{
 
 use super::hub_client::{DBT_CORE_FIXED_VERSION, HubClient};
 
+/// Parse a version string that may be a single semver specifier or a
+/// stringified list produced by Jinja rendering (e.g. `['>=0.8.0', '<0.9.0']`).
+///
+/// dbt-core renders the entire YAML through Jinja before parsing, so a list
+/// value stays a YAML sequence.  In dbt-fusion the per-value rendering turns
+/// the list into its string representation; this helper recovers the original
+/// semantics by re-parsing the string as YAML to recover sequence structure.
+fn parse_version_string(version: &str) -> Result<Vec<VersionSpecifier>, Box<FsError>> {
+    if let Ok(dbt_yaml::Value::Sequence(items, _)) = dbt_yaml::from_str::<dbt_yaml::Value>(version)
+    {
+        let specs: Result<Vec<_>, _> = items
+            .iter()
+            .map(|v| {
+                let s = v.as_str().ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Expected string version specifier, got: {:?}",
+                        v
+                    )
+                })?;
+                VersionSpecifier::from_str(s)
+            })
+            .collect();
+        return specs;
+    }
+    Ok(vec![VersionSpecifier::from_str(version)?])
+}
+
 #[derive(Debug, Clone)]
 pub struct HubPinnedPackage {
     pub package: String,
@@ -102,9 +130,7 @@ impl TryFrom<HubPackage> for HubUnpinnedPackage {
                 .iter()
                 .map(|v| VersionSpecifier::from_str(v))
                 .collect::<Result<Vec<_>, _>>()?,
-            Some(PackageVersion::String(version)) => {
-                vec![VersionSpecifier::from_str(&version)?]
-            }
+            Some(PackageVersion::String(version)) => parse_version_string(&version)?,
             Some(PackageVersion::Number(version)) => {
                 vec![VersionSpecifier::from_str(&version.to_string())?]
             }
@@ -369,5 +395,53 @@ impl TryFrom<TarballPackage> for TarballUnpinnedPackage {
             unrendered: tarball_package.__unrendered__.clone(),
             original_entry: tarball_package,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_version_string_single() {
+        let versions = parse_version_string(">=0.8.0").unwrap();
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0].matcher, Matchers::GreaterThanOrEqualTo);
+        assert_eq!(versions[0].major, Some(0));
+        assert_eq!(versions[0].minor, Some(8));
+        assert_eq!(versions[0].patch, Some(0));
+    }
+
+    #[test]
+    fn test_parse_version_string_jinja_list_single_quotes() {
+        // MiniJinja renders lists with single quotes: ['>=0.8.0', '<0.9.0']
+        let versions = parse_version_string("['>=0.8.0', '<0.9.0']").unwrap();
+        assert_eq!(versions.len(), 2);
+        assert_eq!(versions[0].matcher, Matchers::GreaterThanOrEqualTo);
+        assert_eq!(versions[0].major, Some(0));
+        assert_eq!(versions[0].minor, Some(8));
+        assert_eq!(versions[1].matcher, Matchers::LessThan);
+        assert_eq!(versions[1].major, Some(0));
+        assert_eq!(versions[1].minor, Some(9));
+    }
+
+    #[test]
+    fn test_parse_version_string_jinja_list_double_quotes() {
+        // Python Jinja2 may also produce double quotes
+        let versions = parse_version_string(r#"[">=0.8.0", "<0.9.0"]"#).unwrap();
+        assert_eq!(versions.len(), 2);
+        assert_eq!(versions[0].matcher, Matchers::GreaterThanOrEqualTo);
+        assert_eq!(versions[1].matcher, Matchers::LessThan);
+    }
+
+    #[test]
+    fn test_hub_package_with_stringified_list_version() {
+        let hub_package = HubPackage {
+            package: "dbt-labs/dbt_utils".to_string(),
+            version: Some(PackageVersion::String("['>=0.8.0', '<0.9.0']".to_string())),
+            install_prerelease: None,
+        };
+        let unpinned: HubUnpinnedPackage = hub_package.try_into().unwrap();
+        assert_eq!(unpinned.versions.len(), 2);
     }
 }
