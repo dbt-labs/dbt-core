@@ -4,8 +4,8 @@ use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
-    InternalDbtNode, Nodes, nodes::DbtModel, nodes::is_invalid_for_relation_comparison,
-    nodes::same_persisted_description,
+    InternalDbtNode, Nodes, nodes::DbtModel, nodes::DbtTest,
+    nodes::is_invalid_for_relation_comparison, nodes::same_persisted_description,
 };
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
@@ -33,6 +33,16 @@ pub enum ModificationType {
     Any,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct TestSignature {
+    name: String,
+    namespace: Option<String>,
+    attached_node: String,
+    column_name: Option<String>,
+    /// Sorted, normalized kwargs excluding volatile keys.
+    kwargs: Vec<(String, String)>,
+}
+
 impl fmt::Display for PreviousState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "PreviousState from {}", self.state_path.display())
@@ -40,6 +50,75 @@ impl fmt::Display for PreviousState {
 }
 
 impl PreviousState {
+    fn test_signature(test: &DbtTest) -> Option<TestSignature> {
+        let attached_node = test.__test_attr__.attached_node.clone()?;
+        let metadata = test.__test_attr__.test_metadata.as_ref()?;
+
+        let mut kwargs: Vec<(String, String)> = metadata
+            .kwargs
+            .iter()
+            // The `model` kwarg often contains rendered Jinja/ref strings and can vary between engines
+            // or manifest producers without indicating a semantic difference in the test.
+            .filter(|(k, _)| k.as_str() != "model")
+            .map(|(k, v)| {
+                let rendered = serde_json::to_string(v).unwrap_or_else(|_| format!("{v:?}"));
+                (k.clone(), rendered)
+            })
+            .collect();
+        // Deterministic ordering (even if upstream ever changes map type)
+        kwargs.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        Some(TestSignature {
+            name: metadata.name.clone(),
+            namespace: metadata.namespace.clone(),
+            attached_node,
+            column_name: test.__test_attr__.column_name.clone(),
+            kwargs,
+        })
+    }
+
+    fn find_previous_test_by_signature<'a>(
+        &'a self,
+        current: &DbtTest,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let sig = Self::test_signature(current)?;
+
+        let mut found: Option<&'a dyn InternalDbtNode> = None;
+        for prev in nodes.tests.values() {
+            if let Some(prev_sig) = Self::test_signature(prev.as_ref()) {
+                if prev_sig == sig {
+                    if found.is_some() {
+                        // Ambiguous match; avoid incorrect "exists" classification.
+                        return None;
+                    }
+                    found = Some(prev.as_ref() as &dyn InternalDbtNode);
+                }
+            }
+        }
+
+        found
+    }
+
+    fn previous_node_for<'a>(
+        &'a self,
+        current: &dyn InternalDbtNode,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let nodes = self.nodes.as_ref()?;
+
+        if let Some(prev) = nodes.get_node(current.common().unique_id.as_str()) {
+            return Some(prev as &dyn InternalDbtNode);
+        }
+
+        if current.resource_type() == NodeType::Test {
+            if let Some(cur_test) = current.as_any().downcast_ref::<DbtTest>() {
+                return self.find_previous_test_by_signature(cur_test, nodes);
+            }
+        }
+
+        None
+    }
+
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
         Self::try_new_with_target_path(state_path, root_project_quoting, None, true)
     }
@@ -108,10 +187,7 @@ impl PreviousState {
         if node.is_never_new_if_previous_missing() {
             true
         } else {
-            self.nodes
-                .as_ref()
-                .and_then(|nodes| nodes.get_node(node.common().unique_id.as_str()))
-                .is_some()
+            self.previous_node_for(node).is_some()
         }
     }
 
@@ -158,15 +234,10 @@ impl PreviousState {
 
     // Private helper methods to check specific types of modifications
     fn check_modified_content(&self, current_node: &dyn InternalDbtNode) -> bool {
-        // Get the previous node from the manifest
-        let previous_node = match self
-            .nodes
-            .as_ref()
-            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
-        {
-            Some(node) => node,
-            // TODO test is currently ignored in the state selector because fusion generate test name different from dbt-mantle.
-            None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
         };
 
         // For models, treat "modified content" as a *body* comparison (checksum/raw_code),
@@ -189,14 +260,10 @@ impl PreviousState {
     }
 
     fn check_configs_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
-        // Get the previous node from the manifest
-        let previous_node = match self
-            .nodes
-            .as_ref()
-            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
-        {
-            Some(node) => node,
-            None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
         };
 
         // Mantle semantics for `state:modified` configs are based on configured/unrendered config,
@@ -329,14 +396,10 @@ impl PreviousState {
             return false;
         }
 
-        // Get the previous node from the manifest
-        let previous_node = match self
-            .nodes
-            .as_ref()
-            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
-        {
-            Some(node) => node,
-            None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
         };
 
         // Check if database representation changed (database, schema, alias).
@@ -480,14 +543,10 @@ impl PreviousState {
     }
 
     fn check_persisted_descriptions_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
-        // Get the previous node from the manifest
-        let previous_node = match self
-            .nodes
-            .as_ref()
-            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
-        {
-            Some(node) => node,
-            None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
         };
 
         !same_persisted_description(
@@ -499,14 +558,10 @@ impl PreviousState {
     }
 
     fn check_contract_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
-        // Get the previous node from the manifest
-        let previous_node = match self
-            .nodes
-            .as_ref()
-            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
-        {
-            Some(node) => node,
-            None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
         };
 
         if let (Some(current_model), Some(previous_model)) = (

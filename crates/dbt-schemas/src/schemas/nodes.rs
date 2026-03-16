@@ -237,7 +237,6 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             || self.resource_type() == NodeType::SavedQuery
             || self.resource_type() == NodeType::SemanticModel
             || self.resource_type() == NodeType::Metric
-            || self.is_test() // As per Chenyu tests are a part of this list because of a mantle vs fusion difference in test naming which causes false positives. generation.
     }
 
     // Incremental strategy validation
