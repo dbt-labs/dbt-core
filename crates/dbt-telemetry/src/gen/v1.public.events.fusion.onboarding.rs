@@ -48,6 +48,8 @@ pub enum OnboardingScreen {
     AgenticAutofix = 15,
     TryAgenticAutofix = 16,
     DownloadAgentsMd = 17,
+    CompileSaBaseline = 18,
+    CompileSaBaselineSuccess = 19,
 }
 impl OnboardingScreen {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -74,6 +76,10 @@ impl OnboardingScreen {
             Self::AgenticAutofix => "ONBOARDING_SCREEN_AGENTIC_AUTOFIX",
             Self::TryAgenticAutofix => "ONBOARDING_SCREEN_TRY_AGENTIC_AUTOFIX",
             Self::DownloadAgentsMd => "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD",
+            Self::CompileSaBaseline => "ONBOARDING_SCREEN_COMPILE_SA_BASELINE",
+            Self::CompileSaBaselineSuccess => {
+                "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS"
+            }
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -97,6 +103,10 @@ impl OnboardingScreen {
             "ONBOARDING_SCREEN_AGENTIC_AUTOFIX" => Some(Self::AgenticAutofix),
             "ONBOARDING_SCREEN_TRY_AGENTIC_AUTOFIX" => Some(Self::TryAgenticAutofix),
             "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD" => Some(Self::DownloadAgentsMd),
+            "ONBOARDING_SCREEN_COMPILE_SA_BASELINE" => Some(Self::CompileSaBaseline),
+            "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS" => {
+                Some(Self::CompileSaBaselineSuccess)
+            }
             _ => None,
         }
     }

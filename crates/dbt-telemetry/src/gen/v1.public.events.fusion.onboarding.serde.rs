@@ -23,6 +23,8 @@ impl serde::Serialize for OnboardingScreen {
             Self::AgenticAutofix => "ONBOARDING_SCREEN_AGENTIC_AUTOFIX",
             Self::TryAgenticAutofix => "ONBOARDING_SCREEN_TRY_AGENTIC_AUTOFIX",
             Self::DownloadAgentsMd => "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD",
+            Self::CompileSaBaseline => "ONBOARDING_SCREEN_COMPILE_SA_BASELINE",
+            Self::CompileSaBaselineSuccess => "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS",
         };
         serializer.serialize_str(variant)
     }
@@ -52,6 +54,8 @@ impl<'de> serde::Deserialize<'de> for OnboardingScreen {
             "ONBOARDING_SCREEN_AGENTIC_AUTOFIX",
             "ONBOARDING_SCREEN_TRY_AGENTIC_AUTOFIX",
             "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD",
+            "ONBOARDING_SCREEN_COMPILE_SA_BASELINE",
+            "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS",
         ];
 
         struct GeneratedVisitor;
@@ -110,6 +114,8 @@ impl<'de> serde::Deserialize<'de> for OnboardingScreen {
                     "ONBOARDING_SCREEN_AGENTIC_AUTOFIX" => Ok(OnboardingScreen::AgenticAutofix),
                     "ONBOARDING_SCREEN_TRY_AGENTIC_AUTOFIX" => Ok(OnboardingScreen::TryAgenticAutofix),
                     "ONBOARDING_SCREEN_DOWNLOAD_AGENTS_MD" => Ok(OnboardingScreen::DownloadAgentsMd),
+                    "ONBOARDING_SCREEN_COMPILE_SA_BASELINE" => Ok(OnboardingScreen::CompileSaBaseline),
+                    "ONBOARDING_SCREEN_COMPILE_SA_BASELINE_SUCCESS" => Ok(OnboardingScreen::CompileSaBaselineSuccess),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

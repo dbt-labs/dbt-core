@@ -463,12 +463,14 @@ pub enum OnboardingScreen {
     ParseErrorFail = 9,
     CompileNoSa = 10,
     CompileNoSaFail = 11,
-    Compile = 12,
-    CompileFail = 13,
+    CompileStrict = 12,
+    CompileStrictFail = 13,
     Success = 14,
     AgenticAutofix = 15,
     TryAgenticAutofix = 16,
     DownloadAgentsMd = 17,
+    CompileSaBaseline = 18,
+    CompileSaBaselineSuccess = 19,
 }
 impl OnboardingScreen {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -489,12 +491,14 @@ impl OnboardingScreen {
             Self::ParseErrorFail => "PARSE_ERROR_FAIL",
             Self::CompileNoSa => "COMPILE_NO_SA",
             Self::CompileNoSaFail => "COMPILE_NO_SA_FAIL",
-            Self::Compile => "COMPILE",
-            Self::CompileFail => "COMPILE_FAIL",
+            Self::CompileStrict => "COMPILE_STRICT",
+            Self::CompileStrictFail => "COMPILE_STRICT_FAIL",
             Self::Success => "SUCCESS",
             Self::AgenticAutofix => "AGENTIC_AUTOFIX",
             Self::TryAgenticAutofix => "TRY_AGENTIC_AUTOFIX",
             Self::DownloadAgentsMd => "DOWNLOAD_AGENTS_MD",
+            Self::CompileSaBaseline => "COMPILE_SA_BASELINE",
+            Self::CompileSaBaselineSuccess => "COMPILE_SA_BASELINE_SUCCESS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -512,12 +516,14 @@ impl OnboardingScreen {
             "PARSE_ERROR_FAIL" => Some(Self::ParseErrorFail),
             "COMPILE_NO_SA" => Some(Self::CompileNoSa),
             "COMPILE_NO_SA_FAIL" => Some(Self::CompileNoSaFail),
-            "COMPILE" => Some(Self::Compile),
-            "COMPILE_FAIL" => Some(Self::CompileFail),
+            "COMPILE_STRICT" => Some(Self::CompileStrict),
+            "COMPILE_STRICT_FAIL" => Some(Self::CompileStrictFail),
             "SUCCESS" => Some(Self::Success),
             "AGENTIC_AUTOFIX" => Some(Self::AgenticAutofix),
             "TRY_AGENTIC_AUTOFIX" => Some(Self::TryAgenticAutofix),
             "DOWNLOAD_AGENTS_MD" => Some(Self::DownloadAgentsMd),
+            "COMPILE_SA_BASELINE" => Some(Self::CompileSaBaseline),
+            "COMPILE_SA_BASELINE_SUCCESS" => Some(Self::CompileSaBaselineSuccess),
             _ => None,
         }
     }

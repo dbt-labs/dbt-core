@@ -381,12 +381,14 @@ enum OnboardingScreen {
   PARSE_ERROR_FAIL   = 9;
   COMPILE_NO_SA      = 10;
   COMPILE_NO_SA_FAIL = 11;
-  COMPILE            = 12;
-  COMPILE_FAIL       = 13;
+  COMPILE_STRICT     = 12;
+  COMPILE_STRICT_FAIL = 13;
   SUCCESS            = 14;
   AGENTIC_AUTOFIX    = 15;
   TRY_AGENTIC_AUTOFIX = 16;
   DOWNLOAD_AGENTS_MD = 17;
+  COMPILE_SA_BASELINE = 18;
+  COMPILE_SA_BASELINE_SUCCESS = 19;
 }
 
 enum OnboardingAction {
