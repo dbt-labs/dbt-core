@@ -12,7 +12,7 @@ use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-static INSTALLABLE_DRIVERS: &[Backend; 8] = &[
+static INSTALLABLE_DRIVERS: &[Backend; 9] = &[
     Backend::Snowflake,
     Backend::BigQuery,
     Backend::Postgres,
@@ -21,6 +21,7 @@ static INSTALLABLE_DRIVERS: &[Backend; 8] = &[
     Backend::DuckDB,
     Backend::Salesforce,
     Backend::Spark,
+    Backend::SQLServer,
 ];
 
 #[derive(Debug)]
@@ -652,6 +653,7 @@ mod tests {
             ("duckdb", DUCKDB_DRIVER_VERSION),
             ("salesforce", SALESFORCE_DRIVER_VERSION),
             ("spark", SPARK_DRIVER_VERSION),
+            ("mssql", MSSQLSERVER_DRIVER_VERSION),
         ];
         debug_assert!(
             backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),
@@ -665,11 +667,16 @@ mod tests {
         for (backend, version) in backend_and_versions.iter() {
             for (target_os, archs) in target_os_and_archs.iter() {
                 for arch in archs {
+                    if backend == &"mssql" && target_os == &MACOS_TARGET_OS && arch == &"x86_64" {
+                        // there is no driver available for macos x86_64
+                        continue;
+                    }
+
                     let checksum =
                         find_expected_checksum_internal(backend, version, target_os, arch);
                     assert!(
                         checksum.is_some(),
-                        "Missing checksum for backend: {backend}, version: {version}, target_os: {target_os}"
+                        "Missing checksum for backend: {backend}, version: {version}, target_os: {target_os}, target_arch: {arch}"
                     );
                 }
             }

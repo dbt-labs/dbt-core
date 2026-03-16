@@ -341,7 +341,8 @@ impl AdbcDriver {
             | Backend::Redshift
             | Backend::Spark
             | Backend::DuckDB
-            | Backend::Salesforce => {
+            | Backend::Salesforce
+            | Backend::SQLServer => {
                 debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
                 debug_assert!(
                     install::is_installable_driver(backend),
@@ -389,14 +390,12 @@ impl AdbcDriver {
                 Self::try_load_driver_through_cdn_cache(backend, adbc_version)
             }
             // Drivers that are not published to the dbt Labs CDN.
-            Backend::SQLServer | Backend::ClickHouse | Backend::Generic { .. } => {
-                Self::try_load_driver_from_name(
-                    backend,
-                    backend.adbc_library_name().unwrap(),
-                    backend.adbc_driver_entrypoint(),
-                    adbc_version,
-                )
-            }
+            Backend::ClickHouse | Backend::Generic { .. } => Self::try_load_driver_from_name(
+                backend,
+                backend.adbc_library_name().unwrap(),
+                backend.adbc_driver_entrypoint(),
+                adbc_version,
+            ),
             // ODBC drivers.
             Backend::DatabricksODBC | Backend::RedshiftODBC => Err(Error::with_message_and_status(
                 format!(

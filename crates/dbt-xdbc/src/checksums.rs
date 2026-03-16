@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 140] = [
+); 144] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0+dbt0.21.3"),
         "050474c79886935db06e3e192fc901fd07a6e73d3e6932bf238ace55f2c1bbc8",
@@ -291,6 +291,22 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("duckdb", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.0.6"),
         "e1d5946cf947bedfe4ef1a3e178366f6a5ddba690c4348d2c9df900ecc37c964",
+    ),
+    (
+        ("mssql", "apple-darwin", "aarch64", "1.3.1"),
+        "7e356f8f2f89a89b7a5c45fc255e8c5429f934b634e6071c689fad323a0f0de4",
+    ),
+    (
+        ("mssql", "manylinux_2_17-linux-gnu", "aarch64", "1.3.1"),
+        "cb3f81b8a220fb5659f1f9d3516b8cb15742326fb900df01b18cb68bb0dd0e96",
+    ),
+    (
+        ("mssql", "manylinux_2_17-linux-gnu", "x86_64", "1.3.1"),
+        "8714af2a435e4de896192fa89336dde1461ff127fd1375b07be33a8da4e7da30",
+    ),
+    (
+        ("mssql", "pc-windows-msvc", "x86_64", "1.3.1"),
+        "bcb6b0235297c0797e0cd0999fe1cf79d35c6b45e4abf33b9cae0252fc2a8cd3",
     ),
     (
         ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
