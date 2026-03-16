@@ -62,6 +62,19 @@ class FileHash(dbtClassMixin):
         return cls(name=name, checksum=checksum)
 
     @classmethod
+    def from_path_legacy(cls, path: str, name="sha256") -> "FileHash":
+        """Reproduce the OLD hashing behavior: open in binary mode ("rb"),
+        decode UTF-8, strip, re-encode, and hash.  This preserves \\r\\n on
+        Windows, matching what load_file_contents + from_contents used to do.
+        """
+        path = convert_path(path)
+        with open(path, "rb") as handle:
+            contents = handle.read().decode("utf-8").strip()
+        data = contents.encode("utf-8")
+        checksum = hashlib.new(name, data).hexdigest()
+        return cls(name=name, checksum=checksum)
+
+    @classmethod
     def from_path(cls, path: str, name="sha256") -> "FileHash":
         """Create a file hash from the file at given path. The hash is always the
         utf-8 encoding of the contents which is stripped to give similar hashes

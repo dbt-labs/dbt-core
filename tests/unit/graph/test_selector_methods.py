@@ -1063,3 +1063,94 @@ def test_select_state_changed_test_macros_with_upstream_change(manifest, previou
     assert "model1" and "model2" not in search_manifest_using_method(
         manifest, method, "unmodified"
     )
+
+
+class TestSeedNodeSameSeedsFallback:
+    """Tests for the legacy-hash fallback in SeedNode.same_seeds()."""
+
+    def _make_seed_node(self, checksum, root_path="", original_file_path="seeds/seed.csv"):
+        seed = make_seed("pkg", "test_seed")
+        seed = replace(seed, checksum=checksum, root_path=root_path)
+        seed = replace(seed, original_file_path=original_file_path)
+        return seed
+
+    def test_matching_checksums(self):
+        """When checksums match, same_seeds returns True (no fallback needed)."""
+        h = FileHash.from_contents("id,name\n1,Alice")
+        current = self._make_seed_node(h)
+        previous = self._make_seed_node(h)
+        assert current.same_seeds(previous) is True
+
+    def test_different_checksums_no_root_path(self):
+        """When checksums differ and root_path is empty, no fallback — returns False."""
+        h1 = FileHash.from_contents("id,name\n1,Alice")
+        h2 = FileHash.from_contents("id,name\n1,Bob")
+        current = self._make_seed_node(h1, root_path="")
+        previous = self._make_seed_node(h2)
+        assert current.same_seeds(previous) is False
+
+    def test_legacy_fallback_matches(self, tmp_path):
+        """When new hash differs from old but legacy hash matches old, seed is NOT modified."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        # Write file with CRLF endings
+        seed_file.write_bytes(b"id,name\r\n1,Alice\r\n")
+
+        # New hash: computed via from_path (text mode, normalizes \r\n → \n)
+        new_hash = FileHash.from_path(str(seed_file))
+        # Old hash: computed via legacy method (binary mode, preserves \r\n)
+        old_hash = FileHash.from_path_legacy(str(seed_file))
+
+        # Verify they actually differ (this is the migration scenario)
+        assert new_hash.checksum != old_hash.checksum
+
+        current = self._make_seed_node(
+            new_hash, root_path=str(tmp_path), original_file_path="seeds/seed.csv"
+        )
+        previous = self._make_seed_node(old_hash)
+
+        # Fallback should recognize legacy hash matches → seed not modified
+        assert current.same_seeds(previous) is True
+
+    def test_legacy_fallback_no_match(self, tmp_path):
+        """When new hash AND legacy hash both differ from old, seed IS modified."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        seed_file.write_bytes(b"id,name\r\n1,Alice\r\n")
+
+        new_hash = FileHash.from_path(str(seed_file))
+        # Old hash from completely different content
+        old_hash = FileHash.from_contents("id,name\r\n1,Bob\r\n")
+
+        current = self._make_seed_node(
+            new_hash, root_path=str(tmp_path), original_file_path="seeds/seed.csv"
+        )
+        previous = self._make_seed_node(old_hash)
+
+        assert current.same_seeds(previous) is False
+
+    def test_no_fallback_when_hash_types_differ(self, tmp_path):
+        """When hash types differ (e.g., sha256 vs path), no fallback is attempted."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        seed_file.write_text("id,name\n1,Alice\n")
+
+        current = self._make_seed_node(
+            FileHash.from_path(str(seed_file)),
+            root_path=str(tmp_path),
+            original_file_path="seeds/seed.csv",
+        )
+        previous = self._make_seed_node(FileHash.path("seeds/seed.csv"))
+
+        # Different hash types → FileHash.__eq__ returns False, no fallback
+        assert current.same_seeds(previous) is False
+
+    def test_no_fallback_for_path_hash_type(self, tmp_path):
+        """When both checksums are 'path' type, fallback should not trigger."""
+        current = self._make_seed_node(
+            FileHash.path("seeds/seed.csv"),
+            root_path=str(tmp_path),
+        )
+        previous = self._make_seed_node(FileHash.path("seeds/other.csv"))
+        # path type is excluded from fallback
+        assert current.same_seeds(previous) is False
