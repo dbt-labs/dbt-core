@@ -12,6 +12,7 @@ from dbt.context.context_config import (
     ContextConfigGenerator,
     UnrenderedConfigGenerator,
 )
+from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest, SourceKey
 from dbt.contracts.graph.nodes import (
     GenericTestNode,
@@ -146,6 +147,13 @@ class SourcePatcher:
             rendered=False,
         )
 
+        schema_file = self.manifest.files.get(target.file_id)
+        source_vars = (
+            schema_file.get_vars("sources", source.name)
+            if isinstance(schema_file, SchemaSourceFile)
+            else {}
+        )
+
         if not isinstance(config, SourceConfig):
             raise DbtInternalError(
                 f"Calculated a {type(config)} for a source, but expected a SourceConfig"
@@ -181,6 +189,7 @@ class SourcePatcher:
             tags=config.tags,
             config=config,
             unrendered_config=unrendered_config,
+            vars=source_vars,
         )
 
         if (

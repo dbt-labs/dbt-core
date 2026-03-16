@@ -207,6 +207,7 @@ def basic_compiled_dict():
         },
         "unrendered_config": {},
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
@@ -531,6 +532,7 @@ def basic_compiled_schema_test_dict():
             "severity": "warn",
         },
         "unrendered_config_call_dict": {},
+        "vars": {},
         "config_call_dict": {},
         "doc_blocks": [],
     }
