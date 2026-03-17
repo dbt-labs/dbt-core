@@ -175,11 +175,30 @@ class Flags:
                         params_assigned_from_default.remove(new_name)
 
                     # Add the deprecation warning function to the set.
-                    assert isinstance(dep_param.envvar, str)
-                    assert isinstance(new_param.envvar, str)
+                    # Get the old and new env vars
+                    if isinstance(dep_param.envvar, list):
+                        dep_env_var_without_prefix = dep_param.envvar[1]
+                    elif isinstance(dep_param.envvar, str):
+                        dep_env_var_without_prefix = dep_param.envvar
+                    else:
+                        # Error raised as an assertion error to maintain history of how this was handled in the past
+                        assert (
+                            False
+                        ), f"Invalid envvar type: {type(dep_param.envvar)}, expected a list or string"
+
+                    if isinstance(new_param.envvar, list):
+                        new_env_var_with_prefix = new_param.envvar[0]
+                    elif isinstance(new_param.envvar, str):
+                        new_env_var_with_prefix = new_param.envvar
+                    else:
+                        # Error raised as an assertion error to maintain history of how this was handled in the past
+                        assert (
+                            False
+                        ), f"Invalid envvar type: {type(new_param.envvar)}, expected a list or string"
+
                     deprecated_env_vars[new_name] = renamed_env_var(
-                        old_name=dep_param.envvar,
-                        new_name=new_param.envvar,
+                        old_name=dep_env_var_without_prefix,
+                        new_name=new_env_var_with_prefix,
                     )
                 # end deprecated_params
 

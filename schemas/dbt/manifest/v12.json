@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.11.0a1"
+          "default": "1.11.6"
         },
         "generated_at": {
           "type": "string"
@@ -8495,6 +8495,51 @@
                   },
                   "concurrent_batches": {
                     "default": null
+                  },
+                  "type": {
+                    "enum": [
+                      "scalar",
+                      "aggregate",
+                      "table"
+                    ],
+                    "default": "scalar"
+                  },
+                  "volatility": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "deterministic",
+                          "stable",
+                          "non-deterministic"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "runtime_version": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "entry_point": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -8999,6 +9044,15 @@
                         }
                       ],
                       "default": null
+                    },
+                    "default_value": {
+                      "anyOf": [
+                        {},
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     }
                   },
                   "additionalProperties": false,
@@ -9007,14 +9061,6 @@
                     "data_type"
                   ]
                 }
-              },
-              "type": {
-                "enum": [
-                  "scalar",
-                  "aggregate",
-                  "table"
-                ],
-                "default": "scalar"
               }
             },
             "additionalProperties": false,
@@ -20093,6 +20139,51 @@
                         },
                         "concurrent_batches": {
                           "default": null
+                        },
+                        "type": {
+                          "enum": [
+                            "scalar",
+                            "aggregate",
+                            "table"
+                          ],
+                          "default": "scalar"
+                        },
+                        "volatility": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "deterministic",
+                                "stable",
+                                "non-deterministic"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "runtime_version": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "entry_point": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -20597,6 +20688,15 @@
                               }
                             ],
                             "default": null
+                          },
+                          "default_value": {
+                            "anyOf": [
+                              {},
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": false,
@@ -20605,14 +20705,6 @@
                           "data_type"
                         ]
                       }
-                    },
-                    "type": {
-                      "enum": [
-                        "scalar",
-                        "aggregate",
-                        "table"
-                      ],
-                      "default": "scalar"
                     }
                   },
                   "additionalProperties": false,
@@ -26611,6 +26703,51 @@
               },
               "concurrent_batches": {
                 "default": null
+              },
+              "type": {
+                "enum": [
+                  "scalar",
+                  "aggregate",
+                  "table"
+                ],
+                "default": "scalar"
+              },
+              "volatility": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "deterministic",
+                      "stable",
+                      "non-deterministic"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "runtime_version": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "entry_point": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": true
@@ -27115,6 +27252,15 @@
                     }
                   ],
                   "default": null
+                },
+                "default_value": {
+                  "anyOf": [
+                    {},
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": false,
@@ -27123,14 +27269,6 @@
                 "data_type"
               ]
             }
-          },
-          "type": {
-            "enum": [
-              "scalar",
-              "aggregate",
-              "table"
-            ],
-            "default": "scalar"
           }
         },
         "additionalProperties": false,
