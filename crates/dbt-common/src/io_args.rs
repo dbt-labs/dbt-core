@@ -897,6 +897,11 @@ impl ReplayMode {
             _ => None,
         }
     }
+
+    /// Returns true when replaying a Time Machine recording.
+    pub fn is_time_machine_replay(&self) -> bool {
+        matches!(self, ReplayMode::FsTimeMachine(TimeMachineMode::Replay(_)))
+    }
 }
 
 // -----------------------------------------------------------------------------
