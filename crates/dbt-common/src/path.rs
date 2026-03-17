@@ -196,6 +196,15 @@ where
     }
 }
 
+/// Compare two strings treating `/` and `\` as equivalent.
+/// Zero-allocation alternative to `a.replace('\\', "/") == b.replace('\\', "/")`.
+pub fn path_separator_eq(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.chars()
+            .zip(b.chars())
+            .all(|(ca, cb)| ca == cb || (ca == '\\' && cb == '/') || (ca == '/' && cb == '\\'))
+}
+
 /// Based off of https://docs.rs/pathdiff/0.2.3/src/pathdiff/lib.rs.html#171
 #[cfg(test)]
 mod tests {
@@ -334,5 +343,14 @@ mod tests {
             diff_paths_os_ascii_case(path, base),
             expected.map(|s| s.into())
         );
+    }
+
+    #[test]
+    fn test_path_separator_eq() {
+        assert!(path_separator_eq("foo/bar", "foo/bar"));
+        assert!(path_separator_eq("foo/bar", "foo\\bar"));
+        assert!(path_separator_eq("foo\\bar", "foo/bar"));
+        assert!(!path_separator_eq("foo/bar", "foo/baz"));
+        assert!(!path_separator_eq("foo/bar", "foo/bar/baz"));
     }
 }

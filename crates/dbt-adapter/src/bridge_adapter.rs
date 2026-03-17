@@ -2092,7 +2092,20 @@ impl Object for BridgeAdapter {
             && let Some(replay_result) = tm.try_replay(&node_id, name, args)
         {
             return replay_result.map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, e.to_string())
+                // Reconstruct an AdapterError so that from_jinja_err can downcast it
+                // and classify the error code correctly (matching recording behavior).
+                let error_msg = e.recorded_error.unwrap_or(e.message);
+                // Old recordings used e.to_string() which includes the ErrorKind prefix
+                // (e.g. "execution error: ..."). Strip it dynamically so we stay in
+                // sync with minijinja. New recordings store only the detail, so this
+                // is a no-op for them.
+                let prefix = format!("{}: ", minijinja::ErrorKind::Execution);
+                let error_msg = error_msg
+                    .strip_prefix(&prefix)
+                    .unwrap_or(&error_msg)
+                    .to_string();
+                let adapter_err = AdapterError::new(AdapterErrorKind::Driver, error_msg);
+                minijinja::Error::from(adapter_err)
             });
         }
 
@@ -2121,7 +2134,15 @@ impl Object for BridgeAdapter {
         {
             let (result_json, success, error) = match &result {
                 Ok(value) => (crate::time_machine::serialize_value(value), true, None),
-                Err(e) => (serde_json::Value::Null, false, Some(e.to_string())),
+                Err(e) => {
+                    // Record only the detail (raw error message) without the
+                    // ErrorKind prefix or stack trace that to_string() includes.
+                    let error_msg = e
+                        .detail()
+                        .map(|d| d.to_string())
+                        .unwrap_or_else(|| e.kind().to_string());
+                    (serde_json::Value::Null, false, Some(error_msg))
+                }
             };
 
             tm.record_call(

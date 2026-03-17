@@ -476,6 +476,45 @@ impl EventReplayer {
         self.recording.total_sao_events()
     }
 
+    /// Get the result for a run_remote_adhoc query.
+    ///
+    /// Returns deserialized Arrow batches and schema from the recording.
+    pub fn get_run_remote_adhoc_result(
+        &self,
+    ) -> Option<Result<(Vec<arrow::array::RecordBatch>, arrow_schema::SchemaRef), ReplayCallError>>
+    {
+        let event = self.recording.take_next_run_remote_adhoc()?;
+
+        if !event.success {
+            return Some(Err(ReplayCallError {
+                message: format!(
+                    "Recorded run_remote_adhoc query failed: {}",
+                    event.error.as_deref().unwrap_or("unknown error")
+                ),
+                recorded_error: event.error.clone(),
+            }));
+        }
+
+        match super::serializable_impls::ipc_base64_to_batches(&event.result_ipc_base64) {
+            Some((batches, schema)) => Some(Ok((batches, schema))),
+            None => Some(Err(ReplayCallError {
+                message: "Failed to decode recorded Arrow IPC data for run_remote_adhoc"
+                    .to_string(),
+                recorded_error: None,
+            })),
+        }
+    }
+
+    /// Get the next cache invalidation event's invalidated nodes.
+    ///
+    /// Returns `Some(nodes)` if a cache invalidation event was recorded,
+    /// `None` if no more cache invalidation events exist.
+    pub fn get_cache_invalidations(&self) -> Option<Vec<String>> {
+        self.recording
+            .take_next_cache_invalidation()
+            .map(|e| e.invalidated_nodes.clone())
+    }
+
     /// Reset replay state for all nodes.
     pub fn reset(&self) {
         self.recording.reset();

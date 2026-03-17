@@ -56,25 +56,45 @@ impl TimeMachineSerializable for dbt_agate::AgateTable {
 }
 
 fn table_to_ipc_base64(table: &dbt_agate::AgateTable) -> Option<String> {
+    let batch = table.to_record_batch();
+    let schema = batch.schema();
+    batches_to_ipc_base64(std::slice::from_ref(batch.as_ref()), &schema)
+}
+
+/// Deserialize an AgateTable from base64-encoded Arrow IPC bytes.
+fn ipc_base64_to_table(ipc_base64: &str) -> Option<dbt_agate::AgateTable> {
+    let (batches, _schema) = ipc_base64_to_batches(ipc_base64)?;
+    let batch = batches.into_iter().next()?;
+    Some(dbt_agate::AgateTable::from_record_batch(Arc::new(batch)))
+}
+
+/// Encode `Vec<RecordBatch>` + `SchemaRef` as a base64 Arrow IPC stream (LZ4-compressed).
+pub fn batches_to_ipc_base64(
+    batches: &[arrow::array::RecordBatch],
+    schema: &arrow_schema::SchemaRef,
+) -> Option<String> {
     use arrow_ipc::CompressionType;
     use arrow_ipc::writer::{IpcWriteOptions, StreamWriter};
     use base64::Engine;
 
-    let batch = table.to_record_batch();
     let options = IpcWriteOptions::default()
         .try_with_compression(Some(CompressionType::LZ4_FRAME))
         .ok()?;
 
     let mut buf = Vec::new();
-    let mut writer = StreamWriter::try_new_with_options(&mut buf, &batch.schema(), options).ok()?;
-    writer.write(&batch).ok()?;
+    let mut writer = StreamWriter::try_new_with_options(&mut buf, schema, options).ok()?;
+    for batch in batches {
+        writer.write(batch).ok()?;
+    }
     writer.finish().ok()?;
 
     Some(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
 
-/// Deserialize an AgateTable from base64-encoded Arrow IPC bytes.
-fn ipc_base64_to_table(ipc_base64: &str) -> Option<dbt_agate::AgateTable> {
+/// Decode a base64 Arrow IPC stream into `(Vec<RecordBatch>, SchemaRef)`.
+pub fn ipc_base64_to_batches(
+    ipc_base64: &str,
+) -> Option<(Vec<arrow::array::RecordBatch>, arrow_schema::SchemaRef)> {
     use arrow_ipc::reader::StreamReader;
     use base64::Engine;
 
@@ -83,11 +103,10 @@ fn ipc_base64_to_table(ipc_base64: &str) -> Option<dbt_agate::AgateTable> {
         .ok()?;
 
     let cursor = std::io::Cursor::new(ipc_bytes);
-    let mut reader = StreamReader::try_new(cursor, None).ok()?;
-
-    // Read the single batch
-    let batch = reader.next()?.ok()?;
-    Some(dbt_agate::AgateTable::from_record_batch(Arc::new(batch)))
+    let reader = StreamReader::try_new(cursor, None).ok()?;
+    let schema = reader.schema();
+    let batches: Vec<arrow::array::RecordBatch> = reader.filter_map(|r| r.ok()).collect();
+    Some((batches, schema))
 }
 
 impl TimeMachineSerializable for crate::response::AdapterResponse {

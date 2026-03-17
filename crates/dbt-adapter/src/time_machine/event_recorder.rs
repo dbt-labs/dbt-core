@@ -10,10 +10,11 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use super::event::{
-    AdapterCallEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs, MetadataCallEvent,
-    RecordedEvent, SaoEvent, SaoStatus,
+    AdapterCallEvent, CacheInvalidationEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs,
+    MetadataCallEvent, RecordedEvent, RunRemoteAdhocEvent, SaoEvent, SaoStatus,
 };
 use super::semantic::SemanticCategory;
+use super::serializable_impls::batches_to_ipc_base64;
 
 /// Number of events to keep in buffer
 const CHANNEL_BUFFER_SIZE: usize = 10_000;
@@ -201,6 +202,44 @@ impl EventRecorder {
             status,
             message: message.into(),
             stored_hash: stored_hash.into(),
+            timestamp_ns: self.elapsed_ns(),
+        }));
+    }
+
+    /// Record a direct engine query from `run_remote_adhoc()`.
+    ///
+    /// This captures queries that bypass the BridgeAdapter layer, such as
+    /// `dbt show --inline` queries executed via ADBC connections.
+    pub fn record_run_remote_adhoc(
+        &self,
+        sql: impl Into<String>,
+        batches: &[arrow::array::RecordBatch],
+        schema: &arrow_schema::SchemaRef,
+        success: bool,
+        error: Option<String>,
+    ) {
+        let caller_id = "run_remote_adhoc".to_string();
+        let seq = self.next_seq(&caller_id);
+        let result_ipc_base64 = batches_to_ipc_base64(batches, schema).unwrap_or_default();
+
+        self.emit_sync(RecordedEvent::RunRemoteAdhoc(RunRemoteAdhocEvent {
+            caller_id,
+            seq,
+            sql: sql.into(),
+            result_ipc_base64,
+            success,
+            error,
+            timestamp_ns: self.elapsed_ns(),
+        }));
+    }
+
+    /// Record cache invalidation decisions for missing warehouse relations.
+    ///
+    /// This captures which nodes were invalidated so replay can reproduce the
+    /// same invalidation without querying the warehouse.
+    pub fn record_cache_invalidation(&self, invalidated_nodes: Vec<String>) {
+        self.emit_sync(RecordedEvent::CacheInvalidation(CacheInvalidationEvent {
+            invalidated_nodes,
             timestamp_ns: self.elapsed_ns(),
         }));
     }

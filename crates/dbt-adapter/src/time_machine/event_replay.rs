@@ -28,7 +28,8 @@ use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 
 use super::event::{
-    AdapterCallEvent, MetadataCallArgs, MetadataCallEvent, RecordedEvent, RecordingHeader, SaoEvent,
+    AdapterCallEvent, CacheInvalidationEvent, MetadataCallArgs, MetadataCallEvent, RecordedEvent,
+    RecordingHeader, RunRemoteAdhocEvent, SaoEvent,
 };
 use super::semantic::SemanticCategory;
 use super::serde::values_match;
@@ -219,10 +220,18 @@ pub struct Recording {
     metadata_events_by_caller: HashMap<String, Vec<MetadataCallEvent>>,
     /// SAO skip events indexed by node_id
     sao_events: HashMap<String, SaoEvent>,
+    /// Run-remote-adhoc events in order
+    run_remote_adhoc_events: Vec<RunRemoteAdhocEvent>,
+    /// Cache invalidation events in order
+    cache_invalidation_events: Vec<CacheInvalidationEvent>,
     /// Current replay position per node for adapter calls (strict mode)
     adapter_positions: RwLock<HashMap<String, usize>>,
     /// Current replay position per caller for metadata calls (strict mode)
     metadata_positions: RwLock<HashMap<String, usize>>,
+    /// Current replay position for run_remote_adhoc events
+    run_remote_adhoc_position: RwLock<usize>,
+    /// Current replay position for cache invalidation events
+    cache_invalidation_position: RwLock<usize>,
     /// Semantic mode state: tracks write barriers per node.
     /// Only writes are tracked - reads can be matched any number of times.
     semantic_adapter_state: RwLock<HashMap<String, SemanticReplayState>>,
@@ -280,6 +289,8 @@ impl Recording {
         let mut adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>> = HashMap::new();
         let mut metadata_events_by_caller: HashMap<String, Vec<MetadataCallEvent>> = HashMap::new();
         let mut sao_events: HashMap<String, SaoEvent> = HashMap::new();
+        let mut run_remote_adhoc_events: Vec<RunRemoteAdhocEvent> = Vec::new();
+        let mut cache_invalidation_events: Vec<CacheInvalidationEvent> = Vec::new();
 
         for event in events {
             match event {
@@ -300,6 +311,12 @@ impl Recording {
                     // ASSUMPTION: node_id is unique and 1-1 with SAO events
                     sao_events.insert(sao_event.node_id.clone(), sao_event);
                 }
+                RecordedEvent::RunRemoteAdhoc(event) => {
+                    run_remote_adhoc_events.push(event);
+                }
+                RecordedEvent::CacheInvalidation(event) => {
+                    cache_invalidation_events.push(event);
+                }
             }
         }
 
@@ -311,13 +328,20 @@ impl Recording {
             events.sort_by_key(|e| e.seq);
         }
 
+        // Sort run_remote_adhoc events by seq
+        run_remote_adhoc_events.sort_by_key(|e| e.seq);
+
         Ok(Self {
             header,
             adapter_events_by_node,
             metadata_events_by_caller,
             sao_events,
+            run_remote_adhoc_events,
+            cache_invalidation_events,
             adapter_positions: RwLock::new(HashMap::new()),
             metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
         })
@@ -735,7 +759,7 @@ impl Recording {
     // Statistics and reset
     // -------------------------------------------------------------------------
 
-    /// Get the total number of events (adapter, metadata, and SAO).
+    /// Get the total number of events (adapter, metadata, SAO, and run_remote_adhoc).
     pub fn total_events(&self) -> usize {
         self.adapter_events_by_node
             .values()
@@ -747,6 +771,7 @@ impl Recording {
                 .map(|v| v.len())
                 .sum::<usize>()
             + self.sao_events.len()
+            + self.run_remote_adhoc_events.len()
     }
 
     /// Get total adapter events count.
@@ -762,10 +787,33 @@ impl Recording {
             .sum()
     }
 
+    /// Get total run_remote_adhoc events count.
+    pub fn total_run_remote_adhoc_events(&self) -> usize {
+        self.run_remote_adhoc_events.len()
+    }
+
+    /// Get the next run_remote_adhoc event, advancing the position.
+    pub fn take_next_run_remote_adhoc(&self) -> Option<&RunRemoteAdhocEvent> {
+        let mut pos = self.run_remote_adhoc_position.write();
+        let event = self.run_remote_adhoc_events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
+    /// Get the next cache invalidation event, advancing the position.
+    pub fn take_next_cache_invalidation(&self) -> Option<&CacheInvalidationEvent> {
+        let mut pos = self.cache_invalidation_position.write();
+        let event = self.cache_invalidation_events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
     /// Reset replay positions for all nodes and callers.
     pub fn reset(&self) {
         self.adapter_positions.write().clear();
         self.metadata_positions.write().clear();
+        *self.run_remote_adhoc_position.write() = 0;
+        *self.cache_invalidation_position.write() = 0;
         self.semantic_adapter_state.write().clear();
         self.semantic_metadata_state.write().clear();
     }
@@ -1040,8 +1088,12 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: HashMap::new(),
             sao_events: HashMap::new(),
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
             metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
         }
@@ -1578,8 +1630,12 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: HashMap::new(),
             sao_events: HashMap::new(),
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
             metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
         };
@@ -1768,8 +1824,12 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: HashMap::new(),
             sao_events: sao_events_map,
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
             metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
             semantic_adapter_state: RwLock::new(HashMap::new()),
             semantic_metadata_state: RwLock::new(HashMap::new()),
         }

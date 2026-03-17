@@ -60,10 +60,7 @@
 //! - **Cache**: Internal bookkeeping (no DB I/O)
 //! - **Pure**: Local computation (no I/O at all)
 
-use std::{
-    io,
-    sync::{Arc, OnceLock},
-};
+use std::{io, sync::Arc};
 
 use dbt_common::cancellation::CancellationToken;
 use parking_lot::Mutex;
@@ -77,20 +74,22 @@ pub mod metadata;
 pub mod semantic;
 pub mod serde;
 pub mod serializable;
-mod serializable_impls;
+pub(crate) mod serializable_impls;
 mod validation;
 pub mod writer;
 
 // Re-export commonly used types
 pub use engine::{EventReplayer, ReplayCallError, ReplayerStats, TimeMachine};
 pub use event::{
-    AdapterCallEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs, MetadataCallEvent,
-    NodeIndex, RecordedEvent, RecordingHeader, SaoEvent, SaoStatus,
+    AdapterCallEvent, CacheInvalidationEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs,
+    MetadataCallEvent, NodeIndex, RecordedEvent, RecordingHeader, RunRemoteAdhocEvent, SaoEvent,
+    SaoStatus,
 };
 pub use event_recorder::EventRecorder;
 pub use event_replay::{
     Recording, ReplayDifference, ReplayError, ReplayMode, ReplayResult, validate_replay,
 };
+pub use serializable_impls::{batches_to_ipc_base64, ipc_base64_to_batches};
 
 // Re-export time machine ordering type and provide conversion
 use dbt_common::io_args::TimeMachineReplayOrdering;
@@ -125,11 +124,12 @@ struct RecordingSession {
     writer_handle: Mutex<Option<JoinHandle<io::Result<RecordingResult>>>>,
 }
 
-/// Global recording session singleton - initialized once, accessible everywhere.
-static GLOBAL_SESSION: OnceLock<RecordingSession> = OnceLock::new();
+/// Global recording session — resettable so test harnesses can run multiple
+/// invocations within a single process, each with its own recording.
+static GLOBAL_SESSION: Mutex<Option<RecordingSession>> = Mutex::new(None);
 
-/// Global replayer singleton - initialized once for replay mode.
-static GLOBAL_REPLAYER: OnceLock<Arc<EventReplayer>> = OnceLock::new();
+/// Global replayer — resettable for multi-invocation test support.
+static GLOBAL_REPLAYER: Mutex<Option<Arc<EventReplayer>>> = Mutex::new(None);
 
 /// Initialize the global recording session.
 ///
@@ -155,11 +155,12 @@ pub fn get_or_init_recording(
     invocation_command: Option<String>,
     token: CancellationToken,
 ) -> RecordingHandle {
-    let output_path = output_path.into();
-    let adapter_type = adapter_type.into();
-    let invocation_id = invocation_id.into();
+    let mut guard = GLOBAL_SESSION.lock();
+    if guard.is_none() {
+        let output_path = output_path.into();
+        let adapter_type = adapter_type.into();
+        let invocation_id = invocation_id.into();
 
-    GLOBAL_SESSION.get_or_init(|| {
         let (recorder, receiver) = EventRecorder::new();
         let mut header = RecordingHeader::new(adapter_type, invocation_id);
         if let Some(cmd) = invocation_command {
@@ -168,11 +169,11 @@ pub fn get_or_init_recording(
         let config = WriterConfig::new(output_path);
         let writer_handle = spawn_writer(receiver, header, config, token);
 
-        RecordingSession {
+        *guard = Some(RecordingSession {
             recorder: Arc::new(recorder),
             writer_handle: Mutex::new(Some(writer_handle)),
-        }
-    });
+        });
+    }
 
     RecordingHandle { _private: () }
 }
@@ -196,13 +197,16 @@ pub fn get_or_init_recording(
 ///     );
 /// }
 /// ```
-pub fn global_recorder() -> Option<&'static Arc<EventRecorder>> {
-    GLOBAL_SESSION.get().map(|s| &s.recorder)
+pub fn global_recorder() -> Option<Arc<EventRecorder>> {
+    GLOBAL_SESSION
+        .lock()
+        .as_ref()
+        .map(|s| Arc::clone(&s.recorder))
 }
 
 /// Check if recording is currently active.
 pub fn is_recording() -> bool {
-    GLOBAL_SESSION.get().is_some()
+    GLOBAL_SESSION.lock().is_some()
 }
 
 /// Get or initialize the global replayer.
@@ -230,32 +234,28 @@ where
         ));
     }
 
-    // If already initialized, return the existing replayer
-    if let Some(existing) = GLOBAL_REPLAYER.get() {
+    let mut guard = GLOBAL_REPLAYER.lock();
+    if let Some(existing) = guard.as_ref() {
         return Ok(Arc::clone(existing));
     }
 
     // Create the replayer via closure
     let replayer = f()?;
-
-    // Try to store it - if race lost, use the winner's replayer
-    match GLOBAL_REPLAYER.set(Arc::clone(&replayer)) {
-        Ok(()) => Ok(replayer),
-        Err(_) => Ok(Arc::clone(GLOBAL_REPLAYER.get().unwrap())),
-    }
+    *guard = Some(Arc::clone(&replayer));
+    Ok(replayer)
 }
 
 /// Get the global replayer, if initialized.
 ///
 /// This is the primary way to access the replayer from anywhere in the codebase.
 /// Returns `None` if replay has not been initialized.
-pub fn global_replayer() -> Option<&'static Arc<EventReplayer>> {
-    GLOBAL_REPLAYER.get()
+pub fn global_replayer() -> Option<Arc<EventReplayer>> {
+    GLOBAL_REPLAYER.lock().as_ref().map(Arc::clone)
 }
 
 /// Check if replay is currently active.
 pub fn is_replaying() -> bool {
-    GLOBAL_REPLAYER.get().is_some()
+    GLOBAL_REPLAYER.lock().is_some()
 }
 
 /// Handle for the global replay session.
@@ -266,12 +266,12 @@ pub struct ReplayHandle {
 impl ReplayHandle {
     /// Get the replayer statistics.
     pub fn stats(&self) -> Option<ReplayerStats> {
-        GLOBAL_REPLAYER.get().map(|r| r.stats())
+        GLOBAL_REPLAYER.lock().as_ref().map(|r| r.stats())
     }
 
     /// Reset replay state for all callers.
     pub fn reset(&self) {
-        if let Some(replayer) = GLOBAL_REPLAYER.get() {
+        if let Some(replayer) = GLOBAL_REPLAYER.lock().as_ref() {
             replayer.reset();
         }
     }
@@ -306,18 +306,17 @@ impl RecordingHandle {
     ///
     /// The `RecordingResult` containing statistics and file paths.
     pub async fn shutdown(self) -> Result<RecordingResult, RecordingError> {
-        let session = GLOBAL_SESSION.get().ok_or(RecordingError::NotInitialized)?;
-
-        // Close the recorder to signal the writer to finish.
-        // This drops the sender, which closes the channel.
-        session.recorder.close();
-
-        // Take the writer handle
-        let handle = session
-            .writer_handle
-            .lock()
-            .take()
-            .ok_or(RecordingError::AlreadyShutdown)?;
+        // Extract needed data synchronously (don't hold MutexGuard across await)
+        let handle = {
+            let guard = GLOBAL_SESSION.lock();
+            let session = guard.as_ref().ok_or(RecordingError::NotInitialized)?;
+            session.recorder.close();
+            session
+                .writer_handle
+                .lock()
+                .take()
+                .ok_or(RecordingError::AlreadyShutdown)?
+        };
 
         // Wait for the writer to drain remaining events and complete
         handle
@@ -328,7 +327,7 @@ impl RecordingHandle {
 
     /// Get statistics about the current recording session.
     pub fn stats(&self) -> Option<RecordingStats> {
-        GLOBAL_SESSION.get().map(|s| RecordingStats {
+        GLOBAL_SESSION.lock().as_ref().map(|s| RecordingStats {
             event_count: s.recorder.event_count(),
         })
     }
@@ -372,6 +371,38 @@ impl std::error::Error for RecordingError {
             _ => None,
         }
     }
+}
+
+/// Reset global time machine state so a new recording or replay session can begin.
+///
+/// This is intended for test harnesses that run multiple dbt invocations
+/// within a single process, each needing its own isolated recording/replay.
+///
+/// For recording mode this closes the recorder and flushes events to disk
+/// before the next invocation starts.
+pub async fn reset_time_machine_globals() -> Result<(), RecordingError> {
+    // Take the recording session out of the global (sync, no await while locked)
+    let taken_session = GLOBAL_SESSION.lock().take();
+
+    // If a recording was active, close it and flush to disk
+    if let Some(session) = taken_session {
+        session.recorder.close();
+        let writer_handle = session.writer_handle.lock().take();
+        // Drop the session (and its Arc<EventRecorder> / sender) so the
+        // channel closes and the writer task can finish draining.
+        drop(session);
+        if let Some(handle) = writer_handle {
+            handle
+                .await
+                .map_err(|e| RecordingError::WriterPanic(e.to_string()))?
+                .map_err(RecordingError::IoError)?;
+        }
+    }
+
+    // Reset replayer
+    *GLOBAL_REPLAYER.lock() = None;
+
+    Ok(())
 }
 
 #[allow(dead_code)] // Used in tests

@@ -167,7 +167,11 @@ pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) ->
         (serde_json::Value::Null, serde_json::Value::Null) => true,
         (serde_json::Value::Bool(a), serde_json::Value::Bool(b)) => a == b,
         (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a == b,
-        (serde_json::Value::String(a), serde_json::Value::String(b)) => a == b,
+        (serde_json::Value::String(a), serde_json::Value::String(b)) => {
+            // Normalize path separators so recordings made on Linux (/) match
+            // replay on Windows (\) and vice versa.
+            a == b || dbt_common::path::path_separator_eq(a, b)
+        }
         (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
             a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_match(x, y))
         }

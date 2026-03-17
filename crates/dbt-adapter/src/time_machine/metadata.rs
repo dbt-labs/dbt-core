@@ -111,10 +111,12 @@ where
                     });
                 }
                 Some(Err(e)) => {
-                    // Recorded call failed - return the recorded error
+                    // Recorded call failed - return the original error message so
+                    // replay output matches the recording exactly.
+                    let original_msg = e.recorded_error.unwrap_or(e.message);
                     return Err(Cancellable::Error(AdapterError::new(
-                        AdapterErrorKind::Internal,
-                        format!("Replayed call failed: {}", e),
+                        AdapterErrorKind::Driver,
+                        original_msg,
                     )));
                 }
                 None => {
@@ -228,7 +230,9 @@ impl MetadataResultDeserialize for HashMap<String, AdapterResult<Arc<Schema>>> {
                 Ok(Arc::new(Schema::new(arrow_fields)))
             } else if let Some(error) = value.get("error") {
                 let error_msg = error.as_str().unwrap_or("Unknown error");
-                Err(AdapterError::new(AdapterErrorKind::Internal, error_msg))
+                // Use Driver kind so Display reproduces the original recorded message
+                // without adding an "Internal Error:" prefix.
+                Err(AdapterError::new(AdapterErrorKind::Driver, error_msg))
             } else {
                 return Err("Invalid schema entry".to_string());
             };
@@ -356,7 +360,7 @@ impl MetadataResultDeserialize for BTreeMap<CatalogAndSchema, AdapterResult<Rela
                     Ok(Vec::new())
                 } else if let Some(error) = res.get("error") {
                     let error_msg = error.as_str().unwrap_or("Unknown error");
-                    Err(AdapterError::new(AdapterErrorKind::Internal, error_msg))
+                    Err(AdapterError::new(AdapterErrorKind::Driver, error_msg))
                 } else {
                     return Err("Invalid result entry".to_string());
                 }
@@ -531,7 +535,7 @@ impl MetadataResultDeserialize for Vec<(String, String, AdapterResult<()>)> {
                     Ok(())
                 } else if let Some(error) = res.get("error") {
                     let error_msg = error.as_str().unwrap_or("Unknown error");
-                    Err(AdapterError::new(AdapterErrorKind::Internal, error_msg))
+                    Err(AdapterError::new(AdapterErrorKind::Driver, error_msg))
                 } else {
                     return Err("Invalid result entry".to_string());
                 }

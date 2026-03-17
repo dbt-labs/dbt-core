@@ -17,6 +17,10 @@ pub enum RecordedEvent {
     MetadataCall(MetadataCallEvent),
     /// SAO skip event
     Sao(SaoEvent),
+    /// From run_remote_adhoc() — direct engine queries (e.g., dbt show --inline)
+    RunRemoteAdhoc(RunRemoteAdhocEvent),
+    /// Cache invalidation decisions (recorded outcomes for replay)
+    CacheInvalidation(CacheInvalidationEvent),
 }
 
 impl RecordedEvent {
@@ -26,6 +30,8 @@ impl RecordedEvent {
             RecordedEvent::AdapterCall(e) => &e.node_id,
             RecordedEvent::MetadataCall(e) => &e.caller_id,
             RecordedEvent::Sao(e) => &e.node_id,
+            RecordedEvent::RunRemoteAdhoc(e) => &e.caller_id,
+            RecordedEvent::CacheInvalidation(_) => "cache_invalidation",
         }
     }
 
@@ -35,6 +41,8 @@ impl RecordedEvent {
             RecordedEvent::AdapterCall(e) => e.seq,
             RecordedEvent::MetadataCall(e) => e.seq,
             RecordedEvent::Sao(_) => 0,
+            RecordedEvent::RunRemoteAdhoc(e) => e.seq,
+            RecordedEvent::CacheInvalidation(_) => 0,
         }
     }
 
@@ -44,6 +52,8 @@ impl RecordedEvent {
             RecordedEvent::AdapterCall(e) => e.timestamp_ns,
             RecordedEvent::MetadataCall(e) => e.timestamp_ns,
             RecordedEvent::Sao(e) => e.timestamp_ns,
+            RecordedEvent::RunRemoteAdhoc(e) => e.timestamp_ns,
+            RecordedEvent::CacheInvalidation(e) => e.timestamp_ns,
         }
     }
 }
@@ -133,6 +143,27 @@ pub enum SaoStatus {
     ReusedStillFreshNoChanges,
 }
 
+impl SaoEvent {
+    /// Convert to `NodeStatus`, preserving the original message from the recording.
+    pub fn to_node_status(&self) -> dbt_common::stats::NodeStatus {
+        use dbt_common::stats::NodeStatus;
+        match &self.status {
+            SaoStatus::ReusedNoChanges => NodeStatus::ReusedNoChanges(self.message.clone()),
+            SaoStatus::ReusedStillFresh {
+                freshness_seconds,
+                last_updated_seconds,
+            } => NodeStatus::ReusedStillFresh(
+                self.message.clone(),
+                *freshness_seconds,
+                *last_updated_seconds,
+            ),
+            SaoStatus::ReusedStillFreshNoChanges => {
+                NodeStatus::ReusedStillFreshNoChanges(self.message.clone())
+            }
+        }
+    }
+}
+
 impl From<SaoStatus> for dbt_common::stats::NodeStatus {
     fn from(status: SaoStatus) -> Self {
         use dbt_common::stats::NodeStatus;
@@ -153,6 +184,42 @@ impl From<SaoStatus> for dbt_common::stats::NodeStatus {
             }
         }
     }
+}
+
+/// A direct engine query event captured from `run_remote_adhoc()`.
+///
+/// These are queries executed outside the BridgeAdapter layer, such as
+/// `dbt show --inline` queries that go directly through the ADBC connection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunRemoteAdhocEvent {
+    /// Caller identifier (always "run_remote_adhoc")
+    pub caller_id: String,
+    /// Monotonic sequence number within this caller
+    pub seq: u32,
+    /// The SQL query that was executed
+    pub sql: String,
+    /// The result batches serialized as base64-encoded Arrow IPC stream (LZ4-compressed)
+    pub result_ipc_base64: String,
+    /// Whether the query succeeded
+    pub success: bool,
+    /// Error message if the query failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Timestamp in nanoseconds since recording start
+    pub timestamp_ns: u64,
+}
+
+/// Cache invalidation event.
+///
+/// Recorded when nodes are invalidated due to missing warehouse relations.
+/// During replay, these decisions are replayed directly instead of querying
+/// the warehouse (which can't be faithfully replayed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheInvalidationEvent {
+    /// Node unique_ids that were invalidated
+    pub invalidated_nodes: Vec<String>,
+    /// Timestamp in nanoseconds since recording start
+    pub timestamp_ns: u64,
 }
 
 /// Structured arguments for MetadataAdapter method calls.
