@@ -736,7 +736,7 @@ class TestCustomKeyInConfigDbtProjectYmlDeprecation:
     def test_custom_key_in_config_dbt_project_yml_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
-            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            ["parse", "--no-partial-parse"],
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 1
