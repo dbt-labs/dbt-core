@@ -66,6 +66,7 @@ class FilePath(dbtClassMixin):
     def original_file_path(self) -> str:
         return os.path.join(self.searched_path, self.relative_path)
 
+    @property
     def file_size(self) -> int:
         return os.stat(self.full_path).st_size
 

@@ -135,7 +135,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
     # Users can configure the maximum seed size (MiB) that will be hashed for state comparison
     maximum_seed_size = get_flags().MAXIMUM_SEED_SIZE_MIB * 1024 * 1024
     # maximum_seed_size = 0 means no limit
-    if match.file_size() > maximum_seed_size and maximum_seed_size != 0:
+    if match.file_size > maximum_seed_size and maximum_seed_size != 0:
         # We don't want to calculate a hash of this file. Use the path.
         source_file = SourceFile.big_seed(match)
     else:

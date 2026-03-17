@@ -953,8 +953,11 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         # hashing to the new text-mode (from_path) hashing, Windows line
         # endings (\r\n vs \n) cause checksums to differ even though the file
         # hasn't changed.  Re-compute using the legacy method and compare.
+        # Only runs on Windows: on other platforms text and binary mode produce
+        # identical hashes, so a differing checksum always means a real change.
         if (
             not result
+            and os.name == "nt"
             and self.checksum.name == other.checksum.name
             and self.checksum.name not in ("path", "none")
             and self.root_path

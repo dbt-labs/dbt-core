@@ -1,4 +1,5 @@
 import copy
+import os
 from argparse import Namespace
 from dataclasses import replace
 from pathlib import Path
@@ -1090,27 +1091,30 @@ class TestSeedNodeSameSeedsFallback:
         previous = self._make_seed_node(h2)
         assert current.same_seeds(previous) is False
 
-    def test_legacy_fallback_matches(self, tmp_path):
-        """When new hash differs from old but legacy hash matches old, seed is NOT modified."""
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="CRLF/LF hash divergence only occurs on Windows where text mode normalises \\r\\n",
+    )
+    def test_legacy_fallback_matches_windows(self, tmp_path):
+        """On Windows: new hash (text-mode) differs from old (binary-mode legacy) hash for a
+        CRLF file, but the fallback re-hashes via the legacy method and recognises the file
+        is unchanged."""
         seed_file = tmp_path / "seeds" / "seed.csv"
         seed_file.parent.mkdir(parents=True)
-        # Write file with CRLF endings
         seed_file.write_bytes(b"id,name\r\n1,Alice\r\n")
 
-        # New hash: computed via from_path (text mode, normalizes \r\n → \n)
+        # On Windows, from_path (text mode) normalises \r\n → \n; from_path_legacy preserves it
         new_hash = FileHash.from_path(str(seed_file))
-        # Old hash: computed via legacy method (binary mode, preserves \r\n)
         old_hash = FileHash.from_path_legacy(str(seed_file))
 
-        # Verify they actually differ (this is the migration scenario)
-        assert new_hash.checksum != old_hash.checksum
+        assert new_hash.checksum != old_hash.checksum, "Hashes should differ on Windows"
 
         current = self._make_seed_node(
             new_hash, root_path=str(tmp_path), original_file_path="seeds/seed.csv"
         )
         previous = self._make_seed_node(old_hash)
 
-        # Fallback should recognize legacy hash matches → seed not modified
+        # Fallback fires (os.name == "nt") and recognises the legacy hash → not modified
         assert current.same_seeds(previous) is True
 
     def test_legacy_fallback_no_match(self, tmp_path):
