@@ -269,7 +269,7 @@
   {% endif %}
 
   {# Override: do not set column comments for LBVs #}
-  {% set is_lbv = config.get('materialized') == 'view' and config.get('bind') == false %}
+  {% set is_lbv = relation.type == 'view' and config.get('bind') == false %}
   {% if for_columns and config.persist_column_docs() and model.columns and not is_lbv %}
     {% do run_query(alter_column_comment(relation, model.columns)) %}
   {% endif %}
