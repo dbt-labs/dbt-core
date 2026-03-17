@@ -298,7 +298,8 @@ pub async fn load(
     {
         let internal_pkgs = match &arg.internal_package_mode {
             InternalPackageMode::Embedded => {
-                let pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+                #[allow(unused_mut)]
+                let mut pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
                 // Register vars for each internal package
                 for pkg in &pkgs {
                     load_vars(&pkg.dbt_project.name, None, &mut collected_vars)?;
