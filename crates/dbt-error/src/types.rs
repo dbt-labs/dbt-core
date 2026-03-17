@@ -45,12 +45,14 @@ pub struct FsError {
 pub const MAX_DISPLAY_TOKENS: usize = 7;
 impl Debug for FsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FsError")
-            .field("code", &self.code)
-            .field("location", &self.location)
-            .field("context", &self.context)
-            .field("cause", &self.cause)
-            .finish()
+        writeln!(f, "dbt{}: {}", self.code, self)?;
+        if let Some(loc) = &self.location {
+            writeln!(f, " --> {loc}")?;
+        }
+        if self.backtrace.status() == std::backtrace::BacktraceStatus::Captured {
+            write!(f, "\n{}", self.backtrace)?;
+        }
+        Ok(())
     }
 }
 

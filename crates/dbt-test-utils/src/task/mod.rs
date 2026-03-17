@@ -58,7 +58,15 @@ impl From<TestError> for FsError {
                 let msg = format!("Goldie mismatch:\n{}", lines.join("\n"));
                 FsError::new(ErrorCode::Generic, msg)
             }
-            TestError::Generic(err) => FsError::new(ErrorCode::Generic, err.to_string()),
+            TestError::Generic(err) => {
+                if (*err).is::<Box<FsError>>() {
+                    **err.downcast::<Box<FsError>>().unwrap()
+                } else if (*err).is::<FsError>() {
+                    *err.downcast::<FsError>().unwrap()
+                } else {
+                    FsError::new(ErrorCode::Generic, err.to_string())
+                }
+            }
         }
     }
 }
