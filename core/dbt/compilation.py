@@ -552,17 +552,31 @@ class Compiler:
             if not cte_model.is_ephemeral_model:
                 raise DbtInternalError(f"{cte.id} is not ephemeral")
 
-            # This model has already been compiled and extra_ctes_injected, so it's been
-            # through here before. We already checked above for extra_ctes_injected, but
-            # checking again because updates maybe have happened in another thread.
-            if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
-                new_prepended_ctes = cte_model.extra_ctes
+            # Lock the ephemeral cte_model to ensure only one thread compiles it.
+            # The lock is scoped to just the compilation step; the recursive
+            # _recursively_prepend_ctes call happens outside the lock to avoid
+            # deadlock (it will re-acquire this node's lock at CTE injection).
+            new_prepended_ctes = None
+            needs_recursion = False
+            with cte_model._lock:
+                # This model has already been compiled and extra_ctes_injected,
+                # so it's been through here before. We already checked above for
+                # extra_ctes_injected, but checking again because updates may
+                # have happened in another thread.
+                if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
+                    new_prepended_ctes = cte_model.extra_ctes
+                elif not cte_model.compiled:
+                    # This is an ephemeral parsed model that we can compile.
+                    # Render the raw_code and set compiled to True
+                    cte_model = self._compile_code(cte_model, manifest, extra_context)
+                    needs_recursion = True
+                else:
+                    # compiled=True but extra_ctes not yet injected; another
+                    # thread compiled it but hasn't finished recursion yet.
+                    # We still need to recurse to get the prepended CTEs.
+                    needs_recursion = True
 
-            # if the cte_model isn't compiled, i.e. first time here
-            else:
-                # This is an ephemeral parsed model that we can compile.
-                # Render the raw_code and set compiled to True
-                cte_model = self._compile_code(cte_model, manifest, extra_context)
+            if needs_recursion:
                 # recursively call this method, sets extra_ctes_injected to True
                 cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
                     cte_model, manifest, extra_context
@@ -570,6 +584,10 @@ class Compiler:
                 # Write compiled SQL file
                 self._write_node(cte_model)
 
+            if new_prepended_ctes is None:
+                raise DbtInternalError(
+                    f"Expected extra_ctes to be set for ephemeral model {cte.id}"
+                )
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
             cte_name = (
@@ -583,16 +601,17 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        # Check again before updating for multi-threading
-        if not model.extra_ctes_injected:
-            injected_sql = inject_ctes_into_sql(
-                model.compiled_code,
-                prepended_ctes,
-            )
-            model.extra_ctes_injected = True
-            model._pre_injected_sql = model.compiled_code
-            model.compiled_code = injected_sql
-            model.extra_ctes = prepended_ctes
+        # Lock the consuming model to prevent duplicate CTE injection
+        with model._lock:
+            if not model.extra_ctes_injected:
+                injected_sql = inject_ctes_into_sql(
+                    model.compiled_code,
+                    prepended_ctes,
+                )
+                model.extra_ctes_injected = True
+                model._pre_injected_sql = model.compiled_code
+                model.compiled_code = injected_sql
+                model.extra_ctes = prepended_ctes
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
