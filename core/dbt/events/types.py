@@ -91,7 +91,7 @@ class InvalidOptionYAML(ErrorLevel):
         return "A008"
 
     def message(self) -> str:
-        return f"The YAML provided in the --{self.option_name} argument is not valid."
+        return error_tag(f"The YAML provided in the --{self.option_name} argument is not valid.")
 
 
 class LogDbtProjectError(ErrorLevel):
@@ -101,8 +101,8 @@ class LogDbtProjectError(ErrorLevel):
     def message(self) -> str:
         msg = "Encountered an error while reading the project:"
         if self.exc:
-            msg += f"  ERROR: {str(self.exc)}"
-        return msg
+            msg += f"\n  {str(self.exc)}"
+        return error_tag(msg)
 
 
 # Skipped A010
@@ -113,7 +113,7 @@ class LogDbtProfileError(ErrorLevel):
         return "A011"
 
     def message(self) -> str:
-        msg = "Encountered an error while reading profiles:\n" f"  ERROR: {str(self.exc)}"
+        msg = "Encountered an error while reading profiles:\n" f"  {str(self.exc)}"
         if self.profiles:
             msg += "Defined profiles:\n"
             for profile in self.profiles:
@@ -126,7 +126,7 @@ For more information on configuring profiles, please consult the dbt docs:
 
 https://docs.getdbt.com/docs/configure-your-profile
 """
-        return msg
+        return error_tag(msg)
 
 
 class StarterProjectPath(DebugLevel):
@@ -824,7 +824,7 @@ class InvalidValueForField(WarnLevel):
         return "I008"
 
     def message(self) -> str:
-        return f"Invalid value ({self.field_value}) for field {self.field_name}"
+        return warning_tag(f"Invalid value ({self.field_value}) for field {self.field_name}")
 
 
 class ValidationWarning(WarnLevel):
@@ -990,7 +990,7 @@ class SeedIncreased(WarnLevel):
             f">{maximum_seed_size_name} in size. The previous file was "
             f"<={maximum_seed_size_name}, so it has changed"
         )
-        return msg
+        return warning_tag(msg)
 
 
 class SeedExceedsLimitSamePath(WarnLevel):
@@ -1004,7 +1004,7 @@ class SeedExceedsLimitSamePath(WarnLevel):
             f">{maximum_seed_size_name} in size at the same path, dbt "
             f"cannot tell if it has changed: assuming they are the same"
         )
-        return msg
+        return warning_tag(msg)
 
 
 class SeedExceedsLimitAndPathChanged(WarnLevel):
@@ -1018,7 +1018,7 @@ class SeedExceedsLimitAndPathChanged(WarnLevel):
             f">{maximum_seed_size_name} in size. The previous file was in "
             f"a different location, assuming it has changed"
         )
-        return msg
+        return warning_tag(msg)
 
 
 class SeedExceedsLimitChecksumChanged(WarnLevel):
@@ -1032,7 +1032,7 @@ class SeedExceedsLimitChecksumChanged(WarnLevel):
             f">{maximum_seed_size_name} in size. The previous file had a "
             f"checksum type of {self.checksum_name}, so it has changed"
         )
-        return msg
+        return warning_tag(msg)
 
 
 class UnusedTables(WarnLevel):
@@ -1121,7 +1121,7 @@ class JinjaLogWarning(WarnLevel):
         return "I061"
 
     def message(self) -> str:
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class JinjaLogInfo(InfoLevel):
@@ -1221,7 +1221,7 @@ class ParseInlineNodeError(ErrorLevel):
         return "I069"
 
     def message(self) -> str:
-        return "Error while parsing node: " + self.node_info.node_name + "\n" + self.exc
+        return error_tag("Error while parsing node: " + self.node_info.node_name + "\n" + self.exc)
 
 
 class SemanticValidationFailure(WarnLevel):
@@ -1229,7 +1229,7 @@ class SemanticValidationFailure(WarnLevel):
         return "I070"
 
     def message(self) -> str:
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class UnversionedBreakingChange(WarnLevel):
@@ -1253,8 +1253,8 @@ class WarnStateTargetEqual(WarnLevel):
         return "I072"
 
     def message(self) -> str:
-        return yellow(
-            f"Warning: The state and target directories are the same: '{self.state_path}'. "
+        return warning_tag(
+            f"The state and target directories are the same: '{self.state_path}'. "
             f"This could lead to missing changes due to overwritten state including non-idempotent retries."
         )
 
@@ -1264,7 +1264,7 @@ class FreshnessConfigProblem(WarnLevel):
         return "I073"
 
     def message(self) -> str:
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class MicrobatchModelNoEventTimeInputs(WarnLevel):
@@ -1295,7 +1295,7 @@ class InvalidMacroAnnotation(WarnLevel):
         return "I076"
 
     def message(self) -> str:
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class PackageNodeDependsOnRootProjectNode(WarnLevel):
@@ -1531,7 +1531,7 @@ class DepsUnpinned(WarnLevel):
             f'The git package "{self.git}" \n\tis {unpinned_msg}.\n\tThis can introduce '
             f"breaking changes into your project without warning!\n\nSee {PIN_PACKAGE_URL}"
         )
-        return yellow(f"WARNING: {msg}")
+        return warning_tag(msg)
 
 
 class NoNodesForSelectionCriteria(WarnLevel):
@@ -1539,7 +1539,9 @@ class NoNodesForSelectionCriteria(WarnLevel):
         return "M030"
 
     def message(self) -> str:
-        return f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
+        return warning_tag(
+            f"The selection criterion '{self.spec_raw}' does not match any enabled nodes"
+        )
 
 
 class DepsLockUpdating(InfoLevel):
@@ -1571,7 +1573,9 @@ class DepsScrubbedPackageName(WarnLevel):
         return "M035"
 
     def message(self) -> str:
-        return f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
+        return warning_tag(
+            f"Detected secret env var in {self.package_name}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
+        )
 
 
 # =======================================================
@@ -1597,7 +1601,7 @@ class RunningOperationCaughtError(ErrorLevel):
         return "Q001"
 
     def message(self) -> str:
-        return f"Encountered an error while running operation: {self.exc}"
+        return error_tag(f"Encountered an error while running operation: {self.exc}")
 
 
 class CompileComplete(InfoLevel):
@@ -1965,7 +1969,9 @@ class NothingToDo(WarnLevel):
         return "Q035"
 
     def message(self) -> str:
-        return "Nothing to do. Try checking your model configs and model specification args"
+        return warning_tag(
+            "Nothing to do. Try checking your model configs and model specification args"
+        )
 
 
 class RunningOperationUncaughtError(ErrorLevel):
@@ -1973,7 +1979,7 @@ class RunningOperationUncaughtError(ErrorLevel):
         return "Q036"
 
     def message(self) -> str:
-        return f"Encountered an error while running operation: {self.exc}"
+        return error_tag(f"Encountered an error while running operation: {self.exc}")
 
 
 class EndRunResult(DebugLevel):
@@ -1989,7 +1995,7 @@ class NoNodesSelected(WarnLevel):
         return "Q038"
 
     def message(self) -> str:
-        return "No nodes selected!"
+        return warning_tag("No nodes selected!")
 
 
 class CommandCompleted(DebugLevel):
@@ -2047,11 +2053,12 @@ class SnapshotTimestampWarning(WarnLevel):
         return "Q043"
 
     def message(self) -> str:
-        return (
+        msg = (
             f"Data type of snapshot table timestamp columns ({self.snapshot_time_data_type}) "
             f"doesn't match derived column 'updated_at' ({self.updated_at_data_type}). "
             "Please update snapshot config 'updated_at'."
         )
+        return warning_tag(msg)
 
 
 class MicrobatchExecutionDebug(DebugLevel):
@@ -2169,8 +2176,8 @@ class GenericExceptionOnRun(ErrorLevel):
         node_description = self.build_path
         if node_description is None:
             node_description = self.unique_id
-        prefix = f"Unhandled error while executing {node_description}"
-        return f"{red(prefix)}\n{str(self.exc).strip()}"
+        msg = f"Unhandled error while executing {node_description}\n{str(self.exc).strip()}"
+        return error_tag(msg)
 
 
 class NodeConnectionReleaseError(DebugLevel):
@@ -2207,7 +2214,7 @@ class MainEncounteredError(ErrorLevel):
         return "Z002"
 
     def message(self) -> str:
-        return f"Encountered an error:\n{self.exc}"
+        return error_tag(f"Encountered an error:\n{self.exc}")
 
 
 class MainStackTrace(ErrorLevel):
@@ -2296,8 +2303,7 @@ class RunResultWarning(WarnLevel):
         return "Z021"
 
     def message(self) -> str:
-        info = "Warning"
-        return yellow(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return warning_tag(f"in {self.resource_type} {self.node_name} ({self.path})")
 
 
 class RunResultFailure(ErrorLevel):
@@ -2305,8 +2311,7 @@ class RunResultFailure(ErrorLevel):
         return "Z022"
 
     def message(self) -> str:
-        info = "Failure"
-        return red(f"{info} in {self.resource_type} {self.node_name} ({self.path})")
+        return error_tag(f"in {self.resource_type} {self.node_name} ({self.path})")
 
 
 class StatsLine(InfoLevel):
@@ -2418,7 +2423,7 @@ class EnsureGitInstalled(ErrorLevel):
         return "Z036"
 
     def message(self) -> str:
-        return (
+        return error_tag(
             "Make sure git is installed on your machine. More "
             "information: "
             "https://docs.getdbt.com/docs/package-management"
@@ -2502,7 +2507,7 @@ class RunResultWarningMessage(WarnLevel):
 
     def message(self) -> str:
         # This is the message on the result object, cannot be formatted in event
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class DebugCmdOut(InfoLevel):
@@ -2546,7 +2551,7 @@ class ArtifactUploadError(ErrorLevel):
         return "Z061"
 
     def message(self) -> str:
-        return f"Error uploading artifacts to artifact ingestion API: {self.msg}"
+        return error_tag(f"Error uploading artifacts to artifact ingestion API: {self.msg}")
 
 
 class ArtifactUploadSuccess(InfoLevel):
