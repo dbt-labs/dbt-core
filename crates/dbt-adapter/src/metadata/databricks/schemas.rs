@@ -150,6 +150,7 @@ pub enum DatabricksColumnTypeInfo {
         fields: Vec<DatabricksStructFieldInfo>,
     },
     Variant,
+    Void,
 }
 
 impl DatabricksColumnTypeInfo {
@@ -176,6 +177,7 @@ impl DatabricksColumnTypeInfo {
             DatabricksColumnTypeInfo::Timestamp => out.push_str("timestamp_ltz"),
             DatabricksColumnTypeInfo::TimestampNtz => out.push_str("timestamp_ntz"),
             DatabricksColumnTypeInfo::Variant => out.push_str("variant"),
+            DatabricksColumnTypeInfo::Void => out.push_str("void"),
             DatabricksColumnTypeInfo::Decimal { precision, scale } => {
                 write!(out, "DECIMAL({precision},{scale})")?;
             }
