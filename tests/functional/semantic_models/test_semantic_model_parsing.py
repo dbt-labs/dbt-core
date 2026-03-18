@@ -17,10 +17,12 @@ from tests.functional.semantic_models.fixtures import (
     conversion_metric_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
+    models_people_sql,
     multi_sm_schema_yml,
     ratio_metric_yml,
     schema_without_semantic_model_yml,
     schema_yml,
+    semantic_model_with_disabled_ref_yml,
 )
 
 
@@ -76,6 +78,30 @@ class TestSemanticModelParsingErrors:
 
         validation_errors = [e for e in events if e.info.name == "SemanticValidationFailure"]
         assert validation_errors
+
+
+class TestSemanticModelWithDisabledRef:
+    """Regression test: parsing must not raise IndexError when a semantic model
+    references a disabled model (depends_on_nodes is empty in that case)."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_with_disabled_ref_yml,
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_no_index_error_on_disabled_ref(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        # Parse should complete without raising IndexError.
+        # The semantic model is disabled (its ref resolves to a disabled node)
+        # so it ends up in manifest.disabled, not manifest.semantic_models.
+        assert result.exception is None, f"Unexpected exception: {result.exception}"
+        manifest = result.result
+        assert "semantic_model.test.semantic_people" not in manifest.semantic_models
+        assert "semantic_model.test.semantic_people" in manifest.disabled
 
 
 class TestSemanticModelParsingForCumulativeMetrics:

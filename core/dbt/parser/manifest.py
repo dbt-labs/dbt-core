@@ -1248,7 +1248,7 @@ class ManifestLoader:
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
         # might have alias/schema/database fields that are updated by yaml config.
-        if semantic_model.depends_on_nodes[0]:
+        if semantic_model.depends_on_nodes:
             refd_node = self.manifest.nodes[semantic_model.depends_on_nodes[0]]
             semantic_model.node_relation = NodeRelation(
                 relation_name=refd_node.relation_name,

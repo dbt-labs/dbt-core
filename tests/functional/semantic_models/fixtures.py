@@ -225,6 +225,38 @@ semantic_models:
 """
 
 
+semantic_model_with_disabled_ref_yml = """
+version: 2
+
+models:
+  - name: people
+    config:
+      enabled: false
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+
 base_schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
