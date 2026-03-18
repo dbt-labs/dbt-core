@@ -10,7 +10,7 @@ from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
 import msgpack
-from jinja2.nodes import Call
+from jinja2.nodes import Call, Const
 
 import dbt.deprecations
 import dbt.exceptions
@@ -1772,7 +1772,7 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
                 and hasattr(node.node, "name")
                 and node.node.name == "doc"
             ):
-                doc_args = [arg.value for arg in node.args]
+                doc_args = [arg.value for arg in node.args if isinstance(arg, Const)]
 
                 if len(doc_args) == 1:
                     package, name = None, doc_args[0]
