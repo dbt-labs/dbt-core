@@ -4,6 +4,7 @@ import pytest
 
 from dbt.artifacts.resources.v1.semantic_model import MetricType
 from dbt.contracts.graph.manifest import Manifest
+from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
 from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
@@ -81,9 +82,6 @@ class TestSemanticModelParsingErrors:
 
 
 class TestSemanticModelWithDisabledRef:
-    """Regression test: parsing must not raise IndexError when a semantic model
-    references a disabled model (depends_on_nodes is empty in that case)."""
-
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -93,15 +91,12 @@ class TestSemanticModelWithDisabledRef:
         }
 
     def test_no_index_error_on_disabled_ref(self, project):
-        runner = dbtTestRunner()
-        result = runner.invoke(["parse"])
-        # Parse should complete without raising IndexError.
-        # The semantic model is disabled (its ref resolves to a disabled node)
-        # so it ends up in manifest.disabled, not manifest.semantic_models.
-        assert result.exception is None, f"Unexpected exception: {result.exception}"
-        manifest = result.result
-        assert "semantic_model.test.semantic_people" not in manifest.semantic_models
-        assert "semantic_model.test.semantic_people" in manifest.disabled
+        with pytest.raises(CompilationError) as excinfo:
+            run_dbt(["parse"])
+        assert (
+            "'semantic_model.test.semantic_people' (models/schema.yml) depends on a node named 'people' which is disabled"
+            in str(excinfo.value)
+        )
 
 
 class TestSemanticModelParsingForCumulativeMetrics:
