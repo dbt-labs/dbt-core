@@ -334,6 +334,7 @@ def docs_serve(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def compile(ctx, **kwargs):
