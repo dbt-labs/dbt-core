@@ -90,7 +90,7 @@ class TestSemanticModelWithDisabledRef:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
-    def test_no_index_error_on_disabled_ref(self, project):
+    def test_compilation_error_on_disabled_ref(self, project):
         with pytest.raises(CompilationError) as excinfo:
             run_dbt(["parse"])
         assert (
