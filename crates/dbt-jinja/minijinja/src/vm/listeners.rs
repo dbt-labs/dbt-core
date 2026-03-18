@@ -45,7 +45,8 @@ pub trait TypecheckingEventListener {
     #[allow(clippy::too_many_arguments)]
     fn on_model_source_reference(
         &self,
-        _name: &str,
+        _source_name: &str,
+        _model_name: &str,
         _identifier_span: &Span,
         _start_line: &u32,
         _start_col: &u32,

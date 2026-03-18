@@ -1550,11 +1550,16 @@ impl<'src> TypeChecker<'src> {
                                         );
                                     }
                                 }
-                            } else if *name == "source" {
+                            } else if *name == "source" && (args.len() == 2) {
                                 if let Some(ref_or_source_span) = ref_or_source_span {
-                                    if let Type::String(Some(name)) = args.last().unwrap() {
+                                    if let (
+                                        Type::String(Some(source_name)),
+                                        Type::String(Some(model_name)),
+                                    ) = (args.first().unwrap(), args.last().unwrap())
+                                    {
                                         listener.on_model_source_reference(
-                                            name,
+                                            source_name,
+                                            model_name,
                                             identifier_span,
                                             &ref_or_source_span.start_line,
                                             &ref_or_source_span.start_col,
