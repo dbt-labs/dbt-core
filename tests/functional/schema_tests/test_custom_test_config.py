@@ -185,6 +185,38 @@ class TestMixedDataTestConfig(BaseDataTestsConfig):
         assert test_node.config["severity"] == "warn"
 
 
+string_config_yml = """
+models:
+  - name: table
+    columns:
+      - name: color
+        data_tests:
+          - not_null:
+              config: "severity"
+"""
+
+
+class TestConfigNotDictError:
+    """
+    Regression test: when 'config' is a non-dict scalar (e.g. a string), dbt should raise
+    a clear ParsingError rather than an opaque AttributeError: 'str' object has no attribute 'pop'.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"table.sql": table_sql, "string_config.yml": string_config_yml}
+
+    def test_config_not_dict_raises_error(self, project):
+        from dbt_common.exceptions import DbtBaseException
+
+        with pytest.raises(DbtBaseException) as exc_info:
+            run_dbt(["parse"])
+
+        exception_message = str(exc_info.value)
+        assert "config" in exception_message.lower()
+        assert "dict" in exception_message.lower()
+
+
 class TestSameKeyErrorDataTestConfig:
     @pytest.fixture(scope="class")
     def models(self):
