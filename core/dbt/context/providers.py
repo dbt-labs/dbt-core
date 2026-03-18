@@ -2246,6 +2246,18 @@ class TestContext(ProviderContext):
             depends_on_macros.append(get_where_subquery.unique_id)
         if self.model.depends_on and self.model.depends_on.macros:
             depends_on_macros.extend(self.model.depends_on.macros)
+
+        # When support_custom_ref_kwargs is enabled, include custom ref/source
+        # macro overrides in the test namespace so that test arguments like
+        # ref('model', custom_kwarg=value) are properly resolved.
+        if getattr(get_flags(), "SUPPORT_CUSTOM_REF_KWARGS", False):
+            for macro_name in ("ref", "source"):
+                macro = self.macro_resolver.macros_by_name.get(macro_name)
+                if macro and macro.unique_id not in depends_on_macros:
+                    # Only include user-defined overrides, not built-in macros
+                    if macro.package_name != "dbt":
+                        depends_on_macros.append(macro.unique_id)
+
         lookup_macros = depends_on_macros.copy()
         for macro_unique_id in lookup_macros:
             lookup_macro = self.macro_resolver.macros.get(macro_unique_id)
