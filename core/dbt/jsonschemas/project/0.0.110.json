@@ -5349,7 +5349,7 @@
       ]
     },
     "SchemaRefreshInterval": {
-      "description": "Schema refresh interval: 'duration', 'duration', '1d', or 'never'",
+      "description": "Schema refresh interval: '30m', '2h', '1d', or 'never'",
       "type": "string"
     },
     "Severity": {
@@ -5413,6 +5413,8 @@
       "enum": [
         "unsafe",
         "off",
+        "strict",
+        "baseline",
         "on"
       ]
     },
@@ -5453,7 +5455,7 @@
       "type": "object",
       "properties": {
         "schema_refresh_interval": {
-          "description": "How often to refresh the schema from the warehouse. Examples: \"duration\", \"duration\", \"1d\", \"never\"",
+          "description": "How often to refresh the schema from the warehouse. Examples: \"30m\", \"2h\", \"1d\", \"never\"",
           "anyOf": [
             {
               "$ref": "#/definitions/SchemaRefreshInterval"
