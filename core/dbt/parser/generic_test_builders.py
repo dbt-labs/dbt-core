@@ -259,7 +259,13 @@ class TestBuilder(Generic[Testable]):
                         key_path=f"data_tests.{test_name}.{k}",
                     )
 
-            top_level_keys = ("config", "column_name", "description", "name", *TestBuilder.CONFIG_ARGS)
+            top_level_keys = (
+                "config",
+                "column_name",
+                "description",
+                "name",
+                *TestBuilder.CONFIG_ARGS,
+            )
 
             if not arguments and any(k not in top_level_keys for k in test_args.keys()):
                 resource = (

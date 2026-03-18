@@ -39,6 +39,7 @@ from tests.functional.deprecations.fixtures import (
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
     generate_schema_name_null_return_macro_sql,
+    generic_test_config_as_top_level_yaml,
     invalid_deprecation_date_yaml,
     models_custom_key_in_config_non_static_parser_sql,
     models_custom_key_in_config_sql,
@@ -51,7 +52,6 @@ from tests.functional.deprecations.fixtures import (
     python_model_yml,
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
-    generic_test_config_as_top_level_yaml,
 )
 
 
@@ -957,7 +957,6 @@ class TestMissingArgsVsPropertyMovedToConfig:
     defined at the top level of a generic test, it should raise
     PropertyMovedToConfigDeprecation, not MissingArgumentsPropertyInGenericTestDeprecation."""
 
-
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -977,9 +976,9 @@ class TestMissingArgsVsPropertyMovedToConfig:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[moved_catcher.catch, missing_catcher.catch],
         )
-        assert len(moved_catcher.caught_events) == 1, (
-            "Expected PropertyMovedToConfigDeprecation for `where` at top level of generic test"
-        )
-        assert len(missing_catcher.caught_events) == 0, (
-            "Got MissingArgumentsPropertyInGenericTestDeprecation — wrong deprecation fired for config key"
-        )
+        assert (
+            len(moved_catcher.caught_events) == 1
+        ), "Expected PropertyMovedToConfigDeprecation for `where` at top level of generic test"
+        assert (
+            len(missing_catcher.caught_events) == 0
+        ), "Got MissingArgumentsPropertyInGenericTestDeprecation — wrong deprecation fired for config key"
