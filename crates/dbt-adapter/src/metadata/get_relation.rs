@@ -23,10 +23,12 @@ use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::typed_adapter::ConcreteAdapter;
+use dbt_common::cancellation::CancellationToken;
 
 // TODO: turn this into a struct and collapse all the common code from X_get_relation functions
 
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 pub fn get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -35,33 +37,36 @@ pub fn get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     match adapter.adapter_type() {
-        AdapterType::Snowflake => {
-            snowflake_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
-        AdapterType::Bigquery => {
-            bigquery_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
-        AdapterType::Databricks => {
-            databricks_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
-        AdapterType::Redshift => {
-            redshift_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
-        AdapterType::Postgres => {
-            postgres_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
+        AdapterType::Snowflake => snowflake_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Bigquery => bigquery_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Databricks => databricks_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Redshift => redshift_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Postgres => postgres_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
         AdapterType::Salesforce => {
             salesforce_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
-        AdapterType::Spark => spark_get_relation(adapter, state, ctx, conn, schema, identifier),
-        AdapterType::DuckDB => {
-            duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
+        AdapterType::Spark => {
+            spark_get_relation(adapter, state, ctx, conn, schema, identifier, token)
         }
-        AdapterType::Fabric => {
-            fabric_get_relation(adapter, state, ctx, conn, database, schema, identifier)
-        }
+        AdapterType::DuckDB => duckdb_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
+        AdapterType::Fabric => fabric_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
         AdapterType::Sidecar => {
             // This branch should not be reached - sidecar adapters override get_relation()
             Err(AdapterError::new(
@@ -79,6 +84,7 @@ pub fn get_relation(
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
+#[allow(clippy::too_many_arguments)]
 fn snowflake_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -87,6 +93,7 @@ fn snowflake_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let quoted_database = if adapter.quoting().database {
         adapter.quote(database)
@@ -108,7 +115,10 @@ fn snowflake_get_relation(
         "show objects like '{quoted_identifier}' in schema {quoted_database}.{quoted_schema}"
     );
 
-    let batch = match adapter.engine().execute(Some(state), conn, ctx, &sql) {
+    let batch = match adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)
+    {
         Ok(b) => b,
         Err(e) => {
             // Previous versions of this code [1] checked the prefix of the error message
@@ -194,6 +204,7 @@ fn snowflake_get_relation(
     ))))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn bigquery_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -202,6 +213,7 @@ fn bigquery_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_database = if adapter.quoting().database {
         adapter.quote(database)
@@ -229,7 +241,9 @@ fn bigquery_get_relation(
                 WHERE table_name = '{query_identifier}';",
     );
 
-    let result = adapter.engine().execute(Some(state), conn, ctx, &sql);
+    let result = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token.clone());
     let batch = match result {
         Ok(batch) => batch,
         Err(err) => {
@@ -261,7 +275,7 @@ fn bigquery_get_relation(
         None,
         adapter.quoting(),
     ));
-    let location = adapter.get_dataset_location(state, conn, relation.as_ref())?;
+    let location = adapter.get_dataset_location(state, conn, relation.as_ref(), token)?;
     relation.location = location;
     Ok(Some(relation))
 }
@@ -273,6 +287,7 @@ fn spark_get_relation(
     conn: &mut dyn Connection,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_schema = if adapter.quoting().schema {
         adapter.quote(schema)
@@ -287,7 +302,9 @@ fn spark_get_relation(
 
     // Spark 3.5 does not support AS JSON
     let sql = format!("DESCRIBE TABLE EXTENDED {query_schema}.{query_identifier}");
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql);
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token);
     if let Err(e) = &batch
         && (e.to_string().contains("cannot be found")
             || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))
@@ -315,6 +332,7 @@ fn spark_get_relation(
     ))))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn databricks_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -323,6 +341,7 @@ fn databricks_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     use crate::metadata::MetadataProcessor as _;
     use crate::metadata::databricks::DatabricksMetadataAdapter;
@@ -356,7 +375,10 @@ fn databricks_get_relation(
     let dbr_version = match adapter.adapter_type() {
         AdapterType::Spark => None,
         AdapterType::Databricks => Some(DatabricksMetadataAdapter::get_engine_version(
-            adapter, ctx, conn,
+            adapter,
+            ctx,
+            conn,
+            token.clone(),
         )?),
         _ => unreachable!(),
     };
@@ -381,7 +403,9 @@ fn databricks_get_relation(
         format!("DESCRIBE TABLE EXTENDED {fqn} AS JSON")
     };
 
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql);
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token);
     if let Err(e) = &batch
         && (e.to_string().contains("cannot be found")
             || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))
@@ -467,6 +491,7 @@ fn databricks_get_relation(
     ))))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn redshift_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -475,6 +500,7 @@ fn redshift_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_schema = if adapter.quoting().schema {
         schema.to_string()
@@ -509,7 +535,9 @@ LEFT JOIN materialized_views mv
     ON ao.object_name = mv.object_name"
     );
 
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         // If there are no rows, then we did not find the object
@@ -545,6 +573,7 @@ LEFT JOIN materialized_views mv
 }
 
 // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85
+#[allow(clippy::too_many_arguments)]
 fn postgres_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -553,6 +582,7 @@ fn postgres_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_schema = if adapter.quoting().schema {
         schema.to_string()
@@ -585,7 +615,9 @@ fn postgres_get_relation(
             "#,
     );
 
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)?;
     if batch.num_rows() == 0 {
         return Ok(None);
     }
@@ -638,6 +670,7 @@ fn salesforce_get_relation(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn duckdb_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -646,6 +679,7 @@ fn duckdb_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     // DuckDB is case-preserving for quoted identifiers
     // Unquoted identifiers are lowercase by default
@@ -672,7 +706,9 @@ fn duckdb_get_relation(
         "#,
     );
 
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)?;
     if batch.num_rows() == 0 {
         return Ok(None);
     }
@@ -709,6 +745,7 @@ fn duckdb_get_relation(
     Ok(Some(relation))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fabric_get_relation(
     adapter: &ConcreteAdapter,
     state: &State,
@@ -717,6 +754,7 @@ fn fabric_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
+    token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     // Can't use `conn.get_table_schema()` here because the driver doesn't use the proper identifier casing in its internal query.
     // Same goes for `conn.get_objects()`
@@ -743,7 +781,9 @@ fn fabric_get_relation(
         lit_fmt.format_str(identifier),
     );
 
-    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         // If there are no rows, then we did not find the object

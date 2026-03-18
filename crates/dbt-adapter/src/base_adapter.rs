@@ -126,19 +126,15 @@ pub trait AdapterTyping {
             Ok(identifier.to_string())
         }
     }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        match self.inner_adapter() {
-            InnerAdapter::Impl(_, engine) => engine.cancellation_token(),
-            InnerAdapter::Replay(_, adapter) => adapter.engine().cancellation_token(),
-        }
-    }
 }
 
 /// Base adapter
 pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// Build an instance of the metadata adapter if supported.
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>>;
+
+    /// Get the cancellation token for this adapter.
+    fn cancellation_token(&self) -> CancellationToken;
 
     /// Commit
     ///

@@ -11,6 +11,7 @@ use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
 
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
@@ -159,6 +160,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
@@ -176,6 +178,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         });
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
@@ -189,7 +192,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             if let Some(phase) = phase {
                 ctx = ctx.with_phase(phase.as_str());
             }
-            let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
             let schema = build_schema_from_duckdb_describe(batch, adapter.engine().type_ops())?;
             Ok(schema)
@@ -209,13 +212,13 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(table_names), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("DuckDBAdapter::list_relations_schemas_by_patterns")
     }
@@ -223,6 +226,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     fn freshness_inner(
         &self,
         _relations: &[Arc<dyn BaseRelation>],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         todo!("DuckDBAdapter::freshness")
     }
@@ -238,6 +242,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
 
@@ -250,11 +255,18 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            list_relations(adapter.engine().as_ref(), &ctx, conn, db_schema)
+            list_relations(
+                adapter.engine().as_ref(),
+                &ctx,
+                conn,
+                db_schema,
+                token_clone.clone(),
+            )
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -287,7 +299,6 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }
@@ -301,6 +312,7 @@ pub fn list_relations(
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
+    token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     let query_schema = if engine.quoting().schema {
         db_schema.resolved_schema.clone()
@@ -314,7 +326,7 @@ pub fn list_relations(
          WHERE table_schema = '{query_schema}'"
     );
 
-    let batch = engine.execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());

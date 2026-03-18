@@ -165,7 +165,6 @@ pub async fn resolve(
             .map(|p| p.dbt_project.name.clone())
             .collect(),
         arg.io.clone(),
-        token.clone(),
         dbt_state.catalogs.clone(),
     )?);
 

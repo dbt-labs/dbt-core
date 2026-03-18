@@ -9,10 +9,7 @@ use std::{
 use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
-use dbt_common::{
-    ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
-    io_args::IoArgs,
-};
+use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::IoArgs};
 use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::{
     common::DbtQuoting,
@@ -52,7 +49,6 @@ pub fn initialize_parse_jinja_environment(
     invocation_args: &InvocationArgs,
     all_package_names: BTreeSet<String>,
     io_args: IoArgs,
-    token: CancellationToken,
     catalogs: Option<Arc<DbtCatalogs>>,
 ) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
@@ -121,7 +117,6 @@ pub fn initialize_parse_jinja_environment(
         adapter_config_mapping,
         package_quoting,
         type_formatter,
-        token,
         catalogs,
     );
 

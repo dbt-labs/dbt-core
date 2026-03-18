@@ -11,6 +11,7 @@ use arrow_schema::*;
 use dbt_common::adapter::AdapterType;
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -30,6 +31,7 @@ pub fn list_relations(
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
+    token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     let sql = format!(
         "SELECT
@@ -41,7 +43,7 @@ FROM
     {db_schema}.INFORMATION_SCHEMA.TABLES"
     );
 
-    let batch = engine.execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
     let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
     let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
     let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
@@ -491,6 +493,7 @@ pub fn build_relation_clauses_bigquery(
 fn make_map_f(
     relations: Vec<Arc<dyn BaseRelation>>,
     adapter: ConcreteAdapter,
+    token: CancellationToken,
 ) -> impl Fn(&mut dyn Connection, &(String, Vec<String>)) -> AdapterResult<Arc<RecordBatch>>
 + Send
 + Sync
@@ -534,7 +537,7 @@ fn make_map_f(
         );
 
         let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-        let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+        let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None, token.clone())?;
         let batch = agate_table.original_record_batch();
         Ok(batch)
     }
@@ -869,6 +872,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -885,6 +889,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         });
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           relation: &Arc<dyn BaseRelation>|
               -> AdapterResult<Arc<Schema>> {
@@ -911,7 +916,8 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                 let sql = format!("SELECT * FROM {table_fqn} LIMIT 0");
 
                 let ctx = QueryCtx::default().with_desc("Get table schema");
-                let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+                let (_, agate_table) =
+                    adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
                 let batch = agate_table.original_record_batch();
 
                 let schema = batch.schema();
@@ -963,13 +969,13 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("list_relations_schemas_by_patterns for BigQuery")
     }
@@ -977,6 +983,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -999,7 +1006,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
-        let map_f = make_map_f(relations.to_vec(), adapter);
+        let map_f = make_map_f(relations.to_vec(), adapter, token.clone());
 
         let reduce_f = move |acc: &mut Acc,
                              database_and_where_clauses: (String, Vec<String>),
@@ -1036,7 +1043,6 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             MAX_CONNECTIONS,
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
@@ -1051,6 +1057,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
@@ -1062,6 +1069,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
@@ -1069,7 +1077,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             // Deviation from core: we cannot use `list_tables` as this is not supported from ADBC
             // Pagination is handled in the ADBC driver
             let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            adapter.list_relations(&query_ctx, conn, db_schema)
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -1101,7 +1109,6 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 

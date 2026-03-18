@@ -50,7 +50,6 @@ use dbt_adapter::sql_types::SATypeOpsImpl;
 use dbt_adapter::{BaseAdapter, BridgeAdapter};
 use dbt_common::FsResult;
 use dbt_common::adapter::AdapterType;
-use dbt_common::cancellation::never_cancels;
 use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
@@ -519,7 +518,6 @@ impl MacroTestHarnessBuilder {
             dbt_yaml::Mapping::default(),
             quoting,
             Box::new(SATypeOpsImpl::new(self.adapter_type)),
-            never_cancels(),
             None,
         ));
 

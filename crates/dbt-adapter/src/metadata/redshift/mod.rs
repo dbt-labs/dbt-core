@@ -29,6 +29,7 @@ pub fn list_relations(
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
+    token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     let sql = format!(
         "select
@@ -54,7 +55,7 @@ where table_schema ilike '{}'",
         &db_schema.resolved_schema, &db_schema.resolved_schema
     );
 
-    let batch = engine.execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -120,6 +121,7 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
         });
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           relation: &Arc<dyn BaseRelation>|
               -> AdapterResult<Arc<Schema>> {
@@ -152,7 +154,7 @@ AND table_name = '{identifier}'"
             if let Some(phase) = phase {
                 ctx = ctx.with_phase(phase.as_str());
             }
-            let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
             // Build fields from the response
             let mut fields = Vec::new();
@@ -328,6 +330,7 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           database_and_where_clauses: &(String, Vec<String>)|
               -> AdapterResult<Arc<RecordBatch>> {
@@ -361,7 +364,8 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
             );
 
             let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let (_adapter_response, agate_table) =
+                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
         };
@@ -908,8 +912,8 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>], // TODO: change to an Arc<Vec<..>>
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
-        let token = self.adapter.cancellation_token();
         let strategy =
             RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
         let relations = Arc::new(relations.to_vec());
@@ -919,8 +923,8 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         patterns: &[RelationPattern],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        let token = self.adapter.cancellation_token();
         let strategy =
             RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
         let patterns = Arc::new(patterns.to_vec());
@@ -938,8 +942,8 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        let token = self.adapter.cancellation_token();
         let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
         strategy.run(relations, token)
     }
@@ -947,6 +951,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
@@ -958,12 +963,13 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            adapter.list_relations(&query_ctx, conn, db_schema)
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -980,7 +986,6 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }

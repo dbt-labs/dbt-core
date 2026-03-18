@@ -2,6 +2,7 @@ use crate::AdapterResponse;
 use crate::typed_adapter::ConcreteAdapter;
 use std::collections::HashMap;
 
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_xdbc::bigquery::{
     CREATE_BATCH_REQ_BATCH_ID, CREATE_BATCH_REQ_BATCH_YML, CREATE_BATCH_REQ_PARENT,
@@ -34,6 +35,7 @@ pub struct JobContext<'a> {
     pub ctx: &'a QueryCtx,
     pub conn: &'a mut dyn Connection,
     pub config: &'a Value,
+    pub token: CancellationToken,
 }
 
 pub struct ClusterJobParams<'a> {
@@ -80,6 +82,7 @@ pub fn submit_python_job(
     _state: &State,
     model: &Value,
     compiled_code: &str,
+    token: CancellationToken,
 ) -> AdapterResult<AdapterResponse> {
     let config = model
         .get_attr("config")
@@ -207,6 +210,7 @@ pub fn submit_python_job(
         false,
         None,
         Some(options),
+        token.clone(),
     )?;
 
     let job_ctx = JobContext {
@@ -214,6 +218,7 @@ pub fn submit_python_job(
         ctx,
         conn,
         config: &config,
+        token,
     };
 
     match submission_method {
@@ -313,6 +318,7 @@ fn submit_cluster_job(
         false,
         None,
         Some(options),
+        job_ctx.token.clone(),
     )?;
 
     Ok(response.0)
@@ -364,6 +370,7 @@ fn submit_serverless_job(
         false,
         None,
         Some(options),
+        job_ctx.token.clone(),
     )?;
 
     Ok(response.0)
@@ -491,6 +498,7 @@ fn submit_bigframes_job(
         true,
         None,
         Some(options),
+        job_ctx.token.clone(),
     )?;
 
     Ok(response.0)

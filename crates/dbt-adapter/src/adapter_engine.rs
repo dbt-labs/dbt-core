@@ -24,7 +24,7 @@ use dbt_agate::hashers::IdentityBuildHasher;
 use dbt_common::ErrorCode;
 use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
-use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
 use dbt_common::tracing::emit::emit_warn_log_message;
@@ -171,9 +171,6 @@ pub trait AdapterEngine: Send + Sync {
     /// Get a reference to the relation cache
     fn relation_cache(&self) -> &Arc<RelationCache>;
 
-    /// Get the cancellation token
-    fn cancellation_token(&self) -> CancellationToken;
-
     /// Get the resolved behavior object with user overrides applied
     fn behavior(&self) -> &Arc<Behavior>;
 
@@ -197,6 +194,7 @@ pub trait AdapterEngine: Send + Sync {
     ///
     /// The default implementation uses ADBC to execute queries. Engines that
     /// route execution differently (e.g. sidecar) should override this.
+    #[allow(clippy::too_many_arguments)]
     fn execute_with_options(
         &self,
         state: Option<&State>,
@@ -205,8 +203,9 @@ pub trait AdapterEngine: Send + Sync {
         sql: &str,
         options: Options,
         fetch: bool,
+        token: CancellationToken,
     ) -> AdapterResult<RecordBatch> {
-        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch)
+        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch, token)
     }
 
     // -- Methods with default implementations ---------------------------------
@@ -252,8 +251,9 @@ pub trait AdapterEngine: Send + Sync {
         conn: &'_ mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
+        token: CancellationToken,
     ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(state, ctx, conn, sql, Options::new(), true)
+        self.execute_with_options(state, ctx, conn, sql, Options::new(), true, token)
     }
 
     /// Split SQL statements using the provided dialect.
@@ -276,6 +276,7 @@ pub trait AdapterEngine: Send + Sync {
 ///
 /// Used by engines whose connections implement the full ADBC protocol
 /// (XdbcEngine in Live, Record, and Replay modes).
+#[allow(clippy::too_many_arguments)]
 fn adbc_execute_with_options(
     engine: &(impl AdapterEngine + ?Sized),
     state: Option<&State>,
@@ -284,6 +285,7 @@ fn adbc_execute_with_options(
     sql: &str,
     options: Options,
     fetch: bool,
+    token: CancellationToken,
 ) -> AdapterResult<RecordBatch> {
     assert!(!sql.is_empty() || !options.is_empty());
 
@@ -325,7 +327,6 @@ fn adbc_execute_with_options(
         ));
     }
 
-    let token = engine.cancellation_token();
     let do_execute = |conn: &'_ mut dyn Connection| -> Result<
         (Arc<Schema>, Vec<RecordBatch>),
         Cancellable<adbc_core::error::Error>,
@@ -509,8 +510,6 @@ pub struct XdbcEngine {
     behavior_flag_overrides: BTreeMap<String, bool>,
     /// Resolved behavior object with user overrides applied
     behavior: Arc<Behavior>,
-    /// Global CLI cancellation token
-    cancellation_token: CancellationToken,
     /// Controls connection/execution behaviour.
     mode: EngineMode,
 }
@@ -528,7 +527,6 @@ impl XdbcEngine {
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
-        token: CancellationToken,
         mode: EngineMode,
     ) -> Self {
         let permits = if mode.has_real_connections() {
@@ -563,7 +561,6 @@ impl XdbcEngine {
             query_comment,
             query_cache,
             relation_cache,
-            cancellation_token: token,
             behavior_flag_overrides,
             behavior,
             mode,
@@ -582,7 +579,6 @@ impl XdbcEngine {
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
-        token: CancellationToken,
     ) -> Self {
         Self::build(
             adapter_type,
@@ -595,7 +591,6 @@ impl XdbcEngine {
             query_cache,
             relation_cache,
             behavior_flag_overrides,
-            token,
             EngineMode::Live,
         )
     }
@@ -626,7 +621,6 @@ impl XdbcEngine {
             None,
             relation_cache,
             behavior_flag_overrides,
-            never_cancels(),
             EngineMode::Mock,
         )
     }
@@ -644,7 +638,6 @@ impl XdbcEngine {
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
-        token: CancellationToken,
         recordings_path: PathBuf,
     ) -> Self {
         crate::record_and_replay::reset_counters(&recordings_path);
@@ -659,7 +652,6 @@ impl XdbcEngine {
             None,
             relation_cache,
             behavior_flag_overrides,
-            token,
             EngineMode::Record(recordings_path),
         )
     }
@@ -677,7 +669,6 @@ impl XdbcEngine {
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
-        token: CancellationToken,
         recordings_path: PathBuf,
     ) -> Self {
         crate::record_and_replay::reset_counters(&recordings_path);
@@ -692,7 +683,6 @@ impl XdbcEngine {
             None,
             relation_cache,
             behavior_flag_overrides,
-            token,
             EngineMode::Replay(recordings_path),
         )
     }
@@ -836,10 +826,6 @@ impl AdapterEngine for XdbcEngine {
         &self.relation_cache
     }
 
-    fn cancellation_token(&self) -> CancellationToken {
-        self.cancellation_token.clone()
-    }
-
     fn new_connection(
         &self,
         state: Option<&State>,
@@ -916,11 +902,12 @@ impl AdapterEngine for XdbcEngine {
         sql: &str,
         options: Options,
         fetch: bool,
+        token: CancellationToken,
     ) -> AdapterResult<RecordBatch> {
         if matches!(self.mode, EngineMode::Mock) {
             return Ok(RecordBatch::new_empty(Arc::new(Schema::empty())));
         }
-        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch)
+        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch, token)
     }
 
     fn behavior(&self) -> &Arc<Behavior> {
@@ -1027,10 +1014,6 @@ impl AdapterEngine for SidecarEngine {
         &self.relation_cache
     }
 
-    fn cancellation_token(&self) -> CancellationToken {
-        never_cancels()
-    }
-
     fn new_connection(
         &self,
         state: Option<&State>,
@@ -1055,6 +1038,7 @@ impl AdapterEngine for SidecarEngine {
         sql: &str,
         _options: Options,
         fetch: bool,
+        _token: CancellationToken,
     ) -> AdapterResult<RecordBatch> {
         // Route through sidecar client
         let batch_opt = self.client.execute(ctx, sql, fetch)?;
@@ -1164,12 +1148,21 @@ pub fn execute_query_with_retry(
     retry_limit: u32,
     options: &Options,
     fetch: bool,
+    token: CancellationToken,
 ) -> AdapterResult<RecordBatch> {
     let mut attempt = 0;
     let mut last_error = None;
 
     while attempt < retry_limit {
-        match engine.execute_with_options(state, ctx, conn, sql, options.clone(), fetch) {
+        match engine.execute_with_options(
+            state,
+            ctx,
+            conn,
+            sql,
+            options.clone(),
+            fetch,
+            token.clone(),
+        ) {
             Ok(result) => return Ok(result),
             Err(err) => {
                 last_error = Some(err.clone());

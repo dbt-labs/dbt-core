@@ -188,13 +188,14 @@ impl ConcreteAdapter {
         conn: &'_ mut dyn Connection,
         warehouse: String,
         node_id: &str,
+        token: CancellationToken,
     ) -> FsResult<()> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_use_warehouse(conn, warehouse, node_id),
             Impl(Snowflake, _) => {
                 let ctx = QueryCtx::default().with_node_id(node_id);
                 let sql = format!("use warehouse {warehouse}");
-                self.exec_stmt(&ctx, conn, &sql, false)?;
+                self.exec_stmt(&ctx, conn, &sql, false, token)?;
                 Ok(())
             }
             Impl(..) => {
@@ -206,7 +207,12 @@ impl ConcreteAdapter {
 
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
-    pub fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: &str) -> FsResult<()> {
+    pub fn restore_warehouse(
+        &self,
+        conn: &'_ mut dyn Connection,
+        node_id: &str,
+        token: CancellationToken,
+    ) -> FsResult<()> {
         match self.adapter_type() {
             Snowflake => {
                 let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
@@ -214,7 +220,7 @@ impl ConcreteAdapter {
                 })?;
                 let ctx = QueryCtx::default().with_node_id(node_id);
                 let sql = format!("use warehouse {warehouse}");
-                self.exec_stmt(&ctx, conn, &sql, false)?;
+                self.exec_stmt(&ctx, conn, &sql, false, token)?;
             }
             _ => debug_assert!(
                 false,
@@ -369,6 +375,7 @@ impl ConcreteAdapter {
         fetch: bool,
         _limit: Option<i64>,
         options: Option<HashMap<String, String>>,
+        token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let adapter_type = self.adapter_type();
         // BigQuery and DuckDB support multi-statement execution.
@@ -428,6 +435,7 @@ impl ConcreteAdapter {
                 1,
                 &options,
                 fetch,
+                token.clone(),
             )?);
         }
 
@@ -461,6 +469,7 @@ impl ConcreteAdapter {
         fetch: bool,
         limit: Option<i64>,
         options: Option<HashMap<String, String>>,
+        token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         if self.mock_state().is_some() {
             if !self.introspect_enabled() {
@@ -502,6 +511,7 @@ impl ConcreteAdapter {
                 fetch,
                 limit,
                 options,
+                token,
             ),
         }
     }
@@ -513,6 +523,7 @@ impl ConcreteAdapter {
         conn: &'_ mut dyn Connection,
         sql: &str,
         auto_begin: bool,
+        token: CancellationToken,
     ) -> AdapterResult<AdapterResponse> {
         // default values are the same as in dispatch_adapter_calls()
         let (response, _) = self.execute(
@@ -524,6 +535,7 @@ impl ConcreteAdapter {
             false,      // fetch
             None,       // limit
             None,       // options
+            token,
         )?;
         Ok(response)
     }
@@ -535,6 +547,7 @@ impl ConcreteAdapter {
         conn: &'_ mut dyn Connection,
         sql: &str,
         limit: Option<i64>,
+        token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         self.execute(
             None,  // state
@@ -545,6 +558,7 @@ impl ConcreteAdapter {
             true,  // fetch
             limit, // limit
             None,  // options
+            token,
         )
     }
 
@@ -557,6 +571,7 @@ impl ConcreteAdapter {
         auto_begin: bool,
         bindings: Option<&Value>,
         abridge_sql_log: bool,
+        token: CancellationToken,
     ) -> AdapterResult<()> {
         if self.mock_state().is_some() {
             unimplemented!("query addition to connection in MockAdapter")
@@ -584,6 +599,7 @@ impl ConcreteAdapter {
                     false,
                     None,
                     None,
+                    token,
                 )?;
                 Ok(())
             }
@@ -601,6 +617,7 @@ impl ConcreteAdapter {
         state: &State,
         model: &Value,
         compiled_code: &str,
+        token: CancellationToken,
     ) -> AdapterResult<AdapterResponse> {
         match self.inner_adapter() {
             Impl(Snowflake, engine) => {
@@ -615,6 +632,7 @@ impl ConcreteAdapter {
                     false,
                     None,
                     None,
+                    token,
                 )?;
                 Ok(response)
             }
@@ -635,9 +653,15 @@ impl ConcreteAdapter {
             }
             // https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup#running-python-models-on-bigquery-dataframes
             // https://docs.getdbt.com/reference/resource-configs/bigquery-configs#python-model-configuration
-            Impl(Bigquery, _) => {
-                python::bigquery::submit_python_job(self, ctx, conn, state, model, compiled_code)
-            }
+            Impl(Bigquery, _) => python::bigquery::submit_python_job(
+                self,
+                ctx,
+                conn,
+                state,
+                model,
+                compiled_code,
+                token,
+            ),
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
             Impl(Databricks, _) => {
                 python::databricks::submit_python_job(self, ctx, conn, state, model, compiled_code)
@@ -771,6 +795,7 @@ impl ConcreteAdapter {
         }))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn get_relation(
         &self,
         state: &State,
@@ -779,6 +804,7 @@ impl ConcreteAdapter {
         database: &str,
         schema: &str,
         identifier: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
         if self.mock_state().is_some() {
             if !self.introspect_enabled() {
@@ -822,7 +848,7 @@ impl ConcreteAdapter {
             }
             Impl(_, _engine) => {
                 let relation_opt = metadata::get_relation::get_relation(
-                    self, state, ctx, conn, database, schema, identifier,
+                    self, state, ctx, conn, database, schema, identifier, token,
                 )?;
                 let relation =
                     relation_opt.map(|relation| -> Arc<dyn BaseRelation> { relation.into() });
@@ -848,6 +874,7 @@ impl ConcreteAdapter {
         state: &State,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        token: CancellationToken,
     ) -> Result<Value, minijinja::Error> {
         let adapter_type = self.adapter_type();
         match adapter_type {
@@ -873,7 +900,7 @@ impl ConcreteAdapter {
                     relation.identifier_as_str()?
                 );
 
-                let (_, table) = self.query(&ctx, conn, &show_sql, None)?;
+                let (_, table) = self.query(&ctx, conn, &show_sql, None, token)?;
 
                 let new_column_names: Vec<String> = table
                     .column_names()
@@ -1084,7 +1111,12 @@ impl ConcreteAdapter {
     }
 
     /// Returns true if the adapter supports the given feature.
-    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Option<bool>> {
+    pub fn has_feature(
+        &self,
+        state: &State,
+        name: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<Option<bool>> {
         // PRE-CONDITION: adapter_type is DuckDB
         let is_motherduck = |engine: &dyn AdapterEngine| {
             engine
@@ -1104,7 +1136,7 @@ impl ConcreteAdapter {
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let has_capability = self.has_dbr_capability(state, conn.as_mut(), name)?;
+                let has_capability = self.has_dbr_capability(state, conn.as_mut(), name, token)?;
                 Ok(Some(has_capability))
             }
             _ => {
@@ -1634,6 +1666,7 @@ impl ConcreteAdapter {
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
         columns: IndexMap<String, DbtColumn>,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -1671,8 +1704,15 @@ impl ConcreteAdapter {
 
                 let ctx = query_ctx_from_state(state)?;
                 let sql = "none";
-                self.engine()
-                    .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
+                self.engine().execute_with_options(
+                    Some(state),
+                    &ctx,
+                    conn,
+                    sql,
+                    options,
+                    false,
+                    token,
+                )?;
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
@@ -2100,6 +2140,7 @@ impl ConcreteAdapter {
         _role: Option<&str>,
         database: &str,
         schema: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -2147,8 +2188,15 @@ impl ConcreteAdapter {
                     UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS.to_string(),
                     OptionValue::String(serde_json::to_string(&payload)?),
                 ));
-                self.engine()
-                    .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
+                self.engine().execute_with_options(
+                    Some(state),
+                    &ctx,
+                    conn,
+                    sql,
+                    options,
+                    false,
+                    token,
+                )?;
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
@@ -2163,6 +2211,7 @@ impl ConcreteAdapter {
         state: &State,
         conn: &'_ mut dyn Connection,
         relation: &dyn BaseRelation,
+        token: CancellationToken,
     ) -> AdapterResult<Option<String>> {
         match self.adapter_type() {
             Bigquery => {
@@ -2178,7 +2227,9 @@ impl ConcreteAdapter {
 
                 let ctx =
                     query_ctx_from_state(state)?.with_desc("get_dataset_location adapter call");
-                let batch = self.engine().execute(Some(state), conn, &ctx, &sql)?;
+                let batch = self
+                    .engine()
+                    .execute(Some(state), conn, &ctx, &sql, token)?;
 
                 let location = get_column_values::<StringArray>(&batch, "location")?;
                 debug_assert!(batch.num_rows() <= 1);
@@ -2196,6 +2247,7 @@ impl ConcreteAdapter {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_table_description(
         &self,
         state: &State,
@@ -2204,6 +2256,7 @@ impl ConcreteAdapter {
         schema: &str,
         identifier: &str,
         description: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -2230,6 +2283,7 @@ impl ConcreteAdapter {
                         ),
                     ],
                     false,
+                    token,
                 )?;
                 Ok(none_value())
             }
@@ -2253,6 +2307,7 @@ impl ConcreteAdapter {
         file_path: &str,
         column_overrides: IndexMap<String, String>,
         field_delimiter: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -2316,6 +2371,7 @@ impl ConcreteAdapter {
                         ),
                     ],
                     false,
+                    token,
                 )?;
 
                 Ok(none_value())
@@ -2343,6 +2399,7 @@ impl ConcreteAdapter {
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
         columns: Value,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -2373,6 +2430,7 @@ impl ConcreteAdapter {
                     &sql,
                     self.get_adbc_execute_options(state),
                     false,
+                    token,
                 )?;
 
                 Ok(none_value())
@@ -2452,12 +2510,13 @@ impl ConcreteAdapter {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
+        token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx),
             Impl(Bigquery, engine) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
-                let batch = engine.execute(Some(state), conn, ctx, sql)?;
+                let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
                 let schema = batch.schema();
 
                 let type_ops = engine.type_ops();
@@ -2476,7 +2535,7 @@ impl ConcreteAdapter {
                 Ok(flattened_columns)
             }
             Impl(_, engine) => {
-                let batch = engine.execute(Some(state), conn, ctx, sql)?;
+                let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
                 let original_schema = Some(batch.schema());
                 let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
                 self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
@@ -2818,6 +2877,7 @@ impl ConcreteAdapter {
         query_ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         db_schema: &CatalogAndSchema,
+        token: CancellationToken,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
         if self.mock_state().is_some() {
             if !self.introspect_enabled() {
@@ -2858,19 +2918,19 @@ impl ConcreteAdapter {
                 Ok(relations)
             }
             Impl(Snowflake, engine) => {
-                snowflake::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+                snowflake::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(Bigquery, engine) => {
-                bigquery::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+                bigquery::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(Databricks | Spark, engine) => {
-                databricks::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+                databricks::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(Redshift, engine) => {
-                redshift::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+                redshift::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(DuckDB, engine) => {
-                duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema)
+                duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(
                 adapter_type @ (Postgres | Salesforce | Sidecar | Fabric | ClickHouse | Starburst
@@ -2905,6 +2965,7 @@ impl ConcreteAdapter {
         state: &State,
         conn: &mut dyn Connection,
         capability_name: &str,
+        token: CancellationToken,
     ) -> AdapterResult<bool> {
         debug_assert!(self.adapter_type() == Databricks);
         let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
@@ -2914,7 +2975,8 @@ impl ConcreteAdapter {
         let is_sql_warehouse = !is_cluster;
 
         let query_ctx = query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
-        let dbr_version = DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn)?;
+        let dbr_version =
+            DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn, token)?;
 
         Ok(dbr_capabilities::has_capability(
             capability,
@@ -2930,6 +2992,7 @@ impl ConcreteAdapter {
         conn: &mut dyn Connection,
         major: i64,
         minor: i64,
+        token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             Databricks => {
@@ -2937,7 +3000,7 @@ impl ConcreteAdapter {
                     query_ctx_from_state(state)?.with_desc("compare_dbr_version adapter call");
 
                 let current_version =
-                    DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn)?;
+                    DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn, token)?;
                 let expected_version = EngineVersion::Full(major, minor);
 
                 let result = match current_version.cmp(&expected_version) {
@@ -3122,6 +3185,7 @@ impl ConcreteAdapter {
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
         tblproperties: &mut BTreeMap<String, Value>,
+        token: CancellationToken,
     ) -> AdapterResult<()> {
         match self.adapter_type() {
             adapter_type @ Databricks => {
@@ -3137,7 +3201,7 @@ impl ConcreteAdapter {
                 // We only have to update tblproperties if using a UniForm Iceberg table
                 if catalog_relation.table_format == "iceberg" {
                     if self
-                        .compare_dbr_version(state, conn, 14, 3)?
+                        .compare_dbr_version(state, conn, 14, 3, token)?
                         .as_i64()
                         .expect("dbr_version is a number")
                         < 0
@@ -3197,6 +3261,7 @@ impl ConcreteAdapter {
         conn: &mut dyn Connection,
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
+        token: CancellationToken,
     ) -> AdapterResult<bool> {
         match self.adapter_type() {
             adapter_type @ Databricks => {
@@ -3215,7 +3280,7 @@ impl ConcreteAdapter {
                 }
 
                 if self
-                    .compare_dbr_version(state, conn, 14, 3)?
+                    .compare_dbr_version(state, conn, 14, 3, token)?
                     .as_i64()
                     .expect("dbr_version is a number")
                     < 0
@@ -3294,6 +3359,7 @@ impl ConcreteAdapter {
         state: &State,
         conn: &mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        token: CancellationToken,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
 
@@ -3302,7 +3368,7 @@ impl ConcreteAdapter {
             // In replay mode, adapter calls must go through the replay adapter so they consume
             // the recording stream.
             let metadata_adapter = DatabricksMetadataAdapter::new_from_adapter(self.clone());
-            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation)?
+            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation, token)?
         };
 
         let config_loader = match relation_type {
@@ -3512,6 +3578,7 @@ impl ConcreteAdapter {
         source: &Arc<dyn BaseRelation>,
         dest: &Arc<dyn BaseRelation>,
         materialization: String,
+        token: CancellationToken,
     ) -> AdapterResult<()> {
         match self.adapter_type() {
             Bigquery => {
@@ -3563,8 +3630,15 @@ impl ConcreteAdapter {
                 ]);
 
                 let ctx = query_ctx_from_state(state)?.with_desc("copy_table adapter call");
-                self.engine()
-                    .execute_with_options(Some(state), &ctx, conn, "", options, false)?;
+                self.engine().execute_with_options(
+                    Some(state),
+                    &ctx,
+                    conn,
+                    "",
+                    options,
+                    false,
+                    token,
+                )?;
 
                 Ok(())
             }
@@ -3919,7 +3993,6 @@ struct MockState {
     engine: Arc<dyn AdapterEngine>,
     flags: BTreeMap<String, Value>,
     behavior: Arc<Behavior>,
-    cancellation_token: CancellationToken,
 }
 
 #[derive(Clone)]
@@ -3948,7 +4021,6 @@ impl ConcreteAdapter {
         quoting: ResolvedQuoting,
         type_ops: Box<dyn crate::sql_types::TypeOps>,
         stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
-        token: CancellationToken,
     ) -> Self {
         let backend = crate::base_adapter::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
@@ -3978,7 +4050,6 @@ impl ConcreteAdapter {
                 engine,
                 flags,
                 behavior,
-                cancellation_token: token,
             }),
         }
     }
@@ -4019,19 +4090,6 @@ impl AdapterTyping for ConcreteAdapter {
 
     fn as_concrete_adapter(&self) -> &ConcreteAdapter {
         self
-    }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        match &self.inner {
-            ConcreteAdapterInner::Mock(mock) => mock.cancellation_token.clone(),
-            _ => {
-                // Default dispatch via inner_adapter()
-                match self.inner_adapter() {
-                    Impl(_, engine) => engine.cancellation_token(),
-                    Replay(_, replay) => replay.engine().cancellation_token(),
-                }
-            }
-        }
     }
 }
 
@@ -4224,8 +4282,8 @@ mod tests {
     use crate::stmt_splitter::NaiveStmtSplitter;
 
     use dbt_auth::auth_for_backend;
+    use dbt_common::AdapterResult;
     use dbt_common::adapter::AdapterType;
-    use dbt_common::{AdapterResult, cancellation::never_cancels};
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
@@ -4265,7 +4323,6 @@ mod tests {
             None,
             Arc::new(RelationCache::default()),
             BTreeMap::new(),
-            never_cancels(),
         ))
     }
 
@@ -4346,7 +4403,6 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             Box::new(SATypeOpsImpl::new(Databricks)),
             Arc::new(NaiveStmtSplitter),
-            never_cancels(),
         );
 
         let env = Environment::new();

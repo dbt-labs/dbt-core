@@ -33,7 +33,7 @@ use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ProgressMessage};
 pub async fn execute_clean_command(
     arg: &EvalArgs,
     files: &[String],
-    token: &CancellationToken,
+    _token: &CancellationToken,
 ) -> FsResult<()> {
     let load_args = LoadArgs::from_eval_args(arg);
     let dbt_state = load_for_clean(&load_args).await?;
@@ -52,7 +52,6 @@ pub async fn execute_clean_command(
         dbt_state.run_started_at,
         &flags,
         arg.io.clone(),
-        token.clone(),
         dbt_state.catalogs,
     )?;
 

@@ -451,7 +451,6 @@ mod tests {
     use dbt_adapter::BridgeAdapter;
     use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_common::adapter::AdapterType;
-    use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
@@ -587,7 +586,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -675,7 +673,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -738,7 +735,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -859,7 +855,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
 
@@ -911,7 +906,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
 
@@ -957,7 +951,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-            never_cancels(),
             None,
         );
 

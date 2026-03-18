@@ -12,6 +12,7 @@ use arrow_schema::Schema;
 use dbt_common::AsyncAdapterResult;
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -95,6 +96,7 @@ pub fn list_relations(
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
+    token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     // Paginate through the results
     let limit_size = 10000;
@@ -109,7 +111,7 @@ pub fn list_relations(
                 .map(|name| format!(" FROM '{name}'"))
                 .unwrap_or_default()
         );
-        let batch = engine.execute(None, conn, ctx, &sql)?;
+        let batch = engine.execute(None, conn, ctx, &sql, token.clone())?;
 
         // From the RecordBatch, get the last row of the vector of name 'name'
         let names = get_column_values::<StringArray>(&batch, "name")?;
@@ -376,6 +378,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
     fn list_user_defined_functions_inner(
         &self,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
         type Acc = Vec<UDF>;
 
@@ -400,10 +403,11 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
                 let ctx = QueryCtx::default().with_desc("List user functions");
-                let (_, table) = adapter.query(&ctx, conn, sql, None)?;
+                let (_, table) = adapter.query(&ctx, conn, sql, None, token_clone.clone())?;
                 let batch = table.original_record_batch();
                 Ok(batch)
             };
@@ -474,7 +478,6 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(queries), token)
     }
 
@@ -483,6 +486,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -501,6 +505,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         });
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
@@ -512,7 +517,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             if let Some(phase) = phase {
                 ctx = ctx.with_phase(phase.as_str());
             }
-            let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
             let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops())?;
             Ok(schema)
@@ -530,7 +535,6 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(table_names), token)
     }
 
@@ -538,6 +542,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
     fn list_relations_schemas_by_patterns_inner(
         &self,
         relations_pattern: &[RelationPattern],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         // All results are accumulated in a Vec of pairs
         type Acc = Vec<(String, AdapterResult<RelationSchemaPair>)>;
@@ -593,10 +598,11 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
 
         // map_f runs the queries, reduce_f decodes the result set and builds the schemas
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
                 let ctx = QueryCtx::default().with_desc("Get schema by pattern");
-                let (_, table) = adapter.query(&ctx, conn, sql, None)?;
+                let (_, table) = adapter.query(&ctx, conn, sql, None, token_clone.clone())?;
                 let batch = table.original_record_batch();
                 Ok(batch)
             };
@@ -621,7 +627,6 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             MAX_CONNECTIONS,
         );
         let keys = queries.collect::<Vec<_>>();
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
@@ -636,6 +641,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -658,6 +664,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           database_and_where_clauses: &(String, Vec<String>)|
               -> AdapterResult<Arc<RecordBatch>> {
@@ -676,7 +683,8 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             );
 
             let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let (_adapter_response, agate_table) =
+                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
         };
@@ -717,7 +725,6 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             MAX_CONNECTIONS,
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
@@ -725,6 +732,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
@@ -736,12 +744,13 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
-            adapter.list_relations(&query_ctx, conn, db_schema)
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -773,7 +782,6 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 

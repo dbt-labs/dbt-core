@@ -8,6 +8,7 @@ use crate::{AdapterEngine, AdapterTyping};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
 use dbt_common::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterResult, AsyncAdapterResult, adapter::ExecutionPhase};
 use dbt_schemas::schemas::legacy_catalog::{CatalogNodeStats, TableMetadata};
 use dbt_schemas::schemas::{
@@ -146,6 +147,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let new_conn_f = Box::new({
             let adapter = self.adapter.clone();
@@ -159,6 +161,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
 
         let map_f = Box::new({
             let adapter = self.adapter.clone();
+            let token_clone = token.clone();
             move |conn: &mut dyn Connection, relation: &Arc<dyn BaseRelation>| {
                 // TODO: we need to get the actual schema
                 let sql = format!(
@@ -178,7 +181,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
                         .iter()
                         .fold(ctx, |ctx, phase| ctx.with_phase(phase.as_str()));
 
-                    let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
+                    let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
                     let _batch = table.original_record_batch();
 
                     // TODO: convert the RecordBatch into a Schema and return it
@@ -196,15 +199,14 @@ impl MetadataAdapter for FabricMetadataAdapter {
             },
         );
 
-        MapReduce::new(new_conn_f, map_f, reduce_f, MAX_CONNECTIONS).run(
-            Arc::new(relations.to_vec()),
-            self.adapter.cancellation_token(),
-        )
+        MapReduce::new(new_conn_f, map_f, reduce_f, MAX_CONNECTIONS)
+            .run(Arc::new(relations.to_vec()), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
         patterns: &[RelationPattern],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         let _ = patterns;
 
@@ -214,6 +216,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         let _ = relations;
 
@@ -223,6 +226,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         let _ = db_schemas;
 

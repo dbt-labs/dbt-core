@@ -25,7 +25,7 @@ use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, ResolvedQuoting};
@@ -102,6 +102,8 @@ pub struct BridgeAdapter {
     inner: InnerAdapter,
     /// Time-machine for cross-version snapshot testing (optional)
     time_machine: Option<TimeMachine>,
+    /// Global CLI cancellation token
+    cancellation_token: CancellationToken,
 }
 
 impl fmt::Debug for BridgeAdapter {
@@ -121,6 +123,7 @@ impl BridgeAdapter {
         adapter: Arc<ConcreteAdapter>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
         time_machine: Option<TimeMachine>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         let inner = Typed {
             adapter,
@@ -129,6 +132,7 @@ impl BridgeAdapter {
         Self {
             inner,
             time_machine,
+            cancellation_token,
         }
     }
 
@@ -138,7 +142,6 @@ impl BridgeAdapter {
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Box<dyn TypeOps>,
-        token: CancellationToken,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> BridgeAdapter {
         let state = Self::make_parse_adapter_state(
@@ -147,12 +150,12 @@ impl BridgeAdapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
-            token,
             catalogs,
         );
         BridgeAdapter {
             inner: Parse(state),
             time_machine: None,
+            cancellation_token: never_cancels(),
         }
     }
 
@@ -162,7 +165,6 @@ impl BridgeAdapter {
         package_quoting: DbtQuoting,
         type_ops: Box<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
-        token: CancellationToken,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
@@ -186,7 +188,6 @@ impl BridgeAdapter {
             None,
             relation_cache,
             BTreeMap::new(),
-            token,
         );
 
         Box::new(ParseAdapterState::new(
@@ -194,6 +195,11 @@ impl BridgeAdapter {
             Arc::new(engine),
             catalogs,
         ))
+    }
+
+    /// Get the cancellation token.
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
     }
 
     /// Get a reference to the time machine, if enabled.
@@ -289,6 +295,10 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => adapter.metadata_adapter(),
             Parse(_) => None, // TODO: implement metadata_adapter() for ParseAdapter
         }
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
     }
 
     fn as_value(&self) -> Value {
@@ -542,6 +552,7 @@ impl BaseAdapter for BridgeAdapter {
                     fetch,
                     limit,
                     options,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok((response, table))
             }
@@ -595,6 +606,7 @@ impl BaseAdapter for BridgeAdapter {
                     auto_begin,
                     bindings,
                     abridge_sql_log,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(())
             }
@@ -614,7 +626,14 @@ impl BaseAdapter for BridgeAdapter {
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("submit_python_job adapter call");
 
-                adapter.submit_python_job(&ctx, conn.as_mut(), state, model, compiled_code)
+                adapter.submit_python_job(
+                    &ctx,
+                    conn.as_mut(),
+                    state,
+                    model,
+                    compiled_code,
+                    self.cancellation_token.clone(),
+                )
             }
             Parse(_) => {
                 // Python models cannot be executed during parse phase
@@ -846,8 +865,12 @@ impl BaseAdapter for BridgeAdapter {
                             let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
                             let query_ctx = query_ctx_from_state(state)?
                                 .with_desc("get_relation > list_relations call");
-                            let maybe_relations_list =
-                                adapter.list_relations(&query_ctx, conn.as_mut(), &db_schema);
+                            let maybe_relations_list = adapter.list_relations(
+                                &query_ctx,
+                                conn.as_mut(),
+                                &db_schema,
+                                self.cancellation_token.clone(),
+                            );
 
                             if let Ok(relations_list) = maybe_relations_list {
                                 let _ = self.update_relation_cache(BTreeMap::from([(
@@ -896,6 +919,7 @@ impl BaseAdapter for BridgeAdapter {
                     database,
                     schema,
                     identifier,
+                    self.cancellation_token.clone(),
                 )?;
                 match relation {
                     Some(relation) => {
@@ -1074,8 +1098,13 @@ impl BaseAdapter for BridgeAdapter {
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result =
-                    adapter.get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
+                let result = adapter.get_column_schema_from_query(
+                    state,
+                    conn.as_mut(),
+                    &ctx,
+                    sql,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(empty_map_value()),
@@ -1098,8 +1127,13 @@ impl BaseAdapter for BridgeAdapter {
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result =
-                    adapter.get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
+                let result = adapter.get_column_schema_from_query(
+                    state,
+                    conn.as_mut(),
+                    &ctx,
+                    sql,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(empty_map_value()),
@@ -1318,6 +1352,7 @@ impl BaseAdapter for BridgeAdapter {
                     role,
                     database,
                     schema,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(result)
             }
@@ -1335,7 +1370,12 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.get_dataset_location(state, conn.as_mut(), relation)?;
+                let result = adapter.get_dataset_location(
+                    state,
+                    conn.as_mut(),
+                    relation,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(none_value()),
@@ -1362,6 +1402,7 @@ impl BaseAdapter for BridgeAdapter {
                     schema,
                     identifier,
                     description,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(result)
             }
@@ -1385,6 +1426,7 @@ impl BaseAdapter for BridgeAdapter {
                     conn.as_mut(),
                     relation,
                     columns.clone(),
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(result)
             }
@@ -1403,8 +1445,13 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result =
-                    adapter.update_columns_descriptions(state, conn.as_mut(), relation, columns)?;
+                let result = adapter.update_columns_descriptions(
+                    state,
+                    conn.as_mut(),
+                    relation,
+                    columns,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(result)
             }
             Parse(_) => Ok(none_value()),
@@ -1443,6 +1490,7 @@ impl BaseAdapter for BridgeAdapter {
                     &query_ctx,
                     conn.as_mut(),
                     &CatalogAndSchema::from(schema_relation.as_ref()),
+                    self.cancellation_token.clone(),
                 )?;
 
                 Ok(Value::from_object(
@@ -1468,15 +1516,14 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 match adapter.adapter_type() {
                     AdapterType::Databricks => {
-                        let has_feature = adapter.has_feature(state, capability_name)?;
+                        let has_feature = adapter.has_feature(state, capability_name, self.cancellation_token.clone())?;
                         Ok(Value::from(has_feature.unwrap_or(false)))
-                    },
-                    _ => {
-                        Err(AdapterError::new(
-                            AdapterErrorKind::NotSupported,
-                            format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
-                        ).into())
                     }
+                    _ => Err(AdapterError::new(
+                        AdapterErrorKind::NotSupported,
+                        format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
+                    )
+                    .into()),
                 }
             }
             Parse(_) => Ok(Value::from(false)),
@@ -1494,7 +1541,13 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.compare_dbr_version(state, conn.as_mut(), major, minor)?;
+                let result = adapter.compare_dbr_version(
+                    state,
+                    conn.as_mut(),
+                    major,
+                    minor,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(result)
             }
             Parse(_) => Ok(Value::from(0)),
@@ -1504,7 +1557,9 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
         let result = match &self.inner {
-            Typed { adapter, .. } => adapter.has_feature(state, name)?,
+            Typed { adapter, .. } => {
+                adapter.has_feature(state, name, self.cancellation_token.clone())?
+            }
             Parse(_) => None,
         };
         Ok(Value::from(result))
@@ -1530,7 +1585,11 @@ impl BaseAdapter for BridgeAdapter {
         let result = match &self.inner {
             Typed { adapter, .. } => match adapter.adapter_type() {
                 AdapterType::DuckDB => {
-                    let transactions_enabled = adapter.has_feature(state, "transactions")?;
+                    let transactions_enabled = adapter.has_feature(
+                        state,
+                        "transactions",
+                        self.cancellation_token.clone(),
+                    )?;
                     Ok(!transactions_enabled.unwrap_or(true))
                 }
                 _ => Err(AdapterError::new(
@@ -1676,6 +1735,7 @@ impl BaseAdapter for BridgeAdapter {
                     config,
                     node,
                     &mut tblproperties,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from_serialize(&tblproperties))
             }
@@ -1697,7 +1757,13 @@ impl BaseAdapter for BridgeAdapter {
                 }
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.is_uniform(state, conn.as_mut(), config, node)?;
+                let result = adapter.is_uniform(
+                    state,
+                    conn.as_mut(),
+                    config,
+                    node,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(Value::from(false)),
@@ -1742,6 +1808,7 @@ impl BaseAdapter for BridgeAdapter {
                     tmp_relation_partitioned,
                     target_relation_partitioned,
                     materialization.to_string(),
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(none_value())
             }
@@ -1876,7 +1943,12 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let config = adapter.get_relation_config(state, conn.as_mut(), relation)?;
+                let config = adapter.get_relation_config(
+                    state,
+                    conn.as_mut(),
+                    relation,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(Value::from_object(config))
             }
             Parse(_) => Ok(none_value()),
@@ -1947,7 +2019,12 @@ impl BaseAdapter for BridgeAdapter {
                 let mut conn = adapter
                     .borrow_tlocal_connection(None, Some(node_id.to_string()))
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
-                adapter.use_warehouse(conn.as_mut(), warehouse.unwrap(), node_id)?;
+                adapter.use_warehouse(
+                    conn.as_mut(),
+                    warehouse.unwrap(),
+                    node_id,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(true)
             }
             Parse(_) => Ok(false),
@@ -1972,7 +2049,11 @@ impl BaseAdapter for BridgeAdapter {
                 let mut conn = adapter
                     .borrow_tlocal_connection(None, Some(node_id.to_string()))
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
-                adapter.restore_warehouse(conn.as_mut(), node_id)?;
+                adapter.restore_warehouse(
+                    conn.as_mut(),
+                    node_id,
+                    self.cancellation_token.clone(),
+                )?;
                 Ok(())
             }
             Parse(_) => Ok(()),
@@ -2008,6 +2089,7 @@ impl BaseAdapter for BridgeAdapter {
                     file_path,
                     column_overrides,
                     field_delimiter,
+                    self.cancellation_token.clone(),
                 )?;
                 Ok(result)
             }
@@ -2025,7 +2107,12 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                adapter.describe_dynamic_table(state, conn.as_mut(), relation)
+                adapter.describe_dynamic_table(
+                    state,
+                    conn.as_mut(),
+                    relation,
+                    self.cancellation_token.clone(),
+                )
             }
             Parse(_) => {
                 let map = [("dynamic_table", none_value())]

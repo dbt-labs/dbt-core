@@ -5,7 +5,6 @@ mod tests {
     use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_adapter::{BaseAdapter, BridgeAdapter};
     use dbt_common::adapter::AdapterType;
-    use dbt_common::cancellation::never_cancels;
     use dbt_common::io_args::StaticAnalysisKind;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;
@@ -107,7 +106,6 @@ mod tests {
             &invocation_args,
             BTreeSet::from(["common".to_string()]),
             IoArgs::default(),
-            never_cancels(),
             None,
         )
         .unwrap();
@@ -343,7 +341,6 @@ mod tests {
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
                 Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
-                never_cancels(),
                 None,
             )) as Arc<dyn BaseAdapter>;
             env.add_global("adapter", adapter.as_value());

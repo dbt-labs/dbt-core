@@ -167,7 +167,6 @@ pub async fn load(
         dbt_state.run_started_at,
         &flags,
         arg.io.clone(),
-        token.clone(),
         dbt_state.catalogs.clone(),
     )?;
 

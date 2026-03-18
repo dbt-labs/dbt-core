@@ -1568,9 +1568,8 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
             Arc::new(NaiveStmtSplitter),
-            never_cancels(),
         );
-        BridgeAdapter::new(Arc::new(concrete), None, None)
+        BridgeAdapter::new(Arc::new(concrete), None, None, never_cancels())
     }
 
     /// Create a parse-phase DuckDB adapter (returns defaults, no real execution).
@@ -1580,7 +1579,6 @@ mod tests {
             dbt_yaml::Mapping::new(),
             DEFAULT_DBT_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
-            never_cancels(),
             None,
         )
     }

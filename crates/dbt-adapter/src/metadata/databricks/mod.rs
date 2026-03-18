@@ -10,6 +10,7 @@ use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
@@ -47,6 +48,7 @@ pub fn list_relations(
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
+    token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     let sql = format!("
 SELECT
@@ -72,7 +74,7 @@ WHERE table_catalog = '{}'
                             &db_schema.resolved_catalog,
                             &db_schema.resolved_schema);
 
-    let batch = engine.execute(None, conn, ctx, &sql)?;
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -161,14 +163,18 @@ impl DatabricksMetadataAdapter {
     /// Get the engine runtime version, caching the result for subsequent calls.
     ///
     /// To bypass the cache, use [`get_engine_version()`](Self::get_engine_version) directly.
-    pub(crate) fn engine_version(&self, node_id: Option<String>) -> AdapterResult<EngineVersion> {
+    pub(crate) fn engine_version(
+        &self,
+        node_id: Option<String>,
+        token: CancellationToken,
+    ) -> AdapterResult<EngineVersion> {
         static CACHED_ENGINE_VERSION: OnceLock<AdapterResult<EngineVersion>> = OnceLock::new();
 
         CACHED_ENGINE_VERSION
             .get_or_init(move || {
                 let query_ctx = QueryCtx::default().with_desc("get_engine_version adapter call");
                 let mut conn = self.adapter.borrow_tlocal_connection(None, node_id)?;
-                Self::get_engine_version(&self.adapter, &query_ctx, conn.as_mut())
+                Self::get_engine_version(&self.adapter, &query_ctx, conn.as_mut(), token)
             })
             .clone()
     }
@@ -188,6 +194,7 @@ impl DatabricksMetadataAdapter {
         adapter: &ConcreteAdapter,
         ctx: &QueryCtx,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<EngineVersion> {
         match adapter.adapter_type() {
             AdapterType::Databricks => {
@@ -201,7 +208,7 @@ impl DatabricksMetadataAdapter {
                 // Returns a row like: (key, value) = ("spark.databricks.clusterUsageTags.sparkVersion", "15.4.x-scala2.12")
                 let sql = "SET spark.databricks.clusterUsageTags.sparkVersion";
                 let (_response, table) =
-                    adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
+                    adapter.execute(None, conn, ctx, sql, false, true, None, None, token)?;
                 let batch = table.original_record_batch();
 
                 // The result has two columns: "key" and "value"
@@ -214,7 +221,7 @@ impl DatabricksMetadataAdapter {
             AdapterType::Spark => {
                 let sql = "SELECT version() AS version";
                 let (_response, table) =
-                    adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
+                    adapter.execute(None, conn, ctx, sql, false, true, None, None, token)?;
                 let batch = table.original_record_batch();
                 let values = get_column_values::<StringArray>(&batch, "version")?;
                 debug_assert_eq!(values.len(), 1);
@@ -233,6 +240,7 @@ impl DatabricksMetadataAdapter {
         state: &State,
         conn: &mut dyn Connection,
         base_relation: &Arc<dyn BaseRelation>,
+        token: CancellationToken,
     ) -> AdapterResult<(RelationType, DatabricksRelationMetadata)> {
         let relation_type = base_relation.relation_type().ok_or_else(|| {
             AdapterError::new(
@@ -258,11 +266,18 @@ impl DatabricksMetadataAdapter {
         if relation_type != RelationType::Table {
             metadata.insert(
                 DatabricksRelationMetadataKey::DescribeExtended,
-                self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
+                self.describe_extended(
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
+                    token.clone(),
+                )?,
             );
             metadata.insert(
                 DatabricksRelationMetadataKey::ShowTblProperties,
-                self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
+                self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
             );
         }
 
@@ -272,21 +287,49 @@ impl DatabricksMetadataAdapter {
             RelationType::MaterializedView => {
                 metadata.insert(
                     DatabricksRelationMetadataKey::DescribeExtended,
-                    self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.get_view_description(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
                 );
             }
             RelationType::View => {
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaViews,
-                    self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.get_view_description(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.fetch_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                    self.fetch_column_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.fetch_column_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
                 );
             }
             RelationType::StreamingTable => {}
@@ -312,11 +355,25 @@ impl DatabricksMetadataAdapter {
 
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.fetch_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                    self.fetch_column_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.fetch_column_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::NonNullConstraints,
@@ -326,6 +383,7 @@ impl DatabricksMetadataAdapter {
                         &identifier,
                         state,
                         &mut *conn,
+                        token.clone(),
                     )?,
                 );
                 metadata.insert(
@@ -336,6 +394,7 @@ impl DatabricksMetadataAdapter {
                         &identifier,
                         state,
                         &mut *conn,
+                        token.clone(),
                     )?,
                 );
                 metadata.insert(
@@ -346,21 +405,36 @@ impl DatabricksMetadataAdapter {
                         &identifier,
                         state,
                         &mut *conn,
+                        token.clone(),
                     )?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::ColumnMasks,
-                    self.fetch_column_masks(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.fetch_column_masks(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
                 );
 
                 // Match dbt-databricks/Mantle ordering: SHOW TBLPROPERTIES then DESCRIBE EXTENDED.
                 metadata.insert(
                     DatabricksRelationMetadataKey::ShowTblProperties,
-                    self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
                 );
                 metadata.insert(
                     DatabricksRelationMetadataKey::DescribeExtended,
-                    self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
                 );
             }
             RelationType::CTE
@@ -393,6 +467,7 @@ impl DatabricksMetadataAdapter {
         state: &State,
         desc: &str,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let ctx = query_ctx_from_state(state)?.with_desc(desc);
         self.adapter.execute(
@@ -404,6 +479,7 @@ impl DatabricksMetadataAdapter {
             true,  // fetch
             None,  // limit
             None,  // options
+            token,
         )
     }
 
@@ -415,11 +491,12 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         // match Mantle casing
         let sql = format!("describe extended `{database}`.`{schema}`.`{identifier}`;");
         let (_, result) =
-            self.execute_sql_with_context(&sql, state, "Describe table extended", conn)?;
+            self.execute_sql_with_context(&sql, state, "Describe table extended", conn, token)?;
         Ok(result)
     }
 
@@ -431,6 +508,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT * 
@@ -442,7 +520,8 @@ impl DatabricksMetadataAdapter {
             schema.to_lowercase(),
             identifier.to_lowercase()
         );
-        let (_, result) = self.execute_sql_with_context(&sql, state, "Query for view", conn)?;
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Query for view", conn, token)?;
         Ok(result)
     }
 
@@ -452,10 +531,11 @@ impl DatabricksMetadataAdapter {
         relation_str: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!("SHOW TBLPROPERTIES {relation_str}");
         let (_, result) =
-            self.execute_sql_with_context(&sql, state, "Show table properties", conn)?;
+            self.execute_sql_with_context(&sql, state, "Show table properties", conn, token)?;
         Ok(result)
     }
 
@@ -467,6 +547,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT column_name
@@ -476,8 +557,13 @@ impl DatabricksMetadataAdapter {
               AND table_name = '{identifier}'
               AND is_nullable = 'NO';"
         );
-        let (_, result) =
-            self.execute_sql_with_context(&sql, state, "Fetch non null constraint columns", conn)?;
+        let (_, result) = self.execute_sql_with_context(
+            &sql,
+            state,
+            "Fetch non null constraint columns",
+            conn,
+            token,
+        )?;
         Ok(result)
     }
 
@@ -489,6 +575,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT kcu.constraint_name, kcu.column_name
@@ -507,7 +594,7 @@ impl DatabricksMetadataAdapter {
             ORDER BY kcu.ordinal_position;"
         );
         let (_, result) =
-            self.execute_sql_with_context(&sql, state, "Fetch PK constraints", conn)?;
+            self.execute_sql_with_context(&sql, state, "Fetch PK constraints", conn, token)?;
         Ok(result)
     }
 
@@ -519,6 +606,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT 
@@ -530,7 +618,8 @@ impl DatabricksMetadataAdapter {
                 AND table_schema = '{schema}'
                 AND table_name = '{identifier}';"
         );
-        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch column masks", conn)?;
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch column masks", conn, token)?;
         Ok(result)
     }
 
@@ -542,6 +631,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT
@@ -571,7 +661,7 @@ impl DatabricksMetadataAdapter {
             ORDER BY kcu.ordinal_position;"
         );
         let (_, result) =
-            self.execute_sql_with_context(&sql, state, "Fetch FK constraints", conn)?;
+            self.execute_sql_with_context(&sql, state, "Fetch FK constraints", conn, token)?;
         Ok(result)
     }
 
@@ -583,6 +673,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT tag_name, tag_value
@@ -591,7 +682,7 @@ impl DatabricksMetadataAdapter {
                 AND schema_name = '{schema}'
                 AND table_name = '{identifier}'"
         );
-        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn)?;
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn, token)?;
         Ok(result)
     }
 
@@ -602,6 +693,7 @@ impl DatabricksMetadataAdapter {
         identifier: &str,
         state: &State,
         conn: &mut dyn Connection,
+        token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
         let sql = format!(
             "SELECT column_name, tag_name, tag_value
@@ -610,7 +702,8 @@ impl DatabricksMetadataAdapter {
                 AND schema_name = '{schema}'
                 AND table_name = '{identifier}'"
         );
-        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch column tags", conn)?;
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch column tags", conn, token)?;
         Ok(result)
     }
 }
@@ -760,10 +853,11 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let engine_version = match self.engine_version(unique_id.clone()) {
+        let engine_version = match self.engine_version(unique_id.clone(), token.clone()) {
             Ok(version) => Some(version),
             Err(e) => {
                 return Box::pin(future::ready(Err(Cancellable::Error(e))));
@@ -780,6 +874,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         });
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           relation: &Arc<dyn BaseRelation>|
               -> AdapterResult<Arc<Schema>> {
@@ -848,7 +943,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                 ctx = ctx.with_phase(phase.as_str());
             }
 
-            let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
 
             let schema = if as_json_unsupported {
@@ -872,13 +967,13 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
+        _token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("DatabricksAdapter::list_relations_schemas_by_patterns")
     }
@@ -886,6 +981,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         // Build the where clause for all relations grouped by databases
         let (where_clauses_by_database, relations_by_database) =
@@ -908,6 +1004,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           database_and_where_clauses: &(String, Vec<String>)|
               -> AdapterResult<Arc<RecordBatch>> {
@@ -926,7 +1023,8 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             );
 
             let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+            let (_adapter_response, agate_table) =
+                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
         };
@@ -966,7 +1064,6 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             MAX_CONNECTIONS,
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
@@ -981,6 +1078,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
@@ -992,11 +1090,12 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         };
 
         let adapter = self.adapter.clone();
+        let token_clone = token.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel (UC)");
-            adapter.list_relations(&query_ctx, conn, db_schema)
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
@@ -1013,7 +1112,6 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 
