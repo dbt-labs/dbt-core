@@ -442,6 +442,7 @@ impl DatabricksMetadataAdapter {
             | RelationType::External
             | RelationType::PointerTable
             | RelationType::DynamicTable
+            | RelationType::MetricView
             | RelationType::Function => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,

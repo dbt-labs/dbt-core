@@ -27,6 +27,8 @@ pub enum RelationType {
     DynamicTable,
     /// An enum for a delta table type that supports streaming or incremental data processing (databricks only)
     StreamingTable,
+    /// An enum for a Databricks Unity Catalog Metric View
+    MetricView,
     /// An enum for a warehouse function
     Function,
 }
@@ -50,6 +52,7 @@ impl RelationType {
                 "MATERIALIZED_VIEW" => RelationType::MaterializedView,
                 "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
                 "STREAMING_TABLE" => RelationType::StreamingTable,
+                "METRIC_VIEW" => RelationType::MetricView,
                 "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
                 _ => panic!("unknown table type: {type_string}"),
             },
@@ -71,6 +74,7 @@ impl fmt::Display for RelationType {
             RelationType::PointerTable => "pointer_table",
             RelationType::DynamicTable => "dynamic_table",
             RelationType::StreamingTable => "streaming_table",
+            RelationType::MetricView => "metric_view",
             RelationType::Function => "function",
         };
         write!(f, "{s}")
@@ -89,6 +93,7 @@ impl From<&str> for RelationType {
             "pointer_table" => RelationType::PointerTable,
             "dynamic_table" => RelationType::DynamicTable,
             "streaming_table" => RelationType::StreamingTable,
+            "metric_view" => RelationType::MetricView,
             "function" => RelationType::Function,
             _ => panic!("Invalid relation type: {s}"),
         }
