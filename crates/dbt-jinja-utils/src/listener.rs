@@ -143,6 +143,13 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     /// We need to type check sql before unique id is determined
     fn update_unique_id(&self, _old_unique_id: &str, _new_unique_id: &str) {}
 
+    /// Return the sorted list of macro unique-ids that were observed for the given
+    /// node unique-id during type-checking. Returns an empty Vec when the factory
+    /// has no data for the given key (e.g. in LSP mode).
+    fn get_macro_depends_on(&self, _unique_id: &str) -> Vec<String> {
+        vec![]
+    }
+
     /// Determines whether or not the listener factory is able to capture
     /// information on hooks.
     fn can_listen_on_hooks(&self) -> bool {
@@ -205,6 +212,15 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
         {
             all_depends_on.insert(new_unique_id.to_string(), depends_on);
         }
+    }
+
+    fn get_macro_depends_on(&self, unique_id: &str) -> Vec<String> {
+        self.all_depends_on
+            .read()
+            .unwrap()
+            .get(unique_id)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default()
     }
 }
 

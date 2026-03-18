@@ -29,7 +29,6 @@ use dbt_common::static_analysis::{
 };
 use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -188,9 +187,8 @@ pub async fn resolve_data_tests(
     collected_generic_tests: &[GenericTestAsset],
     node_resolver: &NodeResolver,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
-    let jinja_type_checking_event_listener_factory =
-        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
@@ -279,10 +277,6 @@ pub async fn resolve_data_tests(
         ..Default::default()
     };
 
-    let all_depends_on = jinja_type_checking_event_listener_factory
-        .depends_on()
-        .clone();
-
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
@@ -341,6 +335,11 @@ pub async fn resolve_data_tests(
 
         let unique_id = format!("test.{package_name}.{test_name}.{test_hash}");
 
+        jinja_type_checking_event_listener_factory
+            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
+        let macro_depends_on =
+            jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
+
         // Check if this test_name corresponds to any test in our collected tests
         // If so, use the original_file_path from the GenericTestAsset for the fqn construction and original_file_path
         let path_for_fqn = dbt_asset.original_path.clone();
@@ -371,30 +370,6 @@ pub async fn resolve_data_tests(
             // If global override is set, use it. Otherwise default
             arg.static_analysis.unwrap_or_default().into()
         };
-
-        // For generic tests, only add the test macro itself to depends_on_macros
-        // (matching Mantle behavior). For singular tests, use all macros from Jinja rendering.
-        let macro_depends_on: Vec<String> =
-            if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
-                // Generic test - construct the test macro unique_id
-                let namespace = test_asset
-                    .test_metadata_namespace
-                    .as_deref()
-                    .unwrap_or("dbt");
-                let test_name = test_asset
-                    .test_metadata_name
-                    .as_deref()
-                    .unwrap_or(&test_asset.test_name);
-                vec![format!("macro.{}.test_{}", namespace, test_name)]
-            } else {
-                // Singular test - use all macros from Jinja rendering
-                all_depends_on
-                    .get(&format!("{package_name}.{test_name}"))
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect()
-            };
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =

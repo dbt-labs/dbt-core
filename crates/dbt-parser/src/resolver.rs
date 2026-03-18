@@ -662,6 +662,9 @@ pub async fn resolve_inner(
     nodes.seeds.extend(seeds);
     disabled_nodes.seeds.extend(disabled_seeds);
 
+    // TODO: resolve_snapshots still creates its own local JinjaTypeCheckingEventListenerFactory
+    // instead of receiving the top-level one, so snapshot macro dependencies are populated
+    // locally rather than via update_manifest_with_macro_depends_on. Out of scope for now.
     // Resolve snapshots based on the dbt_state, database, schema, and project name
     let (snapshots, disabled_snapshots) = resolve_snapshots(
         arg,
@@ -710,6 +713,8 @@ pub async fn resolve_inner(
     nodes.models.extend(models);
     disabled_nodes.models.extend(disabled_models);
 
+    // TODO: resolve_analyses still creates its own local JinjaTypeCheckingEventListenerFactory
+    // instead of receiving the top-level one — same issue as resolve_snapshots. Out of scope for now.
     let (analyses, analyses_rendering_results) = resolve_analyses(
         arg,
         package,
@@ -833,6 +838,7 @@ pub async fn resolve_inner(
         &collected_generic_tests,
         &node_resolver,
         token,
+        jinja_type_checking_event_listener_factory.clone(),
     )
     .await?;
     nodes.tests.extend(data_tests);
