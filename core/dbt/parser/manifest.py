@@ -1772,7 +1772,7 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
                 and hasattr(node.node, "name")
                 and node.node.name == "doc"
             ):
-                # Only Const is statically resolvable to a block name at parse time. 
+                # Only Const is statically resolvable to a block name at parse time.
                 #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
                 # Filter out Const values to avoid raising an unhandled exception attempting
                 # to statically parseother jinja expression nodes (ie Concat, CondExpr)
