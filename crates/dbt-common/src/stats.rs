@@ -30,6 +30,22 @@ impl NodeStatus {
             _ => None,
         }
     }
+
+    /// Returns a default message for the node status, used in run_results.json
+    /// when no explicit message is provided.
+    pub fn default_message(&self) -> String {
+        match self {
+            NodeStatus::Succeeded => "Succeeded".to_string(),
+            NodeStatus::Errored => "Error".to_string(),
+            NodeStatus::TestWarned => "Warn".to_string(),
+            NodeStatus::TestPassed => "Pass".to_string(),
+            NodeStatus::SkippedUpstreamFailed => "Skipped".to_string(),
+            NodeStatus::ReusedNoChanges(msg) => msg.clone(),
+            NodeStatus::ReusedStillFresh(msg, _, _) => msg.clone(),
+            NodeStatus::ReusedStillFreshNoChanges(msg) => msg.clone(),
+            NodeStatus::NoOp => "Skipped".to_string(),
+        }
+    }
 }
 impl From<NodeStatus> for NodeOutcome {
     fn from(status: NodeStatus) -> Self {
@@ -83,6 +99,7 @@ impl Stat {
         thread_id: i32,
     ) -> Self {
         let end_time = SystemTime::now();
+        let message = message.or_else(|| Some(status.default_message()));
 
         Stat {
             unique_id,
@@ -182,6 +199,59 @@ mod tests {
             number_part.parse::<u64>().is_ok(),
             "thread_id should end with a number, got: {}",
             stat.thread_id
+        );
+    }
+
+    #[test]
+    fn test_default_message_when_none_provided() {
+        let stat = Stat::new(
+            "model.my_project.my_model".to_string(),
+            SystemTime::now(),
+            None,
+            NodeStatus::Succeeded,
+            None,
+            1,
+        );
+
+        assert_eq!(
+            stat.message,
+            Some("Succeeded".to_string()),
+            "message should default to 'Succeeded' for successful nodes"
+        );
+    }
+
+    #[test]
+    fn test_explicit_message_preserved() {
+        let stat = Stat::new(
+            "model.my_project.my_model".to_string(),
+            SystemTime::now(),
+            None,
+            NodeStatus::Errored,
+            Some("Custom error message".to_string()),
+            1,
+        );
+
+        assert_eq!(
+            stat.message,
+            Some("Custom error message".to_string()),
+            "explicit message should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_default_messages_for_all_statuses() {
+        assert_eq!(NodeStatus::Succeeded.default_message(), "Succeeded");
+        assert_eq!(NodeStatus::Errored.default_message(), "Error");
+        assert_eq!(NodeStatus::TestWarned.default_message(), "Warn");
+        assert_eq!(NodeStatus::TestPassed.default_message(), "Pass");
+        assert_eq!(
+            NodeStatus::SkippedUpstreamFailed.default_message(),
+            "Skipped"
+        );
+        assert_eq!(NodeStatus::NoOp.default_message(), "Skipped");
+        assert_eq!(
+            NodeStatus::ReusedNoChanges("Model reused".to_string()).default_message(),
+            "Model reused"
         );
     }
 }
