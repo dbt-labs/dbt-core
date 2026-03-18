@@ -9,7 +9,7 @@ extended_msgpack_encoder in core/dbt/parser/manifest.py.
 
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, write_file
+from dbt.tests.util import get_manifest, run_dbt, write_file
 
 # A model whose meta references a Jinja variable that is not in the schema
 # rendering context.  The SchemaYamlRenderer renders these values with
