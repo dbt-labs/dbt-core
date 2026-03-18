@@ -11,7 +11,7 @@ use arrow::ipc::writer::StreamWriter as ArrowStreamWriter;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use dbt_common::ErrorCode;
 use dbt_common::adapter::DBT_EXECUTION_PHASES;
 use dbt_common::tracing::emit::emit_warn_log_message;
@@ -39,6 +39,18 @@ use std::sync::Arc;
 /// namespace without any global state transitions.
 static COUNTERS: Lazy<DashMap<PathBuf, DashMap<String, usize>>> = Lazy::new(DashMap::new);
 
+/// Paths that should NOT have their counters reset between sequential `fs`
+/// invocations. Useful for multi-command tests where the same model runs in
+/// different steps with different schemas.
+static SKIP_RESET_PATHS: Lazy<DashSet<PathBuf>> = Lazy::new(DashSet::new);
+
+/// Mark a recording path to skip counter resets between sequential
+/// fs invocations. Useful for multi-command tests where the same
+/// model runs in different steps with different schemas.
+pub fn skip_counter_reset(path: &Path) {
+    SKIP_RESET_PATHS.insert(path.to_path_buf());
+}
+
 static RECORDS_NAME: &str = "recordings.db";
 
 /// Clear sequence counters for the given recordings directory.
@@ -46,7 +58,9 @@ static RECORDS_NAME: &str = "recordings.db";
 /// Called when a new record/replay engine is created so that each
 /// recording session starts with fresh sequence numbers.
 pub(crate) fn reset_counters(path: &Path) {
-    COUNTERS.remove(path);
+    if !SKIP_RESET_PATHS.contains(path) {
+        COUNTERS.remove(path);
+    }
 }
 
 // This is cleaning we need to do for our auto generated
