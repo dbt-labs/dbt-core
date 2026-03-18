@@ -232,7 +232,9 @@ class UnitTestManifestLoader:
                     and ctx is not None
                     and unit_test_node is not None
                 ):
-                    statically_parsed = self._extract_ref_via_jinja(input, ctx, unit_test_node)
+                    statically_parsed = self._extract_ref_or_source_via_jinja(
+                        input, ctx, unit_test_node
+                    )
                 else:
                     raise InvalidUnitTestGivenInput(input=input)
 
@@ -262,7 +264,7 @@ class UnitTestManifestLoader:
 
         return original_input_node
 
-    def _extract_ref_via_jinja(
+    def _extract_ref_or_source_via_jinja(
         self,
         input_str: str,
         ctx: Dict[str, Any],
