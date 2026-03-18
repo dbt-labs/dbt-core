@@ -237,25 +237,26 @@ fn apply_connection_args(
 fn keyfile_json_to_credential_string(keyfile_json: &YmlValue) -> Result<String, AuthError> {
     let keyfile_yaml = match keyfile_json {
         YmlValue::Mapping(_, _) => keyfile_json.clone(),
-        YmlValue::String(base64_json_str, _) => {
+        YmlValue::String(json_str, _) => {
+            // Attempt to decode as base 64. Otherwise, assume that this is
+            // a JSON string.
             use base64::prelude::*;
-            let decoded = BASE64_STANDARD.decode(base64_json_str).map_err(|err| {
-                AuthError::config(format!(
-                    "Error decoding 'keyfile_json' from base64: '{err}'"
-                ))
-            })?;
-            let keyfile_yaml: YmlValue = serde_json::from_slice(&decoded)?;
+            let keyfile_yaml: YmlValue = if let Ok(decoded) = BASE64_STANDARD.decode(json_str) {
+                serde_json::from_slice(&decoded)?
+            } else {
+                serde_json::from_str(json_str)?
+            };
             if keyfile_yaml.is_mapping() {
                 keyfile_yaml
             } else {
                 return Err(AuthError::config(
-                    "'keyfile_json' must be a JSON object when provided as base64",
+                    "'keyfile_json' must be a JSON object when provided as a string",
                 ));
             }
         }
         _ => {
             return Err(AuthError::config(
-                "'keyfile_json' must be a YAML mapping or a base64-encoded string",
+                "'keyfile_json' must be a YAML mapping or string",
             ));
         }
     };
@@ -309,6 +310,29 @@ mod tests {
         ])
     }
 
+    fn base_config_keyfile_json() -> Mapping {
+        Mapping::from_iter([
+            ("method".into(), "service-account-json".into()),
+            ("database".into(), "my_db".into()),
+            ("schema".into(), "my_schema".into()),
+            (
+                "keyfile_json".into(),
+                r#"{
+                    "type": "service_account",
+                    "project_id": "bq-project",
+                    "private_key_id": "xyz123",
+                    "private_key": "-----BEGIN PRIVATE KEY-----\nXYZ\n-----END PRIVATE KEY-----",
+                    "client_email": "xyz@123.iam.gserviceaccount.com",
+                    "client_id": "111222333",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/fde-bigquery%40fde-testing-450816.iam.gserviceaccount.com"
+                }"#.into(),
+            ),
+        ])
+    }
+
     fn base_config_keyfile_json_base64() -> Mapping {
         Mapping::from_iter([
             ("method".into(), "service-account-json".into()),
@@ -345,6 +369,27 @@ mod tests {
             err.msg(),
             "Keyfile 'akeyfilethatdoesnotexist.json' does not exist"
         );
+    }
+
+    #[test]
+    fn test_auth_config_from_adapter_config_keyfile_json() {
+        let config = base_config_keyfile_json();
+        match try_configure(config) {
+            Ok(builder) => {
+                assert_eq!(
+                    other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
+                    auth_type::JSON_CREDENTIAL_STRING
+                );
+                let keyfile_json =
+                    other_option_value(&builder, bigquery::AUTH_CREDENTIALS).unwrap();
+                assert!(keyfile_json.contains(r#""type":"service_account""#));
+                assert_contains!(keyfile_json, "BEGIN PRIVATE KEY");
+                assert_contains!(keyfile_json, "END PRIVATE KEY");
+            }
+            Err(err) => {
+                panic!("Auth config mapping failed with error: {err:?}")
+            }
+        }
     }
 
     #[test]
