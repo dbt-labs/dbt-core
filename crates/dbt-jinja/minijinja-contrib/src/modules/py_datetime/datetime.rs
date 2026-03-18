@@ -10,11 +10,12 @@ use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
 
-use crate::modules::py_datetime::date::PyDate; // your date
+use crate::modules::py_datetime::date::PyDate;
 use crate::modules::py_datetime::strptime;
 use crate::modules::py_datetime::time::PyTime;
 use crate::modules::py_datetime::timedelta::PyTimeDelta;
-use crate::modules::pytz::PytzTimezone; // your timedelta // your trait // your time
+use crate::modules::py_datetime::tzinfo::PyFixedTimezone;
+use crate::modules::pytz::PytzTimezone;
 
 /// An enum storing either a naive datetime or an aware datetime with a known timezone.
 #[derive(Clone, Debug)]
@@ -85,8 +86,6 @@ impl PyDateTimeClass {
                     tzinfo: None,
                 })
             } else if let Some(tz) = tz_val.downcast_object_ref::<PytzTimezone>() {
-                // We have a chrono_tz::Tz in tz.tz
-                // Convert naive to aware
                 let aware_dt = tz
                     .tz
                     .from_local_datetime(&naive_dt)
@@ -101,10 +100,24 @@ impl PyDateTimeClass {
                     state: DateTimeState::Aware(aware_dt),
                     tzinfo: Some(tz.clone()),
                 })
+            } else if let Some(ftz) = tz_val.downcast_object_ref::<PyFixedTimezone>() {
+                let aware_dt = naive_dt
+                    .and_local_timezone(ftz.offset)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "ambiguous or invalid local time in that timezone",
+                        )
+                    })?;
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(aware_dt),
+                    tzinfo: None,
+                })
             } else {
                 Err(Error::new(
                     ErrorKind::InvalidArgument,
-                    "tzinfo must be a pytz timezone or None",
+                    "tzinfo must be a timezone or None",
                 ))
             }
         } else {
@@ -137,10 +150,9 @@ impl PyDateTimeClass {
             Ok(py_dt)
         } else if let Some(tz) = tz_val
             .as_ref()
-            .unwrap() // we checked that it's not None above
+            .unwrap()
             .downcast_object_ref::<PytzTimezone>()
         {
-            // Convert local_now (which we can interpret as local) to UTC, then to tz
             let dt_utc = local_now.with_timezone(&chrono::Utc);
             let new_aware = dt_utc.with_timezone(&tz.tz);
             let py_dt = PyDateTime {
@@ -148,10 +160,21 @@ impl PyDateTimeClass {
                 tzinfo: Some(tz.clone()),
             };
             Ok(py_dt)
+        } else if let Some(ftz) = tz_val
+            .as_ref()
+            .unwrap()
+            .downcast_object_ref::<PyFixedTimezone>()
+        {
+            let dt_utc = local_now.with_timezone(&chrono::Utc);
+            let new_aware = dt_utc.with_timezone(&ftz.offset);
+            Ok(PyDateTime {
+                state: DateTimeState::FixedOffset(new_aware),
+                tzinfo: None,
+            })
         } else {
             Err(Error::new(
                 ErrorKind::InvalidArgument,
-                "tz must be a pytz timezone or None",
+                "tz must be a timezone or None",
             ))
         }
     }
@@ -214,7 +237,6 @@ impl PyDateTimeClass {
                 };
                 Ok(py_dt)
             } else if let Some(tz) = tz_val.downcast_object_ref::<PytzTimezone>() {
-                // interpret as UTC, then convert to tz
                 let dt_utc = chrono::Utc
                     .timestamp_opt(secs, nanos)
                     .single()
@@ -230,10 +252,25 @@ impl PyDateTimeClass {
                     tzinfo: Some(tz.clone()),
                 };
                 Ok(py_dt)
+            } else if let Some(ftz) = tz_val.downcast_object_ref::<PyFixedTimezone>() {
+                let dt_utc = chrono::Utc
+                    .timestamp_opt(secs, nanos)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "invalid or out of range timestamp",
+                        )
+                    })?;
+                let new_aware = dt_utc.with_timezone(&ftz.offset);
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(new_aware),
+                    tzinfo: None,
+                })
             } else {
                 Err(Error::new(
                     ErrorKind::InvalidArgument,
-                    "tz must be a pytz timezone or None",
+                    "tz must be a timezone or None",
                 ))
             }
         } else {
@@ -301,10 +338,24 @@ impl PyDateTimeClass {
                     tzinfo: Some(tz.clone()),
                 };
                 Ok(py_dt)
+            } else if let Some(ftz) = tz_val.downcast_object_ref::<PyFixedTimezone>() {
+                let aware_dt = naive_dt
+                    .and_local_timezone(ftz.offset)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "ambiguous or invalid local time in that timezone",
+                        )
+                    })?;
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(aware_dt),
+                    tzinfo: None,
+                })
             } else {
                 Err(Error::new(
                     ErrorKind::InvalidArgument,
-                    "tzinfo must be a pytz timezone or None",
+                    "tzinfo must be a timezone or None",
                 ))
             }
         } else {
@@ -521,10 +572,16 @@ impl PyDateTime {
 
     /// Return .tzinfo. If naive => None
     pub fn tzinfo(&self) -> Option<Value> {
-        match &self.tzinfo {
-            Some(tz) => Some(Value::from_object(tz.clone())),
-            None => Some(Value::from(())), // Return Python's None (not undefined)
+        if let Some(tz) = &self.tzinfo {
+            return Some(Value::from_object(tz.clone()));
         }
+        if let DateTimeState::FixedOffset(fdt) = &self.state {
+            return Some(Value::from_object(PyFixedTimezone {
+                offset: *fdt.offset(),
+                name: None,
+            }));
+        }
+        Some(Value::from(()))
     }
 
     /// "chrono_dt" is a helper method that returns a naive DateTime if we're naive,
@@ -824,23 +881,46 @@ impl PyDateTime {
         let new_naive = NaiveDateTime::new(new_date, new_time);
 
         // parse tzinfo
-        let final_tzinfo = if let Some(tz_val) = new_tzinfo_val {
+        if let Some(tz_val) = new_tzinfo_val {
             if tz_val.is_none() {
-                None
+                return Ok(PyDateTime {
+                    state: DateTimeState::Naive(new_naive),
+                    tzinfo: None,
+                });
             } else if let Some(tz) = tz_val.downcast_object_ref::<PytzTimezone>() {
-                Some(tz.clone())
-            } else {
-                // fallback to the old tz if no recognized tz
-                self.tzinfo.clone()
+                let aware = tz
+                    .tz
+                    .from_local_datetime(&new_naive)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "ambiguous or invalid local time in that timezone",
+                        )
+                    })?;
+                return Ok(PyDateTime {
+                    state: DateTimeState::Aware(aware),
+                    tzinfo: Some(tz.clone()),
+                });
+            } else if let Some(ftz) = tz_val.downcast_object_ref::<PyFixedTimezone>() {
+                let aware = new_naive
+                    .and_local_timezone(ftz.offset)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidArgument,
+                            "ambiguous or invalid local time in that timezone",
+                        )
+                    })?;
+                return Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(aware),
+                    tzinfo: None,
+                });
             }
-        } else {
-            // if tzinfo kwarg not provided, keep the same tzinfo
-            self.tzinfo.clone()
-        };
+        }
 
-        if let Some(ref tz) = final_tzinfo {
-            // produce an aware datetime
-            // interpret new_naive in that tz
+        // tzinfo kwarg not provided or unrecognized — keep the same state type
+        if let Some(ref tz) = self.tzinfo {
             let aware = tz
                 .tz
                 .from_local_datetime(&new_naive)
@@ -853,14 +933,30 @@ impl PyDateTime {
                 })?;
             Ok(PyDateTime {
                 state: DateTimeState::Aware(aware),
-                tzinfo: final_tzinfo,
+                tzinfo: self.tzinfo.clone(),
             })
         } else {
-            // produce naive
-            Ok(PyDateTime {
-                state: DateTimeState::Naive(new_naive),
-                tzinfo: None,
-            })
+            match &self.state {
+                DateTimeState::FixedOffset(fdt) => {
+                    let aware = new_naive
+                        .and_local_timezone(*fdt.offset())
+                        .single()
+                        .ok_or_else(|| {
+                            Error::new(
+                                ErrorKind::InvalidArgument,
+                                "ambiguous or invalid local time in that timezone",
+                            )
+                        })?;
+                    Ok(PyDateTime {
+                        state: DateTimeState::FixedOffset(aware),
+                        tzinfo: None,
+                    })
+                }
+                _ => Ok(PyDateTime {
+                    state: DateTimeState::Naive(new_naive),
+                    tzinfo: None,
+                }),
+            }
         }
     }
 
@@ -904,10 +1000,50 @@ impl PyDateTime {
                 Ok(py_dt)
             }
             DateTimeState::FixedOffset(fdt) => {
-                // Keep the datetime with its original fixed offset
+                let dt_utc = fdt.with_timezone(&chrono::Utc);
+                let new_aware = dt_utc.with_timezone(&tz.tz);
                 Ok(PyDateTime {
-                    state: DateTimeState::FixedOffset(*fdt),
-                    tzinfo: self.tzinfo.clone(),
+                    state: DateTimeState::Aware(new_aware),
+                    tzinfo: Some(tz.clone()),
+                })
+            }
+        }
+    }
+
+    /// dt.astimezone(fixed_tz) — convert to a fixed-offset timezone
+    pub fn astimezone_fixed(&self, ftz: &PyFixedTimezone) -> Result<PyDateTime, Error> {
+        match &self.state {
+            DateTimeState::Naive(naive_dt) => {
+                let local_dt = chrono::Local
+                    .from_local_datetime(naive_dt)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "ambiguous or invalid local time for naive datetime",
+                        )
+                    })?;
+                let dt_utc = local_dt.with_timezone(&chrono::Utc);
+                let new_aware = dt_utc.with_timezone(&ftz.offset);
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(new_aware),
+                    tzinfo: None,
+                })
+            }
+            DateTimeState::Aware(old_dt) => {
+                let dt_utc = old_dt.with_timezone(&chrono::Utc);
+                let new_aware = dt_utc.with_timezone(&ftz.offset);
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(new_aware),
+                    tzinfo: None,
+                })
+            }
+            DateTimeState::FixedOffset(fdt) => {
+                let dt_utc = fdt.with_timezone(&chrono::Utc);
+                let new_aware = dt_utc.with_timezone(&ftz.offset);
+                Ok(PyDateTime {
+                    state: DateTimeState::FixedOffset(new_aware),
+                    tzinfo: None,
                 })
             }
         }
@@ -933,7 +1069,6 @@ impl Object for PyDateTime {
             // "strftime(format)"
             "strftime" => self.strftime(args),
 
-            // "astimezone(tz)"
             "astimezone" => {
                 let tz_val = args.first().ok_or_else(|| {
                     Error::new(
@@ -941,16 +1076,18 @@ impl Object for PyDateTime {
                         "astimezone() requires an argument",
                     )
                 })?;
-                let tz = tz_val
-                    .downcast_object_ref::<PytzTimezone>()
-                    .ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::InvalidArgument,
-                            "astimezone() expects a PytzTimezone object",
-                        )
-                    })?;
-                let new_dt = self.astimezone(tz)?;
-                Ok(Value::from_object(new_dt))
+                if let Some(tz) = tz_val.downcast_object_ref::<PytzTimezone>() {
+                    let new_dt = self.astimezone(tz)?;
+                    Ok(Value::from_object(new_dt))
+                } else if let Some(ftz) = tz_val.downcast_object_ref::<PyFixedTimezone>() {
+                    let new_dt = self.astimezone_fixed(ftz)?;
+                    Ok(Value::from_object(new_dt))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidArgument,
+                        "astimezone() expects a timezone object",
+                    ))
+                }
             }
 
             // "replace(...)"

@@ -196,6 +196,41 @@ impl PyTime {
         Ok(Value::from(self.time.format(fmt).to_string()))
     }
 
+    fn replace(&self, args: &[Value]) -> Result<PyTime, Error> {
+        let mut parser = ArgParser::new(args, None);
+
+        let mut hour = self.time.hour();
+        let mut minute = self.time.minute();
+        let mut second = self.time.second();
+        let mut microsecond = self.time.nanosecond() / 1_000;
+
+        if let Some(h) = parser.consume_optional_only_from_kwargs::<u32>("hour") {
+            hour = h;
+        }
+        if let Some(m) = parser.consume_optional_only_from_kwargs::<u32>("minute") {
+            minute = m;
+        }
+        if let Some(s) = parser.consume_optional_only_from_kwargs::<u32>("second") {
+            second = s;
+        }
+        if let Some(us) = parser.consume_optional_only_from_kwargs::<u32>("microsecond") {
+            microsecond = us;
+        }
+
+        let naive = NaiveTime::from_hms_micro_opt(hour, minute, second, microsecond).ok_or_else(
+            || {
+                Error::new(
+                    ErrorKind::InvalidArgument,
+                    format!(
+                        "Invalid time: hour={hour}, minute={minute}, second={second}, microsecond={microsecond}"
+                    ),
+                )
+            },
+        )?;
+
+        Ok(PyTime { time: naive })
+    }
+
     /// Handle time + timedelta operations
     fn add_op(&self, args: &[Value], is_add: bool) -> Result<Value, Error> {
         let mut parser = ArgParser::new(args, None);
@@ -335,15 +370,13 @@ impl Object for PyTime {
     ) -> Result<Value, Error> {
         match method {
             "isoformat" => {
-                // Return a string like "HH:MM:SS.uuuuuu"
-                Ok(Value::from(self.time.format("%H:%M:%S%.6f").to_string()))
+                if self.time.nanosecond() == 0 {
+                    Ok(Value::from(self.time.format("%H:%M:%S").to_string()))
+                } else {
+                    Ok(Value::from(self.time.format("%H:%M:%S%.6f").to_string()))
+                }
             }
-            "replace" => {
-                // If you wanted a time.replace(hour=10, minute=30, etc.)
-                // You could parse new fields from args, build a new `NaiveTime`.
-                // For brevity, we skip it or stub it:
-                Ok(Value::from("TODO: implement time.replace(...)"))
-            }
+            "replace" => self.replace(args).map(Value::from_object),
             "strftime" => self.strftime(args),
 
             // Add arithmetic operations

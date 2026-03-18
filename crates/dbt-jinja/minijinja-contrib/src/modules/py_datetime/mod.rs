@@ -26,5 +26,9 @@ pub fn create_datetime_module() -> BTreeMap<String, Value> {
         "tzinfo".to_string(),
         Value::from_object(tzinfo::PyTzInfoClass),
     );
+    datetime_module.insert(
+        "timezone".to_string(),
+        Value::from_object(tzinfo::PyTimezoneClass),
+    );
     datetime_module
 }

@@ -68,6 +68,13 @@ impl Pattern {
 }
 
 impl Object for Pattern {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
+            "pattern" => Some(Value::from(self.raw.clone())),
+            _ => None,
+        }
+    }
+
     fn call_method(
         self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
@@ -110,10 +117,11 @@ fn re_match(args: &[Value]) -> Result<Value, Error> {
     }
 
     let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let raw_pattern = regex.as_str().to_string();
+    let input_string = text.to_string();
 
-    // Create a new pattern that must match from the start
     let mut pattern = String::from(r"\A");
-    pattern.push_str(regex.as_str());
+    pattern.push_str(&raw_pattern);
 
     let start_anchored = Regex::new(&pattern).map_err(|e| {
         Error::new(
@@ -136,7 +144,7 @@ fn re_match(args: &[Value]) -> Result<Value, Error> {
                 .enumerate()
                 .filter_map(|(idx, name)| name.map(|name| (name.to_string(), idx))),
         );
-        let capture = Capture::new(groups, named_groups);
+        let capture = Capture::new(groups, named_groups, input_string, raw_pattern);
         Ok(Value::from_object(capture))
     } else {
         Ok(Value::NONE)
@@ -154,6 +162,8 @@ fn re_search(args: &[Value]) -> Result<Value, Error> {
     }
 
     let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let raw_pattern = regex.as_str().to_string();
+    let input_string = text.to_string();
 
     if let Ok(Some(captures)) = regex.captures(text) {
         let groups: Vec<(Value, Option<Span>)> = captures
@@ -169,7 +179,7 @@ fn re_search(args: &[Value]) -> Result<Value, Error> {
                 .enumerate()
                 .filter_map(|(idx, name)| name.map(|name| (name.to_string(), idx))),
         );
-        let capture = Capture::new(groups, named_groups);
+        let capture = Capture::new(groups, named_groups, input_string, raw_pattern);
         Ok(Value::from_object(capture))
     } else {
         Ok(Value::NONE)
@@ -200,6 +210,9 @@ fn re_findall(args: &[Value]) -> Result<Value, Error> {
     }
 
     let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let raw_pattern = regex.as_str().to_string();
+    let input_string = text.to_string();
+
     let matches =
         regex
             .captures_iter(text)
@@ -229,7 +242,12 @@ fn re_findall(args: &[Value]) -> Result<Value, Error> {
                             IndexMap::from_iter(names.enumerate().skip(1).filter_map(
                                 |(idx, name)| name.map(|name| (name.to_string(), idx)),
                             ));
-                        let capture = Capture::new(groups, named_groups);
+                        let capture = Capture::new(
+                            groups,
+                            named_groups,
+                            input_string.clone(),
+                            raw_pattern.clone(),
+                        );
                         Value::from_object(capture)
                     }
                 })
@@ -403,17 +421,29 @@ type Span = (usize, usize);
 
 #[derive(Debug, Clone)]
 pub struct Capture {
-    /// List of groups and spans
     groups: Vec<(Value, Option<Span>)>,
-    /// Map of group names to their indices in the group vector
     named_groups: IndexMap<String, usize>,
+    input_string: String,
+    pattern: String,
+    pos: usize,
+    endpos: usize,
 }
 
 impl Capture {
-    pub fn new(groups: Vec<(Value, Option<Span>)>, named_groups: IndexMap<String, usize>) -> Self {
+    pub fn new(
+        groups: Vec<(Value, Option<Span>)>,
+        named_groups: IndexMap<String, usize>,
+        input_string: String,
+        pattern: String,
+    ) -> Self {
+        let endpos = input_string.len();
         Self {
             groups,
             named_groups,
+            input_string,
+            pattern,
+            pos: 0,
+            endpos,
         }
     }
 
@@ -577,37 +607,51 @@ impl Object for Capture {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str() {
-            // Match.pos
-            Some("pos") => {
-                // https://docs.python.org/3/library/re.html#re.Match.pos
-                todo!("'pos' is not yet implemented")
+        match key.as_str()? {
+            "pos" => Some(Value::from(self.pos)),
+            "endpos" => Some(Value::from(self.endpos)),
+            "lastindex" => {
+                let last = self
+                    .groups
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .rev()
+                    .find(|(_, (val, _))| !val.is_none());
+                match last {
+                    Some((idx, _)) => Some(Value::from(idx)),
+                    None => Some(Value::from(())),
+                }
             }
-            // Match.endpos
-            Some("endpos") => {
-                // https://docs.python.org/3/library/re.html#re.Match.endpos
-                todo!("'endpos' is not yet implemented")
+            "lastgroup" => {
+                let last_idx = self
+                    .groups
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .rev()
+                    .find(|(_, (val, _))| !val.is_none())
+                    .map(|(idx, _)| idx);
+                match last_idx {
+                    Some(idx) => {
+                        let name = self
+                            .named_groups
+                            .iter()
+                            .find(|(_, &gi)| gi == idx)
+                            .map(|(name, _)| name.clone());
+                        match name {
+                            Some(n) => Some(Value::from(n)),
+                            None => Some(Value::from(())),
+                        }
+                    }
+                    None => Some(Value::from(())),
+                }
             }
-            // Match.lastindex
-            Some("lastindex") => {
-                // https://docs.python.org/3/library/re.html#re.Match.lastindex
-                todo!("'lastindex' is not yet implemented")
+            "re" => {
+                let compiled = Regex::new(&self.pattern).ok()?;
+                Some(Value::from_object(Pattern::new(&self.pattern, compiled)))
             }
-            // Match.lastgroup
-            Some("lastgroup") => {
-                // https://docs.python.org/3/library/re.html#re.Match.lastgroup
-                todo!("'lastgroup' is not yet implemented")
-            }
-            // Match.re
-            Some("re") => {
-                // https://docs.python.org/3/library/re.html#re.Match.re
-                todo!("'re' is not yet implemented")
-            }
-            // Match.string
-            Some("string") => {
-                // https://docs.python.org/3/library/re.html#re.Match.string
-                todo!("'string' is not yet implemented")
-            }
+            "string" => Some(Value::from(self.input_string.clone())),
             _ => None,
         }
     }
