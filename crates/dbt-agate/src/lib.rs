@@ -260,13 +260,12 @@ impl Object for Tuple {
         Some(self.len())
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn call_method(
         self: &Arc<Self>,
-        state: &State,
+        _state: &State,
         name: &str,
         args: &[Value],
-        listeners: &[Rc<dyn RenderingEventListener>],
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         match name {
             "count" => {
@@ -283,7 +282,7 @@ impl Object for Tuple {
                 let idx = self.index(value);
                 Ok(Value::from(idx))
             }
-            _ => Object::call_method(self, state, name, args, listeners),
+            _ => Err(minijinja::Error::from(ErrorKind::UnknownMethod)),
         }
     }
 
@@ -1054,5 +1053,26 @@ mod tests {
             )
             .unwrap();
         assert_eq!(popped_value, Value::from(42));
+    }
+
+    /// Regression test for calling `__ne__` on `dbt_agate::Tuple`.
+    ///
+    /// Expected behavior:
+    /// - Pre-fix: this test aborts the process with a stack overflow (infinite recursion).
+    /// - Post-fix: this test completes successfully.
+    #[test]
+    fn tuple_ne_operator_does_not_stack_overflow() {
+        let tuple = Arc::new(Tuple(Box::new(TestTupleRepr::new(Arc::new(vec![
+            Value::from(1),
+        ])))));
+
+        let env = Environment::new();
+        let ctx = minijinja::context! { t => Value::from_dyn_object(tuple) };
+
+        // `!=` lowers to a `__ne__` method lookup on the left operand in MiniJinja.
+        // Pre-fix this triggers infinite recursion in `Tuple::call_method`.
+        let _out = env
+            .render_str("{{ t != (1,) }}", ctx, &[])
+            .expect("render should succeed without stack overflow");
     }
 }
