@@ -278,6 +278,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -360,12 +371,40 @@
       },
       "additionalProperties": false
     },
+    "ColumnMask": {
+      "type": "object",
+      "required": [
+        "function"
+      ],
+      "properties": {
+        "function": {
+          "type": "string"
+        },
+        "using_columns": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ColumnProperties": {
       "type": "object",
       "required": [
         "name"
       ],
       "properties": {
+        "column_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnMask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -1452,6 +1491,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -2902,6 +2952,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -3144,6 +3205,31 @@
       },
       "additionalProperties": false
     },
+    "MacrosConfig": {
+      "type": "object",
+      "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "MacrosProperties": {
       "type": "object",
       "required": [
@@ -3158,6 +3244,16 @@
           "items": {
             "$ref": "#/definitions/MacrosArguments"
           }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MacrosConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "description": {
           "type": [
@@ -4725,6 +4821,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -5179,7 +5286,7 @@
       ]
     },
     "SchemaRefreshInterval": {
-      "description": "Schema refresh interval: 'duration', 'duration', '1d', or 'never'",
+      "description": "Schema refresh interval: '30m', '2h', '1d', or 'never'",
       "type": "string"
     },
     "SeedConfig": {
@@ -5901,6 +6008,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tests": {
           "type": [
@@ -6772,6 +6890,17 @@
             "null"
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -7471,9 +7600,17 @@
       "enum": [
         "unsafe",
         "off",
-        "baseline",
         "strict",
+        "baseline",
         "on"
+      ]
+    },
+    "StaticAnalysisOffReason": {
+      "type": "string",
+      "enum": [
+        "configuredoff",
+        "unabletofetchschema",
+        "nodownstream"
       ]
     },
     "StoreFailuresAs": {
@@ -7512,7 +7649,7 @@
       "type": "object",
       "properties": {
         "schema_refresh_interval": {
-          "description": "How often to refresh the schema from the warehouse. Examples: \"duration\", \"duration\", \"1d\", \"never\"",
+          "description": "How often to refresh the schema from the warehouse. Examples: \"30m\", \"2h\", \"1d\", \"never\"",
           "anyOf": [
             {
               "$ref": "#/definitions/SchemaRefreshInterval"
@@ -8352,6 +8489,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/UnitTestOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
             },
             {
               "type": "null"
