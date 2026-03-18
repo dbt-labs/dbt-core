@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from dbt.parser.manifest import _get_doc_blocks
 
 
@@ -24,9 +22,7 @@ class TestGetDocBlocks:
         result = _get_doc_blocks("{{ doc('my_doc') }}", manifest, "my_package")
 
         assert result == ["doc.my_project.my_doc"]
-        manifest.resolve_doc.assert_called_once_with(
-            "my_doc", None, "my_project", "my_package"
-        )
+        manifest.resolve_doc.assert_called_once_with("my_doc", None, "my_project", "my_package")
 
     def test_mixed_args_skips_name_nodes(self):
         """When one arg is a Name node and others are Const, only Const values are used."""

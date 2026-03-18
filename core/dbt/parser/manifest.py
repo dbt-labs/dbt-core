@@ -1772,10 +1772,15 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
                 and hasattr(node.node, "name")
                 and node.node.name == "doc"
             ):
-                # Only Const is statically resolvable to a block name at parse time
-                # Filter out Const values as opposed to raising an unhandled exception attempting to statically parse 
-                # other jinja expression nodes (ie Concat, CondExpr)
-                doc_args = [arg.value for arg in node.args if isinstance(arg, Const)]
+                # Only Const is statically resolvable to a block name at parse time. 
+                #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
+                # Filter out Const values to avoid raising an unhandled exception attempting
+                # to statically parseother jinja expression nodes (ie Concat, CondExpr)
+                doc_args = [
+                    arg.value
+                    for arg in node.args
+                    if isinstance(arg, Const) and hasattr(arg, "value")
+                ]
 
                 if len(doc_args) == 1:
                     package, name = None, doc_args[0]

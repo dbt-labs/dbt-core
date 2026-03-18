@@ -1,7 +1,7 @@
 import json
+
 import pytest
 
-from dbt.exceptions import DocTargetNotFoundError
 from dbt.tests.util import run_dbt
 
 docs_md = """{% docs test_doc %}
@@ -41,4 +41,3 @@ class TestDocVariableArg:
         column_data = model_data["columns"]["id"]
         assert column_data["description"] == "this is a docs block"
         assert column_data["doc_blocks"] == []
-
