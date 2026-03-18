@@ -76,7 +76,7 @@ impl HubUnpinnedPackage {
         self.versions.extend(other.versions);
     }
 
-    pub async fn resolved(&self, hub_registry: &mut HubClient) -> FsResult<HubPinnedPackage> {
+    pub async fn resolved(&self, hub_registry: &HubClient) -> FsResult<HubPinnedPackage> {
         if !hub_registry.check_index(&self.package).await? {
             return err!(
                 ErrorCode::InvalidConfig,

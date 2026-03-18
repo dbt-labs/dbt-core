@@ -83,7 +83,7 @@ pub async fn get_or_install_packages(
             }
         })
         .unwrap_or(DBT_HUB_URL);
-    let mut hub_registry = HubClient::new(hub_url);
+    let hub_registry = HubClient::new(hub_url);
 
     // Add package first if specified, then load the package definition
     if let Some(add_package) = add_package {
@@ -122,7 +122,7 @@ pub async fn get_or_install_packages(
                 io,
                 &vars,
                 env,
-                &mut hub_registry,
+                &hub_registry,
                 dbt_packages,
                 version_check,
                 skip_private_deps,
@@ -199,7 +199,7 @@ pub async fn get_or_install_packages(
         install_packages(
             io,
             &vars,
-            &mut hub_registry,
+            &hub_registry,
             env,
             &dbt_packages_lock,
             packages_install_path,
@@ -246,7 +246,7 @@ pub async fn get_or_install_packages(
             install_packages(
                 io,
                 &vars,
-                &mut hub_registry,
+                &hub_registry,
                 env,
                 &dbt_packages_lock,
                 packages_install_path,

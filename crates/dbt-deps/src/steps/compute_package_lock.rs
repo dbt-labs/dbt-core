@@ -25,7 +25,7 @@ pub async fn compute_package_lock(
     io: &IoArgs,
     vars: &BTreeMap<String, dbt_yaml::Value>,
     jinja_env: &JinjaEnv,
-    hub_registry: &mut HubClient,
+    hub_registry: &HubClient,
     dbt_packages: &DbtPackages,
     version_check: bool,
     skip_private_deps: bool,
@@ -39,7 +39,6 @@ pub async fn compute_package_lock(
     package_listing.hydrate_dbt_packages(dbt_packages, jinja_env)?;
     let mut final_listing =
         PackageListing::new(io.clone(), vars.clone()).with_skip_private_deps(skip_private_deps);
-    hub_registry.hydrate_index().await?;
     resolve_packages(
         io,
         vars,
@@ -159,7 +158,7 @@ pub async fn compute_package_lock(
 async fn resolve_packages(
     io: &IoArgs,
     vars: &BTreeMap<String, dbt_yaml::Value>,
-    hub_registry: &mut HubClient,
+    hub_registry: &HubClient,
     final_listing: &mut PackageListing,
     package_listing: &mut PackageListing,
     jinja_env: &JinjaEnv,

@@ -90,7 +90,7 @@ fn create_package_installed_span(
 pub async fn install_packages(
     io_args: &IoArgs,
     vars: &BTreeMap<String, dbt_yaml::Value>,
-    hub_registry: &mut HubClient,
+    hub_registry: &HubClient,
     jinja_env: &JinjaEnv,
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
@@ -206,7 +206,7 @@ pub async fn install_packages(
 async fn install_package(
     io_args: &IoArgs,
     vars: &BTreeMap<String, dbt_yaml::Value>,
-    hub_registry: &mut HubClient,
+    hub_registry: &HubClient,
     jinja_env: &JinjaEnv,
     packages_install_path: &Path,
     package: &UnpinnedPackage,

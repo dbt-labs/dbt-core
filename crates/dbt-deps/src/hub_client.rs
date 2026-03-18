@@ -11,6 +11,8 @@ use reqwest_retry::{
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 pub const DBT_HUB_URL: &str = "https://hub.getdbt.com";
 pub const DBT_CORE_FIXED_VERSION: &str = "1.8.7";
@@ -46,11 +48,20 @@ pub struct HubPackageJson {
     pub latest_fusion_schema_compat: Option<bool>,
 }
 
+struct HubClientInner {
+    client: ClientWithMiddleware,
+    base_url: String,
+    index: OnceCell<HashSet<String>>,
+    cache: scc::HashMap<String, HubPackageJson>,
+}
+
+/// Client for interacting with the dbt Hub API.
+///
+/// Clone-safe and thread-safe via Arc interior. All methods take `&self`
+/// allowing concurrent fetches without a mutable borrow.
+#[derive(Clone)]
 pub struct HubClient {
-    pub client: ClientWithMiddleware,
-    pub base_url: String,
-    pub index: Option<HashSet<String>>,
-    pub hub_packages: HashMap<String, HubPackageJson>,
+    inner: Arc<HubClientInner>,
 }
 
 impl HubClient {
@@ -62,50 +73,55 @@ impl HubClient {
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
         Self {
-            client,
-            base_url: base_url.to_string(),
-            index: None,
-            hub_packages: HashMap::new(),
+            inner: Arc::new(HubClientInner {
+                client,
+                base_url: base_url.to_string(),
+                index: OnceCell::new(),
+                cache: scc::HashMap::new(),
+            }),
         }
     }
 
-    pub async fn hydrate_index(&mut self) -> FsResult<()> {
-        if self.index.is_some() {
-            return Ok(());
-        }
-        let url = format!("{}/api/v1/index.json", self.base_url);
-        let res = self.client.get(&url).send().await.map_err(|e| {
-            fs_err!(
-                ErrorCode::RuntimeError,
-                "Failed to get index from {url}; status: {}",
-                e
-            )
-        })?;
-        if res.status().is_success() {
-            let index: Vec<String> = res.json().await.map_err(|e| {
-                fs_err!(
-                    ErrorCode::RuntimeError,
-                    "Failed to parse index from {url}; status: {}",
-                    e
-                )
-            })?;
-            self.index = Some(index.into_iter().collect());
-            Ok(())
-        } else {
-            err!(
-                ErrorCode::RuntimeError,
-                "Failed to get index from {url}; status: {}",
-                res.status()
-            )
-        }
+    /// Hydrate the package index. Safe to call concurrently — OnceCell ensures
+    /// only one fetch runs; all other callers wait for the same result.
+    pub async fn hydrate_index(&self) -> FsResult<&HashSet<String>> {
+        self.inner
+            .index
+            .get_or_try_init(|| async {
+                let url = format!("{}/api/v1/index.json", self.inner.base_url);
+                let res = self.inner.client.get(&url).send().await.map_err(|e| {
+                    fs_err!(
+                        ErrorCode::RuntimeError,
+                        "Failed to get index from {url}; status: {}",
+                        e
+                    )
+                })?;
+                if res.status().is_success() {
+                    let index: Vec<String> = res.json().await.map_err(|e| {
+                        fs_err!(
+                            ErrorCode::RuntimeError,
+                            "Failed to parse index from {url}; status: {}",
+                            e
+                        )
+                    })?;
+                    Ok(index.into_iter().collect())
+                } else {
+                    err!(
+                        ErrorCode::RuntimeError,
+                        "Failed to get index from {url}; status: {}",
+                        res.status()
+                    )
+                }
+            })
+            .await
     }
 
-    pub async fn get_hub_package(&mut self, package: &str) -> FsResult<HubPackageJson> {
-        if let Some(hub_package) = self.hub_packages.get(package) {
-            return Ok(hub_package.clone());
+    pub async fn get_hub_package(&self, package: &str) -> FsResult<HubPackageJson> {
+        if let Some(entry) = self.inner.cache.get_async(package).await {
+            return Ok(entry.get().clone());
         }
-        let url = format!("{}/api/v1/{}.json", self.base_url, package);
-        let res = self.client.get(&url).send().await.map_err(|e| {
+        let url = format!("{}/api/v1/{}.json", self.inner.base_url, package);
+        let res = self.inner.client.get(&url).send().await.map_err(|e| {
             fs_err!(
                 ErrorCode::RuntimeError,
                 "Failed to get package from {url}; status: {}",
@@ -120,8 +136,12 @@ impl HubClient {
                     e.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
                 )
             })?;
-            self.hub_packages
-                .insert(package.to_string(), hub_package.clone());
+            // insert_async returns a bool (inserted/not), discard it.
+            let _ = self
+                .inner
+                .cache
+                .insert_async(package.to_string(), hub_package.clone())
+                .await;
             Ok(hub_package)
         } else {
             err!(
@@ -132,19 +152,13 @@ impl HubClient {
         }
     }
 
-    pub async fn check_index(&mut self, package: &str) -> FsResult<bool> {
-        if self.index.is_none() {
-            self.hydrate_index().await?;
-        }
-        if let Some(index) = &self.index {
-            Ok(index.contains(package))
-        } else {
-            Ok(false)
-        }
+    pub async fn check_index(&self, package: &str) -> FsResult<bool> {
+        let index = self.hydrate_index().await?;
+        Ok(index.contains(package))
     }
 
     pub async fn get_compatible_versions(
-        &mut self,
+        &self,
         hub_package: &HubPackageJson,
         _dbt_version: &str,
         _should_version_check: bool,

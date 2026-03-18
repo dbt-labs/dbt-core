@@ -27,10 +27,12 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ['json', 'stream'] }
 reqwest-middleware = { workspace = true, features = ['json'] }
 reqwest-retry = { workspace = true }
+scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = { version = "0.10.6" }
 tempfile = { workspace = true }
+tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
