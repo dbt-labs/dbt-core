@@ -250,23 +250,18 @@ class TestBuilder(Generic[Testable]):
         # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
         if get_flags().require_generic_test_arguments_property:
             arguments = test_args.pop("arguments", {})
-            config_keys_at_root = [
-                k for k in test_args.keys()
-                if k not in ("config", "column_name", "description", "name")
-                and k in TestBuilder.CONFIG_ARGS
-            ]
-            for config_key in config_keys_at_root:
-                deprecations.warn(
-                    "property-moved-to-config-deprecation",
-                    key=config_key,
-                    file=file_path,
-                    key_path=f"data_tests.{test_name}.{config_key}",
-                )
-            if not arguments and any(
-                k not in ("config", "column_name", "description", "name")
-                and k not in TestBuilder.CONFIG_ARGS
-                for k in test_args.keys()
-            ):
+            for k in test_args.keys():
+                if k in TestBuilder.CONFIG_ARGS:
+                    deprecations.warn(
+                        "property-moved-to-config-deprecation",
+                        key=k,
+                        file=file_path,
+                        key_path=f"data_tests.{test_name}.{k}",
+                    )
+
+            top_level_keys = ("config", "column_name", "description", "name", *TestBuilder.CONFIG_ARGS)
+
+            if not arguments and any(k not in top_level_keys for k in test_args.keys()):
                 resource = (
                     f"'{resource_name}' in package '{package_name}'"
                     if package_name

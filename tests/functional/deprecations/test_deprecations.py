@@ -957,9 +957,6 @@ class TestMissingArgsVsPropertyMovedToConfig:
     defined at the top level of a generic test, it should raise
     PropertyMovedToConfigDeprecation, not MissingArgumentsPropertyInGenericTestDeprecation."""
 
-    @pytest.fixture(scope="class")
-    def dbt_profile_target(self):
-        return {"type": "duckdb", "threads": 1, "path": ":memory:"}
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -980,7 +977,7 @@ class TestMissingArgsVsPropertyMovedToConfig:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[moved_catcher.catch, missing_catcher.catch],
         )
-        assert len(moved_catcher.caught_events) >= 1, (
+        assert len(moved_catcher.caught_events) == 1, (
             "Expected PropertyMovedToConfigDeprecation for `where` at top level of generic test"
         )
         assert len(missing_catcher.caught_events) == 0, (
