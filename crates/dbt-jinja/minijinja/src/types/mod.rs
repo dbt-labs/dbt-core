@@ -971,4 +971,73 @@ mod tests {
             "join must be an upper bound of src; src={src:?} joined={joined:?}"
         );
     }
+
+    #[test]
+    fn union_join_must_not_drop_equivalent_object_types() {
+        use crate::types::builtins::{BuiltinDefinition, Definition};
+        use crate::types::DynObject;
+        use dashmap::DashMap;
+        use std::sync::Arc;
+
+        // Two distinct object instances that represent the same conceptual type ("relation")
+        // should not cause a join to drop the type and collapse to None.
+        let registry = Arc::new(DashMap::new());
+        let relation_def: Definition = minijinja_typecheck_builtins::get_definitions()
+            .iter()
+            .find(|d| d.object.as_ref().is_some_and(|o| o.id == "relation"))
+            .expect("missing builtin definition for relation")
+            .clone()
+            .into();
+
+        let rel1 = Type::Object(DynObject::new(Arc::new(BuiltinDefinition::new(
+            &relation_def,
+            registry.clone(),
+        ))));
+        let rel2 = Type::Object(DynObject::new(Arc::new(BuiltinDefinition::new(
+            &relation_def,
+            registry,
+        ))));
+        assert_ne!(
+            rel1, rel2,
+            "sanity: relation objects must be pointer-distinct"
+        );
+        assert!(
+            rel1.is_subtype_of(&rel2),
+            "sanity: relation should subtype itself"
+        );
+        assert!(
+            rel2.is_subtype_of(&rel1),
+            "sanity: relation should subtype itself"
+        );
+
+        // Trigger normalization via `remove_subtypes` in the union join.
+        // This matches the real-world failure mode: an existing Optional[relation] joined
+        // with another equivalent-but-distinct relation instance.
+        let before = Type::Union(UnionType::new([Type::None, rel1]));
+        let joined = before.union(&rel2);
+
+        match &joined {
+            Type::Union(union_type) => {
+                assert_eq!(
+                    union_type.types.len(),
+                    2,
+                    "joined must have exactly two members (None and relation); before={before:?} joined={joined:?}"
+                );
+                assert!(
+                    union_type.types.contains(&Type::None),
+                    "joined must remain optional; before={before:?} joined={joined:?}"
+                );
+                assert!(
+                    union_type.types.iter().any(|t| match t {
+                        Type::Object(obj) => obj.type_debug() == "relation",
+                        _ => false,
+                    }),
+                    "joined must include relation; before={before:?} joined={joined:?}"
+                );
+            }
+            _ => {
+                panic!("joined must be Union(None, relation); before={before:?} joined={joined:?}")
+            }
+        }
+    }
 }

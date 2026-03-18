@@ -46,7 +46,10 @@ impl UnionType {
                 all_types.remove(&Type::Any { hard: true });
 
                 // Remove types that are subtypes of other types
-                let filtered_types = Self::remove_subtypes(all_types);
+                let filtered_types = Self::dedup_types(all_types);
+
+                // Remove types that are subtypes of other types
+                let filtered_types = Self::remove_subtypes(filtered_types);
 
                 if filtered_types.is_empty() {
                     Type::Any { hard: true }
@@ -63,8 +66,10 @@ impl UnionType {
                 let mut all_types = self.types.clone();
                 all_types.insert(other.clone());
 
+                // Remove types that are semanically equivalent to some other types in the set
+                let filtered_types = Self::dedup_types(all_types);
                 // Remove types that are subtypes of other types
-                let filtered_types = Self::remove_subtypes(all_types);
+                let filtered_types = Self::remove_subtypes(filtered_types);
 
                 if filtered_types.is_empty() {
                     Type::Any { hard: true }
@@ -79,6 +84,26 @@ impl UnionType {
         }
     }
 
+    /// Remove types that are semanically equivalent to some other types in the set
+    /// Keep the first occurrence of each type.
+    fn dedup_types(types: BTreeSet<Type>) -> BTreeSet<Type> {
+        let mut reps: Vec<Type> = Vec::new();
+        let mut result = BTreeSet::new();
+
+        for ty in types {
+            let is_equivalent_to_existing = reps
+                .iter()
+                .any(|rep| rep == &ty || (rep.is_subtype_of(&ty) && ty.is_subtype_of(rep)));
+
+            if !is_equivalent_to_existing {
+                reps.push(ty.clone());
+                result.insert(ty);
+            }
+        }
+
+        result
+    }
+
     /// Remove types that are subtypes of other types in the set
     fn remove_subtypes(types: BTreeSet<Type>) -> BTreeSet<Type> {
         let mut result = BTreeSet::new();
@@ -87,7 +112,11 @@ impl UnionType {
             let mut is_subtype_of_another = false;
 
             for other in &types {
-                if candidate != other && candidate.is_subtype_of(other) {
+                let sub1 = candidate.is_subtype_of(other);
+                let sub2 = other.is_subtype_of(candidate);
+                // sub1 && sub2 implies equality we have to account for in case
+                // semantic equality is not the same as pointer equality.
+                if candidate != other && sub1 && !sub2 {
                     is_subtype_of_another = true;
                     break;
                 }
