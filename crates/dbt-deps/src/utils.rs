@@ -9,7 +9,9 @@ use dbt_schemas::schemas::{
 };
 use sha1::Digest;
 
-use dbt_common::{ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs};
+use dbt_common::{
+    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs, tokiofs,
+};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     phases::load::LoadContext,
@@ -18,6 +20,47 @@ use dbt_jinja_utils::{
 use dbt_schemas::schemas::project::DbtProject;
 
 use crate::github_client::clone_and_checkout;
+
+/// Move a directory from `src` to `dst`.
+///
+/// Attempts an atomic `rename` first. If that fails due to a cross-device error
+/// (src and dst on different filesystems), falls back to a recursive copy followed
+/// by deletion of the source.
+pub async fn move_dir(src: &Path, dst: &Path) -> FsResult<()> {
+    if tokiofs::rename(src, dst).await.is_ok() {
+        return Ok(());
+    }
+    // rename failed (e.g. cross-device) — fall back to recursive copy + delete
+    copy_dir_recursive(src, dst).await?;
+    tokiofs::remove_dir_all(src).await
+}
+
+async fn copy_dir_recursive(src: &Path, dst: &Path) -> FsResult<()> {
+    tokiofs::create_dir_all(dst).await?;
+    let mut entries = tokiofs::read_dir(src).await?;
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read directory entry: {}", e))?
+    {
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let file_type = entry.file_type().await.map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to get file type for '{}': {}",
+                src_path.display(),
+                e
+            )
+        })?;
+        if file_type.is_dir() {
+            Box::pin(copy_dir_recursive(&src_path, &dst_path)).await?;
+        } else {
+            tokiofs::copy(&src_path, &dst_path).await?;
+        }
+    }
+    Ok(())
+}
 
 pub fn get_local_package_full_path(in_dir: &Path, local_package: &LocalPackage) -> PathBuf {
     if local_package.local.is_absolute() {

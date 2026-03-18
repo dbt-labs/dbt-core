@@ -28,7 +28,7 @@ use crate::{
     hub_client::HubClient,
     package_listing::PackageListing,
     tarball_client::TarballClient,
-    utils::{handle_git_like_package, read_and_validate_dbt_project, sanitize_git_url},
+    utils::{handle_git_like_package, move_dir, read_and_validate_dbt_project, sanitize_git_url},
 };
 
 /// Create a package installation span and report to status reporter
@@ -305,7 +305,7 @@ async fn install_package(
                 ev.package_version = Some(commit_sha.clone());
             });
 
-            stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
+            move_dir(&checkout_path, &packages_install_path.join(&project_name)).await?;
             // Keep tmp_dir alive until we're done with checkout_path
             drop(tmp_dir);
 
@@ -363,7 +363,7 @@ async fn install_package(
                 ev.package_version = Some(commit_sha.clone());
             });
 
-            stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
+            move_dir(&checkout_path, &packages_install_path.join(&project_name)).await?;
             // Keep tmp_dir alive until we're done with checkout_path
             drop(tmp_dir);
             let package_name = private_unpinned_package
@@ -381,8 +381,9 @@ async fn install_package(
             }
         }
         UnpinnedPackage::Tarball(tarball_unpinned_package) => {
-            // Download and extract the tarball to a temp dir, then read project name
-            let tmp_extract = tempfile::tempdir()
+            // Download and extract the tarball to a temp dir on the same filesystem as
+            // packages_install_path so that the final rename is atomic (no cross-device move).
+            let tmp_extract = tempfile::tempdir_in(packages_install_path)
                 .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
             let extract_path = tmp_extract.path().join("package");
 
@@ -413,7 +414,7 @@ async fn install_package(
                 ev.package_version = Some("tarball".to_string());
             });
 
-            stdfs::rename(&extract_path, packages_install_path.join(&project_name))?;
+            move_dir(&extract_path, &packages_install_path.join(&project_name)).await?;
 
             if io_args.send_anonymous_usage_stats {
                 package_install_event(
