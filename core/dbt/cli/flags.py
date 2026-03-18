@@ -19,9 +19,11 @@ from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
 from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
+from dbt.events.types import SelectExcludeIgnoredWithSelectorWarning
 from dbt_common import ui
 from dbt_common.clients import jinja
 from dbt_common.events import functions
+from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.helper_types import WarnErrorOptionsV2
 
@@ -409,6 +411,12 @@ class Flags:
     def fire_deprecations(self, ctx: Optional[Context] = None):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
+
+        # Warn when --selector is used together with --select or --exclude (they are ignored)
+        if getattr(self, "SELECTOR", None) and (
+            getattr(self, "SELECT", ()) or getattr(self, "EXCLUDE", ())
+        ):
+            fire_event(SelectExcludeIgnoredWithSelectorWarning())
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")

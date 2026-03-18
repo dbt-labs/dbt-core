@@ -3,6 +3,7 @@ from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -32,12 +33,17 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
+from dbt.exceptions import DbtSelectorsError
 from dbt.node_types import NodeType
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
 from dbt_common.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
+from dbt_common.exceptions import RecursionError as DbtRecursionError
 
 from .graph import UniqueId
+
+if TYPE_CHECKING:
+    from .selector_spec import SelectionSpec
 
 SELECTOR_GLOB = "*"
 SELECTOR_DELIMITER = ":"
@@ -65,6 +71,7 @@ class MethodName(StrEnum):
     SemanticModel = "semantic_model"
     SavedQuery = "saved_query"
     UnitTest = "unit_test"
+    Selector = "selector"
 
 
 def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
@@ -116,7 +123,11 @@ SelectorTarget = Union[
 
 class SelectorMethod(metaclass=abc.ABCMeta):
     def __init__(
-        self, manifest: Manifest, previous_state: Optional[PreviousState], arguments: List[str]
+        self,
+        manifest: Manifest,
+        previous_state: Optional[PreviousState],
+        arguments: List[str],
+        **kwargs: Any,
     ) -> None:
         self.manifest: Manifest = manifest
         self.previous_state = previous_state
@@ -941,6 +952,56 @@ class VersionSelectorMethod(SelectorMethod):
                     )
 
 
+class SelectorSelectorMethod(SelectorMethod):
+    def __init__(
+        self,
+        manifest: Manifest,
+        previous_state: Optional[PreviousState],
+        arguments: List[str],
+        *,
+        get_selected_callback: Callable[..., Set[UniqueId]],
+        selectors: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(manifest, previous_state, arguments)
+        self._selectors = selectors
+        self._get_selected_callback = get_selected_callback
+
+    def _search_for_matched_selector(
+        self, included_nodes: Set[UniqueId], selection_spec: "SelectionSpec"
+    ) -> Iterator[UniqueId]:
+        selected = self._get_selected_callback(selection_spec)
+        for unique_id in selected:
+            if unique_id in included_nodes:
+                yield unique_id
+
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        if self._selectors is None or self._get_selected_callback is None:
+            raise DbtSelectorsError("Cannot use selector: method if selectors.yml is not provided")
+        matched_selector_dfns = []
+
+        # ensure that selectors are sorted to make the execution deterministic
+        # this will ensure that when circular depdencies are detected
+        # the same selector is used as the "head" of the circular dependency on every run
+        sorted_selectors = sorted(self._selectors.items(), key=lambda x: x[0])
+
+        for s_name, s_value in sorted_selectors:
+            if fnmatch(s_name, selector):
+                matched_selector_dfns.append(s_value["definition"])
+
+        if not matched_selector_dfns:
+            raise DbtSelectorsError(
+                f"Selector '{selector}' did not match any selector in selectors.yml"
+            )
+
+        for matched_selector_dfn in matched_selector_dfns:
+            try:
+                yield from self._search_for_matched_selector(included_nodes, matched_selector_dfn)
+            except RecursionError as e:
+                raise DbtRecursionError(
+                    f"Circular dependency detected in selector: {matched_selector_dfn.raw}"
+                ) from e
+
+
 class MethodManager:
     SELECTOR_METHODS: Dict[MethodName, Type[SelectorMethod]] = {
         MethodName.FQN: QualifiedNameSelectorMethod,
@@ -964,6 +1025,7 @@ class MethodManager:
         MethodName.SemanticModel: SemanticModelSelectorMethod,
         MethodName.SavedQuery: SavedQuerySelectorMethod,
         MethodName.UnitTest: UnitTestSelectorMethod,
+        MethodName.Selector: SelectorSelectorMethod,
     }
 
     def __init__(
@@ -974,12 +1036,15 @@ class MethodManager:
         self.manifest = manifest
         self.previous_state = previous_state
 
-    def get_method(self, method: MethodName, method_arguments: List[str]) -> SelectorMethod:
+    def get_method(
+        self, method: MethodName, method_arguments: List[str], **kwargs: Any
+    ) -> SelectorMethod:
 
         if method not in self.SELECTOR_METHODS:
             raise DbtInternalError(
                 f'Method name "{method}" is a valid node selection '
                 f"method name, but it is not handled"
             )
+
         cls: Type[SelectorMethod] = self.SELECTOR_METHODS[method]
-        return cls(self.manifest, self.previous_state, method_arguments)
+        return cls(self.manifest, self.previous_state, method_arguments, **kwargs)
