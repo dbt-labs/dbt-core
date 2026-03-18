@@ -897,7 +897,13 @@ impl AdapterEngine for XdbcEngine {
         let connection_builder = connection::Builder::default();
         let conn = match connection_builder.build(&mut database) {
             Ok(conn) => conn,
-            Err(e) => return Err(adbc_error_to_adapter_error(e)),
+            Err(e) => {
+                return Err(maybe_enrich_snowflake_account_error(
+                    e,
+                    self.backend(),
+                    config,
+                ));
+            }
         };
         Ok(conn)
     }
@@ -1105,6 +1111,43 @@ fn databricks_compute_from_state(state: &State) -> Option<String> {
     } else {
         None
     }
+}
+
+/// If `err` looks like a Snowflake HTTP 403 connection failure, replace its message with one that
+/// hints at a misconfigured account identifier. Other errors are returned unchanged.
+///
+/// We key off HTTP 403 in the error message because that is the specific status Snowflake returns
+/// when the account subdomain is not recognized. The Go ADBC driver does not expose a dedicated
+/// vendor code for this case (the error arrives as a raw HTTP failure, not a typed SnowflakeError),
+/// so substring matching on the status code is the most reliable signal available.
+fn maybe_enrich_snowflake_account_error(
+    err: adbc_core::error::Error,
+    backend: Backend,
+    config: &AdapterConfig,
+) -> AdapterError {
+    if backend != Backend::Snowflake || !err.message.contains(": 403") {
+        return adbc_error_to_adapter_error(err);
+    }
+    let account_display = config
+        .get_string("account")
+        .map(|a| format!("'{a}'"))
+        .unwrap_or_else(|| "<unknown>".to_string());
+    let original = err.message.clone();
+    AdapterError::new(
+        adbc_error_to_adapter_error(err).kind(),
+        format!(
+            "Could not connect to Snowflake. One possible cause is an incorrect \
+account identifier ({account_display}).\n\n\
+If the 'account' field in your profile is wrong, the value should be \
+in the format '<orgname>-<account_name>' (e.g. 'myorg-myaccount') and \
+must not include '.snowflakecomputing.com'.\n\n\
+You can find your account identifier in Snowsight under \
+Admin > Accounts, or by running:\n  \
+SELECT CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT_NAME()\n\n\
+See: https://docs.snowflake.com/en/user-guide/admin-account-identifier#requirements-for-account-identifiers\n\n\
+Original error: {original}"
+        ),
+    )
 }
 
 /// Execute query and retry in case of an error. Retry is done (up to
