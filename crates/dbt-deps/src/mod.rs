@@ -6,7 +6,6 @@ mod hub_client;
 pub mod package_listing;
 pub mod private_package;
 pub mod semver;
-mod tarball;
 mod tarball_client;
 pub mod types;
 pub mod utils;

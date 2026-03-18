@@ -1,7 +1,7 @@
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, stdfs};
+use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{
     DbtPackageLock, DbtPackages, DbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::{
     package_listing::UnpinnedPackage,
-    tarball_client::TarballClient,
+    tarball_client::download_tarball_package,
     types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
     utils::{fusion_sha1_hash_packages, handle_git_like_package, read_and_validate_dbt_project},
 };
@@ -234,49 +234,14 @@ async fn resolve_packages(
                 drop(tmp_dir);
             }
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
-                // Download and extract the tarball
-                let tarball_dir = tempfile::tempdir().map_err(|e| {
+                let tmp_dir = tempfile::tempdir().map_err(|e| {
                     fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e,)
                 })?;
-                let tar_path = tarball_dir
-                    .path()
-                    .join(tarball_unpinned_package.tarball.replace('/', "_"));
-                let untar_path = tempfile::TempDir::new().map_err(|e| {
-                    fs_err!(ErrorCode::IoError, "Failed to create untar dir: {}", e)
-                })?;
+                let download_dir = tmp_dir.path().join("package");
 
-                let mut tarball_client = TarballClient::new();
-                tarball_client
-                    .download_and_extract_tarball(
-                        &tarball_unpinned_package.tarball,
-                        &tar_path,
-                        &untar_path,
-                        "tarball_package",
-                    )
-                    .await?;
-
-                // Find the extracted package directory
-                let tar_contents = std::fs::read_dir(&untar_path).map_err(|e| {
-                    fs_err!(
-                        ErrorCode::IoError,
-                        "Failed to read untarred directory: {}",
-                        e
-                    )
-                })?;
-                let tar_contents: Vec<_> = tar_contents
-                    .filter_map(|entry| entry.ok())
-                    .filter(|entry| entry.path().is_dir())
-                    .collect();
-
-                if tar_contents.len() != 1 {
-                    return err!(
-                        ErrorCode::InvalidConfig,
-                        "Incorrect structure for package extracted from {}. The extracted package needs to follow the structure <package_name>/<package_contents>.",
-                        tarball_unpinned_package.tarball
-                    );
-                }
-
-                let checkout_path = tar_contents[0].path();
+                let checkout_path =
+                    download_tarball_package(&tarball_unpinned_package.tarball, &download_dir)
+                        .await?;
                 let dbt_project =
                     read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
                 tarball_unpinned_package.name = Some(dbt_project.name);

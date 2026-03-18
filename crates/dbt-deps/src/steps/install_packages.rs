@@ -1,7 +1,6 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::pretty_string::{GREEN, RED};
-use dbt_common::stdfs::File;
 use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::tracing::formatters::deps::get_package_display_name;
 use dbt_common::tracing::span_info::{
@@ -10,16 +9,15 @@ use dbt_common::tracing::span_info::{
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, INSTALLING},
-    create_info_span, err, fs_err,
+    create_info_span, fs_err,
     pretty_string::BLUE,
     stdfs,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
 use dbt_telemetry::{DepsAllPackagesInstalled, DepsPackageInstalled, PackageType};
-use flate2::read::GzDecoder;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use tracing::{Instrument as _, Span};
 use vortex_events::package_install_event;
@@ -109,8 +107,6 @@ pub async fn install_packages(
             e,
         )
     })?;
-    let tarball_dir = tempfile::tempdir()
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e,))?;
     if packages_install_path.exists() {
         std::fs::remove_dir_all(packages_install_path).map_err(|e| {
             fs_err!(
@@ -165,7 +161,6 @@ pub async fn install_packages(
             jinja_env,
             packages_install_path,
             package,
-            &tarball_dir,
             &mut fusion_compat_suggestions,
             &pspan,
         )
@@ -215,7 +210,6 @@ async fn install_package(
     jinja_env: &JinjaEnv,
     packages_install_path: &Path,
     package: &UnpinnedPackage,
-    tarball_dir: &tempfile::TempDir,
     fusion_compat_suggestions: &mut Vec<(String, String, String)>,
     pspan: &Span,
 ) -> FsResult<()> {
@@ -267,29 +261,15 @@ async fn install_package(
                 ));
             }
 
-            let version = pinned_package.get_version();
-            let tar_name = format!("{}.{}.tar.gz", pinned_package.package, version);
-            let tar_path = tarball_dir.path().join(tar_name);
-            std::fs::create_dir_all(tar_path.parent().unwrap())
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create tarball dir: {}", e,))?;
             let tarball_url = metadata.downloads.tarball.clone();
             let project_name = metadata.name.clone();
+            let final_path = packages_install_path.join(&project_name);
 
-            // Use TarballClient to download and extract the tarball
-            let untar_path = tempfile::TempDir::new_in(packages_install_path)
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create untar dir: {}", e))?;
-            let mut tarball_client = TarballClient::new();
-
+            let tarball_client = TarballClient::new();
             tarball_client
-                .download_and_extract_tarball(&tarball_url, &tar_path, &untar_path, "hub_package")
+                .download_and_extract_tarball(&tarball_url, &final_path, true, None)
                 .await?;
 
-            if let Some(common_prefix) = get_common_prefix(&tar_path)? {
-                let rename_path = packages_install_path.join(project_name);
-                stdfs::rename(untar_path.path().join(&common_prefix), &rename_path)?;
-            } else {
-                return err!(ErrorCode::IoError, "No common prefix for package found");
-            }
             if io_args.send_anonymous_usage_stats {
                 package_install_event(
                     io_args.invocation_id.to_string(),
@@ -401,50 +381,24 @@ async fn install_package(
             }
         }
         UnpinnedPackage::Tarball(tarball_unpinned_package) => {
-            // Download and extract the tarball
-            let tarball_dir = tempfile::tempdir()
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e,))?;
-            let tar_path = tarball_dir
-                .path()
-                .join(tarball_unpinned_package.tarball.replace('/', "_"));
-            let untar_path = tempfile::TempDir::new_in(packages_install_path)
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create untar dir: {}", e))?;
-            let mut tarball_client = TarballClient::new();
+            // Download and extract the tarball to a temp dir, then read project name
+            let tmp_extract = tempfile::tempdir()
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
+            let extract_path = tmp_extract.path().join("package");
 
+            let tarball_client = TarballClient::new();
             tarball_client
                 .download_and_extract_tarball(
                     &tarball_unpinned_package.tarball,
-                    &tar_path,
-                    &untar_path,
-                    "tarball_package",
+                    &extract_path,
+                    true,
+                    None,
                 )
                 .await?;
 
-            // Find the extracted package directory
-            let tar_contents = std::fs::read_dir(&untar_path).map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to read untarred directory: {}",
-                    e
-                )
-            })?;
-            let tar_contents: Vec<_> = tar_contents
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| entry.path().is_dir())
-                .collect();
-
-            if tar_contents.len() != 1 {
-                return err!(
-                    ErrorCode::InvalidConfig,
-                    "Incorrect structure for package extracted from {}. The extracted package needs to follow the structure <package_name>/<package_contents>.",
-                    tarball_unpinned_package.tarball
-                );
-            }
-
-            let checkout_path = tar_contents[0].path();
             let dbt_project = read_and_validate_dbt_project(
                 io_args,
-                &checkout_path,
+                &extract_path,
                 // do not report warnings here, since it would have alerady been reported
                 // during package resolution phase
                 false,
@@ -459,7 +413,7 @@ async fn install_package(
                 ev.package_version = Some("tarball".to_string());
             });
 
-            stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
+            stdfs::rename(&extract_path, packages_install_path.join(&project_name))?;
 
             if io_args.send_anonymous_usage_stats {
                 package_install_event(
@@ -473,48 +427,4 @@ async fn install_package(
     };
 
     Ok(())
-}
-
-fn get_common_prefix(tar_path: &Path) -> FsResult<Option<PathBuf>> {
-    // Open the tarball file
-    let tar = File::open(tar_path)
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to open tar file: {}", e,))?;
-    let gz = GzDecoder::new(tar);
-    let mut tar_archive = tar::Archive::new(gz);
-
-    // Collect all paths in the tarball
-    let mut paths = Vec::new();
-    for entry in tar_archive
-        .entries()
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get tarball entries: {}", e))?
-    {
-        let entry =
-            entry.map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get tarball entry: {}", e))?;
-        let path = entry.path().expect("Path should exist");
-        if path == Path::new("pax_global_header") {
-            continue;
-        }
-        paths.push(path.to_path_buf());
-    }
-
-    if paths.is_empty() {
-        return Ok(None);
-    }
-    // Sort paths to prepare for finding the common prefix
-    paths.sort();
-
-    // Find the common prefix
-    let first = &paths[0];
-    let last = &paths[paths.len() - 1];
-    let mut prefix = PathBuf::new();
-
-    for (a, b) in first.components().zip(last.components()) {
-        if a == b {
-            prefix.push(a.as_os_str());
-        } else {
-            break;
-        }
-    }
-
-    Ok(Some(prefix))
 }

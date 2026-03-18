@@ -13,29 +13,32 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+astral-tokio-tar = { workspace = true }
+async-compression = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
-flate2 = { workspace = true }
+futures = { workspace = true }
 percent-encoding = "2.3.1"
 regex = { workspace = true }
-reqwest = { workspace = true, features = ['json'] }
+reqwest = { workspace = true, features = ['json', 'stream'] }
 reqwest-middleware = { workspace = true, features = ['json'] }
 reqwest-retry = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = { version = "0.10.6" }
-tar = { workspace = true }
 tempfile = { workspace = true }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 vortex-events = { workspace = true }
 
 [dev-dependencies]
 dbt-telemetry = { workspace = true }
+tokio = { workspace = true }
 
 [lib]
 name = "fs_deps"
