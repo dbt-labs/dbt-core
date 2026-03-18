@@ -1,5 +1,6 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/streaming_table.py
 
+use crate::AdapterType;
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
 use crate::relation::databricks::config::{DatabricksRelationMetadata, components};
@@ -24,12 +25,13 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
         Box::new(components::ColumnMasksLoader),
     ];
 
-    RelationConfigLoader::new(loaders, requires_full_refresh)
+    RelationConfigLoader::new(AdapterType::Databricks, loaders, requires_full_refresh)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{new_loader, requires_full_refresh};
+    use crate::AdapterType;
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
@@ -88,6 +90,7 @@ mod tests {
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
+                    AdapterType::Databricks,
                     [
                         // TODO: add liquid clustering to changeset here once that gets implemented
                         (
@@ -145,6 +148,7 @@ mod tests {
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
+                    AdapterType::Databricks,
                     [(
                         components::PartitionByLoader::type_name(),
                         ComponentConfigChange::Some(

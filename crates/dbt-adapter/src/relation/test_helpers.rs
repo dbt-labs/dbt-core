@@ -27,6 +27,14 @@ fn changesets_eq(
     a: &RelationComponentConfigChangeSet,
     b: &RelationComponentConfigChangeSet,
 ) -> Vec<String> {
+    if a.adapter_type() != b.adapter_type() {
+        return vec![format!(
+            "adapter_type mismatch (expected {}, got {})",
+            a.adapter_type(),
+            b.adapter_type()
+        )];
+    }
+
     if a.len() != b.len() {
         return vec![format!(
             "changeset lengths differ (expected {}, got {})",

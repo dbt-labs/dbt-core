@@ -22,6 +22,7 @@
 
 use crate::funcs::none_value;
 
+use crate::AdapterType;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, map::Iter as IndexMapIter};
 use minijinja::{
@@ -187,23 +188,26 @@ impl ComponentConfigChange {
 pub(crate) type RequiresFullRefreshFn = fn(&IndexMap<&'static str, ComponentConfigChange>) -> bool;
 
 #[derive(Debug)]
-pub struct RelationConfig(
-    IndexMap<&'static str, Box<dyn ComponentConfig>>,
-    RequiresFullRefreshFn,
-);
+pub struct RelationConfig {
+    adapter_type: AdapterType,
+    components: IndexMap<&'static str, Box<dyn ComponentConfig>>,
+    requires_full_refresh_fn: RequiresFullRefreshFn,
+}
 
 impl RelationConfig {
     pub fn new(
+        adapter_type: AdapterType,
         configs: impl IntoIterator<Item = Box<dyn ComponentConfig>>,
-        requires_full_refresh: RequiresFullRefreshFn,
+        requires_full_refresh_fn: RequiresFullRefreshFn,
     ) -> Self {
-        Self(
-            configs
+        Self {
+            adapter_type,
+            components: configs
                 .into_iter()
                 .map(|cfg| (cfg.type_name(), cfg))
                 .collect(),
-            requires_full_refresh,
-        )
+            requires_full_refresh_fn,
+        }
     }
 }
 
@@ -213,7 +217,9 @@ impl RelationConfig {
         &'a self,
         component_type_name: &'static str,
     ) -> Option<&'a dyn ComponentConfig> {
-        self.0.get(&component_type_name).map(|inner| inner.as_ref())
+        self.components
+            .get(&component_type_name)
+            .map(|inner| inner.as_ref())
     }
 
     /// Get the diff that takes the current state to the desired state
@@ -221,9 +227,11 @@ impl RelationConfig {
         desired_state: &RelationConfig,
         current_state: &RelationConfig,
     ) -> RelationComponentConfigChangeSet {
+        debug_assert!(desired_state.adapter_type == current_state.adapter_type);
+
         let mut diffs = IndexMap::new();
 
-        for (type_name, desired_component) in &desired_state.0 {
+        for (type_name, desired_component) in &desired_state.components {
             let current_component = current_state.get(type_name);
 
             if let Some(diff) = desired_component.diff_from(current_component) {
@@ -232,13 +240,17 @@ impl RelationConfig {
             }
         }
 
-        for type_name in current_state.0.keys() {
+        for type_name in current_state.components.keys() {
             if desired_state.get(type_name).is_none() {
                 diffs.insert(*type_name, ComponentConfigChange::Drop);
             }
         }
 
-        RelationComponentConfigChangeSet(diffs, desired_state.1)
+        RelationComponentConfigChangeSet::new(
+            desired_state.adapter_type,
+            diffs,
+            desired_state.requires_full_refresh_fn,
+        )
     }
 }
 
@@ -283,11 +295,11 @@ impl Object for RelationConfig {
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         let key = key.as_str()?;
-        self.0.get(key).map(|v| v.as_jinja())
+        self.components.get(key).map(|v| v.as_jinja())
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Values(self.0.keys().map(|v| Value::from(*v)).collect())
+        Enumerator::Values(self.components.keys().map(|v| Value::from(*v)).collect())
     }
 }
 
@@ -312,31 +324,35 @@ pub(crate) trait ComponentConfigLoader<R> {
 
 /// Holds a collection of `ComponentConfigLoader` to populate a `RelationConfig`
 /// by loading each of its components one by one
-pub(crate) struct RelationConfigLoader<R>(
-    Vec<Box<dyn ComponentConfigLoader<R>>>,
-    RequiresFullRefreshFn,
-);
+pub(crate) struct RelationConfigLoader<R> {
+    adapter_type: AdapterType,
+    component_loaders: Vec<Box<dyn ComponentConfigLoader<R>>>,
+    requires_full_refresh_fn: RequiresFullRefreshFn,
+}
 
 impl<R> RelationConfigLoader<R> {
     pub(crate) fn new(
+        adapter_type: AdapterType,
         component_loaders: impl IntoIterator<Item = Box<dyn ComponentConfigLoader<R>>>,
-        requires_full_refresh: RequiresFullRefreshFn,
+        requires_full_refresh_fn: RequiresFullRefreshFn,
     ) -> Self {
-        Self(
-            component_loaders.into_iter().collect(),
-            requires_full_refresh,
-        )
+        Self {
+            adapter_type,
+            component_loaders: component_loaders.into_iter().collect(),
+            requires_full_refresh_fn,
+        }
     }
 
     /// Load the current applied state for the relation and all its components given the remote state
     #[expect(clippy::wrong_self_convention)]
     pub(crate) fn from_remote_state(&self, remote_state: &R) -> RelationConfig {
         RelationConfig::new(
-            self.0
+            self.adapter_type,
+            self.component_loaders
                 .iter()
                 .map(|l| l.from_remote_state(remote_state))
                 .collect::<Vec<_>>(),
-            self.1,
+            self.requires_full_refresh_fn,
         )
     }
 
@@ -347,32 +363,43 @@ impl<R> RelationConfigLoader<R> {
         relation_config: &dyn InternalDbtNodeAttributes,
     ) -> RelationConfig {
         RelationConfig::new(
-            self.0
+            self.adapter_type,
+            self.component_loaders
                 .iter()
                 .map(|l| l.from_local_config(relation_config))
                 .collect::<Vec<_>>(),
-            self.1,
+            self.requires_full_refresh_fn,
         )
     }
 }
 
 #[derive(Debug)]
-pub struct RelationComponentConfigChangeSet(
-    IndexMap<&'static str, ComponentConfigChange>,
-    RequiresFullRefreshFn,
-);
+pub struct RelationComponentConfigChangeSet {
+    adapter_type: AdapterType,
+    changes: IndexMap<&'static str, ComponentConfigChange>,
+    requires_full_refresh_fn: RequiresFullRefreshFn,
+}
 
 impl RelationComponentConfigChangeSet {
     pub fn new(
+        adapter_type: AdapterType,
         changes: impl Into<IndexMap<&'static str, ComponentConfigChange>>,
-        requires_full_refresh: RequiresFullRefreshFn,
+        requires_full_refresh_fn: RequiresFullRefreshFn,
     ) -> Self {
-        Self(changes.into(), requires_full_refresh)
+        Self {
+            adapter_type,
+            changes: changes.into(),
+            requires_full_refresh_fn,
+        }
     }
 
     /// Get the count of changes in this changeset
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.changes.len()
+    }
+
+    pub fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
     pub fn is_empty(&self) -> bool {
@@ -380,19 +407,19 @@ impl RelationComponentConfigChangeSet {
     }
 
     pub fn iter(&self) -> IndexMapIter<'_, &'static str, ComponentConfigChange> {
-        self.0.iter()
+        self.changes.iter()
     }
 
     /// Get a change by TypeId
     pub fn get<'a>(&'a self, component_type_name: &'static str) -> &'a ComponentConfigChange {
-        self.0
+        self.changes
             .get(&component_type_name)
             .unwrap_or(&ComponentConfigChange::None)
     }
 
     /// Whether applying this config to an existing table requires a full refresh
     pub fn requires_full_refresh(&self) -> bool {
-        self.1(&self.0)
+        (self.requires_full_refresh_fn)(&self.changes)
     }
 }
 
@@ -418,7 +445,7 @@ impl Object for RelationComponentConfigChangeSet {
                 })?;
 
                 Ok(self
-                    .0
+                    .changes
                     .get(key)
                     .map(|v| v.as_jinja())
                     .unwrap_or_else(none_value))
@@ -432,12 +459,12 @@ impl Object for RelationComponentConfigChangeSet {
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         let key = key.as_str()?;
-        self.0.get(key).map(|v| v.as_jinja())
+        self.changes.get(key).map(|v| v.as_jinja())
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
         Enumerator::Iter(Box::new(
-            self.0
+            self.changes
                 .keys()
                 .map(|v| Value::from(*v))
                 .collect::<Vec<_>>()
@@ -584,14 +611,15 @@ mod tests {
             to_jinja_fn: to_jinja,
             value: 10,
         };
-        let prev = RelationConfig::new([], return_true);
+        let prev = RelationConfig::new(AdapterType::Bigquery, [], return_true);
         let next = RelationConfig::new(
+            AdapterType::Bigquery,
             [Box::new(next_component.clone()) as Box<dyn ComponentConfig>],
             return_true,
         );
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());
-        assert_eq!(changeset.0.len(), 1);
+        assert_eq!(changeset.changes.len(), 1);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(
             change,
@@ -608,12 +636,13 @@ mod tests {
             value: 10,
         };
         let relation_config = RelationConfig::new(
+            AdapterType::Bigquery,
             [Box::new(component) as Box<dyn ComponentConfig>],
             return_true,
         );
         let changeset = RelationConfig::diff(&relation_config, &relation_config);
         assert!(changeset.requires_full_refresh());
-        assert_eq!(changeset.0.len(), 0);
+        assert_eq!(changeset.len(), 0);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(change, &ComponentConfigChange::None);
     }
@@ -633,16 +662,18 @@ mod tests {
             value: 10,
         };
         let prev = RelationConfig::new(
+            AdapterType::Bigquery,
             [Box::new(prev_component) as Box<dyn ComponentConfig>],
             return_true,
         );
         let next = RelationConfig::new(
+            AdapterType::Bigquery,
             [Box::new(next_component.clone()) as Box<dyn ComponentConfig>],
             return_true,
         );
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());
-        assert_eq!(changeset.0.len(), 1);
+        assert_eq!(changeset.len(), 1);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(
             change,
@@ -659,13 +690,14 @@ mod tests {
             value: 1,
         };
         let prev = RelationConfig::new(
+            AdapterType::Bigquery,
             [Box::new(prev_component) as Box<dyn ComponentConfig>],
             return_true,
         );
-        let next = RelationConfig::new([], return_true);
+        let next = RelationConfig::new(AdapterType::Bigquery, [], return_true);
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());
-        assert_eq!(changeset.0.len(), 1);
+        assert_eq!(changeset.len(), 1);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(change, &ComponentConfigChange::Drop);
     }
