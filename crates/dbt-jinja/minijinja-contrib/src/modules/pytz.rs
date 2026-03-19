@@ -1,15 +1,29 @@
 use chrono::{DateTime, LocalResult, NaiveDateTime, TimeZone};
-use chrono_tz::Tz;
+use chrono_tz::{Tz, TZ_VARIANTS};
 use minijinja::{Error, ErrorKind, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// A Python-like "pytz" timezone object that wraps a `chrono_tz::Tz`.
 #[derive(Debug, Clone)]
 pub struct PytzTimezone {
     pub tz: Tz,
+}
+
+static TIMEZONES: OnceLock<Arc<HashMap<String, Tz>>> = OnceLock::new();
+
+fn get_timezones() -> Arc<HashMap<String, Tz>> {
+    TIMEZONES
+        .get_or_init(|| {
+            Arc::new(
+                TZ_VARIANTS
+                    .iter()
+                    .map(|tz| (tz.name().to_lowercase(), *tz))
+                    .collect(),
+            )
+        })
+        .clone()
 }
 
 impl PytzTimezone {
@@ -80,10 +94,12 @@ fn timezone(args: &[Value]) -> Result<Value, Error> {
         )
     })?;
 
-    // Try to parse it as a Chrono Tz.
-    match Tz::from_str(tz_name) {
-        Ok(tz) => Ok(Value::from_object(PytzTimezone::new(tz))),
-        Err(_) => Err(Error::new(
+    // Chrono Tz names are case-sensitive, but Python is not. This means we can't
+    // just call `Tz::from_str`; instead, we need to manually look up the timezone.
+    let timezones = get_timezones();
+    match timezones.get(&tz_name.to_lowercase()) {
+        Some(&tz) => Ok(Value::from_object(PytzTimezone::new(tz))),
+        None => Err(Error::new(
             ErrorKind::InvalidArgument,
             format!("Invalid timezone name: {tz_name}"),
         )),
