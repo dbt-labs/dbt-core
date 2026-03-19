@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
+import jinja2
 import msgpack
 from jinja2.nodes import Call, Const
 
@@ -152,6 +153,8 @@ def extended_msgpack_encoder(obj):
     elif type(obj) is datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
+    elif isinstance(obj, jinja2.Undefined):
+        return None
 
     return obj
 
