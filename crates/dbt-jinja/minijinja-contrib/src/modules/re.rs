@@ -14,6 +14,78 @@ use minijinja::{
 };
 use std::{collections::BTreeMap, fmt, iter, sync::Arc};
 
+// Python re flag values (matching CPython's enum values)
+// https://docs.python.org/3/library/re.html#flags
+const RE_NOFLAG: i64 = 0;
+const RE_IGNORECASE: i64 = 2;
+const RE_LOCALE: i64 = 4;
+const RE_MULTILINE: i64 = 8;
+const RE_DOTALL: i64 = 16;
+const RE_UNICODE: i64 = 32;
+const RE_VERBOSE: i64 = 64;
+const RE_ASCII: i64 = 256;
+
+/// A Python `re.RegexFlag`-like object that renders as `re.FLAGNAME` and has an integer value.
+#[derive(Debug, Clone)]
+struct ReFlag {
+    name: &'static str,
+    value: i64,
+}
+
+impl Object for ReFlag {
+    fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        write!(f, "re.{}", self.name)
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        // Support `| int` filter by exposing the numeric value through __int__
+        if key.as_str() == Some("__int__") {
+            Some(Value::from(self.value))
+        } else {
+            None
+        }
+    }
+}
+
+/// Extract the integer flags value from a `Value` which may be a `ReFlag` object or a plain int.
+fn extract_flags(val: &Value) -> i64 {
+    if let Some(obj) = val.as_object() {
+        if let Some(flag) = obj.downcast_ref::<ReFlag>() {
+            return flag.value;
+        }
+    }
+    val.as_i64().unwrap_or(0)
+}
+
+/// Build an inline regex flag prefix (e.g. `(?i)`, `(?imsx)`) from the integer flags bitmask.
+///
+/// Only flags that map to regex inline modifiers are emitted. `UNICODE` is already the default
+/// in Rust's regex engine; `ASCII`, `LOCALE`, and `DEBUG` have no regex-level equivalent and
+/// are silently ignored here.
+fn flags_to_inline_prefix(flags: i64) -> String {
+    if flags == 0 {
+        return String::new();
+    }
+    let mut prefix = String::from("(?");
+    if flags & RE_IGNORECASE != 0 {
+        prefix.push('i');
+    }
+    if flags & RE_MULTILINE != 0 {
+        prefix.push('m');
+    }
+    if flags & RE_DOTALL != 0 {
+        prefix.push('s');
+    }
+    if flags & RE_VERBOSE != 0 {
+        prefix.push('x');
+    }
+    prefix.push(')');
+    prefix
+}
+
 /// Create a namespace with `re`-like functions for pattern matching.
 pub fn create_re_namespace() -> BTreeMap<String, Value> {
     let mut re_module = BTreeMap::new();
@@ -28,27 +100,81 @@ pub fn create_re_namespace() -> BTreeMap<String, Value> {
     re_module.insert("sub".to_string(), Value::from_function(re_sub));
     re_module.insert("escape".to_string(), Value::from_function(re_escape));
 
+    // Flag constants (matching Python's re module)
+    // https://docs.python.org/3/library/re.html#flags
+    re_module.insert(
+        "NOFLAG".to_string(),
+        Value::from_object(ReFlag {
+            name: "NOFLAG",
+            value: RE_NOFLAG,
+        }),
+    );
+
+    let ignorecase = Value::from_object(ReFlag {
+        name: "IGNORECASE",
+        value: RE_IGNORECASE,
+    });
+    re_module.insert("IGNORECASE".to_string(), ignorecase.clone());
+    re_module.insert("I".to_string(), ignorecase);
+
+    let locale = Value::from_object(ReFlag {
+        name: "LOCALE",
+        value: RE_LOCALE,
+    });
+    re_module.insert("LOCALE".to_string(), locale.clone());
+    re_module.insert("L".to_string(), locale);
+
+    let multiline = Value::from_object(ReFlag {
+        name: "MULTILINE",
+        value: RE_MULTILINE,
+    });
+    re_module.insert("MULTILINE".to_string(), multiline.clone());
+    re_module.insert("M".to_string(), multiline);
+
+    let dotall = Value::from_object(ReFlag {
+        name: "DOTALL",
+        value: RE_DOTALL,
+    });
+    re_module.insert("DOTALL".to_string(), dotall.clone());
+    re_module.insert("S".to_string(), dotall);
+
+    let unicode = Value::from_object(ReFlag {
+        name: "UNICODE",
+        value: RE_UNICODE,
+    });
+    re_module.insert("UNICODE".to_string(), unicode.clone());
+    re_module.insert("U".to_string(), unicode);
+
+    let verbose = Value::from_object(ReFlag {
+        name: "VERBOSE",
+        value: RE_VERBOSE,
+    });
+    re_module.insert("VERBOSE".to_string(), verbose.clone());
+    re_module.insert("X".to_string(), verbose);
+
+    let ascii = Value::from_object(ReFlag {
+        name: "ASCII",
+        value: RE_ASCII,
+    });
+    re_module.insert("ASCII".to_string(), ascii.clone());
+    re_module.insert("A".to_string(), ascii);
+
     re_module
 }
 
-/// Compile the given pattern into a RegexObject, optionally using flags (not fully implemented).
+/// Compile the given pattern into a RegexObject.
 ///
 /// Python signature: re.compile(pattern, flags=0)
 fn re_compile(args: &[Value]) -> Result<Value, Error> {
-    let pattern = args
+    let pattern_str = args
         .first()
         .ok_or_else(|| Error::new(ErrorKind::MissingArgument, "Pattern argument required"))?
         .to_string();
 
-    // If desired, we could parse optional flags from args.get(1), but we omit advanced flags here.
-    let compiled = Regex::new(&pattern).map_err(|e| {
-        Error::new(
-            ErrorKind::InvalidOperation,
-            format!("Failed to compile regex: {e}"),
-        )
-    })?;
+    let flags = args.get(1).map(extract_flags).unwrap_or(0);
+    let compiled = compile_pattern(&pattern_str, flags)?;
 
-    let pattern = Pattern::new(&pattern, compiled);
+    let pattern = Pattern::new(&pattern_str, *compiled);
     Ok(Value::from_object(pattern))
 }
 
@@ -82,7 +208,7 @@ impl Object for Pattern {
         args: &[Value],
         _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
-        let args = iter::once(Value::from(self.raw.clone()))
+        let args = iter::once(Value::from_object(self.as_ref().clone()))
             .chain(args.iter().cloned())
             .collect::<Vec<_>>();
         if method == "match" {
@@ -116,7 +242,8 @@ fn re_match(args: &[Value]) -> Result<Value, Error> {
         ));
     }
 
-    let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let flags = args.get(2).map(extract_flags).unwrap_or(0);
+    let (regex, text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
     let raw_pattern = regex.as_str().to_string();
     let input_string = text.to_string();
 
@@ -161,7 +288,8 @@ fn re_search(args: &[Value]) -> Result<Value, Error> {
         ));
     }
 
-    let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let flags = args.get(2).map(extract_flags).unwrap_or(0);
+    let (regex, text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
     let raw_pattern = regex.as_str().to_string();
     let input_string = text.to_string();
 
@@ -189,7 +317,15 @@ fn re_search(args: &[Value]) -> Result<Value, Error> {
 /// Python `re.fullmatch(pattern, string, flags=0)`.
 /// Matches the entire string against the pattern (like `^pattern$`).
 fn re_fullmatch(args: &[Value]) -> Result<Value, Error> {
-    let (regex, text) = get_or_compile_regex_and_text(args)?;
+    if args.len() < 2 {
+        return Err(Error::new(
+            ErrorKind::MissingArgument,
+            "fullmatch() requires pattern and string arguments",
+        ));
+    }
+
+    let flags = args.get(2).map(extract_flags).unwrap_or(0);
+    let (regex, text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
     match regex.find(text) {
         Ok(Some(m)) if m.start() == 0 && m.end() == text.len() => {
             Ok(match_obj_to_list(&regex, text, m.start(), m.end()))
@@ -209,7 +345,8 @@ fn re_findall(args: &[Value]) -> Result<Value, Error> {
         ));
     }
 
-    let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let flags = args.get(2).map(extract_flags).unwrap_or(0);
+    let (regex, text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
     let raw_pattern = regex.as_str().to_string();
     let input_string = text.to_string();
 
@@ -268,7 +405,8 @@ fn re_split(args: &[Value]) -> Result<Value, Error> {
         ));
     }
 
-    let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
+    let flags = args.get(3).map(extract_flags).unwrap_or(0);
+    let (regex, text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
 
     let maxsplit = args.get(2).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
 
@@ -314,7 +452,8 @@ fn re_sub(args: &[Value]) -> Result<Value, Error> {
         ));
     }
 
-    let (regex, _text) = get_or_compile_regex_and_text(&args[..2])?;
+    let flags = args.get(4).map(extract_flags).unwrap_or(0);
+    let (regex, _text) = get_or_compile_regex_and_text_with_flags(&args[..2], flags)?;
     let repl_text = args[1].to_string();
     let text_arg = &args[2].to_string();
 
@@ -365,8 +504,28 @@ fn re_escape(args: &[Value]) -> Result<Value, Error> {
     Ok(Value::from(escaped))
 }
 
+/// Compile a pattern string with optional inline flags prefix.
+fn compile_pattern(pattern: &str, flags: i64) -> Result<Box<Regex>, Error> {
+    let full_pattern = if flags != 0 {
+        format!("{}{}", flags_to_inline_prefix(flags), pattern)
+    } else {
+        pattern.to_string()
+    };
+    Ok(Box::new(Regex::new(&full_pattern).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("Failed to compile regex: {e}"),
+        )
+    })?))
+}
+
 /// Extract either a compiled regex from arg[0] *or* compile arg[0], plus read `string` from arg[1].
-fn get_or_compile_regex_and_text(args: &[Value]) -> Result<(Box<Regex>, &str), Error> {
+/// If `flags` is non-zero and the pattern is a raw string (not pre-compiled), inline flags are
+/// prepended to the pattern.
+fn get_or_compile_regex_and_text_with_flags(
+    args: &[Value],
+    flags: i64,
+) -> Result<(Box<Regex>, &str), Error> {
     if args.len() < 2 {
         return Err(Error::new(
             ErrorKind::MissingArgument,
@@ -374,30 +533,20 @@ fn get_or_compile_regex_and_text(args: &[Value]) -> Result<(Box<Regex>, &str), E
         ));
     }
 
-    // First arg: either compiled or raw pattern
     let compiled = if let Some(object) = args[0].as_object() {
         if let Some(pattern) = object.downcast_ref::<Pattern>() {
-            Box::new(pattern.compiled.clone())
+            if flags != 0 {
+                compile_pattern(pattern.compiled.as_str(), flags)?
+            } else {
+                Box::new(pattern.compiled.clone())
+            }
         } else {
-            let pattern = args[0].to_string();
-            Box::new(Regex::new(&pattern).map_err(|e| {
-                Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to compile regex: {e}"),
-                )
-            })?)
+            compile_pattern(&args[0].to_string(), flags)?
         }
     } else {
-        let pattern = args[0].to_string();
-        Box::new(Regex::new(&pattern).map_err(|e| {
-            Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Failed to compile regex: {e}"),
-            )
-        })?)
+        compile_pattern(&args[0].to_string(), flags)?
     };
 
-    // Second arg: the text to match against
     let text = args[1].to_string();
     Ok((compiled, Box::leak(text.into_boxed_str())))
 }

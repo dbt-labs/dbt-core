@@ -691,7 +691,8 @@ mod builtins {
         let base = arg_parser.get_optional("base").unwrap_or(10);
 
         match &value.0 {
-            ValueRepr::Undefined | ValueRepr::None => Ok(Value::from(default)),
+            ValueRepr::Undefined => Err(Error::from(ErrorKind::UndefinedError)),
+            ValueRepr::None => Ok(Value::from(default)),
             ValueRepr::Bool(x) => Ok(Value::from(*x as u64)),
             ValueRepr::U64(_) | ValueRepr::I64(_) | ValueRepr::U128(_) | ValueRepr::I128(_) => {
                 Ok(value.clone())
@@ -716,7 +717,16 @@ mod builtins {
                     Ok(Value::from(default))
                 }
             }
-            ValueRepr::Bytes(_) | ValueRepr::Object(_) => Ok(Value::from(default)),
+            ValueRepr::Object(_) => {
+                // Support Python's __int__ protocol for custom objects
+                if let Some(int_val) = value.get_attr_fast("__int__") {
+                    if let Some(i) = int_val.as_i64() {
+                        return Ok(Value::from(i));
+                    }
+                }
+                Ok(Value::from(default))
+            }
+            ValueRepr::Bytes(_) => Ok(Value::from(default)),
             ValueRepr::Invalid(_) => value.clone().validate(),
         }
     }

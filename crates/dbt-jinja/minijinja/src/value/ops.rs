@@ -59,11 +59,16 @@ pub fn coerce<'x>(a: &'x Value, b: &'x Value, lossy: bool) -> Option<CoerceResul
         (ValueRepr::F64(a), _) => Some(CoerceResult::F64(*a, some!(as_f64(b, lossy)))),
         (_, ValueRepr::F64(b)) => Some(CoerceResult::F64(some!(as_f64(a, lossy)), *b)),
 
-        // everything else goes up to i128
-        _ => Some(CoerceResult::I128(
-            some!(i128::try_from(a.clone()).ok()),
-            some!(i128::try_from(b.clone()).ok()),
-        )),
+        // everything else goes up to i128, with __int__ protocol support for objects
+        _ => {
+            let a_i128 = i128::try_from(a.clone())
+                .ok()
+                .or_else(|| a.get_attr_fast("__int__")?.as_i64().map(|v| v as i128));
+            let b_i128 = i128::try_from(b.clone())
+                .ok()
+                .or_else(|| b.get_attr_fast("__int__")?.as_i64().map(|v| v as i128));
+            Some(CoerceResult::I128(some!(a_i128), some!(b_i128)))
+        }
     }
 }
 
