@@ -5,7 +5,6 @@
 #[macro_use]
 mod macros;
 
-pub mod adapter_engine;
 pub mod base_adapter;
 pub mod bridge_adapter;
 pub mod cache;
@@ -13,6 +12,7 @@ pub mod catalog_relation;
 pub mod column;
 /// Connection management, thread-local storage, and connection backpressure.
 pub mod connection;
+pub mod engine;
 pub mod errors;
 pub mod factory;
 pub mod formatter;
@@ -35,9 +35,6 @@ pub mod sql;
 pub mod sql_types;
 pub mod statement;
 pub mod stmt_splitter;
-
-/// Sidecar client for local DuckDB execution
-pub mod sidecar_client;
 
 /// Cross-Version Record/Replay System
 pub mod time_machine;
@@ -64,7 +61,7 @@ pub mod record_batch_utils;
 pub mod cast_util;
 
 /// SqlEngine
-pub use adapter_engine::AdapterEngine;
+pub use engine::AdapterEngine;
 
 /// Functions exposed to jinja
 pub mod load_store;
@@ -76,8 +73,3 @@ pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
 pub use response::AdapterResponse;
 pub use typed_adapter::ConcreteAdapter;
-
-// Exposing structs for testing
-pub use adapter_engine::AdapterEngine as SqlEngineForTesting;
-pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
-pub use typed_adapter::ConcreteAdapter as ConcreteAdapterForTesting;

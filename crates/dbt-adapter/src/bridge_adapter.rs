@@ -1,10 +1,10 @@
-use crate::adapter_engine::XdbcEngine;
 use crate::base_adapter::*;
 use crate::cache::RelationCache;
 use crate::catalog_relation::CatalogRelation;
 #[cfg(debug_assertions)]
 use crate::column::Column;
 use crate::column::ColumnStatic;
+use crate::engine::XdbcEngine;
 use crate::funcs::*;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;

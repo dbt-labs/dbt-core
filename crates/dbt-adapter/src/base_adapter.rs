@@ -1,5 +1,5 @@
-use crate::adapter_engine::AdapterEngine;
 use crate::column::ColumnStatic;
+use crate::engine::AdapterEngine;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;

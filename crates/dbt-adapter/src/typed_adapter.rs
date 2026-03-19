@@ -1,7 +1,7 @@
-use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
 use crate::connection::{ConnectionGuard, borrow_tlocal_connection};
+use crate::engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
@@ -4024,7 +4024,7 @@ impl ConcreteAdapter {
     ) -> Self {
         let backend = crate::base_adapter::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
-        let engine: Arc<dyn AdapterEngine> = Arc::new(crate::adapter_engine::XdbcEngine::new_mock(
+        let engine: Arc<dyn AdapterEngine> = Arc::new(crate::engine::XdbcEngine::new_mock(
             adapter_type,
             auth,
             crate::config::AdapterConfig::default(),
@@ -4272,11 +4272,11 @@ pub trait Replayer: fmt::Debug + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter_engine::XdbcEngine;
     use crate::base_adapter::backend_of;
     use crate::cache::RelationCache;
     use crate::column::Column;
     use crate::config::AdapterConfig;
+    use crate::engine::XdbcEngine;
     use crate::query_comment::QueryCommentConfig;
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;

@@ -11,13 +11,10 @@ use std::fmt::Debug;
 
 use arrow::record_batch::RecordBatch;
 use dbt_schemas::dbt_types::RelationType;
+use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::errors::AdapterResult;
-
-// Re-export types needed by trait implementations
-pub use dbt_xdbc::connection::Connection;
-pub use dbt_xdbc::query_ctx::QueryCtx;
 
 /// Column information returned by sidecar introspection.
 #[derive(Debug, Clone)]
