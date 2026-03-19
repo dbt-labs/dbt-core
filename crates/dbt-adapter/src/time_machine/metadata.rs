@@ -121,9 +121,12 @@ where
                 }
                 None => {
                     // No matching recorded event found in replay mode.
-                    // This is an error - we should not execute real network calls during replay.
+                    // This can happen when schema data was served from cache during
+                    // recording (e.g. populated by an earlier model build step) so no
+                    // metadata call was made. Use ReplayDataMissing so callers can
+                    // distinguish "recording incomplete" from real adapter errors.
                     return Err(Cancellable::Error(AdapterError::new(
-                        AdapterErrorKind::Internal,
+                        AdapterErrorKind::ReplayDataMissing,
                         format!(
                             "No recorded metadata event for method '{}' with caller '{}'. \
                              Recording may be incomplete.",
