@@ -10,11 +10,11 @@ use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
 use crate::install;
 use crate::semaphore::Semaphore;
 use adbc_core::{
-    Driver as _, LOAD_FLAG_DEFAULT,
+    Driver as _, LOAD_FLAG_ALLOW_RELATIVE_PATHS, LOAD_FLAG_SEARCH_ENV, LOAD_FLAG_SEARCH_SYSTEM,
+    LOAD_FLAG_SEARCH_USER,
     error::{Error, Result, Status},
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
-use libloading;
 use parking_lot::RwLockUpgradableReadGuard;
 use std::sync::Arc;
 use std::{
@@ -27,6 +27,22 @@ use {crate::env_var::env_var_bool, std::io::ErrorKind, std::process::Command};
 
 mod builder;
 pub use builder::*;
+
+/// Strategy for loading an ADBC driver.
+#[derive(Clone, Debug)]
+pub enum LoadStrategy {
+    /// Download from the dbt Labs CDN (with local cache).
+    CdnCache,
+    /// Load from standard ADBC paths and additional system paths.
+    ///
+    /// The provided library name (e.g. `adbc_driver_snowflake`) is searched in
+    /// standard ADBC paths and additional paths. Depending on the OS, the
+    /// the full filename will be on of:
+    /// - Linux: `libadbc_driver_snowflake.so`
+    /// - Windows: `adbc_driver_snowflake.dll`
+    /// - macOS: `libadbc_driver_snowflake.dylib`
+    System(Option<String>),
+}
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Backend {
@@ -295,18 +311,27 @@ impl AdbcDriver {
         backend: Backend,
         adbc_version: AdbcVersion,
         semaphore: Option<Arc<Semaphore>>,
+        mut load_strategy: LoadStrategy,
     ) -> Result<Self> {
-        Self::try_load_driver_trough_cache(backend, adbc_version).map(|driver| Self {
+        // Override for Snowflake dbt Projects integration
+        //
+        // This flag changes driver loading behavior to adhere to:
+        // https://arrow.apache.org/adbc/main/format/driver_manifests.html
+        let use_local_snowflake = env::var("DBT_LOAD_STANDARD_SNOWFLAKE_DRIVER").is_ok();
+        if use_local_snowflake {
+            load_strategy = LoadStrategy::System(None);
+        }
+        Self::try_load_driver(backend, adbc_version, load_strategy).map(|driver| Self {
             backend,
             driver,
             semaphore,
         })
     }
 
-    /// Check the read-trough cache of loaded ADBC drivers before loading a new one.
-    fn try_load_driver_trough_cache(
+    fn try_load_driver(
         backend: Backend,
         adbc_version: AdbcVersion,
+        load_strategy: LoadStrategy,
     ) -> Result<ManagedAdbcDriver> {
         let key = AdbcDriverKey {
             backend,
@@ -323,7 +348,7 @@ impl AdbcDriver {
         if let Some(driver) = cache.get(&key) {
             return driver.clone();
         }
-        let driver = Self::try_load_driver_internal(backend, adbc_version);
+        let driver = Self::try_load_driver_internal(backend, adbc_version, load_strategy);
         cache.insert(key, driver.clone());
         driver
     }
@@ -331,23 +356,17 @@ impl AdbcDriver {
     fn try_load_driver_internal(
         backend: Backend,
         adbc_version: AdbcVersion,
+        load_strategy: LoadStrategy,
     ) -> Result<ManagedAdbcDriver> {
-        match backend {
-            // These drivers are published to the dbt Labs CDN.
-            Backend::Snowflake
-            | Backend::BigQuery
-            | Backend::Postgres
-            | Backend::Databricks
-            | Backend::Redshift
-            | Backend::Spark
-            | Backend::DuckDB
-            | Backend::Salesforce
-            | Backend::SQLServer => {
-                debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
-                debug_assert!(
-                    install::is_installable_driver(backend),
-                    "{backend} should be an installable driver"
-                );
+        use Backend::*;
+        use LoadStrategy::*;
+        let final_strategy = match (load_strategy, backend) {
+            // CDN strategy for drivers published to the dbt Labs CDN.
+            (
+                CdnCache,
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                | Salesforce | SQLServer,
+            ) => {
                 #[cfg(debug_assertions)]
                 {
                     // This option is only used during development of ADBC drivers to make sure
@@ -355,94 +374,84 @@ impl AdbcDriver {
                     // either the repo root lib/ directory or an arrow-adbc repo whose root is
                     // a sibling to this fs repo.
                     let disable_cdn_driver_cache = env_var_bool("DISABLE_CDN_DRIVER_CACHE")?;
-
                     if disable_cdn_driver_cache {
                         eprintln!(
                             "WARNING: {} ADBC driver is being loaded from {} in debug mode.",
                             backend,
                             ADBC_LIBS_DIRECTORY.as_ref().unwrap().display()
                         );
-                        return Self::try_load_driver_from_name(
-                            backend,
-                            backend.adbc_library_name().unwrap(), // safe because it's ADBC
-                            backend.adbc_driver_entrypoint(),
-                            adbc_version,
-                        );
+                        System(None)
+                    } else {
+                        CdnCache
                     }
                 }
-                // Override for Snowflake dbt Projects integration
-                //
-                // This flag changes driver loading behavior to adhere to:
-                // https://arrow.apache.org/adbc/main/format/driver_manifests.html
-                let use_local_snowflake = env::var("DBT_LOAD_STANDARD_SNOWFLAKE_DRIVER").is_ok();
-
-                if use_local_snowflake {
-                    return ManagedAdbcDriver::load_from_name(
-                        backend,
-                        backend.adbc_library_name().unwrap(),
-                        backend.adbc_driver_entrypoint(),
-                        adbc_version,
-                        LOAD_FLAG_DEFAULT,
-                        None,
-                    );
+                #[cfg(not(debug_assertions))]
+                {
+                    CdnCache
                 }
-
-                Self::try_load_driver_through_cdn_cache(backend, adbc_version)
             }
-            // Drivers that are not published to the dbt Labs CDN.
-            Backend::ClickHouse | Backend::Generic { .. } => Self::try_load_driver_from_name(
-                backend,
-                backend.adbc_library_name().unwrap(),
-                backend.adbc_driver_entrypoint(),
-                adbc_version,
-            ),
-            // ODBC drivers.
-            Backend::DatabricksODBC | Backend::RedshiftODBC => Err(Error::with_message_and_status(
-                format!(
-                    "Can not load ADBC driver for {backend:?} because ODBC should be used instead."
-                ),
-                Status::InvalidArguments,
-            )),
+            // ODBC backends cannot be loaded as ADBC drivers, no matter the strategy.
+            (_, DatabricksODBC | RedshiftODBC) => {
+                return Err(Error::with_message_and_status(
+                    format!(
+                        "Can not load ADBC driver for {backend:?} because ODBC should be used instead."
+                    ),
+                    Status::InvalidArguments,
+                ));
+            }
+            // CDN strategy for non-CDN drivers: just fall back to the system strategy.
+            (CdnCache, ClickHouse) => System(None),
+            // Generic drivers can only be loaded from a file, so fallback to the System strategy.
+            (CdnCache, Generic { library_name, .. }) => System(Some(library_name.to_string())),
+            // System strategy: load from a provided library name (e.g. "adbc_driver_snowflake").
+            (load_strategy @ System(_), _) => load_strategy,
+        };
+
+        debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
+        match final_strategy {
+            CdnCache => Self::try_load_driver_through_cdn_cache(backend, adbc_version),
+            System(library_name) => {
+                let name = match library_name.as_ref() {
+                    Some(name) => name,
+                    // Safe to unwrap because it's an ADBC backend
+                    None => backend.adbc_library_name().unwrap(),
+                };
+                Self::try_load_driver_from_name(backend, name, adbc_version)
+            }
         }
     }
 
-    /// Simple driver loading function.
-    ///
-    /// This function relies on the OS to find the library in the system path or something like
-    /// LD_LIBRARY_PATH. If that fails it climbs up the directory tree and chooses the first lib/
-    /// directory it can find. This is used for drivers that are not published to the dbt Labs CDN
-    /// or might not be part of the standard set of drivers.
+    /// Load the driver using the [LoadStrategy::System] strategy.
     fn try_load_driver_from_name(
         backend: Backend,
         name: &str,
-        entrypoint: Option<&[u8]>,
         adbc_version: AdbcVersion,
     ) -> Result<ManagedAdbcDriver> {
-        // Rely on the OS to find the library in the system path or something like LD_LIBRARY_PATH.
-        let res =
-            ManagedAdbcDriver::load_dynamic_from_name(backend, name, entrypoint, adbc_version);
-        if res.is_ok() {
-            return res;
-        }
-        // If it fails, we climb up the directory tree and choose the first lib/ directory we can
-        // find. The result of that search is cached in LIBS_DIRECTORY.
+        let entrypoint = backend.adbc_driver_entrypoint();
+        let mut additional_search_paths: Vec<PathBuf> = Vec::new();
+        // Climb up the directory tree and choose the first lib/ directory we can
+        // find. The result of that search is cached in LIBS_DIRECTORY. We use as
+        // as an additional search path for the driver library.
         if let Some(libs_dir) = ADBC_LIBS_DIRECTORY.as_ref() {
-            let qualified_filename = libloading::library_filename(name);
-            let full_path = libs_dir
-                .join(qualified_filename)
-                .to_string_lossy()
-                .into_owned();
-            ManagedAdbcDriver::load_dynamic_from_filename(
-                backend,
-                full_path,
-                entrypoint,
-                adbc_version,
-            )
-        } else {
-            res
+            additional_search_paths.push(libs_dir.clone());
         }
+
+        // Rely on the OS to find the library in the system path or something like LD_LIBRARY_PATH.
+        let load_flags = LOAD_FLAG_SEARCH_ENV
+            | LOAD_FLAG_SEARCH_USER
+            | LOAD_FLAG_SEARCH_SYSTEM
+            | LOAD_FLAG_ALLOW_RELATIVE_PATHS;
+        ManagedAdbcDriver::load_from_name(
+            backend,
+            name,
+            entrypoint,
+            adbc_version,
+            load_flags,
+            Some(additional_search_paths),
+        )
     }
 
+    /// Load the driver using the [LoadStrategy::CdnCache] strategy.
     fn try_load_driver_through_cdn_cache(
         backend: Backend,
         adbc_version: AdbcVersion,
@@ -590,8 +599,18 @@ mod tests {
         .iter()
         .copied()
         {
-            let _a = AdbcDriver::try_load_dynamic(backend, AdbcVersion::default(), None)?;
-            let _b = AdbcDriver::try_load_dynamic(backend, AdbcVersion::default(), None)?;
+            let _a = AdbcDriver::try_load_dynamic(
+                backend,
+                AdbcVersion::default(),
+                None,
+                LoadStrategy::CdnCache,
+            )?;
+            let _b = AdbcDriver::try_load_dynamic(
+                backend,
+                AdbcVersion::default(),
+                None,
+                LoadStrategy::CdnCache,
+            )?;
         }
         Ok(())
     }

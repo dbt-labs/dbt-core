@@ -34,6 +34,7 @@ pub(crate) mod env_var;
 pub mod driver;
 pub use driver::Backend;
 pub use driver::Driver;
+pub use driver::LoadStrategy;
 
 pub mod database;
 pub use database::Database;

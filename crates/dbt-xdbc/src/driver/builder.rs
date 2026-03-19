@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "odbc")]
 use super::OdbcDriver;
-use super::{AdbcDriver, FFIProtocol};
+use super::{AdbcDriver, FFIProtocol, LoadStrategy};
 use crate::{Backend, Driver, semaphore::Semaphore};
 #[allow(unused_imports)]
 use adbc_core::{
@@ -25,6 +25,9 @@ pub struct Builder {
 
     /// The semaphore for limiting the number of concurrent parallelism.
     pub semaphore: Option<Arc<Semaphore>>,
+
+    /// The strategy for loading the driver.
+    pub load_strategy: LoadStrategy,
 }
 
 impl Builder {
@@ -33,6 +36,7 @@ impl Builder {
             backend,
             adbc_version: None,
             semaphore: None,
+            load_strategy: LoadStrategy::CdnCache,
         }
     }
 
@@ -48,6 +52,12 @@ impl Builder {
         self
     }
 
+    /// Set the strategy for loading the driver.
+    pub fn with_load_strategy(&mut self, load_strategy: LoadStrategy) -> &mut Self {
+        self.load_strategy = load_strategy;
+        self
+    }
+
     /// Try to load the [`Driver`] using the values provided to this builder.
     pub fn try_load(&self) -> Result<Box<dyn Driver>> {
         match self.backend.ffi_protocol() {
@@ -56,6 +66,7 @@ impl Builder {
                     self.backend,
                     self.adbc_version.unwrap_or_default(),
                     self.semaphore.clone(),
+                    self.load_strategy.clone(),
                 )?;
                 let driver = Box::new(adbc_driver);
                 Ok(driver)
