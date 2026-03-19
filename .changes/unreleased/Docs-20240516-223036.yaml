@@ -1,0 +1,6 @@
+kind: Docs
+body: Add support for Saved Query node
+time: 2024-05-16T22:30:36.206492-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "486"

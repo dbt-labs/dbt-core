@@ -1,0 +1,6 @@
+kind: Docs
+body: Fix npm security vulnerabilities as of June 2024
+time: 2024-06-13T15:10:48.301989+01:00
+custom:
+    Author: aranke
+    Issue: "513"
