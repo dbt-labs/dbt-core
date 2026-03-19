@@ -1,0 +1,6 @@
+kind: Fixes
+body: handle jinja2.Undefined in msgpack_encoder
+time: 2026-03-18T19:11:53.734654-04:00
+custom:
+    Author: michelleark
+    Issue: "12677"

@@ -2,6 +2,8 @@ from argparse import Namespace
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import jinja2
+import msgpack
 import pytest
 from pytest_mock import MockerFixture
 
@@ -12,7 +14,12 @@ from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
 from dbt.flags import set_from_args
-from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
+from dbt.parser.manifest import (
+    ManifestLoader,
+    _warn_for_unused_resource_config_paths,
+    extended_mashumaro_encoder,
+    extended_msgpack_encoder,
+)
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_catcher import EventCatcher
@@ -343,3 +350,58 @@ class TestUpdateSemanticModel:
             schema_name="schema",
             database="db",
         )
+class TestExtendedMsgpackEncoder:
+    """
+    Unit tests for extended_msgpack_encoder and extended_mashumaro_encoder.
+
+    The key regression being guarded: jinja2.Undefined objects that end up in
+    manifest node fields (e.g. meta values rendered from schema.yml with an
+    undefined Jinja variable) must be serialisable to msgpack.  Without the
+    isinstance(obj, jinja2.Undefined) branch in extended_msgpack_encoder the
+    packer raises:
+        TypeError: can not serialize 'Undefined' object
+    """
+
+    def test_undefined_returns_none(self):
+        """extended_msgpack_encoder converts jinja2.Undefined to None."""
+        undefined = jinja2.Undefined(name="some_undefined_var")
+        result = extended_msgpack_encoder(undefined)
+        assert result is None
+
+    def test_undefined_subclass_returns_none(self):
+        """extended_msgpack_encoder handles jinja2.Undefined subclasses."""
+
+        class MyUndefined(jinja2.Undefined):
+            pass
+
+        result = extended_msgpack_encoder(MyUndefined())
+        assert result is None
+
+    def test_non_undefined_passthrough(self):
+        """extended_msgpack_encoder passes through unknown types unchanged."""
+        # msgpack itself will raise for truly unserializable objects; the
+        # encoder just returns them so msgpack can raise its own error.
+        obj = object()
+        assert extended_msgpack_encoder(obj) is obj
+
+    def test_mashumaro_encoder_with_undefined_in_dict(self):
+        """
+        extended_mashumaro_encoder can pack a dict containing jinja2.Undefined.
+
+        This is the direct reproduction of the production traceback: a manifest
+        node with a meta dict like {"key": <jinja2.Undefined>} must serialise
+        without raising TypeError.
+        """
+        undefined = jinja2.Undefined(name="undefined_jinja_var")
+        data = {"meta": {"key": undefined}}
+        # Must not raise TypeError
+        packed = extended_mashumaro_encoder(data)
+        unpacked = msgpack.unpackb(packed, raw=False)
+        assert unpacked == {"meta": {"key": None}}
+
+    def test_mashumaro_encoder_without_undefined_unchanged(self):
+        """extended_mashumaro_encoder round-trips plain data correctly."""
+        data = {"meta": {"key": "value"}, "count": 42}
+        packed = extended_mashumaro_encoder(data)
+        unpacked = msgpack.unpackb(packed, raw=False)
+        assert unpacked == data

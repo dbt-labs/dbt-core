@@ -439,6 +439,7 @@ class MetricParser(YamlReader):
         self,
         unparsed_metric: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> MetricTypeParams:
         if isinstance(unparsed_metric, UnparsedMetric):
             type_params = unparsed_metric.type_params
@@ -487,7 +488,8 @@ class MetricParser(YamlReader):
                         use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
                         == PercentileType.CONTINUOUS,
                     ),
-                    agg_time_dimension=unparsed_metric.agg_time_dimension,
+                    agg_time_dimension=unparsed_metric.agg_time_dimension
+                    or default_agg_time_dimension,
                     non_additive_dimension=self._get_v2_non_additive_dimension(
                         unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
                     ),
@@ -520,6 +522,7 @@ class MetricParser(YamlReader):
         self,
         unparsed: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
@@ -578,7 +581,11 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed, generated_from=generated_from),
+            type_params=self._get_metric_type_params(
+                unparsed,
+                generated_from=generated_from,
+                default_agg_time_dimension=default_agg_time_dimension,
+            ),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=meta,
@@ -638,10 +645,13 @@ class MetricParser(YamlReader):
             if model_patch.semantic_model.name is not None:
                 semantic_model_name = model_patch.semantic_model.name
         for metric in model_patch.metrics:
-            semantic_model = (
-                semantic_model_name if MetricType(metric.type) == MetricType.SIMPLE else None
+            is_simple = MetricType(metric.type) == MetricType.SIMPLE
+            semantic_model = semantic_model_name if is_simple else None
+            self.parse_metric(
+                metric,
+                generated_from=semantic_model,
+                default_agg_time_dimension=model_patch.agg_time_dimension if is_simple else None,
             )
-            self.parse_metric(metric, generated_from=semantic_model)
 
     def parse(self) -> None:
         for data in self.get_key_dicts():

@@ -2564,3 +2564,11 @@ class ArtifactUploadSkipped(DebugLevel):
 
     def message(self) -> str:
         return f"Artifacts skipped for command : {self.msg}"
+
+
+class SelectExcludeIgnoredWithSelectorWarning(WarnLevel):
+    def code(self) -> str:
+        return "Z064"
+
+    def message(self) -> str:
+        return "The --select and --exclude arguments are being ignored for node selection because --selector is provided"
