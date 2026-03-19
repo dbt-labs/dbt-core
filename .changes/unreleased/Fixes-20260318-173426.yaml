@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix AttributeError when docs block argument is non-constant
+time: 2026-03-18T17:34:26.771797-04:00
+custom:
+    Author: michelleark
+    Issue: "12673"
