@@ -1238,15 +1238,26 @@ pub fn manifest_model_to_dbt_model(
         custom_granularities: ts.custom_granularities.unwrap_or_default(),
     });
 
-    let recalculated_checksum = match model.__base_attr__.raw_code.clone() {
-        Some(raw_code) => {
+    // Only SQL models should have whitespace/case normalization applied when recalculating checksums.
+    // Python models' checksums are based on the original file contents; applying SQL normalization
+    // would incorrectly mark them as modified under `state:*` selectors when deferring to a
+    // dbt-core-produced manifest.
+    let should_normalize_sql = model
+        .__base_attr__
+        .language
+        .as_deref()
+        .map(|l| l.eq_ignore_ascii_case("sql"))
+        .unwrap_or(true);
+
+    let recalculated_checksum = match (should_normalize_sql, model.__base_attr__.raw_code.clone()) {
+        (true, Some(raw_code)) => {
             let normalized_raw_code = normalize_sql(&raw_code);
             recalculate_checksum(
                 Some(normalized_raw_code.as_str()),
                 model.__base_attr__.checksum.clone(),
             )
         }
-        None => model.__base_attr__.checksum.clone(),
+        _ => model.__base_attr__.checksum.clone(),
     };
 
     DbtModel {

@@ -1100,7 +1100,6 @@ impl ModelConfig {
         let merge_exclude_columns_eq = self.merge_exclude_columns == other.merge_exclude_columns;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
         let table_format_eq = self.table_format == other.table_format;
-        let static_analysis_eq = self.static_analysis == other.static_analysis;
         let freshness_eq = self.freshness == other.freshness;
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
@@ -1138,7 +1137,6 @@ impl ModelConfig {
             && merge_exclude_columns_eq
             && access_eq_result
             && table_format_eq
-            && static_analysis_eq
             && freshness_eq
             && sql_header_eq
             && location_eq
@@ -1340,14 +1338,6 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.table_format),
                             format!("{:?}", &other.table_format),
-                        )),
-                    ),
-                    (
-                        "static_analysis",
-                        static_analysis_eq,
-                        Some((
-                            format!("{:?}", &self.static_analysis),
-                            format!("{:?}", &other.static_analysis),
                         )),
                     ),
                     (

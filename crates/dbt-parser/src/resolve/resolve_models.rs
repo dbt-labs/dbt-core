@@ -1199,7 +1199,9 @@ fn process_python_models(
         }
 
         // Analyze Python AST to extract dbt function calls
-        let checksum = dbt_schemas::schemas::common::DbtChecksum::default(); // TODO: compute actual checksum
+        // Use the Python model source to compute the model checksum. This is used by `state:*`
+        // selectors (e.g. `state:modified`) when comparing to a deferred/previous-state manifest.
+        let checksum = dbt_schemas::schemas::common::DbtChecksum::hash(source.as_bytes());
         let python_file_info: PythonFileInfo<ModelConfig> = match analyze_python_file(
             &python_asset.path,
             &source,
