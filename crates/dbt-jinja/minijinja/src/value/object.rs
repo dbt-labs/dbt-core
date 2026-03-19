@@ -1486,6 +1486,7 @@ pub mod mutable_map {
             match method {
                 "update" => update_impl(self, args),
                 "pop" => pop_impl(self, args),
+                "popitem" => popitem_impl(self, args),
                 "clear" => {
                     if !args.is_empty() {
                         return Err(Error::new(
@@ -1592,6 +1593,25 @@ pub mod mutable_map {
                 "pop() takes one or two arguments, but none were given",
             )),
         }
+    }
+
+    fn popitem_impl(map: &Arc<MutableMap>, args: &[Value]) -> Result<Value, Error> {
+        if !args.is_empty() {
+            return Err(Error::new(
+                ErrorKind::TooManyArguments,
+                "popitem() takes no arguments",
+            ));
+        }
+
+        let key = map
+            .keys()
+            .last()
+            .cloned()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "no items to pop"))?;
+
+        let value = map.remove(&key).unwrap_or_default();
+
+        Ok(Value::from_iter([key, value]))
     }
 
     fn setdefault_impl(map: &Arc<MutableMap>, args: &[Value]) -> Result<Value, Error> {
