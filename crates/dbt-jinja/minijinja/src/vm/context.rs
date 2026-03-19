@@ -286,7 +286,7 @@ impl<'env> Context<'env> {
     /// to emulate the behavior of how scopes work in Jinja2 in Python.  The
     /// unfortunate downside is that this has to be done with a `Mutex`.
     #[cfg(feature = "macros")]
-    pub fn enclose(&mut self, env: &Environment, key: &str) {
+    pub fn enclose(&mut self, key: &str, value: Value) {
         self.stack
             .last_mut()
             .unwrap()
@@ -294,7 +294,7 @@ impl<'env> Context<'env> {
             .as_mut()
             .unwrap()
             .clone()
-            .store_if_missing(key, || self.load(env, key).unwrap_or(Value::UNDEFINED));
+            .store_if_missing(key, || value)
     }
 
     /// Loads the closure and returns it.

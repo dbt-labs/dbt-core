@@ -1,5 +1,6 @@
 use crate::compiler::instructions::Instructions;
 use crate::constants::{CURRENT_PATH, CURRENT_SPAN};
+use crate::dispatch_object::{macro_namespace_template_resolver, DispatchObject};
 use crate::environment::Environment;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
@@ -253,7 +254,23 @@ impl<'template, 'env> State<'template, 'env> {
     /// referenced by a macro, this method won't be able to find it.
     #[inline(always)]
     pub fn lookup(&self, name: &str) -> Option<Value> {
-        self.ctx.load(self.env, name)
+        if let Some(val) = self.ctx.load(self.env, name) {
+            return Some(val);
+        }
+
+        macro_namespace_template_resolver(self, name, &mut Vec::new()).and_then(|template_name| {
+            if let Some((pkg, macro_name)) = template_name.split_once('.') {
+                Some(Value::from_object(DispatchObject {
+                    macro_name: macro_name.to_string(),
+                    package_name: Some(pkg.to_string()),
+                    strict: true,
+                    auto_execute: false,
+                    context: Some(self.get_base_context()),
+                }))
+            } else {
+                None
+            }
+        })
     }
 
     /// Looks up a global macro and calls it, converting the result into a string.

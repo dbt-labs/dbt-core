@@ -1,12 +1,13 @@
+use crate::arg_utils::ArgParser;
 use crate::constants::MACRO_DISPATCH_ORDER;
 use crate::constants::TARGET_PACKAGE_NAME;
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::value::Enumerator;
 use crate::value::Object;
-use crate::value::Value;
-use crate::value::ValueMap;
-use crate::vm::INCLUDE_RECURSION_COST;
+use crate::value::{value_map_with_capacity, Kwargs, Value, ValueMap};
+use crate::vm::Macro;
+use crate::vm::MACRO_RECURSION_COST;
 use crate::{Error, ErrorKind, State};
 
 use std::collections::BTreeSet;
@@ -276,11 +277,47 @@ impl DispatchObject {
             .unwrap_or_else(|| Value::from_serialize(Span::default()));
 
         let context = state.get_base_context_with_path_and_span(&path, &span);
-        let template_state = template.eval_to_state_with_outer_stack_depth(
+        let mut template_state = template.eval_to_state_with_outer_stack_depth(
             context,
             listeners,
-            state.ctx.depth() + INCLUDE_RECURSION_COST,
+            state.ctx.depth() + MACRO_RECURSION_COST,
         )?;
+
+        // When a {% call %} block is used (e.g. {% call statement(...) %}),
+        // a caller macro is passed as a kwarg. That macro carries the state_id
+        // of the *calling* state. Since we just created a fresh template_state,
+        // the caller macro's state_id won't match and calling it would fail with
+        // "template state went away". Re-create the caller with the new state's
+        // id and copy its instructions over.
+        let mut args = args.to_vec();
+        let mut parser = ArgParser::new(&args, None);
+        if parser.has_kwarg("caller") {
+            let last_idx = args.len() - 1;
+            let caller = parser.get::<Value>("caller").unwrap();
+            if let Some(caller_macro) = caller.downcast_object_ref::<Macro>() {
+                let mut new_kwargs = value_map_with_capacity(parser.kwargs_len());
+                for (key, value) in parser.kwargs_iter() {
+                    new_kwargs.insert(Value::from(key), value.clone());
+                }
+                new_kwargs.insert(
+                    Value::from("caller"),
+                    Value::from_object(Macro {
+                        name: Value::from("caller"),
+                        arg_spec: caller_macro.arg_spec.clone(),
+                        macro_ref_id: template_state.macros.len(),
+                        state_id: template_state.id,
+                        closure: caller_macro.closure.clone(),
+                        caller_reference: true,
+                        path: caller_macro.path.clone(),
+                        span: caller_macro.span,
+                    }),
+                );
+                args[last_idx] = Kwargs::wrap(new_kwargs);
+
+                Arc::make_mut(&mut template_state.macros)
+                    .push(state.macros[caller_macro.macro_ref_id]);
+            }
+        }
 
         let func = template_state
             .lookup(
@@ -291,7 +328,7 @@ impl DispatchObject {
             )
             .expect("function should exist in template");
 
-        func.call(&template_state, args, listeners)
+        func.call(&template_state, &args, listeners)
     }
 }
 
@@ -371,7 +408,8 @@ pub fn macro_namespace_template_resolver(
 ) -> Option<String> {
     // Get necessary values from state
     let current_package_name = state
-        .lookup(TARGET_PACKAGE_NAME)
+        .ctx
+        .load(state.env(), TARGET_PACKAGE_NAME)
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "dbt".to_string());
     let root_package = state.env().get_root_package_name();

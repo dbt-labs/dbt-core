@@ -567,8 +567,14 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_filter(state: &State, name: &str) -> bool {
-        state.env.get_filter(name).is_some()
+    pub fn is_filter(state: &State, value: &Value) -> Result<bool, Error> {
+        if value.is_undefined() {
+            return Ok(false);
+        }
+        let name = value
+            .as_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "value is not a string"))?;
+        Ok(state.env.get_filter(name).is_some())
     }
 
     /// Checks if a test with a given name is available.
@@ -578,8 +584,14 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_test(state: &State, name: &str) -> bool {
-        state.env.get_test(name).is_some()
+    pub fn is_test(state: &State, value: &Value) -> Result<bool, Error> {
+        if value.is_undefined() {
+            return Ok(false);
+        }
+        let name = value
+            .as_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "value is not a string"))?;
+        Ok(state.env.get_test(name).is_some())
     }
 
     /// Checks if a string is all lowercase.
@@ -589,8 +601,14 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_lower(name: &str) -> bool {
-        name.chars().all(|x| x.is_lowercase())
+    pub fn is_lower(value: &Value) -> Result<bool, Error> {
+        if value.is_undefined() {
+            return Ok(false);
+        }
+        let name = value
+            .as_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "value is not a string"))?;
+        Ok(name.chars().all(|x| x.is_lowercase()))
     }
 
     /// Checks if a string is all uppercase.
@@ -600,8 +618,14 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_upper(name: &str) -> bool {
-        name.chars().all(|x| x.is_uppercase())
+    pub fn is_upper(value: &Value) -> Result<bool, Error> {
+        if value.is_undefined() {
+            return Ok(false);
+        }
+        let name = value
+            .as_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "value is not a string"))?;
+        Ok(name.chars().all(|x| x.is_uppercase()))
     }
 
     /// Checks if two values are identical.

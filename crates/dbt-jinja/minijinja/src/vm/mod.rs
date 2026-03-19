@@ -5,14 +5,13 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use macro_object::Macro;
+pub(crate) use macro_object::Macro;
 
-use crate::arg_utils::ArgParser;
 use crate::compiler::instructions::{
     Instruction, Instructions, LOOP_FLAG_RECURSIVE, LOOP_FLAG_WITH_LOOP_VAR, MAX_LOCALS,
 };
 use crate::constants::{CURRENT_PATH, CURRENT_SPAN};
-use crate::dispatch_object::{macro_namespace_template_resolver, DispatchObject};
+use crate::dispatch_object::DispatchObject;
 use crate::environment::Environment;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
@@ -55,7 +54,7 @@ pub(crate) const INCLUDE_RECURSION_COST: usize = 10;
 
 // the cost of a single macro call against the stack limit.
 #[cfg(feature = "macros")]
-const MACRO_RECURSION_COST: usize = 4;
+pub(crate) const MACRO_RECURSION_COST: usize = 4;
 
 /// Helps to evaluate something.
 #[cfg_attr(feature = "internal_debug", derive(Debug))]
@@ -438,6 +437,7 @@ impl<'env> Vm<'env> {
                 tracker.track(instr)?;
             }
 
+            // dbg!(&instr);
             match instr {
                 Instruction::Swap => {
                     let a = stack.pop();
@@ -460,6 +460,7 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::StoreLocal(name, _) => {
                     let value = stack.pop();
+                    // dbg!((name, &value));
                     // check if the value is a Map, if so, convert it to MutableMap
                     if let Some(value_map) = value.downcast_object_ref::<ValueMap>() {
                         let mutable_map = MutableMap::from(value_map.clone());
@@ -469,32 +470,7 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::Lookup(name, _) => {
-                    if state.lookup(name).is_some()
-                        && !state
-                            .lookup(name)
-                            .expect("we just checked that it is some")
-                            .is_undefined()
-                    {
-                        stack.push(state.lookup(name).expect("we just checked that it is some"));
-                    // Try to resolve as a macro name (e.g., bare `get_revoke_sql`)
-                    } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new())
-                    {
-                        if let Some((pkg, macro_name)) = template_name.split_once('.') {
-                            stack.push(Value::from_object(DispatchObject {
-                                macro_name: macro_name.to_string(),
-                                package_name: Some(pkg.to_string()),
-                                strict: true,
-                                auto_execute: false,
-                                context: Some(state.get_base_context()),
-                            }));
-                        } else {
-                            stack.push(Value::UNDEFINED);
-                        }
-                    // check if it is a regular variable in the state
-                    } else {
-                        stack.push(Value::UNDEFINED);
-                    }
+                    stack.push(state.lookup(name).unwrap_or(Value::UNDEFINED))
                 }
                 Instruction::GetAttr(name, span) => {
                     let a = stack.pop();
@@ -1024,67 +1000,6 @@ impl<'env> Vm<'env> {
                             }
                         }
                         rv
-                    // Resolve the template using the dbt macro namespace resolution logic
-                    } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new())
-                    {
-                        // The template was found, now get and execute it
-                        let template = self.env.get_template(&template_name)?;
-                        let template_registry_entry =
-                            template_registry.get(&Value::from(template_name.clone()));
-                        let path = template_registry_entry
-                            .and_then(|entry| entry.get_attr_fast("path"))
-                            .unwrap_or_else(|| Value::from(template_name.clone()));
-                        let span = template_registry_entry
-                            .and_then(|entry| entry.get_attr_fast("span"))
-                            .unwrap_or_else(|| Value::from_serialize(Span::default()));
-
-                        let context = state.get_base_context_with_path_and_span(&path, &span);
-
-                        let mut new_state = template.eval_to_state_with_outer_stack_depth(
-                            context,
-                            listeners,
-                            state.ctx.depth() + MACRO_RECURSION_COST,
-                        )?;
-                        let mut args = args.to_vec();
-
-                        // modify the args and macros if caller is included to pass caller to new state
-                        let mut parser = ArgParser::new(&args, None);
-                        if parser.has_kwarg("caller") {
-                            let last_idx = args.len() - 1;
-                            let caller = parser.get::<Value>("caller").unwrap();
-                            let caller_macro: &Macro =
-                                caller.downcast_object_ref::<Macro>().unwrap();
-
-                            // create new kwargs with caller replaced
-                            let mut new_kwargs = value_map_with_capacity(parser.kwargs_len());
-                            for (key, value) in parser.kwargs_iter() {
-                                new_kwargs.insert(Value::from(key), value.clone());
-                            }
-                            new_kwargs.insert(
-                                Value::from("caller"),
-                                Value::from_object(Macro {
-                                    name: Value::from("caller"),
-                                    arg_spec: caller_macro.arg_spec.clone(),
-                                    macro_ref_id: new_state.macros.len(),
-                                    state_id: new_state.id,
-                                    closure: caller_macro.closure.clone(),
-                                    caller_reference: true,
-                                    path: caller_macro.path.clone(),
-                                    span: caller_macro.span,
-                                }),
-                            );
-                            args[last_idx] = Kwargs::wrap(new_kwargs);
-
-                            // copy the macro from the old state to the new state
-                            Arc::make_mut(&mut new_state.macros)
-                                .push(state.macros[caller_macro.macro_ref_id]);
-                        }
-
-                        // look up and evaluate the macro
-                        let func = new_state.lookup(name).unwrap();
-                        call_wrapper(listeners, || func.call(&new_state, &args, listeners))
-                            .map_err(|err| state.with_span_error(err, this_span))?
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
                         let template = state.env().template_from_str(raw)?;
@@ -1263,7 +1178,9 @@ impl<'env> Vm<'env> {
                         state.closure_tracker.track_closure(closure.clone());
                         state.ctx.reset_closure(Some(closure));
                     }
-                    state.ctx.enclose(state.env, name);
+
+                    let value = state.lookup(name).unwrap_or(Value::UNDEFINED);
+                    state.ctx.enclose(name, value);
                 }
                 #[cfg(feature = "macros")]
                 Instruction::GetClosure => {
@@ -1324,6 +1241,7 @@ impl<'env> Vm<'env> {
             pc += 1;
         }
 
+        // dbg!(&rv);
         if is_caller_return {
             let rv = stack.pop();
             Ok(Value::from_object(CallerReturn::new(rv)))
