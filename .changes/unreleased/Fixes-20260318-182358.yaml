@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix AttributeError when generic test config is non-dictionary
+time: 2026-03-18T18:23:58.393692-04:00
+custom:
+    Author: michelleark
+    Issue: "12674"

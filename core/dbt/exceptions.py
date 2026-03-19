@@ -801,6 +801,16 @@ class TestArgsNotDictError(ParsingError):
         return msg
 
 
+class TestConfigNotDictError(ParsingError):
+    def __init__(self, config: Any) -> None:
+        self.config = config
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"'config' must be a dict, got {type(self.config)} (value {self.config})"
+        return msg
+
+
 class TestDefinitionDictLengthError(ParsingError):
     def __init__(self, test):
         self.test = test

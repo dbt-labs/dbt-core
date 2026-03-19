@@ -14,6 +14,7 @@ from dbt.exceptions import (
     TagsNotListOfStringsError,
     TestArgIncludesModelError,
     TestArgsNotDictError,
+    TestConfigNotDictError,
     TestDefinitionDictLengthError,
     TestNameNotStringError,
     TestTypeError,
@@ -186,6 +187,8 @@ class TestBuilder(Generic[Testable]):
 
     def _process_legacy_args(self):
         config = {}
+        if "config" in self.args and not isinstance(self.args["config"], dict):
+            raise TestConfigNotDictError(self.args["config"])
         for key in self.CONFIG_ARGS:
             value = self.args.pop(key, None)
             if value and "config" in self.args and key in self.args["config"]:
