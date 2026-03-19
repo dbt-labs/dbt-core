@@ -488,7 +488,8 @@ class MetricParser(YamlReader):
                         use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
                         == PercentileType.CONTINUOUS,
                     ),
-                    agg_time_dimension=unparsed_metric.agg_time_dimension or default_agg_time_dimension,
+                    agg_time_dimension=unparsed_metric.agg_time_dimension
+                    or default_agg_time_dimension,
                     non_additive_dimension=self._get_v2_non_additive_dimension(
                         unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
                     ),
@@ -581,10 +582,10 @@ class MetricParser(YamlReader):
             label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
             type_params=self._get_metric_type_params(
-            unparsed,
-            generated_from=generated_from,
-            default_agg_time_dimension=default_agg_time_dimension,
-        ),
+                unparsed,
+                generated_from=generated_from,
+                default_agg_time_dimension=default_agg_time_dimension,
+            ),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=meta,
