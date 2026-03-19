@@ -435,6 +435,11 @@ impl AdbcDriver {
         if let Some(libs_dir) = ADBC_LIBS_DIRECTORY.as_ref() {
             additional_search_paths.push(libs_dir.clone());
         }
+        // Add Homebrew library path on macOS (Apple Silicon).
+        // On Intel Macs, Homebrew installs to /usr/local/lib which is already
+        // searched by the dynamic linker by default.
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        additional_search_paths.push(PathBuf::from("/opt/homebrew/lib"));
 
         // Rely on the OS to find the library in the system path or something like LD_LIBRARY_PATH.
         let load_flags = LOAD_FLAG_SEARCH_ENV
@@ -544,7 +549,7 @@ mod tests {
     use super::*;
 
     fn try_load_with_builder(backend: Backend, adbc_version: AdbcVersion) -> Result<()> {
-        Builder::new(backend)
+        Builder::new(backend, LoadStrategy::CdnCache)
             .with_adbc_version(adbc_version)
             .try_load()?;
         Ok(())

@@ -25,7 +25,7 @@ mod tests {
     const ADBC_VERSION: AdbcVersion = AdbcVersion::V110;
 
     fn driver_for(backend: Backend) -> Result<Box<dyn Driver>> {
-        driver::Builder::new(backend)
+        driver::Builder::new(backend, driver::LoadStrategy::CdnCache)
             .with_adbc_version(ADBC_VERSION)
             .try_load()
     }

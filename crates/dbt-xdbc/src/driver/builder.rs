@@ -31,12 +31,12 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn new(backend: Backend) -> Self {
+    pub fn new(backend: Backend, load_strategy: LoadStrategy) -> Self {
         Self {
             backend,
             adbc_version: None,
             semaphore: None,
-            load_strategy: LoadStrategy::CdnCache,
+            load_strategy,
         }
     }
 

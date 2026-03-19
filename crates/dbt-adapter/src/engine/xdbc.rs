@@ -281,7 +281,7 @@ impl XdbcEngine {
             .configure(config)
             .map_err(crate::errors::auth_error_to_adapter_error)?;
 
-        let mut driver = driver::Builder::new(self.auth.backend())
+        let mut driver = driver::Builder::new(self.auth.backend(), LoadStrategy::CdnCache)
             .with_semaphore(self.semaphore.clone())
             .try_load()
             .map_err(adbc_error_to_adapter_error)?;
