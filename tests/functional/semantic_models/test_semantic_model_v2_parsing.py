@@ -299,7 +299,9 @@ class TestMetricOnModelParsingWorks:
         assert simple_metric.type_params.metric_aggregation_params.agg == AggregationType.COUNT
         assert simple_metric.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
         assert "semantic_model.test.fct_revenue" in simple_metric.depends_on.nodes
-        assert simple_metric.type_params.metric_aggregation_params.agg_time_dimension is None
+        assert (
+            simple_metric.type_params.metric_aggregation_params.agg_time_dimension == "second_dim"
+        )
 
         simple_metric_pydantic = semantic_manifest_metrics["simple_metric"]
         assert simple_metric_pydantic.name == "simple_metric"
@@ -314,7 +316,8 @@ class TestMetricOnModelParsingWorks:
             == "fct_revenue"
         )
         assert (
-            simple_metric_pydantic.type_params.metric_aggregation_params.agg_time_dimension is None
+            simple_metric_pydantic.type_params.metric_aggregation_params.agg_time_dimension
+            == "second_dim"
         )
         # No 'depends_on' in the pydantic metric
 
@@ -370,7 +373,10 @@ class TestMetricOnModelParsingWorks:
             is False
         )
         assert "semantic_model.test.fct_revenue" in percentile_metric.depends_on.nodes
-        assert percentile_metric.type_params.metric_aggregation_params.agg_time_dimension is None
+        assert (
+            percentile_metric.type_params.metric_aggregation_params.agg_time_dimension
+            == "second_dim"
+        )
 
         percentile_metric_pydantic = semantic_manifest_metrics["percentile_metric"]
         assert percentile_metric_pydantic.name == "percentile_metric"
@@ -398,7 +404,7 @@ class TestMetricOnModelParsingWorks:
         )
         assert (
             percentile_metric_pydantic.type_params.metric_aggregation_params.agg_time_dimension
-            is None
+            == "second_dim"
         )
 
         cumulative_metric = metrics["metric.test.cumulative_metric"]
