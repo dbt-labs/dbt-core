@@ -417,128 +417,94 @@ impl PreviousState {
             m.get(k).and_then(|v| v.as_str())
         }
 
-        // Only use `unrendered_config` for relation comparison when both sides actually contain
-        // relation keys (database/schema/alias). Mantle-produced manifests may populate
-        // `unrendered_config` for sources with non-relation config keys (loaded_at_field/meta/tags),
-        // which would otherwise cause false positives here.
-        let has_relation_keys_on_both_sides = ["database", "schema", "alias"]
-            .iter()
-            .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k));
-
-        if has_relation_keys_on_both_sides {
-            let db_eq = get(current_uc, "database") == get(previous_uc, "database");
-            let schema_eq = get(current_uc, "schema") == get(previous_uc, "schema");
-            let alias_eq = get(current_uc, "alias") == get(previous_uc, "alias");
-            let is_same_relation = db_eq && schema_eq && alias_eq;
-
-            if !is_same_relation {
-                log_state_mod_diff(
-                    &current_node.common().unique_id,
-                    "relation",
-                    [
-                        (
-                            "database",
-                            db_eq,
-                            Some((
-                                format!("{:?}", get(current_uc, "database")),
-                                format!("{:?}", get(previous_uc, "database")),
-                            )),
-                        ),
-                        (
-                            "schema",
-                            schema_eq,
-                            Some((
-                                format!("{:?}", get(current_uc, "schema")),
-                                format!("{:?}", get(previous_uc, "schema")),
-                            )),
-                        ),
-                        (
-                            "alias",
-                            alias_eq,
-                            Some((
-                                format!("{:?}", get(current_uc, "alias")),
-                                format!("{:?}", get(previous_uc, "alias")),
-                            )),
-                        ),
-                    ],
-                );
-            }
-
-            return !is_same_relation;
-        }
-
-        // Fallback:
-        // - For sources, compare rendered database/schema/identifier (stored in alias) like dbt-core.
-        // - For other nodes, compare just the rendered alias (legacy behavior).
-        if current_node.resource_type() == NodeType::Source
-            && previous_node.resource_type() == NodeType::Source
-        {
-            let db_eq = current_node.base().database == previous_node.base().database;
-            let schema_eq = current_node.base().schema == previous_node.base().schema;
-            let alias_eq = current_node.base().alias == previous_node.base().alias;
-            let is_same_relation = db_eq && schema_eq && alias_eq;
-            if !is_same_relation {
-                log_state_mod_diff(
-                    &current_node.common().unique_id,
-                    "relation",
-                    [
-                        (
-                            "database",
-                            db_eq,
-                            Some((
-                                format!("{:?}", &current_node.base().database),
-                                format!("{:?}", &previous_node.base().database),
-                            )),
-                        ),
-                        (
-                            "schema",
-                            schema_eq,
-                            Some((
-                                format!("{:?}", &current_node.base().schema),
-                                format!("{:?}", &previous_node.base().schema),
-                            )),
-                        ),
-                        (
-                            "alias",
-                            alias_eq,
-                            Some((
-                                format!("{:?}", &current_node.base().alias),
-                                format!("{:?}", &previous_node.base().alias),
-                            )),
-                        ),
-                    ],
-                );
-            }
-            return !is_same_relation;
-        }
-
-        // Non-source nodes fallback: compare just the rendered alias (legacy behavior).
-        let current_alias = &current_node.base().alias;
-        let previous_alias = &previous_node.base().alias;
-
-        // Helper function to normalize alias by trimming whitespace, newlines, and quotes
-        fn normalize_alias(alias: &str) -> &str {
-            alias.trim_matches(|c: char| c.is_whitespace() || c == '\n' || c == '"')
-        }
-
-        let normalized_current = normalize_alias(current_alias);
-        let normalized_previous = normalize_alias(previous_alias);
-
-        let is_same_relation = normalized_current == normalized_previous;
-        if !is_same_relation {
+        #[allow(clippy::too_many_arguments)]
+        fn log_relation_modified(
+            current_node: &dyn InternalDbtNode,
+            db_eq: bool,
+            schema_eq: bool,
+            alias_eq: bool,
+            current_db: String,
+            previous_db: String,
+            current_schema: String,
+            previous_schema: String,
+            current_alias: String,
+            previous_alias: String,
+        ) {
             log_state_mod_diff(
                 &current_node.common().unique_id,
                 "relation",
-                [(
-                    "alias",
-                    false,
-                    Some((
-                        format!("{:?}", current_alias),
-                        format!("{:?}", previous_alias),
-                    )),
-                )],
+                [
+                    ("database", db_eq, Some((current_db, previous_db))),
+                    ("schema", schema_eq, Some((current_schema, previous_schema))),
+                    ("alias", alias_eq, Some((current_alias, previous_alias))),
+                ],
             );
         }
+
+        // Sources are a special case: some manifest producers omit relation keys from
+        // `unrendered_config` even though the rendered/database representation is stable.
+        // If we treat `Some(...)` vs `None` as a diff here, `state:modified+` can end up selecting
+        // large parts of the graph from a source-only representation mismatch.
+        //
+        // Match dbt-core semantics by only comparing unrendered relation keys when both manifests
+        // include them; otherwise compare the rendered/base representation.
+        if current_node.resource_type() == NodeType::Source
+            && previous_node.resource_type() == NodeType::Source
+        {
+            let uc_has_both = ["database", "schema", "alias"]
+                .iter()
+                .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k));
+
+            if !uc_has_both {
+                let db_eq = current_node.base().database == previous_node.base().database;
+                let schema_eq = current_node.base().schema == previous_node.base().schema;
+                let alias_eq = current_node.base().alias == previous_node.base().alias;
+                let is_same_relation = db_eq && schema_eq && alias_eq;
+
+                if !is_same_relation {
+                    log_relation_modified(
+                        current_node,
+                        db_eq,
+                        schema_eq,
+                        alias_eq,
+                        format!("{:?}", &current_node.base().database),
+                        format!("{:?}", &previous_node.base().database),
+                        format!("{:?}", &current_node.base().schema),
+                        format!("{:?}", &previous_node.base().schema),
+                        format!("{:?}", &current_node.base().alias),
+                        format!("{:?}", &previous_node.base().alias),
+                    );
+                }
+
+                return !is_same_relation;
+            }
+        }
+
+        // Match dbt-core / Mantle semantics: compare only the configured representation
+        // (unrendered_config), not the rendered values derived from the target (e.g.
+        // generate_*_name macros).
+        //
+        // Missing keys compare as `None`, which intentionally ignores target-only differences.
+        let db_eq = get(current_uc, "database") == get(previous_uc, "database");
+        let schema_eq = get(current_uc, "schema") == get(previous_uc, "schema");
+        let alias_eq = get(current_uc, "alias") == get(previous_uc, "alias");
+        let is_same_relation = db_eq && schema_eq && alias_eq;
+
+        if !is_same_relation {
+            log_relation_modified(
+                current_node,
+                db_eq,
+                schema_eq,
+                alias_eq,
+                format!("{:?}", get(current_uc, "database")),
+                format!("{:?}", get(previous_uc, "database")),
+                format!("{:?}", get(current_uc, "schema")),
+                format!("{:?}", get(previous_uc, "schema")),
+                format!("{:?}", get(current_uc, "alias")),
+                format!("{:?}", get(previous_uc, "alias")),
+            );
+        }
+
         !is_same_relation
     }
 
