@@ -440,6 +440,8 @@ pub struct EvalArgs {
     pub event_time_start: Option<String>,
     /// How to load internal (embedded) dbt packages
     pub internal_package_mode: InternalPackageMode,
+    /// Whether to skip running post hook operations.
+    pub skip_post_hooks: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

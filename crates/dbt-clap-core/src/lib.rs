@@ -1966,6 +1966,7 @@ impl CommonArgs {
             event_time_end: self.event_time_end.clone(),
             event_time_start: self.event_time_start.clone(),
             internal_package_mode: self.internal_package_mode.clone(),
+            skip_post_hooks: false,
         }
     }
 
