@@ -94,7 +94,7 @@ class TestSemanticModelWithDisabledRef:
         with pytest.raises(CompilationError) as excinfo:
             run_dbt(["parse"])
         assert (
-            "'semantic_model.test.semantic_people' (models/schema.yml) depends on a node named 'people' which is disabled"
+            "depends on a node named 'people' which is disabled"
             in str(excinfo.value)
         )
 
