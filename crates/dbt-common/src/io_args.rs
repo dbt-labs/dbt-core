@@ -442,6 +442,10 @@ pub struct EvalArgs {
     pub internal_package_mode: InternalPackageMode,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
+    /// Write parquet index alongside JSON artifacts
+    pub use_index: bool,
+    /// Directory for the parquet index output (default: <target>/index/)
+    pub index_dir: Option<PathBuf>,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
