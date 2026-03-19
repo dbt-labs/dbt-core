@@ -93,10 +93,7 @@ class TestSemanticModelWithDisabledRef:
     def test_compilation_error_on_disabled_ref(self, project):
         with pytest.raises(CompilationError) as excinfo:
             run_dbt(["parse"])
-        assert (
-            "depends on a node named 'people' which is disabled"
-            in str(excinfo.value)
-        )
+        assert "depends on a node named 'people' which is disabled" in str(excinfo.value)
 
 
 class TestSemanticModelParsingForCumulativeMetrics:

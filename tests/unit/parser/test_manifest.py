@@ -350,6 +350,8 @@ class TestUpdateSemanticModel:
             schema_name="schema",
             database="db",
         )
+
+
 class TestExtendedMsgpackEncoder:
     """
     Unit tests for extended_msgpack_encoder and extended_mashumaro_encoder.
