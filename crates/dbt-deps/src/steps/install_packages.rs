@@ -25,10 +25,11 @@ use vortex_events::package_install_event;
 use crate::package_listing::UnpinnedPackage;
 
 use crate::{
+    github_client::download_git_like_package,
     hub_client::HubClient,
     package_listing::PackageListing,
     tarball_client::TarballClient,
-    utils::{handle_git_like_package, move_dir, read_and_validate_dbt_project, sanitize_git_url},
+    utils::{move_dir, read_and_validate_dbt_project, sanitize_git_url},
 };
 
 /// Create a package installation span and report to status reporter
@@ -280,13 +281,17 @@ async fn install_package(
             }
         }
         UnpinnedPackage::Git(git_unpinned_package) => {
-            let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
+            let tmp_dir = tempfile::tempdir_in(packages_install_path)
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
+            let download_dir = tmp_dir.path().join("git_pkg");
+            let (checkout_path, commit_sha) = download_git_like_package(
                 &git_unpinned_package.git,
                 &git_unpinned_package.revisions,
                 &git_unpinned_package.subdirectory,
                 git_unpinned_package.warn_unpinned.unwrap_or_default(),
-                Some(packages_install_path),
-            )?;
+                &download_dir,
+            )
+            .await?;
 
             let dbt_project = read_and_validate_dbt_project(
                 io_args,
@@ -339,13 +344,17 @@ async fn install_package(
             }
         }
         UnpinnedPackage::Private(private_unpinned_package) => {
-            let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
+            let tmp_dir = tempfile::tempdir_in(packages_install_path)
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
+            let download_dir = tmp_dir.path().join("private_pkg");
+            let (checkout_path, commit_sha) = download_git_like_package(
                 &private_unpinned_package.private,
                 &private_unpinned_package.revisions,
                 &private_unpinned_package.subdirectory,
                 private_unpinned_package.warn_unpinned.unwrap_or_default(),
-                Some(packages_install_path),
-            )?;
+                &download_dir,
+            )
+            .await?;
             let dbt_project = read_and_validate_dbt_project(
                 io_args,
                 &checkout_path,
