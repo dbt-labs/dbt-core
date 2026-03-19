@@ -19,7 +19,7 @@ models:
 """
 
 
-class TestDocVariableArg:
+class TestDocConcatArg:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -35,9 +35,13 @@ class TestDocVariableArg:
             manifest = json.load(fp)
 
         model_data = manifest["nodes"]["model.test.my_model"]
-        model_data["description"] == "this is a docs block"
+        assert model_data["description"] == "this is a docs block"
+        # Ideally, this would be able to track the doc block in lineage.
+        # However, Const jinja nodes are not handled statically for this resolution.
         assert model_data["doc_blocks"] == []
 
         column_data = model_data["columns"]["id"]
         assert column_data["description"] == "this is a docs block"
+        # Ideally, this would be able to track the doc block in lineage.
+        # However, Const jinja nodes are not handled statically for this resolution.
         assert column_data["doc_blocks"] == []
