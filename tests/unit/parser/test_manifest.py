@@ -9,6 +9,7 @@ from pytest_mock import MockerFixture
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
+from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
@@ -303,6 +304,52 @@ class TestCheckForcingConcurrentBatches:
             assert "Batches will be run sequentially" in event_catcher.caught_events[0].info.msg  # type: ignore
         else:
             assert len(event_catcher.caught_events) == 0
+
+
+class TestUpdateSemanticModel:
+    """Tests for ManifestLoader.update_semantic_model."""
+
+    @pytest.fixture
+    @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
+    @patch("dbt.parser.manifest.os.path.exists")
+    @patch("dbt.parser.manifest.open")
+    def loader(self, patched_open, patched_os_exist, patched_state_check):
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.project_target_path = "mock_target_path"
+        return ManifestLoader(mock_project, {})
+
+    def test_no_index_error_when_depends_on_nodes_is_empty(self, loader):
+        """Regression: update_semantic_model must not raise IndexError when
+        depends_on_nodes is empty (e.g. referenced model is disabled)."""
+        semantic_model = MagicMock()
+        semantic_model.depends_on_nodes = []
+
+        # Before the fix this raised: IndexError: list index out of range
+        loader.update_semantic_model(semantic_model)
+
+        # node_relation must not have been assigned
+        assert "node_relation" not in semantic_model.__dict__
+
+    def test_node_relation_set_when_depends_on_nodes_has_entry(self, loader):
+        """When depends_on_nodes is non-empty, node_relation is populated."""
+        refd_node = MagicMock()
+        refd_node.relation_name = '"db"."schema"."my_model"'
+        refd_node.alias = "my_model"
+        refd_node.schema = "schema"
+        refd_node.database = "db"
+        loader.manifest.nodes["model.pkg.my_model"] = refd_node
+
+        semantic_model = MagicMock()
+        semantic_model.depends_on_nodes = ["model.pkg.my_model"]
+
+        loader.update_semantic_model(semantic_model)
+
+        assert semantic_model.node_relation == NodeRelation(
+            relation_name='"db"."schema"."my_model"',
+            alias="my_model",
+            schema_name="schema",
+            database="db",
+        )
 
 
 class TestExtendedMsgpackEncoder:

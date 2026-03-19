@@ -4,6 +4,7 @@ import pytest
 
 from dbt.artifacts.resources.v1.semantic_model import MetricType
 from dbt.contracts.graph.manifest import Manifest
+from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
 from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
@@ -17,10 +18,12 @@ from tests.functional.semantic_models.fixtures import (
     conversion_metric_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
+    models_people_sql,
     multi_sm_schema_yml,
     ratio_metric_yml,
     schema_without_semantic_model_yml,
     schema_yml,
+    semantic_model_with_disabled_ref_yml,
 )
 
 
@@ -76,6 +79,21 @@ class TestSemanticModelParsingErrors:
 
         validation_errors = [e for e in events if e.info.name == "SemanticValidationFailure"]
         assert validation_errors
+
+
+class TestSemanticModelWithDisabledRef:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_with_disabled_ref_yml,
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_compilation_error_on_disabled_ref(self, project):
+        with pytest.raises(CompilationError) as excinfo:
+            run_dbt(["parse"])
+        assert "depends on a node named 'people' which is disabled" in str(excinfo.value)
 
 
 class TestSemanticModelParsingForCumulativeMetrics:
