@@ -1,9 +1,11 @@
 use std::collections::BTreeSet;
+use std::iter::zip;
 
+use minijinja::arg_utils::ArgsIter;
 use minijinja::tuple;
 use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::mutable_vec::MutableVec;
-use minijinja::value::{from_args, ValueKind};
+use minijinja::value::{from_args, ValueKind, ValueMap};
 use minijinja::{Error, ErrorKind, State, Value};
 use regex::Regex;
 
@@ -55,6 +57,7 @@ use regex::Regex;
 /// * `str.ljust`
 /// * `str.lower`
 /// * `str.lstrip`
+/// * `str.maketrans`
 /// * `str.partition`
 /// * `str.removeprefix`
 /// * `str.removesuffix`
@@ -214,10 +217,20 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                                 format!("invalid code point: {new_cp}"),
                             ));
                         }
+                    } else if let Some(new_c) = val.as_str() {
+                        if new_c.len() != 1 {
+                            return Err(Error::new(
+                                ErrorKind::InvalidOperation,
+                                "translate table values must be a single character string"
+                                    .to_string(),
+                            ));
+                        }
+                        let new_c = new_c.chars().next().unwrap();
+                        result.push(new_c);
                     } else {
                         return Err(Error::new(
                             ErrorKind::InvalidOperation,
-                            "translate table values must be integers or None".to_string(),
+                            "translate table values must be integers, strings, or None".to_string(),
                         ));
                     }
                 } else {
@@ -665,6 +678,94 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 })
                 .collect();
             Ok(Value::from(result))
+        }
+        // Reference: https://docs.python.org/3/library/stdtypes.html#str.maketrans
+        "maketrans" => {
+            // `maketrans(x: dict)`: If there is only one argument,
+            // it must be a dictionary mapping Unicode ordinals
+            // (integers) or characters (strings of length 1) to
+            // Unicode ordinals, strings (of arbitrary lengths) or
+            // None. Character keys will then be converted to
+            // ordinals.
+            if args.len() == 1 {
+                let iter = ArgsIter::new("maketrans", &["x"], args);
+                let mapping = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let result = mapping
+                    .try_iter()?
+                    .map(|key| {
+                        let value = mapping.get_item(&key).map_err(|_| {
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                "if you give only one argument to maketrans it must be a dict"
+                                    .to_string(),
+                            )
+                        })?;
+
+                        // Validate key type: must be a string of length 1 or integer
+                        // Convert all keys to ordinals.
+                        let key = if key.is_integer() {
+                            key
+                        } else if let Some(s) = key.as_str() {
+                            if s.len() != 1 {
+                                return Err(Error::new(
+                                    ErrorKind::InvalidOperation,
+                                    "string keys in translate table must be of length 1"
+                                        .to_string(),
+                                ));
+                            }
+                            // SAFETY: |s| = 1
+                            let c = s.chars().next().unwrap();
+                            Value::from(c as u32)
+                        } else {
+                            return Err(Error::new(
+                                ErrorKind::InvalidOperation,
+                                "keys in translate table must be strings or integers".to_string(),
+                            ));
+                        };
+
+                        // Values are NOT validated in `maketrans`
+                        Ok((key, value))
+                    })
+                    .collect::<Result<ValueMap, Error>>()?;
+                Ok(Value::from(result))
+            }
+            // `maketrans(x: str, y: str)`: If there are two
+            // arguments, they must be strings of equal length, and
+            // in the resulting dictionary, each character in from
+            // will be mapped to the character at the same position
+            // in to. If there is a third argument, it must be a
+            // string, whose characters will be mapped to None in
+            // the result.
+            else {
+                let iter = ArgsIter::new("maketrans", &["x", "y", "z"], args);
+                let from = iter.next_arg::<&str>()?;
+                let to = iter.next_arg::<&str>()?;
+                let remove = iter.next_arg::<Option<&str>>()?;
+                iter.finish()?;
+                if from.len() != to.len() {
+                    return Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        "maketrans arguments must be strings of equal length".to_string(),
+                    ));
+                }
+                // This might overshoot the capacity if there is overlap between from and remove.
+                let mut result =
+                    ValueMap::with_capacity(from.len() + remove.map_or(0, |r| r.len()));
+                for (from_c, to_c) in zip(from.chars(), to.chars()) {
+                    result.insert(
+                        Value::from(from_c as u32 as f64),
+                        Value::from(to_c as u32 as f64),
+                    );
+                }
+                if let Some(remove) = remove {
+                    for remove_c in remove.chars() {
+                        result.insert(Value::from(remove_c as u32 as f64), Value::NONE);
+                    }
+                }
+                Ok(Value::from(result))
+            }
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
