@@ -209,7 +209,7 @@ class Linker:
         cycle = self.find_cycles()
 
         if cycle:
-            raise RuntimeError("Found a cycle: {}".format(cycle))
+            raise CompilationError("Found a cycle: {}".format(cycle))
 
     def add_test_edges(self, manifest: Manifest) -> None:
         if not get_flags().USE_FAST_TEST_EDGES:
