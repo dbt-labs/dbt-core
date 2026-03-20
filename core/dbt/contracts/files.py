@@ -6,6 +6,7 @@ from mashumaro.types import SerializableType
 
 from dbt.artifacts.resources.base import FileHash
 from dbt.constants import MAXIMUM_SEED_SIZE
+from dbt.exceptions import ParsingError
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
@@ -80,7 +81,7 @@ class RemoteFile(dbtClassMixin):
         elif language == "python":
             self.path_end = ".py"
         else:
-            raise RuntimeError(f"Invalid language for remote File {language}")
+            raise ParsingError(f"Invalid language for remote File {language}")
         self.path = f"from remote system{self.path_end}"
 
     @property

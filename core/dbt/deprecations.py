@@ -5,6 +5,7 @@ from typing import Any, Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
 from dbt.events import types as core_types
+from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import fire_event, warn_or_error
@@ -268,7 +269,7 @@ def renamed_env_var(old_name: str, new_name: str):
 def warn(name: str, *args, **kwargs) -> None:
     if name not in deprecations:
         # this should (hopefully) never happen
-        raise RuntimeError("Error showing deprecation warning: {}".format(name))
+        raise DbtRuntimeError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
 

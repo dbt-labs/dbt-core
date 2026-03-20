@@ -2,6 +2,7 @@ from typing import Dict, Optional, Union
 
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.contracts.graph.nodes import Exposure
+from dbt.exceptions import DbtRuntimeError
 from dbt.events.types import (
     CheckNodeTestFailure,
     EndOfRunSummary,
@@ -52,7 +53,7 @@ def interpret_run_result(result) -> str:
     elif result.status == NodeStatus.NoOp:
         return "noop"
     else:
-        raise RuntimeError(f"unhandled result {result}")
+        raise DbtRuntimeError(f"unhandled result {result}")
 
 
 def print_run_status_line(results) -> None:
