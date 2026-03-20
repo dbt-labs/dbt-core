@@ -15,6 +15,7 @@ pub mod connection;
 pub mod engine;
 pub mod errors;
 pub mod factory;
+pub mod format_ident;
 pub mod formatter;
 pub mod funcs;
 pub mod information_schema;
