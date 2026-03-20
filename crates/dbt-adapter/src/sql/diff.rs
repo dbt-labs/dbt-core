@@ -2472,14 +2472,10 @@ fn parse_python_value(s: &str) -> Result<(PyValue, &str), String> {
 }
 
 fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
-    let actual_tokens = tokenize(actual);
-    let expected_tokens = tokenize(expected);
-
-    let actual_tokens_without_comments = eliminate_comments(actual_tokens);
-    let expected_tokens_without_comments = eliminate_comments(expected_tokens);
-
-    let actual_abstract_tokens = abstract_tokenize(actual_tokens_without_comments);
-    let expected_abstract_tokens = abstract_tokenize(expected_tokens_without_comments);
+    let actual = eliminate_comments(actual);
+    let expected = eliminate_comments(expected);
+    let actual_abstract_tokens = abstract_tokenize(tokenize(&actual));
+    let expected_abstract_tokens = abstract_tokenize(tokenize(&expected));
 
     let mut actual_index = 0;
     let mut expected_index = 0;
@@ -2643,25 +2639,102 @@ fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
     false
 }
 
-fn eliminate_comments(tokens: Vec<Token>) -> Vec<Token> {
-    let mut result = Vec::new();
-    let mut in_comment = false;
-    for token in tokens {
-        if token.matches("\n") {
-            if in_comment {
-                in_comment = false;
+/// Strip `/* ... */` block comments, respecting string literals. Leave `--` line comments
+/// intact so `--EPHEMERAL-SELECT-WRAPPER-*` markers reach `abstract_tokenize`.
+fn eliminate_comments(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut in_backtick = false;
+
+    while i < bytes.len() {
+        let ch = bytes[i] as char;
+
+        // Inside string literals — pass through verbatim, watch for closing quote.
+        if in_single {
+            out.push(ch);
+            if ch == '\'' {
+                in_single = false;
             }
-        } else if token.value.starts_with("--") {
-            in_comment = true;
-            if token.value.starts_with("--EPHEMERAL-SELECT-WRAPPER") {
-                result.push(token);
-            }
-        } else if !in_comment {
-            result.push(token);
+            i += 1;
+            continue;
         }
+        if in_double {
+            out.push(ch);
+            if ch == '"' {
+                in_double = false;
+            }
+            i += 1;
+            continue;
+        }
+        if in_backtick {
+            out.push(ch);
+            if ch == '`' {
+                in_backtick = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        // Open string literal.
+        if ch == '\'' {
+            in_single = true;
+            out.push(ch);
+            i += 1;
+            continue;
+        }
+        if ch == '"' {
+            in_double = true;
+            out.push(ch);
+            i += 1;
+            continue;
+        }
+        if ch == '`' {
+            in_backtick = true;
+            out.push(ch);
+            i += 1;
+            continue;
+        }
+
+        // Block comment: skip to closing `*/`.
+        if ch == '/' && i + 1 < bytes.len() && bytes[i + 1] as char == '*' {
+            i += 2;
+            while i + 1 < bytes.len() {
+                if bytes[i] as char == '*' && bytes[i + 1] as char == '/' {
+                    i += 2;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+
+        // Line comment: preserve EPHEMERAL markers; skip everything else to EOL.
+        if ch == '-' && i + 1 < bytes.len() && bytes[i + 1] as char == '-' {
+            const EPHEMERAL: &str = "--EPHEMERAL-SELECT-WRAPPER";
+            if bytes[i..].starts_with(EPHEMERAL.as_bytes()) {
+                // Emit up to (but not including) the newline.
+                while i < bytes.len() && bytes[i] as char != '\n' {
+                    out.push(bytes[i] as char);
+                    i += 1;
+                }
+            } else {
+                // Skip to end of line.
+                while i < bytes.len() && bytes[i] as char != '\n' {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+
+        out.push(ch);
+        i += 1;
     }
-    result
+    out
 }
+
 fn generate_visual_sql_diff(actual: &str, expected: &str) -> String {
     let mut diff_output = String::new();
     diff_output.push_str("Visual SQL Diff (ignoring all whitespace):\n");
@@ -3647,6 +3720,42 @@ LEFT OUTER JOIN
 "#;
         let result = compare_sql(sql1, sql2);
         assert!(result.is_ok(), "Should match");
+    }
+
+    #[test]
+    fn test_compare_ephemeral_model_with_block_comment() {
+        let sql1 = r#"
+create or replace view `db`.`schema`.`my_model`
+OPTIONS()
+as with __dbt__cte__base as (
+SELECT id FROM `project`.`dataset`.`source_table`
+)
+--EPHEMERAL-SELECT-WRAPPER-START
+select * from (
+/* This model joins the base CTE with enrichment data. */
+WITH enriched AS (
+    SELECT * FROM __dbt__cte__base
+)
+SELECT * FROM enriched
+--EPHEMERAL-SELECT-WRAPPER-END
+);
+"#;
+        let sql2 = r#"
+create or replace view `db`.`schema`.`my_model`
+OPTIONS()
+as /* This model joins the base CTE with enrichment data. */
+WITH __dbt__cte__base as (
+SELECT id FROM `project`.`dataset`.`source_table`
+), enriched AS (
+    SELECT * FROM __dbt__cte__base
+)
+SELECT * FROM enriched;
+"#;
+        let result = compare_sql(sql1, sql2);
+        assert!(
+            result.is_ok(),
+            "Should match: block comment in wrapper body"
+        );
     }
 
     #[test]

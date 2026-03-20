@@ -58,20 +58,10 @@ pub(crate) fn tokenize(actual: &str) -> Vec<Token> {
 
     for c in actual.chars() {
         match c {
-            ' ' | '\t' | '\r' => {
+            ' ' | '\t' | '\r' | '\n' => {
                 if !current_token.is_empty() {
                     tokens.push(current_token);
                 }
-                current_token = Token::new();
-            }
-            '\n' => {
-                if !current_token.is_empty() {
-                    tokens.push(current_token);
-                }
-                tokens.push(Token {
-                    value: "\n".to_string(),
-                    maybe_hash: false,
-                });
                 current_token = Token::new();
             }
             '.' | '_' => {
@@ -301,7 +291,19 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 }));
             }
         } else if token.matches("--EPHEMERAL-SELECT-WRAPPER-END") {
-            assert!(tokens.get(index + 1).unwrap().matches(")"));
+            let paren_token = tokens.get(index + 1).unwrap();
+            assert!(
+                paren_token.value.starts_with(')'),
+                "expected ')' after EPHEMERAL-SELECT-WRAPPER-END, got {:?}",
+                paren_token.value
+            );
+            if paren_token.value.len() > 1 {
+                let rest_token = paren_token.value[1..].to_string();
+                abstract_tokens.push(AbstractToken::Token(Token {
+                    value: rest_token,
+                    maybe_hash: false,
+                }));
+            }
             index += 2;
         } else {
             abstract_tokens.push(AbstractToken::Token(token.clone()));
@@ -349,6 +351,28 @@ mod tests {
         match &abstract_tokens[1] {
             AbstractToken::Timestamp { value } => assert_eq!(value, "2023-01-01T12:34:56"),
             _ => panic!("Expected Timestamp"),
+        }
+    }
+
+    #[test]
+    fn test_abstract_tokenize_ephemeral_wrapper_end_with_semicolon() {
+        // Test that tokenizing correctly separates the end parenthesis after
+        // --EPHEMERAL-SELECT-WRAPPER-END into its own token
+        let tokens = vec![
+            Token {
+                value: "--EPHEMERAL-SELECT-WRAPPER-END".to_string(),
+                maybe_hash: false,
+            },
+            Token {
+                value: ");".to_string(),
+                maybe_hash: false,
+            },
+        ];
+        let abstract_tokens = abstract_tokenize(tokens);
+        assert_eq!(abstract_tokens.len(), 1);
+        match &abstract_tokens[0] {
+            AbstractToken::Token(t) => assert_eq!(t.value, ";"),
+            _ => panic!("Expected Token(\";\")"),
         }
     }
 
