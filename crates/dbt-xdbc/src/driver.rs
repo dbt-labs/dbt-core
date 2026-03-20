@@ -42,6 +42,8 @@ pub enum LoadStrategy {
     /// - Windows: `adbc_driver_snowflake.dll`
     /// - macOS: `libadbc_driver_snowflake.dylib`
     System(Option<String>),
+    /// Try loading from system paths first; if not found, fall back to CDN cache.
+    SystemThenCdnCache,
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -363,7 +365,7 @@ impl AdbcDriver {
         let final_strategy = match (load_strategy, backend) {
             // CDN strategy for drivers published to the dbt Labs CDN.
             (
-                CdnCache,
+                load_strategy @ (CdnCache | SystemThenCdnCache),
                 Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
                 | Salesforce | SQLServer,
             ) => {
@@ -382,12 +384,12 @@ impl AdbcDriver {
                         );
                         System(None)
                     } else {
-                        CdnCache
+                        load_strategy
                     }
                 }
                 #[cfg(not(debug_assertions))]
                 {
-                    CdnCache
+                    load_strategy
                 }
             }
             // ODBC backends cannot be loaded as ADBC drivers, no matter the strategy.
@@ -400,9 +402,11 @@ impl AdbcDriver {
                 ));
             }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
-            (CdnCache, ClickHouse) => System(None),
+            (CdnCache | SystemThenCdnCache, ClickHouse) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
-            (CdnCache, Generic { library_name, .. }) => System(Some(library_name.to_string())),
+            (CdnCache | SystemThenCdnCache, Generic { library_name, .. }) => {
+                System(Some(library_name.to_string()))
+            }
             // System strategy: load from a provided library name (e.g. "adbc_driver_snowflake").
             (load_strategy @ System(_), _) => load_strategy,
         };
@@ -417,6 +421,27 @@ impl AdbcDriver {
                     None => backend.adbc_library_name().unwrap(),
                 };
                 Self::try_load_driver_from_name(backend, name, adbc_version)
+            }
+            SystemThenCdnCache => {
+                // Safe to unwrap because it's an ADBC backend and non-CDN backends were already
+                // redirected to System(_) above.
+                let name = backend.adbc_library_name().unwrap();
+                Self::try_load_driver_from_name(backend, name, adbc_version)
+                    .or_else(|e1| {
+                        Self::try_load_driver_through_cdn_cache(backend, adbc_version)
+                            .map_err(|e2| {
+                                // combine the errors into one
+                                let message = format!("Failed to load `{name}` driver from name, then failed to load it from the CDN.\n
+First error:\n\
+{e1}\n\
+Second error:\n\
+{e2}");
+                                Error::with_message_and_status(
+                                    message,
+                                    Status::Internal,
+                                )
+                            })
+                    })
             }
         }
     }
