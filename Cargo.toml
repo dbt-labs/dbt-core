@@ -12,6 +12,7 @@ members = [
   "crates/dbt-common",
   "crates/dbt-csv",
   "crates/dbt-cloud-api",
+  "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
   "crates/dbt-features",
   "crates/dbt-init",
@@ -188,6 +189,7 @@ dbt-base = { path = "crates/dbt-base" }
 dbt-clap-core = { path = "crates/dbt-clap-core" }
 dbt-cli-lib = { path = "crates/dbt-cli-lib" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
+dbt-cloud-config = { path = "crates/dbt-cloud-config" }
 dbt-common = { path = "crates/dbt-common" }
 dbt-csv = { path = "crates/dbt-csv" }
 dbt-dag = { path = "crates/dbt-dag" }
@@ -350,6 +352,7 @@ reqwest = { version = "0.12.9", default-features = false, features = [
 # latest version depended on by the version of reqwest-retry in use
 gcloud-auth = { version = "1.1.1", default-features = false, features = [
   "rustls-tls",
+  "jwt-aws-lc-rs",
 ] }
 http = { version = "1.2.0", default-features = false }
 reqwest-middleware = { version = "0.4.2" }
