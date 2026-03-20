@@ -325,9 +325,17 @@ class BaseContext(metaclass=ContextMeta):
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
         env = get_invocation_context().env
-        if var in env:
+        found_in_env = var in env
+        if found_in_env:
             return_value = env[var]
-        elif default is not None:
+        elif os.name == "nt":
+            # On Windows, env var names are case-insensitive at the OS level,
+            # but the cached env dict may use plain keys that don't match the
+            # requested casing. Fall back to os.environ which preserves
+            # Windows' native case-insensitive lookup.
+            return_value = os.environ.get(var)
+            found_in_env = return_value is not None
+        if return_value is None and default is not None:
             return_value = default
 
         if return_value is not None:
@@ -335,7 +343,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+            self.env_vars[var] = return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:

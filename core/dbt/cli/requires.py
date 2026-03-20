@@ -40,11 +40,7 @@ from dbt.utils import try_get_max_rss_kb
 from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
-from dbt_common.context import (
-    CaseInsensitiveMapping,
-    get_invocation_context,
-    set_invocation_context,
-)
+from dbt_common.context import get_invocation_context, set_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_event
@@ -87,12 +83,7 @@ def preflight(func):
         # recorded or replayed if needed.
         env_dict = get_env()
         _cross_propagate_engine_env_vars(env_dict)
-        # On Windows, wrap env in CaseInsensitiveMapping to preserve the
-        # OS-native case-insensitive behavior of environment variables.
-        if os.name == "nt":
-            get_invocation_context()._env = CaseInsensitiveMapping(env_dict)
-        else:
-            get_invocation_context()._env = env_dict
+        get_invocation_context()._env = env_dict
 
         # Flags
         flags = Flags(ctx)
