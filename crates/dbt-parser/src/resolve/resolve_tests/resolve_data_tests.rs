@@ -285,6 +285,7 @@ pub async fn resolve_data_tests(
         properties: maybe_properties,
         status,
         patch_path: _,
+        ..
     } in test_sql_resources_map.iter()
     {
         let mut test_config = sql_file_info.config.clone();

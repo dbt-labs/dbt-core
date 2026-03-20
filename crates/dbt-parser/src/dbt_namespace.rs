@@ -66,7 +66,7 @@ impl Object for DbtNamespace {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
                     let func = template_state
-                        .lookup("get_columns_in_relation")
+                        .lookup("get_columns_in_relation", listeners)
                         .ok_or_else(|| {
                             MinijinjaError::new(
                                 MinijinjaErrorKind::InvalidOperation,
@@ -102,12 +102,14 @@ impl Object for DbtNamespace {
                 if let Ok(template) = state.env().get_template(template_name) {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
-                    let func = template_state.lookup("get_relation").ok_or_else(|| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::InvalidOperation,
-                            "get_relation macro not found",
-                        )
-                    })?;
+                    let func = template_state
+                        .lookup("get_relation", listeners)
+                        .ok_or_else(|| {
+                            MinijinjaError::new(
+                                MinijinjaErrorKind::InvalidOperation,
+                                "get_relation macro not found",
+                            )
+                        })?;
                     func.call(&template_state, args, listeners)
                 } else {
                     Err(MinijinjaError::new(
@@ -122,7 +124,7 @@ impl Object for DbtNamespace {
                 if let Ok(template) = state.env().get_template(&template_name) {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
-                    let func = template_state.lookup(name).ok_or_else(|| {
+                    let func = template_state.lookup(name, listeners).ok_or_else(|| {
                         MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             format!("{name} macro not found"),

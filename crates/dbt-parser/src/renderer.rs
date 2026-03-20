@@ -36,6 +36,7 @@ use dbt_schemas::schemas::{InternalDbtNodeAttributes, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
 use dbt_telemetry::AssetParsed;
 use std::fmt::Debug;
+use std::rc::Rc;
 use tracing::Instrument as _;
 
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
@@ -63,6 +64,8 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
     pub properties: Option<S>,
     /// The path to the properties file that defines this model
     pub patch_path: Option<PathBuf>,
+    /// Macro unique_ids that were invoked during rendering (for `depends_on.macros`).
+    pub macro_dependencies: Vec<String>,
 }
 
 /// Extracts model and version configuration from node properties
@@ -326,144 +329,164 @@ where
     } else {
         DefaultRenderingEventListenerFactory::new(true)
     };
-    let listeners = listener_factory.create_listeners(
+    let mut listeners = listener_factory.create_listeners(
         &display_path,
         &dbt_frontend_common::error::CodeLocation::start_of_file(),
     );
+    let macro_dep_listener = Rc::new(dbt_jinja_utils::listener::MacroDependencyListener::new());
+    listeners.push(macro_dep_listener.clone());
 
-    let (sql_file_info, status, rendered_sql, macro_spans) = match render_sql_with_listeners(
-        &sql,
-        jinja_env.as_ref(),
-        &resolve_model_context,
-        &listeners,
-        &display_path,
-    ) {
-        Ok(rendered_sql) => {
-            // add root config if rendering a dependency package
-            if root_project_name != package_name {
-                let root_config = root_project_config.get_config_for_fqn(&fqn).clone();
-                sql_resources
-                    .lock()
-                    .unwrap()
-                    .push(SqlResource::BaseConfig(Box::new(root_config)));
-            }
+    let (sql_file_info, status, rendered_sql, macro_spans, macro_dependencies) =
+        match render_sql_with_listeners(
+            &sql,
+            jinja_env.as_ref(),
+            &resolve_model_context,
+            &listeners,
+            &display_path,
+        ) {
+            Ok(rendered_sql) => {
+                // add root config if rendering a dependency package
+                if root_project_name != package_name {
+                    let root_config = root_project_config.get_config_for_fqn(&fqn).clone();
+                    sql_resources
+                        .lock()
+                        .unwrap()
+                        .push(SqlResource::BaseConfig(Box::new(root_config)));
+                }
 
-            let normalized_sql = normalize_sql(&sql);
-            // Get config from current resources to use for hook rendering
-            let temp_sql_file_info = {
-                let sql_resources_locked = sql_resources.lock().unwrap().clone();
-                SqlFileInfo::from_sql_resources(
-                    sql_resources_locked,
-                    DbtChecksum::hash(normalized_sql.as_bytes()),
-                    execute_exists.load(atomic::Ordering::Relaxed),
-                )
-            };
+                let normalized_sql = normalize_sql(&sql);
+                // Get config from current resources to use for hook rendering
+                let temp_sql_file_info = {
+                    let sql_resources_locked = sql_resources.lock().unwrap().clone();
+                    SqlFileInfo::from_sql_resources(
+                        sql_resources_locked,
+                        DbtChecksum::hash(normalized_sql.as_bytes()),
+                        execute_exists.load(atomic::Ordering::Relaxed),
+                    )
+                };
 
-            // Collect dependencies from pre and post hooks (adds to same sql_resources)
-            collect_hook_dependencies_from_config(
-                &*temp_sql_file_info.config,
-                jinja_env.clone(),
-                &display_path,
-                args.io.clone(),
-                &resolve_model_context,
-                jinja_type_checking_event_listener_factory.clone(),
-            )?;
+                // Collect dependencies from pre and post hooks (adds to same sql_resources)
+                collect_hook_dependencies_from_config(
+                    &*temp_sql_file_info.config,
+                    jinja_env.clone(),
+                    &display_path,
+                    args.io.clone(),
+                    &resolve_model_context,
+                    jinja_type_checking_event_listener_factory.clone(),
+                )?;
 
-            // Create normalized SQL strings (remove all whitespace and convert to lowercase)
-            // These transformations make state:modified stable in the face of whitespace
-            // Create final sql_file_info with all dependencies (main SQL + hooks)
-            // and case differences. See https://github.com/dbt-labs/dbt-fusion/issues/768
-            let normalized_sql = normalize_sql(&sql);
+                // Create normalized SQL strings (remove all whitespace and convert to lowercase)
+                // These transformations make state:modified stable in the face of whitespace
+                // Create final sql_file_info with all dependencies (main SQL + hooks)
+                // and case differences. See https://github.com/dbt-labs/dbt-fusion/issues/768
+                let normalized_sql = normalize_sql(&sql);
 
-            let sql_file_info = {
-                let sql_resources_locked = sql_resources.lock().unwrap().clone();
-                SqlFileInfo::from_sql_resources(
-                    sql_resources_locked,
-                    DbtChecksum::hash(normalized_sql.as_bytes()),
-                    execute_exists.load(atomic::Ordering::Relaxed),
-                )
-            };
+                let sql_file_info = {
+                    let sql_resources_locked = sql_resources.lock().unwrap().clone();
+                    SqlFileInfo::from_sql_resources(
+                        sql_resources_locked,
+                        DbtChecksum::hash(normalized_sql.as_bytes()),
+                        execute_exists.load(atomic::Ordering::Relaxed),
+                    )
+                };
 
-            let status = if sql_file_info
-                .config
-                .get_enabled()
-                .expect("model config should be set by now")
-            {
-                ModelStatus::Enabled
-            } else {
-                ModelStatus::Disabled
-            };
+                let status = if sql_file_info
+                    .config
+                    .get_enabled()
+                    .expect("model config should be set by now")
+                {
+                    ModelStatus::Enabled
+                } else {
+                    ModelStatus::Disabled
+                };
 
-            // Destroy DefaultRenderingEventListener first to transfer macro_spans to factory
-            // Keep other listeners for later
-            let (default_listeners, other_listeners): (Vec<_>, Vec<_>) =
-                listeners.into_iter().partition(|l| {
-                    l.as_any()
+                // Destroy DefaultRenderingEventListener first to transfer macro_spans to factory
+                // Keep other listeners for later
+                let (default_listeners, other_listeners): (Vec<_>, Vec<_>) =
+                    listeners.into_iter().partition(|l| {
+                        l.as_any()
                         .downcast_ref::<dbt_jinja_utils::listener::DefaultRenderingEventListener>()
                         .is_some()
-                });
-            for listener in default_listeners {
-                listener_factory.destroy_listener(&display_path, listener);
-            }
-
-            // Now drain macro_spans from factory
-            let macro_spans = listener_factory.drain_macro_spans(&display_path);
-
-            // Emit mangled ref warnings based on the final config's static_analysis setting
-            // This allows {{ config(static_analysis='off') }} to suppress warnings
-            if sql_file_info.config.get_static_analysis() != Some(StaticAnalysisKind::Off) {
-                for listener in &other_listeners {
-                    listener.check_and_emit_mangled_ref_warnings(&rendered_sql, &macro_spans.items);
+                    });
+                for listener in default_listeners {
+                    listener_factory.destroy_listener(&display_path, listener);
                 }
-            }
 
-            // Destroy remaining listeners
-            for listener in other_listeners {
-                listener_factory.destroy_listener(&display_path, listener);
-            }
+                // Now drain macro_spans from factory
+                let macro_spans = listener_factory.drain_macro_spans(&display_path);
 
-            (sql_file_info, status, rendered_sql, macro_spans)
-        }
-        Err(err) => {
-            // Build minimal info for error/disabled outcome
-            let sql_file_info = {
-                let sql_resources_locked = sql_resources.lock().unwrap().clone();
-                let normalized_sql = normalize_sql(&sql);
-                SqlFileInfo::from_sql_resources(
-                    sql_resources_locked,
-                    DbtChecksum::hash(normalized_sql.as_bytes()),
-                    execute_exists.load(atomic::Ordering::Relaxed),
+                // Emit mangled ref warnings based on the final config's static_analysis setting
+                // This allows {{ config(static_analysis='off') }} to suppress warnings
+                if sql_file_info.config.get_static_analysis() != Some(StaticAnalysisKind::Off) {
+                    for listener in &other_listeners {
+                        listener
+                            .check_and_emit_mangled_ref_warnings(&rendered_sql, &macro_spans.items);
+                    }
+                }
+
+                // Destroy remaining listeners
+                for listener in other_listeners {
+                    listener_factory.destroy_listener(&display_path, listener);
+                }
+
+                let macro_dependencies = macro_dep_listener.drain_macro_unique_ids();
+                (
+                    sql_file_info,
+                    status,
+                    rendered_sql,
+                    macro_spans,
+                    macro_dependencies,
                 )
-            };
+            }
+            Err(err) => {
+                // Build minimal info for error/disabled outcome
+                let sql_file_info = {
+                    let sql_resources_locked = sql_resources.lock().unwrap().clone();
+                    let normalized_sql = normalize_sql(&sql);
+                    SqlFileInfo::from_sql_resources(
+                        sql_resources_locked,
+                        DbtChecksum::hash(normalized_sql.as_bytes()),
+                        execute_exists.load(atomic::Ordering::Relaxed),
+                    )
+                };
 
-            let status = match err.code {
-                ErrorCode::DisabledModel => ModelStatus::Disabled,
-                ErrorCode::MacroSyntaxError => {
-                    let err_with_loc = err.with_location(dbt_asset.path.clone());
-                    emit_error_log_from_fs_error(&err_with_loc, args.io.status_reporter.as_ref());
-                    ModelStatus::ParsingFailed
-                }
-                _ => {
-                    if sql_file_info
-                        .config
-                        .get_enabled()
-                        .expect("model config should be set by now")
-                    {
+                let status = match err.code {
+                    ErrorCode::DisabledModel => ModelStatus::Disabled,
+                    ErrorCode::MacroSyntaxError => {
                         let err_with_loc = err.with_location(dbt_asset.path.clone());
                         emit_error_log_from_fs_error(
                             &err_with_loc,
                             args.io.status_reporter.as_ref(),
                         );
                         ModelStatus::ParsingFailed
-                    } else {
-                        ModelStatus::Disabled
                     }
-                }
-            };
+                    _ => {
+                        if sql_file_info
+                            .config
+                            .get_enabled()
+                            .expect("model config should be set by now")
+                        {
+                            let err_with_loc = err.with_location(dbt_asset.path.clone());
+                            emit_error_log_from_fs_error(
+                                &err_with_loc,
+                                args.io.status_reporter.as_ref(),
+                            );
+                            ModelStatus::ParsingFailed
+                        } else {
+                            ModelStatus::Disabled
+                        }
+                    }
+                };
 
-            (sql_file_info, status, String::new(), MacroSpans::default())
-        }
-    };
+                (
+                    sql_file_info,
+                    status,
+                    String::new(),
+                    MacroSpans::default(),
+                    Vec::new(),
+                )
+            }
+        };
 
     // Only check for duplicate resource definitions for enabled models to match dbt-core behavior.
     if status == ModelStatus::Enabled
@@ -489,6 +512,7 @@ where
         patch_path: node_properties
             .get(ref_name)
             .map(|mpe| mpe.relative_path.clone()),
+        macro_dependencies,
     }))
 }
 

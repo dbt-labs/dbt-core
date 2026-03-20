@@ -545,9 +545,9 @@ fn test_state() {
             &[],
         )
         .unwrap();
-    assert!(state.lookup("range").is_some());
+    assert!(state.lookup("range", &[]).is_some());
     assert!(!state.exports().contains(&"range"));
-    assert_eq!(state.lookup("global"), Some(Value::from(23 * 2)));
+    assert_eq!(state.lookup("global", &[]), Some(Value::from(23 * 2)));
     assert_eq!(state.call_macro("something", &[], &[]).unwrap(), "46");
     assert_eq!(state.render_block("baz", &[]).unwrap(), "[46]");
 }
@@ -567,7 +567,7 @@ fn test_render_and_return_state() {
         .render_and_return_state(context! { name => "Foo" }, &[])
         .unwrap();
     assert_eq!(rv, "Hello Foo!\nHello Foo!\nHello Foo!\n");
-    assert_eq!(state.lookup("x"), Some(Value::from(1)));
+    assert_eq!(state.lookup("x", &[]), Some(Value::from(1)));
 
     #[cfg(feature = "fuel")]
     {
@@ -582,7 +582,7 @@ fn test_render_to_write_state() {
         .template_from_str("{% set foo = 42 %}{% macro bar() %}x{% endmacro %}root")
         .unwrap();
     let state = tmpl.eval_to_state((), &[]).unwrap();
-    assert_eq!(state.lookup("foo"), Some(Value::from(42)));
+    assert_eq!(state.lookup("foo", &[]), Some(Value::from(42)));
     assert_eq!(state.call_macro("bar", &[], &[]).ok().as_deref(), Some("x"));
 }
 

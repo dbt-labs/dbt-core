@@ -498,7 +498,7 @@ pub fn generate_relation_name(
 type NodeId = String;
 /// Returns the metadata of the current model from the given Jinja execution state
 pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
-    match state.lookup("model") {
+    match state.lookup("model", &[]) {
         Some(node) => {
             if let Ok(model) = DbtModel::deserialize(&node) {
                 Some((

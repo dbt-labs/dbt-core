@@ -730,7 +730,7 @@ pub fn try_or_compiler_error_fn()
         remaining_args.push(remaining_kwargs.into());
 
         let result = if location_of_func.is_none() {
-            let func = state.lookup(&func_name).ok_or_else(|| {
+            let func = state.lookup(&func_name, &[]).ok_or_else(|| {
                 Error::new(
                     ErrorKind::InvalidOperation,
                     format!("Unknown function {func_name}"),
@@ -879,7 +879,7 @@ pub fn print_fn() -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, 
 
         // Get metadata for the event
         let current_package_name = state
-            .lookup(TARGET_PACKAGE_NAME)
+            .lookup(TARGET_PACKAGE_NAME, &[])
             .and_then(|v| v.as_str().map(|s| s.to_string()));
         let line = state.current_span().start_line;
         let column = state.current_span().start_col;
@@ -918,7 +918,7 @@ pub fn log_fn() -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, Er
 
         // Get metadata for the event
         let current_package_name = state
-            .lookup(TARGET_PACKAGE_NAME)
+            .lookup(TARGET_PACKAGE_NAME, &[])
             .and_then(|v| v.as_str().map(|s| s.to_string()));
         let line = state.current_span().start_line;
         let column = state.current_span().start_col;

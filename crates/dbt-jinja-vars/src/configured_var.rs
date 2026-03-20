@@ -33,7 +33,7 @@ impl ConfiguredVar {
 impl VarFunction for ConfiguredVar {
     fn contains_var(&self, state: &State<'_, '_>, var_name: &str) -> Result<bool, Error> {
         let Some(package_name) = state
-            .lookup(TARGET_PACKAGE_NAME)
+            .lookup(TARGET_PACKAGE_NAME, &[])
             .and_then(|v| v.as_str().map(|s| s.to_string()))
         else {
             return Err(Error::new(
@@ -65,7 +65,7 @@ impl VarFunction for ConfiguredVar {
         // 2. Check if this is dbt_project.yml parsing
         if Some("dbt_project.yml".to_string())
             == state
-                .lookup(TARGET_PACKAGE_NAME)
+                .lookup(TARGET_PACKAGE_NAME, &[])
                 .and_then(|v| v.as_str().map(|s| s.to_string()))
         {
             if let Some(default_value) = default_value {
@@ -80,7 +80,7 @@ impl VarFunction for ConfiguredVar {
 
         // 3. Package vars
         let Some(package_name) = state
-            .lookup(TARGET_PACKAGE_NAME)
+            .lookup(TARGET_PACKAGE_NAME, &[])
             .and_then(|v| v.as_str().map(|s| s.to_string()))
         else {
             return Err(Error::new(
@@ -100,14 +100,14 @@ impl VarFunction for ConfiguredVar {
             Ok(Value::from_serialize(var))
         } else if let Some(default_value) = default_value {
             Ok(default_value)
-        } else if state.lookup("this").is_none() {
+        } else if state.lookup("this", &[]).is_none() {
             // if parsing config and var is missing, throw an error
             Err(Self::missing_var_error(
                 &package_name,
                 &var_name,
                 vars_lookup,
             ))
-        } else if let Some(execute) = state.lookup("execute").map(|v| v.is_true()) {
+        } else if let Some(execute) = state.lookup("execute", &[]).map(|v| v.is_true()) {
             if !execute {
                 // if parsing a model and var is missing, return none
                 Ok(Value::from(()))

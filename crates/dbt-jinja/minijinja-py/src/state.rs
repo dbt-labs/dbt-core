@@ -54,7 +54,7 @@ impl StateRef {
     pub fn lookup(&self, name: &str) -> PyResult<Py<PyAny>> {
         with_state(|state| {
             state
-                .lookup(name)
+                .lookup(name, &[])
                 .map(to_python_value)
                 .unwrap_or_else(|| Ok(Python::with_gil(|py| py.None())))
         })

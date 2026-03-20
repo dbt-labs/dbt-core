@@ -129,6 +129,7 @@ pub async fn resolve_analyses(
         properties: maybe_properties,
         status,
         patch_path,
+        ..
     } in analysis_sql_resources_map.into_iter()
     {
         let analysis_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();

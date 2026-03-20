@@ -136,6 +136,7 @@ pub async fn resolve_functions(
         properties: maybe_properties,
         status,
         patch_path,
+        ..
     } in function_sql_resources_map.into_iter()
     {
         let function_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();

@@ -708,6 +708,30 @@ impl From<DbtMacro> for ManifestMacro {
     }
 }
 
+impl From<ManifestMacro> for DbtMacro {
+    fn from(macro_: ManifestMacro) -> Self {
+        Self {
+            name: macro_.name,
+            package_name: macro_.package_name,
+            path: macro_.path,
+            original_file_path: macro_.original_file_path,
+            span: None,
+            unique_id: macro_.unique_id,
+            macro_sql: macro_.macro_sql,
+            depends_on: macro_.depends_on,
+            description: macro_.description,
+            meta: macro_.meta,
+            docs: macro_.docs,
+            patch_path: macro_.patch_path,
+            funcsign: None,
+            args: vec![],
+            arguments: macro_.arguments,
+            macro_name_span: None,
+            __other__: macro_.__other__,
+        }
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]

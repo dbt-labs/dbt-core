@@ -109,7 +109,7 @@ fn test_macro_passing() {
         .template_from_str("{% macro m(a) %}{{ a }}{% endmacro %}")
         .unwrap();
     let (_, state) = tmpl.render_and_return_state((), &[]).unwrap();
-    let m = state.lookup("m").unwrap();
+    let m = state.lookup("m", &[]).unwrap();
     assert_eq!(m.get_attr("name").unwrap().as_str(), Some("m"));
     let rv = m.call(&state, args!(42), &[]).unwrap();
     assert_eq!(rv.as_str(), Some("42"));
@@ -228,7 +228,7 @@ fn test_unenclosed_resolve() {
     // refer to anything here it in fact has an empty closure.
 
     fn resolve(state: &minijinja::State, var: &str) -> Value {
-        state.lookup(var).unwrap_or_default()
+        state.lookup(var, &[]).unwrap_or_default()
     }
 
     let mut env = Environment::new();
@@ -261,7 +261,7 @@ fn test_unenclosed_resolve_with_template() {
     // refer to anything here it in fact has an empty closure.
 
     fn resolve(state: &minijinja::State, var: &str) -> Value {
-        state.lookup(var).unwrap_or_default()
+        state.lookup(var, &[]).unwrap_or_default()
     }
 
     let mut env = Environment::new();
@@ -302,7 +302,7 @@ fn test_unenclosed_resolve_with_template_with_args() {
     // refer to anything here it in fact has an empty closure.
 
     fn resolve(state: &minijinja::State, var: &str) -> Value {
-        state.lookup(var).unwrap_or_default()
+        state.lookup(var, &[]).unwrap_or_default()
     }
 
     let mut env = Environment::new();

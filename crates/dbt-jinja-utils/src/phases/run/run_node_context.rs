@@ -517,7 +517,7 @@ fn submit_python_job_context_fn()
 
         // Get adapter from context and call submit_python_job
         let adapter = state
-            .lookup("adapter")
+            .lookup("adapter", &[])
             .ok_or_else(|| Error::new(ErrorKind::UndefinedError, "adapter not found in context"))?;
         adapter.call_method(
             state,

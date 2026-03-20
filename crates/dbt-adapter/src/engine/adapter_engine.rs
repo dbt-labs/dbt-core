@@ -212,7 +212,7 @@ pub(crate) fn adbc_execute_with_options(
                     .get_job_labels_from_query_comment(comment)
             });
         if let Some(invocation_id_label) = state
-            .lookup("invocation_id")
+            .lookup("invocation_id", &[])
             .and_then(|value| value.as_str().map(|label| label.to_owned()))
         {
             job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);

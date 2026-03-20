@@ -201,7 +201,7 @@ impl DispatchObject {
                 // since there was only a single call site for it. However, I don't like that
                 // this would default to empty in the previous implementation.
                 let macro_dispatch_order = {
-                    let value = state.lookup(MACRO_DISPATCH_ORDER).unwrap_or_default();
+                    let value = state.lookup(MACRO_DISPATCH_ORDER, &[]).unwrap_or_default();
                     let mut value_map = ValueMap::new();
 
                     if let Ok(keys) = value.try_iter() {
@@ -325,6 +325,7 @@ impl DispatchObject {
                     .split('.')
                     .next_back()
                     .expect("template_name should have a dot"),
+                listeners,
             )
             .expect("function should exist in template");
 

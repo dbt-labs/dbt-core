@@ -201,6 +201,7 @@ impl PreviousState {
         &self,
         node: &dyn InternalDbtNode,
         modification_type: Option<ModificationType>,
+        current_nodes: Option<&Nodes>,
     ) -> bool {
         // If it's new, it's also considered modified
         if self.is_new(node) {
@@ -219,17 +220,94 @@ impl PreviousState {
             Some(ModificationType::PersistedDescriptions) => {
                 self.check_persisted_descriptions_modified(node)
             }
-            // Macro modification is check_modified_content as per dbt-core
-            Some(ModificationType::Macros) => self.check_modified_content(node),
+            // Macro modification is checked by iteraring through depends_on.macros
+            // for each node and checking if the dependent macros are modified.
+            Some(ModificationType::Macros) => self.check_modified_macros(node, current_nodes),
             Some(ModificationType::Contract) => self.check_contract_modified(node),
             Some(ModificationType::Any) | None => {
                 self.check_contract_modified(node)
                     || self.check_configs_modified(node)
                     || self.check_relation_modified(node)
                     || self.check_persisted_descriptions_modified(node)
+                    || self.check_modified_macros(node, current_nodes)
                     || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match previous cases
             }
         }
+    }
+
+    fn check_modified_macros(
+        &self,
+        current_node: &dyn InternalDbtNode,
+        current_nodes: Option<&Nodes>,
+    ) -> bool {
+        if let (Some(current_nodes), Some(prev_nodes)) = (current_nodes, self.nodes.as_ref()) {
+            for macro_uid in &current_node.base().depends_on.macros {
+                let current_macro = current_nodes.macros.get(macro_uid);
+                let previous_macro = prev_nodes.macros.get(macro_uid);
+                match (current_macro, previous_macro) {
+                    (Some(cur), Some(prev)) => {
+                        if cur.macro_sql != prev.macro_sql {
+                            log_state_mod_diff(
+                                &current_node.common().unique_id,
+                                "macro_dependency",
+                                [(
+                                    "macro_content_changed",
+                                    false,
+                                    Some((macro_uid.clone(), macro_uid.clone())),
+                                )],
+                            );
+                            log_state_mod_diff(
+                                macro_uid,
+                                "macro",
+                                [(
+                                    "macro_content_changed",
+                                    false,
+                                    Some((
+                                        format!("{:?}", cur.macro_sql),
+                                        format!("{:?}", prev.macro_sql),
+                                    )),
+                                )],
+                            );
+                            return true;
+                        }
+                    }
+                    (None, Some(_)) | (Some(_), None) => {
+                        // TODO: This code path has been intentionally disabled for now
+                        // because it is triggered by auto-generated macro calls created
+                        // by tests such as not_null as can be seen from the trace output
+                        // below where macro.dbt.get_where_subquery is in an
+                        // auto-generated macro from a not_null test:
+                        // [state_mod_diff] unique_id=test.simplified_client.not_null_cont_bespoke_calendar_effective_date.01fb677460, node_type_or_category=macro_dependency, check=macro_added_or_removed
+                        //    self:  "macro.dbt.get_where_subquery"
+                        //    other:  "macro.dbt.get_where_subquery"
+                        // [state_mod_diff] unique_id=test.simplified_client.unique_cont_bespoke_calendar_effective_date.faaf6305b3, node_type_or_category=macro_dependency, check=macro_added_or_removed
+                        //    self:  "macro.dbt.get_where_subquery"
+                        //    other:  "macro.dbt.get_where_subquery"
+                        //
+                        // Even with this branch disabled, the code will work correctly for
+                        // most known cases because removal of a macro should also lead
+                        // to a code change which the previous branch will detect.
+                        // This branch exists for completeness, and can be fully
+                        // tightened once we have the time to come up with a solution
+                        // that handles auto-generated macro calls.
+                        /*
+                        log_state_mod_diff(
+                            &current_node.common().unique_id,
+                            "macro_dependency",
+                            [(
+                                "macro_added_or_removed",
+                                false,
+                                Some((macro_uid.clone(), macro_uid.clone())),
+                            )],
+                        );
+                        return true;
+                        */
+                    }
+                    (None, None) => {}
+                }
+            }
+        }
+        false
     }
 
     // Private helper methods to check specific types of modifications

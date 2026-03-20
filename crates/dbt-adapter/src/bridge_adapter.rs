@@ -561,7 +561,7 @@ impl BaseAdapter for BridgeAdapter {
                 let table = AgateTable::default();
 
                 if state.is_execute() {
-                    if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+                    if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
                         parse_state.unsafe_nodes.insert(
                             unique_id
                                 .as_str()

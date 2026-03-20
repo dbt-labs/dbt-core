@@ -470,7 +470,7 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::Lookup(name, _) => {
-                    stack.push(state.lookup(name).unwrap_or(Value::UNDEFINED))
+                    stack.push(state.lookup(name, listeners).unwrap_or(Value::UNDEFINED))
                 }
                 Instruction::GetAttr(name, span) => {
                     let a = stack.pop();
@@ -936,6 +936,14 @@ impl<'env> Vm<'env> {
                         });
                         template_result.is_ok()
                     } {
+                        let resolved_name = if self.env.get_template(name).is_ok() {
+                            (*name).to_string()
+                        } else {
+                            format!("{}.{}", root_package_name, *name)
+                        };
+                        listeners
+                            .iter()
+                            .for_each(|l| l.on_macro_dependency(&resolved_name));
                         let template = self
                             .env
                             .get_template(name)
@@ -960,11 +968,12 @@ impl<'env> Vm<'env> {
                                 listeners,
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
-                        let func = inner_state.lookup(name).unwrap();
+                        let func = inner_state.lookup(name, listeners).unwrap();
                         call_wrapper(listeners, || func.call(&inner_state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?
-                    } else if let Some(func) =
-                        state.lookup(name).filter(|func| !func.is_undefined())
+                    } else if let Some(func) = state
+                        .lookup(name, listeners)
+                        .filter(|func| !func.is_undefined())
                     {
                         let function_name = func
                             .get_attr_fast("function_name")
@@ -1179,7 +1188,7 @@ impl<'env> Vm<'env> {
                         state.ctx.reset_closure(Some(closure));
                     }
 
-                    let value = state.lookup(name).unwrap_or(Value::UNDEFINED);
+                    let value = state.lookup(name, listeners).unwrap_or(Value::UNDEFINED);
                     state.ctx.enclose(name, value);
                 }
                 #[cfg(feature = "macros")]

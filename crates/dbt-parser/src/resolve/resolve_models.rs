@@ -609,6 +609,7 @@ pub async fn resolve_models(
         properties: maybe_properties,
         status,
         patch_path,
+        macro_dependencies,
     } in model_sql_resources_map.into_iter()
     {
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
@@ -869,7 +870,7 @@ pub async fn resolve_models(
                 persist_docs: model_config.persist_docs.clone(),
                 columns,
                 depends_on: NodeDependsOn {
-                    macros: vec![],
+                    macros: macro_dependencies,
                     nodes: vec![],
                     nodes_with_ref_location: vec![],
                 },
@@ -1264,6 +1265,7 @@ fn process_python_models(
             properties: maybe_properties,
             status: ModelStatus::Enabled,
             patch_path,
+            macro_dependencies: Vec::new(),
         };
 
         results.push(python_result);

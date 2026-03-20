@@ -1207,6 +1207,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
         );
     }
 
+    for (unique_id, macro_node) in manifest.macros {
+        nodes.macros.insert(unique_id, Arc::new(macro_node.into()));
+    }
+
     nodes
 }
 
@@ -1463,6 +1467,7 @@ mod tests {
             saved_queries: BTreeMap::new(),
             groups: BTreeMap::new(),
             functions: BTreeMap::new(),
+            macros: BTreeMap::new(),
             project_name: None,
         }
     }

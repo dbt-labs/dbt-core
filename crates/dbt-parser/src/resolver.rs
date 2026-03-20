@@ -384,6 +384,20 @@ pub async fn resolve(
     // Set the project name on nodes so that `package:this` selectors can resolve
     nodes.project_name = Some(root_project_name.to_string());
 
+    // Store macros in nodes.macros so that they can be accessed by
+    // state:modified for checking macro modifications
+    // TODO: Instead of cloning macro_node into an Arc, implement
+    //       macro_node as an Arc from the outset. Note that this
+    //.      has the potential for a huge blast radius,
+    //.      hence why we leave it as a TODO for when we
+    //.      have the bandwidth to do it.
+    //       See: https://github.com/dbt-labs/fs/pull/8760#discussion_r2965959119
+    for (uid, macro_node) in &macros.macros {
+        nodes
+            .macros
+            .insert(uid.clone(), Arc::new(macro_node.clone()));
+    }
+
     Ok((
         ResolverState {
             root_project_name: root_project_name.to_string(),

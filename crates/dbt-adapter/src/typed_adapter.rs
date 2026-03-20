@@ -1030,7 +1030,7 @@ impl ConcreteAdapter {
         let database_str = if let Some(db) = database {
             db.to_string()
         } else {
-            let target = state.lookup("target").ok_or_else(|| {
+            let target = state.lookup("target", &[]).ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
                     "target is not set in state",

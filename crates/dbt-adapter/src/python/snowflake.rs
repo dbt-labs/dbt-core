@@ -134,7 +134,7 @@ pub fn finalize_python_code(
     };
 
     let send_anonymous_usage_stats = state
-        .lookup("flags")
+        .lookup("flags", &[])
         .and_then(|flags| flags.get_attr("SEND_ANONYMOUS_USAGE_STATS").ok())
         .filter(|v| !v.is_undefined()) // Filter out undefined values - they should use the default
         .map(|value| value.is_true())

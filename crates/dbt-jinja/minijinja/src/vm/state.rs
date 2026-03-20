@@ -163,14 +163,14 @@ impl<'template, 'env> State<'template, 'env> {
     /// Returns true during either the hidden Parse phase
     /// or phases after Compile (including it)
     pub fn is_execute(&self) -> bool {
-        self.lookup("execute")
+        self.lookup("execute", &[])
             .map(|v| v.is_true())
             .unwrap_or_default()
     }
 
     /// Returns the relation name for current node from the state.
     pub fn database_schema_alias_from_state(&self) -> Option<(String, String, String)> {
-        let model = self.lookup("model")?;
+        let model = self.lookup("model", &[])?;
         let database = model.get_attr_fast("database")?.as_str()?.to_string();
         let schema = model.get_attr_fast("schema")?.as_str()?.to_string();
         let alias = model.get_attr_fast("alias")?.as_str()?.to_string();
@@ -253,12 +253,19 @@ impl<'template, 'env> State<'template, 'env> {
     /// as a [global](Environment::add_global) in the environment or it was
     /// referenced by a macro, this method won't be able to find it.
     #[inline(always)]
-    pub fn lookup(&self, name: &str) -> Option<Value> {
+    pub fn lookup(
+        &self,
+        name: &str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Option<Value> {
         if let Some(val) = self.ctx.load(self.env, name) {
             return Some(val);
         }
 
         macro_namespace_template_resolver(self, name, &mut Vec::new()).and_then(|template_name| {
+            listeners
+                .iter()
+                .for_each(|l| l.on_macro_dependency(&template_name));
             if let Some((pkg, macro_name)) = template_name.split_once('.') {
                 Some(Value::from_object(DispatchObject {
                     macro_name: macro_name.to_string(),
@@ -300,7 +307,7 @@ impl<'template, 'env> State<'template, 'env> {
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        let f = ok!(self.lookup(name).ok_or_else(|| Error::new(
+        let f = ok!(self.lookup(name, listeners).ok_or_else(|| Error::new(
             crate::error::ErrorKind::UnknownFunction,
             "macro not found"
         )));

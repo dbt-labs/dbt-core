@@ -183,7 +183,7 @@ pub fn truncate(state: &State, value: &Value, args: Rest<Value>) -> Result<Strin
         .next_kwarg::<Option<usize>>("leeway")?
         .unwrap_or_else(|| {
             state
-                .lookup("TRUNCATE_LEEWAY")
+                .lookup("TRUNCATE_LEEWAY", &[])
                 .and_then(|x| usize::try_from(x).ok())
                 .unwrap_or(5)
         });

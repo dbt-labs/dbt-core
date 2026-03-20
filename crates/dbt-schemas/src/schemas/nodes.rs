@@ -3427,12 +3427,19 @@ pub struct Nodes {
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
     pub groups: BTreeMap<String, Arc<DbtGroup>>,
     pub functions: BTreeMap<String, Arc<DbtFunction>>,
+    pub macros: BTreeMap<String, Arc<DbtMacro>>,
     /// The root project name. Used to resolve the `package:this` selector.
     pub project_name: Option<String>,
 }
 
 impl Nodes {
     pub fn deep_clone(&self) -> Self {
+        // TODO: Instead of cloning node into an Arc, implement
+        //       node as an Arc from the outset. Note that this
+        //.      has the potential for a huge blast radius,
+        //.      hence why we leave it as a TODO for when we
+        //.      have the bandwidth to do it.
+        //       See: https://github.com/dbt-labs/fs/pull/8760#discussion_r2965956960
         let models = self
             .models
             .iter()
@@ -3498,6 +3505,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let macros = self
+            .macros
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -3512,6 +3524,7 @@ impl Nodes {
             saved_queries,
             groups,
             functions,
+            macros,
             project_name: self.project_name.clone(),
         }
     }

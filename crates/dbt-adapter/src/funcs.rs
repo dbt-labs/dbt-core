@@ -1449,7 +1449,7 @@ pub fn execute_macro_with_package(
     let base_ctx = state.get_base_context();
     let state = template.eval_to_state(base_ctx, &[])?;
     let func = state
-        .lookup(macro_name)
+        .lookup(macro_name, &[])
         .unwrap_or_else(|| panic!("{macro_name} exists"));
     func.call(&state, args, &[]).map_err(|err| {
         if let Some(source) = err.source() {

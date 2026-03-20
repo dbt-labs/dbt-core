@@ -98,7 +98,7 @@ impl ParseAdapterState {
         .as_value();
 
         if state.is_execute() {
-            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
                 self.call_get_relation
                     .entry(unique_id.to_string())
                     .or_default()
@@ -119,7 +119,7 @@ impl ParseAdapterState {
             return Ok(());
         }
         if state.is_execute() {
-            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
                 let relation_value = RelationObject::new(relation.to_owned()).into_value();
                 self.call_get_columns_in_relation
                     .entry(unique_id.to_string())
@@ -198,7 +198,7 @@ impl ParseAdapterState {
         }
 
         let target = state
-            .lookup("target")
+            .lookup("target", &[])
             .expect("target is set in parse")
             .get_attr("database")
             .unwrap_or_default();
@@ -212,7 +212,7 @@ impl ParseAdapterState {
         );
 
         if state.is_execute() {
-            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
                 self.patterned_dangling_sources
                     .entry(unique_id.to_string())
                     .or_default()

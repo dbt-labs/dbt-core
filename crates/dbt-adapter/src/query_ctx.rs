@@ -34,7 +34,7 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
 }
 
 pub fn node_id_from_state(state: &State) -> Option<String> {
-    let node = state.lookup("model").as_ref()?.clone();
+    let node = state.lookup("model", &[]).as_ref()?.clone();
     // all deserialization must go through yaml value
     // should this be a .ok?
     let yaml_node = dbt_yaml::to_value(&node)
@@ -62,7 +62,7 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
 }
 
 pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
-    let value = state.lookup(CURRENT_EXECUTION_PHASE)?;
+    let value = state.lookup(CURRENT_EXECUTION_PHASE, &[])?;
     let s = value.as_str()?;
     DBT_EXECUTION_PHASES
         .iter()

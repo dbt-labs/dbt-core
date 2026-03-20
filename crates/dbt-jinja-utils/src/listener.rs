@@ -356,6 +356,53 @@ impl TypecheckingEventListener for WarningPrinter {
     }
 }
 
+/// Listener that tracks which macros are invoked during rendering.
+/// Used to populate `depends_on.macros` for `state:modified` support.
+#[derive(Debug, Default)]
+pub struct MacroDependencyListener {
+    macro_deps: RefCell<Vec<String>>,
+}
+
+impl MacroDependencyListener {
+    /// Creates a new, empty dependency tracker.
+    pub fn new() -> Self {
+        Self {
+            macro_deps: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Drains collected template names, deduplicates, and returns them as dbt
+    /// `macro.<package>.<name>` unique IDs.
+    pub fn drain_macro_unique_ids(&self) -> Vec<String> {
+        let mut deps = self.macro_deps.borrow_mut();
+        deps.sort();
+        deps.dedup();
+        deps.drain(..)
+            .map(|template_name| format!("macro.{template_name}"))
+            .collect()
+    }
+}
+
+impl RenderingEventListener for MacroDependencyListener {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "MacroDependencyListener"
+    }
+
+    fn on_macro_start(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_macro_stop(&self, _file_path: Option<&Path>, _line: &u32, _col: &u32, _offset: &u32) {}
+    fn on_malicious_return(&self, _location: &CodeLocation) {}
+    fn on_function_start(&self) {}
+    fn on_function_end(&self) {}
+
+    fn on_macro_dependency(&self, template_name: &str) {
+        self.macro_deps.borrow_mut().push(template_name.to_string());
+    }
+}
+
 /// default implementation of RenderingEventListener
 #[derive(Debug)]
 pub struct DefaultRenderingEventListener {

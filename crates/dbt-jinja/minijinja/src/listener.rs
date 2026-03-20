@@ -41,6 +41,10 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// Called when a function is being exited.
     fn on_function_end(&self);
 
+    /// Called when a macro is invoked during rendering, to track macro dependencies.
+    /// The `template_name` has the form `{package_name}.{macro_name}`.
+    fn on_macro_dependency(&self, _template_name: &str) {}
+
     /// Called when a ref() or source() call is rendered.
     /// This is used to detect mangled refs by checking if there are
     /// non-whitespace characters adjacent to the ref/source span.

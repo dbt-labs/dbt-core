@@ -132,7 +132,7 @@ fn get_timezone(
     state: &State<'_, '_>,
     kwargs: &Kwargs,
 ) -> Result<Option<&'static time_tz::Tz>, Error> {
-    let configured_tz = state.lookup("TIMEZONE");
+    let configured_tz = state.lookup("TIMEZONE", &[]);
     let tzname = kwargs.get::<Option<&str>>("tz")?.unwrap_or_else(|| {
         configured_tz
             .as_ref()
@@ -194,7 +194,7 @@ fn get_timezone(
 #[cfg_attr(docsrs, doc(cfg(feature = "datetime")))]
 pub fn datetimeformat(state: &State, value: Value, kwargs: Kwargs) -> Result<String, Error> {
     let datetime = value_to_datetime(value, state, &kwargs, false)?;
-    let configured_format = state.lookup("DATETIME_FORMAT");
+    let configured_format = state.lookup("DATETIME_FORMAT", &[]);
 
     let format = kwargs.get::<Option<&str>>("format")?.unwrap_or_else(|| {
         configured_format
@@ -266,7 +266,7 @@ pub fn datetimeformat(state: &State, value: Value, kwargs: Kwargs) -> Result<Str
 #[cfg_attr(docsrs, doc(cfg(feature = "datetime")))]
 pub fn timeformat(state: &State, value: Value, kwargs: Kwargs) -> Result<String, Error> {
     let datetime = value_to_datetime(value, state, &kwargs, false)?;
-    let configured_format = state.lookup("TIME_FORMAT");
+    let configured_format = state.lookup("TIME_FORMAT", &[]);
 
     let format = kwargs.get::<Option<&str>>("format")?.unwrap_or_else(|| {
         configured_format
@@ -337,7 +337,7 @@ pub fn timeformat(state: &State, value: Value, kwargs: Kwargs) -> Result<String,
 #[cfg_attr(docsrs, doc(cfg(feature = "datetime")))]
 pub fn dateformat(state: &State, value: Value, kwargs: Kwargs) -> Result<String, Error> {
     let datetime = value_to_datetime(value, state, &kwargs, true)?;
-    let configured_format = state.lookup("DATE_FORMAT");
+    let configured_format = state.lookup("DATE_FORMAT", &[]);
 
     let format = kwargs.get::<Option<&str>>("format")?.unwrap_or_else(|| {
         configured_format

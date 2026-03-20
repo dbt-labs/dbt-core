@@ -141,7 +141,7 @@ pub(crate) fn get_rng(state: &State) -> rand::rngs::SmallRng {
     use rand::SeedableRng;
 
     if let Some(seed) = state
-        .lookup("RAND_SEED")
+        .lookup("RAND_SEED", &[])
         .and_then(|x| u64::try_from(x).ok())
     {
         SmallRng::seed_from_u64(seed)
