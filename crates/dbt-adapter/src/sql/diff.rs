@@ -563,23 +563,27 @@ fn canonicalize_struct_projection_order_in_select_lists(sql: &str) -> String {
         if item.len() < "struct".len() + 1 {
             return None;
         }
-        if !item[.."struct".len()].eq_ignore_ascii_case("struct") {
+
+        let struct_start: String = item.chars().take("struct".len()).collect();
+        if !struct_start.eq_ignore_ascii_case("struct") {
             return None;
         }
+
+        let chars: Vec<char> = item.chars().collect();
+
         let mut j = "struct".len();
-        while j < item.len() && item.as_bytes()[j].is_ascii_whitespace() {
+        while j < chars.len() && chars[j].is_ascii_whitespace() {
             j += 1;
         }
-        if j >= item.len() || item.as_bytes()[j] != b'(' {
+        if j >= chars.len() || chars[j] != '(' {
             return None;
         }
 
         // Parse trailing `AS <alias>` from the end, avoiding any dependency on adapter-specific SQL.
         // We already removed comments and this item is a top-level SELECT projection (comma-split),
         // so a backwards parse is sufficient and avoids brittle regex.
-        let bytes = item.as_bytes();
-        let mut end = bytes.len();
-        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+        let mut end = chars.len();
+        while end > 0 && chars[end - 1].is_ascii_whitespace() {
             end -= 1;
         }
         if end == 0 {
@@ -587,8 +591,8 @@ fn canonicalize_struct_projection_order_in_select_lists(sql: &str) -> String {
         }
         let mut start = end;
         while start > 0 {
-            let b = bytes[start - 1];
-            if b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b == b'`' {
+            let b = chars[start - 1];
+            if b.is_ascii_alphanumeric() || b == '_' || b == '.' || b == '`' {
                 start -= 1;
             } else {
                 break;
@@ -597,26 +601,28 @@ fn canonicalize_struct_projection_order_in_select_lists(sql: &str) -> String {
         if start == end {
             return None;
         }
-        let alias = item[start..end].trim();
+        let alias: String = chars[start..end].iter().collect();
+        let alias = alias.trim();
         if !is_simple_identifier_like(alias) {
             return None;
         }
         let mut k = start;
-        while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+        while k > 0 && chars[k - 1].is_ascii_whitespace() {
             k -= 1;
         }
         if k < 2 {
             return None;
         }
         let as_start = k - 2;
-        if !item[as_start..k].eq_ignore_ascii_case("as") {
+        let as_word: String = chars[as_start..k].iter().collect();
+        if !as_word.eq_ignore_ascii_case("as") {
             return None;
         }
         // Require `AS` to be a standalone word.
-        if as_start > 0 && is_word_byte(bytes[as_start - 1]) {
+        if as_start > 0 && is_word_char(chars[as_start - 1]) {
             return None;
         }
-        if k < bytes.len() && is_word_byte(bytes[k]) {
+        if k < chars.len() && is_word_char(chars[k]) {
             return None;
         }
 
@@ -1246,6 +1252,10 @@ fn skip_ws(s: &str, mut i: usize) -> usize {
     i
 }
 
+fn is_word_char(b: char) -> bool {
+    b.is_ascii_alphanumeric() || b == '_'
+}
+
 fn is_word_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
@@ -1294,36 +1304,33 @@ fn strip_sql_comments(s: &str) -> String {
     // Strip `-- ...` and `/* ... */` comments, but only when not inside quotes/backticks.
     // This is intentionally minimal and used only for replay canonicalization.
     let mut out = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0usize;
+    let mut chars = s.chars().peekable();
     let mut in_single = false;
     let mut in_double = false;
     let mut in_backtick = false;
 
-    while i < bytes.len() {
-        let ch = bytes[i] as char;
-
+    while let Some(ch) = chars.next() {
         if in_single {
             out.push(ch);
-            if ch == '\\' && i + 1 < bytes.len() {
+            if ch == '\\' {
                 // Preserve escaped char.
-                i += 1;
-                out.push(bytes[i] as char);
+                if let Some(next) = chars.next() {
+                    out.push(next);
+                }
             } else if ch == '\'' {
                 in_single = false;
             }
-            i += 1;
             continue;
         }
         if in_double {
             out.push(ch);
-            if ch == '\\' && i + 1 < bytes.len() {
-                i += 1;
-                out.push(bytes[i] as char);
+            if ch == '\\' {
+                if let Some(next) = chars.next() {
+                    out.push(next);
+                }
             } else if ch == '"' {
                 in_double = false;
             }
-            i += 1;
             continue;
         }
         if in_backtick {
@@ -1331,7 +1338,6 @@ fn strip_sql_comments(s: &str) -> String {
             if ch == '`' {
                 in_backtick = false;
             }
-            i += 1;
             continue;
         }
 
@@ -1339,53 +1345,46 @@ fn strip_sql_comments(s: &str) -> String {
         if ch == '\'' {
             in_single = true;
             out.push(ch);
-            i += 1;
             continue;
         }
         if ch == '"' {
             in_double = true;
             out.push(ch);
-            i += 1;
             continue;
         }
         if ch == '`' {
             in_backtick = true;
             out.push(ch);
-            i += 1;
             continue;
         }
 
         // Line comment.
-        if ch == '-' && i + 1 < bytes.len() && bytes[i + 1] as char == '-' {
+        if ch == '-' && chars.peek() == Some(&'-') {
+            chars.next(); // consume second '-'
             // Skip until newline, but keep the newline (if present) to avoid gluing tokens.
-            i += 2;
-            while i < bytes.len() {
-                let c = bytes[i] as char;
-                if c == '\n' {
-                    out.push('\n');
-                    i += 1;
-                    break;
-                }
-                i += 1;
+            if chars.any(|c| c == '\n') {
+                out.push('\n');
             }
             continue;
         }
 
         // Block comment.
-        if ch == '/' && i + 1 < bytes.len() && bytes[i + 1] as char == '*' {
-            i += 2;
-            while i + 1 < bytes.len() {
-                if bytes[i] as char == '*' && bytes[i + 1] as char == '/' {
-                    i += 2;
-                    break;
+        if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next(); // consume '*'
+            loop {
+                match chars.next() {
+                    Some('*') if chars.peek() == Some(&'/') => {
+                        chars.next(); // consume '/'
+                        break;
+                    }
+                    None => break,
+                    _ => {}
                 }
-                i += 1;
             }
             continue;
         }
 
         out.push(ch);
-        i += 1;
     }
 
     out
@@ -5281,5 +5280,45 @@ class this:
             result.is_ok(),
             "meta_dict and meta_get differences should be ignorable: {result:?}"
         );
+    }
+
+    #[test]
+    fn test_struct_projection_multibyte_char() {
+        let sql_cjk = "SELECT struct(1 AS x) AS alpha, '日本語' AS account FROM t";
+        let result = canonicalize_struct_projection_order_in_select_lists(sql_cjk);
+        assert_eq!(result, sql_cjk);
+
+        let sql_alias = "SELECT struct(1) AS 한국어alias, struct(2) AS beta FROM t";
+        let result = canonicalize_struct_projection_order_in_select_lists(sql_alias);
+        assert_eq!(result, sql_alias);
+    }
+
+    #[test]
+    fn test_strip_sql_comments() {
+        // Line comment: stripped, newline preserved to avoid gluing tokens.
+        assert_eq!(strip_sql_comments("a -- comment\nb"), "a \nb");
+        // Line comment at end of input with no newline.
+        assert_eq!(strip_sql_comments("a -- comment"), "a ");
+        // Block comment: stripped entirely.
+        assert_eq!(strip_sql_comments("a /* comment */ b"), "a  b");
+        // Block comment with no trailing content.
+        assert_eq!(strip_sql_comments("a /* comment */"), "a ");
+
+        // -- and /* inside single/double/backtick quotes are NOT stripped.
+        assert_eq!(strip_sql_comments("'hello -- world'"), "'hello -- world'");
+        assert_eq!(
+            strip_sql_comments("\"hello /* world */\""),
+            "\"hello /* world */\""
+        );
+        assert_eq!(strip_sql_comments("`col -- name`"), "`col -- name`");
+
+        // Multi-byte characters in a string literal are preserved intact.
+        assert_eq!(strip_sql_comments("'日本語'"), "'日本語'");
+        assert_eq!(strip_sql_comments("'한국어'"), "'한국어'");
+
+        // Multi-byte characters in a line comment are consumed, newline still kept.
+        assert_eq!(strip_sql_comments("a -- 日本語\nb"), "a \nb");
+        // Multi-byte characters in a block comment are consumed.
+        assert_eq!(strip_sql_comments("a /* 日本語 */ b"), "a  b");
     }
 }
