@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 
 from dbt.adapters.contracts.connection import AdapterRequiredConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import Var, contextmember, contextproperty
+from dbt.context.base import Var, _get_env_var, contextmember, contextproperty
 from dbt.context.target import TargetContext
 from dbt.exceptions import EnvVarMissingError, SecretEnvVarLocationError
 from dbt.node_types import NodeType
@@ -90,9 +90,8 @@ class SchemaYamlContext(ConfiguredContext):
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
         env = get_invocation_context().env
-        if var in env:
-            return_value = env[var]
-        elif default is not None:
+        return_value, found_in_env = _get_env_var(env, var)
+        if return_value is None and default is not None:
             return_value = default
 
         if return_value is not None:
@@ -102,7 +101,7 @@ class SchemaYamlContext(ConfiguredContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.schema_yaml_vars.env_vars[var] = (
-                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+                    return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
                 )
 
             return return_value
