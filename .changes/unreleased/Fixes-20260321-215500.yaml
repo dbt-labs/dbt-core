@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve error message when version key is missing from packages.yml
+time: 2026-03-21T21:55:00.000000+00:00
+custom:
+    Author: chinar-amrutkar
+    Issue: "12649"
