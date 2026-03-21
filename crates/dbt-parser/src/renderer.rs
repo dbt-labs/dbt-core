@@ -390,11 +390,7 @@ where
                     )
                 };
 
-                let status = if sql_file_info
-                    .config
-                    .get_enabled()
-                    .expect("model config should be set by now")
-                {
+                let status = if sql_file_info.config.get_enabled().unwrap_or(true) {
                     ModelStatus::Enabled
                 } else {
                     ModelStatus::Disabled
@@ -461,11 +457,7 @@ where
                         ModelStatus::ParsingFailed
                     }
                     _ => {
-                        if sql_file_info
-                            .config
-                            .get_enabled()
-                            .expect("model config should be set by now")
-                        {
+                        if sql_file_info.config.get_enabled().unwrap_or(true) {
                             let err_with_loc = err.with_location(dbt_asset.path.clone());
                             emit_error_log_from_fs_error(
                                 &err_with_loc,

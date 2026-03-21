@@ -216,12 +216,12 @@ pub fn build_root_project_configs(
 
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
+    // NOTE: Don't add a default for enabled since resolution can span root and dependency project configs
     Ok(RootProjectConfigs {
         models: init_project_config(
             io_args,
             &root_project.models,
             ModelConfig {
-                enabled: Some(true),
                 quoting: Some(root_project_quoting),
                 sync: root_project.sync.clone(),
                 ..Default::default()
@@ -232,7 +232,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.sources,
             SourceConfig {
-                enabled: Some(true),
                 quoting: Some(source_default_quoting),
                 sync: root_project.sync.clone(),
                 ..Default::default()
@@ -243,7 +242,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.snapshots,
             SnapshotConfig {
-                enabled: Some(true),
                 quoting: Some(root_project_quoting),
                 sync: root_project.sync.clone(),
                 ..Default::default()
@@ -254,7 +252,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.seeds,
             SeedConfig {
-                enabled: Some(true),
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
@@ -264,7 +261,6 @@ pub fn build_root_project_configs(
             io_args,
             &maybe_root_project_config,
             DataTestConfig {
-                enabled: Some(true),
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
@@ -274,7 +270,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.unit_tests,
             UnitTestConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -283,7 +278,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.exposures,
             ExposureConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -292,7 +286,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.semantic_models,
             SemanticModelConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -301,7 +294,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.metrics,
             MetricConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -310,7 +302,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.saved_queries,
             SavedQueryConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -319,7 +310,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.analyses,
             AnalysesConfig {
-                enabled: Some(true),
                 ..Default::default()
             },
             None,
@@ -328,7 +318,6 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.functions,
             FunctionConfig {
-                enabled: Some(true),
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
