@@ -834,6 +834,18 @@ warn_error_options = _create_option_and_track_env_var(
     type=WarnErrorOptionsType(),
 )
 
+show_all_warn_errors = _create_option_and_track_env_var(
+    "--show-all-warn-errors/--no-show-all-warn-errors",
+    envvar=None,
+    help=(
+        "When used with --warn-error or --warn-error-options, defer raising until after parsing "
+        "(and again after the command body) so all matching warnings are collected and reported "
+        "together instead of failing on the first one."
+    ),
+    is_flag=True,
+    default=False,
+)
+
 write_json = _create_option_and_track_env_var(
     "--write-json/--no-write-json",
     envvar="DBT_WRITE_JSON",
