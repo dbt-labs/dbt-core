@@ -29,7 +29,11 @@ pub struct ReplState {
 
 impl ReplState {
     pub fn new(backend: Backend, version: AdbcVersion) -> Result<Self> {
-        let mut driver = driver::Builder::new(backend, driver::LoadStrategy::CdnCache)
+        let load_strategy = match backend {
+            Backend::DuckDB => driver::LoadStrategy::SystemThenCdnCache,
+            _ => driver::LoadStrategy::CdnCache,
+        };
+        let mut driver = driver::Builder::new(backend, load_strategy)
             .with_adbc_version(version)
             .try_load()?;
 

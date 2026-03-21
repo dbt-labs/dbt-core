@@ -281,7 +281,11 @@ impl XdbcEngine {
             .configure(config)
             .map_err(crate::errors::auth_error_to_adapter_error)?;
 
-        let mut driver = driver::Builder::new(self.auth.backend(), LoadStrategy::CdnCache)
+        let load_strategy = match self.adapter_type {
+            AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
+            _ => LoadStrategy::CdnCache,
+        };
+        let mut driver = driver::Builder::new(self.auth.backend(), load_strategy)
             .with_semaphore(self.semaphore.clone())
             .try_load()
             .map_err(adbc_error_to_adapter_error)?;
