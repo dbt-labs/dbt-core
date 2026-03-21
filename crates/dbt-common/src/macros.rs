@@ -55,7 +55,7 @@ macro_rules! show_progress {
         if !$info.is_phase_completed() {
 
             if let Some(reporter) = &$io.status_reporter {
-                reporter.show_progress($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
+                reporter.show_progress($info.event.action().as_str(), &$info.target, $info.desc.as_deref(), None);
             }
 
             // This whole macro became entirely unweldy, the following condition is a VERY
