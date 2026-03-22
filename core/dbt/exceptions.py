@@ -1213,11 +1213,19 @@ class AmbiguousCatalogMatchError(CompilationError):
         match_name = match.get("metadata", {}).get("name")
         return f"{match_schema}.{match_name}"
 
+    @staticmethod
+    def _node_type_label(unique_id: str) -> str:
+        """Derive a human-readable node type from a dbt unique_id prefix."""
+        prefix = unique_id.split(".", 1)[0] if unique_id else "node"
+        return prefix
+
     def get_message(self) -> str:
+        node_type = self._node_type_label(self.unique_id)
         msg = (
             "dbt found two relations in your warehouse with similar database identifiers. "
-            "dbt\nis unable to determine which of these relations was created by the model "
-            f'"{self.unique_id}".\nIn order for dbt to correctly generate the catalog, one '
+            f"dbt\nis unable to determine which of these relations is associated with the "
+            f'{node_type} "{self.unique_id}".\n'
+            "In order for dbt to correctly generate the catalog, one "
             "of the following relations must be deleted or renamed:\n\n - "
             f"{self.get_match_string(self.match_1)}\n - {self.get_match_string(self.match_2)}"
         )
