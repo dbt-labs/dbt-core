@@ -949,7 +949,9 @@ class PartialParsing:
                     elem_config = elem.get("config", {})
                     elem_group = elem.get("group") or elem_config.get("group")
                     elem_access = elem.get("access") or elem_config.get("access")
-                    if node.group != elem_group or (elem_access == "private" and node.access != elem_access):
+                    if node.group != elem_group or (
+                        elem_access == "private" and node.access != elem_access
+                    ):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
                     # If the latest version has changed, a version has been removed, or a version has been added,
                     #  we need to reparse referencing nodes.
@@ -1256,4 +1258,3 @@ class PartialParsing:
                         break  # if one env_var is changed we can stop
 
         return (env_vars_changed_source_files, env_vars_changed_schema_files)
-
