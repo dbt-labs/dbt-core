@@ -1330,7 +1330,7 @@ impl ConcreteAdapter {
         };
 
         match self.adapter_type() {
-            adapter_type @ (Postgres | Redshift | Sidecar) => {
+            adapter_type @ (Postgres | Redshift | Sidecar | Fabric) => {
                 let result = macro_execution_result?;
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
@@ -1431,8 +1431,7 @@ impl ConcreteAdapter {
                     .collect::<Vec<_>>();
                 Ok(columns)
             }
-            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
-            | Oracle => {
+            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
             adapter_type @ DuckDB => {
@@ -2932,9 +2931,10 @@ impl ConcreteAdapter {
             Impl(DuckDB, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
+            Impl(Fabric, _) => fabric::list_relations(self, query_ctx, conn, db_schema, token),
             Impl(
-                adapter_type @ (Postgres | Salesforce | Sidecar | Fabric | ClickHouse | Starburst
-                | Athena | Trino | Dremio | Oracle),
+                adapter_type @ (Postgres | Salesforce | Sidecar | ClickHouse | Starburst | Athena
+                | Trino | Dremio | Oracle),
                 _,
             ) => {
                 let err = AdapterError::new(

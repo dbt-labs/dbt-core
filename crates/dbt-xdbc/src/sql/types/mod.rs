@@ -1200,6 +1200,7 @@ impl SqlType {
                 // https://learn.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql?view=fabric
                 DataType::Decimal128(18, 0)
             }
+            (SQLServer, DateTime) => arrow_timestamp(Some(6), None),
             // }}}
             (ClickHouse, Numeric(None) | BigNumeric(None)) => {
                 // https://clickhouse.com/docs/sql-reference/data-types/decimal#parameters
@@ -2310,6 +2311,10 @@ impl<'source> Parser<'source> {
                     } else {
                         SqlType::DateTime
                     }
+                } else if eqi(w, "DATETIME2") {
+                    SqlType::DateTime
+                } else if eqi(w, "BIT") {
+                    SqlType::TinyInt
                 } else if eqi(w, "TIMESTAMP_TZ") {
                     let precision = self.precision()?;
                     SqlType::Timestamp {

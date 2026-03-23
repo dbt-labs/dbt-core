@@ -3,13 +3,16 @@ use crate::metadata::{
     RelationVec, create_schemas_if_not_exists,
 };
 use crate::record_batch_utils::get_column_values;
+use crate::relation::fabric::FabricRelation;
+use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::typed_adapter::*;
 use crate::{AdapterEngine, AdapterTyping};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
-use dbt_common::Cancellable;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::{AdapterError, Cancellable};
 use dbt_common::{AdapterResult, AsyncAdapterResult, adapter::ExecutionPhase};
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{CatalogNodeStats, TableMetadata};
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -19,6 +22,55 @@ use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use minijinja::State;
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
+
+pub fn list_relations(
+    adapter: &dyn AdapterTyping,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let sql = format!(
+        "EXEC sp_tables @table_qualifier={}, @table_owner={}",
+        db_schema.resolved_catalog, db_schema.resolved_schema,
+    );
+
+    let batch = adapter.engine().execute(None, conn, ctx, &sql, token)?;
+
+    if batch.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut relations = Vec::new();
+
+    let table_name = get_column_values::<StringArray>(&batch, "TABLE_NAME")?;
+    let database_name = get_column_values::<StringArray>(&batch, "TABLE_QUALIFIER")?;
+    let schema_name = get_column_values::<StringArray>(&batch, "TABLE_OWNER")?;
+    let table_type = get_column_values::<StringArray>(&batch, "TABLE_TYPE")?;
+
+    for i in 0..batch.num_rows() {
+        let table_type_value = table_type.value(i);
+
+        let relation_type = if table_type_value.eq_ignore_ascii_case("TABLE") {
+            Some(RelationType::Table)
+        } else if table_type_value.eq_ignore_ascii_case("VIEW") {
+            Some(RelationType::View)
+        } else {
+            None
+        };
+        let relation = Arc::new(FabricRelation::new(
+            Some(database_name.value(i).to_string()),
+            Some(schema_name.value(i).to_string()),
+            Some(table_name.value(i).to_string()),
+            relation_type,
+            adapter.quoting(),
+        )) as Arc<dyn BaseRelation>;
+
+        relations.push(relation);
+    }
+
+    Ok(relations)
+}
 
 pub struct FabricMetadataAdapter {
     #[allow(dead_code, reason = "TODO implement FabricMetadataAdapter")]
@@ -149,6 +201,8 @@ impl MetadataAdapter for FabricMetadataAdapter {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
+        type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
+
         let new_conn_f = Box::new({
             let adapter = self.adapter.clone();
             move || {
@@ -159,48 +213,49 @@ impl MetadataAdapter for FabricMetadataAdapter {
             }
         });
 
-        let map_f = Box::new({
-            let adapter = self.adapter.clone();
-            let token_clone = token.clone();
-            move |conn: &mut dyn Connection, relation: &Arc<dyn BaseRelation>| {
-                // TODO: we need to get the actual schema
-                let sql = format!(
-                    "EXEC sp_columns {}, {}, {}",
-                    relation.identifier_as_str()?,
-                    relation.schema_as_str()?,
-                    relation.database_as_str()?,
-                );
-                if false {
-                    let ctx = QueryCtx::new_metadata().with_desc("Get table schema");
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          relation: &Arc<dyn BaseRelation>|
+              -> AdapterResult<Arc<Schema>> {
+            let sql = format!(
+                "EXEC sp_columns @table_qualifier={}, @table_owner={}, @table_name={}",
+                relation.database_as_str()?,
+                relation.schema_as_str()?,
+                relation.identifier_as_str()?,
+            );
 
-                    let ctx = unique_id
-                        .iter()
-                        .fold(ctx, |ctx, id| ctx.with_node_id(id.clone()));
+            let ctx = QueryCtx::new_metadata().with_desc("Get table schema");
 
-                    let ctx = phase
-                        .iter()
-                        .fold(ctx, |ctx, phase| ctx.with_phase(phase.as_str()));
+            let ctx = unique_id
+                .iter()
+                .fold(ctx, |ctx, id| ctx.with_node_id(id.clone()));
 
-                    let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
-                    let _batch = table.original_record_batch();
+            let ctx = phase
+                .iter()
+                .fold(ctx, |ctx, phase| ctx.with_phase(phase.as_str()));
 
-                    // TODO: convert the RecordBatch into a Schema and return it
-                }
-                let schema = Schema::new(Vec::<arrow_schema::Field>::default());
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+            let batch = table.original_record_batch();
+            let schema = build_schema_from_sp_columns(batch, adapter.engine().type_ops())?;
 
-                Ok(Arc::new(schema))
-            }
-        });
+            Ok(schema)
+        };
 
-        let reduce_f = Box::new(
-            move |acc: &mut HashMap<_, _>, relation: Arc<dyn BaseRelation>, schema| {
-                acc.insert(relation.semantic_fqn(), schema);
-                Ok(())
-            },
+        let reduce_f = |acc: &mut Acc,
+                        relation: Arc<dyn BaseRelation>,
+                        schema: AdapterResult<Arc<Schema>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            acc.insert(relation.semantic_fqn(), schema);
+            Ok(())
+        };
+        let map_reduce = MapReduce::new(
+            Box::new(new_conn_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            MAX_CONNECTIONS,
         );
-
-        MapReduce::new(new_conn_f, map_f, reduce_f, MAX_CONNECTIONS)
-            .run(Arc::new(relations.to_vec()), token)
+        map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
     fn list_relations_schemas_by_patterns_inner(
@@ -226,10 +281,78 @@ impl MetadataAdapter for FabricMetadataAdapter {
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
-        _token: CancellationToken,
+        token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
-        let _ = db_schemas;
+        type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
+        let adapter = self.adapter.clone();
+        let new_connection_f = move || {
+            adapter
+                .engine()
+                .new_connection(None, None)
+                .map_err(Cancellable::Error)
+        };
 
-        todo!()
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          db_schema: &CatalogAndSchema|
+              -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             db_schema: CatalogAndSchema,
+                             relations: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match relations {
+                Ok(relations) => {
+                    acc.insert(db_schema, Ok(relations));
+                    Ok(())
+                }
+                Err(e) => Err(Cancellable::Error(e)),
+            }
+        };
+
+        let map_reduce = MapReduce::new(
+            Box::new(new_connection_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            MAX_CONNECTIONS,
+        );
+        map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
+}
+
+fn build_schema_from_sp_columns(
+    sp_columns_result: Arc<RecordBatch>,
+    type_ops: &dyn TypeOps,
+) -> AdapterResult<Arc<Schema>> {
+    let column_names = get_column_values::<StringArray>(&sp_columns_result, "COLUMN_NAME")?;
+    let data_types = get_column_values::<StringArray>(&sp_columns_result, "TYPE_NAME")?;
+    let comments = get_column_values::<StringArray>(&sp_columns_result, "REMARKS")?;
+    let nullability = get_column_values::<StringArray>(&sp_columns_result, "IS_NULLABLE")?;
+
+    let mut fields = vec![];
+    for i in 0..sp_columns_result.num_rows() {
+        let name = column_names.value(i);
+        let nullable = nullability.value(i).to_uppercase() == "YES";
+        let text_data_type = data_types.value(i);
+        let comment = match comments.value(i) {
+            "" => None,
+            c => Some(c.to_string()),
+        };
+
+        let field = make_arrow_field(
+            type_ops,
+            name.to_string(),
+            text_data_type,
+            Some(nullable),
+            comment,
+        )?;
+        fields.push(field);
+    }
+
+    let schema = Schema::new(fields);
+    Ok(Arc::new(schema))
 }

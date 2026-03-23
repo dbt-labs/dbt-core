@@ -12,7 +12,7 @@
     {% endif %}
 {% endmacro %}
 
-{% macro fabric__unit_test_create_table_as(temporary, relation, sql) -%}
+{% macro fabric__get_create_table_as_sql(temporary, relation, sql) -%}
     {% set query_label = apply_label() %}
     {% set contract_config = config.get('contract') %}
     {% set is_nested_cte = check_for_nested_cte(sql) %}
