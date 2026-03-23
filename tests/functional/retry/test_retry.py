@@ -5,7 +5,6 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt_common.exceptions import CompilationError
 from dbt.tests.util import (
     rm_file,
     run_dbt,
@@ -13,6 +12,7 @@ from dbt.tests.util import (
     update_config_file,
     write_file,
 )
+from dbt_common.exceptions import CompilationError
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
     macros__success_macro_sql,

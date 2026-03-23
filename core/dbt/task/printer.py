@@ -2,7 +2,6 @@ from typing import Dict, Optional, Union
 
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.contracts.graph.nodes import Exposure
-from dbt.exceptions import DbtRuntimeError
 from dbt.events.types import (
     CheckNodeTestFailure,
     EndOfRunSummary,
@@ -14,6 +13,7 @@ from dbt.events.types import (
     SQLCompiledPath,
     StatsLine,
 )
+from dbt.exceptions import DbtRuntimeError
 from dbt.node_types import NodeType
 from dbt.task import group_lookup
 from dbt_common.events.base_types import EventLevel
