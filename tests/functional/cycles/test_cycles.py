@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
+from dbt_common.exceptions import CompilationError
 
 model_a_sql = """
 select * from {{ ref('model_b') }}
@@ -39,7 +40,7 @@ class TestSimpleCycle:
         return {"model_a.sql": model_a_sql, "model_b.sql": model_b_sql}
 
     def test_simple_cycle(self, project):
-        with pytest.raises(RuntimeError) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["run"])
         expected_msg = "Found a cycle"
         assert expected_msg in str(exc.value)
@@ -62,7 +63,7 @@ class TestComplexCycle:
         }
 
     def test_complex_cycle(self, project):
-        with pytest.raises(RuntimeError) as exc:
+        with pytest.raises(CompilationError) as exc:
             run_dbt(["run"])
         expected_msg = "Found a cycle"
         assert expected_msg in str(exc.value)
