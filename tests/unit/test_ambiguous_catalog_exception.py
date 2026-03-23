@@ -1,4 +1,3 @@
-import pytest
 
 from dbt.exceptions import AmbiguousCatalogMatchError
 
