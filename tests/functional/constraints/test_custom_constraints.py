@@ -4,7 +4,9 @@ import shutil
 import pytest
 
 from dbt.tests.util import run_dbt
-from tests.functional.constraints.fixtures import model_custom_column_constraint_schema_yml
+from tests.functional.constraints.fixtures import (
+    model_custom_column_constraint_schema_yml,
+)
 
 
 class TestCustomConstraintStateModified:
