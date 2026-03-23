@@ -54,9 +54,7 @@ def project_schema() -> Dict[str, Any]:
     global _PROJECT_SCHEMA
 
     if _PROJECT_SCHEMA is None:
-        _PROJECT_SCHEMA = load_json_from_package(
-            jsonschema_type="project", filename="0.0.110.json"
-        )
+        _PROJECT_SCHEMA = load_json_from_package(jsonschema_type="project", filename="latest.json")
     return _PROJECT_SCHEMA
 
 
