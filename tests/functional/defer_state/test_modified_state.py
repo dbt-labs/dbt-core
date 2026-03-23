@@ -1326,8 +1326,18 @@ class TestSeedHashMigration(BaseModifiedState):
         assert len(results) == 1
         assert results[0] == "test.seed"
 
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="CRLF/LF hash divergence and the Windows-only fallback only apply on Windows",
+    )
     def test_seed_crlf_migration(self, project):
-        """Seed with explicit CRLF endings: legacy hash in state should not cause false modified."""
+        """On Windows: seed with CRLF endings and legacy hash in state should not be flagged.
+
+        Python's text-mode open() normalises \\r\\n → \\n on all platforms (universal newlines),
+        so from_path() and from_path_legacy() produce different hashes for CRLF files everywhere.
+        But the migration fallback in same_seeds() is guarded by os.name == 'nt', so this test
+        only exercises the real end-to-end scenario on Windows CI.
+        """
         from dbt.artifacts.resources.base import FileHash
 
         # Write the seed file with explicit CRLF line endings
@@ -1345,7 +1355,7 @@ class TestSeedHashMigration(BaseModifiedState):
             project, "seed", {"name": legacy_hash.name, "checksum": legacy_hash.checksum}
         )
 
-        # Seed should NOT be reported as modified
+        # Seed should NOT be reported as modified — fallback recognises the legacy hash
         results = run_dbt(
             ["ls", "--resource-type", "seed", "--select", "state:modified", "--state", "./state"]
         )
