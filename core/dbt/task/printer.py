@@ -13,7 +13,6 @@ from dbt.events.types import (
     SQLCompiledPath,
     StatsLine,
 )
-from dbt.exceptions import DbtRuntimeError
 from dbt.node_types import NodeType
 from dbt.task import group_lookup
 from dbt_common.events.base_types import EventLevel
@@ -53,7 +52,7 @@ def interpret_run_result(result) -> str:
     elif result.status == NodeStatus.NoOp:
         return "noop"
     else:
-        raise DbtRuntimeError(f"unhandled result {result}")
+        raise RuntimeError(f"unhandled result {result}")
 
 
 def print_run_status_line(results) -> None:

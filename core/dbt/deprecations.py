@@ -10,6 +10,7 @@ from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Note
+from dbt_common.exceptions import DbtInternalError
 
 
 class DBTDeprecation:
@@ -269,7 +270,7 @@ def renamed_env_var(old_name: str, new_name: str):
 def warn(name: str, *args, **kwargs) -> None:
     if name not in deprecations:
         # this should (hopefully) never happen
-        raise DbtRuntimeError("Error showing deprecation warning: {}".format(name))
+        raise DbtInternalError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
 
