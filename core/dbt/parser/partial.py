@@ -23,6 +23,7 @@ from dbt.node_types import NodeType
 from dbt_common.context import get_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 
 mssat_files = (
     ParseFileType.Model,
@@ -135,7 +136,7 @@ class PartialParsing:
                 if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                     sf = self.saved_files[file_id]
                     if type(sf).__name__ != "SchemaSourceFile":
-                        raise Exception(f"Serialization failure for {file_id}")
+                        raise DbtInternalError(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
                     if self.saved_files[file_id].parse_file_type in mg_files:
@@ -210,7 +211,7 @@ class PartialParsing:
         parser_name = parse_file_type_to_parser[source_file.parse_file_type]
         project_name = source_file.project_name
         if not parser_name or not project_name:
-            raise Exception(
+            raise DbtInternalError(
                 f"Did not find parse_file_type or project_name "
                 f"in SourceFile for {source_file.file_id}"
             )
@@ -324,7 +325,7 @@ class PartialParsing:
         elif new_source_file.parse_file_type == ParseFileType.Function:
             self.update_function_in_saved(new_source_file, old_source_file)
         else:
-            raise Exception(f"Invalid parse_file_type in source_file {file_id}")
+            raise DbtInternalError(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
