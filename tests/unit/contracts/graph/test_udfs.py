@@ -4,7 +4,12 @@ from typing import Optional
 import pytest
 
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import FunctionNode, FunctionReturns, NodeType
+from dbt.contracts.graph.nodes import (
+    FunctionArgument,
+    FunctionNode,
+    FunctionReturns,
+    NodeType,
+)
 from dbt.task.function import FunctionRunner
 
 
@@ -80,3 +85,67 @@ def test_function_node_description_with_default_database(
     )
 
     assert runner.describe_node() == "function schema.name"
+
+
+def _make_function_node(**kwargs):
+    defaults = dict(
+        resource_type=NodeType.Function,
+        name="my_func",
+        returns=FunctionReturns(data_type="integer"),
+        database="db",
+        schema="schema",
+        package_name="pkg",
+        path="path/to/file.sql",
+        original_file_path="path/to/original/file.sql",
+        unique_id="pkg.schema.my_func",
+        fqn=["pkg", "schema", "my_func"],
+        alias="my_func",
+        checksum=FileHash.from_contents("test"),
+        arguments=[FunctionArgument(name="a_string", data_type="string")],
+    )
+    defaults.update(kwargs)
+    return FunctionNode(**defaults)
+
+
+class TestFunctionNodeSameContents:
+    def test_identical(self):
+        node = _make_function_node()
+        other = _make_function_node()
+        assert node.same_contents(other, "postgres")
+
+    def test_changed_arguments(self):
+        node = _make_function_node()
+        other = _make_function_node(
+            arguments=[FunctionArgument(name="a_string", data_type="boolean")]
+        )
+        assert not node.same_contents(other, "postgres")
+
+    def test_added_argument(self):
+        node = _make_function_node()
+        other = _make_function_node(
+            arguments=[
+                FunctionArgument(name="a_string", data_type="string"),
+                FunctionArgument(name="b_int", data_type="integer"),
+            ]
+        )
+        assert not node.same_contents(other, "postgres")
+
+    def test_changed_returns(self):
+        node = _make_function_node()
+        other = _make_function_node(returns=FunctionReturns(data_type="string"))
+        assert not node.same_contents(other, "postgres")
+
+    def test_changed_body(self):
+        node = _make_function_node(raw_code="SELECT 1")
+        other = _make_function_node(raw_code="SELECT 2")
+        assert not node.same_contents(other, "postgres")
+
+    def test_same_schema(self):
+        node = _make_function_node()
+        other = _make_function_node()
+        assert node.same_schema(other)
+
+    def test_different_schema(self):
+        node = _make_function_node()
+        other = _make_function_node(returns=FunctionReturns(data_type="boolean"))
+        assert not node.same_schema(other)

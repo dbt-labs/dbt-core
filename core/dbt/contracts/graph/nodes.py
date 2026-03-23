@@ -1610,6 +1610,14 @@ class FunctionNode(CompiledNode, FunctionResource):
     def resource_class(cls) -> Type[FunctionResource]:
         return FunctionResource
 
+    def same_schema(self, old: "FunctionNode") -> bool:
+        return self.arguments == old.arguments and self.returns == old.returns
+
+    def same_contents(self, old, adapter_type) -> bool:
+        if old is None:
+            return False
+        return super().same_contents(old, adapter_type) and self.same_schema(old)
+
 
 # ====================================
 # SemanticModel node
