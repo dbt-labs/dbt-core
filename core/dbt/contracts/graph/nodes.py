@@ -1189,6 +1189,25 @@ class SnapshotNode(SnapshotResource, CompiledNode):
     def resource_class(cls) -> Type[SnapshotResource]:
         return SnapshotResource
 
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
+        # Always use many-to-one path for snapshots. Multiple snapshot blocks
+        # can share a single file, and the basename heuristic in the base class
+        # fails when one snapshot's name matches the source filename — producing
+        # both a file and a directory at the same path (EISDIR).
+        path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
+        return os.path.join(target_path, subdirectory, self.package_name, path)
+
 
 # ====================================
 # Macro

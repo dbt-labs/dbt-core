@@ -686,7 +686,12 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
                 "compiled_path": os.path.join(
-                    "target", "compiled", "test", "snapshots", "snapshot_seed.sql"
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
                 ),
                 "build_path": None,
                 "created_at": ANY,
@@ -1378,7 +1383,12 @@ def expected_references_manifest(project):
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
                 "compiled_path": os.path.join(
-                    "target", "compiled", "test", "snapshots", "snapshot_seed.sql"
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
                 ),
                 "build_path": None,
                 "created_at": ANY,
