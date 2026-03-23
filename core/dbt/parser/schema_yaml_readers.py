@@ -1073,7 +1073,7 @@ class SemanticModelParser(YamlReader):
             pass
         else:
             # this should be unreachable, but just in case
-            raise ValueError(f"Invalid semantic model config: {patch.semantic_model}")
+            raise DbtInternalError(f"Invalid semantic model config: {patch.semantic_model}")
 
         self._parse_semantic_model_helper(
             semantic_model_name=name,
