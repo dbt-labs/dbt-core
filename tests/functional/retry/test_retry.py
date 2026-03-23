@@ -5,6 +5,7 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
+from dbt_common.exceptions import CompilationError
 from dbt.tests.util import (
     rm_file,
     run_dbt,
@@ -217,7 +218,7 @@ class TestRetryRemovedFileLeafNode(BaseTestRetry):
         run_dbt(["build"], expect_pass=False)
 
         rm_file("models", "third_model.sql")
-        with pytest.raises(ValueError, match="Couldn't find model 'model.test.third_model'"):
+        with pytest.raises(CompilationError, match="Couldn't find model 'model.test.third_model'"):
             run_dbt(["retry"], expect_pass=False)
 
 
