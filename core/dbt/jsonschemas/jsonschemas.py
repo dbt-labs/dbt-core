@@ -256,38 +256,34 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             )
             # dbt_project.yml configs
             elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
+                allowed_config_fields = _get_allowed_config_fields_for_project_property(
+                    schema, property_field_name=error_path[0]
+                )
                 for sub_error in sub_errors:
-                    if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
-                        allowed_config_fields = _get_allowed_config_fields_for_project_property(
-                            schema, property_field_name=error_path[0]
-                        )
-                        is_missing_plus_prefix = (
-                            len(sub_error.path) > 0
-                            and isinstance(sub_error.path[-1], str)
-                            and not sub_error.path[-1].startswith("+")
-                        )
-                        had_valid_config_key_in_path = any(
-                            k in allowed_config_fields for k in sub_error.path
-                        )
-                        is_maybe_config_key = (
-                            len(sub_error.path) > 0
-                            and isinstance(sub_error.path[-1], str)
-                            and f"+{sub_error.path[-1]}" in allowed_config_fields
-                        )
+                    if not isinstance(sub_error, ValidationError) or sub_error.validator != "type":
+                        continue
+                    if not sub_error.path or not isinstance(sub_error.path[-1], str):
+                        continue
 
-                        # if its missing a plus prefix, does not have valid config key in path
-                        # and the last part of the error path might be a valid config key
-                        if (
-                            is_missing_plus_prefix
-                            and is_maybe_config_key
-                            and not had_valid_config_key_in_path
-                        ):
-                            deprecations.warn(
-                                "missing-plus-prefix-in-config-deprecation",
-                                key=sub_error.path[-1],
-                                file=file_path,
-                                key_path=error_path_to_string(sub_error),
-                            )
+                    key = sub_error.path[-1]
+                    had_valid_config_key_in_path = any(
+                        k in allowed_config_fields for k in sub_error.path
+                    )
+
+                    if f"+{key}" in allowed_config_fields and not had_valid_config_key_in_path:
+                        deprecations.warn(
+                            "missing-plus-prefix-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
+                    elif key not in allowed_config_fields:
+                        deprecations.warn(
+                            "custom-key-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
         elif error.validator == "type":
             # Not deprecating invalid types yet
             pass

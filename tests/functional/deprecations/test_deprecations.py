@@ -725,6 +725,21 @@ class TestCustomConfigInDbtProjectYmlNoDeprecation:
         assert len(note_catcher.caught_events) == 0
 
 
+class TestCustomKeyInConfigDbtProjectYmlDeprecation:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"my_custom_key": True}}
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_custom_key_in_config_dbt_project_yml_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
 class TestJsonSchemaValidationGating:
     @pytest.fixture(scope="class")
     def models(self):
