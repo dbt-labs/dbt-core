@@ -1,0 +1,4 @@
+kind: Fix
+change_type: bug
+issue_num: 12692
+onesentence: Suppress stacktrace when snapshot validation fails due to missing strategy or unique_key
