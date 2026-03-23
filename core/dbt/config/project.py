@@ -1,4 +1,3 @@
-import logging
 import os
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -933,11 +932,11 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
     # Validate unknown flags - warn if user sets flags that dbt doesn't recognize
     if project_flags:
-        from dbt.contracts.project import ProjectFlags as PF
         import dataclasses
-        known_flag_names = {f.name for f in dataclasses.fields(PF)}
+        known_flag_names = {f.name for f in dataclasses.fields(ProjectFlags)}
         unknown_flags = set(project_flags.keys()) - known_flag_names
         if unknown_flags:
+            from dbt.events.types import InvalidOptionYAML
             from dbt_common.events.functions import fire_event
             fire_event(InvalidOptionYAML(
                 option_name=f"flags: {', '.join(sorted(unknown_flags))}",
