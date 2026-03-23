@@ -11,9 +11,7 @@ from dbt_common.clients.system import load_file_contents
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
 
-def load_catalogs_yml(project_dir: str, project_name: str) -> Dict[str, Any]:
-    path = os.path.join(project_dir, CATALOGS_FILE_NAME)
-
+def load_catalogs_yml(path: str, project_name: str, relative_path: str) -> Dict[str, Any]:
     if os.path.isfile(path):
         try:
             contents = load_file_contents(path, strip=False)
@@ -24,9 +22,55 @@ def load_catalogs_yml(project_dir: str, project_name: str) -> Dict[str, Any]:
 
             return yaml_content
         except DbtValidationError as e:
-            raise YamlLoadError(project_name=project_name, path=CATALOGS_FILE_NAME, exc=e)
+            raise YamlLoadError(project_name=project_name, path=relative_path, exc=e)
 
     return {}
+
+
+def load_catalogs_from_schema_yml(
+    path: str, project_name: str, relative_path: str
+) -> List[Dict[str, Any]]:
+    if not os.path.isfile(path):
+        return []
+
+    try:
+        contents = load_file_contents(path, strip=False)
+        yaml_content = load_yaml_text(contents)
+    except DbtValidationError as e:
+        raise YamlLoadError(project_name=project_name, path=relative_path, exc=e)
+
+    if not yaml_content:
+        return []
+
+    if not isinstance(yaml_content, dict):
+        raise YamlLoadError(
+            project_name=project_name,
+            path=relative_path,
+            exc=DbtValidationError(
+                f"Contents of file '{relative_path}' are not valid. Dictionary expected."
+            ),
+        )
+
+    return yaml_content.get("catalogs", [])
+
+
+def _schema_yml_paths(project_dir: str, source_paths: List[str]) -> List[str]:
+    schema_paths = set()
+
+    for source_path in source_paths:
+        absolute_source_path = os.path.join(project_dir, source_path)
+        if not os.path.isdir(absolute_source_path):
+            continue
+
+        for root, _, files in os.walk(absolute_source_path):
+            for file_name in files:
+                if not file_name.endswith((".yml", ".yaml")):
+                    continue
+
+                absolute_path = os.path.join(root, file_name)
+                schema_paths.add(os.path.relpath(absolute_path, project_dir))
+
+    return sorted(schema_paths)
 
 
 def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -> Catalog:
@@ -76,8 +120,20 @@ def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -
     )
 
 
-def load_catalogs(project_dir: str, project_name: str, cli_vars: Dict[str, Any]) -> List[Catalog]:
-    raw_catalogs = load_catalogs_yml(project_dir, project_name).get("catalogs", [])
+def load_catalogs(
+    project_dir: str, project_name: str, source_paths: List[str], cli_vars: Dict[str, Any]
+) -> List[Catalog]:
+    raw_catalogs = load_catalogs_yml(
+        os.path.join(project_dir, CATALOGS_FILE_NAME), project_name, CATALOGS_FILE_NAME
+    ).get("catalogs", [])
+
+    for relative_path in _schema_yml_paths(project_dir, source_paths):
+        raw_catalogs.extend(
+            load_catalogs_from_schema_yml(
+                os.path.join(project_dir, relative_path), project_name, relative_path
+            )
+        )
+
     catalogs_renderer = SecretRenderer(cli_vars)
 
     return [load_single_catalog(raw_catalog, catalogs_renderer) for raw_catalog in raw_catalogs]
