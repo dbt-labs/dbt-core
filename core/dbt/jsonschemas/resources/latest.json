@@ -3159,6 +3159,16 @@
             "null"
           ]
         },
+        "packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
