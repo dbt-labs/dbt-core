@@ -1,10 +1,10 @@
-use crate::errors::*;
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResult, AdapterTyping};
+use crate::{connection, errors::*};
 
 use arrow_array::*;
 use arrow_schema::*;
@@ -882,10 +882,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             // FIXME(harry): this is not taking into account that we will have multiple connections open
             // when relations are more than one, do we want to enforce single connection in record and replay tests?
             let node_id = unique_id.clone().unwrap_or_else(|| "sources".to_string());
-            adapter
-                .engine()
-                .new_connection(None, Some(node_id))
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(Some(&node_id)) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, Some(node_id))
+                    .map_err(Cancellable::Error)
+            }
         });
 
         let adapter = self.adapter.clone();
@@ -968,6 +972,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
@@ -999,10 +1004,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -1041,6 +1050,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
@@ -1062,10 +1072,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -1108,6 +1122,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }

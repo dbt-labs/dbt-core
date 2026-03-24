@@ -60,6 +60,9 @@ static RECORDS_NAME: &str = "recordings.db";
 pub(crate) fn reset_counters(path: &Path) {
     if !SKIP_RESET_PATHS.contains(path) {
         COUNTERS.remove(path);
+        // Record/replay: pooled connections keep a fixed `recordings_path`; drain the global
+        // recycling pool when starting a new session so sequential invocations do not cross dirs.
+        crate::connection::drain_recycling_pool();
     }
 }
 

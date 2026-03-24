@@ -1,3 +1,4 @@
+use crate::connection;
 use crate::errors::*;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
@@ -114,10 +115,14 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
 
         let adapter = self.adapter.clone();
         let new_connection_f = Box::new(move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         });
 
         let adapter = self.adapter.clone();
@@ -234,6 +239,7 @@ AND table_name = '{identifier}'"
             Box::new(map_f),
             Box::new(reduce_f),
             self.max_connections,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
@@ -323,10 +329,14 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
 
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -403,6 +413,7 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
             Box::new(map_f),
             Box::new(reduce_f),
             self.max_connections,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
@@ -956,10 +967,14 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -985,6 +1000,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }

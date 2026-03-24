@@ -103,6 +103,8 @@ pub use install::pre_install_driver;
 
 /// A function that creates a new connection to the database.
 type NewConnectionF<Error> = Box<dyn Fn() -> Result<Box<dyn Connection>, Error> + Send + Sync>;
+/// A function that recycles a connection after a worker does not need one anymore.
+type RecycleConnectionF = Box<dyn Fn(Box<dyn Connection>) + Send + Sync>;
 
 /// A function that maps a key to a computed value using a [Connection].
 type MapF<Key, Value> = Box<dyn Fn(&'_ mut dyn Connection, &Key) -> Value + Send + Sync>;
@@ -124,6 +126,9 @@ where
     map_f: MapF<Key, Value>,
     /// Function to reduce a computed value into the accumulator.
     reduce_f: ReduceF<Acc, Key, Value, Cancellable<Error>>,
+
+    /// Function to recycle a connection after a worker is done with it.
+    recycle_connection_f: Option<RecycleConnectionF>,
 
     /// The next key to be processed by any of the workers.
     key_counter: AtomicUsize,
@@ -154,6 +159,12 @@ where
                 .fetch_add(elapsed.as_micros() as u64, Ordering::SeqCst);
         }
         res
+    }
+
+    fn recycle_connection(&self, conn: Box<dyn Connection>) {
+        if let Some(recycle_connection_f) = &self.recycle_connection_f {
+            (recycle_connection_f)(conn)
+        }
     }
 
     fn map(&self, conn: &'_ mut dyn Connection, key: &K) -> V {
@@ -235,11 +246,13 @@ where
         map_f: MapF<K, V>,
         reduce_f: ReduceF<Acc, K, V, Cancellable<E>>,
         max_connections: usize,
+        recycle_connection_f: Option<RecycleConnectionF>,
     ) -> Self {
         let inner = MapReduceInner {
             new_connection_f,
             map_f,
             reduce_f,
+            recycle_connection_f,
             key_counter: AtomicUsize::new(0),
             total_task_time_us: AtomicU64::new(0),
             task_count: AtomicU64::new(0),
@@ -258,7 +271,7 @@ where
         &self,
         cur_span: Span,
     ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Connection>, Cancellable<E>>> + Send>> {
-        let inner = self.inner.clone(); // clone needed to move it into lambda
+        let inner = Arc::clone(&self.inner); // clone needed to move it into lambda
         let future = async move {
             match tokio::task::spawn_blocking(move || {
                 let _sp = cur_span.entered();
@@ -283,15 +296,21 @@ where
         token: &CancellationToken,
         cur_span: Span,
     ) -> Pin<Box<dyn Future<Output = Result<(), CancelledError>> + Send>> {
-        let inner = self.inner.clone(); // clone needed to move it into lambda
+        let inner = Arc::clone(&self.inner); // clone needed to move it into lambda
         let token = token.clone(); // clone needed to move it into lambda
         let future = async move {
             let mut conn = conn;
             loop {
-                let inner = inner.clone();
+                let inner = Arc::clone(&inner);
                 let keys_for_task = keys.clone();
                 let i = inner.key_counter.fetch_add(1, Ordering::SeqCst);
                 if i >= keys.len() {
+                    // No more keys to process, recycle connection and exit.
+                    let _ = tokio::task::spawn_blocking(move || {
+                        let _sp = cur_span.entered();
+                        inner.recycle_connection(conn);
+                    })
+                    .await;
                     return Ok(());
                 }
                 let cur_span = cur_span.clone();
@@ -306,6 +325,7 @@ where
                 let conn_value = match handle.await {
                     Ok(conn_value) => conn_value,
                     Err(join_error) => {
+                        // can't recover connection after a join error
                         let err = cancelled_from_join_error(join_error);
                         return Err(err);
                     }
@@ -318,13 +338,15 @@ where
                     Ok(()) => (),
                     Err(SendError(_)) => {
                         // The receiver has been dropped (due to cancellation),
-                        // so we fail with a CancelledError.
+                        // so we fail with a CancelledError. We also don't worry
+                        // about recycling the connection.
                         return Err(CancelledError);
                     }
                 }
 
                 if token.is_cancelled() {
                     return Err(CancelledError);
+                    // And don't worry about recycling the connection since we're shutting down.
                 }
             }
         };

@@ -1,3 +1,4 @@
+use crate::connection;
 use crate::metadata::{
     CatalogAndSchema, MAX_CONNECTIONS, MetadataAdapter, MetadataFreshness, RelationSchemaPair,
     RelationVec, create_schemas_if_not_exists,
@@ -206,10 +207,14 @@ impl MetadataAdapter for FabricMetadataAdapter {
         let new_conn_f = Box::new({
             let adapter = self.adapter.clone();
             move || {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
+                if let Some(conn) = connection::recycle_connection(None) {
+                    Ok(conn)
+                } else {
+                    adapter
+                        .engine()
+                        .new_connection(None, None)
+                        .map_err(Cancellable::Error)
+                }
             }
         });
 
@@ -254,6 +259,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
@@ -319,6 +325,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }

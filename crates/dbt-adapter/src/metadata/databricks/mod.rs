@@ -4,6 +4,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use crate::connection;
+
 use arrow_array::*;
 use arrow_schema::{Field, Schema};
 use dbt_agate::AgateTable;
@@ -868,10 +870,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let connection_unique_id = unique_id.clone();
         let adapter = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
-            adapter
-                .engine()
-                .new_connection(None, connection_unique_id.clone())
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(connection_unique_id.as_ref()) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, connection_unique_id.clone())
+                    .map_err(Cancellable::Error)
+            }
         });
 
         let adapter = self.adapter.clone();
@@ -967,6 +973,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
@@ -998,10 +1005,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -1063,6 +1074,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
@@ -1084,10 +1096,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -1112,6 +1128,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }

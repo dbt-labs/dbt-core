@@ -13,14 +13,15 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::{thread, time::Duration};
 
-mod noop_connection;
-
 mod adapter_engine;
 pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
 
 mod xdbc;
 pub use xdbc::XdbcEngine;
+
+mod noop_connection;
+pub use noop_connection::NoopConnection;
 
 mod sidecar;
 pub use sidecar::SidecarEngine;

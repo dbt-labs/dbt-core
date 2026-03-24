@@ -1,3 +1,4 @@
+use crate::connection;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
@@ -171,10 +172,14 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let new_connection_f = Box::new(move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         });
 
         let adapter = self.adapter.clone();
@@ -211,6 +216,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(table_names), token)
     }
@@ -248,10 +254,14 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
+            if let Some(conn) = connection::recycle_connection(None) {
+                Ok(conn)
+            } else {
+                adapter
+                    .engine()
+                    .new_connection(None, None)
+                    .map_err(Cancellable::Error)
+            }
         };
 
         let adapter = self.adapter.clone();
@@ -298,6 +308,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Box::new(map_f),
             Box::new(reduce_f),
             MAX_CONNECTIONS,
+            Some(Box::new(connection::sort_for_recycling)),
         );
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
