@@ -7,7 +7,7 @@ from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
+from dbt.tests.util import run_dbt, write_file
 
 double_it_sql = """
 SELECT value * 2
@@ -651,14 +651,6 @@ class TestFunctionsGetSchemaCreatedIfNecessary:
 
 model_sql = """select 1 as id"""
 
-log_schemas_macro = """
-{% macro log_schemas(schemas) %}
-    {% for schema in schemas %}
-        {{ log("SCHEMA_ENTRY: " ~ schema, info=True) }}
-    {% endfor %}
-{% endmacro %}
-"""
-
 
 class TestFunctionSchemasInOnRunEnd:
     """Test that function schemas appear in the on-run-end `schemas` variable.
@@ -678,33 +670,36 @@ class TestFunctionSchemasInOnRunEnd:
         return {"my_model.sql": model_sql}
 
     @pytest.fixture(scope="class")
-    def macros(self) -> Dict[str, str]:
-        return {"log_schemas.sql": log_schemas_macro}
-
-    @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "functions": {"+schema": "udfs"},
-            "on-run-end": ["{{ log_schemas(schemas) }}"],
+            "on-run-end": [
+                "create table if not exists {{ target.schema }}.on_run_end_schemas (schema_name text)",
+                "insert into {{ target.schema }}.on_run_end_schemas (schema_name) values "
+                "{% for schema in schemas %}('{{ schema }}'){% if not loop.last %},{% endif %}{% endfor %}",
+            ],
         }
 
-    def test_function_schema_in_on_run_end_schemas(self, project):
-        _, log_output = run_dbt_and_capture(["build"])
+    @pytest.fixture(scope="function")
+    def setUp(self, project):
+        project.run_sql(f"drop table if exists {project.test_schema}.on_run_end_schemas")
 
-        # Extract schemas logged by the on-run-end hook
-        logged_schemas = set()
-        for line in log_output.split("\n"):
-            if "SCHEMA_ENTRY:" in line:
-                schema = line.split("SCHEMA_ENTRY:")[1].strip()
-                logged_schemas.add(schema)
+    def test_function_schema_in_on_run_end_schemas(self, setUp, project):
+        run_dbt(["build"])
+
+        results = project.run_sql(
+            f"select schema_name from {project.test_schema}.on_run_end_schemas",
+            fetch="all",
+        )
+        schemas = {r[0] for r in results}
 
         # The model's schema (target schema) should be present
         assert (
-            project.test_schema in logged_schemas
-        ), f"Expected model schema '{project.test_schema}' in schemas, got {logged_schemas}"
+            project.test_schema in schemas
+        ), f"Expected model schema '{project.test_schema}' in schemas, got {schemas}"
 
         # The function's custom schema should also be present
         expected_fn_schema = f"{project.test_schema}_udfs"
         assert (
-            expected_fn_schema in logged_schemas
-        ), f"Expected function schema '{expected_fn_schema}' in schemas, got {logged_schemas}"
+            expected_fn_schema in schemas
+        ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"
