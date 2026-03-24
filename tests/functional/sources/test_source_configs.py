@@ -11,6 +11,7 @@ from tests.functional.sources.fixtures import (
     disabled_source_level_schema_yml,
     disabled_source_table_schema_yml,
     invalid_config_source_schema_yml,
+    null_tables_source_schema_yml,
     source_config_loaded_at_field_config_level,
     source_config_loaded_at_field_top_level,
     source_config_loaded_at_query_config_level,
@@ -335,3 +336,17 @@ class TestTableLoadedAtQueryNoneWhenFieldSetTopLevel:
 
         assert source.loaded_at_query is None
         assert source.config.loaded_at_query is None
+
+
+class TestNullSourceTables:
+    """Regression test: `tables: null` (explicit null) should not raise TypeError."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": null_tables_source_schema_yml,
+        }
+
+    def test_null_tables_parses_without_error(self, project):
+        # Should not raise "TypeError: 'NoneType' object is not iterable"
+        run_dbt(["parse"])
