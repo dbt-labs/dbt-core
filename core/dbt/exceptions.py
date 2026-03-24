@@ -1216,9 +1216,25 @@ class AmbiguousCatalogMatchError(CompilationError):
     @staticmethod
     def _node_type_label(unique_id: str) -> str:
         """Derive a human-readable node type from a dbt unique_id prefix."""
-        prefix = unique_id.split(".", 1)[0] if unique_id else "node"
-        return prefix
+        # unique_id format is typically "<node_type>.<package>.<name>"
+        prefix = unique_id.split(".", 1)[0] if unique_id else ""
 
+        # Map known internal prefixes to nicer, human-readable labels.
+        known_labels = {
+            "saved_query": "saved query",
+            "unit_test": "unit test",
+            "test": "data test",
+        }
+
+        if prefix in known_labels:
+            return known_labels[prefix]
+
+        if prefix:
+            # Fall back to a generic transformation: replace underscores with spaces.
+            return prefix.replace("_", " ")
+
+        # Generic fallback when no prefix is available.
+        return "node"
     def get_message(self) -> str:
         node_type = self._node_type_label(self.unique_id)
         msg = (
