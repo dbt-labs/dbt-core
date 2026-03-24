@@ -395,11 +395,11 @@ def manifest(*args0, write=True, write_perf_info=False):
 
 def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = False):
     """Load the manifest and add it to the context."""
-    req_strs = ["profile", "project", "runtime_config"]
+    req_strs = ["flags", "profile", "project", "runtime_config"]
     reqs = [ctx.obj.get(dep) for dep in req_strs]
 
     if None in reqs:
-        raise DbtProjectError("profile, project, and runtime_config required for manifest")
+        raise DbtProjectError("flags, profile, project, and runtime_config required for manifest")
 
     runtime_config = ctx.obj["runtime_config"]
 
