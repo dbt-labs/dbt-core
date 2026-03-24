@@ -12,6 +12,7 @@ from tests.functional.exposures.fixtures import (
     models_sql,
     second_model_sql,
     semantic_models_schema_yml,
+    simple_exposure_no_tags_yml,
     simple_exposure_yml,
     source_schema_yml,
 )
@@ -144,3 +145,27 @@ class TestInvalidConfig:
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)
+
+
+class TestNullExposureTags:
+    """Regression test: `exposures: {tags: null}` in dbt_project.yml should raise a clear error."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": models_sql,
+            "schema.yml": simple_exposure_no_tags_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"exposures": {"tags": None}}
+
+    def test_null_exposure_tags_raises_invalid_field_value(self, project):
+        from mashumaro.exceptions import InvalidFieldValue
+
+        with pytest.raises(
+            InvalidFieldValue,
+            match='Field "tags" of type List\[str\] in ExposureConfig has invalid value None',  # noqa: [W605]
+        ):
+            run_dbt(["parse"])

@@ -164,7 +164,9 @@ def yaml_from_file(
         # When loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
-        for source in contents.get("sources", []):
+        for source in contents.get("sources") or []:
+            if source.get("tables") is None:
+                source["tables"] = []
             for table in source.get("tables", []):
                 if "loaded_at_field" in table or (
                     "config" in table

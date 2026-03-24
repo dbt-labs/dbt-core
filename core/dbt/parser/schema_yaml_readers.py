@@ -140,7 +140,10 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
-        tags = sorted(set(self.project.exposures.get("tags", []) + unparsed.tags + config.tags))
+        # Null tags caught during deserialization, but guard here defensively.
+        tags = sorted(
+            set((self.project.exposures.get("tags") or []) + unparsed.tags + config.tags)
+        )
         meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
 
         config.tags = tags
