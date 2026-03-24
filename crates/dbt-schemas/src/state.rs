@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::schemas::{
-    DbtSource, InternalDbtNodeAttributes, Nodes,
+    DbtSource, InternalDbtNodeAttributes, Nodes, ResolvedCloudConfig,
     common::{DbtQuoting, ResolvedQuoting},
     dbt_catalogs::DbtCatalogs,
     macros::{DbtDocsMacro, DbtMacro},
@@ -218,6 +218,7 @@ pub struct DbtState {
     pub vars: BTreeMap<String, IndexMap<String, DbtVars>>,
     pub cli_vars: BTreeMap<String, dbt_yaml::Value>,
     pub catalogs: Option<Arc<DbtCatalogs>>,
+    pub cloud_config: Option<ResolvedCloudConfig>,
 }
 
 impl DbtState {

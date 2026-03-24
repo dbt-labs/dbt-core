@@ -17,6 +17,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dbt-common = { workspace = true }
 dbt-adapter = { workspace = true }
+dbt-cloud-config = { workspace = true }
 dbt-deps = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }

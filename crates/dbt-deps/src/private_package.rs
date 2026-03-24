@@ -1,4 +1,5 @@
 use dbt_common::{ErrorCode, FsResult, err};
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::packages::PrivatePackage;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
@@ -211,7 +212,10 @@ pub fn get_provider_info() -> Vec<ProviderDetail> {
 }
 
 /// Resolves a private package definition to its Git clone URL
-pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
+pub fn get_resolved_url(
+    private_package: &PrivatePackage,
+    cloud_config: &Option<ResolvedCloudConfig>,
+) -> FsResult<String> {
     let provider_info = get_provider_info();
     let private_def = PrivateDefinition::build(&private_package.private);
 
@@ -224,6 +228,7 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
     for provider in provider_info {
         if provider.matches_private_definition(&private_def, private_package.provider.as_deref()) {
             private_package_usage_event(
+                cloud_config,
                 private_package.private.deref(),
                 private_package.provider.as_deref(),
                 true,
@@ -235,6 +240,7 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
 
     // No matching provider found
     private_package_usage_event(
+        cloud_config,
         private_package.private.deref(),
         private_package.provider.as_deref(),
         false,

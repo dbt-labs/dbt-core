@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dbt_adapter::load_catalogs;
+use dbt_cloud_config::resolve_cloud_config;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
@@ -15,7 +16,6 @@ use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_schemas::schemas::serde::{StringOrInteger, yaml_to_fs_error};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
-use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudProjectConfig};
 use dbt_schemas::state::DbtProfile;
 use dbt_telemetry::GenericOpItemProcessed;
 use dbt_yaml;
@@ -35,8 +35,7 @@ use tracing::Instrument;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 use dbt_common::constants::{
-    DBT_CLOUD_YML, DBT_CONFIG_DIR, DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME,
-    DBT_PROJECT_YML,
+    DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME, DBT_PROJECT_YML,
 };
 use dbt_common::error::LiftableResult;
 use project::DbtProject;
@@ -45,7 +44,7 @@ use dbt_common::stdfs::last_modified;
 use dbt_common::{ErrorCode, create_debug_span, ectx, err, tokiofs};
 use dbt_common::{FsResult, fs_err};
 use dbt_jinja_vars::DbtVars;
-use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
+use dbt_schemas::schemas::project::{self, DbtProjectSimplified};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, ResourcePathKind};
 
 use crate::args::LoadArgs;
@@ -105,14 +104,20 @@ pub async fn load(
     arg: &LoadArgs,
     iarg: &InvocationArgs,
     token: &CancellationToken,
-) -> FsResult<(DbtState, Option<DbtCloudProjectConfig>)> {
+) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile) =
         load_simplified_project_and_profiles(arg).await?;
 
-    let dbt_cloud_project = match &simplified_dbt_project.dbt_cloud {
-        Some(project_cloud) => load_cloud_project_config(project_cloud),
-        None => None,
-    };
+    // Parse dbt_cloud.yml (if it exists)
+    let dbt_cloud_yml = dbt_cloud_config::get_cloud_project_path()
+        .ok()
+        .and_then(|p| dbt_cloud_config::parse_cloud_config(&p).ok().flatten());
+
+    // Resolve cloud config with precedence: env > dbt_project.yml > dbt_cloud.yml
+    let cloud_config = resolve_cloud_config(
+        dbt_cloud_yml.as_ref(),
+        simplified_dbt_project.dbt_cloud.as_ref(),
+    );
 
     // Check if .gitignore exists and add dbt_internal_packages/ to it if not present
     let gitignore_path = arg.io.in_dir.join(".gitignore");
@@ -150,11 +155,12 @@ pub async fn load(
         vars: BTreeMap::new(),
         cli_vars: arg.vars.clone(),
         catalogs: load_catalogs::fetch_catalogs(),
+        cloud_config,
     };
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
     if arg.debug_profile {
-        return Ok((dbt_state, dbt_cloud_project));
+        return Ok(dbt_state);
     }
 
     let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
@@ -216,7 +222,7 @@ pub async fn load(
         dbt_state.packages.extend(packages);
         dbt_state.packages[0] = new_root_package;
 
-        return Ok((dbt_state, dbt_cloud_project));
+        return Ok(dbt_state);
     }
 
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
@@ -260,12 +266,13 @@ pub async fn load(
 
     if !is_time_machine_replay {
         // get publication artifact for each upstream project
-        download_publication_artifacts(&upstream_projects, &dbt_cloud_project, &arg.io).await?;
+        download_publication_artifacts(&upstream_projects, &dbt_state.cloud_config, &arg.io)
+            .await?;
     }
 
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
-        return Ok((dbt_state, dbt_cloud_project));
+        return Ok(dbt_state);
     }
 
     let lookup_map = packages_lock.lookup_map();
@@ -336,7 +343,7 @@ pub async fn load(
         let _ = prepare_inline_sql(inline_sql, &arg.io.out_dir, &mut dbt_state).await?;
     }
 
-    Ok((dbt_state, dbt_cloud_project))
+    Ok(dbt_state)
 }
 
 /// Lightweight load function for the `clean` command.
@@ -362,6 +369,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         vars: BTreeMap::new(),
         cli_vars: arg.vars.clone(),
         catalogs: load_catalogs::fetch_catalogs(),
+        cloud_config: None,
     };
 
     Ok(dbt_state)
@@ -466,41 +474,6 @@ pub async fn load_simplified_project_and_profiles(
     let dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
 
     Ok((simplified_dbt_project, dbt_profile))
-}
-
-pub fn load_cloud_project_config(
-    project_dbt_cloud: &ProjectDbtCloudConfig,
-) -> Option<DbtCloudProjectConfig> {
-    // Get home directory
-    let home_dir = dirs::home_dir()?;
-
-    // Check if dbt_cloud.yml exists
-    let dbt_cloud_config_path = home_dir.join(DBT_CONFIG_DIR).join(DBT_CLOUD_YML);
-    if !dbt_cloud_config_path.exists() {
-        return None;
-    }
-
-    // Read and parse the dbt_cloud.yml file
-    let content = fs::read_to_string(&dbt_cloud_config_path).ok()?;
-    let cloud_config: DbtCloudConfig = dbt_yaml::from_str(&content).ok()?;
-
-    // TODO: unsure if we should exit early if the project_id is not set in dbt_project.yml
-    // or if we should fall back to the active_project in dbt_cloud.yml
-    let project = match &project_dbt_cloud.project_id {
-        Some(project_id) => cloud_config.get_project_by_id(project_id.to_string().as_str()),
-        None => cloud_config.get_project_by_id(&cloud_config.context.active_project),
-    };
-
-    let defer_env_id = project_dbt_cloud
-        .defer_env_id
-        .clone()
-        .map(|env_id| env_id.to_string())
-        .or_else(|| cloud_config.context.defer_env_id.clone());
-
-    Some(DbtCloudProjectConfig {
-        defer_env_id,
-        project: project.cloned(),
-    })
 }
 
 #[allow(clippy::too_many_arguments)]

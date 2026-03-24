@@ -190,7 +190,7 @@ impl XdbcEngine {
             auth,
             config,
             quoting,
-            QueryCommentConfig::from_query_comment(None, adapter_type, false),
+            QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
             type_ops,
             splitter,
             None,

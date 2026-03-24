@@ -13,6 +13,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::project::QueryComment;
@@ -1280,6 +1281,7 @@ pub trait AdapterFactory: Send + Sync {
         quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,
         token: CancellationToken,
+        cloud_config: Option<&ResolvedCloudConfig>,
     ) -> FsResult<Arc<dyn BaseAdapter>>;
 
     /// Return the statement splitter used by this factory.

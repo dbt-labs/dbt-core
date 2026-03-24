@@ -4317,7 +4317,7 @@ mod tests {
             auth.into(),
             AdapterConfig::new(config),
             resolved_quoting,
-            QueryCommentConfig::from_query_comment(None, adapter_type, false),
+            QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
             Box::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,

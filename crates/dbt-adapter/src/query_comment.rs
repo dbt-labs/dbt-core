@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 use std::{fmt::Debug, sync::LazyLock};
 
 use dbt_common::adapter::AdapterType;
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::project::QueryComment;
 use minijinja::{Error, State};
 use regex::Regex;
@@ -85,17 +86,9 @@ pub static EMPTY_CONFIG: LazyLock<QueryCommentConfig> = LazyLock::new(|| QueryCo
     job_label: false,
 });
 
-/// Returns true if any dbt Cloud environment variables are set (non-empty).
-fn has_dbt_cloud_env_vars() -> bool {
-    const CLOUD_ENV_VARS: &[&str] = &[
-        "DBT_CLOUD_PROJECT_ID",
-        "DBT_CLOUD_ENVIRONMENT_ID",
-        "DBT_CLOUD_JOB_ID",
-        "DBT_CLOUD_RUN_ID",
-    ];
-    CLOUD_ENV_VARS
-        .iter()
-        .any(|var| std::env::var(var).is_ok_and(|v| !v.is_empty()))
+/// Returns true if a resolved cloud config is available.
+fn has_cloud_config(cloud_config: Option<&ResolvedCloudConfig>) -> bool {
+    cloud_config.and_then(|c| c.credentials.as_ref()).is_some()
 }
 
 impl QueryCommentConfig {
@@ -104,6 +97,7 @@ impl QueryCommentConfig {
         query_comment: Option<QueryComment>,
         adapter_type: AdapterType,
         use_default: bool,
+        cloud_config: Option<&ResolvedCloudConfig>,
     ) -> Self {
         #[derive(Debug, Default, Deserialize)]
         struct _QueryCommentConfig {
@@ -129,7 +123,7 @@ impl QueryCommentConfig {
         QueryCommentConfig {
             comment: config.comment.unwrap_or_else(|| {
                 if use_default {
-                    if has_dbt_cloud_env_vars() {
+                    if has_cloud_config(cloud_config) {
                         DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string()
                     } else {
                         DEFAULT_QUERY_COMMENT.to_string()
@@ -219,16 +213,15 @@ fn sanitize_label(label: &str) -> String {
 #[cfg(test)]
 mod tests {
     use dbt_common::adapter::AdapterType;
+    use dbt_schemas::schemas::ResolvedCloudConfig;
     use dbt_schemas::schemas::project::QueryComment;
     use serde::Deserialize;
-    use std::sync::Mutex;
 
     use crate::query_comment::{
         DEFAULT_QUERY_COMMENT, DEFAULT_QUERY_COMMENT_WITH_CLOUD, QueryCommentConfig,
     };
 
     // Env var tests mutate process-wide state, so they must not run in parallel.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn assert_configs_equal(left: &QueryCommentConfig, right: &QueryCommentConfig) {
         assert_eq!(left.comment, right.comment);
@@ -238,16 +231,13 @@ mod tests {
 
     #[test]
     fn test_empty_query_comment() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
         // Test empty query comment with `use_default`
         for adapter_type in [
             AdapterType::Bigquery,
             AdapterType::Databricks,
             AdapterType::Redshift,
         ] {
-            let config = QueryCommentConfig::from_query_comment(None, adapter_type, true);
+            let config = QueryCommentConfig::from_query_comment(None, adapter_type, true, None);
             let expected_config = QueryCommentConfig {
                 comment: DEFAULT_QUERY_COMMENT.to_string(),
                 append: false,
@@ -256,7 +246,8 @@ mod tests {
             assert_configs_equal(&config, &expected_config);
         }
 
-        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, true);
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, true, None);
         let expected_config = QueryCommentConfig {
             comment: DEFAULT_QUERY_COMMENT.to_string(),
             append: true,
@@ -270,7 +261,7 @@ mod tests {
             AdapterType::Databricks,
             AdapterType::Redshift,
         ] {
-            let config = QueryCommentConfig::from_query_comment(None, adapter_type, false);
+            let config = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
             let expected_config = QueryCommentConfig {
                 comment: "".to_string(),
                 append: false,
@@ -279,7 +270,8 @@ mod tests {
             assert_configs_equal(&config, &expected_config);
         }
 
-        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false);
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false, None);
         let expected_config = QueryCommentConfig {
             comment: "".to_string(),
             append: true,
@@ -299,6 +291,7 @@ mod tests {
                 Some(QueryComment::String("cool comment".to_string())),
                 adapter_type,
                 true,
+                None,
             );
             let expected_config = QueryCommentConfig {
                 comment: "cool comment".to_string(),
@@ -312,6 +305,7 @@ mod tests {
                 Some(QueryComment::String("cool comment".to_string())),
                 adapter_type,
                 false,
+                None,
             );
             assert_configs_equal(&config, &expected_config);
         }
@@ -320,6 +314,7 @@ mod tests {
             Some(QueryComment::String("cool comment".to_string())),
             AdapterType::Snowflake,
             true,
+            None,
         );
         let expected_config = QueryCommentConfig {
             comment: "cool comment".to_string(),
@@ -332,6 +327,7 @@ mod tests {
             Some(QueryComment::String("cool comment".to_string())),
             AdapterType::Snowflake,
             false,
+            None,
         );
         assert_configs_equal(&config, &expected_config);
     }
@@ -347,8 +343,12 @@ mod tests {
             AdapterType::Databricks,
             AdapterType::Redshift,
         ] {
-            let config =
-                QueryCommentConfig::from_query_comment(query_comment.clone(), adapter_type, true);
+            let config = QueryCommentConfig::from_query_comment(
+                query_comment.clone(),
+                adapter_type,
+                true,
+                None,
+            );
             let expected_config = QueryCommentConfig {
                 comment: "cool comment".to_string(),
                 append: false,
@@ -357,8 +357,12 @@ mod tests {
             assert_configs_equal(&config, &expected_config);
 
             // Whether `use_default` is set should make no difference now
-            let config =
-                QueryCommentConfig::from_query_comment(query_comment.clone(), adapter_type, false);
+            let config = QueryCommentConfig::from_query_comment(
+                query_comment.clone(),
+                adapter_type,
+                false,
+                None,
+            );
             assert_configs_equal(&config, &expected_config);
         }
 
@@ -366,6 +370,7 @@ mod tests {
             query_comment.clone(),
             AdapterType::Snowflake,
             true,
+            None,
         );
         let expected_config = QueryCommentConfig {
             comment: "cool comment".to_string(),
@@ -374,16 +379,17 @@ mod tests {
         };
         assert_configs_equal(&config, &expected_config);
 
-        let config =
-            QueryCommentConfig::from_query_comment(query_comment, AdapterType::Snowflake, false);
+        let config = QueryCommentConfig::from_query_comment(
+            query_comment,
+            AdapterType::Snowflake,
+            false,
+            None,
+        );
         assert_configs_equal(&config, &expected_config);
     }
 
     #[test]
     fn test_query_comment_object_append() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
         let config_str = "append: true";
         let query_comment =
             QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
@@ -394,8 +400,12 @@ mod tests {
             AdapterType::Redshift,
             AdapterType::Snowflake,
         ] {
-            let config =
-                QueryCommentConfig::from_query_comment(query_comment.clone(), adapter_type, true);
+            let config = QueryCommentConfig::from_query_comment(
+                query_comment.clone(),
+                adapter_type,
+                true,
+                None,
+            );
             let expected_config = QueryCommentConfig {
                 comment: DEFAULT_QUERY_COMMENT.to_string(),
                 append: true,
@@ -414,8 +424,12 @@ mod tests {
             AdapterType::Redshift,
             AdapterType::Snowflake,
         ] {
-            let config =
-                QueryCommentConfig::from_query_comment(query_comment.clone(), adapter_type, false);
+            let config = QueryCommentConfig::from_query_comment(
+                query_comment.clone(),
+                adapter_type,
+                false,
+                None,
+            );
             let expected_config = QueryCommentConfig {
                 comment: "".to_string(),
                 append: false,
@@ -427,9 +441,6 @@ mod tests {
 
     #[test]
     fn test_query_comment_object_job_label() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
         let config_str = "job-label: true";
         let query_comment =
             QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
@@ -440,8 +451,12 @@ mod tests {
             AdapterType::Redshift,
             AdapterType::Snowflake,
         ] {
-            let config =
-                QueryCommentConfig::from_query_comment(query_comment.clone(), adapter_type, true);
+            let config = QueryCommentConfig::from_query_comment(
+                query_comment.clone(),
+                adapter_type,
+                true,
+                None,
+            );
             let expected_config = QueryCommentConfig {
                 comment: DEFAULT_QUERY_COMMENT.to_string(),
                 append: adapter_type == AdapterType::Snowflake,
@@ -450,8 +465,12 @@ mod tests {
             assert_configs_equal(&config, &expected_config);
         }
 
-        let config =
-            QueryCommentConfig::from_query_comment(query_comment, AdapterType::Bigquery, true);
+        let config = QueryCommentConfig::from_query_comment(
+            query_comment,
+            AdapterType::Bigquery,
+            true,
+            None,
+        );
         let expected_config = QueryCommentConfig {
             comment: DEFAULT_QUERY_COMMENT.to_string(),
             append: false,
@@ -460,41 +479,24 @@ mod tests {
         assert_configs_equal(&config, &expected_config);
     }
 
-    const CLOUD_ENV_VARS: &[&str] = &[
-        "DBT_CLOUD_PROJECT_ID",
-        "DBT_CLOUD_ENVIRONMENT_ID",
-        "DBT_CLOUD_JOB_ID",
-        "DBT_CLOUD_RUN_ID",
-    ];
-
-    /// SAFETY: These tests hold ENV_LOCK so no other test mutates env vars concurrently.
-    #[allow(clippy::disallowed_methods)]
-    unsafe fn set_cloud_env(var: &str, val: &str) {
-        unsafe { std::env::set_var(var, val) }
-    }
-
-    /// SAFETY: These tests hold ENV_LOCK so no other test mutates env vars concurrently.
-    #[allow(clippy::disallowed_methods)]
-    unsafe fn remove_cloud_env(var: &str) {
-        unsafe { std::env::remove_var(var) }
-    }
-
-    fn clear_cloud_env_vars() {
-        for var in CLOUD_ENV_VARS {
-            // SAFETY: protected by ENV_LOCK
-            unsafe { remove_cloud_env(var) }
-        }
-    }
-
     #[test]
-    fn test_cloud_query_comment_with_env_var() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
-        // Set a cloud env var and verify the cloud template is selected
-        // SAFETY: protected by ENV_LOCK
-        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "12345") };
-        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+    fn test_cloud_query_comment_with_cloud_config() {
+        use dbt_schemas::schemas::CloudCredentials;
+        // Verify the cloud template is selected when cloud config has credentials
+        let cloud_config = ResolvedCloudConfig {
+            credentials: Some(CloudCredentials {
+                account_id: "111".to_string(),
+                host: "cloud.getdbt.com".to_string(),
+                token: "tok".to_string(),
+            }),
+            ..Default::default()
+        };
+        let config = QueryCommentConfig::from_query_comment(
+            None,
+            AdapterType::Bigquery,
+            true,
+            Some(&cloud_config),
+        );
         assert_configs_equal(
             &config,
             &QueryCommentConfig {
@@ -503,15 +505,12 @@ mod tests {
                 job_label: false,
             },
         );
-        clear_cloud_env_vars();
     }
 
     #[test]
-    fn test_cloud_query_comment_without_env_var() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
-        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+    fn test_cloud_query_comment_without_cloud_config() {
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true, None);
         assert_configs_equal(
             &config,
             &QueryCommentConfig {
@@ -524,16 +523,13 @@ mod tests {
 
     #[test]
     fn test_cloud_query_comment_not_used_when_user_provides_comment() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
-        // Even with cloud env vars set, user-provided comments take precedence
-        // SAFETY: protected by ENV_LOCK
-        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "12345") };
+        // Even with cloud config present, user-provided comments take precedence
+        let cloud_config = ResolvedCloudConfig::default();
         let config = QueryCommentConfig::from_query_comment(
             Some(QueryComment::String("user comment".to_string())),
             AdapterType::Bigquery,
             true,
+            Some(&cloud_config),
         );
         assert_configs_equal(
             &config,
@@ -543,19 +539,13 @@ mod tests {
                 job_label: false,
             },
         );
-        clear_cloud_env_vars();
     }
 
     #[test]
-    fn test_cloud_query_comment_empty_env_var_ignored() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        clear_cloud_env_vars();
-
-        // An empty env var should not trigger the cloud template
-        // SAFETY: protected by ENV_LOCK
-        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "") };
-
-        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+    fn test_cloud_query_comment_no_config_uses_default() {
+        // No cloud config should not trigger the cloud template
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true, None);
         assert_configs_equal(
             &config,
             &QueryCommentConfig {
@@ -564,7 +554,6 @@ mod tests {
                 job_label: false,
             },
         );
-        clear_cloud_env_vars();
     }
 
     #[test]

@@ -19,3 +19,4 @@ doctest = false
 
 [dependencies]
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-schemas = { workspace = true }

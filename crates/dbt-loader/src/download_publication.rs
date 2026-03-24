@@ -1,7 +1,7 @@
+use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_info_progress_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::schemas::DbtCloudProjectConfig;
 use dbt_schemas::schemas::packages::UpstreamProject;
 use dbt_telemetry::ProgressMessage;
 use std::time::SystemTime;
@@ -17,7 +17,7 @@ const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 ///
 pub(crate) async fn download_publication_artifacts(
     upstream_projects: &Vec<UpstreamProject>,
-    dbt_cloud_config: &Option<DbtCloudProjectConfig>,
+    dbt_cloud_config: &Option<ResolvedCloudConfig>,
     io: &IoArgs,
 ) -> FsResult<()> {
     // Skip if environment variable is set or no upstream projects
@@ -72,28 +72,27 @@ pub(crate) async fn download_publication_artifacts(
     std::fs::remove_dir_all(&default_dir)?;
     std::fs::create_dir_all(&default_dir)?;
 
-    let current_project = match dbt_cloud_config {
-        Some(config) => match &config.project {
-            Some(project) => project,
-            None => {
-                return Err(fs_err!(
-                    ErrorCode::IoError,
-                    "Trying to download publication artifacts but project not found in dbt_cloud configuration"
-                ));
-            }
-        },
-        None => {
-            return Err(fs_err!(
+    let creds = dbt_cloud_config
+        .as_ref()
+        .and_then(|c| c.credentials.as_ref())
+        .ok_or_else(|| {
+            fs_err!(
                 ErrorCode::IoError,
                 "Trying to download publication artifacts but dbt_cloud configuration not found in project"
-            ));
-        }
-    };
+            )
+        })?;
 
+    let config = dbt_cloud_config.as_ref().unwrap(); // safe: creds came from dbt_cloud_config
+    let project_id = config.project_id.as_deref().ok_or_else(|| {
+        fs_err!(
+            ErrorCode::IoError,
+            "Trying to download publication artifacts but project_id not found in dbt_cloud configuration"
+        )
+    })?;
     let (account_id, account_host, token) = (
-        current_project.account_id.clone(),
-        current_project.account_host.clone(),
-        current_project.token_value.clone(),
+        creds.account_id.as_str(),
+        creds.host.as_str(),
+        creds.token.as_str(),
     );
 
     // Download artifacts for each upstream project
@@ -128,7 +127,7 @@ pub(crate) async fn download_publication_artifacts(
         // Construct API URL
         let url = format!(
             "https://{}/api/private/accounts/{}/projects/{}/artifacts/publication/?dbt_project_name={}",
-            account_host, account_id, current_project.project_id, upstream_project.name
+            account_host, account_id, project_id, upstream_project.name
         );
 
         // Log download attempt

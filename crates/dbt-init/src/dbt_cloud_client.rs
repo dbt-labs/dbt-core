@@ -13,41 +13,12 @@ use dbt_schemas::schemas::profiles::{
 use dbt_schemas::schemas::serde::StringOrInteger;
 
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CloudProject {
-    #[serde(rename = "project-name")]
-    pub project_name: String,
-    #[serde(rename = "project-id")]
-    pub project_id: String,
-    #[serde(rename = "account-name")]
-    pub account_name: String,
-    #[serde(rename = "account-id")]
-    pub account_id: String,
-    #[serde(rename = "account-host")]
-    pub account_host: String,
-    #[serde(rename = "token-name")]
-    pub token_name: String,
-    #[serde(rename = "token-value")]
-    pub token_value: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbtCloudYml {
-    pub version: String,
-    pub context: DbtCloudContext,
-    pub projects: Vec<CloudProject>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbtCloudContext {
-    #[serde(rename = "active-host")]
-    pub active_host: String,
-    #[serde(rename = "active-project")]
-    pub active_project: String,
-}
+/// Type aliases for backwards compatibility with downstream crates.
+pub type CloudProject = dbt_cloud_config::DbtCloudProject;
+pub type DbtCloudYml = dbt_cloud_config::DbtCloudConfig;
+pub type DbtCloudContext = dbt_cloud_config::DbtCloudContext;
 
 // Helper struct to provide information about the credential without the full ConfigMap
 #[derive(Debug, Clone)]
@@ -475,53 +446,15 @@ pub struct ConnectionDetails {
 pub struct DbtCloudClient;
 
 impl DbtCloudClient {
-    /// Determine the path to the dbt_cloud.yml configuration file
     pub fn get_cloud_project_path() -> FsResult<PathBuf> {
-        // Get home directory
-        let home_dir = match dirs::home_dir() {
-            Some(dir) => dir,
-            None => {
-                return Err(fs_err!(
-                    ErrorCode::IoError,
-                    "Could not determine home directory"
-                ));
-            }
-        };
-
-        Ok(home_dir.join(".dbt").join("dbt_cloud.yml"))
+        dbt_cloud_config::get_cloud_project_path().map_err(|e| fs_err!(ErrorCode::IoError, "{}", e))
     }
 
-    /// Parse the active cloud project from dbt_cloud.yml based on active-project setting
     pub fn parse_active_cloud_project(
         dbt_cloud_config_path: PathBuf,
     ) -> FsResult<Option<CloudProject>> {
-        if !dbt_cloud_config_path.exists() {
-            return Ok(None);
-        }
-
-        // Read and parse the dbt_cloud.yml file
-        let content = fs::read_to_string(&dbt_cloud_config_path)?;
-        let config: DbtCloudYml = dbt_yaml::from_str(&content)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_cloud.yml: {}", e))?;
-
-        // Get the active project ID from context
-        let active_project_id = &config.context.active_project;
-
-        // Find the project that matches the active project ID
-        let active_project = config
-            .projects
-            .into_iter()
-            .find(|project| project.project_id == *active_project_id);
-
-        if active_project.is_none() {
-            emit_warn_log_message(
-                ErrorCode::Generic,
-                format!("No project found with active project ID: {active_project_id}"),
-                None,
-            );
-        }
-
-        Ok(active_project)
+        dbt_cloud_config::parse_active_cloud_project(&dbt_cloud_config_path)
+            .map_err(|e| fs_err!(ErrorCode::IoError, "{}", e))
     }
 
     /// Get current user ID from dbt Cloud API

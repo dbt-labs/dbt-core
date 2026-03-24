@@ -9,6 +9,7 @@ use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,
 };
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::packages::{
     DbtPackageEntry, DbtPackages, DbtPackagesLock, GitPackage, HubPackage, LocalPackage,
     PrivatePackage, TarballPackage,
@@ -74,6 +75,7 @@ pub struct PackageListing {
     pub vars: BTreeMap<String, dbt_yaml::Value>,
     pub packages: HashMap<String, UnpinnedPackage>,
     pub skip_private_deps: bool,
+    pub cloud_config: Option<ResolvedCloudConfig>,
 }
 
 impl PackageListing {
@@ -83,11 +85,17 @@ impl PackageListing {
             vars,
             packages: HashMap::new(),
             skip_private_deps: false,
+            cloud_config: None,
         }
     }
 
     pub fn with_skip_private_deps(mut self, skip: bool) -> Self {
         self.skip_private_deps = skip;
+        self
+    }
+
+    pub fn with_cloud_config(mut self, cloud_config: Option<ResolvedCloudConfig>) -> Self {
+        self.cloud_config = cloud_config;
         self
     }
 
@@ -290,7 +298,7 @@ impl PackageListing {
                     return Ok(());
                 }
 
-                let private_package_url = get_resolved_url(&private_package)?;
+                let private_package_url = get_resolved_url(&private_package, &self.cloud_config)?;
 
                 // Create key that includes subdirectory if present
                 let mut package_key = private_package_url.clone();

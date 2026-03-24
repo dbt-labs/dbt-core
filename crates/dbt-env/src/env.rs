@@ -1,6 +1,8 @@
 use std::env;
 use std::sync::OnceLock;
 
+use dbt_schemas::schemas::ResolvedCloudConfig;
+
 #[derive(Debug)]
 pub struct VortexConfig {
     pub base_url: String,
@@ -29,6 +31,10 @@ pub struct InternalEnv {
 
 impl InternalEnv {
     fn from_env() -> Self {
+        Self::new(None)
+    }
+
+    pub fn new(cloud_config: Option<&ResolvedCloudConfig>) -> Self {
         let version = env!("CARGO_PKG_VERSION").to_string();
         Self {
             vortex_config: VortexConfig {
@@ -44,12 +50,22 @@ impl InternalEnv {
                 dbt_version: version,
                 environment: env::var("DBT_INVOCATION_ENV")
                     .unwrap_or_else(|_| "manual".to_string()),
-                account_identifier: env::var("DBT_CLOUD_ACCOUNT_IDENTIFIER")
-                    .unwrap_or_else(|_| "".to_string()),
-                project_id: env::var("DBT_CLOUD_PROJECT_ID").unwrap_or_else(|_| "".to_string()),
-                environment_id: env::var("DBT_CLOUD_ENVIRONMENT_ID")
-                    .unwrap_or_else(|_| "".to_string()),
-                job_id: env::var("DBT_CLOUD_JOB_ID").unwrap_or_else(|_| "".to_string()),
+                // TODO(fde-502): Remove env var fallbacks once InternalEnv is no longer
+                // a global singleton. The global path (from_env) passes None for
+                // cloud_config, so we fall back to env vars to preserve telemetry fields.
+                account_identifier: cloud_config
+                    .and_then(|c| c.account_identifier.clone())
+                    .or_else(|| env::var("DBT_CLOUD_ACCOUNT_IDENTIFIER").ok())
+                    .unwrap_or_default(),
+                project_id: cloud_config
+                    .and_then(|c| c.project_id.clone())
+                    .or_else(|| env::var("DBT_CLOUD_PROJECT_ID").ok())
+                    .unwrap_or_default(),
+                environment_id: cloud_config
+                    .and_then(|c| c.environment_id.clone())
+                    .or_else(|| env::var("DBT_CLOUD_ENVIRONMENT_ID").ok())
+                    .unwrap_or_default(),
+                job_id: env::var("DBT_CLOUD_JOB_ID").unwrap_or_default(),
             },
         }
     }

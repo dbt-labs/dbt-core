@@ -187,7 +187,7 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli, token: &CancellationToke
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, _dbt_cloud_config) = load(&load_args, &invocation_args, token).await?;
+    let dbt_state = load(&load_args, &invocation_args, token).await?;
 
     let arg = EvalArgsBuilder::from_eval_args(arg)
         .with_additional(

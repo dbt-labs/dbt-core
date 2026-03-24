@@ -175,7 +175,8 @@ impl BridgeAdapter {
             .try_into()
             .expect("Failed to convert quoting to resolved quoting");
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
-        let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
+        // No cloud config needed — bridge adapter is used for internal operations, not user-facing queries.
+        let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false, None);
 
         let engine = XdbcEngine::new(
             adapter_type,

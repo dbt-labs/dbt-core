@@ -55,3 +55,25 @@ pub struct DbtCloudProjectConfig {
     pub defer_env_id: Option<String>,
     pub project: Option<DbtCloudProject>,
 }
+
+/// Resolved credentials for authenticating with dbt Cloud APIs.
+/// All fields are required — if any credential is missing, this struct is not constructed.
+#[derive(Debug, Clone)]
+pub struct CloudCredentials {
+    pub account_id: String,
+    pub host: String,
+    pub token: String,
+}
+
+/// Fully-resolved dbt Cloud configuration.
+///
+/// Precedence: env var > dbt_project.yml > dbt_cloud.yml, applied once at
+/// construction time via `resolve_cloud_config()`.
+#[derive(Clone, Debug, Default)]
+pub struct ResolvedCloudConfig {
+    pub credentials: Option<CloudCredentials>,
+    pub project_id: Option<String>,
+    pub account_identifier: Option<String>,
+    pub environment_id: Option<String>,
+    pub defer_env_id: Option<String>,
+}

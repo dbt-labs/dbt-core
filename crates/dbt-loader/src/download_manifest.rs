@@ -1,8 +1,8 @@
+use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::constants::{DBT_MANIFEST_INFO, DBT_MANIFEST_JSON};
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::schemas::DbtCloudProjectConfig;
 use dbt_telemetry::ProgressMessage;
 use flate2::read::GzDecoder;
 use reqwest_middleware::ClientBuilder;
@@ -49,20 +49,18 @@ fn process_manifest_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
 /// Downloads manifest from dbt Cloud if available and not recently cached
 #[allow(clippy::cognitive_complexity)]
 pub async fn hydrate_or_download_manifest_from_cloud(
-    dbt_cloud_config: &Option<DbtCloudProjectConfig>,
+    dbt_cloud_config: &Option<ResolvedCloudConfig>,
     io: &IoArgs,
 ) -> FsResult<Option<PathBuf>> {
-    let dbt_cloud_config = match dbt_cloud_config {
-        Some(config) => config,
-        None => return Ok(None),
+    let Some(config) = dbt_cloud_config else {
+        return Ok(None);
     };
-
-    let current_project = match &dbt_cloud_config.project {
-        Some(project) => project,
-        None => return Ok(None),
+    let Some(creds) = &config.credentials else {
+        return Ok(None);
     };
-
-    let project_id = &current_project.project_id;
+    let Some(project_id) = config.project_id.as_deref() else {
+        return Ok(None);
+    };
 
     // Create directory for manifest
     let default_dir = io.out_dir.join("dbt_cloud_defer");
@@ -92,7 +90,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     // Determine which manifest path to use based on defer_env_id
     // If defer_env_id is specified, use the manifest/{env_id}/ path
     // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
-    let manifest_path_suffix = match &dbt_cloud_config.defer_env_id {
+    let manifest_path_suffix = match &config.defer_env_id {
         Some(env_id) => {
             emit_info_progress_message(
                 ProgressMessage::new_from_action_and_target(
@@ -107,9 +105,9 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     };
 
     let (account_id, account_host, token) = (
-        current_project.account_id.clone(),
-        current_project.account_host.clone(),
-        current_project.token_value.clone(),
+        creds.account_id.as_str(),
+        creds.host.as_str(),
+        creds.token.as_str(),
     );
 
     // Construct API URL to get presigned link
