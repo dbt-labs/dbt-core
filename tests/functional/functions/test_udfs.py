@@ -647,3 +647,59 @@ class TestFunctionsGetSchemaCreatedIfNecessary:
         function_node = result.results[0].node
         assert isinstance(function_node, FunctionNode)
         assert "alt_function_schema_" in function_node.schema
+
+
+model_sql = """select 1 as id"""
+
+
+class TestFunctionSchemasInOnRunEnd:
+    """Test that function schemas appear in the on-run-end `schemas` variable.
+
+    Regression test for https://github.com/dbt-labs/dbt-core/issues/12516
+    """
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {"my_model.sql": model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+schema": "udfs"},
+            "on-run-end": [
+                "create table if not exists {{ target.schema }}.on_run_end_schemas (schema_name text)",
+                "insert into {{ target.schema }}.on_run_end_schemas (schema_name) values "
+                "{% for schema in schemas %}('{{ schema }}'){% if not loop.last %},{% endif %}{% endfor %}",
+            ],
+        }
+
+    @pytest.fixture(scope="function")
+    def setUp(self, project):
+        project.run_sql(f"drop table if exists {project.test_schema}.on_run_end_schemas")
+
+    def test_function_schema_in_on_run_end_schemas(self, setUp, project):
+        run_dbt(["build"])
+
+        results = project.run_sql(
+            f"select schema_name from {project.test_schema}.on_run_end_schemas",
+            fetch="all",
+        )
+        schemas = {r[0] for r in results}
+
+        # The model's schema (target schema) should be present
+        assert (
+            project.test_schema in schemas
+        ), f"Expected model schema '{project.test_schema}' in schemas, got {schemas}"
+
+        # The function's custom schema should also be present
+        expected_fn_schema = f"{project.test_schema}_udfs"
+        assert (
+            expected_fn_schema in schemas
+        ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"

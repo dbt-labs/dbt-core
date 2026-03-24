@@ -1626,6 +1626,10 @@ class Group(GroupResource, BaseNode):
 @dataclass
 class FunctionNode(CompiledNode, FunctionResource):
 
+    @property
+    def is_relational(self):
+        return True
+
     @classmethod
     def resource_class(cls) -> Type[FunctionResource]:
         return FunctionResource
