@@ -247,12 +247,14 @@ impl TimeMachineEventValidationEngine {
 
         // Register deviations
         engine.register_deviation(Box::new(DbtPovModelCostCalculatorDeviation));
+        engine.register_deviation(Box::new(ElementaryDeviation));
 
         // Register sanitizers
         engine.register_sanitizer(Box::new(TimestampSanitizer));
         engine.register_sanitizer(Box::new(DateLiteralSanitizer));
         engine.register_sanitizer(Box::new(QueryTagSanitizer));
         engine.register_sanitizer(Box::new(UuidSanitizer));
+        engine.register_sanitizer(Box::new(GrantOrderingSanitizer));
         // Whitespace sanitizer should be last to normalize after other sanitizers
         engine.register_sanitizer(Box::new(WhitespaceSanitizer));
 
@@ -267,6 +269,28 @@ impl TimeMachineEventValidationEngine {
     /// Register a SQL sanitizer.
     pub fn register_sanitizer(&mut self, sanitizer: Box<dyn SqlSanitizer>) {
         self.sanitizers.push(sanitizer);
+    }
+
+    /// Check if a node matches any registered deviation.
+    pub fn is_known_nondeterministic_node(&self, node_id: &str) -> bool {
+        let dummy_incoming = IncomingEvent::new(node_id, "", &serde_json::Value::Null);
+        let dummy_recorded = AdapterCallEvent {
+            node_id: node_id.to_string(),
+            method: String::new(),
+            semantic_category: super::SemanticCategory::Pure,
+            args: serde_json::Value::Null,
+            result: serde_json::Value::Null,
+            success: true,
+            error: None,
+            seq: 0,
+            timestamp_ns: 0,
+        };
+        self.deviations.iter().any(|d| {
+            matches!(
+                d.check(&dummy_incoming, &dummy_recorded),
+                DeviationMatch::Matched(_)
+            )
+        })
     }
 
     /// Validate an incoming event against a recorded event.
@@ -432,7 +456,39 @@ impl KnownDeviation for DbtPovModelCostCalculatorDeviation {
     }
 }
 
-/// Sanitizer for ISO timestamp patterns (single or double-quoted).
+/// Deviation for the `elementary` observability package.
+///
+/// Elementary hooks generate SQL with runtime-dependent data: invocation IDs,
+/// timestamps, run metadata, and test results. These values are inherently
+/// non-deterministic across runs and cannot be meaningfully compared.
+pub struct ElementaryDeviation;
+
+impl KnownDeviation for ElementaryDeviation {
+    fn name(&self) -> &'static str {
+        "elementary"
+    }
+
+    fn reason(&self) -> &'static str {
+        "Elementary package embeds runtime data (timestamps, invocation IDs, test results) that differ between recording and replay"
+    }
+
+    fn check(&self, incoming: &IncomingEvent, _recorded: &AdapterCallEvent) -> DeviationMatch<'_> {
+        if incoming.node_id.contains(".elementary.") {
+            DeviationMatch::Matched(MatchedDeviation {
+                rule_name: self.name(),
+                reason: self.reason(),
+            })
+        } else {
+            DeviationMatch::None
+        }
+    }
+}
+
+/// Sanitizer for timestamp patterns (single or double-quoted).
+///
+/// Handles both ISO 8601 (`2026-02-13T14:49:54`) and space-separated
+/// (`2026-02-13 14:49:54`) formats, with optional fractional seconds
+/// and timezone offsets.
 pub struct TimestampSanitizer;
 
 impl SqlSanitizer for TimestampSanitizer {
@@ -441,12 +497,13 @@ impl SqlSanitizer for TimestampSanitizer {
     }
 
     fn sanitize(&self, sql: &str) -> String {
+        // Matches both 'T' and space separators between date and time
         static SINGLE: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?'")
+            Regex::new(r"'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?'")
                 .expect("valid regex")
         });
         static DOUBLE: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r#""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?""#)
+            Regex::new(r#""\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?""#)
                 .expect("valid regex")
         });
         let sql = SINGLE.replace_all(sql, "'<TIMESTAMP>'");
@@ -500,9 +557,12 @@ impl SqlSanitizer for QueryTagSanitizer {
     }
 }
 
-/// Sanitizer for single-quoted UUID string literals.
+/// Sanitizer for quoted UUID string literals (single or double-quoted).
 ///
-/// Replaces UUIDs like `'8f439b7e-752f-460a-8d1a-f469231d169c'` with `'<UUID>'`.
+/// Replaces UUIDs like `'8f439b7e-752f-460a-8d1a-f469231d169c'` with `'<UUID>'`
+/// and `"8f439b7e-752f-460a-8d1a-f469231d169c"` with `"<UUID>"`.
+/// Double-quoted UUIDs appear inside JSON embedded in SQL comments
+/// (e.g. elementary package metadata).
 pub struct UuidSanitizer;
 
 impl SqlSanitizer for UuidSanitizer {
@@ -511,11 +571,49 @@ impl SqlSanitizer for UuidSanitizer {
     }
 
     fn sanitize(&self, sql: &str) -> String {
-        static RE: LazyLock<Regex> = LazyLock::new(|| {
+        static SINGLE: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'")
                 .expect("valid regex")
         });
-        RE.replace_all(sql, "'<UUID>'").to_string()
+        static DOUBLE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r#"(?i)"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""#)
+                .expect("valid regex")
+        });
+        let sql = SINGLE.replace_all(sql, "'<UUID>'");
+        DOUBLE.replace_all(&sql, "\"<UUID>\"").to_string()
+    }
+}
+
+/// Sanitizer that normalizes the ordering of semicolon-separated GRANT statements.
+///
+/// Some hooks (e.g. `on_run_end`) generate a batch of GRANT statements whose
+/// iteration order is non-deterministic. When the entire SQL is a sequence of
+/// GRANT statements, this sanitizer sorts them so that ordering differences
+/// don't cause false validation mismatches.
+pub struct GrantOrderingSanitizer;
+
+impl SqlSanitizer for GrantOrderingSanitizer {
+    fn name(&self) -> &'static str {
+        "grant_ordering"
+    }
+
+    fn sanitize(&self, sql: &str) -> String {
+        let parts: Vec<&str> = sql
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if parts.len() > 1
+            && parts
+                .iter()
+                .all(|p| p.to_ascii_uppercase().starts_with("GRANT"))
+        {
+            let mut sorted = parts;
+            sorted.sort_unstable();
+            sorted.join("; ") + ";"
+        } else {
+            sql.to_string()
+        }
     }
 }
 
@@ -843,6 +941,74 @@ mod tests {
     }
 
     #[test]
+    fn test_uuid_sanitizer_double_quoted() {
+        let sanitizer = UuidSanitizer;
+        let sql = r#"select * /* --ELEMENTARY-METADATA-- {"command": "seed", "invocation_id": "019c577a-d8fd-7951-87d7-3424221a5afd"} */ order by 1"#;
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(
+            sanitized,
+            r#"select * /* --ELEMENTARY-METADATA-- {"command": "seed", "invocation_id": "<UUID>"} */ order by 1"#
+        );
+    }
+
+    #[test]
+    fn test_uuid_sanitizer_mixed_quotes() {
+        let sanitizer = UuidSanitizer;
+        let sql = r#"VALUES ('019c48a8-c782-7921-8711-85c75a61128c') /* "019c577a-d8fd-7951-87d7-3424221a5afd" */"#;
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(sanitized, r#"VALUES ('<UUID>') /* "<UUID>" */"#);
+    }
+
+    #[test]
+    fn test_grant_ordering_sanitizer() {
+        let sanitizer = GrantOrderingSanitizer;
+        let sql1 = "grant USAGE on schema A to role R1; grant USAGE on schema B to role R2;";
+        let sql2 = "grant USAGE on schema B to role R2; grant USAGE on schema A to role R1;";
+        assert_eq!(sanitizer.sanitize(sql1), sanitizer.sanitize(sql2));
+    }
+
+    #[test]
+    fn test_grant_ordering_sanitizer_preserves_non_grant_sql() {
+        let sanitizer = GrantOrderingSanitizer;
+        let sql = "SELECT 1; INSERT INTO t VALUES (1);";
+        assert_eq!(sanitizer.sanitize(sql), sql);
+    }
+
+    #[test]
+    fn test_grant_ordering_sanitizer_single_statement() {
+        let sanitizer = GrantOrderingSanitizer;
+        let sql = "grant USAGE on schema A to role R1";
+        assert_eq!(sanitizer.sanitize(sql), sql);
+    }
+
+    #[test]
+    fn test_elementary_invocation_id_sanitization() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!([
+            r#"select artifacts_model, metadata_hash from "CLIENT_PROD"."ELEMENTARY"."DBT_ARTIFACTS_HASHES" order by metadata_hash /* --ELEMENTARY-METADATA-- {"command": "seed", "invocation_id": "019c7250-8418-7bd2-9ff8-a68f99684a3b"} --END-ELEMENTARY-METADATA-- */"#
+        ]);
+        let recorded_args = serde_json::json!([
+            r#"select artifacts_model, metadata_hash from "CLIENT_PROD"."ELEMENTARY"."DBT_ARTIFACTS_HASHES" order by metadata_hash /* --ELEMENTARY-METADATA-- {"command": "seed", "invocation_id": "019c577a-d8fd-7951-87d7-3424221a5afd"} --END-ELEMENTARY-METADATA-- */"#
+        ]);
+
+        let incoming = IncomingEvent::new(
+            "operation.elementary.elementary-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        // ElementaryDeviation skips validation entirely for elementary nodes
+        let result = engine.validate(&incoming, &recorded);
+        assert!(
+            matches!(result, ValidationResult::Skipped(_)),
+            "Expected Skipped for elementary node, got {:?}",
+            result
+        );
+    }
+
+    #[test]
     fn test_mismatch_display_preserves_formatting() {
         let engine = TimeMachineEventValidationEngine::new();
 
@@ -870,5 +1036,79 @@ mod tests {
             }
             _ => panic!("Expected mismatch, got {:?}", result),
         }
+    }
+
+    #[test]
+    fn test_timestamp_sanitizer_space_separated() {
+        let sanitizer = TimestampSanitizer;
+
+        // Space-separated format used by elementary's DBT_INVOCATIONS
+        let sql = "values ('abc','2026-02-13 14:49:54','2026-02-13 14:50:29')";
+        let expected = "values ('abc','<TIMESTAMP>','<TIMESTAMP>')";
+        assert_eq!(sanitizer.sanitize(sql), expected);
+
+        // T-separated still works
+        let sql = "values ('abc','2026-02-13T14:49:54','2026-02-13T14:50:29')";
+        let expected = "values ('abc','<TIMESTAMP>','<TIMESTAMP>')";
+        assert_eq!(sanitizer.sanitize(sql), expected);
+
+        // Double-quoted space-separated
+        let sql = r#"values ("abc","2026-02-13 14:49:54")"#;
+        let expected = r#"values ("abc","<TIMESTAMP>")"#;
+        assert_eq!(sanitizer.sanitize(sql), expected);
+    }
+
+    #[test]
+    fn test_elementary_deviation_skips_elementary_nodes() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!(["INSERT INTO elem_table VALUES (1)"]);
+        let recorded_args = serde_json::json!(["INSERT INTO elem_table VALUES (2)"]);
+
+        let incoming = IncomingEvent::new(
+            "operation.elementary.elementary-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Skipped(_)
+        ));
+    }
+
+    #[test]
+    fn test_elementary_deviation_does_not_skip_other_nodes() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!(["INSERT INTO t VALUES (1)"]);
+        let recorded_args = serde_json::json!(["INSERT INTO t VALUES (2)"]);
+
+        let incoming = IncomingEvent::new(
+            "operation.client.client-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Mismatch(_)
+        ));
+    }
+
+    #[test]
+    fn test_is_known_nondeterministic_node() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        assert!(
+            engine.is_known_nondeterministic_node("operation.elementary.elementary-on_run_end-0")
+        );
+        assert!(
+            engine.is_known_nondeterministic_node("operation.elementary.elementary-on_run_start-0")
+        );
+        assert!(!engine.is_known_nondeterministic_node("operation.client.client-on_run_end-0"));
+        assert!(!engine.is_known_nondeterministic_node("model.my_project.my_model"));
     }
 }
