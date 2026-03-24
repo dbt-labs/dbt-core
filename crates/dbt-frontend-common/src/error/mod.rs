@@ -44,6 +44,11 @@ pub use codes::ErrorCode;
 pub use name_candidate::NameCandidate;
 pub use name_candidate::format_candidates;
 
+/// Arrow schema metadata key used to record the parquet file path a schema was
+/// loaded from.  Written by `dbt-schema-store` when reading a cached parquet
+/// file; read by the binder to produce a more actionable error message.
+pub const DBT_CACHED_PARQUET_PATH_KEY: &str = "DBT:cached_parquet_path";
+
 pub type FrontendResult<T, E = Box<FrontendError>> = Result<T, E>;
 
 pub type InternalResult<T, E = Box<InternalError>> = Result<T, E>;
@@ -409,6 +414,8 @@ pub struct SchemaError {
     context: String,
     target: String,
     schemas: Vec<Arc<DFSchema>>,
+    /// Path to the parquet file this schema was loaded from, if any.
+    pub parquet_path: Option<String>,
 }
 
 impl SchemaError {
@@ -421,7 +428,13 @@ impl SchemaError {
             context: context.into(),
             target: target.into(),
             schemas: schemas.into(),
+            parquet_path: None,
         }
+    }
+
+    pub fn with_parquet_path(mut self, path: String) -> Self {
+        self.parquet_path = Some(path);
+        self
     }
 
     pub fn context(&self) -> &str {
@@ -438,6 +451,16 @@ impl SchemaError {
 
     pub fn fields(&self) -> Vec<String> {
         self.schemas.iter().flat_map(|s| s.field_names()).collect()
+    }
+
+    /// If the Arrow schema backing `schema` carries a
+    /// [`DBT_CACHED_PARQUET_PATH_KEY`] metadata entry, records that path on
+    /// this error so the display layer can emit a more actionable message.
+    pub fn with_parquet_path_from_schema(mut self, schema: &Arc<DFSchema>) -> Self {
+        if let Some(path) = schema.as_ref().metadata().get(DBT_CACHED_PARQUET_PATH_KEY) {
+            self.parquet_path = Some(path.clone());
+        }
+        self
     }
 }
 

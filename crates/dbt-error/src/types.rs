@@ -175,9 +175,11 @@ impl FsError {
                     .with_macro_spans(macro_spans, expanded_file.map(|x| Arc::new(x.into())));
                 let cause = err.cause.map(|e| (*e).into());
                 let context = match &cause {
-                    // Make sure the "Available are.." message gets formatted
-                    // into the error context:
-                    Some(WrappedError::NameError(ne)) => format!("{}. {}", err.context, ne),
+                    // Delegate full message assembly to NameError so it can
+                    // choose the right separator and suffix (e.g. cached-parquet
+                    // schemas get a "refresh your cache" hint instead of
+                    // "Available are ...").
+                    Some(WrappedError::NameError(ne)) => ne.format_with_context(&err.context),
                     _ => err.context,
                 };
                 FsError {
@@ -620,6 +622,37 @@ impl Display for NameError {
             ),
         };
         write!(f, "{msg}")
+    }
+}
+
+impl NameError {
+    /// Produces the full display string by combining the `FrontendError`
+    /// context (e.g. "No column X found") with the appropriate suffix.
+    ///
+    /// For a cached-parquet schema error the suffix is joined directly (no
+    /// period), yielding:
+    ///   "No column X found in the locally cached schema for the source in
+    ///     <path>
+    ///    It is likely that this cache needs to be refreshe by running: dbt clean"
+    ///
+    /// For all other cases the existing ". Available are ..." suffix is used.
+    pub fn format_with_context(&self, context: &str) -> String {
+        match self {
+            NameError::Schema(e) if e.parquet_path.is_some() => {
+                let path = e.parquet_path.as_deref().unwrap();
+                format!(
+                    "{context} in the locally cached schema for the source in\n  {path}\n   It is likely that this cache needs to be refreshed by running: dbt clean"
+                )
+            }
+            _ => {
+                let suffix = self.to_string();
+                if suffix.is_empty() {
+                    context.to_string()
+                } else {
+                    format!("{context}. {suffix}")
+                }
+            }
+        }
     }
 }
 

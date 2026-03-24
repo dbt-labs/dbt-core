@@ -42,6 +42,8 @@ const DATA_DIR_NAME: &str = "data";
 const SCHEMA_DIR_NAME: &str = "schemas";
 const DBT_ORIGINAL_SCHEMA_KEY: &str = "DBT:original_schema";
 const DBT_SCHEMA_ORIGIN_KEY: &str = "DBT:schema_origin";
+// Keep in sync with `dbt_frontend_common::error::DBT_CACHED_PARQUET_PATH_KEY`.
+const DBT_CACHED_PARQUET_PATH_KEY: &str = "DBT:cached_parquet_path";
 
 /// Lookup key representing the origin of a schema entry.
 ///
@@ -808,19 +810,20 @@ pub fn read_cached_schema_from_parquet(
         })
         .transpose()?;
 
-    let arrow_schema = if arrow_schema
-        .metadata()
-        .contains_key(DBT_ORIGINAL_SCHEMA_KEY)
-    {
-        // Remove the original schema metadata key to avoid confusion
+    let arrow_schema = {
         let mut metadata = arrow_schema.metadata().clone();
+        // Remove the embedded original-schema blob to avoid confusion.
         metadata.remove(DBT_ORIGINAL_SCHEMA_KEY);
+        // Record the file path so the binder can surface a more actionable
+        // error message when a column is not found in this cached schema.
+        metadata.insert(
+            DBT_CACHED_PARQUET_PATH_KEY.to_string(),
+            table_path.display().to_string(),
+        );
         Arc::new(Schema::new_with_metadata(
             arrow_schema.fields().clone(),
             metadata,
         ))
-    } else {
-        Arc::clone(arrow_schema)
     };
     Ok((
         SchemaEntry::from_sdf_arrow_schema(original_schema, arrow_schema),
