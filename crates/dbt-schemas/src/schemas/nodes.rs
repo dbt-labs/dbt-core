@@ -69,6 +69,17 @@ impl IntrospectionKind {
                 | IntrospectionKind::Unknown
         )
     }
+
+    pub fn is_safe(&self) -> bool {
+        matches!(
+            self,
+            IntrospectionKind::None | IntrospectionKind::UpstreamSchema
+        )
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(self, IntrospectionKind::None)
+    }
 }
 
 impl Display for IntrospectionKind {
