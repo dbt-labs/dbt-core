@@ -13,17 +13,19 @@ pub use generated::databricks::*;
 
 pub(crate) mod lexer_support {
     use super::*;
-    use databrickslexer::{DatabricksLexerActions, LocalTokenFactory};
-    use dbt_antlr4::BaseLexer;
+    use databrickslexer::BaseLexerType;
     use dbt_antlr4::char_stream::CharStream;
     use dbt_antlr4::token_factory::TokenFactory;
 
-    type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
-
     // Follows https://github.com/apache/spark/blob/26dbf651bf8c2389aeea950816288e1db666c611/sql/api/src/main/antlr4/org/apache/spark/sql/catalyst/parser/SqlBaseLexer.g4#L25-L45
-    pub fn is_valid_decimal_boundary<'input, Input: CharStream<From<'input>>>(
-        recog: &mut BaseLexer<'input, DatabricksLexerActions, Input, LocalTokenFactory<'input>>,
-    ) -> bool {
+    pub fn is_valid_decimal_boundary<'input, 'arena, Input, TF>(
+        recog: &mut BaseLexerType<'input, 'arena, Input, TF>,
+    ) -> bool
+    where
+        'input: 'arena,
+        TF: TokenFactory<'input, 'arena> + 'arena,
+        Input: CharStream<'input>,
+    {
         let input = recog.input.as_mut().expect("Input not set");
         let next = input.la(1);
 

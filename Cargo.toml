@@ -288,7 +288,7 @@ adbc-ffi = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_ffi
 dbt-xdbc = { path = "crates/dbt-xdbc" }
 
 # antlr for frontend
-dbt-antlr4 = "0.51.0"
+dbt-antlr4 = "1.0.5"
 # dbt-antlr4 = { path = "../antlr4.dev/runtime/Rust" }
 
 # datafusion

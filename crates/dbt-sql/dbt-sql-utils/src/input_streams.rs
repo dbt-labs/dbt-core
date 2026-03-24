@@ -12,12 +12,9 @@ pub struct CaseInsensitiveInputStream<Data: Deref> {
     index: isize,
 }
 
-better_any::tid! {impl<'a, T: 'static> TidAble<'a> for CaseInsensitiveInputStream<&'a T> where T: ?Sized}
-better_any::tid! {impl<'a, T: 'static> TidAble<'a> for CaseInsensitiveInputStream<Box<T>> where T: ?Sized}
-
-impl<'a, T: From<&'a str>> CharStream<T> for CaseInsensitiveInputStream<&'a str> {
+impl<'a> CharStream<'a> for CaseInsensitiveInputStream<&'a str> {
     #[inline]
-    fn get_text(&self, start: isize, stop: isize) -> T {
+    fn get_text(&self, start: isize, stop: isize) -> std::borrow::Cow<'a, str> {
         self.get_text_inner(start, stop).into()
     }
 }

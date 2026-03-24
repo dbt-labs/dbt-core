@@ -16,7 +16,6 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-better_any = "0.2.0-dev.1"
 dbt-antlr4 = { workspace = true }
 minijinja = { workspace = true }
 

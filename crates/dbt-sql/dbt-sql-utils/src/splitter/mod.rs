@@ -1,9 +1,8 @@
 use dbt_antlr4::{
-    InputStream,
+    Arena, InputStream,
     char_stream::{CharStream, InputData as _},
     int_stream::{self, IntStream},
     token::Token,
-    token_factory::ArenaCommonFactory,
     token_stream::UnbufferedTokenStream,
 };
 use dbt_frontend_common::Dialect;
@@ -17,23 +16,23 @@ use std::borrow::Cow;
 /// input string.
 pub fn sql_find_statement_spans(input: &str, dialect: Option<Dialect>) -> Vec<Span> {
     let dialect = dialect.unwrap_or(Dialect::Trino);
-    let tf = ArenaCommonFactory::default();
     let input_stream = InputStream::new(input);
 
-    do_sql_find_statement_delimiters(input_stream, &tf, dialect)
+    Arena::with(|arena| do_sql_find_statement_delimiters(arena, input_stream, dialect))
 }
 
-fn do_sql_find_statement_delimiters<'input>(
-    input_stream: impl CharStream<Cow<'input, str>>,
-    tf: &'input ArenaCommonFactory<'input>,
+fn do_sql_find_statement_delimiters<'input, 'arena>(
+    arena: &'arena Arena,
+    input_stream: impl CharStream<'input>,
     dialect: Dialect,
 ) -> Vec<Span> {
     macro_rules! dialect_dispatch {
         ($dialect_crate:tt, $module:tt) => {
             (
-                UnbufferedTokenStream::new_unbuffered(
-                    $dialect_crate::Lexer::new_with_token_factory(input_stream, tf),
-                )
+                UnbufferedTokenStream::new_unbuffered($dialect_crate::Lexer::<_>::new(
+                    arena,
+                    input_stream,
+                ))
                 .token_iter()
                 .collect::<Vec<_>>(),
                 $dialect_crate::$module::SEMI_COLON,
@@ -62,14 +61,14 @@ fn do_sql_find_statement_delimiters<'input>(
             let start_token_ = start_token.unwrap();
             let span = Span::new(
                 CodeLocation::new(
-                    start_token_.get_line() as u32,
-                    start_token_.get_column() as u32,
-                    start_token_.get_start() as u32,
+                    start_token_.get_line(),
+                    start_token_.get_char_position_in_line() as u32,
+                    start_token_.get_start_index() as u32,
                 ),
                 CodeLocation::new(
-                    token.get_line() as u32,
-                    token.get_column() as u32,
-                    token.get_start() as u32,
+                    token.get_line(),
+                    token.get_char_position_in_line() as u32,
+                    token.get_start_index() as u32,
                 ),
             );
             result.push(span);
@@ -84,17 +83,17 @@ fn do_sql_find_statement_delimiters<'input>(
         && !unpaired_token_found
     {
         let start_token = start_token.unwrap();
-        if start_token.get_start() != last_token.get_start() {
+        if start_token.get_start_index() != last_token.get_start_index() {
             result.push(Span::new(
                 CodeLocation::new(
-                    start_token.get_line() as u32,
-                    start_token.get_column() as u32,
-                    start_token.get_start() as u32,
+                    start_token.get_line(),
+                    start_token.get_char_position_in_line() as u32,
+                    start_token.get_start_index() as u32,
                 ),
                 CodeLocation::new(
-                    last_token.get_line() as u32,
-                    last_token.get_column() as u32,
-                    last_token.get_start() as u32,
+                    last_token.get_line(),
+                    last_token.get_char_position_in_line() as u32,
+                    last_token.get_start_index() as u32,
                 ),
             ));
         }
@@ -160,7 +159,7 @@ impl<'input> MaskedInputStream<'input> {
     }
 }
 
-impl<'input> CharStream<Cow<'input, str>> for MaskedInputStream<'input> {
+impl<'input> CharStream<'input> for MaskedInputStream<'input> {
     fn get_text(&self, a: isize, b: isize) -> Cow<'input, str> {
         let mut res = String::new();
 
@@ -258,10 +257,11 @@ pub fn jinja_sql_find_statement_spans(input: &str, dialect: Option<Dialect>) -> 
         })
         .collect::<Vec<_>>();
 
-    let tf = ArenaCommonFactory::default();
     let input_stream = MaskedInputStream::new("<string>".to_owned(), input, sql_spans);
 
-    do_sql_find_statement_delimiters(input_stream, &tf, dialect.unwrap_or(Dialect::Trino))
+    Arena::with(|arena| {
+        do_sql_find_statement_delimiters(arena, input_stream, dialect.unwrap_or(Dialect::Trino))
+    })
 }
 
 /// Splits the input string into SQL statements using semicolons as delimiters.
@@ -288,27 +288,28 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
     }
 
     use super::CaseInsensitiveInputStream;
-    use dbt_antlr4::{TokenSource, int_stream::EOF, token_factory::ArenaCommonFactory};
+    use dbt_antlr4::{TokenSource, int_stream::EOF};
 
-    let tf = ArenaCommonFactory::default();
     let input_stream = CaseInsensitiveInputStream::new(trimmed);
     let dialect = dialect.unwrap_or(Dialect::Trino);
 
     // Use the same macro pattern as do_sql_find_statement_delimiters
     macro_rules! dialect_dispatch {
-        ($dialect_crate:tt, $module:tt) => {{
-            let mut lexer = $dialect_crate::Lexer::new_with_token_factory(input_stream, &tf);
-            loop {
-                let token = lexer.next_token();
-                if token.token_type == EOF {
-                    break;
+        ($dialect_crate:tt, $module:tt) => {
+            Arena::with(|arena| {
+                let mut lexer = $dialect_crate::Lexer::<_>::new(arena, input_stream);
+                loop {
+                    let token = lexer.next_token();
+                    if token.token_type == EOF {
+                        break;
+                    }
+                    // If we find any token on the default channel (channel 0), it's not comment-only
+                    if token.get_channel() == 0 {
+                        return false;
+                    }
                 }
-                // If we find any token on the default channel (channel 0), it's not comment-only
-                if token.get_channel() == 0 {
-                    return false;
-                }
-            }
-        }};
+                true
+        })};
     }
 
     match dialect {
@@ -318,8 +319,6 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
         Dialect::Databricks => dialect_dispatch!(dbt_lexer_databricks, databrickslexer),
         _ => dialect_dispatch!(dbt_lexer_trino, trinolexer),
     }
-
-    true
 }
 
 #[cfg(test)]
