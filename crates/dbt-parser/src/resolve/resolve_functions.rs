@@ -291,6 +291,7 @@ pub async fn resolve_functions(
                     .or(Some(FunctionKind::Scalar)),
                 runtime_version: model_config.runtime_version.clone(),
                 entry_point: model_config.entry_point.clone(),
+                packages: model_config.packages.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

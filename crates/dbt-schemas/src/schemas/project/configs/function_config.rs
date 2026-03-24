@@ -20,11 +20,12 @@ use crate::schemas::common::{Access, DbtQuoting};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
-    access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq, same_warehouse_config,
+    access_eq, array_of_strings_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
+    same_warehouse_config,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
-    default_meta_and_tags, default_quoting, default_to_grants,
+    default_meta_and_tags, default_packages, default_quoting, default_to_grants,
 };
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
@@ -75,6 +76,8 @@ pub struct ProjectFunctionConfig {
     pub runtime_version: Option<String>,
     #[serde(rename = "+entry_point")]
     pub entry_point: Option<String>,
+    #[serde(rename = "+packages")]
+    pub packages: Option<StringOrArrayOfStrings>,
 
     // Additional properties for directory structure
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
@@ -101,6 +104,7 @@ impl Default for ProjectFunctionConfig {
             volatility: None,
             runtime_version: None,
             entry_point: None,
+            packages: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -127,6 +131,7 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
             volatility,
             runtime_version,
             entry_point,
+            packages,
             __additional_properties__: _,
         } = self;
 
@@ -136,6 +141,8 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
         default_to_grants(grants, &parent.grants);
         handle_omissible_override(database, &parent.database);
         handle_omissible_override(schema, &parent.schema);
+        #[allow(unused, clippy::let_unit_value)]
+        let packages = default_packages(packages, &parent.packages);
 
         default_to!(
             parent,
@@ -196,6 +203,7 @@ pub struct FunctionConfig {
     pub volatility: Option<Volatility>,
     pub runtime_version: Option<String>,
     pub entry_point: Option<String>,
+    pub packages: Option<StringOrArrayOfStrings>,
 
     // Warehouse-specific configurations
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -237,6 +245,7 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
             volatility,
             runtime_version,
             entry_point,
+            packages,
             __warehouse_specific_config__: warehouse_config,
         } = self;
 
@@ -249,6 +258,8 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
 
         // Handle grants with custom merge logic
         default_to_grants(grants, &parent.grants);
+        #[allow(unused, clippy::let_unit_value)]
+        let packages = default_packages(packages, &parent.packages);
 
         default_to!(
             parent,
@@ -292,6 +303,7 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             volatility: config.volatility,
             runtime_version: config.runtime_version,
             entry_point: config.entry_point,
+            packages: config.packages,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
     }
@@ -316,6 +328,7 @@ impl FunctionConfig {
         let function_kind_eq = self.function_kind == other.function_kind;
         let volatility_eq = self.volatility == other.volatility;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
+        let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
         let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
@@ -335,6 +348,7 @@ impl FunctionConfig {
             && function_kind_eq
             && volatility_eq
             && access_eq_result
+            && packages_eq
             && warehouse_config_eq;
 
         if !result {
@@ -435,6 +449,14 @@ impl FunctionConfig {
                             format!("{:?}", &other.access),
                         )),
                     ),
+                    (
+                        "packages",
+                        packages_eq,
+                        Some((
+                            format!("{:?}", &self.packages),
+                            format!("{:?}", &other.packages),
+                        )),
+                    ),
                     ("warehouse_config", warehouse_config_eq, None),
                 ],
             );
@@ -447,4 +469,92 @@ impl FunctionConfig {
 impl ConfigKeys for FunctionConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schemas::project::dbt_project::DefaultTo;
+    use crate::schemas::serde::StringOrArrayOfStrings;
+
+    #[test]
+    fn test_function_config_packages_append() {
+        let parent = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "matplotlib".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+                "matplotlib".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_function_config_packages_none_child_inherits_parent() {
+        let parent = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = FunctionConfig {
+            packages: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_function_config_packages_same_config() {
+        let a = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let b = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        assert!(a.same_config(&b));
+
+        let c = FunctionConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pandas".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        assert!(!a.same_config(&c));
+    }
 }
