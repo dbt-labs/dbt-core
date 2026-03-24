@@ -142,7 +142,7 @@ class ExposureParser(YamlReader):
 
         # Null tags caught during deserialization, but guard here defensively.
         tags = sorted(
-            set((self.project.exposures.get("tags", []) or []) + unparsed.tags + config.tags)
+            set((self.project.exposures.get("tags") or []) + unparsed.tags + config.tags)
         )
         meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
 
