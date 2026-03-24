@@ -17,7 +17,7 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
 use dbt_adapter::load_store::ResultStore;
-use dbt_common::tokiofs;
+use dbt_common::stdfs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::NodeBaseAttributes;
@@ -40,7 +40,7 @@ type YmlValue = dbt_yaml::Value;
 
 /// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
 #[allow(clippy::too_many_arguments)]
-async fn extend_with_model_context<S: Serialize>(
+fn extend_with_model_context<S: Serialize>(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
     model: YmlValue,
     common_attr: &CommonAttributes,
@@ -143,7 +143,7 @@ async fn extend_with_model_context<S: Serialize>(
         _ => None,
     };
     if let Some(raw_sql_path) = raw_sql_path {
-        if let Ok(raw_sql) = tokiofs::read_to_string(&raw_sql_path).await {
+        if let Ok(raw_sql) = stdfs::read_to_string(&raw_sql_path) {
             model_map.insert("raw_sql".to_owned(), MinijinjaValue::from(raw_sql));
         } else {
             emit_warn_log_message(
@@ -240,7 +240,7 @@ pub fn extend_base_context_stateful_fn(
 
 /// Build a run context - parent function that orchestrates the context building
 #[allow(clippy::too_many_arguments)]
-pub async fn build_run_node_context<S: Serialize>(
+pub fn build_run_node_context<S: Serialize>(
     model: YmlValue,
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
@@ -267,8 +267,7 @@ pub async fn build_run_node_context<S: Serialize>(
         io_args,
         resource_type,
         sql_header,
-    )
-    .await;
+    );
 
     let model_name = common_attr.name.clone();
     // Add write function

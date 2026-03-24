@@ -2,7 +2,7 @@ use dbt_adapter::relation::create_relation;
 use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{ErrorCode, FsError, fs_err};
-use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs};
+use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, stdfs};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
@@ -147,7 +147,7 @@ pub fn unescape(html: &str) -> String {
 /// This function processes SQL that contains DBT CTE prefixes, extracts model names,
 /// reads the corresponding SQL files from the ephemeral directory, and incorporates them
 /// as CTEs in the final SQL. It also adjusts macro spans to account for the added lines.
-pub async fn inject_and_persist_ephemeral_models(
+pub fn inject_and_persist_ephemeral_models(
     sql: String,
     macro_spans: &mut MacroSpans,
     model_name: &str,
@@ -158,12 +158,11 @@ pub async fn inject_and_persist_ephemeral_models(
         // Write the ephemeral model to the ephemeral directory
         if is_current_model_ephemeral {
             let ephemeral_path = ephemeral_dir.join(format!("{model_name}.sql"));
-            tokiofs::create_dir_all(ephemeral_path.parent().unwrap()).await?;
-            tokiofs::write(
+            stdfs::create_dir_all(ephemeral_path.parent().unwrap())?;
+            stdfs::write(
                 ephemeral_path,
                 format!("{DBT_CTE_PREFIX}{model_name} as (\n{sql}\n)"),
-            )
-            .await?;
+            )?;
         }
         return Ok(sql);
     }
@@ -178,7 +177,7 @@ pub async fn inject_and_persist_ephemeral_models(
 
     for model_name in ephemeral_model_names {
         let path = format!("{}/{}.sql", ephemeral_dir.to_str().unwrap(), model_name);
-        let ephemeral_sql = tokiofs::read_to_string(&path).await?;
+        let ephemeral_sql = stdfs::read_to_string(&path)?;
 
         // Split existing CTEs and add any new ones
         let existing_ctes: Vec<String> = ephemeral_sql.split(sep).map(|s| s.to_string()).collect();
@@ -193,10 +192,10 @@ pub async fn inject_and_persist_ephemeral_models(
     // this avoid graph walk for ephemeral models
     if is_current_model_ephemeral {
         let ephemeral_path = ephemeral_dir.join(format!("{model_name}.sql"));
-        tokiofs::create_dir_all(ephemeral_path.parent().unwrap()).await?;
+        stdfs::create_dir_all(ephemeral_path.parent().unwrap())?;
         let cte_line = format!("{DBT_CTE_PREFIX}{model_name} as (\n{final_sql}\n)");
-        all_ctes.push(cte_line.clone());
-        tokiofs::write(ephemeral_path, &all_ctes.join(sep)).await?;
+        all_ctes.push(cte_line);
+        stdfs::write(ephemeral_path, all_ctes.join(sep))?;
         all_ctes.pop();
     }
 
