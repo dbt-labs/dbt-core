@@ -477,7 +477,8 @@ impl ManagedDatabase {
                 // We know the drivers we use for these backends have thread-safe connection
                 // initialization, so we can allow multiple connections to be initialized in
                 // parallel.
-                Backend::Snowflake | Backend::Spark => {
+                // TODO(INC-5645): Add Snowflake back once we implement connection backpressure and pooling
+                Backend::Spark => {
                     let database = {
                         let _span = span!("RwLock::read");
                         self.inner.database.read()
