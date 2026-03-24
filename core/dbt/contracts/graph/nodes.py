@@ -817,7 +817,8 @@ class ModelNode(ModelResource, CompiledNode):
                 for old_constraint in old_value.constraints:
                     if (
                         old_constraint not in self.columns[old_key].constraints
-                        and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                        and constraint_support.get(old_constraint.type)
+                        == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
                             {
@@ -832,7 +833,7 @@ class ModelNode(ModelResource, CompiledNode):
             for old_constraint in old.constraints:
                 if (
                     old_constraint not in self.constraints
-                    and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                    and constraint_support.get(old_constraint.type) == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
                         {
