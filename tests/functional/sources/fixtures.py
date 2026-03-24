@@ -673,3 +673,7 @@ sources:
   - name: test_source
     tables:
 """
+
+null_sources_schema_yml = """
+sources:
+"""

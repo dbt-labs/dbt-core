@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.artifacts.resources import SourceConfig
+from dbt.exceptions import ParsingError
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
 from dbt_common.dataclass_schema import ValidationError
 from tests.functional.sources.fixtures import (
@@ -11,6 +12,7 @@ from tests.functional.sources.fixtures import (
     disabled_source_level_schema_yml,
     disabled_source_table_schema_yml,
     invalid_config_source_schema_yml,
+    null_sources_schema_yml,
     null_tables_source_schema_yml,
     source_config_loaded_at_field_config_level,
     source_config_loaded_at_field_top_level,
@@ -336,6 +338,21 @@ class TestTableLoadedAtQueryNoneWhenFieldSetTopLevel:
 
         assert source.loaded_at_query is None
         assert source.config.loaded_at_query is None
+
+
+class TestNullSourcesParsingError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": null_sources_schema_yml,
+        }
+
+    def test_null_sources_parses_without_error(self, project):
+        # Should not raise "TypeError: 'NoneType' object is not iterable"
+        with pytest.raises(
+            ParsingError, match="invalid because the value of 'sources' is not a list"
+        ):
+            run_dbt(["parse"])
 
 
 class TestNullSourceTables:
