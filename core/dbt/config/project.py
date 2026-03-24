@@ -163,6 +163,9 @@ def package_config_from_data(
     if not packages_data:
         packages_data = {"packages": []}
 
+    if packages_data.get("packages") is None:
+        packages_data["packages"] = []
+
     # this depends on the two lists being in the same order
     if unrendered_packages_data:
         unrendered_packages_data = deepcopy(unrendered_packages_data)
