@@ -80,3 +80,15 @@ def test_function_node_description_with_default_database(
     )
 
     assert runner.describe_node() == "function schema.name"
+
+
+def test_function_node_is_relational(function_node):
+    """FunctionNode.is_relational should return True so that function schemas
+    are included in the on-run-end `schemas` variable (dbt-core#12516)."""
+    assert function_node.is_relational is True
+
+
+def test_function_node_is_not_refable(function_node):
+    """Functions are not refable (they use {{ function() }} not {{ ref() }}),
+    so is_refable should remain False even though is_relational is True."""
+    assert function_node.is_refable is False

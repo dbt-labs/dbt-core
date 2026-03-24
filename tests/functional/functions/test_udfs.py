@@ -7,7 +7,7 @@ from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, write_file
+from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 
 double_it_sql = """
 SELECT value * 2
@@ -647,3 +647,64 @@ class TestFunctionsGetSchemaCreatedIfNecessary:
         function_node = result.results[0].node
         assert isinstance(function_node, FunctionNode)
         assert "alt_function_schema_" in function_node.schema
+
+
+model_sql = """select 1 as id"""
+
+log_schemas_macro = """
+{% macro log_schemas(schemas) %}
+    {% for schema in schemas %}
+        {{ log("SCHEMA_ENTRY: " ~ schema, info=True) }}
+    {% endfor %}
+{% endmacro %}
+"""
+
+
+class TestFunctionSchemasInOnRunEnd:
+    """Test that function schemas appear in the on-run-end `schemas` variable.
+
+    Regression test for https://github.com/dbt-labs/dbt-core/issues/12516
+    """
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {"my_model.sql": model_sql}
+
+    @pytest.fixture(scope="class")
+    def macros(self) -> Dict[str, str]:
+        return {"log_schemas.sql": log_schemas_macro}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+schema": "udfs"},
+            "on-run-end": ["{{ log_schemas(schemas) }}"],
+        }
+
+    def test_function_schema_in_on_run_end_schemas(self, project):
+        _, log_output = run_dbt_and_capture(["build"])
+
+        # Extract schemas logged by the on-run-end hook
+        logged_schemas = set()
+        for line in log_output.split("\n"):
+            if "SCHEMA_ENTRY:" in line:
+                schema = line.split("SCHEMA_ENTRY:")[1].strip()
+                logged_schemas.add(schema)
+
+        # The model's schema (target schema) should be present
+        assert (
+            project.test_schema in logged_schemas
+        ), f"Expected model schema '{project.test_schema}' in schemas, got {logged_schemas}"
+
+        # The function's custom schema should also be present
+        expected_fn_schema = f"{project.test_schema}_udfs"
+        assert (
+            expected_fn_schema in logged_schemas
+        ), f"Expected function schema '{expected_fn_schema}' in schemas, got {logged_schemas}"
