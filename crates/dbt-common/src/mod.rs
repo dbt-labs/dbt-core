@@ -37,6 +37,7 @@ pub mod serde_utils;
 pub mod status_reporter;
 pub mod time;
 pub mod tracing;
+pub mod warn_error_options;
 
 // Re-export span creation functions that were previously exported as macros
 pub use tracing::{

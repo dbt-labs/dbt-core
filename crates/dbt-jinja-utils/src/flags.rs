@@ -211,14 +211,7 @@ impl Flags {
         );
         self.flags.insert(
             "WARN_ERROR_OPTIONS".to_string(),
-            Value::from(
-                invocation_args
-                    .warn_error_options
-                    .clone()
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
-            ),
+            Value::from_serialize(&invocation_args.warn_error_options),
         );
         self.flags.insert(
             "VERSION_CHECK".to_string(),

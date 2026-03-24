@@ -1,3 +1,4 @@
+use crate::warn_error_options::WarnErrorOptions;
 use clap::ValueEnum;
 use dbt_base::{HashMap, HashSet};
 use dbt_telemetry::{NodeType, ShowDataOutputFormat};
@@ -414,7 +415,7 @@ pub struct EvalArgs {
     pub macro_name: String,
     pub macro_args: BTreeMap<String, Value>,
     pub warn_error: bool,
-    pub warn_error_options: BTreeMap<String, Value>,
+    pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
     pub introspect: bool,
     pub defer: bool,
@@ -565,6 +566,16 @@ impl EvalArgsBuilder {
 
     pub fn with_use_fqtn(mut self, use_fqtn: bool) -> Self {
         self.args.use_fqtn = use_fqtn;
+        self
+    }
+
+    pub fn with_warn_error_options(
+        mut self,
+        warn_error: bool,
+        warn_error_options: WarnErrorOptions,
+    ) -> Self {
+        self.args.warn_error = warn_error;
+        self.args.warn_error_options = warn_error_options;
         self
     }
 

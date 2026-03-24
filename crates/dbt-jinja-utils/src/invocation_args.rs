@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, env};
 
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::ReplayMode;
+use dbt_common::warn_error_options::WarnErrorOptions;
 use itertools::Itertools;
 use log::LevelFilter;
 use minijinja::Value;
@@ -33,7 +34,7 @@ pub struct InvocationArgs {
     /// Flags
     pub warn_error: bool,
     /// Warning error options
-    pub warn_error_options: BTreeMap<String, Value>,
+    pub warn_error_options: WarnErrorOptions,
     /// Version check
     pub version_check: bool,
     /// Introspect
@@ -90,7 +91,7 @@ impl Default for InvocationArgs {
             num_threads: None,
             invocation_id: uuid::Uuid::nil(),
             warn_error: false,
-            warn_error_options: BTreeMap::new(),
+            warn_error_options: WarnErrorOptions::default(),
             version_check: false,
             introspect: true,
             defer: false,
@@ -150,14 +151,7 @@ impl InvocationArgs {
             num_threads: arg.num_threads,
             invocation_id: arg.io.invocation_id,
             warn_error: arg.warn_error,
-            warn_error_options: arg
-                .warn_error_options
-                .iter()
-                .map(|(k, v)| {
-                    let value = Value::from_serialize(v);
-                    (k.clone(), value)
-                })
-                .collect(),
+            warn_error_options: arg.warn_error_options.clone(),
             version_check: arg.version_check,
             introspect: arg.introspect,
             defer: arg.defer,
@@ -229,12 +223,7 @@ impl InvocationArgs {
         dict.insert("warn_error".to_string(), Value::from(self.warn_error));
         dict.insert(
             "warn_error_options".to_string(),
-            Value::from(
-                self.warn_error_options
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.to_string()))
-                    .collect::<BTreeMap<_, _>>(),
-            ),
+            Value::from_serialize(&self.warn_error_options),
         );
         dict.insert("VERSION_CHECK".to_string(), Value::from(self.version_check));
         dict.insert("INTROSPECT".to_string(), Value::from(self.introspect));

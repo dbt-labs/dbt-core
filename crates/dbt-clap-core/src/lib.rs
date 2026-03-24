@@ -20,6 +20,7 @@ use strum::IntoEnumIterator;
 use strum_macros::Display;
 use uuid::Uuid;
 
+use clap::{ArgAction, Parser, ValueEnum, arg, builder::BoolishValueParser, command};
 use dbt_common::constants::{
     DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
 };
@@ -32,8 +33,7 @@ use dbt_common::io_args::{
     validate_project_name,
 };
 use dbt_common::row_limit::RowLimit;
-
-use clap::{ArgAction, Parser, ValueEnum, arg, builder::BoolishValueParser, command};
+use dbt_common::warn_error_options::{WarnErrorOptions, parse_warn_error_options};
 
 use dbt_common::logging::LogFormat;
 use dbt_common::node_selector::{
@@ -1383,10 +1383,10 @@ pub struct CommonArgs {
     pub no_warn_error: bool,
 
     /// Warning error options
-    #[arg(global = true, long,value_parser = check_var,
+    #[arg(global = true, long, value_parser = parse_warn_error_options,
         env = "DBT_WARN_ERROR_OPTIONS",
         hide = true )]
-    pub warn_error_options: Option<BTreeMap<String, YValue>>,
+    pub warn_error_options: Option<WarnErrorOptions>,
 
     // TODO: currently only used to avoid suppressing warnings/errors from dependencies
     /// Show all deprecations warnings/errors instead of one per package
@@ -2019,29 +2019,6 @@ pub enum ComputeArg {
     Sidecar,
     /// Run via the remote compute service (persistent workers/cluster).
     Service,
-}
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Default,
-    ValueEnum,
-    Display,
-    Serialize,
-    Deserialize,
-)]
-#[serde(rename_all = "lowercase")]
-#[clap(rename_all = "lowercase")]
-pub enum WarnErrorOptions {
-    #[default]
-    All,
-    InvalidTests,
-    Deprecation,
-    VersionMismatch,
 }
 
 /// Maintain the system: update and uninstall
