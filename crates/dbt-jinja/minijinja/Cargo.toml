@@ -84,7 +84,7 @@ unicode-ident = { version = "1.0.5", optional = true }
 v_htmlescape = { version = "0.15.8", optional = true }
 
 [dev-dependencies]
-insta = { version = "1.38.0", features = ["glob", "serde"] }
+insta = { version = "1.38.0", features = ["glob", "serde", "yaml"] }
 "minijinja-contrib" = { workspace = true, features = ["pycompat"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
