@@ -625,6 +625,36 @@ impl Debug for ParseMetricReference {
     }
 }
 
+/// A stub value returned by `config.get()` during parsing.
+///
+/// We haven't populated `config` yet, so this stub value could be any type;
+/// therefore any method could be called on it. This prevents a crash during parse.
+///
+/// TODO: This is not a complete fix. If someone is using the config value in a
+/// type-specific way, there could still be issues.
+#[derive(Debug)]
+struct ParseConfigValue;
+
+impl Object for ParseConfigValue {
+    fn get_value(self: &Arc<Self>, _key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        Some(MinijinjaValue::from_object(ParseConfigValue))
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        _name: &str,
+        _args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        Ok(MinijinjaValue::from_object(ParseConfigValue))
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
+}
+
 /// A struct that represents a parse config object to be used during parsing
 #[derive(Debug)]
 pub struct ParseConfig<T: DefaultTo<T> + 'static> {
@@ -773,11 +803,11 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match name {
             // At compile time, this will return the value of the config variable if it exists
-            // Here, we just return an empty string
+            // Here, we return a stub value.
             "get" => {
                 let mut args = ArgParser::new(args, None);
                 let _: String = args.get("name")?;
-                Ok(MinijinjaValue::from(""))
+                Ok(MinijinjaValue::from_object(ParseConfigValue))
             }
             // At compile time, this just returns an empty string
             "set" => {
