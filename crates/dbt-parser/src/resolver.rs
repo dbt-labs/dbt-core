@@ -25,24 +25,22 @@ use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
-use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schemas::state::{
-    DbtPackage, GenericTestAsset, GetColumnsInRelationCalls, GetRelationCalls, Macros,
-    PatternedDanglingSources, RenderResults,
-};
-use dbt_schemas::state::{DbtRuntimeConfig, Operations};
-use minijinja::constants::CURRENT_PATH;
-use tracing::Instrument as _;
-
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::resolve::resolve_query_comment::resolve_query_comment;
 use crate::utils::{self, clear_package_diagnostics};
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
+use dbt_schemas::state::{
+    DbtPackage, GenericTestAsset, GetColumnsInRelationCalls, GetRelationCalls, Macros,
+    PatternedDanglingSources, RenderResults,
+};
+use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
+use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -209,71 +207,36 @@ pub async fn resolve(
         BTreeMap<String, resolve_properties::MinimalPropertiesEntry>,
     >;
 
-    // Use sequential processing if num_threads is 1, otherwise use parallel processing
-    if arg.num_threads == Some(1) {
-        let (
-            resolved_nodes,
-            resolved_disabled_nodes,
-            resolved_collector,
-            resolved_semantic_layer_spec_is_legacy,
-            resolved_test_name_truncations,
-            resolved_macro_properties,
-        ) = resolve_packages_sequentially(
-            package_waves,
-            arg,
-            dbt_state.clone(),
-            root_project_name,
-            root_project_configs.clone(),
-            adapter_type,
-            &macros,
-            jinja_env.clone(),
-            &mut node_resolver,
-            &mut all_runtime_configs,
-            token,
-            jinja_type_checking_event_listener_factory.clone(),
-        )
-        .await?;
-        nodes.extend(resolved_nodes);
-        disabled_nodes.extend(resolved_disabled_nodes);
-        collector
-            .rendering_results
-            .extend(resolved_collector.rendering_results);
-        semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
-        test_name_truncations.extend(resolved_test_name_truncations);
-        all_macro_properties = resolved_macro_properties;
-    } else {
-        // Parallel processing (original implementation)
-        let (
-            resolved_nodes,
-            resolved_disabled_nodes,
-            resolved_collector,
-            resolved_semantic_layer_spec_is_legacy,
-            resolved_test_name_truncations,
-            resolved_macro_properties,
-        ) = resolve_packages_parallel(
-            package_waves,
-            arg,
-            dbt_state.clone(),
-            root_project_name,
-            root_project_configs.clone(),
-            adapter_type,
-            &macros,
-            jinja_env.clone(),
-            &mut node_resolver,
-            &mut all_runtime_configs,
-            token,
-            jinja_type_checking_event_listener_factory.clone(),
-        )
-        .await?;
-        nodes.extend(resolved_nodes);
-        disabled_nodes.extend(resolved_disabled_nodes);
-        collector
-            .rendering_results
-            .extend(resolved_collector.rendering_results);
-        semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
-        test_name_truncations.extend(resolved_test_name_truncations);
-        all_macro_properties = resolved_macro_properties;
-    }
+    let (
+        resolved_nodes,
+        resolved_disabled_nodes,
+        resolved_collector,
+        resolved_semantic_layer_spec_is_legacy,
+        resolved_test_name_truncations,
+        resolved_macro_properties,
+    ) = resolve_package_waves(
+        package_waves,
+        arg,
+        dbt_state.clone(),
+        root_project_name,
+        root_project_configs.clone(),
+        adapter_type,
+        &macros,
+        jinja_env.clone(),
+        &mut node_resolver,
+        &mut all_runtime_configs,
+        token,
+        jinja_type_checking_event_listener_factory.clone(),
+    )
+    .await?;
+    nodes.extend(resolved_nodes);
+    disabled_nodes.extend(resolved_disabled_nodes);
+    collector
+        .rendering_results
+        .extend(resolved_collector.rendering_results);
+    semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
+    test_name_truncations.extend(resolved_test_name_truncations);
+    all_macro_properties = resolved_macro_properties;
 
     // Apply macro patches from YAML schema files
     for (package_name, macro_properties) in all_macro_properties {
@@ -1035,9 +998,9 @@ async fn resolve_package(
     ))
 }
 
-/// Resolves packages sequentially (single-threaded).
+/// Resolves packages in waves (inter-wave sequential, intra-wave parallel via `dispatch_maybe_parallel`).
 #[allow(clippy::too_many_arguments)]
-async fn resolve_packages_sequentially(
+async fn resolve_package_waves(
     package_waves: Vec<Vec<String>>,
     arg: &ResolveArgs,
     dbt_state: Arc<DbtState>,
@@ -1058,6 +1021,10 @@ async fn resolve_packages_sequentially(
     HashMap<String, String>,
     BTreeMap<String, BTreeMap<String, resolve_properties::MinimalPropertiesEntry>>,
 )> {
+    let max_concurrency = crate::parallel::effective_parallelism(arg.num_threads);
+    let arg = Arc::new(arg.clone());
+    let macros = Arc::new(macros.clone());
+
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let mut collector = RenderResults {
@@ -1069,26 +1036,63 @@ async fn resolve_packages_sequentially(
         String,
         BTreeMap<String, resolve_properties::MinimalPropertiesEntry>,
     > = BTreeMap::new();
+
     for package_wave in package_waves {
         token.check_cancellation()?;
 
-        for package_name in package_wave {
-            let result = resolve_package(
-                package_name.clone(),
-                arg,
-                dbt_state.clone(),
-                root_project_name.to_string(),
-                root_project_configs.clone(),
-                adapter_type,
-                macros,
-                jinja_env.clone(),
-                node_resolver.clone(),
-                all_runtime_configs,
-                token,
-                jinja_type_checking_event_listener_factory.clone(),
-            )
-            .await?;
+        // Snapshot per-wave state for parallel tasks
+        let runtime_configs_snapshot = Arc::new(all_runtime_configs.clone());
+        let node_resolver_snapshot = node_resolver.clone();
 
+        let arg = arg.clone();
+        let dbt_state = dbt_state.clone();
+        let root_project_name = root_project_name.to_string();
+        let root_project_configs = root_project_configs.clone();
+        let macros = macros.clone();
+        let jinja_env = jinja_env.clone();
+        let token = token.clone();
+        let jinja_type_checking_event_listener_factory =
+            jinja_type_checking_event_listener_factory.clone();
+
+        let results = crate::parallel::dispatch_maybe_parallel(
+            package_wave,
+            max_concurrency > 1,
+            move |package_name: String| {
+                let arg = arg.clone();
+                let dbt_state = dbt_state.clone();
+                let root_project_name = root_project_name.clone();
+                let root_project_configs = root_project_configs.clone();
+                let macros = macros.clone();
+                let jinja_env = jinja_env.clone();
+                let node_resolver = node_resolver_snapshot.clone();
+                let runtime_configs = runtime_configs_snapshot.clone();
+                let token = token.clone();
+                let jinja_type_checking_event_listener_factory =
+                    jinja_type_checking_event_listener_factory.clone();
+
+                async move {
+                    resolve_package(
+                        package_name,
+                        &arg,
+                        dbt_state,
+                        root_project_name,
+                        root_project_configs,
+                        adapter_type,
+                        &macros,
+                        jinja_env,
+                        node_resolver,
+                        &runtime_configs,
+                        &token,
+                        jinja_type_checking_event_listener_factory,
+                    )
+                    .await
+                }
+            },
+        )
+        .await?;
+
+        // Merge wave results back into accumulators
+        for result in results {
             let (
                 package_name,
                 runtime_config,
@@ -1103,156 +1107,22 @@ async fn resolve_packages_sequentially(
 
             semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
 
-            // Update runtime configs for next wave
             dbt_schemas::state::register_global_runtime_config(
                 package_name.clone(),
                 runtime_config.clone(),
             );
             all_runtime_configs.insert(package_name.clone(), runtime_config);
 
-            // Collect macro properties for patching later
             if !macro_properties.is_empty() {
                 all_macro_properties.insert(package_name.clone(), macro_properties);
             }
 
-            // Merge results
             nodes.extend(new_nodes);
             disabled_nodes.extend(new_disabled_nodes);
             collector
                 .rendering_results
                 .extend(rendering_results.rendering_results);
             test_name_truncations.extend(resolved_test_name_truncations);
-            // Update refs and sources
-            node_resolver.merge(updated_node_resolver);
-        }
-    }
-
-    Ok((
-        nodes,
-        disabled_nodes,
-        collector,
-        semantic_layer_spec_is_legacy,
-        test_name_truncations,
-        all_macro_properties,
-    ))
-}
-
-/// Resolves packages in parallel using tokio::spawn.
-#[allow(clippy::too_many_arguments)]
-async fn resolve_packages_parallel(
-    package_waves: Vec<Vec<String>>,
-    arg: &ResolveArgs,
-    dbt_state: Arc<DbtState>,
-    root_project_name: &str,
-    root_project_configs: Arc<RootProjectConfigs>,
-    adapter_type: AdapterType,
-    macros: &Macros,
-    jinja_env: Arc<JinjaEnv>,
-    node_resolver: &mut NodeResolver,
-    all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
-    token: &CancellationToken,
-    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-) -> FsResult<(
-    Nodes,
-    Nodes,
-    RenderResults,
-    bool,
-    HashMap<String, String>,
-    BTreeMap<String, BTreeMap<String, resolve_properties::MinimalPropertiesEntry>>,
-)> {
-    let mut nodes = Nodes::default();
-    let mut disabled_nodes = Nodes::default();
-    let mut collector = RenderResults {
-        rendering_results: BTreeMap::new(),
-    };
-    let mut semantic_layer_spec_is_legacy = false;
-    let mut test_name_truncations: HashMap<String, String> = HashMap::new();
-    let mut all_macro_properties: BTreeMap<
-        String,
-        BTreeMap<String, resolve_properties::MinimalPropertiesEntry>,
-    > = BTreeMap::new();
-    let arg = Arc::new(arg.clone());
-    let macros = Arc::new(macros.clone());
-
-    for package_wave in package_waves {
-        let all_runtime_configs_snapshot_arc = Arc::new(all_runtime_configs.clone()); // update snapshot after each wave
-        token.check_cancellation()?;
-
-        let mut handles = Vec::new();
-        for package_name in package_wave {
-            let arg = arg.clone();
-            let dbt_state = dbt_state.clone();
-            let root_project_name = root_project_name.to_string();
-            let root_project_configs = root_project_configs.clone();
-            let macros = macros.clone();
-            let jinja_env = jinja_env.clone();
-            let node_resolver = node_resolver.clone();
-            let all_runtime_configs_snapshot = all_runtime_configs_snapshot_arc.clone();
-            let dbt_state = dbt_state.clone();
-            let token = token.clone();
-            let jinja_type_checking_event_listener_factory =
-                jinja_type_checking_event_listener_factory.clone();
-            handles.push(tokio::spawn(
-                async move {
-                    resolve_package(
-                        package_name,
-                        &arg,
-                        dbt_state,
-                        root_project_name,
-                        root_project_configs,
-                        adapter_type,
-                        &macros,
-                        jinja_env,
-                        node_resolver,
-                        &all_runtime_configs_snapshot,
-                        &token,
-                        jinja_type_checking_event_listener_factory,
-                    )
-                    .await
-                    .map_err(|e| *e)
-                }
-                .in_current_span(),
-            ));
-        }
-
-        // Wait for all packages in this wave to finish, then merge results and update configs
-        for handle in handles {
-            let result = handle.await;
-            let (
-                package_name,
-                runtime_config,
-                new_nodes,
-                new_disabled_nodes,
-                rendering_results,
-                updated_node_resolver,
-                resolved_semantic_layer_spec_is_legacy,
-                resolved_test_name_truncations,
-                macro_properties,
-            ) = match result {
-                Ok(Ok(val)) => val,
-                Ok(Err(e)) => return Err(Box::new(e)),
-                Err(e) => return Err(fs_err!(ErrorCode::Unexpected, "Join error: {}", e)),
-            };
-            semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
-
-            // Update runtime configs for next wave
-            dbt_schemas::state::register_global_runtime_config(
-                package_name.clone(),
-                runtime_config.clone(),
-            );
-            all_runtime_configs.insert(package_name.clone(), runtime_config);
-            // Collect macro properties for patching later
-            if !macro_properties.is_empty() {
-                all_macro_properties.insert(package_name.clone(), macro_properties);
-            }
-            // Merge results in main thread
-            nodes.extend(new_nodes);
-            disabled_nodes.extend(new_disabled_nodes);
-            collector
-                .rendering_results
-                .extend(rendering_results.rendering_results);
-            test_name_truncations.extend(resolved_test_name_truncations);
-            // This could be optimized refs and sources can all be inserted at the end instead of merging
             node_resolver.merge(updated_node_resolver);
         }
     }

@@ -10,9 +10,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
-use dbt_common::tracing::emit::{
-    emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_from_fs_error,
-};
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -546,38 +544,9 @@ pub struct RenderCtx<T: DefaultTo<T>> {
     pub runtime_config: Arc<DbtRuntimeConfig>,
 }
 
-async fn render_unresolved_sql_files_sequentially<
-    T: DefaultTo<T> + 'static,
-    S: GetConfig<T> + Debug,
->(
-    render_ctx: &RenderCtx<T>,
-    model_sql_files: &[DbtAsset],
-    node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
-    token: &CancellationToken,
-    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-    duplicate_errors: &mut Vec<FsError>,
-) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
-    let mut results = Vec::new();
-
-    for dbt_asset in model_sql_files {
-        if let Some(res) = render_sql_file::<T, S>(
-            render_ctx,
-            dbt_asset,
-            node_properties,
-            duplicate_errors,
-            token,
-            jinja_type_checking_event_listener_factory.clone(),
-        )
-        .await?
-        {
-            results.push(res);
-        }
-    }
-
-    Ok(results)
-}
-
-async fn render_unresolved_sql_files_parallel<
+/// Iterate over all the sql files passed in, generate the local config, initialize the sql render env, and render the sql
+/// and return the sql resources (deps) found while rendering the files
+pub async fn render_unresolved_sql_files<
     T: DefaultTo<T> + 'static,
     S: GetConfig<T> + 'static + Debug,
 >(
@@ -586,52 +555,47 @@ async fn render_unresolved_sql_files_parallel<
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-    duplicate_errors: &mut Vec<FsError>,
 ) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
-    let mut results = Vec::new();
-
-    let max_concurrency = render_ctx
-        .inner
-        .args
-        .num_threads
-        .filter(|&n| n != 0)
-        .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()));
-    let chunk_size = model_sql_files.len().div_ceil(max_concurrency);
-
-    #[allow(clippy::type_complexity)]
-    let mut tasks: Vec<
-        tokio::task::JoinHandle<
-            FsResult<(
-                Vec<SqlFileRenderResult<T, S>>,
-                Vec<FsError>,
-                BTreeMap<String, MinimalPropertiesEntry>,
-            )>,
-        >,
-    > = Vec::new();
-
-    let mut chunked_files: Vec<Vec<DbtAsset>> = Vec::new();
-    let mut chunked_node_props: Vec<BTreeMap<String, MinimalPropertiesEntry>> = Vec::new();
-
-    for chunk in model_sql_files.chunks(chunk_size) {
-        let chunk_vec = chunk.to_vec();
-        let mut chunk_props = BTreeMap::new();
-        for dbt_asset in &chunk_vec {
-            let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
-            if let Some(entry) = node_properties.get(ref_name) {
-                chunk_props.insert(ref_name.to_string(), entry.clone());
-            }
-        }
-        chunked_files.push(chunk_vec);
-        chunked_node_props.push(chunk_props);
+    if model_sql_files.is_empty() {
+        return Ok(Vec::new());
     }
 
-    for (chunk, mut chunk_node_properties) in chunked_files.into_iter().zip(chunked_node_props) {
-        let render_ctx = render_ctx.clone();
-        let token = token.clone();
-        let jinja_type_checking_event_listener_factory =
-            jinja_type_checking_event_listener_factory.clone();
+    let mut max_concurrency =
+        crate::parallel::effective_parallelism(render_ctx.inner.args.num_threads);
+    // TODO: why do we have this override?
+    if model_sql_files.len() < 50 {
+        max_concurrency = 1;
+    }
+    let chunk_size = model_sql_files.len().div_ceil(max_concurrency);
 
-        tasks.push(tokio::spawn(
+    // Split node_properties into per-chunk subsets
+    let chunks: Vec<(Vec<DbtAsset>, BTreeMap<String, MinimalPropertiesEntry>)> = model_sql_files
+        .chunks(chunk_size)
+        .map(|chunk| {
+            let chunk_vec = chunk.to_vec();
+            let mut chunk_props = BTreeMap::new();
+            for dbt_asset in &chunk_vec {
+                let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+                if let Some(entry) = node_properties.get(ref_name) {
+                    chunk_props.insert(ref_name.to_string(), entry.clone());
+                }
+            }
+            (chunk_vec, chunk_props)
+        })
+        .collect();
+
+    let io = &render_ctx.inner.args.io;
+    let render_ctx = Arc::new(render_ctx.clone());
+    let token = token.clone();
+
+    let chunk_results = crate::parallel::dispatch_maybe_parallel(
+        chunks,
+        max_concurrency > 1,
+        move |(chunk, mut chunk_node_properties)| {
+            let render_ctx = render_ctx.clone();
+            let token = token.clone();
+            let jinja_type_checking_event_listener_factory =
+                jinja_type_checking_event_listener_factory.clone();
             async move {
                 let mut local_results: Vec<SqlFileRenderResult<T, S>> = Vec::new();
                 let mut local_duplicate_errors: Vec<FsError> = Vec::new();
@@ -652,87 +616,23 @@ async fn render_unresolved_sql_files_parallel<
                     }
                 }
 
-                Ok::<_, _>((local_results, local_duplicate_errors, chunk_node_properties))
+                Ok((local_results, local_duplicate_errors, chunk_node_properties))
             }
-            .in_current_span(),
-        ));
-    }
+        },
+    )
+    .await?;
 
-    // Collect results from all tasks
-    let mut merged_node_properties: BTreeMap<String, MinimalPropertiesEntry> = BTreeMap::new();
-    for task in tasks {
-        match task.await {
-            Ok(Ok((task_results, errors, chunk_node_properties))) => {
-                results.extend(task_results);
-                duplicate_errors.extend(errors);
-                merged_node_properties.extend(chunk_node_properties);
-            }
-            Ok(Err(err)) => {
-                emit_error_log_from_fs_error(
-                    &err,
-                    render_ctx.inner.args.io.status_reporter.as_ref(),
-                );
-                continue;
-            }
-            Err(err) => {
-                emit_error_log_message(
-                    ErrorCode::Unexpected,
-                    err.to_string(),
-                    render_ctx.inner.args.io.status_reporter.as_ref(),
-                );
-                continue;
-            }
-        }
-    }
-
-    // Merge back node_properties - update entries that were processed while preserving
-    // entries that weren't (e.g., Python models that go through a different code path)
-    for (key, value) in merged_node_properties {
-        node_properties.insert(key, value);
-    }
-
-    Ok(results)
-}
-
-/// iterate over all the sql files passed in, generate the local config, initialize the sql render env, and render the sql
-/// and return the sql resources (deps) found while rendering the files
-pub async fn render_unresolved_sql_files<
-    T: DefaultTo<T> + 'static,
-    S: GetConfig<T> + 'static + Debug,
->(
-    render_ctx: &RenderCtx<T>,
-    model_sql_files: &[DbtAsset],
-    node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
-    token: &CancellationToken,
-    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
+    let mut results = Vec::new();
     let mut duplicate_errors: Vec<FsError> = Vec::new();
+    for (task_results, errors, chunk_node_properties) in chunk_results {
+        results.extend(task_results);
+        duplicate_errors.extend(errors);
+        // Merge back node_properties — update entries that were processed while preserving
+        // entries that weren't (e.g., Python models that go through a different code path)
+        node_properties.extend(chunk_node_properties);
+    }
 
-    let results = if model_sql_files.is_empty() {
-        Vec::new()
-    } else if model_sql_files.len() < 50 || render_ctx.inner.args.num_threads == Some(1) {
-        render_unresolved_sql_files_sequentially(
-            render_ctx,
-            model_sql_files,
-            node_properties,
-            token,
-            jinja_type_checking_event_listener_factory,
-            &mut duplicate_errors,
-        )
-        .await?
-    } else {
-        render_unresolved_sql_files_parallel(
-            render_ctx,
-            model_sql_files,
-            node_properties,
-            token,
-            jinja_type_checking_event_listener_factory,
-            &mut duplicate_errors,
-        )
-        .await?
-    };
-
-    trigger_duplicate_errors(&render_ctx.inner.args.io, &mut duplicate_errors)?;
+    trigger_duplicate_errors(io, &mut duplicate_errors)?;
     Ok(results)
 }
 
@@ -752,51 +652,52 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
     if node_map.is_empty() {
         return Ok(Vec::new());
     }
-    // Prepare chunking
-    let model_vec: Vec<(String, T)> = node_map.into_iter().collect();
 
-    let max_concurrency = arg
-        .num_threads
-        .filter(|&n| n != 0)
-        .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()));
+    let max_concurrency = crate::parallel::effective_parallelism(arg.num_threads);
+    let model_vec: Vec<(String, T)> = node_map.into_iter().collect();
     let chunk_size = model_vec.len().div_ceil(max_concurrency);
 
     let parse_adapter = jinja_env
         .get_adapter()
         .expect("Adapter should be available during parse phase");
 
-    // Use sequential processing if num_threads is 1, otherwise use parallel processing
-    let mut dbt_nodes = if max_concurrency == 1 {
-        collect_adapter_identifiers_sequential(
-            arg,
-            model_vec,
-            node_resolver,
-            &jinja_env,
-            adapter_type,
-            package_name,
-            root_project_name,
-            runtime_config,
-            parse_adapter,
-            chunk_size,
-            token,
-        )
-        .await?
-    } else {
-        collect_adapter_identifiers_parallel(
-            arg,
-            model_vec,
-            node_resolver,
-            jinja_env,
-            adapter_type,
-            package_name,
-            root_project_name,
-            runtime_config,
-            parse_adapter,
-            chunk_size,
-            token,
-        )
-        .await?
-    };
+    let chunks = chunk_vec(model_vec, chunk_size);
+
+    let arg = Arc::new(arg.clone());
+    let node_resolver = Arc::new(node_resolver.clone());
+    let package_name = package_name.to_string();
+    let root_project_name = root_project_name.to_string();
+    let token = token.clone();
+
+    let chunk_results =
+        crate::parallel::dispatch_maybe_parallel(chunks, max_concurrency > 1, move |chunk| {
+            let arg = arg.clone();
+            let node_resolver = node_resolver.clone();
+            let jinja_env = jinja_env.clone();
+            let package_name = package_name.clone();
+            let root_project_name = root_project_name.clone();
+            let runtime_config = runtime_config.clone();
+            let parse_adapter = parse_adapter.clone();
+            let token = token.clone();
+            async move {
+                process_model_chunk_for_unsafe_detection(
+                    chunk,
+                    arg,
+                    node_resolver,
+                    &jinja_env,
+                    adapter_type,
+                    package_name,
+                    root_project_name,
+                    runtime_config,
+                    parse_adapter,
+                    &token,
+                )
+                .await
+            }
+        })
+        .await?;
+
+    let mut dbt_nodes: Vec<(T, bool)> = chunk_results.into_iter().flatten().collect();
 
     for (node, is_unsafe) in dbt_nodes.iter_mut() {
         if *is_unsafe {
@@ -811,8 +712,8 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
 #[allow(clippy::too_many_arguments)]
 async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes + 'static>(
     chunk: Vec<(String, T)>,
-    arg: ResolveArgs,
-    node_resolver: NodeResolver,
+    arg: Arc<ResolveArgs>,
+    node_resolver: Arc<NodeResolver>,
     jinja_env: &JinjaEnv,
     adapter_type: AdapterType,
     package_name: String,
@@ -828,7 +729,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
         .map(|r| r.keys().map(|k| k.to_string()).collect())
         .unwrap_or_default();
     let mut render_base_context = build_compile_and_run_base_context(
-        Arc::new(node_resolver.clone()),
+        node_resolver.clone(),
         &package_name,
         &Nodes::default(),
         runtime_config.clone(),
@@ -861,7 +762,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             adapter_type,
             &render_base_context,
             &root_project_name,
-            Arc::new(node_resolver.clone()),
+            node_resolver.clone(),
             runtime_config.clone(),
             true,
         );
@@ -908,108 +809,6 @@ fn chunk_vec<T>(mut v: Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
         chunks.push(chunk);
     }
     chunks
-}
-
-/// Collect adapter identifiers sequentially (single-threaded)
-#[allow(clippy::too_many_arguments)]
-async fn collect_adapter_identifiers_sequential<T: InternalDbtNodeAttributes + 'static>(
-    arg: &ResolveArgs,
-    model_vec: Vec<(String, T)>,
-    node_resolver: &NodeResolver,
-    jinja_env: &JinjaEnv,
-    adapter_type: AdapterType,
-    package_name: &str,
-    root_project_name: &str,
-    runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
-    chunk_size: usize,
-    token: &CancellationToken,
-) -> FsResult<Vec<(T, bool)>> {
-    let mut all_unsafe_nodes = Vec::new();
-
-    // Split the model_vec into owned chunks
-    for chunk in chunk_vec(model_vec, chunk_size) {
-        // Drain the chunk &mut [(String, T)] into owned Vec<(String, T)> (does not have drain method) without clone
-        let unsafe_nodes = process_model_chunk_for_unsafe_detection(
-            chunk,
-            arg.clone(),
-            node_resolver.clone(),
-            jinja_env,
-            adapter_type,
-            package_name.to_string(),
-            root_project_name.to_string(),
-            runtime_config.clone(),
-            parse_adapter.clone(),
-            token,
-        )
-        .await?;
-        all_unsafe_nodes.extend(unsafe_nodes);
-    }
-
-    Ok(all_unsafe_nodes)
-}
-
-/// Collect adapter identifiers in parallel using tokio::spawn
-#[allow(clippy::too_many_arguments)]
-async fn collect_adapter_identifiers_parallel<T: InternalDbtNodeAttributes + 'static>(
-    arg: &ResolveArgs,
-    model_vec: Vec<(String, T)>,
-    node_resolver: &NodeResolver,
-    jinja_env: Arc<JinjaEnv>,
-    adapter_type: AdapterType,
-    package_name: &str,
-    root_project_name: &str,
-    runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
-    chunk_size: usize,
-    token: &CancellationToken,
-) -> FsResult<Vec<(T, bool)>> {
-    let mut tasks = Vec::new();
-
-    for chunk in chunk_vec(model_vec, chunk_size) {
-        let arg = arg.clone();
-        let node_resolver_clone = node_resolver.clone();
-        let jinja_env = jinja_env.clone();
-        let package_name = package_name.to_string();
-        let root_project_name = root_project_name.to_string();
-        let runtime_config = runtime_config.clone();
-        let parse_adapter = parse_adapter.clone();
-
-        let token = token.clone();
-        tasks.push(tokio::spawn(
-            async move {
-                process_model_chunk_for_unsafe_detection(
-                    chunk,
-                    arg,
-                    node_resolver_clone,
-                    &jinja_env,
-                    adapter_type,
-                    package_name,
-                    root_project_name,
-                    runtime_config,
-                    parse_adapter,
-                    &token,
-                )
-                .await
-                .map_err(|e| *e)
-            }
-            .in_current_span(),
-        ));
-    }
-
-    // Collect all unsafe IDs from all threads
-    let mut all_unsafe_ids = Vec::new();
-    for task in tasks {
-        match task.await {
-            Ok(Ok(ids)) => {
-                all_unsafe_ids.extend(ids);
-            }
-            Ok(Err(e)) => return Err(Box::new(e)),
-            Err(e) => return Err(fs_err!(ErrorCode::Unexpected, "{}", e)),
-        }
-    }
-
-    Ok(all_unsafe_ids)
 }
 
 /// Collect refs and sources from pre and post hooks in any resource config

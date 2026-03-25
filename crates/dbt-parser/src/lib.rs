@@ -13,6 +13,8 @@ pub mod args;
 /// DbtNamespace for intercepting dbt macro calls during parse phase
 pub mod dbt_namespace;
 pub mod dbt_project_config;
+/// Parallel dispatch utilities
+pub mod parallel;
 /// Python AST parsing utilities
 pub mod python_ast;
 /// Python file information collection

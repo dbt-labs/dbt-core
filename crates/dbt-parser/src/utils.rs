@@ -161,6 +161,7 @@ pub fn prepare_package_dependency_levels(
     // Return packages in topological order
     dbt_dag::deps_mgmt::topological_levels(&dependency_map)
 }
+
 /// Register a resource definition for a model
 pub fn prepare_package_dependencies(dbt_state: Arc<dbt_schemas::state::DbtState>) -> Vec<String> {
     // Build dependency map (similar to dbt's load_dependencies)
