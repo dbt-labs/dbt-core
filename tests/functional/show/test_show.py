@@ -7,6 +7,7 @@ from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtRuntimeError
 from tests.functional.show.fixtures import (
     models__ephemeral_model,
+    models__model_with_show_in_name,
     models__sample_model,
     models__sample_number_model,
     models__sample_number_model_with_nulls,
@@ -263,3 +264,45 @@ class TestShowPrivateModel:
     def test_version_unspecified(self, project):
         run_dbt(["build"])
         run_dbt(["show", "--inline", "select * from {{ ref('private_model') }}"])
+
+
+class TestShowSubstringBug:
+    """Regression test for #12539 — models with substrings like 'show' in their
+    name should not incorrectly match other nodes during result filtering."""
+
+    @pytest.fixture(scope="class")
+    def dbt_profile_target(self):
+        return {"type": "duckdb", "threads": 1, "path": ":memory:"}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_show_model.sql": models__model_with_show_in_name,
+            "second_model.sql": models__second_model,
+            "sample_model.sql": models__sample_model,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"sample_seed.csv": seeds__sample_seed}
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setup(self, project):
+        run_dbt(["seed"])
+        run_dbt(["build"])
+
+    def test_show_does_not_match_substring(self, project):
+        """Selecting 'show' should not match 'my_show_model' via substring."""
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "second_model"],
+        )
+        assert "Previewing node 'second_model'" in log_output
+        assert "Previewing node 'my_show_model'" not in log_output
+
+    def test_show_matches_exact_model_with_show_in_name(self, project):
+        """Selecting 'my_show_model' should only show that model."""
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "my_show_model"],
+        )
+        assert "Previewing node 'my_show_model'" in log_output
+        assert "Previewing node 'second_model'" not in log_output
