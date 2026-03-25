@@ -48,6 +48,9 @@ analyses:
 """
 
 
+FLAGS = {"flags": {"require_analyses_project_level_config": True}}
+
+
 # Test: project-level analyses +enabled: false disables all analyses
 class TestAnalysisEnabledConfigProjectLevel:
     @pytest.fixture(scope="class")
@@ -64,7 +67,7 @@ class TestAnalysisEnabledConfigProjectLevel:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"analyses": {"+enabled": False}}
+        return {**FLAGS, "analyses": {"+enabled": False}}
 
     def test_project_level_disabled(self, project):
         run_dbt(["parse"])
@@ -91,7 +94,7 @@ class TestAnalysisPathConfig:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"analyses": {"test": {"subdir": {"+enabled": False}}}}
+        return {**FLAGS, "analyses": {"test": {"subdir": {"+enabled": False}}}}
 
     def test_path_based_disabled(self, project):
         run_dbt(["parse"])
@@ -115,7 +118,7 @@ class TestAnalysisInFileConfigOverridesProject:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"analyses": {"+enabled": False}}
+        return {**FLAGS, "analyses": {"+enabled": False}}
 
     def test_in_file_config_overrides_project(self, project):
         run_dbt(["parse"])
@@ -135,6 +138,10 @@ class TestAnalysisYamlLevelConfig:
             "my_analysis.sql": analysis_sql,
             "schema.yml": schema_disabled_yml,
         }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return FLAGS
 
     def test_yaml_level_disabled(self, project):
         run_dbt(["parse"])
@@ -157,7 +164,7 @@ class TestAnalysisConfigInheritance:
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"analyses": {"+enabled": False}}
+        return {**FLAGS, "analyses": {"+enabled": False}}
 
     def test_yaml_overrides_project(self, project):
         run_dbt(["parse"])

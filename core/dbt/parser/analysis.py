@@ -1,6 +1,7 @@
 import os
 
 from dbt.contracts.graph.nodes import AnalysisNode
+from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
@@ -18,4 +19,6 @@ class AnalysisParser(SimpleSQLParser[AnalysisNode]):
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock):
+        if get_flags().require_corrected_analysis_fqns:
+            return block.path.relative_path
         return os.path.join("analysis", block.path.relative_path)
