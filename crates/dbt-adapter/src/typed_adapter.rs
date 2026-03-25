@@ -2316,26 +2316,11 @@ impl ConcreteAdapter {
                 // one. Later we can document to end users that their old way of using this macro
                 // is bugged. The fix will be trivial for any power user relying on this adapter
                 // method and we can provide clear guidance for migration.
-
-                // Apply column overrides to Arrow schema first
-                let arrow_schema = agate_table.original_record_batch().schema();
-                let new_fields = arrow_schema
-                    .fields()
-                    .iter()
-                    .map(|field| {
-                        let field = field.as_ref().clone();
-                        let new_field = if let Some(data_type) = column_overrides.get(field.name())
-                        {
-                            let type_ops = self.engine().type_ops();
-                            let new_data_type = type_ops.parse_into_arrow_type(data_type)?;
-                            field.with_data_type(new_data_type)
-                        } else {
-                            field
-                        };
-                        Ok(new_field)
-                    })
-                    .collect::<AdapterResult<Vec<Field>>>()?;
-                let ingest_schema = Schema::new(new_fields);
+                let ingest_schema = crate::seed::ingest_schema_with_column_overrides(
+                    agate_table.original_record_batch().schema().as_ref(),
+                    &column_overrides,
+                    self.adapter_type(),
+                )?;
 
                 let serialized_ingest_schema: Vec<u8> = {
                     // serialize the Arrow schema as an Arrow IPC byte blob

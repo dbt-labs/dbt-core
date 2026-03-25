@@ -30,6 +30,7 @@ pub mod record_and_replay;
 pub mod relation;
 pub mod render_constraint;
 pub mod response;
+pub(crate) mod seed;
 pub mod snapshots;
 /// Tokenizing and fuzzy diffing of SQL strings
 pub mod sql;
