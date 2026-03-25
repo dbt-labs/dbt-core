@@ -3794,14 +3794,16 @@ impl ConcreteAdapter {
         let invalidate_hard_deletes = config.get("invalidate_hard_deletes");
         let hard_deletes = config.get("hard_deletes");
 
-        if invalidate_hard_deletes.is_some() && hard_deletes.is_some() {
+        let invalidate_hard_deletes_is_true = invalidate_hard_deletes.is_some_and(|v| v.is_true());
+
+        if invalidate_hard_deletes_is_true && hard_deletes.is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "You cannot set both the invalidate_hard_deletes and hard_deletes config properties on the same snapshot.",
             ));
         }
 
-        if invalidate_hard_deletes.is_some() {
+        if invalidate_hard_deletes_is_true {
             return Ok("invalidate".to_string());
         }
 
