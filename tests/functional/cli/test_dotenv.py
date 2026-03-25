@@ -55,6 +55,32 @@ class TestDotEnvShellEnvTakesPrecedence:
             os.environ.pop("DBT_DOTENV_TEST_MARKER", None)
 
 
+class TestDotEnvLoadsFromCwdNotProjectRoot:
+    """Verify that .env is loaded from cwd, not from the project root directory."""
+
+    def test_dotenv_uses_cwd_not_project_root(self, project, tmp_path):
+        project_root = Path(os.getcwd())
+
+        # Put .env in project root with a value that should NOT be loaded
+        project_dotenv = project_root / ".env"
+        project_dotenv.write_text("DBT_DOTENV_LOCATION=project_root\n")
+
+        # Put .env in a separate directory (our "cwd") with the correct value
+        cwd_dotenv = tmp_path / ".env"
+        cwd_dotenv.write_text("DBT_DOTENV_LOCATION=cwd\n")
+
+        try:
+            os.chdir(tmp_path)
+
+            # Invoke dbt with explicit --project-dir so it finds the project
+            run_dbt(["parse", "--project-dir", str(project_root)])
+            assert os.environ.get("DBT_DOTENV_LOCATION") == "cwd"
+        finally:
+            os.chdir(project_root)
+            project_dotenv.unlink(missing_ok=True)
+            os.environ.pop("DBT_DOTENV_LOCATION", None)
+
+
 class TestDotEnvInGitignoreTemplate:
     """Verify that the starter project .gitignore template includes .env."""
 
