@@ -148,4 +148,3 @@ class CompileTask(GraphRunnableTask):
             and (self.args.select or getattr(self.args, "inline", None))
         ):
             self.node_results.append(result)
-

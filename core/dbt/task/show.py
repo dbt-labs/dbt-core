@@ -147,4 +147,3 @@ class ShowTaskDirect(ConfiguredTask):
                     quiet=get_flags().QUIET,
                 )
             )
-
