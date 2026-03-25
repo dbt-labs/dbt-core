@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, fields, field
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
@@ -924,8 +924,7 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
     # Validate unknown flags - warn if user sets flags that dbt doesn't recognize
     if project_flags:
-        import dataclasses
-        known_flag_names = {f.name for f in dataclasses.fields(ProjectFlags)}
+        known_flag_names = {f.name for f in fields(ProjectFlags)}
         unknown_flags = set(project_flags.keys()) - known_flag_names
         if unknown_flags:
             from dbt.events.types import InvalidOptionYAML
