@@ -10,11 +10,10 @@ use dbt_schemas::schemas::packages::{
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    github_client::download_git_like_package,
     package_listing::UnpinnedPackage,
     tarball_client::download_tarball_package,
     types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
-    utils::{fusion_sha1_hash_packages, read_and_validate_dbt_project},
+    utils::{fusion_sha1_hash_packages, handle_git_like_package, read_and_validate_dbt_project},
 };
 
 use crate::{hub_client::HubClient, package_listing::PackageListing};
@@ -192,20 +191,13 @@ async fn resolve_packages(
                 next_listing.update_from(&metadata.packages, jinja_env)?;
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
-                // tempdir() is fine here: resolution only reads from this directory (project name,
-                // packages list) and never moves anything out of it, so no cross-device rename
-                // can occur. The directory is dropped at the end of this block.
-                let tmp_dir = tempfile::tempdir()
-                    .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
-                let download_dir = tmp_dir.path().join("git_pkg");
-                let (checkout_path, commit_sha) = download_git_like_package(
+                let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
                     &git_unpinned_package.git,
                     &git_unpinned_package.revisions,
                     &git_unpinned_package.subdirectory,
                     git_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    &download_dir,
-                )
-                .await?;
+                    None,
+                )?;
                 git_unpinned_package.revisions = vec![commit_sha];
                 let dbt_project =
                     read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
@@ -213,6 +205,8 @@ async fn resolve_packages(
                 if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
                     next_listing.update_from(&dbt_packages.packages, jinja_env)?;
                 }
+                // Keep tmp_dir alive until we're done with checkout_path
+                drop(tmp_dir);
             }
             UnpinnedPackage::Local(local_unpinned_package) => {
                 let (dbt_packages, _) = load_dbt_packages(io, &local_unpinned_package.local)?;
@@ -221,20 +215,13 @@ async fn resolve_packages(
                 }
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
-                // tempdir() is fine here: resolution only reads from this directory (project name,
-                // packages list) and never moves anything out of it, so no cross-device rename
-                // can occur. The directory is dropped at the end of this block.
-                let tmp_dir = tempfile::tempdir()
-                    .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
-                let download_dir = tmp_dir.path().join("git_pkg");
-                let (checkout_path, commit_sha) = download_git_like_package(
+                let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
                     &private_unpinned_package.private,
                     &private_unpinned_package.revisions,
                     &private_unpinned_package.subdirectory,
                     private_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    &download_dir,
-                )
-                .await?;
+                    None,
+                )?;
                 private_unpinned_package.revisions = vec![commit_sha];
                 let dbt_project =
                     read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
@@ -242,6 +229,8 @@ async fn resolve_packages(
                 if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
                     next_listing.update_from(&dbt_packages.packages, jinja_env)?;
                 }
+                // Keep tmp_dir alive until we're done with checkout_path
+                drop(tmp_dir);
             }
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
                 let tmp_dir = tempfile::tempdir().map_err(|e| {
