@@ -1594,6 +1594,19 @@ class FunctionNode(CompiledNode, FunctionResource):
     def resource_class(cls) -> Type[FunctionResource]:
         return FunctionResource
 
+    def same_arguments(self, old: "FunctionNode") -> bool:
+        return self.arguments == old.arguments
+
+    def same_returns(self, old: "FunctionNode") -> bool:
+        return self.returns == old.returns
+
+    def same_contents(self, old, adapter_type) -> bool:
+        return (
+            super().same_contents(old, adapter_type)
+            and self.same_arguments(old)
+            and self.same_returns(old)
+        )
+
 
 # ====================================
 # SemanticModel node
