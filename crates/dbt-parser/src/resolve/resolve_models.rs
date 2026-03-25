@@ -1017,15 +1017,17 @@ pub async fn resolve_models(
                 node_names.insert(model_name.to_owned());
                 rendering_results.insert(unique_id, (rendered_sql.clone(), macro_spans.clone()));
 
-                properties.as_testable().persist(
-                    package_name,
-                    &root_project.name,
-                    collected_generic_tests,
-                    test_name_truncations,
-                    adapter_type,
-                    &arg.io,
-                    patch_path.as_ref().unwrap_or(&dbt_asset.path),
-                )?;
+                if !arg.skip_creating_generic_tests {
+                    properties.as_testable().persist(
+                        package_name,
+                        &root_project.name,
+                        collected_generic_tests,
+                        test_name_truncations,
+                        adapter_type,
+                        &arg.io,
+                        patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                    )?;
+                }
             }
             ModelStatus::Disabled => {
                 disabled_models.insert(unique_id.to_owned(), Arc::new(dbt_model));

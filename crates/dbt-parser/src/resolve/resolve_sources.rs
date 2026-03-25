@@ -412,20 +412,22 @@ pub fn resolve_sources(
             ModelStatus::Enabled => {
                 sources.insert(unique_id, Arc::new(dbt_source));
 
-                TestableTable {
-                    source_name: source_name.clone(),
-                    table: &table.clone(),
+                if !arg.skip_creating_generic_tests {
+                    TestableTable {
+                        source_name: source_name.clone(),
+                        table: &table.clone(),
+                    }
+                    .as_testable()
+                    .persist(
+                        package_name,
+                        root_package_name,
+                        collected_generic_tests,
+                        test_name_truncations,
+                        adapter_type,
+                        io_args,
+                        &mpe.relative_path,
+                    )?;
                 }
-                .as_testable()
-                .persist(
-                    package_name,
-                    root_package_name,
-                    collected_generic_tests,
-                    test_name_truncations,
-                    adapter_type,
-                    io_args,
-                    &mpe.relative_path,
-                )?;
             }
             ModelStatus::Disabled => {
                 disabled_sources.insert(unique_id, Arc::new(dbt_source));

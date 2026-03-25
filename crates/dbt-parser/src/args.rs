@@ -40,6 +40,8 @@ pub struct ResolveArgs {
     pub static_analysis: Option<StaticAnalysisKind>,
     /// Store failures?
     pub store_failures: bool,
+    /// Whether to skip creating generic tests
+    pub skip_creating_generic_tests: bool,
 }
 
 impl ResolveArgs {
@@ -60,6 +62,7 @@ impl ResolveArgs {
             sample_renaming: arg.sample_renaming.clone(),
             static_analysis: arg.static_analysis,
             store_failures: arg.store_failures,
+            skip_creating_generic_tests: arg.skip_creating_generic_tests,
         })
     }
 }

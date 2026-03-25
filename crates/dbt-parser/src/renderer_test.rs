@@ -86,6 +86,7 @@ mod tests {
             sample_renaming: BTreeMap::new(),
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
+            skip_creating_generic_tests: false,
         };
 
         // Create base context with minimal required values

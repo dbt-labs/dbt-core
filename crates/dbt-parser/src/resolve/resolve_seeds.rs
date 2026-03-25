@@ -323,15 +323,17 @@ pub fn resolve_seeds(
         match status {
             ModelStatus::Enabled => {
                 seeds.insert(unique_id, Arc::new(dbt_seed));
-                seed.as_testable().persist(
-                    package_name,
-                    &root_project.name,
-                    collected_generic_tests,
-                    test_name_truncations,
-                    adapter_type,
-                    io_args,
-                    patch_path.as_ref().unwrap_or(&path),
-                )?;
+                if !arg.skip_creating_generic_tests {
+                    seed.as_testable().persist(
+                        package_name,
+                        &root_project.name,
+                        collected_generic_tests,
+                        test_name_truncations,
+                        adapter_type,
+                        io_args,
+                        patch_path.as_ref().unwrap_or(&path),
+                    )?;
+                }
             }
             ModelStatus::Disabled => {
                 disabled_seeds.insert(unique_id, Arc::new(dbt_seed));

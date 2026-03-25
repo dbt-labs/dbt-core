@@ -1,3 +1,4 @@
+use crate::args::ResolveArgs;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
