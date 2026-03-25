@@ -1159,6 +1159,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     f"Invalid constraint type on model {node.name}: "
                     f"Type must be one of {[ct.value for ct in ConstraintType]}"
                 )
+        else:
+            constraints = [
+                c for c in constraints if "type" in c and ConstraintType.is_valid(c["type"])
+            ]
 
         self._validate_pk_constraints(node, constraints)
         node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
