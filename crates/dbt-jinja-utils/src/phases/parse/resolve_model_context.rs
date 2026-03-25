@@ -32,6 +32,7 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtModel, NodeBaseAttributes,
         common::{DbtChecksum, DbtQuoting, NodeDependsOn},
+        serde::yml_value_to_minijinja,
     },
     state::DbtRuntimeConfig,
 };
@@ -47,6 +48,7 @@ use minijinja::{
     },
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
+use serde::Serialize;
 
 use crate::{phases::MacroLookupContext, serde::into_typed_with_error};
 
@@ -66,7 +68,7 @@ impl Object for ParseExecute {
 
 /// Builds a context for resolving models
 #[allow(clippy::too_many_arguments)]
-pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
+pub fn build_resolve_model_context<T: DefaultTo<T> + Serialize + 'static>(
     config: &T,
     adapter_type: AdapterType,
     database: &str,
@@ -280,7 +282,19 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         deprecated_config: ModelConfig::default(),
     };
 
-    let mut model_map = convert_yml_to_value_map(model.serialize());
+    let mut model_map = convert_yml_to_value_map(InternalDbtNode::serialize(&model));
+    // Stub `DbtModel` uses `ModelConfig::default()` for `config` in YAML serialization. At parse
+    // time, kwargs to `config(...)` (e.g. `post_hook=my_macro(model)`) are evaluated while
+    // rendering; macros must see the merged node config (`properties_config` / `BaseConfig`),
+    // matching dbt-core (dbt-fusion#1414).
+    //
+    // Use `dbt_yaml::to_value` + `yml_value_to_minijinja` — same pipeline as
+    // `DbtModel::serialized_config()` — not `MinijinjaValue::from_serialize`, so later
+    // `dbt_yaml::to_value(model)` → `InternalDbtNodeWrapper::deserialize` in adapter helpers
+    // (`get_view_options`, `get_config_from_model`, …) round-trips correctly.
+    let config_yml = dbt_yaml::to_value(config)
+        .expect("Failed to serialize merged node config to dbt_yaml::Value for parse model.config");
+    model_map.insert("config".to_owned(), yml_value_to_minijinja(config_yml));
     model_map.insert(
         "batch".to_owned(),
         MinijinjaValue::from_object(init_batch_context()),

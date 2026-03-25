@@ -38,7 +38,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::{collections::BTreeMap, path::PathBuf};
 
-    fn create_resolve_model_context<T: DefaultTo<T> + 'static>(
+    fn create_resolve_model_context<T: DefaultTo<T> + serde::Serialize + 'static>(
         init_config: &T,
         sql_resources: &Arc<Mutex<Vec<SqlResource<T>>>>,
     ) -> BTreeMap<String, Value> {
