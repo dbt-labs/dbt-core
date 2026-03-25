@@ -7,6 +7,7 @@ import click
 from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
+from dotenv import load_dotenv
 
 from dbt.adapters.factory import register_adapter
 from dbt.artifacts.schemas.catalog import CatalogArtifact
@@ -18,6 +19,10 @@ from dbt.cli.requires import setup_manifest
 from dbt.contracts.graph.manifest import Manifest
 from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
+
+# Load .env from current working directory before Click processes any parameters.
+# override=False ensures shell env vars take precedence over .env values.
+load_dotenv(override=False)
 
 
 @dataclass
@@ -52,6 +57,7 @@ class dbtRunner:
 
     def invoke(self, args: List[str], **kwargs) -> dbtRunnerResult:
         try:
+            load_dotenv(override=False)
             dbt_ctx = cli.make_context(cli.name, args.copy())
             dbt_ctx.obj = {
                 "manifest": self.manifest,
