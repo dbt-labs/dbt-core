@@ -56,7 +56,7 @@ pub fn dispatch_adapter_calls(
             let auto_begin = iter
                 .next_kwarg::<Option<bool>>("auto_begin")?
                 .unwrap_or(false);
-            let fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
+            let mut fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
             let limit = iter.next_kwarg::<Option<i64>>("limit")?;
             let options = if let Some(value) = iter.next_kwarg::<Option<Value>>("options")? {
                 Some(HashMap::<String, String>::deserialize(value).map_err(|e| {
@@ -69,6 +69,16 @@ pub fn dispatch_adapter_calls(
                 None
             };
             // TODO(harry): add iter.finish() and fix the tests
+
+            // NOTE(serramatutu): this is a hacky fix for: https://github.com/dbt-labs/dbt-fusion/issues/1332
+            // It is possible this still fails for other things that return large result sets
+            // unnecessarily. Without users explicitly running with `fetch=False`, we'd need full SQL
+            // parsing to determine whether to fetch or not.
+            if adapter.adapter_type() == AdapterType::Bigquery
+                && sql.trim().to_lowercase().starts_with("alter table")
+            {
+                fetch = false;
+            }
 
             let (response, table) =
                 adapter.execute(state, sql, auto_begin, fetch, limit, options)?;
