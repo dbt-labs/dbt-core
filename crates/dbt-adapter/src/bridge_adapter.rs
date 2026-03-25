@@ -411,7 +411,9 @@ impl BaseAdapter for BridgeAdapter {
                 let quoted_identifier = adapter.quote(identifier);
                 Ok(Value::from(quoted_identifier))
             }
-            Parse(_) => Ok(empty_vec_value()),
+            Parse(state) => Ok(Value::from(
+                ConcreteAdapter::quote_identifier_for_adapter_type(state.adapter_type, identifier),
+            )),
         }
     }
 

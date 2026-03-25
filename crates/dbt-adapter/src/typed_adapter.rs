@@ -687,11 +687,12 @@ impl ConcreteAdapter {
         }
     }
 
-    pub fn quote(&self, identifier: &str) -> String {
-        if self.mock_state().is_some() {
-            return format!("\"{identifier}\"");
-        }
-        match self.adapter_type() {
+    /// Quote like [ConcreteAdapter::quote] when the adapter is not in mock mode.
+    pub fn quote_identifier_for_adapter_type(
+        adapter_type: AdapterType,
+        identifier: &str,
+    ) -> String {
+        match adapter_type {
             Snowflake | Redshift | Postgres | Sidecar | Salesforce | DuckDB | Fabric
             | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 format!("\"{identifier}\"")
@@ -700,6 +701,10 @@ impl ConcreteAdapter {
                 format!("`{identifier}`")
             }
         }
+    }
+
+    pub fn quote(&self, identifier: &str) -> String {
+        Self::quote_identifier_for_adapter_type(self.adapter_type(), identifier)
     }
 
     pub fn list_schemas(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
