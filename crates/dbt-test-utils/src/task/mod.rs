@@ -1,6 +1,7 @@
 mod artifact_validation;
 mod assertions;
 mod check_compiled;
+mod check_publication;
 mod dbt;
 pub mod dir_manifest;
 mod env;
@@ -90,6 +91,7 @@ pub use task_seq::{CommandFn, TaskSeq, fs_cmd_vec};
 pub use artifact_validation::ArtifactComparisonTask;
 pub use assertions::{AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask};
 pub use check_compiled::CheckCompiledFiles;
+pub use check_publication::CheckPublicationArtifact;
 pub use dbt::DbtRecordTask;
 pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, RmTask, SedTask};
 pub use log_capture::{ExecuteAndCaptureLogs, JsonLogEvent};

@@ -307,7 +307,8 @@ fn spark_get_relation(
         .execute(Some(state), conn, ctx, &sql, token);
     if let Err(e) = &batch
         && (e.to_string().contains("cannot be found")
-            || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))
+            || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND")
+            || e.to_string().contains("UnresolvedTableOrView"))
     {
         return Ok(None);
     }
