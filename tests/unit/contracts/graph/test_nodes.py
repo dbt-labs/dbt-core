@@ -5,7 +5,14 @@ from dataclasses import replace
 
 import pytest
 
-from dbt.artifacts.resources import ColumnInfo, FunctionArgument, FunctionConfig, FunctionReturns, TestConfig, TestMetadata
+from dbt.artifacts.resources import (
+    ColumnInfo,
+    FunctionArgument,
+    FunctionConfig,
+    FunctionReturns,
+    TestConfig,
+    TestMetadata,
+)
 from dbt.compilation import inject_ctes_into_sql
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
