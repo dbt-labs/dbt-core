@@ -19,6 +19,6 @@ class AnalysisParser(SimpleSQLParser[AnalysisNode]):
 
     @classmethod
     def get_compiled_path(cls, block: FileBlock):
-        if get_flags().require_corrected_analysis_fqns:
+        if getattr(get_flags(), "require_corrected_analysis_fqns", False):
             return block.path.relative_path
         return os.path.join("analysis", block.path.relative_path)

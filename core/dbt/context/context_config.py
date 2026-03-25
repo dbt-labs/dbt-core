@@ -57,7 +57,9 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("exposures")
         elif resource_type == NodeType.Unit:
             model_configs = unrendered.get("unit_tests")
-        elif resource_type == NodeType.Analysis and get_flags().require_corrected_analysis_fqns:
+        elif resource_type == NodeType.Analysis and getattr(
+            get_flags(), "require_corrected_analysis_fqns", False
+        ):
             model_configs = unrendered.get("analyses")
         else:
             model_configs = unrendered.get("models")
@@ -90,7 +92,9 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.exposures
         elif resource_type == NodeType.Unit:
             model_configs = self.project.unit_tests
-        elif resource_type == NodeType.Analysis and get_flags().require_corrected_analysis_fqns:
+        elif resource_type == NodeType.Analysis and getattr(
+            get_flags(), "require_corrected_analysis_fqns", False
+        ):
             model_configs = self.project.analyses
         elif resource_type == NodeType.Function:
             model_configs = self.project.functions

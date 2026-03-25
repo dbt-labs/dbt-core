@@ -48,7 +48,7 @@ analyses:
 """
 
 
-FLAGS = {"flags": {"require_analyses_project_level_config": True}}
+FLAGS = {"flags": {"require_corrected_analysis_fqns": True}}
 
 
 # Test: project-level analyses +enabled: false disables all analyses
