@@ -21,6 +21,11 @@ class UnitTestConfig(BaseConfig):
         metadata=MergeBehavior.Update.meta(),
     )
     enabled: bool = True
+    static_analysis: Optional[str] = None
+
+    def __post_init__(self):
+        if isinstance(self.static_analysis, bool):
+            self.static_analysis = "on" if self.static_analysis else "off"
 
 
 class UnitTestFormat(StrEnum):
