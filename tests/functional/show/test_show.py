@@ -271,10 +271,6 @@ class TestShowSubstringBug:
     name should not incorrectly match other nodes during result filtering."""
 
     @pytest.fixture(scope="class")
-    def dbt_profile_target(self):
-        return {"type": "duckdb", "threads": 1, "path": ":memory:"}
-
-    @pytest.fixture(scope="class")
     def models(self):
         return {
             "my_show_model.sql": models__model_with_show_in_name,
@@ -292,7 +288,7 @@ class TestShowSubstringBug:
         run_dbt(["build"])
 
     def test_show_does_not_match_substring(self, project):
-        """Selecting 'show' should not match 'my_show_model' via substring."""
+        """Selecting 'second_model' should not match 'my_show_model' via substring check."""
         (_, log_output) = run_dbt_and_capture(
             ["show", "--select", "second_model"],
         )
