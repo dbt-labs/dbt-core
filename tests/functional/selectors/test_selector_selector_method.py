@@ -316,6 +316,6 @@ class TestSelectExcludeIgnoredWithSelectorWarning:
 
         for command in commands:
             if isinstance(command, tuple):
-                run_dbt([*command, "--selector", "model_a_selector"], expect_pass=True)
+                run_dbt([*command, "--selector", "model_a_explicit_selector"], expect_pass=True)
             else:
-                run_dbt([command, "--selector", "model_a_selector"], expect_pass=True)
+                run_dbt([command, "--selector", "model_a_explicit_selector"], expect_pass=True)
