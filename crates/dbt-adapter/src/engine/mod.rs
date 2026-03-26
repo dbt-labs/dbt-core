@@ -34,6 +34,8 @@ pub use sidecar_client::SidecarClient;
 /// The new behavior is always enabled; these flags are accepted but ignored.
 /// See: https://docs.getdbt.com/reference/global-configs/behavior-changes
 const REMOVED_IN_FUSION: &[&str] = &[
+    // dbt-core flags
+    // ---
     "use_info_schema_for_columns",
     "require_explicit_package_overrides_for_builtin_materializations",
     "require_resource_names_without_spaces",
@@ -41,6 +43,23 @@ const REMOVED_IN_FUSION: &[&str] = &[
     "skip_nodes_if_on_run_start_fails",
     "state_modified_compare_more_unrendered_values",
     "require_yaml_configuration_for_mf_time_spines",
+    "require_nested_cumulative_type_params",
+    "require_generic_test_arguments_property",
+    "require_unique_project_resource_names",
+    "require_ref_searches_node_package_before_root",
+    "require_valid_schema_from_generate_schema_name",
+    "require_sql_header_in_test_configs",
+    "require_batched_execution_for_custom_microbatch_strategy",
+    // dbt-redshift flags
+    // ---
+    // metadata adapter already uses SVV views
+    "restrict_direct_pg_catalog_access",
+    // transactions handled at driver level
+    "redshift_skip_autocommit_transaction_statements",
+    // dbt-bigquery flags
+    // ---
+    // metadata adapter already uses batched __TABLES__ queries for freshness.
+    "bigquery_use_batch_source_freshness",
 ];
 
 pub(crate) fn make_behavior(

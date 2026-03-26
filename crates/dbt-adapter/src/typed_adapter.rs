@@ -778,7 +778,7 @@ impl ConcreteAdapter {
             let strategy_ = DbtIncrementalStrategy::from_str(strategy)
                 .map_err(|e| invalid_argument_inner!("Invalid strategy value {}", e))?;
             if !self.valid_incremental_strategies().contains(&strategy_)
-                && builtin_incremental_strategies(false).contains(&strategy_)
+                && builtin_incremental_strategies().contains(&strategy_)
             {
                 return invalid_argument!(
                     "The incremental strategy '{}' is not valid for this adapter",
@@ -3844,24 +3844,18 @@ impl ConcreteAdapter {
     }
 }
 
-/// List of possible builtin strategies for adapters
-/// Microbatch is added by _default_. It is only not added when the behavior flag
-/// `require_batched_execution_for_custom_microbatch_strategy` is True.
-/// TODO: come back when Behavior is implemented
+/// List of possible builtin strategies for adapters.
+/// Microbatch is always included — `require_batched_execution_for_custom_microbatch_strategy`
+/// is always True in Fusion (new behavior only, no legacy path).
 /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1690-L1691
-fn builtin_incremental_strategies(
-    require_batched_execution_for_custom_microbatch_strategy: bool,
-) -> Vec<DbtIncrementalStrategy> {
-    let mut result = vec![
+fn builtin_incremental_strategies() -> Vec<DbtIncrementalStrategy> {
+    vec![
         DbtIncrementalStrategy::Append,
         DbtIncrementalStrategy::DeleteInsert,
         DbtIncrementalStrategy::Merge,
         DbtIncrementalStrategy::InsertOverwrite,
-    ];
-    if require_batched_execution_for_custom_microbatch_strategy {
-        result.push(DbtIncrementalStrategy::Microbatch)
-    }
-    result
+        DbtIncrementalStrategy::Microbatch,
+    ]
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
@@ -3869,7 +3863,7 @@ pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = Laz
     [
         BehaviorFlag::new(
             "require_batched_execution_for_custom_microbatch_strategy",
-            false,
+            true,
             Some("https://docs.getdbt.com/docs/build/incremental-microbatch"),
             None,
             None,
