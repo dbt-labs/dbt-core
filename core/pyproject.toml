@@ -64,6 +64,7 @@ dependencies = [
     "pytz>=2015.7",
     "pyyaml>=6.0",
     "daff>=1.3.46",
+    "python-dotenv>=1.2",
     "typing-extensions>=4.4",
 ]
 
