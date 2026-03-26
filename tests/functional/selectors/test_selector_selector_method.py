@@ -297,3 +297,25 @@ class TestSelectExcludeIgnoredWithSelectorWarning:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 0
+
+    def test_all_commands_requiring_selectors_support_selectors(self, project):
+        # tests all commands except for clone as clone functional tests are in adapters
+        commands = [
+            "build",
+            ("docs", "generate"),
+            "compile",
+            ("show", "--select", "selector:model_a_selector"),
+            "list",
+            "ls",
+            "run",
+            "seed",
+            "snapshot",
+            ("source", "freshness"),
+            "test",
+        ]
+
+        for command in commands:
+            if isinstance(command, tuple):
+                run_dbt([*command, "--selector", "model_a_selector"], expect_pass=True)
+            else:
+                run_dbt([command, "--selector", "model_a_selector"], expect_pass=True)

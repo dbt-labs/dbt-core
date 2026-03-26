@@ -224,6 +224,7 @@ class FreshnessTask(RunTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=[NodeType.Source],
+            selectors=self.config.selectors,
         )
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
