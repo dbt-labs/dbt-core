@@ -5,12 +5,14 @@
 //! - Known deviations that should skip validation
 //! - SQL extraction and sanitization for meaningful comparison
 //! - Pluggable sanitizers to clean dynamic content from SQL
+//!   (including stripping `--` / `/* */` comments so diagnostics do not false-fail replay)
 
 use std::{fmt, sync::LazyLock};
 
 use regex::Regex;
 use similar::{ChangeTag, TextDiff};
 
+use crate::sql::normalize::strip_sql_comments;
 use crate::time_machine::event::AdapterCallEvent;
 
 /// An incoming event being compared against a recorded event.
@@ -255,6 +257,9 @@ impl TimeMachineEventValidationEngine {
         engine.register_sanitizer(Box::new(QueryTagSanitizer));
         engine.register_sanitizer(Box::new(UuidSanitizer));
         engine.register_sanitizer(Box::new(GrantOrderingSanitizer));
+        // Strip SQL comments before whitespace normalization so dynamic text in comments
+        // (timestamps, state fingerprints, etc.) does not cause false mismatches.
+        engine.register_sanitizer(Box::new(SqlCommentSanitizer));
         // Whitespace sanitizer should be last to normalize after other sanitizers
         engine.register_sanitizer(Box::new(WhitespaceSanitizer));
 
@@ -617,6 +622,23 @@ impl SqlSanitizer for GrantOrderingSanitizer {
     }
 }
 
+/// Sanitizer that removes SQL line and block comments using the same string-aware
+/// implementation as query-cache key normalization ([`crate::sql::normalize::strip_sql_comments`]).
+///
+/// Executed SQL often includes non-semantic `--` / `/* */` diagnostics (e.g. frozen state
+/// timestamps) that differ between recording and replay without changing executable SQL.
+pub struct SqlCommentSanitizer;
+
+impl SqlSanitizer for SqlCommentSanitizer {
+    fn name(&self) -> &'static str {
+        "sql_comments"
+    }
+
+    fn sanitize(&self, sql: &str) -> String {
+        strip_sql_comments(sql)
+    }
+}
+
 /// Sanitizer that normalizes whitespace by collapsing consecutive whitespace
 /// characters into single spaces.
 ///
@@ -883,6 +905,49 @@ mod tests {
         let sql = "SELECT\n    a,\n    b\nFROM\n    t";
         let sanitized = sanitizer.sanitize(sql);
         assert_eq!(sanitized, "SELECT a, b FROM t");
+    }
+
+    #[test]
+    fn test_sql_comment_sanitizer_strips_line_comment_diagnostics() {
+        let sanitizer = SqlCommentSanitizer;
+        let a = "SELECT 1 WHERE x = 1 -- force_state: 2026-03-20T21:00:14.457688+00:00";
+        let b = "SELECT 1 WHERE x = 1 -- force_state: 2026-03-25T17:25:42.672017+00:00";
+        assert_eq!(sanitizer.sanitize(a), sanitizer.sanitize(b));
+    }
+
+    #[test]
+    fn test_sql_comment_sanitizer_strips_block_comment() {
+        let sanitizer = SqlCommentSanitizer;
+        let a = "SELECT /* old */ 1";
+        let b = "SELECT /* new */ 1";
+        assert_eq!(sanitizer.sanitize(a), sanitizer.sanitize(b));
+        assert_eq!(sanitizer.sanitize(a), "SELECT 1");
+    }
+
+    #[test]
+    fn test_sql_comment_sanitizer_preserves_dash_dash_inside_string_literal() {
+        let sanitizer = SqlCommentSanitizer;
+        let sql = "SELECT '-- not a comment'";
+        assert_eq!(sanitizer.sanitize(sql), sql);
+    }
+
+    #[test]
+    fn test_engine_matches_when_only_sql_comment_differs() {
+        let engine = TimeMachineEventValidationEngine::new();
+        let incoming_args = serde_json::json!([
+            "SELECT 1 FROM t WHERE a = 1 -- force_state: 2026-03-20T21:00:14+00:00"
+        ]);
+        let recorded_args = serde_json::json!([
+            "SELECT 1 FROM t WHERE a = 1 -- force_state: 2026-03-25T17:25:42+00:00"
+        ]);
+        let incoming = IncomingEvent::new("model.p.my_model", "execute", &incoming_args);
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+        let result = engine.validate(&incoming, &recorded);
+        assert!(
+            matches!(result, ValidationResult::Match),
+            "Expected match when only line comments differ, got {:?}",
+            result
+        );
     }
 
     #[test]
