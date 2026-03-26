@@ -150,6 +150,44 @@ mod tests {
                     ],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<column_comments>
+    <comments>
+        <a_column>
+            new comment
+        </a_column>
+    </comments>
+    <persist>
+        True
+    </persist>
+</column_comments>
+<tags>
+    <set_tags>
+        <a_tag>
+            new
+        </a_tag>
+        <b_tag>
+            old
+        </b_tag>
+    </set_tags>
+</tags>
+<tblproperties>
+    <tblproperties>
+        <customKey>
+            new
+        </customKey>
+        <customKey2>
+            value
+        </customKey2>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
+    </tblproperties>
+    <pipeline_id>
+        my_new_pipeline
+    </pipeline_id>
+</tblproperties>
+                    ",
                 requires_full_refresh: false,
             },
             TestCase {
@@ -178,6 +216,16 @@ mod tests {
                     )],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<comment>
+    <comment>
+        new comment
+    </comment>
+    <persist>
+        True
+    </persist>
+</comment>
+                    ",
                 requires_full_refresh: true,
             },
         ]

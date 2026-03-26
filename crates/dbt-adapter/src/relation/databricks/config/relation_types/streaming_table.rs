@@ -134,6 +134,43 @@ mod tests {
                     ],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<comment>
+    <comment>
+        new comment
+    </comment>
+    <persist>
+        True
+    </persist>
+</comment>
+<tblproperties>
+    <tblproperties>
+        <customKey>
+            new
+        </customKey>
+        <customKey2>
+            value
+        </customKey2>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
+    </tblproperties>
+    <pipeline_id>
+        my_new_pipeline
+    </pipeline_id>
+</tblproperties>
+<refresh>
+    <cron>
+        */60 * * * *
+    </cron>
+    <time_zone_value>
+        UTC
+    </time_zone_value>
+    <is_altered>
+        True
+    </is_altered>
+</refresh>
+                    ",
                 requires_full_refresh: false,
             },
             TestCase {
@@ -159,6 +196,13 @@ mod tests {
                     )],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<partitioned_by>
+    <partition_by>
+        partition_by_new
+    </partition_by>
+</partitioned_by>
+                    ",
                 requires_full_refresh: true,
             },
         ]

@@ -59,6 +59,7 @@ ureq = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+dbt-jinja-utils = { workspace = true, features = ["testing"] }
 dbt-test-primitives = { workspace = true }
 tempfile = { workspace = true }
 

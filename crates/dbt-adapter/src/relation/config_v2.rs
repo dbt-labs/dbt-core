@@ -529,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_diff_config_created() {
+    fn simple_diff_config_created() {
         let next = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
@@ -541,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_diff_no_change() {
+    fn simple_diff_no_change() {
         let prev = MockComponent {
             diff_fn: diff::desired_state,
             to_jinja_fn: to_jinja,
@@ -559,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_diff_with_change() {
+    fn simple_diff_with_change() {
         let prev = MockComponent {
             diff_fn: diff::desired_state,
             to_jinja_fn: to_jinja,
@@ -577,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_diff_with_change() {
+    fn custom_diff_with_change() {
         let prev = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: custom_diff,
@@ -604,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relation_config_diff_created() {
+    fn relation_config_diff_created() {
         let next_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relation_config_diff_no_changes() {
+    fn relation_config_diff_no_changes() {
         let component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
@@ -648,7 +648,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relation_config_diff_with_changes() {
+    fn relation_config_diff_with_changes() {
         let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
@@ -682,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relation_config_diff_drop() {
+    fn relation_config_diff_drop() {
         let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
@@ -703,14 +703,14 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_changed_keys_no_changes() {
+    fn diff_changed_keys_no_changes() {
         let hashmap = IndexMap::from([("a", 1), ("b", 2)]);
         let diff = diff::changed_keys(&hashmap, &hashmap);
         assert!(diff.is_none());
     }
 
     #[test]
-    fn test_diff_changed_keys_with_changes() {
+    fn diff_changed_keys_with_changes() {
         let prev = IndexMap::from([("a", 1), ("b", 2)]);
         let next = IndexMap::from([("a", 1), ("b", 3)]);
         let diff = diff::changed_keys(&next, &prev);
@@ -719,12 +719,235 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_changed_keys_dropped_key() {
+    fn diff_changed_keys_dropped_key() {
         let prev = IndexMap::from([("a", 1), ("b", 2)]);
         let next = IndexMap::from([("a", 1)]);
         let diff = diff::changed_keys(&next, &prev);
         // Dropping key resets the value to the default
         let expected = Some(IndexMap::from([("b", 0)]));
         assert_eq!(diff, expected);
+    }
+
+    /// Tests related to the jinja Object implementation
+    mod jinja {
+        use super::*;
+        use dbt_jinja_utils::test_helpers::jinja_assert;
+        use minijinja::value::{Enumerator, Object, Value};
+        use std::sync::Arc;
+
+        #[derive(Debug)]
+        struct RelationConfigTestWrapper {
+            desired: Arc<RelationConfig>,
+            existing: Arc<RelationConfig>,
+        }
+
+        impl RelationConfigTestWrapper {
+            fn new(desired: RelationConfig, existing: RelationConfig) -> Self {
+                RelationConfigTestWrapper {
+                    desired: Arc::new(desired),
+                    existing: Arc::new(existing),
+                }
+            }
+        }
+
+        impl Object for RelationConfigTestWrapper {
+            fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+                match key.as_str()? {
+                    "desired" => Some(Value::from_dyn_object(self.desired.clone())),
+                    "existing" => Some(Value::from_dyn_object(self.existing.clone())),
+                    _ => None,
+                }
+            }
+
+            fn enumerate(self: &Arc<Self>) -> Enumerator {
+                Enumerator::Values(vec![Value::from("desired"), Value::from("existing")])
+            }
+        }
+
+        mod databricks {
+            use super::*;
+
+            fn to_jinja_plus_one(v: &u8) -> Value {
+                Value::from(*v + 1)
+            }
+
+            #[test]
+            fn relation_config_empty() {
+                let cfg = RelationConfig::new(AdapterType::Databricks, [], return_true);
+                let template = "
+                {% for key in obj %}
+                    {{ key }}
+                {% endfor %}
+                ";
+                let expect = "";
+                jinja_assert(cfg, template, expect);
+            }
+
+            #[test]
+            fn relation_config_iter_keys_and_get_values() {
+                let cfg = RelationConfig::new(
+                    AdapterType::Databricks,
+                    [
+                        Box::new(MockComponent {
+                            type_name: "mock1",
+                            diff_fn: diff::desired_state,
+                            to_jinja_fn: to_jinja,
+                            value: 111,
+                        }) as Box<dyn ComponentConfig>,
+                        Box::new(MockComponent {
+                            type_name: "mock2",
+                            diff_fn: diff::desired_state,
+                            to_jinja_fn: to_jinja_plus_one,
+                            value: 222,
+                        }) as Box<dyn ComponentConfig>,
+                    ],
+                    return_true,
+                );
+                let template = "
+                {% for key in obj %}
+                    key       : {{ key }}
+                    value[key]: {{ obj[key] }}
+                {% endfor %}
+                ";
+                let expect = "
+                key       : mock1
+                value[key]: 111
+                key       : mock2
+                value[key]: 223
+                ";
+                jinja_assert(cfg, template, expect);
+            }
+
+            #[test]
+            fn relation_config_get_changeset_with_changes() {
+                let existing = RelationConfig::new(
+                    AdapterType::Databricks,
+                    [Box::new(MockComponent {
+                        type_name: "mock1",
+                        diff_fn: diff::desired_state,
+                        to_jinja_fn: to_jinja,
+                        value: 100,
+                    }) as Box<dyn ComponentConfig>],
+                    return_true,
+                );
+                let desired = RelationConfig::new(
+                    AdapterType::Databricks,
+                    [Box::new(MockComponent {
+                        type_name: "mock1",
+                        diff_fn: diff::desired_state,
+                        to_jinja_fn: to_jinja,
+                        value: 200,
+                    }) as Box<dyn ComponentConfig>],
+                    return_true,
+                );
+
+                let wrapper = RelationConfigTestWrapper::new(desired, existing);
+                let template = "
+                {% set changeset = obj.desired.get_changeset(obj.existing) %}
+                has_changeset: {{ changeset is not none }}
+                requires_full_refresh: {{ changeset.requires_full_refresh }}
+                desired_state: {{ changeset.changes['mock1'] }}
+                ";
+                let expect = "
+                has_changeset: True
+                requires_full_refresh: True
+                desired_state: 200
+                ";
+                jinja_assert(wrapper, template, expect);
+            }
+
+            #[test]
+            fn relation_config_get_changeset_no_changes() {
+                let existing = RelationConfig::new(
+                    AdapterType::Databricks,
+                    [Box::new(MockComponent {
+                        type_name: "mock1",
+                        diff_fn: diff::desired_state,
+                        to_jinja_fn: to_jinja,
+                        value: 100,
+                    }) as Box<dyn ComponentConfig>],
+                    return_true,
+                );
+                let desired = RelationConfig::new(
+                    AdapterType::Databricks,
+                    [Box::new(MockComponent {
+                        type_name: "mock1",
+                        diff_fn: diff::desired_state,
+                        to_jinja_fn: to_jinja,
+                        value: 100,
+                    }) as Box<dyn ComponentConfig>],
+                    return_true,
+                );
+
+                let wrapper = RelationConfigTestWrapper::new(desired, existing);
+                let template = "
+                {% set changeset = obj.desired.get_changeset(obj.existing) %}
+                has_changeset: {{ changeset is not none }}
+                ";
+                let expect = "
+                has_changeset: False
+                ";
+                jinja_assert(wrapper, template, expect);
+            }
+
+            #[test]
+            fn changeset_empty() {
+                let cfg =
+                    RelationComponentConfigChangeSet::new(AdapterType::Databricks, [], return_true);
+                let template = "
+                {% for key in obj %}
+                    {{ key }}
+                {% endfor %}
+                ";
+                let expect = "";
+                jinja_assert(cfg, template, expect);
+            }
+
+            #[test]
+            fn changeset_iter_keys_and_get_values() {
+                let cfg = RelationComponentConfigChangeSet::new(
+                    AdapterType::Databricks,
+                    [
+                        (
+                            "mock1",
+                            ComponentConfigChange::Some(Box::new(MockComponent {
+                                type_name: TYPE_NAME,
+                                diff_fn: diff::desired_state,
+                                to_jinja_fn: to_jinja,
+                                value: 111,
+                            })
+                                as Box<dyn ComponentConfig>),
+                        ),
+                        (
+                            "mock2",
+                            ComponentConfigChange::Some(Box::new(MockComponent {
+                                type_name: TYPE_NAME,
+                                diff_fn: diff::desired_state,
+                                to_jinja_fn: to_jinja_plus_one,
+                                value: 222,
+                            })
+                                as Box<dyn ComponentConfig>),
+                        ),
+                    ],
+                    return_true,
+                );
+                let template = "
+                {% for key in obj %}
+                    key           : {{ key }}
+                    value.get(key): {{ obj.get(key) }}
+                    value[key]    : {{ obj[key] }}
+                {% endfor %}
+                ";
+                let expect = "
+                key           : mock1
+                value.get(key): 111
+                value[key]    : 111
+                key           : mock2
+                value.get(key): 223
+                value[key]    : 223
+                ";
+                jinja_assert(cfg, template, expect);
+            }
+        }
     }
 }

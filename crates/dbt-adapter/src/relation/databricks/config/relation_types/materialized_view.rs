@@ -100,6 +100,26 @@ mod tests {
                     ],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<partitioned_by>
+    <partition_by>
+        partition_column_new
+    </partition_by>
+</partitioned_by>
+<tblproperties>
+    <tblproperties>
+        <custom.key>
+            new
+        </custom.key>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
+    </tblproperties>
+    <pipeline_id>
+        my_old_pipeline
+    </pipeline_id>
+</tblproperties>
+                    ",
                 requires_full_refresh: true,
             },
             TestCase {
@@ -142,6 +162,19 @@ mod tests {
                     ],
                     requires_full_refresh,
                 ),
+                changeset_jinja: "
+<refresh>
+    <cron>
+        */60 * * * *
+    </cron>
+    <time_zone_value>
+        UTC
+    </time_zone_value>
+    <is_altered>
+        True
+    </is_altered>
+</refresh>
+                    ",
                 requires_full_refresh: false,
             },
         ]
