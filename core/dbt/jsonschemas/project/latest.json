@@ -2213,6 +2213,16 @@
             "null"
           ]
         },
+        "+packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+quoting": {
           "anyOf": [
             {
