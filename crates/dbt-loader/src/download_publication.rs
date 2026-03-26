@@ -1,6 +1,7 @@
+use crate::cloud_http_client::{CloudAuthScheme, build_cloud_api_client, build_private_api_url};
 use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::tracing::emit::{emit_debug_log_message, emit_info_progress_message};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::packages::UpstreamProject;
 use dbt_telemetry::ProgressMessage;
@@ -13,10 +14,10 @@ const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 ///
 /// This function checks if the environment variable `DBT_CLOUD_PUBLICATIONS_DIR` is set.
 /// If it is, it uses the specified directory for storing publication artifacts.
-/// Otherwise it will download the publication artifacts to the target directory if upstream_projects are specifid.
+/// Otherwise it will download the publication artifacts to the target directory if upstream_projects are specified.
 ///
 pub(crate) async fn download_publication_artifacts(
-    upstream_projects: &Vec<UpstreamProject>,
+    upstream_projects: &[UpstreamProject],
     dbt_cloud_config: &Option<ResolvedCloudConfig>,
     io: &IoArgs,
 ) -> FsResult<()> {
@@ -77,23 +78,29 @@ pub(crate) async fn download_publication_artifacts(
         .and_then(|c| c.credentials.as_ref())
         .ok_or_else(|| {
             fs_err!(
-                ErrorCode::IoError,
-                "Trying to download publication artifacts but dbt_cloud configuration not found in project"
+                ErrorCode::InvalidConfig,
+                "Cannot download publication artifacts: no dbt Cloud credentials configured."
             )
         })?;
-
-    let config = dbt_cloud_config.as_ref().unwrap(); // safe: creds came from dbt_cloud_config
-    let project_id = config.project_id.as_deref().ok_or_else(|| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Trying to download publication artifacts but project_id not found in dbt_cloud configuration"
-        )
-    })?;
+    let project_id = dbt_cloud_config
+        .as_ref()
+        .and_then(|c| c.project_id.as_deref())
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Cannot download publication artifacts: no project ID configured."
+            )
+        })?;
     let (account_id, account_host, token) = (
         creds.account_id.as_str(),
         creds.host.as_str(),
         creds.token.as_str(),
     );
+    emit_debug_log_message(format!(
+        "Publication download config: host={}, account_id={}",
+        account_host, account_id
+    ));
+    let cloud_client = build_cloud_api_client(token, CloudAuthScheme::Bearer, None)?;
 
     // Download artifacts for each upstream project
     for upstream_project in upstream_projects {
@@ -121,33 +128,40 @@ pub(crate) async fn download_publication_artifacts(
         };
 
         if !should_download {
+            emit_debug_log_message(format!(
+                "Skipping download for {}, cached artifact is still fresh",
+                upstream_project.name
+            ));
             continue;
         }
 
-        // Construct API URL
-        let url = format!(
-            "https://{}/api/private/accounts/{}/projects/{}/artifacts/publication/?dbt_project_name={}",
-            account_host, account_id, project_id, upstream_project.name
+        // The API expects the consumer (current) project ID in the path,
+        // and the producer (upstream) project name as a query parameter.
+        let url = build_private_api_url(
+            account_host,
+            account_id,
+            &format!(
+                "projects/{}/artifacts/publication/?dbt_project_name={}",
+                project_id, upstream_project.name
+            ),
         );
+
+        emit_debug_log_message(format!("Publication download URL: {}", url));
 
         // Log download attempt
         emit_info_progress_message(
             ProgressMessage::new_from_action_and_target(
-                "DOWNLOADING".to_string(),
+                "Downloading".to_string(),
                 format!("publication artifact for {}", upstream_project.name),
             ),
             io.status_reporter.as_ref(),
         );
 
         // Execute HTTP request
-        let client = reqwest::Client::new();
-        let response = client
-            .get(&url)
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"))
-            .send()
-            .await
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e))?;
+        let response =
+            cloud_client.get(&url).send().await.map_err(|e| {
+                fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e)
+            })?;
 
         if !response.status().is_success() {
             return Err(fs_err!(
@@ -221,7 +235,7 @@ pub(crate) async fn download_publication_artifacts(
         // Log successful download
         emit_info_progress_message(
             ProgressMessage::new_from_action_and_target(
-                "DOWNLOADED".to_string(),
+                "Downloaded".to_string(),
                 format!(
                     "publication artifact for {} to {}",
                     upstream_project.name,

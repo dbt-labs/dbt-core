@@ -68,6 +68,14 @@ pub async fn last_modified<P: AsRef<Path>>(path: P) -> FsResult<SystemTime> {
         ))
 }
 
+/// Wrapper around [`tokio::fs::metadata`] that returns a useful error in case of failure.
+pub async fn metadata(path: impl AsRef<Path>) -> FsResult<std::fs::Metadata> {
+    let path = path.as_ref();
+    tokio::fs::metadata(path)
+        .await
+        .lift(ectx!("Failed to get metadata for: {}", path.display()))
+}
+
 /// Wrapper around [`tokio::fs::rename`] that returns a useful error in case of failure.
 pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> FsResult<()> {
     let from = from.as_ref();

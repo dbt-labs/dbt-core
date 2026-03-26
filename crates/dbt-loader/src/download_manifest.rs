@@ -1,3 +1,6 @@
+use crate::cloud_http_client::{
+    CloudAuthScheme, build_cloud_api_client, build_private_api_url, build_retry_client,
+};
 use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::constants::{DBT_MANIFEST_INFO, DBT_MANIFEST_JSON};
 use dbt_common::io_args::IoArgs;
@@ -5,17 +8,12 @@ use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_messag
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_telemetry::ProgressMessage;
 use flate2::read::GzDecoder;
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::{
-    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
-};
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
-const MAX_CLIENT_RETRIES: u32 = 3;
 
 /// Process manifest bytes - handles both plain JSON and gzip-compressed JSON
 /// Returns the valid JSON bytes or None if the data is invalid
@@ -58,9 +56,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     let Some(creds) = &config.credentials else {
         return Ok(None);
     };
-    let Some(project_id) = config.project_id.as_deref() else {
-        return Ok(None);
-    };
+    let project_id = config.project_id.as_deref().unwrap_or_default();
 
     // Create directory for manifest
     let default_dir = io.out_dir.join("dbt_cloud_defer");
@@ -104,15 +100,15 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         None => "manifest/latest/".to_string(),
     };
 
-    let (account_id, account_host, token) = (
-        creds.account_id.as_str(),
-        creds.host.as_str(),
-        creds.token.as_str(),
-    );
+    let account_id = creds.account_id.as_str();
+    let account_host = creds.host.as_str();
+    let token = creds.token.as_str();
 
     // Construct API URL to get presigned link
-    let url = format!(
-        "https://{account_host}/api/private/accounts/{account_id}/projects/{project_id}/{manifest_path_suffix}"
+    let url = build_private_api_url(
+        account_host,
+        account_id,
+        &format!("projects/{project_id}/{manifest_path_suffix}"),
     );
 
     // Log download attempt
@@ -125,18 +121,22 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     );
 
     // First request to get presigned URL
-    let retry_policy =
-        RetryExponentialBackoff::builder().build_with_max_retries(MAX_CLIENT_RETRIES);
-    let client = ClientBuilder::new(reqwest::Client::new())
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build();
-    let response = match client
-        .get(&url)
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {token}"))
-        .send()
-        .await
-    {
+    let cloud_client = match build_cloud_api_client(token, CloudAuthScheme::Bearer, None) {
+        Ok(client) => client,
+        Err(err) => {
+            emit_warn_log_message(
+                ErrorCode::NetworkError,
+                format!(
+                    "Failed to create cloud HTTP client for deferral manifest, continuing without deferral. Error: {}",
+                    err
+                ),
+                io.status_reporter.as_ref(),
+            );
+            return Ok(None);
+        }
+    };
+
+    let response = match cloud_client.get(&url).send().await {
         Ok(response) => response,
         Err(e) => {
             // Don't fail the entire operation if API request fails
@@ -206,7 +206,9 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         })?;
 
     // Download manifest from presigned URL
-    let manifest_response = match client.get(presigned_url).send().await {
+    // Presigned URL requests should not include cloud auth headers.
+    let manifest_download_client = build_retry_client(reqwest::Client::new());
+    let manifest_response = match manifest_download_client.get(presigned_url).send().await {
         Ok(response) => response,
         Err(e) => {
             // Extract the source error from middleware/retry errors

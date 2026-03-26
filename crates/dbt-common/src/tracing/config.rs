@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{
     convert::log_level_filter_to_tracing,
@@ -256,6 +256,14 @@ impl FsTraceConfig {
             show_all_deprecations,
             disable_console_output,
         }
+    }
+
+    /// Returns the resolved absolute path to the log directory.
+    ///
+    /// This is the directory where `dbt.log`, query logs, and OTEL files are written.
+    /// It is always an absolute path after construction.
+    pub fn log_dir(&self) -> &Path {
+        &self.log_path
     }
 
     /// Creates a new FsTraceConfig with proper path resolution.

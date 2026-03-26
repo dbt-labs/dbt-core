@@ -405,6 +405,7 @@ tempfile = "3.2.0"
 term_size = "0.3.1"
 walkdir = "2.4.0"
 xshell = "0.2.7"
+zip = "0.6.6"
 
 # async + threading
 astral-tokio-tar = { version = "0.5.6" }

@@ -43,11 +43,13 @@ sha2 = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 dbt-jinja-utils = { workspace = true, features = ["testing"] }
 dbt-parser = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [lib]
 name = "dbt_loader"
