@@ -78,15 +78,22 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
     ) -> Vec<Rc<dyn RenderingEventListener>> {
         let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![];
 
-        // Always add the default listener for macro spans
-        listeners.push(Rc::new(DefaultRenderingEventListener::new(self.quiet)));
-
-        // Add mangled ref printer if enabled
         if self.check_mangled_refs {
+            // Share the output tracker location so MangledRefWarningPrinter can observe
+            // the current render position at the moment on_ref_or_source fires.
+            let shared_tracker = Rc::new(OutputTrackerLocation::default());
+            listeners.push(Rc::new(DefaultRenderingEventListener::with_tracker(
+                self.quiet,
+                shared_tracker.clone(),
+            )));
             listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
                 filename.to_path_buf(),
                 self.io_args.clone(),
+                shared_tracker,
             )));
+        } else {
+            // Always add the default listener for macro spans
+            listeners.push(Rc::new(DefaultRenderingEventListener::new(self.quiet)));
         }
 
         listeners
@@ -443,6 +450,19 @@ impl DefaultRenderingEventListener {
             macro_spans: RefCell::new(MacroSpans::default()),
             macro_start_stack: RefCell::new(vec![vec![]]),
             output_tracker_location: Rc::new(OutputTrackerLocation::default()),
+        }
+    }
+
+    /// Creates a new rendering event listener with a shared output tracker location.
+    /// Use this when the output position needs to be observable by another listener
+    /// (e.g. `MangledRefWarningPrinter`) at the same time.
+    pub fn with_tracker(quiet: bool, output_tracker_location: Rc<OutputTrackerLocation>) -> Self {
+        Self {
+            quiet,
+            args: IoArgs::default(),
+            macro_spans: RefCell::new(MacroSpans::default()),
+            macro_start_stack: RefCell::new(vec![vec![]]),
+            output_tracker_location,
         }
     }
 }
