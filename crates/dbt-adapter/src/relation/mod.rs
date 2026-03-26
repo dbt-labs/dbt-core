@@ -7,7 +7,6 @@ pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, Rel
 pub mod bigquery;
 pub mod databricks;
 pub mod duckdb;
-pub mod fabric;
 pub mod parse;
 pub mod postgres;
 pub mod redshift;
@@ -160,7 +159,7 @@ mod tests {
     #[test]
     fn test_render_with_run_filter_databricks_adapter() {
         // relation impl in dbt-databricks doesn't seem to override this
-        let relation = databricks::DatabricksRelation::new(
+        let relation = databricks::GenericRelation::new(
             AdapterType::Databricks, // ?
             None,
             None,

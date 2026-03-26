@@ -12,9 +12,8 @@ use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::relation::bigquery::*;
-use crate::relation::databricks::{DatabricksRelation, typed_constraint::TypedConstraint};
+use crate::relation::databricks::{GenericRelation, typed_constraint::TypedConstraint};
 use crate::relation::duckdb_should_include_database;
-use crate::relation::fabric::FabricRelation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -87,7 +86,7 @@ impl RelationObject {
         let dbx = self
             .relation
             .as_any()
-            .downcast_ref::<DatabricksRelation>()
+            .downcast_ref::<GenericRelation>()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
@@ -121,7 +120,7 @@ impl RelationObject {
         let dbx = self
             .relation
             .as_any()
-            .downcast_ref::<DatabricksRelation>()
+            .downcast_ref::<GenericRelation>()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
@@ -133,10 +132,7 @@ impl RelationObject {
 
     /// Databricks: get create_constraints for get_column_and_constraints_sql
     fn relation_create_constraints(self: &Arc<Self>) -> Option<Value> {
-        let dbx = self
-            .relation
-            .as_any()
-            .downcast_ref::<DatabricksRelation>()?;
+        let dbx = self.relation.as_any().downcast_ref::<GenericRelation>()?;
         Some(Value::from_serialize(&dbx.create_constraints))
     }
 }
@@ -285,15 +281,16 @@ pub fn do_create_relation(
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
 ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
+    use AdapterType::*;
     let relation = match adapter_type {
-        AdapterType::Postgres | AdapterType::Sidecar => Box::new(PostgresRelation::try_new(
+        Postgres | Sidecar => Box::new(PostgresRelation::try_new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             custom_quoting,
         )?) as Box<dyn BaseRelation>,
-        AdapterType::DuckDB => {
+        DuckDB => {
             // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
             let include_policy = Policy::new(
                 duckdb_should_include_database(Some(database.as_str())),
@@ -311,7 +308,7 @@ pub fn do_create_relation(
                 custom_quoting,
             )?) as Box<dyn BaseRelation>
         }
-        AdapterType::Snowflake => Box::new(SnowflakeRelation::new(
+        Snowflake => Box::new(SnowflakeRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -319,7 +316,7 @@ pub fn do_create_relation(
             TableFormat::Default,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Bigquery => Box::new(BigqueryRelation::new(
+        Bigquery => Box::new(BigqueryRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -327,7 +324,7 @@ pub fn do_create_relation(
             None,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Redshift => Box::new(RedshiftRelation::new(
+        Redshift => Box::new(RedshiftRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -335,7 +332,7 @@ pub fn do_create_relation(
             None,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Databricks | AdapterType::Spark => Box::new(DatabricksRelation::new(
+        Databricks | Spark | Fabric => Box::new(GenericRelation::new(
             adapter_type,
             Some(database),
             Some(schema),
@@ -347,25 +344,18 @@ pub fn do_create_relation(
             false,
             false,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Salesforce => Box::new(SalesforceRelation::new(
+        Salesforce => Box::new(SalesforceRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Fabric => Box::new(FabricRelation::new(
-            Some(database),
-            Some(schema),
-            identifier,
-            relation_type,
-            custom_quoting,
-        )) as Box<dyn BaseRelation>,
-        AdapterType::ClickHouse => todo!("ClickHouse"),
-        AdapterType::Starburst => todo!("Starburst"),
-        AdapterType::Athena => todo!("Athena"),
-        AdapterType::Trino => todo!("Trino"),
-        AdapterType::Dremio => todo!("Dremio"),
-        AdapterType::Oracle => todo!("Oracle"),
+        ClickHouse => todo!("ClickHouse"),
+        Starburst => todo!("Starburst"),
+        Athena => todo!("Athena"),
+        Trino => todo!("Trino"),
+        Dremio => todo!("Dremio"),
+        Oracle => todo!("Oracle"),
     };
     Ok(relation)
 }

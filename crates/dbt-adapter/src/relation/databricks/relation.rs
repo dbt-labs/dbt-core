@@ -1,6 +1,7 @@
+use crate::information_schema::InformationSchema;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
-use dbt_common::adapter::AdapterType;
+use dbt_common::adapter::{AdapterType, quote_char};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -27,13 +28,12 @@ pub const INFORMATION_SCHEMA_SCHEMA: &str = "information_schema";
 
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
-pub struct DatabricksRelationType {
-    // should be databricks or spark
+pub struct GenericRelationType {
     pub adapter_type: AdapterType,
     pub quoting: ResolvedQuoting,
 }
 
-impl StaticBaseRelation for DatabricksRelationType {
+impl StaticBaseRelation for GenericRelationType {
     fn try_new(
         &self,
         database: Option<String>,
@@ -43,7 +43,7 @@ impl StaticBaseRelation for DatabricksRelationType {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
-        Ok(RelationObject::new(Arc::new(DatabricksRelation::new(
+        Ok(RelationObject::new(Arc::new(GenericRelation::new(
             self.adapter_type,
             database,
             schema,
@@ -60,14 +60,14 @@ impl StaticBaseRelation for DatabricksRelationType {
     }
 
     fn get_adapter_type(&self) -> String {
-        "databricks".to_string()
+        self.adapter_type.as_ref().to_string()
     }
 }
 
 /// A relation object for the adapter
 #[derive(Clone, Debug)]
-pub struct DatabricksRelation {
-    /// Should be databricks or spark
+pub struct GenericRelation {
+    /// The adapter type this relation instance is for.
     pub adapter_type: AdapterType,
     /// The path of the relation
     pub path: RelationPath,
@@ -92,7 +92,7 @@ pub struct DatabricksRelation {
     pub temporary: bool,
 }
 
-impl BaseRelationProperties for DatabricksRelation {
+impl BaseRelationProperties for GenericRelation {
     fn include_policy(&self) -> Policy {
         self.include_policy
     }
@@ -101,21 +101,22 @@ impl BaseRelationProperties for DatabricksRelation {
         self.quote_policy
     }
 
-    /// See [reference](https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/relation.py#L64)
     fn quote_character(&self) -> char {
-        '`'
+        quote_char(self.adapter_type)
     }
 
     fn get_database(&self) -> FsResult<String> {
+        use AdapterType::*;
         match self.adapter_type {
-            AdapterType::Databricks => self.path.database.clone().ok_or_else(|| {
+            Databricks | Fabric => self.path.database.clone().ok_or_else(|| {
                 fs_err!(
                     ErrorCode::InvalidConfig,
-                    "schema is required for databricks relation",
+                    "database is required for {} relation",
+                    self.adapter_type.as_ref()
                 )
             }),
-            AdapterType::Spark => Ok(self.path.database.clone().unwrap_or_default()),
-            _ => unreachable!(),
+            Spark => Ok(self.path.database.clone().unwrap_or_default()),
+            _ => Ok(self.path.database.clone().unwrap_or_default()),
         }
     }
 
@@ -123,7 +124,8 @@ impl BaseRelationProperties for DatabricksRelation {
         self.path.schema.clone().ok_or_else(|| {
             fs_err!(
                 ErrorCode::InvalidConfig,
-                "schema is required for databricks relation",
+                "schema is required for {} relation",
+                self.adapter_type.as_ref()
             )
         })
     }
@@ -132,32 +134,44 @@ impl BaseRelationProperties for DatabricksRelation {
         self.path.identifier.clone().ok_or_else(|| {
             fs_err!(
                 ErrorCode::InvalidConfig,
-                "identifier is required for databricks relation",
+                "identifier is required for {} relation",
+                self.adapter_type.as_ref()
             )
         })
     }
 
     fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
-        let database = if self.quote_policy().database {
-            Identifier::new(self.get_database()?)
-        } else {
-            Identifier::new(self.get_database()?.to_ascii_lowercase())
-        };
-        let schema = if self.quote_policy().schema {
-            Identifier::new(self.get_schema()?)
-        } else {
-            Identifier::new(self.get_schema()?.to_ascii_lowercase())
-        };
-        let identifier = if self.quote_policy().identifier {
-            Identifier::new(self.get_identifier()?)
-        } else {
-            Identifier::new(self.get_identifier()?.to_ascii_lowercase())
-        };
-        Ok(CanonicalFqn::new(&database, &schema, &identifier))
+        match self.adapter_type {
+            AdapterType::Fabric => {
+                // Fabric is case sensitive, even if unquoted
+                let d = self.get_database().map(Identifier::new)?;
+                let s = self.get_schema().map(Identifier::new)?;
+                let i = self.get_identifier().map(Identifier::new)?;
+                Ok(CanonicalFqn::new(&d, &s, &i))
+            }
+            _ => {
+                let database = if self.quote_policy().database {
+                    Identifier::new(self.get_database()?)
+                } else {
+                    Identifier::new(self.get_database()?.to_ascii_lowercase())
+                };
+                let schema = if self.quote_policy().schema {
+                    Identifier::new(self.get_schema()?)
+                } else {
+                    Identifier::new(self.get_schema()?.to_ascii_lowercase())
+                };
+                let identifier = if self.quote_policy().identifier {
+                    Identifier::new(self.get_identifier()?)
+                } else {
+                    Identifier::new(self.get_identifier()?.to_ascii_lowercase())
+                };
+                Ok(CanonicalFqn::new(&database, &schema, &identifier))
+            }
+        }
     }
 }
 
-impl DatabricksRelation {
+impl GenericRelation {
     /// Creates a new relation
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -172,10 +186,6 @@ impl DatabricksRelation {
         is_delta: bool,
         temporary: bool,
     ) -> Self {
-        debug_assert!(matches!(
-            adapter_type,
-            AdapterType::Databricks | AdapterType::Spark
-        ));
         Self {
             adapter_type,
             path: RelationPath {
@@ -193,6 +203,27 @@ impl DatabricksRelation {
             alter_constraints: Vec::new(),
             temporary,
         }
+    }
+
+    pub fn new_fabric(
+        database: Option<String>,
+        schema: Option<String>,
+        identifier: Option<String>,
+        relation_type: Option<RelationType>,
+        custom_quoting: ResolvedQuoting,
+    ) -> Self {
+        Self::new(
+            AdapterType::Fabric,
+            database,
+            schema,
+            identifier,
+            relation_type,
+            None,
+            custom_quoting,
+            None,
+            false,
+            false,
+        )
     }
 
     /// Create a new relation with a policy
@@ -259,13 +290,21 @@ impl DatabricksRelation {
     }
 }
 
-impl BaseRelation for DatabricksRelation {
-    /// It might be relation under a `information_schema` schema or a `system` catalog
-    /// For example, system.billing.list_prices or [database].information_schema.tables are both system tables
+impl BaseRelation for GenericRelation {
+    /// Whether the relation is a system table or not
     fn is_system(&self) -> bool {
-        self.path.database.as_ref().map(|s| s.to_lowercase()) == Some(SYSTEM_DATABASE.to_string())
-            || self.path.schema.as_ref().map(|s| s.to_lowercase())
-                == Some(INFORMATION_SCHEMA_SCHEMA.to_string())
+        match self.adapter_type {
+            AdapterType::Databricks | AdapterType::Spark => {
+                // It might be relation under a `information_schema` schema or a `system` catalog
+                // For example, system.billing.list_prices or [database].information_schema.tables
+                // are both system tables
+                self.path.database.as_ref().map(|s| s.to_lowercase())
+                    == Some(SYSTEM_DATABASE.to_string())
+                    || self.path.schema.as_ref().map(|s| s.to_lowercase())
+                        == Some(INFORMATION_SCHEMA_SCHEMA.to_string())
+            }
+            _ => false,
+        }
     }
 
     fn has_information(&self) -> bool {
@@ -281,7 +320,7 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
-        unimplemented!("Databricks relation creation from Jinja values")
+        unimplemented!("{} relation creation from Jinja values", self.adapter_type)
     }
 
     fn database(&self) -> Value {
@@ -305,7 +344,7 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn adapter_type(&self) -> AdapterType {
-        AdapterType::Databricks
+        self.adapter_type
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
@@ -328,18 +367,22 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn is_hive_metastore(&self) -> Value {
-        // Match Python dbt-databricks semantics:
-        // def is_hive_metastore(database: Optional[str], temporary: Optional[bool] = False) -> bool:
-        //     return (database is None or database.lower() == "hive_metastore") and not temporary
-        //
-        // Note: The `temporary` field only tracks Unity Catalog temporary tables, not Hive Metastore temporary views.
-        // Unity Catalog temporary tables are never considered to be in Hive Metastore.
-        let result = (self.path.database.is_none()
-            || self.path.database.as_ref().map(|s| s.to_lowercase())
-                == Some(DEFAULT_DATABRICKS_DATABASE.to_string()))
-            && !self.temporary;
-
-        Value::from(result)
+        let is_hive_metastore = match self.adapter_type {
+            AdapterType::Databricks | AdapterType::Spark => {
+                // Match Python dbt-databricks semantics:
+                // def is_hive_metastore(database: Optional[str], temporary: Optional[bool] = False) -> bool:
+                //     return (database is None or database.lower() == "hive_metastore") and not temporary
+                //
+                // Note: The `temporary` field only tracks Unity Catalog temporary tables, not Hive Metastore temporary views.
+                // Unity Catalog temporary tables are never considered to be in Hive Metastore.
+                (self.path.database.is_none()
+                    || self.path.database.as_ref().map(|s| s.to_lowercase())
+                        == Some(DEFAULT_DATABRICKS_DATABASE.to_string()))
+                    && !self.temporary
+            }
+            _ => false,
+        };
+        Value::from(is_hive_metastore)
     }
 
     fn is_temporary(&self) -> bool {
@@ -351,7 +394,12 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn set_is_delta(&mut self, is_delta: Option<bool>) {
-        self.is_delta = is_delta.unwrap_or(self.is_delta);
+        match self.adapter_type {
+            AdapterType::Databricks | AdapterType::Spark => {
+                self.is_delta = is_delta.unwrap_or(self.is_delta);
+            }
+            _ => {}
+        }
     }
 
     fn is_materialized_view(&self) -> bool {
@@ -378,7 +426,7 @@ impl BaseRelation for DatabricksRelation {
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        Ok(Arc::new(DatabricksRelation::new(
+        Ok(Arc::new(GenericRelation::new(
             self.adapter_type,
             database,
             schema,
@@ -394,10 +442,12 @@ impl BaseRelation for DatabricksRelation {
 
     fn information_schema_inner(
         &self,
-        _database: Option<String>,
-        _view_name: Option<&str>,
+        database: Option<String>,
+        view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
-        todo!("InformationSchema")
+        let result =
+            InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
+        Ok(RelationObject::new(Arc::new(result)).into_value())
     }
 }
 
@@ -408,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation_type = DatabricksRelationType {
+        let relation_type = GenericRelationType {
             adapter_type: AdapterType::Databricks,
             quoting: DEFAULT_RESOLVED_QUOTING,
         };
@@ -433,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation_with_default_database() {
-        let relation_type = DatabricksRelationType {
+        let relation_type = GenericRelationType {
             adapter_type: AdapterType::Databricks,
             quoting: DEFAULT_RESOLVED_QUOTING,
         };
@@ -461,7 +511,7 @@ mod tests {
         // lowercasing the entire rendered relation string.
         // Databricks backtick-quoted identifiers are case-insensitive, so
         // this is semantically correct and matches Mantle's behavior.
-        let relation_type = DatabricksRelationType {
+        let relation_type = GenericRelationType {
             adapter_type: AdapterType::Databricks,
             quoting: DEFAULT_RESOLVED_QUOTING,
         };
@@ -486,7 +536,7 @@ mod tests {
     #[test]
     fn test_is_system() {
         // Test system database (lowercase)
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("system".to_string()),
             Some("schema".to_string()),
@@ -501,7 +551,7 @@ mod tests {
         assert!(relation.is_system());
 
         // Test system database (uppercase - case insensitive)
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("SYSTEM".to_string()),
             Some("schema".to_string()),
@@ -516,7 +566,7 @@ mod tests {
         assert!(relation.is_system());
 
         // Test information_schema schema (lowercase)
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("database".to_string()),
             Some("information_schema".to_string()),
@@ -531,7 +581,7 @@ mod tests {
         assert!(relation.is_system());
 
         // Test information_schema schema (uppercase - case insensitive)
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("database".to_string()),
             Some("INFORMATION_SCHEMA".to_string()),
@@ -546,7 +596,7 @@ mod tests {
         assert!(relation.is_system());
 
         // Test neither system database nor information_schema schema
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("regular_database".to_string()),
             Some("regular_schema".to_string()),
@@ -561,7 +611,7 @@ mod tests {
         assert!(!relation.is_system());
 
         // Test with None database and non-information_schema schema
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             None,
             Some("regular_schema".to_string()),
@@ -576,7 +626,7 @@ mod tests {
         assert!(!relation.is_system());
 
         // Test with non-system database and None schema
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("regular_database".to_string()),
             None,
@@ -591,7 +641,7 @@ mod tests {
         assert!(!relation.is_system());
 
         // Test both system database and information_schema schema (should still be true)
-        let relation = DatabricksRelation::new(
+        let relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("system".to_string()),
             Some("information_schema".to_string()),
@@ -610,7 +660,7 @@ mod tests {
     fn test_constraint_methods() {
         use crate::relation::databricks::typed_constraint::TypedConstraint;
 
-        let mut relation = DatabricksRelation::new(
+        let mut relation = GenericRelation::new(
             AdapterType::Databricks,
             Some("test_db".to_string()),
             Some("test_schema".to_string()),

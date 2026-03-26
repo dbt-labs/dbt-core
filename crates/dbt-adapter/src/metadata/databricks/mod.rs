@@ -30,7 +30,7 @@ use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
-use crate::relation::databricks::DatabricksRelation;
+use crate::relation::databricks::GenericRelation;
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
@@ -97,7 +97,7 @@ WHERE table_catalog = '{}'
         let table_type = table_types.value(i).to_uppercase();
         let is_delta = file_formats.value(i) == "delta";
 
-        let relation = Arc::new(DatabricksRelation::new(
+        let relation = Arc::new(GenericRelation::new(
             engine.adapter_type(),
             Some(catalog.to_string()),
             Some(schema.to_string()),
@@ -1197,7 +1197,7 @@ fn extract_dbr_version(version_str: &str) -> AdapterResult<EngineVersion> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::relation::databricks::DatabricksRelation;
+    use crate::relation::databricks::GenericRelation;
     use dbt_schemas::dbt_types::RelationType;
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use dbt_schemas::schemas::relations::base::BaseRelation;
@@ -1218,7 +1218,7 @@ mod tests {
             identifier: quote_identifier,
         };
 
-        Arc::new(DatabricksRelation::new(
+        Arc::new(GenericRelation::new(
             AdapterType::Databricks,
             Some(database.to_string()),
             Some(schema.to_string()),

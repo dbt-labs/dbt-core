@@ -4468,11 +4468,11 @@ mod tests {
     /// - Streaming tables: use legacy
     #[test]
     fn test_databricks_get_columns_use_legacy_logic() {
-        use crate::relation::databricks::{DEFAULT_DATABRICKS_DATABASE, DatabricksRelation};
+        use crate::relation::databricks::{DEFAULT_DATABRICKS_DATABASE, GenericRelation};
         use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
 
         // Test 1: Non-temporary Hive Metastore table -> should use legacy
-        let hive_table = DatabricksRelation::new(
+        let hive_table = GenericRelation::new(
             Databricks,
             Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
             Some("schema1".to_string()),
@@ -4502,7 +4502,7 @@ mod tests {
         // Test 2: Unity Catalog temporary table (with hive_metastore database name) -> should NOT use legacy
         // Key test: is_hive_metastore() should return FALSE for UC temporary tables
         // Note: In practice, UC temp tables wouldn't have database="hive_metastore", but this tests the logic
-        let uc_temp_table = DatabricksRelation::new(
+        let uc_temp_table = GenericRelation::new(
             Databricks,
             Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
             Some("schema1".to_string()),
@@ -4530,7 +4530,7 @@ mod tests {
         );
 
         // Test 3: Unity Catalog table (non-temporary) -> should NOT use legacy
-        let unity_table = DatabricksRelation::new(
+        let unity_table = GenericRelation::new(
             Databricks,
             Some("unity_catalog".to_string()),
             Some("schema1".to_string()),
@@ -4557,7 +4557,7 @@ mod tests {
         );
 
         // Test 4: Materialized view -> should use legacy
-        let mv = DatabricksRelation::new(
+        let mv = GenericRelation::new(
             Databricks,
             Some("unity_catalog".to_string()),
             Some("schema1".to_string()),

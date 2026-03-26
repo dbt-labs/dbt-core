@@ -15,9 +15,8 @@ use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
-use crate::relation::databricks::DatabricksRelation;
+use crate::relation::databricks::GenericRelation;
 use crate::relation::do_create_relation;
-use crate::relation::fabric::FabricRelation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -319,7 +318,7 @@ fn spark_get_relation(
     // TODO(serramatutu): populate table metadata.
     let json_metadata = BTreeMap::new();
 
-    Ok(Some(Box::new(DatabricksRelation::new(
+    Ok(Some(Box::new(GenericRelation::new(
         AdapterType::Spark,
         Some("".to_string()),
         Some(schema.to_string()),
@@ -478,7 +477,7 @@ fn databricks_get_relation(
         Some(database.to_string())
     };
 
-    Ok(Some(Box::new(DatabricksRelation::new(
+    Ok(Some(Box::new(GenericRelation::new(
         adapter.adapter_type(),
         db,
         Some(schema.to_string()),
@@ -809,7 +808,7 @@ fn fabric_get_relation(
         _ => None,
     };
 
-    Ok(Some(Box::new(FabricRelation::new(
+    Ok(Some(Box::new(GenericRelation::new_fabric(
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),

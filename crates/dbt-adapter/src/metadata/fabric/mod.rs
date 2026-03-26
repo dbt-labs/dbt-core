@@ -4,7 +4,7 @@ use crate::metadata::{
     RelationVec, create_schemas_if_not_exists,
 };
 use crate::record_batch_utils::get_column_values;
-use crate::relation::fabric::FabricRelation;
+use crate::relation::databricks::GenericRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::typed_adapter::*;
 use crate::{AdapterEngine, AdapterTyping};
@@ -59,7 +59,7 @@ pub fn list_relations(
         } else {
             None
         };
-        let relation = Arc::new(FabricRelation::new(
+        let relation = Arc::new(GenericRelation::new_fabric(
             Some(database_name.value(i).to_string()),
             Some(schema_name.value(i).to_string()),
             Some(table_name.value(i).to_string()),

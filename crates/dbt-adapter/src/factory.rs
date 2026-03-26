@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::AdapterType;
+use dbt_common::adapter::AdapterType;
+
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
-use crate::relation::databricks::DatabricksRelationType;
+use crate::relation::databricks::GenericRelationType;
 use crate::relation::duckdb::DuckDBRelationType;
-use crate::relation::fabric::FabricRelationType;
 use crate::relation::postgres::PostgresRelationType;
 use crate::relation::redshift::RedshiftRelationType;
 use crate::relation::salesforce::SalesforceRelationType;
@@ -20,48 +20,45 @@ pub fn create_static_relation(
     adapter_type: AdapterType,
     quoting: ResolvedQuoting,
 ) -> Option<Value> {
+    use AdapterType::*;
     let result = match adapter_type {
-        AdapterType::Snowflake => {
+        Snowflake => {
             let snowflake_relation_type = SnowflakeRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(snowflake_relation_type))
         }
-        AdapterType::Postgres | AdapterType::Sidecar => {
+        Postgres | Sidecar => {
             let postgres_relation_type = PostgresRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(postgres_relation_type))
         }
-        AdapterType::DuckDB => {
+        DuckDB => {
             let duckdb_relation_type = DuckDBRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(duckdb_relation_type))
         }
-        AdapterType::Bigquery => {
+        Bigquery => {
             let bigquery_relation_type = BigqueryRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(bigquery_relation_type))
         }
-        AdapterType::Databricks | AdapterType::Spark => {
-            let databricks_relation_type = DatabricksRelationType {
-                adapter_type,
-                quoting,
-            };
-            StaticBaseRelationObject::new(Arc::new(databricks_relation_type))
-        }
-        AdapterType::Redshift => {
+        Redshift => {
             let redshift_relation_type = RedshiftRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(redshift_relation_type))
         }
-        AdapterType::Salesforce => {
+        Salesforce => {
             let salesforce_relation_type = SalesforceRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
-        AdapterType::Fabric => {
-            let fabric_relation_type = FabricRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
+        Databricks | Spark | Fabric => {
+            let relation_type = GenericRelationType {
+                adapter_type,
+                quoting,
+            };
+            StaticBaseRelationObject::new(Arc::new(relation_type))
         }
-        AdapterType::ClickHouse => todo!("ClickHouse"),
-        AdapterType::Starburst => todo!("Starburst"),
-        AdapterType::Athena => todo!("Athena"),
-        AdapterType::Trino => todo!("Trino"),
-        AdapterType::Dremio => todo!("Dremio"),
-        AdapterType::Oracle => todo!("Oracle"),
+        ClickHouse => todo!("ClickHouse"),
+        Starburst => todo!("Starburst"),
+        Athena => todo!("Athena"),
+        Trino => todo!("Trino"),
+        Dremio => todo!("Dremio"),
+        Oracle => todo!("Oracle"),
     };
     Some(Value::from_object(result))
 }
