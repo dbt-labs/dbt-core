@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use arrow_schema::{FieldRef, Schema};
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_xdbc::sql::types::metadata_sql_type_key;
 use indexmap::IndexMap;
 

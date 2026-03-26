@@ -1,4 +1,4 @@
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 

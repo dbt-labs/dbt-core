@@ -1,6 +1,6 @@
 //! Conversion between minijinja::Value and serde_json::Value for time-machine recordings.
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
 use super::serializable::{deserialize_object, serialize_object};

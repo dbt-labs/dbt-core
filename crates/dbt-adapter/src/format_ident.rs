@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use once_cell::sync::Lazy;
 
 pub fn format_ident(id: &str, adapter: AdapterType) -> String {
@@ -484,7 +484,7 @@ static FABRIC_KEYWORDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
 
     #[test]
     fn test_format_ident_unquoted() {

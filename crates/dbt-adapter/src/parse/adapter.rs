@@ -4,8 +4,8 @@ use crate::funcs::*;
 use crate::relation::{RelationObject, do_create_relation};
 
 use dashmap::{DashMap, DashSet};
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
-use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use minijinja::constants::TARGET_UNIQUE_ID;

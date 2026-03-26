@@ -1,4 +1,4 @@
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::emit::emit_warn_log_message;

@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
 use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
-use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::IoArgs};
+use dbt_adapter_core::AdapterType;
+use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::dbt_catalogs::DbtCatalogs,

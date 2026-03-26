@@ -16,9 +16,9 @@ use crate::utils::get_original_file_path;
 use crate::utils::get_unique_id;
 use crate::utils::update_node_relation_components;
 
+use dbt_adapter_core::AdapterType;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
-use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;

@@ -1,10 +1,8 @@
 use super::utils::{base_tests_inner, column_tests_inner};
 use crate::args::ResolveArgs;
+use dbt_adapter_core::*;
 use dbt_common::FsError;
 use dbt_common::FsResult;
-use dbt_common::adapter::AdapterType;
-use dbt_common::adapter::dialect_of;
-use dbt_common::adapter::quote_char;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;

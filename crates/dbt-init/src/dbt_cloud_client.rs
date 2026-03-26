@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_cloud_api::{
     apis::{configuration::Configuration, connections_api, users_api, whoami_api},
     models,
@@ -5,7 +6,7 @@ use dbt_cloud_api::{
 use dbt_common::tracing::emit::{
     emit_debug_log_message, emit_info_log_message, emit_warn_log_message,
 };
-use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::profiles::{
     BigqueryDbConfig, DatabricksDbConfig, DbConfig, PostgresDbConfig, RedshiftDbConfig,
     SnowflakeDbConfig,

@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
-use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::io_args::IoArgs;

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use serde::{Deserialize, Serialize};
 
 /// Enum representing different types of relations.

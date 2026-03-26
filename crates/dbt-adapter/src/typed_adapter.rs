@@ -45,8 +45,8 @@ use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
 use dashmap::DashMap;
+use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
-use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
@@ -4273,9 +4273,9 @@ mod tests {
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
 
+    use dbt_adapter_core::AdapterType;
     use dbt_auth::auth_for_backend;
     use dbt_common::AdapterResult;
-    use dbt_common::adapter::AdapterType;
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};

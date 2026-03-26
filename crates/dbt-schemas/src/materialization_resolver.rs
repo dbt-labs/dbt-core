@@ -1,5 +1,6 @@
 use crate::schemas::macros::DbtMacro;
-use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err};
+use dbt_adapter_core::AdapterType;
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use minijinja::{
     compiler::parser::materialization_macro_name,
     dispatch_object::{get_adapter_prefixes, get_internal_packages},

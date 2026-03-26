@@ -8,7 +8,7 @@ use dbt_common::cancellation::CancellationToken;
 
 use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
 
-use dbt_common::adapter::ExecutionPhase;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},

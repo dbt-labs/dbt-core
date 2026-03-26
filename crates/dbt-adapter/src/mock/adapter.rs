@@ -2,7 +2,7 @@
 mod tests {
     use crate::sql_types::SATypeOpsImpl;
     use crate::typed_adapter::ConcreteAdapter;
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
 
     use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
 

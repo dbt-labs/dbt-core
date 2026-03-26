@@ -21,9 +21,9 @@ use crate::typed_adapter;
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
+use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
-use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};

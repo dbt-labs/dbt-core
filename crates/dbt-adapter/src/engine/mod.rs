@@ -1,7 +1,7 @@
 use crate::typed_adapter::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific_behavior_flags};
 
 use arrow::array::RecordBatch;
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;

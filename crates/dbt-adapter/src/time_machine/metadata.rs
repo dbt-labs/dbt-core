@@ -445,7 +445,7 @@ impl MetadataResultSerialize for Vec<UDF> {
 impl MetadataResultDeserialize for Vec<UDF> {
     fn from_recording_json(json: &serde_json::Value) -> Result<Self, String> {
         use crate::metadata::UDFKind;
-        use dbt_common::adapter::AdapterType;
+        use dbt_adapter_core::AdapterType;
 
         let arr = json.as_array().ok_or("Expected array")?;
         let mut result = Vec::new();

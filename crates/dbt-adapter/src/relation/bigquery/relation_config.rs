@@ -755,7 +755,7 @@ mod tests {
     use crate::sql_types::SATypeOpsImpl;
     use arrow::datatypes::DataType;
     use arrow_schema::{Field, Fields, TimeUnit};
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
 
     /// Test that the arrow schema returned from the BigQuery driver
     /// can be parsed into a `BigqueryPartitionConfigRepr`

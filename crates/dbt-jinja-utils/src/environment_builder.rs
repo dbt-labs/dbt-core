@@ -450,7 +450,7 @@ mod tests {
 
     use dbt_adapter::BridgeAdapter;
     use dbt_adapter::sql_types::SATypeOpsImpl;
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,

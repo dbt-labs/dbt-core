@@ -4,7 +4,7 @@ use crate::relation::redshift::materialized_view_config::*;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;

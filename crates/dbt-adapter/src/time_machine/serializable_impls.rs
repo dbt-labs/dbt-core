@@ -155,7 +155,7 @@ impl TimeMachineSerializable for RelationObject {
         json: &serde_json::Value,
         ctx: &ReplayContext,
     ) -> Option<minijinja::Value> {
-        use dbt_common::adapter::AdapterType;
+        use dbt_adapter_core::AdapterType;
         use dbt_schemas::schemas::common::ResolvedQuoting;
         use dbt_schemas::schemas::relations::{
             DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING,
@@ -305,7 +305,7 @@ mod tests {
     use crate::relation::RelationObject;
 
     use super::*;
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::common::ResolvedQuoting;
 
     fn ctx() -> ReplayContext {

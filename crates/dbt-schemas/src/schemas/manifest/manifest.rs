@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
-use dbt_common::{Span, adapter::AdapterType};
+use dbt_adapter_core::AdapterType;
+use dbt_common::Span;
 use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

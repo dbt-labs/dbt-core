@@ -5,7 +5,7 @@ use crate::dbt_project_config::DbtProjectConfig;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};

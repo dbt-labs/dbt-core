@@ -1,8 +1,8 @@
 use crate::funcs::{empty_string_value, none_value};
 use crate::relation::RelationObject;
 
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
-use dbt_common::adapter::AdapterType;
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;

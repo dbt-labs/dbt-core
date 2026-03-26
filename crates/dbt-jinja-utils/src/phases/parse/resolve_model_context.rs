@@ -1,5 +1,6 @@
 //! This module contains the scope guard for resolving models.
 
+use dbt_adapter_core::AdapterType;
 use indexmap::IndexMap;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -16,7 +17,6 @@ use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{cast_util::THIS_RELATION_KEY, load_store::ResultStore};
 use dbt_common::{
-    adapter::AdapterType,
     io_args::{IoArgs, StaticAnalysisKind},
     serde_utils::convert_yml_to_value_map,
 };

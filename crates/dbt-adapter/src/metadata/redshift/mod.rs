@@ -9,7 +9,7 @@ use crate::{AdapterEngine, AdapterResult, AdapterTyping};
 use arrow::array::*;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
-use dbt_common::adapter::ExecutionPhase;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;

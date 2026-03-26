@@ -7,10 +7,9 @@ use std::{
 
 use chrono::{NaiveDate, Utc};
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
+use dbt_adapter_core::AdapterType;
 use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsResult,
-    adapter::AdapterType,
-    err, fs_err,
+    CodeLocationWithFile, ErrorCode, FsResult, err, fs_err,
     io_args::IoArgs,
     tracing::emit::{
         emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,

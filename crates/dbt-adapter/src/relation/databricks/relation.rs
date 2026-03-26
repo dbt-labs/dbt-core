@@ -1,7 +1,7 @@
 use crate::information_schema::InformationSchema;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
-use dbt_common::adapter::{AdapterType, quote_char};
+use dbt_adapter_core::{AdapterType, quote_char};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;

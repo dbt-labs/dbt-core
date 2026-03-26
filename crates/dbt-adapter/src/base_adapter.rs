@@ -29,7 +29,7 @@ use std::fmt;
 use std::sync::Arc;
 
 /// The type of the adapter. Used to identify the specific database adapter being used.
-pub type AdapterType = dbt_common::adapter::AdapterType;
+pub type AdapterType = dbt_adapter_core::AdapterType;
 
 pub fn backend_of(adapter_type: AdapterType) -> Backend {
     match adapter_type {

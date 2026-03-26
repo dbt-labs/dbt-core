@@ -1566,7 +1566,7 @@ mod tests {
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
     use crate::typed_adapter::ConcreteAdapter;
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 

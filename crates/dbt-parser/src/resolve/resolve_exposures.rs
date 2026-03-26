@@ -1,7 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;

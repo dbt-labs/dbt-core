@@ -1,9 +1,10 @@
+use dbt_common::current_function_name;
 use dbt_xdbc::sql::types::{SqlType, StructField};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
 
-use dbt_common::{adapter::AdapterType, current_function_name};
+use dbt_adapter_core::*;
 use dbt_schemas::schemas::dbt_column::DbtCoreBaseColumn;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja;

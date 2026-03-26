@@ -3,7 +3,7 @@
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{QueryTag, StringOrInteger, StringOrMap};
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::UntaggedEnumDeserialize;
 use merge::Merge;

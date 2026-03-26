@@ -1,5 +1,6 @@
 use crate::warn_error_options::WarnErrorOptions;
 use clap::ValueEnum;
+use dbt_adapter_core::AdapterType;
 use dbt_base::{HashMap, HashSet};
 use dbt_telemetry::{NodeType, ShowDataOutputFormat};
 use dbt_yaml::{JsonSchema, Value};
@@ -31,7 +32,6 @@ pub enum LocalExecutionBackendKind {
     Service,
 }
 
-use crate::adapter::AdapterType;
 use crate::constants::DBT_TARGET_DIR_NAME;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -531,7 +531,7 @@ impl EvalArgsBuilder {
         adapter_type: Option<AdapterType>,
     ) -> Self {
         let supported = adapter_type
-            .map(crate::adapter::adapter_type_supports_static_analysis)
+            .map(dbt_adapter_core::adapter_type_supports_static_analysis)
             .unwrap_or(false);
 
         // FIXME(serramatutu): there is a bug in Postgres' frontend parser that makes

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use minijinja::Value;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
 use crate::time_machine::AdapterCallEvent;

@@ -4,7 +4,7 @@ use crate::adapter_config::{
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::constants::DBT_PACKAGES_DIR_NAME;
 use dbt_common::pretty_string::GREEN;
 use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};

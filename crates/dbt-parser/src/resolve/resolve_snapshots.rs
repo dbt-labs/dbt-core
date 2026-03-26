@@ -10,7 +10,7 @@ use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
     RelationComponents, get_node_fqn, get_original_file_path, update_node_relation_components,
 };
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;

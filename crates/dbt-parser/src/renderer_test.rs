@@ -3,7 +3,7 @@ mod tests {
     use crate::args::ResolveArgs;
     use crate::dbt_project_config::DbtProjectConfig;
     use crate::renderer::{RenderCtx, RenderCtxInner, render_unresolved_sql_files};
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::{FsCommand, IoArgs};
     use dbt_common::serde_utils::Omissible;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;

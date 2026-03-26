@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::time::Duration;
 
-use dbt_common::adapter::{AdapterType, quote_char};
+use dbt_adapter_core::{AdapterType, quote_char};
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_telemetry::NodeMaterialization;
 use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize, Verbatim};

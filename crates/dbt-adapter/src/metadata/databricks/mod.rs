@@ -8,9 +8,9 @@ use crate::connection;
 
 use arrow_array::*;
 use arrow_schema::{Field, Schema};
+use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_agate::AgateTable;
-use dbt_common::adapter::AdapterType;
-use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;

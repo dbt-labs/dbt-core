@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 
-use dbt_common::adapter::DBT_EXECUTION_PHASES;
+use dbt_adapter_core::DBT_EXECUTION_PHASES;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };

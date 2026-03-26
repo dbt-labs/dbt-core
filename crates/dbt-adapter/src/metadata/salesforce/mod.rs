@@ -3,7 +3,7 @@ use crate::metadata::*;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 
-use dbt_common::adapter::ExecutionPhase;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use minijinja::State;

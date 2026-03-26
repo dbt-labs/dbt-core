@@ -4,7 +4,7 @@
 mod tests {
     use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_adapter::{BaseAdapter, BridgeAdapter};
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::StaticAnalysisKind;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;

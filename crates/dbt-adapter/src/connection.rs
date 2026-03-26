@@ -1,5 +1,5 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::AdapterResult;
-use dbt_common::adapter::AdapterType;
 use dbt_xdbc::Connection;
 use minijinja::State;
 use tracy_client::span;

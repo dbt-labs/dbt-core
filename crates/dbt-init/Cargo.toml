@@ -13,6 +13,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+dbt-adapter-core = { workspace = true }
 dbt-cloud-api = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }

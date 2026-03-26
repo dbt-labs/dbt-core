@@ -3,7 +3,7 @@ use crate::dbt_types::RelationType;
 use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
 use dbt_schema_store::CanonicalFqn;

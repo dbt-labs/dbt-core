@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_yaml::Spanned;
 

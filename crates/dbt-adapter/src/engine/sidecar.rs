@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
+use dbt_adapter_core::AdapterType;
 use dbt_auth::AdapterConfig;
 use dbt_common::AdapterResult;
-use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;

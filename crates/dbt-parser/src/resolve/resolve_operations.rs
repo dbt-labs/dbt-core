@@ -5,11 +5,12 @@ use std::{
 };
 
 use crate::utils::get_original_file_path;
+use dbt_adapter_core::AdapterType;
+use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsResult, fs_err,
     io_args::{IoArgs, StaticAnalysisKind},
 };
-use dbt_common::{adapter::AdapterType, tracing::emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::DefaultRenderingEventListenerFactory,

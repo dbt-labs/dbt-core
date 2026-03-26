@@ -9,7 +9,8 @@ use std::{
 use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
-use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::IoArgs};
+use dbt_adapter_core::*;
+use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::{
     common::DbtQuoting,

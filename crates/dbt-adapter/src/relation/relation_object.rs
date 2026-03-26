@@ -1,4 +1,4 @@
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;

@@ -3,7 +3,7 @@ use std::string::String;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
-use dbt_common::adapter::ExecutionPhase;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterResult, AsyncAdapterResult};
 use dbt_schemas::schemas::relations::base::BaseRelation;

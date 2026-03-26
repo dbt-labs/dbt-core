@@ -1,7 +1,7 @@
 //! Module containing the entrypoint for the resolve phase.
+use dbt_adapter_core::AdapterType;
 #[allow(unused_imports)]
 use dbt_common::FsError;
-use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args::FsCommand;

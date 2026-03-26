@@ -5,7 +5,7 @@ use crate::relation::snowflake::dynamic_table::{
 };
 use crate::relation::{RelationObject, StaticBaseRelation};
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;

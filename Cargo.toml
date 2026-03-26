@@ -9,6 +9,7 @@ members = [
   "crates/dbt-base",
   "crates/dbt-clap-core",
   "crates/dbt-cli-lib",
+  "crates/dbt-adapter-core",
   "crates/dbt-common",
   "crates/dbt-csv",
   "crates/dbt-cloud-api",
@@ -183,6 +184,7 @@ opt-level = 3
 
 # fs source available dependencies
 dbt-adapter = { path = "crates/dbt-adapter" }
+dbt-adapter-core = { path = "crates/dbt-adapter-core" }
 dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-base = { path = "crates/dbt-base" }

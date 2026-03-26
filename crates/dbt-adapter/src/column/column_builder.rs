@@ -6,7 +6,7 @@ use crate::column::{BigqueryColumnMode, Column};
 use crate::metadata;
 use crate::sql_types::{self, TypeOps, original_type_string};
 use arrow_schema::{DataType, FieldRef};
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_xdbc::{Backend, sql::types::SqlType};
 use regex::Regex;
 

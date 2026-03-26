@@ -4,7 +4,7 @@ use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
     update_node_relation_components,
 };
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,

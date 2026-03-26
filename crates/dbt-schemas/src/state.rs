@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+use dbt_adapter_core::AdapterType;
 use dbt_yaml::Spanned;
 use indexmap::IndexMap;
 use std::{
@@ -27,7 +28,7 @@ use crate::schemas::{
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{
-    ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand, path::DbtPath,
+    ErrorCode, FsResult, fs_err, io_args::FsCommand, path::DbtPath,
     warn_error_options::WarnErrorOptions,
 };
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};

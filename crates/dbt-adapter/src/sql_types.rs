@@ -8,7 +8,7 @@ use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key};
 
 // TODO: Add keys here as necessary
@@ -485,7 +485,7 @@ pub fn sql_type_hint_to_str<'a>(
     adapter_type: AdapterType,
 ) -> Cow<'a, str> {
     use SqlTypeHint::*;
-    use dbt_common::adapter::AdapterType::*;
+    use dbt_adapter_core::AdapterType::*;
     let str = match (adapter_type, hint) {
         // ## convert_integer_type()
         (Bigquery, Integer) => "int64",
@@ -538,7 +538,7 @@ pub mod bigquery {
 
     // XXX: make private once all tests are moved to here
     use arrow_schema::{DataType, Field};
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
 
     use crate::sql_types::get_field_sql_type_metadata_key;
 
@@ -1024,7 +1024,7 @@ pub fn numeric_precision_scale(
 mod tests {
     use super::*;
     use SqlTypeHint::*;
-    use dbt_common::adapter::AdapterType::*;
+    use dbt_adapter_core::AdapterType::*;
 
     #[test]
     fn test_convert_integer_type() {

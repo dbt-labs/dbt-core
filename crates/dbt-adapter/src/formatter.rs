@@ -1,4 +1,4 @@
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use minijinja::Value;
 use minijinja::value::ValueKind;
 use minijinja_contrib::modules::py_datetime::date::PyDate;

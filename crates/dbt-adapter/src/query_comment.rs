@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use std::{fmt::Debug, sync::LazyLock};
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::project::QueryComment;
 use minijinja::{Error, State};
@@ -212,7 +212,7 @@ fn sanitize_label(label: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use dbt_common::adapter::AdapterType;
+    use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::ResolvedCloudConfig;
     use dbt_schemas::schemas::project::QueryComment;
     use serde::Deserialize;

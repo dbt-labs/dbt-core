@@ -1,4 +1,4 @@
-use dbt_common::adapter::{
+use dbt_adapter_core::{
     DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASE_RENDER, DBT_EXECUTION_PHASES,
 };
 use regex::Regex;
@@ -818,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_fetch_false_bypasses_cache() {
-        use dbt_common::adapter::DBT_EXECUTION_PHASE_RENDER;
+        use dbt_adapter_core::DBT_EXECUTION_PHASE_RENDER;
 
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -848,7 +848,7 @@ mod tests {
 
     #[test]
     fn test_fetch_true_uses_cache() {
-        use dbt_common::adapter::DBT_EXECUTION_PHASE_RENDER;
+        use dbt_adapter_core::DBT_EXECUTION_PHASE_RENDER;
 
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();

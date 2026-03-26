@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use minijinja::Value;
 
 use crate::macro_test_harness::MacroTestHarness;

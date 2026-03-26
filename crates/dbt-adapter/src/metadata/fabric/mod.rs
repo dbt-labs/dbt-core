@@ -10,9 +10,10 @@ use crate::typed_adapter::*;
 use crate::{AdapterEngine, AdapterTyping};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, Cancellable};
-use dbt_common::{AdapterResult, AsyncAdapterResult, adapter::ExecutionPhase};
+use dbt_common::{AdapterResult, AsyncAdapterResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{CatalogNodeStats, TableMetadata};
 use dbt_schemas::schemas::{

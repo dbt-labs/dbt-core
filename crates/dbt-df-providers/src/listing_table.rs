@@ -8,7 +8,7 @@ use datafusion::{
 };
 use datafusion_catalog::Session;
 use datafusion_common::DataFusionError;
-use dbt_common::adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 use std::{path::Path, sync::Arc};
 /// Supported on-disk table formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

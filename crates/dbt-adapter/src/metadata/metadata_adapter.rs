@@ -11,7 +11,7 @@ use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
-use dbt_common::adapter::ExecutionPhase;
+use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::CancellationToken;
 
 use dbt_schemas::schemas::{
