@@ -199,6 +199,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             metrics=project.metrics,
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
+            analyses=project.analyses,
             exposures=project.exposures,
             functions=project.functions,
             vars=project.vars,
