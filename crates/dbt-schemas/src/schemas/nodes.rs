@@ -491,6 +491,12 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.base().static_analysis.clone()
     }
 
+    fn static_analysis_baseline(&self) -> Spanned<bool> {
+        self.static_analysis().map(|static_analysis| {
+            dbt_common::static_analysis::is_baseline_static_analysis(static_analysis)
+        })
+    }
+
     fn static_analysis_enabled(&self) -> Spanned<bool> {
         self.static_analysis().map(|static_analysis| {
             dbt_common::static_analysis::is_static_analysis_enabled(static_analysis)

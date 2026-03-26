@@ -36,6 +36,11 @@ pub fn is_strict_static_analysis(kind: StaticAnalysisKind) -> bool {
 }
 
 #[inline]
+pub fn is_baseline_static_analysis(kind: StaticAnalysisKind) -> bool {
+    matches!(kind, StaticAnalysisKind::Baseline)
+}
+
+#[inline]
 pub fn is_static_analysis_enabled(kind: StaticAnalysisKind) -> bool {
     matches!(
         kind,
