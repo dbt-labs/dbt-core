@@ -2295,7 +2295,7 @@ class TestContext(ProviderContext):
                 if self.model.resource_type == NodeType.Test and self.model.file_key_name:  # type: ignore[union-attr] # noqa
                     source_file = self.manifest.files[self.model.file_id]
                     # TODO CT-211
-                    yaml_key, name = self.model.file_key_name.split(".")  # type: ignore[union-attr] # noqa
+                    (yaml_key, name) = self.model.file_key_name.split(".")  # type: ignore[union-attr] # noqa
                     # TODO CT-211
                     source_file.add_env_var(var, yaml_key, name)  # type: ignore[union-attr]
             return return_value
