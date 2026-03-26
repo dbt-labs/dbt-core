@@ -196,7 +196,7 @@ class Var:
             return self.get_missing_var(var_name)
 
 
-def _get_env_var(env: Mapping[str, str], var: str) -> tuple:
+def _get_env_var(env: Mapping[str, str], var: str) -> tuple[Optional[str], bool]:
     """Look up an environment variable, with case-insensitive fallback on Windows.
 
     Returns (value, found_in_env) where found_in_env indicates whether the
