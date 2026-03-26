@@ -287,6 +287,7 @@ class CompiledResource(ParsedResource):
     compiled_path: Optional[str] = None
     compiled: bool = False
     compiled_code: Optional[str] = None
+    compiled_code_full_refresh: Optional[str] = None
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
