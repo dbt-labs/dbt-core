@@ -55,6 +55,7 @@ fn load_profile_with_loader(
         packages_install_path: Some(DBT_PACKAGES_DIR_NAME.to_string()),
         profile: Some(profile_name.to_string()),
         dbt_cloud: None,
+        flags: None,
         data_paths: Default::default(),
         source_paths: Default::default(),
         log_path: Default::default(),

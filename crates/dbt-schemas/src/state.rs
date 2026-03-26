@@ -28,6 +28,7 @@ use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand, path::DbtPath,
+    warn_error_options::WarnErrorOptions,
 };
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
@@ -219,6 +220,8 @@ pub struct DbtState {
     pub cli_vars: BTreeMap<String, dbt_yaml::Value>,
     pub catalogs: Option<Arc<DbtCatalogs>>,
     pub cloud_config: Option<ResolvedCloudConfig>,
+    pub warn_error: bool,
+    pub warn_error_options: WarnErrorOptions,
 }
 
 impl DbtState {

@@ -62,25 +62,19 @@ impl WarnErrorOptions {
         )
     }
 
-    pub fn merge(&mut self, other: Self) {
-        self.extend_error(other.error);
-        self.extend_warn(other.warn);
-        self.extend_silence(other.silence);
-    }
-
-    pub fn add_all_to_error(&mut self) {
+    fn add_all_to_error(&mut self) {
         self.extend_error([WarnErrorOptionValue::all()]);
     }
 
-    pub fn extend_error(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
+    fn extend_error(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
         extend_unique(&mut self.error, values);
     }
 
-    pub fn extend_warn(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
+    fn extend_warn(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
         extend_unique(&mut self.warn, values);
     }
 
-    pub fn extend_silence(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
+    fn extend_silence(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
         extend_unique(&mut self.silence, values);
     }
 
@@ -108,6 +102,48 @@ impl WarnErrorOptions {
 
 pub fn parse_warn_error_options(value: &str) -> Result<WarnErrorOptions, String> {
     crate::io_args::check_var(value).map(WarnErrorOptions::from_cli_mapping)
+}
+
+pub fn resolve_warn_error_options(
+    from_cli: Option<bool>,
+    from_cli_or_env: Option<&WarnErrorOptions>,
+    project_flags: Option<&Value>,
+) -> (bool, WarnErrorOptions) {
+    let warn_error = from_cli.unwrap_or_else(|| {
+        project_flags
+            .and_then(project_flags_warn_error)
+            .unwrap_or_default()
+    });
+    let mut warn_error_options = from_cli_or_env.cloned().unwrap_or_else(|| {
+        project_flags
+            .and_then(project_flags_warn_error_options)
+            .unwrap_or_default()
+    });
+    if warn_error {
+        warn_error_options.add_all_to_error();
+    }
+    (warn_error, warn_error_options)
+}
+
+fn project_flags_warn_error(flags: &Value) -> Option<bool> {
+    project_flags_get_value(flags, "warn_error").and_then(Value::as_bool)
+}
+
+fn project_flags_warn_error_options(flags: &Value) -> Option<WarnErrorOptions> {
+    project_flags_get_value(flags, "warn_error_options").map(WarnErrorOptions::from_yaml_value)
+}
+
+fn project_flags_get_value<'a>(flags: &'a Value, key: &str) -> Option<&'a Value> {
+    let Value::Mapping(mapping, _) = flags else {
+        return None;
+    };
+
+    mapping.iter().find_map(|(candidate, value)| {
+        candidate
+            .as_str()
+            .filter(|candidate| candidate.eq_ignore_ascii_case(key))
+            .map(|_| value)
+    })
 }
 
 fn extend_unique(
@@ -146,7 +182,10 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
 #[cfg(test)]
 mod tests {
-    use super::{WarnErrorOptionValue, WarnErrorOptions, parse_warn_error_options};
+    use super::{
+        WarnErrorOptionValue, WarnErrorOptions, parse_warn_error_options,
+        resolve_warn_error_options,
+    };
 
     #[test]
     fn parses_legacy_cli_shape_case_insensitively_and_deduplicates() {
@@ -196,40 +235,6 @@ mod tests {
     }
 
     #[test]
-    fn merge_preserves_first_seen_order_and_deduplicates() {
-        let mut left = WarnErrorOptions {
-            error: vec![WarnErrorOptionValue::FusionCode(1)],
-            warn: vec![],
-            silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
-            ..Default::default()
-        };
-        let right = WarnErrorOptions {
-            error: vec![
-                WarnErrorOptionValue::FusionCode(1),
-                WarnErrorOptionValue::all(),
-            ],
-            warn: vec![WarnErrorOptionValue::Unsupported("bar".to_string())],
-            silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
-            ..Default::default()
-        };
-
-        left.merge(right);
-
-        assert_eq!(
-            left,
-            WarnErrorOptions {
-                error: vec![
-                    WarnErrorOptionValue::FusionCode(1),
-                    WarnErrorOptionValue::all(),
-                ],
-                warn: vec![WarnErrorOptionValue::Unsupported("bar".to_string())],
-                silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
     fn serializes_all_canonically() {
         let options = WarnErrorOptions {
             error: vec![WarnErrorOptionValue::all()],
@@ -243,6 +248,91 @@ mod tests {
                 "warn": [],
                 "silence": [],
             })
+        );
+    }
+
+    #[test]
+    fn resolve_warn_error_options_prefers_cli_or_env_over_project_flags() {
+        let from_cli_or_env = WarnErrorOptions {
+            warn: vec![WarnErrorOptionValue::FusionCode(11)],
+            ..Default::default()
+        };
+
+        let resolved = resolve_warn_error_options(
+            Some(true),
+            Some(&from_cli_or_env),
+            Some(
+                &dbt_yaml::from_str("{warn_error_options: {error: [7, all]}, warn_error: true}")
+                    .unwrap(),
+            ),
+        );
+
+        assert_eq!(
+            resolved,
+            (
+                true,
+                WarnErrorOptions {
+                    error: vec![WarnErrorOptionValue::all()],
+                    warn: vec![WarnErrorOptionValue::FusionCode(11)],
+                    silence: vec![],
+                    ..Default::default()
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_warn_error_options_falls_back_to_project_flags() {
+        let resolved = resolve_warn_error_options(
+            None,
+            None,
+            Some(
+                &dbt_yaml::from_str(
+                    "{warn_error_options: {error: [7, all], silence: [foo, foo]}, warn_error: true}",
+                )
+                .unwrap(),
+            ),
+        );
+
+        assert_eq!(
+            resolved,
+            (
+                true,
+                WarnErrorOptions {
+                    error: vec![
+                        WarnErrorOptionValue::FusionCode(7),
+                        WarnErrorOptionValue::all(),
+                    ],
+                    warn: vec![],
+                    silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
+                    ..Default::default()
+                }
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_warn_error_options_honors_explicit_no_warn_error_from_cli() {
+        let resolved = resolve_warn_error_options(
+            Some(false),
+            None,
+            Some(
+                &dbt_yaml::from_str("{warn_error_options: {error: [7]}, warn_error: true}")
+                    .unwrap(),
+            ),
+        );
+
+        assert_eq!(
+            resolved,
+            (
+                false,
+                WarnErrorOptions {
+                    error: vec![WarnErrorOptionValue::FusionCode(7)],
+                    warn: vec![],
+                    silence: vec![],
+                    ..Default::default()
+                }
+            )
         );
     }
 }

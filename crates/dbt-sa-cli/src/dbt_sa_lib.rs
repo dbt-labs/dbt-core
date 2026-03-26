@@ -33,6 +33,7 @@ use dbt_schemas::state::{
 };
 #[allow(unused_imports)]
 use git_version::git_version;
+use std::borrow::Cow;
 
 use dbt_schemas::schemas::manifest::build_manifest;
 use tracing::Instrument;
@@ -187,9 +188,10 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli, token: &CancellationToke
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let dbt_state = load(&load_args, &invocation_args, token).await?;
+    let dbt_state = load(&load_args, Cow::Borrowed(&invocation_args), token).await?;
 
     let arg = EvalArgsBuilder::from_eval_args(arg)
+        .with_warn_error_options(dbt_state.warn_error, dbt_state.warn_error_options.clone())
         .with_additional(
             dbt_state.dbt_profile.target.to_string(),
             dbt_state.dbt_profile.threads,

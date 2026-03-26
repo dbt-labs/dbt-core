@@ -10,6 +10,7 @@ use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
+use dbt_common::warn_error_options::resolve_warn_error_options;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
@@ -23,6 +24,7 @@ use fs_deps::get_or_install_packages;
 use indexmap::IndexMap;
 use pathdiff::diff_paths;
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
@@ -94,6 +96,25 @@ fn resolve_and_set_threads(
     Ok(final_threads)
 }
 
+fn resolve_warn_error_options_from_flags<'a>(
+    mut iarg: Cow<'a, InvocationArgs>,
+    from_cli: Option<bool>,
+    from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
+    project_flags: Option<&dbt_yaml::Value>,
+) -> Cow<'a, InvocationArgs> {
+    let (warn_error, warn_error_options) =
+        resolve_warn_error_options(from_cli, from_cli_or_env, project_flags);
+
+    if iarg.warn_error == warn_error && iarg.warn_error_options == warn_error_options {
+        return iarg;
+    }
+
+    let iarg_mut = iarg.to_mut();
+    iarg_mut.warn_error = warn_error;
+    iarg_mut.warn_error_options = warn_error_options;
+    iarg
+}
+
 #[tracing::instrument(
     skip_all,
     fields(
@@ -102,7 +123,7 @@ fn resolve_and_set_threads(
 )]
 pub async fn load(
     arg: &LoadArgs,
-    iarg: &InvocationArgs,
+    iarg: Cow<'_, InvocationArgs>,
     token: &CancellationToken,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile) =
@@ -137,12 +158,17 @@ pub async fn load(
     let env = initialize_load_profile_jinja_environment();
     load_catalogs(arg, &env).await?;
 
-    let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg)?;
+    let mut iarg = resolve_warn_error_options_from_flags(
+        iarg,
+        arg.cli_warn_error,
+        arg.cli_warn_error_options.as_ref(),
+        simplified_dbt_project.flags.as_ref(),
+    );
+    let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
 
-    let iarg = InvocationArgs {
-        num_threads: final_threads,
-        ..iarg.clone()
-    };
+    if iarg.num_threads != final_threads {
+        iarg.to_mut().num_threads = final_threads;
+    }
     let arg = LoadArgs {
         threads: final_threads,
         ..arg.clone()
@@ -156,6 +182,8 @@ pub async fn load(
         cli_vars: arg.vars.clone(),
         catalogs: load_catalogs::fetch_catalogs(),
         cloud_config,
+        warn_error: iarg.warn_error,
+        warn_error_options: iarg.warn_error_options.clone(),
     };
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
@@ -356,7 +384,13 @@ pub async fn load(
     )
 )]
 pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
-    let (_simplified_dbt_project, dbt_profile) = load_simplified_project_and_profiles(arg).await?;
+    let (simplified_dbt_project, dbt_profile) = load_simplified_project_and_profiles(arg).await?;
+    let invocation_args = resolve_warn_error_options_from_flags(
+        Cow::Owned(InvocationArgs::default()),
+        arg.cli_warn_error,
+        arg.cli_warn_error_options.as_ref(),
+        simplified_dbt_project.flags.as_ref(),
+    );
 
     let env = initialize_load_profile_jinja_environment();
     load_catalogs(arg, &env).await?;
@@ -370,6 +404,8 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         cli_vars: arg.vars.clone(),
         catalogs: load_catalogs::fetch_catalogs(),
         cloud_config: None,
+        warn_error: invocation_args.warn_error,
+        warn_error_options: invocation_args.warn_error_options.clone(),
     };
 
     Ok(dbt_state)

@@ -74,6 +74,7 @@ pub struct DbtProjectSimplified {
     pub profile: Option<String>,
     #[serde(rename = "dbt-cloud")]
     pub dbt_cloud: Option<ProjectDbtCloudConfig>,
+    pub flags: Option<YmlValue>,
 
     // Deprecated paths
     // When present in the db_project.yml file we will raise an error

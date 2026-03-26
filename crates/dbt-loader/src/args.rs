@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 pub use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::{EvalArgs, FsCommand, InternalPackageMode, Phases};
+use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
@@ -40,6 +41,10 @@ pub struct LoadArgs {
     pub version_check: bool,
     /// Inline SQL to compile (from --inline flag)
     pub inline_sql: Option<String>,
+    /// The raw CLI `warn_error`/`no_warn_error` value before flags are resolved.
+    pub cli_warn_error: Option<bool>,
+    /// The raw CLI/env `warn_error_options` value before flags are resolved.
+    pub cli_warn_error_options: Option<WarnErrorOptions>,
     /// Enables persisting compare packages in private builds
     pub enable_persist_compare_package: bool,
     /// This is for incremental.
@@ -73,6 +78,8 @@ impl LoadArgs {
             debug_profile: arg.phase == Phases::Debug,
             version_check: arg.version_check,
             inline_sql: None, // Will be set separately when needed
+            cli_warn_error: None,
+            cli_warn_error_options: None,
             enable_persist_compare_package: arg.command == FsCommand::Extension("compare"),
             prev_dbt_state: None,
             skip_private_deps: arg.skip_private_deps,
@@ -83,6 +90,19 @@ impl LoadArgs {
     /// Set the inline SQL for compilation
     pub fn with_inline_sql(mut self, inline_sql: Option<String>) -> Self {
         self.inline_sql = inline_sql;
+        self
+    }
+
+    pub fn with_cli_warn_error(mut self, cli_warn_error: Option<bool>) -> Self {
+        self.cli_warn_error = cli_warn_error;
+        self
+    }
+
+    pub fn with_cli_warn_error_options(
+        mut self,
+        cli_warn_error_options: Option<WarnErrorOptions>,
+    ) -> Self {
+        self.cli_warn_error_options = cli_warn_error_options;
         self
     }
 }
