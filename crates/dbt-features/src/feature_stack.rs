@@ -1,10 +1,19 @@
+use async_trait::async_trait;
+use dbt_clap_core::Cli;
 use dbt_common::DiscreteEventEmitter;
 use dbt_common::FsResult;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
+use dbt_dag::schedule::Schedule;
+use dbt_schemas::schemas::PreviousState;
+use dbt_schemas::schemas::manifest::DbtManifestV12;
 use dbt_schemas::state::ResolverState;
+// use dbt_tasks::task_runner::RunTasksOk;
 use std::fmt;
+use std::path::Path;
+use std::sync::OnceLock;
 
 pub trait CommandHandler: Sync + Send {
     fn process_eval_args(
@@ -29,12 +38,71 @@ pub struct LinterFeature {
     pub command_handler: Box<dyn CommandHandler>,
 }
 
+#[async_trait]
+#[allow(clippy::too_many_arguments)]
+pub trait CliExtensionHooks: Send + Sync {
+    /// Called after tasks have been scheduled and run, but before manifest
+    /// update and further phases.
+    ///
+    /// Return `Ok(())` if execution was not fully handled by this hook and
+    /// should continue normally. To signal that a command was handled and
+    /// execution should terminate, return `Err(FsError::exit_with_status(0))`
+    /// for success or `Err(FsError::exit_with_status(n))` for failure.
+    async fn did_schedule_and_run_tasks(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _previous_state: Option<&PreviousState>,
+        // _run_tasks_ok: &RunTasksOk,
+        _resolved_state: &ResolverState,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Called after compilation and manifest update, once the full schedule
+    /// and lineage information are available.
+    ///
+    /// Return `Ok(())` if execution was not fully handled by this hook and
+    /// should continue normally. To signal that a command was handled and
+    /// execution should terminate, return `Err(FsError::exit_with_status(0))`
+    /// for success or `Err(FsError::exit_with_status(n))` for failure.
+    async fn did_compile(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        // _run_tasks_ok: &RunTasksOk,
+        _resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn did_write_json(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _invocation_id: &str,
+        _resolved_state: &ResolverState,
+        _lazy_dbt_manifest: &OnceLock<DbtManifestV12>,
+        _dbt_manifest_path: &Path,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+}
+
+pub struct CliExtensionFeature {
+    pub hooks: Box<dyn CliExtensionHooks>,
+}
+
 /// A feature stack is an object that can be initialized with type-erased
 /// objects that implement feature-specific services.
 pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
     pub formatter: FormatterFeature,
     pub linter: LinterFeature,
+    pub cli_extension: CliExtensionFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).

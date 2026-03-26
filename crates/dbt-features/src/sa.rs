@@ -5,6 +5,9 @@ use crate::feature_stack::*;
 use crate::formatter::FormatterCommandHandler;
 use crate::linter::LinterCommandHandler;
 
+struct NoOpExtensionHooks;
+impl CliExtensionHooks for NoOpExtensionHooks {}
+
 #[derive(Default)]
 pub struct SourceAvailableFeatureStackBuilder {
     send_anonymous_usage_stats: bool,
@@ -26,10 +29,14 @@ impl SourceAvailableFeatureStackBuilder {
         let linter = LinterFeature {
             command_handler: Box::new(LinterCommandHandler {}),
         };
+        let cli_extension = CliExtensionFeature {
+            hooks: Box::new(NoOpExtensionHooks),
+        };
         let stack = FeatureStack {
             instrumentation,
             formatter,
             linter,
+            cli_extension,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };
