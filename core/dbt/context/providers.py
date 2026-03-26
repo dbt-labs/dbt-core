@@ -1326,6 +1326,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(
                 path, text_columns=filtered_column_types, delimiter=delimiter
             )
+            if getattr(self.config.args, "EMPTY", False):
+                table = table.limit(0)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
@@ -2293,7 +2295,7 @@ class TestContext(ProviderContext):
                 if self.model.resource_type == NodeType.Test and self.model.file_key_name:  # type: ignore[union-attr] # noqa
                     source_file = self.manifest.files[self.model.file_id]
                     # TODO CT-211
-                    (yaml_key, name) = self.model.file_key_name.split(".")  # type: ignore[union-attr] # noqa
+                    yaml_key, name = self.model.file_key_name.split(".")  # type: ignore[union-attr] # noqa
                     # TODO CT-211
                     source_file.add_env_var(var, yaml_key, name)  # type: ignore[union-attr]
             return return_value
