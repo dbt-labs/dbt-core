@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, fields, field
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
@@ -36,9 +36,11 @@ from dbt.exceptions import (
 from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
 from dbt.node_types import NodeType
+from dbt.events.types import InvalidOptionYAML
 from dbt.utils import MultiDict, coerce_dict_str, md5
 from dbt.version import get_installed_version
 from dbt_common.clients.system import load_file_contents, path_exists
+from dbt_common.events.functions import fire_event
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import SemverError
 from dbt_common.helper_types import NoValue
@@ -929,4 +931,15 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
         raise exc
     except (DbtRuntimeError, ValidationError):
         pass
+
+    # Validate unknown flags - warn if user sets flags that dbt doesn't recognize
+    if project_flags:
+        known_flag_names = {f.name for f in fields(ProjectFlags)}
+        unknown_flags = set(project_flags.keys()) - known_flag_names
+        if unknown_flags:
+            fire_event(InvalidOptionYAML(
+                option_name=f"flags: {', '.join(sorted(unknown_flags))}",
+                valid_options=", ".join(sorted(known_flag_names)[:10]) + "..."
+            ))
+
     return ProjectFlags()

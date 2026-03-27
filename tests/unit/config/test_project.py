@@ -11,13 +11,13 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.config.project import Project, _get_required_version
+from dbt.config.project import Project, _get_required_version, read_project_flags
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
 from dbt.deprecations import (
     GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
 )
-from dbt.events.types import GenericJSONSchemaValidationDeprecation
+from dbt.events.types import GenericJSONSchemaValidationDeprecation, InvalidOptionYAML
 from dbt.flags import set_from_args
 from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
@@ -646,3 +646,29 @@ class TestDeprecations:
             event = event_catcher.caught_events[0]
 
         assert "'name' is a required property at top level" in event.info.msg
+
+
+class TestUnknownFlagsWarning:
+
+    def test_unknown_flag_in_project_yml_fires_warning(self, tmp_path) -> None:
+        # Create a minimal dbt_project.yml with an unknown flag
+        project_dir = tmp_path
+        profiles_dir = tmp_path / "profiles"
+        profiles_dir.mkdir()
+        dbt_project = project_dir / "dbt_project.yml"
+        dbt_project.write_text(
+            "name: test_project\n"
+            "version: '1.0.0'\n"
+            "profile: test\n"
+            "config-version: 2\n"
+            "flags:\n"
+            "  some_bogus_flag: true\n"
+        )
+
+        event_catcher = EventCatcher(InvalidOptionYAML)
+        get_event_manager().add_callback(event_catcher.catch)
+
+        read_project_flags(project_dir=str(project_dir), profiles_dir=str(profiles_dir))
+
+        assert len(event_catcher.caught_events) == 1
+        assert "some_bogus_flag" in event_catcher.caught_events[0].info.option_name

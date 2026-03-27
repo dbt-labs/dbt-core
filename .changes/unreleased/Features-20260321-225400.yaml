@@ -1,0 +1,6 @@
+kind: Features
+body: Warn on unknown flags in dbt_project.yml
+time: 2026-03-21T22:54:00.000000+00:00
+custom:
+    Author: chinar-amrutkar
+    Issue: "12590"
