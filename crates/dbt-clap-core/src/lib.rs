@@ -1728,10 +1728,6 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = true)]
     pub legacy_compile: bool,
 
-    /// Flag for compile conformance
-    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide= true)]
-    pub check_conformance: bool,
-
     /// Flag for semantic manifest validation
     #[arg(global = true, env = "DBT_SKIP_SEMANTIC_MANIFEST_VALIDATION", long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide= true)]
     pub skip_semantic_manifest_validation: bool,
@@ -1901,7 +1897,6 @@ impl CommonArgs {
             indirect_selection: self.indirect_selection,
             replay,
             interactive: false,
-            check_conformance: self.check_conformance,
             skip_semantic_manifest_validation: self.skip_semantic_manifest_validation,
             export_saved_queries: self.export_saved_queries,
             max_depth: 0,

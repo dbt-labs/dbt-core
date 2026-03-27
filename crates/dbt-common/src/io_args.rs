@@ -399,7 +399,6 @@ pub struct EvalArgs {
     pub replay: Option<ReplayMode>,
     pub static_analysis: Option<StaticAnalysisKind>,
     pub interactive: bool,
-    pub check_conformance: bool,
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,

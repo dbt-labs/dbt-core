@@ -9,12 +9,9 @@ use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::TracingFeaturesHandle;
 use dbt_dag::schedule::Schedule;
 use dbt_schemas::schemas::PreviousState;
-use dbt_schemas::schemas::manifest::DbtManifestV12;
 use dbt_schemas::state::ResolverState;
 // use dbt_tasks::task_runner::RunTasksOk;
 use std::fmt;
-use std::path::Path;
-use std::sync::OnceLock;
 
 pub trait CommandHandler: Sync + Send {
     fn process_eval_args(
@@ -76,18 +73,6 @@ pub trait CliExtensionHooks: Send + Sync {
         _resolved_state: &ResolverState,
         _schedule: &Schedule<String>,
         _token: &CancellationToken,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    fn did_write_json(
-        &self,
-        _arg: &EvalArgs,
-        _cli: &Cli,
-        _invocation_id: &str,
-        _resolved_state: &ResolverState,
-        _lazy_dbt_manifest: &OnceLock<DbtManifestV12>,
-        _dbt_manifest_path: &Path,
     ) -> FsResult<()> {
         Ok(())
     }
