@@ -11,13 +11,13 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.config.project import Project, _get_required_version
+from dbt.config.project import Project, _get_required_version, read_project_flags
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
 from dbt.deprecations import (
     GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
 )
-from dbt.events.types import GenericJSONSchemaValidationDeprecation
+from dbt.events.types import GenericJSONSchemaValidationDeprecation, InvalidOptionYAML
 from dbt.flags import set_from_args
 from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
@@ -651,9 +651,6 @@ class TestDeprecations:
 class TestUnknownFlagsWarning:
 
     def test_unknown_flag_in_project_yml_fires_warning(self, tmp_path) -> None:
-        from dbt.events.types import InvalidOptionYAML
-        from dbt.config.project import read_project_flags
-
         # Create a minimal dbt_project.yml with an unknown flag
         project_dir = tmp_path
         profiles_dir = tmp_path / "profiles"
