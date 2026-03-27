@@ -672,6 +672,14 @@ validate_versions() {
     return 0
 }
 
+warn_if_dbt_lsp_package() {
+    package_name="$1"
+
+    if [ "$package_name" = "dbt-lsp" ]; then
+        log_grey "Warning: dbt-lsp is a compatibility binary. Prefer installing and updating the dbt binary, which now provides 'dbt lsp'."
+    fi
+}
+
 
 main() {
     # Initialize variables with defaults if not set by command-line parsing
@@ -682,6 +690,8 @@ main() {
     target="${target:-}"
     dest="${dest:-$HOME/.local/bin}"
     update="${update:-false}"
+
+    warn_if_dbt_lsp_package "$package"
 
     check_jq
 
