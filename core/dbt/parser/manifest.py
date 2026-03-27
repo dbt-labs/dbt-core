@@ -118,7 +118,7 @@ from dbt.parser.read_files import (
     ReadFilesFromFileSystem,
     load_source_file,
 )
-from dbt.parser.schemas import SchemaParser
+from dbt.parser.schemas import SchemaParser, validate_macro_arguments
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
 from dbt.parser.singular_test import SingularTestParser
@@ -534,7 +534,75 @@ class ManifestLoader:
         self.check_function_default_arguments_ordering()
 
         return self.manifest
+    def _revalidate_macro_arguments(self) -> None:
+        """Re-run macro argument validation on cached macros after partial parse reuse.
 
+        When partial parsing skips all parsing (nothing changed), macros are reused
+        from the saved manifest without going through parse_patch, so argument
+        validation must be re-run explicitly here.
+
+        We re-extract Jinja arguments from macro_sql and compare against the YAML
+        arguments stored in the schema file's dict_from_yaml, mirroring what
+        MacroParser and MacroPatchParser do during a full parse.
+        """
+        import jinja2
+        from dbt.artifacts.resources import MacroArgument
+        from dbt.contracts.files import SchemaSourceFile
+        from dbt.contracts.graph.nodes import ParsedMacroPatch
+        from dbt_common.clients import jinja as jinja_client
+        
+
+        for macro in self.manifest.macros.values():
+            if not macro.patch_path:
+                continue
+
+            # Re-extract Jinja arguments from macro_sql
+            try:
+                ast = jinja_client.parse(macro.macro_sql)
+                macro_nodes = list(ast.find_all(jinja2.nodes.Macro))
+                if len(macro_nodes) != 1:
+                    continue
+                jinja_macro = macro_nodes[0]
+                jinja_args = [MacroArgument(name=arg.name) for arg in jinja_macro.args]
+            except Exception:
+                continue
+
+            # Get YAML arguments from the schema file
+            file_id = macro.patch_path
+            if file_id not in self.manifest.files:
+                continue
+            schema_file = self.manifest.files[file_id]
+            if not isinstance(schema_file, SchemaSourceFile):
+                continue
+            macro_dicts = schema_file.dict_from_yaml.get("macros", [])
+            yaml_macro = next((m for m in macro_dicts if m.get("name") == macro.name), None)
+            if not yaml_macro:
+                continue
+            yaml_arguments = yaml_macro.get("arguments", [])
+            if not yaml_arguments:
+                continue
+            patch_args = [
+                MacroArgument(name=a["name"], type=a.get("type"), description=a.get("description", ""))
+                for a in yaml_arguments
+            ]
+
+            # Build a temporary macro object with Jinja args for comparison
+            from copy import copy
+            jinja_macro_node = copy(macro)
+            jinja_macro_node.arguments = jinja_args
+
+            patch = ParsedMacroPatch(
+                name=macro.name,
+                original_file_path=macro.original_file_path,
+                yaml_key="macros",
+                package_name=macro.package_name,
+                arguments=patch_args,
+                description="",
+                meta={},
+                docs=macro.docs,
+                config=macro.config if hasattr(macro, "config") else {},
+            )
+            validate_macro_arguments(jinja_macro_node, patch)
     def safe_update_project_parser_files_partially(self, project_parser_files: Dict) -> Dict:
         if self.saved_manifest is None:
             return project_parser_files
@@ -547,6 +615,8 @@ class ManifestLoader:
                 Note(msg="Nothing changed, skipping partial parsing."), level=EventLevel.DEBUG
             )
             self.manifest = self.saved_manifest  # type: ignore[assignment]
+            if getattr(get_flags(), "validate_macro_args", False):
+                self._revalidate_macro_arguments()
         else:
             # create child_map and parent_map
             self.saved_manifest.build_parent_and_child_maps()  # type: ignore[union-attr]

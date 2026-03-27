@@ -1352,7 +1352,45 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             returns=target.returns,
         )
 
+def validate_macro_arguments(macro: Macro, patch: ParsedMacroPatch) -> None:
+    """Validate macro arguments from YAML match the Jinja definition.
 
+    Extracted as a standalone function so it can be called both during full
+    parsing and after partial parsing reuses a cached manifest, ensuring the
+    warning is always emitted when arguments are mismatched.
+    """
+    if not patch.arguments:
+        return
+    for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
+        if patch_arg.name != macro_arg.name:
+            msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
+            warn_or_error(
+                InvalidMacroAnnotation(
+                    msg=msg,
+                    macro_unique_id=macro.unique_id,
+                    macro_file_path=macro.original_file_path,
+                )
+            )
+    if len(patch.arguments) != len(macro.arguments):
+        msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
+        warn_or_error(
+            InvalidMacroAnnotation(
+                msg=msg,
+                macro_unique_id=macro.unique_id,
+                macro_file_path=macro.original_file_path,
+            )
+        )
+    for patch_arg in patch.arguments:
+        arg_type = patch_arg.type
+        if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
+            msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
+            warn_or_error(
+                InvalidMacroAnnotation(
+                    msg=msg,
+                    macro_unique_id=macro.unique_id,
+                    macro_file_path=macro.original_file_path,
+                )
+            )
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def get_block(self, node: UnparsedMacroUpdate) -> TargetBlock:
         return TargetBlock.from_yaml_block(self.yaml, node)
@@ -1409,30 +1447,7 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             macro.arguments = patch.arguments
 
     def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
-        if not patch.arguments:
-            return
-
-        for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
-            if patch_arg.name != macro_arg.name:
-                msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
-                self._fire_macro_arg_warning(msg, macro)
-
-        if len(patch.arguments) != len(macro.arguments):
-            msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
-            self._fire_macro_arg_warning(msg, macro)
-
-        for patch_arg in patch.arguments:
-            arg_type = patch_arg.type
-            if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
-                msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
-                self._fire_macro_arg_warning(msg, macro)
-
-    def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
-        warn_or_error(
-            InvalidMacroAnnotation(
-                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
-            )
-        )
+        validate_macro_arguments(macro, patch)
 
 
 # valid type names, along with the number of parameters they require
