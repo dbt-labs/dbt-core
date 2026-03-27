@@ -42,7 +42,10 @@ from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
 from dbt_common.events.base_types import EventLevel
-from dbt_common.events.event_manager_client import get_event_manager
+from dbt_common.events.event_manager_client import (  # type: ignore[attr-defined]
+    get_event_manager,
+    raise_deferred_warn_errors,
+)
 from dbt_common.events.functions import LOG_VERSION, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
 from dbt_common.exceptions import DbtBaseException as DbtException
@@ -99,6 +102,7 @@ def preflight(func):
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         setup_event_logger(flags=flags, callbacks=callbacks)
+        get_event_manager().defer_warn_errors = flags.SHOW_ALL_WARN_ERRORS
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
@@ -180,6 +184,8 @@ def postflight(func):
 
         try:
             result, success = func(*args, **kwargs)
+            if get_flags().SHOW_ALL_WARN_ERRORS:
+                raise_deferred_warn_errors()
         except FailFastError as e:
             fire_event(MainEncounteredError(exc=str(e)))
             raise ResultExit(e.result)
@@ -426,3 +432,6 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.connections.set_query_header(query_header_context)
         for integration in active_integrations:
             adapter.add_catalog_integration(integration)
+
+    if ctx.obj["flags"].SHOW_ALL_WARN_ERRORS:
+        raise_deferred_warn_errors()

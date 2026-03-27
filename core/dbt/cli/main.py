@@ -149,6 +149,7 @@ def global_flags(func):
     @p.version_check
     @p.warn_error
     @p.warn_error_options
+    @p.show_all_warn_errors
     @p.write_json
     @p.use_fast_test_edges
     @p.upload_artifacts
