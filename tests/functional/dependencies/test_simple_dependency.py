@@ -472,3 +472,15 @@ class TestEmptyDependency:
         write_config_file(empty_local_package, "packages.yml")
         with pytest.raises(DbtProjectError, match="A local package is missing the value"):
             run_dbt(["deps"])
+
+    def test_versionless_package(self, project):
+        no_version_hub_package = {
+            "packages": [
+                {
+                    "package": "dbt-labs/dbt_utils",
+                }
+            ]
+        }
+        write_config_file(no_version_hub_package, "packages.yml")
+        with pytest.raises(DbtProjectError, match="is missing the version"):
+            run_dbt(["deps"])
