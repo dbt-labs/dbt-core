@@ -195,19 +195,22 @@ def relation_name_format(quote_database: bool, quote_schema: bool, quote_identif
 
 
 def checksum_file(path):
-    """windows has silly git behavior that adds newlines, and python does
-    silly things if we just open(..., 'r').encode('utf-8').
+    """Compute the expected sha256 checksum for a file the same way dbt does.
 
-    seed files should not have their contents normalized to mirror the normalize_file_contents usage during file loading
+    For seed files (.csv), dbt uses FileHash.from_path() which opens in text
+    mode ("r") — this normalizes \\r\\n to \\n on Windows — then strips and
+    hashes the UTF-8 encoding.  For other files dbt normalizes whitespace via
+    normalize_file_contents before hashing.
     """
-    with open(path, "rb") as fp:
-        # We strip the file contents because we want the checksum to match the stored contents
-        file_contents = fp.read().strip()
-        # Normalize non-seed contents
-        if not path.endswith(".csv"):
-            file_contents = " ".join(file_contents.decode("utf-8").split()).encode("utf-8")
+    if path.endswith(".csv"):
+        # Mirror FileHash.from_path(): text-mode open, strip, encode, hash
+        with open(path, "r") as fp:
+            file_contents = fp.read().strip().encode("utf-8")
+    else:
+        with open(path, "rb") as fp:
+            file_contents = " ".join(fp.read().decode("utf-8").split()).encode("utf-8")
 
-        hashed = hashlib.sha256(file_contents).hexdigest()
+    hashed = hashlib.sha256(file_contents).hexdigest()
 
     return {
         "name": "sha256",

@@ -1,0 +1,6 @@
+kind: Features
+body: Make MAXIMUM_SEED_SIZE_MIB configurable
+time: 2023-03-07T13:48:38.792321024Z
+custom:
+  Author: noppaz acurtis-evi
+  Issue: 7117 7124

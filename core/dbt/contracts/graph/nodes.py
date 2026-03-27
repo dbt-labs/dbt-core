@@ -963,6 +963,24 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         # if the current checksum is a path, we want to log a warning.
         result = self.checksum == other.checksum
 
+        # Seamless migration fallback: when upgrading from the old binary-mode
+        # hashing to the new text-mode (from_path) hashing, Windows line
+        # endings (\r\n vs \n) cause checksums to differ even though the file
+        # hasn't changed.  Re-compute using the legacy method and compare.
+        # Only runs on Windows: on other platforms text and binary mode produce
+        # identical hashes, so a differing checksum always means a real change.
+        if (
+            not result
+            and os.name == "nt"
+            and self.checksum.name == other.checksum.name
+            and self.checksum.name not in ("path", "none")
+            and self.root_path
+        ):
+            seed_path = os.path.join(self.root_path, self.original_file_path)
+            if os.path.exists(seed_path):
+                legacy_hash = FileHash.from_path_legacy(seed_path, name=self.checksum.name)
+                result = legacy_hash == other.checksum
+
         if self.checksum.name == "path":
             msg: str
             if other.checksum.name != "path":

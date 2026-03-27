@@ -4,9 +4,6 @@ DEFAULT_ENV_PLACEHOLDER = "DBT_DEFAULT_PLACEHOLDER"
 
 SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
 
-MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
-MAXIMUM_SEED_SIZE_NAME = "1MB"
-
 PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
 )

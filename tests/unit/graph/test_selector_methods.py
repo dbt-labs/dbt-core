@@ -1,4 +1,5 @@
 import copy
+import os
 from argparse import Namespace
 from dataclasses import replace
 from pathlib import Path
@@ -830,7 +831,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedExceedsLimitSamePath"
         msg = event.message()
-        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MiB in size"))
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
@@ -843,7 +844,7 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedExceedsLimitSamePath"
         msg = event.message()
-        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MiB in size"))
 
 
 def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state, seed):
@@ -857,7 +858,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedIncreased"
         msg = event.message()
-        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MiB in size"))
     with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
@@ -870,7 +871,7 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedIncreased"
         msg = event.message()
-        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
+        assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MiB in size"))
 
 
 def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state, seed):
@@ -1113,3 +1114,97 @@ def test_select_state_changed_test_macros_with_upstream_change(manifest, previou
     assert "model1" and "model2" not in search_manifest_using_method(
         manifest, method, "unmodified"
     )
+
+
+class TestSeedNodeSameSeedsFallback:
+    """Tests for the legacy-hash fallback in SeedNode.same_seeds()."""
+
+    def _make_seed_node(self, checksum, root_path="", original_file_path="seeds/seed.csv"):
+        seed = make_seed("pkg", "test_seed")
+        seed = replace(seed, checksum=checksum, root_path=root_path)
+        seed = replace(seed, original_file_path=original_file_path)
+        return seed
+
+    def test_matching_checksums(self):
+        """When checksums match, same_seeds returns True (no fallback needed)."""
+        h = FileHash.from_contents("id,name\n1,Alice")
+        current = self._make_seed_node(h)
+        previous = self._make_seed_node(h)
+        assert current.same_seeds(previous) is True
+
+    def test_different_checksums_no_root_path(self):
+        """When checksums differ and root_path is empty, no fallback — returns False."""
+        h1 = FileHash.from_contents("id,name\n1,Alice")
+        h2 = FileHash.from_contents("id,name\n1,Bob")
+        current = self._make_seed_node(h1, root_path="")
+        previous = self._make_seed_node(h2)
+        assert current.same_seeds(previous) is False
+
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="CRLF/LF hash divergence only occurs on Windows where text mode normalises \\r\\n",
+    )
+    def test_legacy_fallback_matches_windows(self, tmp_path):
+        """On Windows: new hash (text-mode) differs from old (binary-mode legacy) hash for a
+        CRLF file, but the fallback re-hashes via the legacy method and recognises the file
+        is unchanged."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        seed_file.write_bytes(b"id,name\r\n1,Alice\r\n")
+
+        # On Windows, from_path (text mode) normalises \r\n → \n; from_path_legacy preserves it
+        new_hash = FileHash.from_path(str(seed_file))
+        old_hash = FileHash.from_path_legacy(str(seed_file))
+
+        assert new_hash.checksum != old_hash.checksum, "Hashes should differ on Windows"
+
+        current = self._make_seed_node(
+            new_hash, root_path=str(tmp_path), original_file_path="seeds/seed.csv"
+        )
+        previous = self._make_seed_node(old_hash)
+
+        # Fallback fires (os.name == "nt") and recognises the legacy hash → not modified
+        assert current.same_seeds(previous) is True
+
+    def test_legacy_fallback_no_match(self, tmp_path):
+        """When new hash AND legacy hash both differ from old, seed IS modified."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        seed_file.write_bytes(b"id,name\r\n1,Alice\r\n")
+
+        new_hash = FileHash.from_path(str(seed_file))
+        # Old hash from completely different content
+        old_hash = FileHash.from_contents("id,name\r\n1,Bob\r\n")
+
+        current = self._make_seed_node(
+            new_hash, root_path=str(tmp_path), original_file_path="seeds/seed.csv"
+        )
+        previous = self._make_seed_node(old_hash)
+
+        assert current.same_seeds(previous) is False
+
+    def test_no_fallback_when_hash_types_differ(self, tmp_path):
+        """When hash types differ (e.g., sha256 vs path), no fallback is attempted."""
+        seed_file = tmp_path / "seeds" / "seed.csv"
+        seed_file.parent.mkdir(parents=True)
+        seed_file.write_text("id,name\n1,Alice\n")
+
+        current = self._make_seed_node(
+            FileHash.from_path(str(seed_file)),
+            root_path=str(tmp_path),
+            original_file_path="seeds/seed.csv",
+        )
+        previous = self._make_seed_node(FileHash.path("seeds/seed.csv"))
+
+        # Different hash types → FileHash.__eq__ returns False, no fallback
+        assert current.same_seeds(previous) is False
+
+    def test_no_fallback_for_path_hash_type(self, tmp_path):
+        """When both checksums are 'path' type, fallback should not trigger."""
+        current = self._make_seed_node(
+            FileHash.path("seeds/seed.csv"),
+            root_path=str(tmp_path),
+        )
+        previous = self._make_seed_node(FileHash.path("seeds/other.csv"))
+        # path type is excluded from fallback
+        assert current.same_seeds(previous) is False

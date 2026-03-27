@@ -111,7 +111,6 @@ lint = [
 flake8 = "pre-commit run flake8-check --hook-stage manual --all-files"
 mypy = "pre-commit run mypy-check --hook-stage manual --all-files"
 black = "pre-commit run black-check --hook-stage manual --all-files"
-
 # Testing commands
 unit-tests = "python -m pytest {args} ../tests/unit"
 integration-tests = "python -m pytest -nauto {args} ../tests/functional"
