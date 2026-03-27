@@ -188,3 +188,11 @@ pub fn checkpoint_maybe_exit(arg: &EvalArgs, phase: Phases) -> FsResult<()> {
         error_count_checkpoint()
     }
 }
+
+pub fn checkpoint_error_count_maybe_exit(arg: &EvalArgs) -> FsResult<()> {
+    if arg.skip_checkpoints {
+        return Ok(());
+    }
+
+    error_count_checkpoint()
+}
