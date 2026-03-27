@@ -6,7 +6,6 @@ pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, Rel
 // Relation and RelationConfig for different data warehouses
 pub mod bigquery;
 pub mod databricks;
-pub mod duckdb;
 pub mod parse;
 pub mod postgres;
 pub mod redshift;
@@ -22,7 +21,9 @@ pub use relation_object::{
 pub(crate) mod config_v2;
 
 pub(crate) fn duckdb_should_include_database(database: Option<&str>) -> bool {
-    database.is_some_and(|db| !db.is_empty() && !db.eq_ignore_ascii_case("main"))
+    database.is_some_and(|db| {
+        !db.is_empty() && !db.eq_ignore_ascii_case("main") && !db.eq_ignore_ascii_case("memory")
+    })
 }
 
 #[cfg(test)]
@@ -206,6 +207,8 @@ mod tests {
     #[test]
     fn test_duckdb_should_not_include_database_for_default_catalog() {
         assert!(!duckdb_should_include_database(Some("main")));
+        assert!(!duckdb_should_include_database(Some("memory")));
+        assert!(!duckdb_should_include_database(Some("MEMORY")));
         assert!(!duckdb_should_include_database(Some("")));
         assert!(!duckdb_should_include_database(None));
     }

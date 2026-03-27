@@ -297,7 +297,8 @@ pub fn do_create_relation(
                 true,
                 true,
             );
-            Box::new(PostgresRelation::try_new_with_policy(
+            Box::new(GenericRelation::new_with_policy(
+                DuckDB,
                 RelationPath {
                     database: Some(database).filter(|s| !s.is_empty()),
                     schema: Some(schema),
@@ -306,7 +307,10 @@ pub fn do_create_relation(
                 relation_type,
                 include_policy,
                 custom_quoting,
-            )?) as Box<dyn BaseRelation>
+                None,
+                false,
+                false,
+            )) as Box<dyn BaseRelation>
         }
         Snowflake => Box::new(SnowflakeRelation::new(
             Some(database),

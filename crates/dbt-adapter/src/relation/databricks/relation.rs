@@ -1,4 +1,5 @@
 use crate::information_schema::InformationSchema;
+use crate::relation::duckdb_should_include_database;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use dbt_adapter_core::{AdapterType, quote_char};
@@ -43,20 +44,33 @@ impl StaticBaseRelation for GenericRelationType {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
-        Ok(RelationObject::new(Arc::new(GenericRelation::new(
-            self.adapter_type,
-            database,
-            schema,
-            identifier,
-            relation_type,
-            // api.Relation.create doesn't set everything below
-            None,
-            custom_quoting.unwrap_or(self.quoting),
-            None,
-            false,
-            temporary.unwrap_or(false),
-        )))
-        .into_value())
+        let include_policy = match self.adapter_type {
+            // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
+            AdapterType::DuckDB => Policy::new(
+                duckdb_should_include_database(database.as_deref()),
+                true,
+                true,
+            ),
+            _ => Policy::trues(),
+        };
+        Ok(
+            RelationObject::new(Arc::new(GenericRelation::new_with_policy(
+                self.adapter_type,
+                RelationPath {
+                    database: database.filter(|s| !s.is_empty()),
+                    schema,
+                    identifier,
+                },
+                relation_type,
+                include_policy,
+                custom_quoting.unwrap_or(self.quoting),
+                // api.Relation.create doesn't set everything below
+                None,
+                false,
+                temporary.unwrap_or(false),
+            )))
+            .into_value(),
+        )
     }
 
     fn get_adapter_type(&self) -> String {
@@ -186,6 +200,14 @@ impl GenericRelation {
         is_delta: bool,
         temporary: bool,
     ) -> Self {
+        let include_policy = match adapter_type {
+            AdapterType::DuckDB => Policy::new(
+                duckdb_should_include_database(database.as_deref()),
+                true,
+                true,
+            ),
+            _ => Policy::trues(),
+        };
         Self {
             adapter_type,
             path: RelationPath {
@@ -194,7 +216,7 @@ impl GenericRelation {
                 identifier,
             },
             relation_type,
-            include_policy: Policy::trues(),
+            include_policy,
             quote_policy: custom_quoting,
             native_schema,
             metadata,
@@ -412,8 +434,8 @@ impl BaseRelation for GenericRelation {
     }
 
     /// Mirrors Python `DatabricksRelation.render()` → `super().render().lower()`.
-    /// Databricks identifiers are case-insensitive even when backtick-quoted,
-    /// so lowercasing the rendered string is semantically correct.
+    /// Case-insensitive adapters (Databricks, DuckDB, etc.) lowercase the
+    /// rendered string for consistency.
     fn render_self_as_str(&self) -> String {
         self.base_render_self_as_str().to_ascii_lowercase()
     }
@@ -426,17 +448,27 @@ impl BaseRelation for GenericRelation {
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        Ok(Arc::new(GenericRelation::new(
+        let include_policy = match self.adapter_type {
+            AdapterType::DuckDB => Policy::new(
+                duckdb_should_include_database(database.as_deref()),
+                true,
+                true,
+            ),
+            _ => Policy::trues(),
+        };
+        Ok(Arc::new(GenericRelation::new_with_policy(
             self.adapter_type,
-            database,
-            schema,
-            identifier,
+            RelationPath {
+                database: database.filter(|s| !s.is_empty()),
+                schema,
+                identifier,
+            },
             relation_type,
-            None,
+            include_policy,
             custom_quoting,
-            None,
-            false,
-            false,
+            self.metadata.clone(),
+            self.is_delta,
+            self.temporary,
         )))
     }
 
