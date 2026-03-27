@@ -1235,6 +1235,7 @@ class AmbiguousCatalogMatchError(CompilationError):
 
         # Generic fallback when no prefix is available.
         return "node"
+
     def get_message(self) -> str:
         node_type = self._node_type_label(self.unique_id)
         msg = (
