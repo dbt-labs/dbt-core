@@ -21,16 +21,15 @@ from dbt.context.providers import RuntimeProvider, SourceContext
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
-from dbt.events.types import FreshnessCheckComplete, LogFreshnessResult, LogStartLine
+from dbt.events.types import EndOfRunSummary, FreshnessCheckComplete, LogFreshnessResult, LogStartLine, StatsLine
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType, RunHookType
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt_common.events.types import Formatting, Note
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 from .base import BaseRunner
-from .printer import print_run_result_error
 from .run import RunTask
 
 
@@ -261,15 +260,83 @@ class FreshnessTask(RunTask):
             elapsed_time=elapsed_time, generated_at=generated_at, results=results
         )
 
-    def task_end_messages(self, results) -> None:
-        for result in results:
-            if result.status in (
-                FreshnessStatus.Error,
-                FreshnessStatus.RuntimeErr,
-                RunStatus.Error,
-            ):
-                print_run_result_error(result)
+    def _print_freshness_result(self, result, level, prefix):
+        """Helper to print a freshness result message
+        
+        Handles two cases:
+        1. result.node exists (standard freshness results)
+        2. result has source_name and table_name attributes directly (edge cases)
+        """
+        fire_event(Formatting(""))
+        if hasattr(result, 'node') and result.node:
+            source_name = result.node.source_name
+            table_name = result.node.name
+        elif hasattr(result, 'source_name') and hasattr(result, 'table_name'):
+            source_name = result.source_name
+            table_name = result.table_name
+        else:
+            # Fallback for unexpected result structure
+            fire_event(
+                Note(msg=f"{prefix} in unknown source"),
+                level,
+            )
+            return
+        
+        fire_event(
+            Note(msg=f"{prefix} in source {source_name}.{table_name}"),
+            level,
+        )
 
+    def task_end_messages(self, results) -> None:
+        errors, warnings = [], []
+        
+        for result in results:
+            # freshness tasks use FreshnessStatus (Error/RuntimeErr/Warn/Pass) and not RunStatus
+            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
+                errors.append(result)
+            elif result.status == FreshnessStatus.Warn:
+                warnings.append(result)
+        
+        # Print summary if there are errors or warnings
+        if errors or warnings:
+            fire_event(Formatting(""))
+            fire_event(
+                EndOfRunSummary(
+                    num_errors=len(errors),
+                    num_warnings=len(warnings),
+                    keyboard_interrupt=False,
+                    num_partial_success=0,
+                )
+            )
+            
+            # Print each error using helper
+            for error in errors:
+                self._print_freshness_result(error, EventLevel.ERROR, "Failure")
+            
+            # Print each warning using helper
+            for warning in warnings:
+                self._print_freshness_result(warning, EventLevel.WARN, "Warning")
+        
+        # Print final stats
+        pass_count = sum(1 for r in results if r.status == FreshnessStatus.Pass)
+        warn_count = len(warnings)
+        error_count = len(errors)
+        total_count = len(results)
+        
+        fire_event(Formatting(""))
+        fire_event(
+            StatsLine(
+                stats={
+                    "pass": pass_count,
+                    "warn": warn_count,
+                    "error": error_count,
+                    "skip": 0,
+                    "noop": 0,
+                    "total": total_count,
+                }
+            )
+        )
+        
         fire_event(FreshnessCheckComplete())
 
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
