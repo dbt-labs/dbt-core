@@ -290,7 +290,7 @@ impl<'a> Parser<'a> {
     /// Parses a template.
     pub fn parse(&mut self) -> Result<ast::Stmt<'a>, Error> {
         let span = self.stream.last_span();
-        self.subparse(&|_| false).map(|children| {
+        self.subparse(&|_| false, None).map(|children| {
             ast::Stmt::Template(Spanned::new(
                 ast::Template { children },
                 self.stream.expand_span(span),
@@ -1082,10 +1082,16 @@ impl<'a> Parser<'a> {
         skip_token!(self, Token::Colon);
 
         expect_token!(self, Token::BlockEnd, "end of block");
-        let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endfor" | "else"))));
+        let body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endfor" | "else")),
+            Some(("for", &["endfor", "else"])),
+        ));
         let else_body = if skip_token!(self, Token::Ident("else")) {
             expect_token!(self, Token::BlockEnd, "end of block");
-            ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endfor"))))
+            ok!(self.subparse(
+                &|tok| matches!(tok, Token::Ident("endfor")),
+                Some(("for", &["endfor"])),
+            ))
         } else {
             Vec::new()
         };
@@ -1105,12 +1111,17 @@ impl<'a> Parser<'a> {
         let expr = ok!(self.parse_expr_noif());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
-        let true_body =
-            ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endif" | "else" | "elif"))));
+        let true_body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endif" | "else" | "elif")),
+            Some(("if", &["elif", "else", "endif"])),
+        ));
         let false_body = match ok!(self.stream.next()) {
             Some((Token::Ident("else"), _)) => {
                 expect_token!(self, Token::BlockEnd, "end of block");
-                let rv = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endif"))));
+                let rv = ok!(self.subparse(
+                    &|tok| matches!(tok, Token::Ident("endif")),
+                    Some(("if", &["endif"])),
+                ));
                 ok!(self.stream.next());
                 rv
             }
@@ -1148,7 +1159,10 @@ impl<'a> Parser<'a> {
         }
 
         expect_token!(self, Token::BlockEnd, "end of block");
-        let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endwith"))));
+        let body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endwith")),
+            Some(("with", &["endwith"])),
+        ));
         ok!(self.stream.next());
         Ok(ast::WithBlock { assignments, body })
     }
@@ -1180,7 +1194,10 @@ impl<'a> Parser<'a> {
                 None
             };
             expect_token!(self, Token::BlockEnd, "end of block");
-            let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endset"))));
+            let body = ok!(self.subparse(
+                &|tok| matches!(tok, Token::Ident("endset")),
+                Some(("set", &["endset"])),
+            ));
             ok!(self.stream.next());
             Ok(SetParseResult::SetBlock(ast::SetBlock {
                 target: targets.into_iter().next().unwrap(),
@@ -1241,7 +1258,10 @@ impl<'a> Parser<'a> {
         }
 
         expect_token!(self, Token::BlockEnd, "end of block");
-        let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endblock"))));
+        let body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endblock")),
+            Some(("block", &["endblock"])),
+        ));
         ok!(self.stream.next());
 
         if let Some((Token::Ident(trailing_name), _)) = ok!(self.stream.current()) {
@@ -1263,7 +1283,10 @@ impl<'a> Parser<'a> {
     fn parse_auto_escape(&mut self) -> Result<ast::AutoEscape<'a>, Error> {
         let enabled = ok!(self.parse_expr());
         expect_token!(self, Token::BlockEnd, "end of block");
-        let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endautoescape"))));
+        let body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endautoescape")),
+            Some(("autoescape", &["endautoescape"])),
+        ));
         ok!(self.stream.next());
         Ok(ast::AutoEscape { enabled, body })
     }
@@ -1297,7 +1320,10 @@ impl<'a> Parser<'a> {
     fn parse_filter_block(&mut self) -> Result<ast::FilterBlock<'a>, Error> {
         let filter = ok!(self.parse_filter_chain());
         expect_token!(self, Token::BlockEnd, "end of block");
-        let body = ok!(self.subparse(&|tok| matches!(tok, Token::Ident("endfilter"))));
+        let body = ok!(self.subparse(
+            &|tok| matches!(tok, Token::Ident("endfilter")),
+            Some(("filter", &["endfilter"])),
+        ));
         ok!(self.stream.next());
         Ok(ast::FilterBlock { filter, body })
     }
@@ -1442,11 +1468,19 @@ impl<'a> Parser<'a> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
-        let body = ok!(self.subparse(&|tok| match tok {
-            Token::Ident("endmacro") if name.is_some() => true,
-            Token::Ident("endcall") if name.is_none() => true,
-            _ => false,
-        }));
+        let ctx = if name.is_some() {
+            ("macro", &["endmacro"][..])
+        } else {
+            ("call", &["endcall"][..])
+        };
+        let body = ok!(self.subparse(
+            &|tok| match tok {
+                Token::Ident("endmacro") if name.is_some() => true,
+                Token::Ident("endcall") if name.is_none() => true,
+                _ => false,
+            },
+            Some(ctx),
+        ));
         self.in_macro = old_in_macro;
         self.in_loop = old_in_loop;
         ok!(self.stream.next());
@@ -1470,11 +1504,19 @@ impl<'a> Parser<'a> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
-        let body = ok!(self.subparse(&|tok| match tok {
-            Token::Ident("endtest") if name.is_some() => true,
-            Token::Ident("endcall") if name.is_none() => true,
-            _ => false,
-        }));
+        let ctx = if name.is_some() {
+            ("test", &["endtest"][..])
+        } else {
+            ("call", &["endcall"][..])
+        };
+        let body = ok!(self.subparse(
+            &|tok| match tok {
+                Token::Ident("endtest") if name.is_some() => true,
+                Token::Ident("endcall") if name.is_none() => true,
+                _ => false,
+            },
+            Some(ctx),
+        ));
         self.in_macro = old_in_macro;
         self.in_loop = old_in_loop;
         ok!(self.stream.next());
@@ -1496,11 +1538,19 @@ impl<'a> Parser<'a> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
-        let body = ok!(self.subparse(&|tok| match tok {
-            Token::Ident("endsnapshot") if name.is_some() => true,
-            Token::Ident("endcall") if name.is_none() => true,
-            _ => false,
-        }));
+        let ctx = if name.is_some() {
+            ("snapshot", &["endsnapshot"][..])
+        } else {
+            ("call", &["endcall"][..])
+        };
+        let body = ok!(self.subparse(
+            &|tok| match tok {
+                Token::Ident("endsnapshot") if name.is_some() => true,
+                Token::Ident("endcall") if name.is_none() => true,
+                _ => false,
+            },
+            Some(ctx),
+        ));
         self.in_macro = old_in_macro;
         self.in_loop = old_in_loop;
         ok!(self.stream.next());
@@ -1523,11 +1573,19 @@ impl<'a> Parser<'a> {
     ) -> Result<ast::Macro<'a>, Error> {
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
-        let body = ok!(self.subparse(&|tok| match tok {
-            Token::Ident("enddocs") if name.is_some() => true,
-            Token::Ident("endcall") if name.is_none() => true,
-            _ => false,
-        }));
+        let ctx = if name.is_some() {
+            ("docs", &["enddocs"][..])
+        } else {
+            ("call", &["endcall"][..])
+        };
+        let body = ok!(self.subparse(
+            &|tok| match tok {
+                Token::Ident("enddocs") if name.is_some() => true,
+                Token::Ident("endcall") if name.is_none() => true,
+                _ => false,
+            },
+            Some(ctx),
+        ));
         self.in_macro = old_in_macro;
         self.in_loop = old_in_loop;
         ok!(self.stream.next());
@@ -1549,11 +1607,19 @@ impl<'a> Parser<'a> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
-        let body = ok!(self.subparse(&|tok| match tok {
-            Token::Ident("endmaterialization") if name.is_some() => true,
-            Token::Ident("endcall") if name.is_none() => true,
-            _ => false,
-        }));
+        let ctx = if name.is_some() {
+            ("materialization", &["endmaterialization"][..])
+        } else {
+            ("call", &["endcall"][..])
+        };
+        let body = ok!(self.subparse(
+            &|tok| match tok {
+                Token::Ident("endmaterialization") if name.is_some() => true,
+                Token::Ident("endcall") if name.is_none() => true,
+                _ => false,
+            },
+            Some(ctx),
+        ));
         self.in_macro = old_in_macro;
         self.in_loop = old_in_loop;
         ok!(self.stream.next());
@@ -1688,13 +1754,15 @@ impl<'a> Parser<'a> {
     fn subparse(
         &mut self,
         end_check: &dyn Fn(&Token) -> bool,
+        block_context: Option<(&'static str, &'static [&'static str])>,
     ) -> Result<Vec<ast::Stmt<'a>>, Error> {
-        with_recursion_guard!(self, self.subparse_internal(end_check))
+        with_recursion_guard!(self, self.subparse_internal(end_check, block_context))
     }
 
     fn subparse_internal(
         &mut self,
         end_check: &dyn Fn(&Token) -> bool,
+        block_context: Option<(&'static str, &'static [&'static str])>,
     ) -> Result<Vec<ast::Stmt<'a>>, Error> {
         let mut rv = Vec::new();
         while let Some((token, span)) = ok!(self.stream.next()) {
@@ -1733,7 +1801,7 @@ impl<'a> Parser<'a> {
                     )));
                 }
                 Token::BlockStart => {
-                    let (tok, _span) = match ok!(self.stream.current()) {
+                    let (tok, span) = match ok!(self.stream.current()) {
                         Some(rv) => rv,
                         None => syntax_error!(
                             "unexpected end of input, expected keyword",
@@ -1743,6 +1811,30 @@ impl<'a> Parser<'a> {
                     };
                     if end_check(tok) {
                         return Ok(rv);
+                    }
+                    // Check for a misplaced end-block tag before dispatching to parse_stmt.
+                    // This happens when an inner block (e.g. {% if %}) is closed by an outer
+                    // end tag (e.g. {% endmacro %}) without first closing the inner block.
+                    if let (Token::Ident(name), Some((innermost_block, expected_tags))) =
+                        (tok, block_context)
+                    {
+                        if ENDBLOCK_IDENT.contains(name) {
+                            let expected_list = expected_tags
+                                .iter()
+                                .map(|t| format!("'{t}'"))
+                                .collect::<Vec<_>>()
+                                .join(" or ");
+                            syntax_error!(
+                                "Encountered unknown tag '{}'. You probably made a nesting \
+                                 mistake. Jinja is currently looking for {}. The innermost \
+                                 block that needs to be closed is '{}'.",
+                                &self.filename,
+                                &span,
+                                name,
+                                expected_list,
+                                innermost_block
+                            )
+                        }
                     }
                     rv.push(ok!(self.parse_stmt()));
                     // WARNING: this is a dangerous change.

@@ -800,6 +800,61 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_unclosed_if_inside_macro_gives_rich_error() {
+        // Reproducer from https://github.com/dbt-labs/dbt-fusion/issues/130
+        let sql = r#"
+            {% macro my_macro() %}
+              {% if true %}
+            {% endmacro %}
+        "#;
+
+        let err = parse_macro_statements(sql, &PathBuf::from("macros/my_macro.sql"), &["macro"])
+            .unwrap_err();
+        let msg = err.to_string();
+        println!("error: {msg}");
+        assert!(
+            msg.contains("Encountered unknown tag 'endmacro'"),
+            "expected 'Encountered unknown tag' in: {msg}"
+        );
+        assert!(
+            msg.contains("innermost block that needs to be closed is 'if'"),
+            "expected innermost block hint in: {msg}"
+        );
+        assert!(
+            msg.contains("looking for"),
+            "expected 'looking for' hint in: {msg}"
+        );
+        assert!(
+            msg.contains("'endif'") || msg.contains("endif"),
+            "expected 'endif' in expected tags hint: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parse_unclosed_for_inside_if_gives_rich_error() {
+        let sql = r#"
+            {% macro my_macro() %}
+              {% if true %}
+                {% for x in [] %}
+              {% endif %}
+            {% endmacro %}
+        "#;
+
+        let err = parse_macro_statements(sql, &PathBuf::from("macros/my_macro.sql"), &["macro"])
+            .unwrap_err();
+        let msg = err.to_string();
+        println!("error: {msg}");
+        assert!(
+            msg.contains("Encountered unknown tag 'endif'"),
+            "expected 'Encountered unknown tag' in: {msg}"
+        );
+        assert!(
+            msg.contains("innermost block that needs to be closed is 'for'"),
+            "expected innermost block hint in: {msg}"
+        );
+    }
+
+    #[test]
     fn test_parse_materialization_macro() -> FsResult<()> {
         let sql_default = r#"
             {% materialization name, default %}
