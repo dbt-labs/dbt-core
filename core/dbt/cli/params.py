@@ -22,7 +22,7 @@ from dbt_common.exceptions import DbtInternalError
 model_decls = ("-m", "--models", "--model")
 select_decls = ("-s", "--select")
 select_attrs = {
-    "envvar": None,
+    "envvar": "DBT_ENGINE_SELECT",
     "help": "Specify the nodes to include.",
     "cls": MultiOption,
     "multiple": True,
@@ -242,7 +242,7 @@ event_time_start = _create_option_and_track_env_var(
 
 exclude = _create_option_and_track_env_var(
     "--exclude",
-    envvar=None,
+    envvar="DBT_ENGINE_EXCLUDE",
     type=tuple,
     cls=MultiOption,
     multiple=True,
@@ -604,7 +604,7 @@ select = _create_option_and_track_env_var(*select_decls, *model_decls, **select_
 
 selector = _create_option_and_track_env_var(
     "--selector",
-    envvar=None,
+    envvar="DBT_ENGINE_SELECTOR",
     help="The selector name to use, as defined in selectors.yml",
 )
 
