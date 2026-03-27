@@ -133,8 +133,16 @@ class DbtProjectYamlRenderer(BaseRenderer):
         "Project config"
 
     # Uses SecretRenderer
-    def get_package_renderer(self) -> BaseRenderer:
-        return PackageRenderer(self.ctx_obj.cli_vars)
+    def get_package_renderer(
+        self,
+        project_vars: Optional[Dict[str, Any]] = None,
+    ) -> BaseRenderer:
+        target_dict = getattr(self.ctx_obj, "target_dict", None)
+        all_vars: Dict[str, Any] = {}
+        if project_vars:
+            all_vars.update(project_vars)
+        all_vars.update(self.ctx_obj.cli_vars)
+        return PackageRenderer(all_vars, target_dict=target_dict)
 
     def render_project(
         self,
@@ -146,10 +154,15 @@ class DbtProjectYamlRenderer(BaseRenderer):
         rendered_project["project-root"] = project_root
         return rendered_project
 
-    def render_packages(self, packages: Dict[str, Any], packages_specified_path: str):
+    def render_packages(
+        self,
+        packages: Dict[str, Any],
+        packages_specified_path: str,
+        project_vars: Optional[Dict[str, Any]] = None,
+    ):
         """Render the given packages dict"""
         packages = packages or {}  # Sometimes this is none in tests
-        package_renderer = self.get_package_renderer()
+        package_renderer = self.get_package_renderer(project_vars=project_vars)
         if packages_specified_path == DEPENDENCIES_FILE_NAME:
             # We don't want to render the "packages" dictionary that came from dependencies.yml
             return packages
@@ -237,7 +250,39 @@ class ProfileRenderer(SecretRenderer):
         return "Profile"
 
 
+class _TrackingDict(dict):
+    """A dict wrapper that records which keys are accessed."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.accessed_keys: set = set()
+
+    def __contains__(self, key):
+        self.accessed_keys.add(key)
+        return super().__contains__(key)
+
+    def __getitem__(self, key):
+        self.accessed_keys.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self.accessed_keys.add(key)
+        return super().get(key, default)
+
+
 class PackageRenderer(SecretRenderer):
+    def __init__(
+        self,
+        cli_vars: Dict[str, Any] = {},
+        target_dict: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.tracked_vars = _TrackingDict(cli_vars)
+        super().__init__(self.tracked_vars)
+        self.tracked_target: Optional[_TrackingDict] = None
+        if target_dict is not None:
+            self.tracked_target = _TrackingDict(target_dict)
+            self.context["target"] = self.tracked_target
+
     @property
     def name(self):
         return "Packages config"

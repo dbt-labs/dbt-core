@@ -446,7 +446,7 @@ def debug(ctx, **kwargs):
 @p.add_package
 @requires.postflight
 @requires.preflight
-@requires.unset_profile
+@requires.optional_profile
 @requires.project
 def deps(ctx, **kwargs):
     """Install dbt packages specified.
@@ -468,7 +468,7 @@ def deps(ctx, **kwargs):
                 message=f"Version is required in --add-package when a package when source is {flags.SOURCE}",
                 option_name="--add-package",
             )
-    with DepsTask(flags, ctx.obj["project"]) as task:
+    with DepsTask(flags, ctx.obj["project"], ctx.obj["profile"]) as task:
         results = task.run()
         success = task.interpret_results(results)
     return results, success

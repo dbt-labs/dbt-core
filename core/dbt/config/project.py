@@ -18,6 +18,7 @@ from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
     DBT_PROJECT_FILE_NAME,
     DEPENDENCIES_FILE_NAME,
+    PACKAGE_LOCK_CONTEXT_KEY,
     PACKAGE_LOCK_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
     PACKAGES_FILE_NAME,
@@ -174,6 +175,8 @@ def package_config_from_data(
 
     if PACKAGE_LOCK_HASH_KEY in packages_data:
         packages_data.pop(PACKAGE_LOCK_HASH_KEY)
+    if PACKAGE_LOCK_CONTEXT_KEY in packages_data:
+        packages_data.pop(PACKAGE_LOCK_CONTEXT_KEY)
     try:
         PackageConfig.validate(packages_data)
         packages = PackageConfig.from_dict(packages_data)
@@ -355,8 +358,14 @@ class PartialProject(RenderComponents):
         renderer: DbtProjectYamlRenderer,
     ) -> RenderComponents:
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
+
+        # Extract raw project vars for package rendering context
+        raw_project_vars = self.project_dict.get("vars", {})
+
         rendered_packages = renderer.render_packages(
-            self.packages_dict, self.packages_specified_path
+            self.packages_dict,
+            self.packages_specified_path,
+            project_vars=raw_project_vars,
         )
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 
