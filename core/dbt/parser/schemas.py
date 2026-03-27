@@ -495,9 +495,13 @@ class YamlReader(metaclass=ABCMeta):
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
-                for var in self.schema_yaml_vars.env_vars.keys():
-                    schema_file.add_env_var(var, self.key, entry["name"])
+                for env_var in self.schema_yaml_vars.env_vars.keys():
+                    schema_file.add_env_var(env_var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
+
+            if self.schema_yaml_vars.vars:
+                schema_file.add_vars(self.schema_yaml_vars.vars, self.key, entry["name"])
+                self.schema_yaml_vars.vars = {}
 
             yield entry
 
@@ -805,6 +809,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             derived_semantics = block.target.derived_semantics
             agg_time_dimension = block.target.agg_time_dimension
             primary_entity = block.target.primary_entity
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file: SchemaSourceFile = self.yaml.file
+
         return ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -820,6 +827,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             latest_version=None,
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
+            vars=source_file.get_vars(block.target.yaml_key, block.target.name),
             time_spine=time_spine,
             semantic_model=semantic_model,
             metrics=metrics,
@@ -933,6 +941,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         node.description = patch.description
         node.columns = patch.columns
         node.name = patch.name
+        # Prefer node-level vars to vars from patch
+        node.vars = {**patch.vars, **node.vars}
 
         if not isinstance(node, ModelNode):
             for attr in ["latest_version", "access", "version", "constraints"]:
@@ -1082,6 +1092,7 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     latest_version=latest_version,
                     constraints=unparsed_version.constraints or target.constraints,
                     deprecation_date=unparsed_version.deprecation_date,
+                    vars=source_file.get_vars(block.target.yaml_key, block.target.name),
                 )
                 # Node patched before config because config patching depends on model name,
                 # which may have been updated in the version patch
@@ -1332,6 +1343,9 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
 
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file: SchemaSourceFile = self.yaml.file
+
         return ParsedFunctionPatch(
             name=target.name,
             original_file_path=target.original_file_path,
@@ -1347,6 +1361,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             latest_version=None,
             constraints=target.constraints,
             deprecation_date=None,
+            vars=source_file.get_vars(target.yaml_key, target.name),
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
