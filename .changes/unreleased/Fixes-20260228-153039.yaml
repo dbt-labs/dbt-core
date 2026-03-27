@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix substring match bug in show and compile task selection causing models with reserved substrings in name to be incorrectly filtered
+time: 2026-02-28T15:30:39.5307104Z
+custom:
+    Author: kalluripradeep
+    Issue: "12539"

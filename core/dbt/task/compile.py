@@ -89,7 +89,15 @@ class CompileTask(GraphRunnableTask):
         elif self.selection_arg:
             matched_results = []
             for result in results:
-                if result.node.name in self.selection_arg[0]:
+                node_name = result.node.name
+                versioned_name = (
+                    f"{node_name}.v{result.node.version}"
+                    if hasattr(result.node, "version") and result.node.version
+                    else None
+                )
+                if node_name in self.selection_arg or (
+                    versioned_name and versioned_name in self.selection_arg
+                ):
                     matched_results.append(result)
                 else:
                     fire_event(
