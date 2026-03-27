@@ -378,6 +378,70 @@ class TestMicrobatchModelRunner:
         assert builder.default_end_time == current_time
 
 
+    @pytest.mark.parametrize("is_incremental", [True, False])
+    def test_execute_passes_incremental_batch_to_all_batches(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+        is_incremental: bool,
+    ) -> None:
+        """incremental_batch should be propagated to all _submit_batch calls,
+        not just the first one."""
+        model = model_runner.node
+
+        # Mock _is_incremental to return parameterized value
+        mocker.patch.object(model_runner, "_is_incremental", return_value=is_incremental)
+
+        # Mock _has_relation
+        mocker.patch.object(model_runner, "_has_relation", return_value=True)
+
+        # Mock get_batches to return 3 batches (exercises first, middle, last paths)
+        batches = {0: ("2024-01-01", "2024-01-02"), 1: ("2024-01-02", "2024-01-03"), 2: ("2024-01-03", "2024-01-04")}
+        mocker.patch.object(model_runner, "get_batches", return_value=batches)
+
+        # Track _submit_batch calls
+        submit_calls = []
+        first_result = RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id="thread-1",
+            execution_time=0.1,
+            message="SUCCESS",
+            adapter_response={"_message": "OK"},
+            failures=0,
+            batch_results=None,
+        )
+
+        def fake_submit_batch(**kwargs):
+            submit_calls.append(kwargs)
+            kwargs["batch_results"].append(first_result)
+            return True
+
+        mock_parent = mocker.Mock(spec=RunTask)
+        mock_parent._submit_batch = mocker.Mock(side_effect=fake_submit_batch)
+        model_runner._parent_task = mock_parent
+
+        # Mock pool property
+        mock_pool = mocker.Mock()
+        mock_pool.is_closed.return_value = False
+        mocker.patch.object(
+            MicrobatchModelRunner, "pool", new_callable=mocker.PropertyMock, return_value=mock_pool
+        )
+
+        # Mock merge_batch_results to avoid side effects
+        mocker.patch.object(model_runner, "merge_batch_results")
+
+        model_runner.execute(model, mocker.Mock(spec=Manifest))
+
+        # All 3 batches should have been submitted
+        assert mock_parent._submit_batch.call_count == 3
+
+        # All calls should have incremental_batch set to our parameterized value
+        for call in mock_parent._submit_batch.call_args_list:
+            assert call.kwargs["incremental_batch"] == is_incremental
+
+
 class TestRunTask:
     @pytest.fixture
     def hook_node(self) -> HookNode:
