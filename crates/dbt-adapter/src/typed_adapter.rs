@@ -282,25 +282,18 @@ impl ConcreteAdapter {
 
     pub fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
         use DbtIncrementalStrategy::*;
-        static POSTGRES: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
-        static SNOWFLAKE: [DbtIncrementalStrategy; 5] =
-            [Append, DeleteInsert, InsertOverwrite, Merge, Microbatch];
-        static BIGQUERY: [DbtIncrementalStrategy; 1] = [Append];
-        static DATABRICKS: [DbtIncrementalStrategy; 4] =
-            [Append, Merge, InsertOverwrite, ReplaceWhere];
-        static REDSHIFT: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
-        static FABRIC: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
 
         match self.adapter_type() {
-            Postgres | Sidecar | DuckDB => &POSTGRES,
-            Snowflake => &SNOWFLAKE,
-            Bigquery => &BIGQUERY,
-            Databricks => &DATABRICKS,
-            Redshift => &REDSHIFT,
-            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
+            Postgres | Sidecar | DuckDB => &[Append, DeleteInsert, Merge, Microbatch],
+            Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
+            Bigquery => &[Append],
+            Databricks => &[Append, Merge, InsertOverwrite, ReplaceWhere],
+            Redshift => &[Append, DeleteInsert, Merge, Microbatch],
+            Fabric => &[Append, DeleteInsert, Merge, Microbatch],
+            Salesforce => &[Append, Merge],
+            Spark | ClickHouse | Athena | Starburst | Trino | Dremio | Oracle => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
-            Fabric => &FABRIC,
         }
     }
 

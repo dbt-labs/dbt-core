@@ -191,7 +191,8 @@ impl BaseRelation for SalesforceRelation {
     }
 
     fn include_inner(&self, _policy: Policy) -> Result<Value, minijinja::Error> {
-        unimplemented!("Salesforce include inner")
+        let relation = self.clone();
+        Ok(relation.as_value())
     }
 
     fn normalize_component(&self, component: &str) -> String {
