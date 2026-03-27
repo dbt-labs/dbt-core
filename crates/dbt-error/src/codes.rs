@@ -223,6 +223,7 @@ pub enum ErrorCode {
     InvalidTableNameInCLI = 9004,
     CoalesceHasOnlyNulls = 9005,
     CacheWarning = 9010,
+    NoFilesChangedWarning = 9011,
     // ExitRepl is not really an error, but a special error code that is used to
     // signal the repl to exit gracefully:
     ExitRepl = 9006,
