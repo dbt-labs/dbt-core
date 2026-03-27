@@ -2517,10 +2517,20 @@ impl ConcreteAdapter {
                 Ok(flattened_columns)
             }
             Impl(_, engine) => {
-                let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
-                let original_schema = Some(batch.schema());
-                let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
-                self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
+                let (_, table) = self.execute_inner(
+                    Arc::clone(engine),
+                    Some(state),
+                    conn,
+                    ctx,
+                    sql,
+                    false,
+                    true,
+                    None,
+                    None,
+                    token,
+                )?;
+                let schema = table.original_record_batch().schema();
+                self.schema_to_columns(None, &schema)
             }
         }
     }
