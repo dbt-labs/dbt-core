@@ -41,11 +41,11 @@ from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
-from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
 from dbt_common.record import (
