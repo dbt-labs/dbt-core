@@ -71,6 +71,7 @@ from dbt.artifacts.resources.v1.model import (
     Model,
     ModelConfig,
     ModelFreshness,
+    ModelOnErrorOptions,
     TimeSpine,
 )
 from dbt.artifacts.resources.v1.owner import Owner

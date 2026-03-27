@@ -24,6 +24,8 @@ import dbt.utils
 import dbt_common.utils.formatting
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.resources import ModelOnErrorOptions
+from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -402,6 +404,7 @@ class GraphRunnableTask(ConfiguredTask):
         the result was an ephemeral model) as skipped.
         """
         is_ephemeral = result.node.is_ephemeral_model
+
         if not is_ephemeral:
             self.node_results.append(result)
 
@@ -410,12 +413,19 @@ class GraphRunnableTask(ConfiguredTask):
         if self.manifest is None:
             raise DbtInternalError("manifest was None in _handle_result")
 
+        if (
+            node.resource_type is NodeType.Model
+            and node.config.on_error is ModelOnErrorOptions.continue_
+        ):
+            return
+
         # If result.status == NodeStatus.Error, plus Fail for build command
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:
                 cause = result
             else:
                 cause = None
+
             self._mark_dependent_errors(node.unique_id, result, cause)
 
     def _cancel_connections(self, pool):
