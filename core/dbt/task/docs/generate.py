@@ -139,7 +139,27 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
                         table.to_dict(omit_none=True),
                     )
                 elif selected_node_ids is None or unique_id in selected_node_ids:
-                    sources[unique_id] = replace(table, unique_id=unique_id)
+                    # Get source from manifest to extract docs/description
+                    source = manifest.sources.get(unique_id)
+                    if source:
+                        # Copy metadata and add source description as comment
+                        metadata = table.metadata
+                        # Preserve existing comment or add source description
+                        comment = table.metadata.comment or source.description
+                        metadata_with_comment = TableMetadata(
+                            type=metadata.type,
+                            schema=metadata.schema,
+                            name=metadata.name,
+                            database=metadata.database,
+                            comment=comment,
+                            owner=metadata.owner,
+                        )
+                        table_with_docs = replace(
+                            table,
+                            unique_id=unique_id,
+                            metadata=metadata_with_comment,
+                        )
+                        sources[unique_id] = table_with_docs
         return nodes, sources
 
 
