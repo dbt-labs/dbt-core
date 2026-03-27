@@ -1326,6 +1326,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(
                 path, text_columns=filtered_column_types, delimiter=delimiter
             )
+            if getattr(self.config.args, "EMPTY", False):
+                table = table.limit(0)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
