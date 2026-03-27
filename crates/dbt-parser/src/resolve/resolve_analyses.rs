@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -133,6 +135,9 @@ pub async fn resolve_analyses(
     } in analysis_sql_resources_map.into_iter()
     {
         let analysis_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+        if analysis_name.contains(' ') {
+            return Err(err_resource_name_has_spaces(analysis_name, &dbt_asset.path));
+        }
         let analysis_config = *sql_file_info.config;
 
         let original_file_path =

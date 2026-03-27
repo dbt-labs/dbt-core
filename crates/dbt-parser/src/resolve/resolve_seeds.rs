@@ -1,5 +1,6 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
     update_node_relation_components,
@@ -125,6 +126,9 @@ pub fn resolve_seeds(
                 .unwrap_or_else(|| path.to_string_lossy().to_string())
         };
         let seed_name = seed_name_owned.as_str();
+        if seed_name.contains(' ') {
+            return Err(err_resource_name_has_spaces(seed_name, &path));
+        }
         let unique_id = format!("seed.{package_name}.{seed_name}");
 
         let fqn = get_node_fqn(

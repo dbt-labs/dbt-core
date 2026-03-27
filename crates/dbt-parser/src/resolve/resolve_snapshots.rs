@@ -6,6 +6,7 @@ use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, collect_adapter_identifiers_detect_unsafe,
     render_unresolved_sql_files,
 };
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
     RelationComponents, get_node_fqn, get_original_file_path, update_node_relation_components,
@@ -286,6 +287,9 @@ pub async fn resolve_snapshots(
     {
         {
             let snapshot_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+            if snapshot_name.contains(' ') {
+                return Err(err_resource_name_has_spaces(snapshot_name, &dbt_asset.path));
+            }
 
             // Recalculate checksum from original snapshot file.
             // Without doing this, the checksum will be different from the one from mantle since fusion

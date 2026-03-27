@@ -8,6 +8,7 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::utils::RelationComponents;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
@@ -296,18 +297,21 @@ pub async fn resolve_data_tests(
         }
 
         // Use the custom test name from GenericTestAsset if available, otherwise use the filename
-        let test_name = test_path_to_test_asset
-            .get(&dbt_asset.path)
-            .map(|test_asset| test_asset.test_name.clone())
-            .unwrap_or_else(|| {
-                dbt_asset
-                    .path
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            });
+        let test_name = if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
+            test_asset.test_name.clone()
+        } else {
+            let name = dbt_asset
+                .path
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+            if name.contains(' ') {
+                return Err(err_resource_name_has_spaces(&name, &dbt_asset.path));
+            }
+            name
+        };
 
         let properties = if let Some(properties) = maybe_properties {
             properties

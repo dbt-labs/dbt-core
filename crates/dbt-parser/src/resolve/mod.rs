@@ -34,6 +34,8 @@ pub(crate) mod resolve_snapshots;
 pub(crate) mod resolve_sources;
 /// Functions for resolving tests
 pub(crate) mod resolve_tests;
+/// Shared utilities for resolve passes
+pub(crate) mod resolve_utils;
 /// Functions for validating metrics
 pub(crate) mod validate_metrics;
 /// Functions for validating models

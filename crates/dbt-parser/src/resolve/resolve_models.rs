@@ -10,6 +10,7 @@ use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::utils::RelationComponents;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
@@ -613,6 +614,9 @@ pub async fn resolve_models(
     } in model_sql_resources_map.into_iter()
     {
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+        if ref_name.contains(' ') {
+            return Err(err_resource_name_has_spaces(ref_name, &dbt_asset.path));
+        }
         // Is there a better way to handle this if the model doesn't have a config?
         let mut model_config = *sql_file_info.config;
         // Capture inline SQL config overrides (from `{{ config(...) }}`) separately.

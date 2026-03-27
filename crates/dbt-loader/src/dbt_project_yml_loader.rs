@@ -188,6 +188,16 @@ pub fn load_project_yml(
         true,
     )?;
 
+    if dbt_project.name.contains(' ') {
+        return Err(fs_err!(
+            code => ErrorCode::SchemaError,
+            loc => dbt_project_path.to_path_buf(),
+            "Project name '{}' in {} contains spaces. Project names cannot contain spaces.",
+            dbt_project.name,
+            DBT_PROJECT_YML
+        ));
+    }
+
     // Prune unexpected null keys (e.g. empty keys) early and emit warnings
     prune_sections(io_args, &mut dbt_project);
 
