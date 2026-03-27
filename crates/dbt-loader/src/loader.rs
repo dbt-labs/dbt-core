@@ -9,6 +9,7 @@ use dbt_common::constants::{
 use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
+use dbt_common::tracing::TracingFeatures;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_common::warn_error_options::resolve_warn_error_options;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -101,12 +102,17 @@ fn resolve_warn_error_options_from_flags<'a>(
     from_cli: Option<bool>,
     from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
     project_flags: Option<&dbt_yaml::Value>,
+    tracing_features: Option<&dyn TracingFeatures>,
 ) -> Cow<'a, InvocationArgs> {
     let (warn_error, warn_error_options) =
         resolve_warn_error_options(from_cli, from_cli_or_env, project_flags);
 
     if iarg.warn_error == warn_error && iarg.warn_error_options == warn_error_options {
         return iarg;
+    }
+
+    if let Some(tracing_handle) = tracing_features {
+        tracing_handle.set_warn_error_options(warn_error_options.clone());
     }
 
     let iarg_mut = iarg.to_mut();
@@ -124,6 +130,7 @@ fn resolve_warn_error_options_from_flags<'a>(
 pub async fn load(
     arg: &LoadArgs,
     iarg: Cow<'_, InvocationArgs>,
+    tracing_features: Option<&dyn TracingFeatures>,
     token: &CancellationToken,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile) =
@@ -163,6 +170,7 @@ pub async fn load(
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
+        tracing_features,
     );
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
 
@@ -390,6 +398,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
+        None,
     );
 
     let env = initialize_load_profile_jinja_environment();

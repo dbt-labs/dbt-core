@@ -1,5 +1,6 @@
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
+use dbt_common::tracing::{TracingFeaturesHandle, noop_tracing_handle};
 
 use crate::feature_stack::*;
 use crate::formatter::FormatterCommandHandler;
@@ -11,11 +12,17 @@ impl CliExtensionHooks for NoOpExtensionHooks {}
 #[derive(Default)]
 pub struct SourceAvailableFeatureStackBuilder {
     send_anonymous_usage_stats: bool,
+    tracing: Option<TracingFeaturesHandle>,
 }
 
 impl SourceAvailableFeatureStackBuilder {
     pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
         self.send_anonymous_usage_stats = enabled;
+        self
+    }
+
+    pub fn tracing(mut self, tracing_features_handle: TracingFeaturesHandle) -> Self {
+        self.tracing = Some(tracing_features_handle);
         self
     }
 
@@ -37,6 +44,7 @@ impl SourceAvailableFeatureStackBuilder {
             formatter,
             linter,
             cli_extension,
+            tracing: self.tracing.unwrap_or_else(|| noop_tracing_handle()),
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

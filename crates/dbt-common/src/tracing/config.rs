@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::{
     convert::log_level_filter_to_tracing,
@@ -16,8 +16,10 @@ use super::{
     },
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
+    middlewares::warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     rotating_file_writer::RotatingFileWriter,
     shutdown::TelemetryShutdownItem,
+    tracing_features_handle::{TracingFeatures, TracingFeaturesHandle},
 };
 use crate::collections::HashSet;
 use crate::{
@@ -30,6 +32,7 @@ use crate::{
     io_utils::determine_project_dir,
     logging::LogFormat,
     tracing::middlewares::parse_error_filter::TelemetryParsingErrorFilter,
+    warn_error_options::WarnErrorOptions,
 };
 use dbt_error::{ErrorCode, FsResult};
 use tracing::level_filters::LevelFilter;
@@ -81,6 +84,8 @@ pub struct FsTraceConfig {
     pub(super) show_options: HashSet<ShowOptions>,
     /// Show all deprecations warnings/errors instead of one per package
     pub(super) show_all_deprecations: bool,
+    /// The initial warn-error options loaded from CLI/env before project flags are resolved.
+    pub(super) warn_error_options: WarnErrorOptions,
     /// If True, disables stdout/console output even when using Text/Default format.
     /// Useful for long-running services like LSP that only want file logging.
     pub(super) disable_console_output: bool,
@@ -105,6 +110,7 @@ impl Default for FsTraceConfig {
             enable_query_log: false,
             show_options: HashSet::default(),
             show_all_deprecations: false,
+            warn_error_options: WarnErrorOptions::default(),
             disable_console_output: false,
         }
     }
@@ -130,6 +136,49 @@ fn calculate_trace_dirs(
         .unwrap_or_else(|| in_dir.join(DBT_TARGET_DIR_NAME));
 
     (in_dir, out_dir)
+}
+
+struct FsTracingFeatures {
+    warn_error_options: std::sync::Arc<std::sync::RwLock<WarnErrorOptions>>,
+    file_log_path: Option<PathBuf>,
+}
+
+impl TracingFeatures for FsTracingFeatures {
+    fn set_warn_error_options(&self, warn_error_options: WarnErrorOptions) {
+        *self
+            .warn_error_options
+            .write()
+            .expect("warn_error_options lock should not be poisoned") = warn_error_options;
+    }
+
+    fn get_file_log_path(&self) -> Option<&std::path::Path> {
+        self.file_log_path.as_deref()
+    }
+}
+
+pub struct FsTraceLayers {
+    middleware_layers: Vec<MiddlewareLayer>,
+    consumer_layers: Vec<ConsumerLayer>,
+    shutdown_items: Vec<TelemetryShutdownItem>,
+    tracing_feature_handle: TracingFeaturesHandle,
+}
+
+impl FsTraceLayers {
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<MiddlewareLayer>,
+        Vec<ConsumerLayer>,
+        Vec<TelemetryShutdownItem>,
+        TracingFeaturesHandle,
+    ) {
+        (
+            self.middleware_layers,
+            self.consumer_layers,
+            self.shutdown_items,
+            self.tracing_feature_handle,
+        )
+    }
 }
 
 impl FsTraceConfig {
@@ -163,6 +212,7 @@ impl FsTraceConfig {
     /// * `enable_query_log` - If true, enables writing a separate query log file
     /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
     /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
+    /// * `warn_error_options` - Initial warn-error options from CLI/env before project flags are resolved
     /// * `log_file_name` - Optional custom name for the log file. If None, defaults to `dbt.log`.
     ///   If Some, creates log file at `{log_path}/{log_file_name}`
     /// * `log_file_max_bytes` - Max size for rotating file logs in bytes.
@@ -218,6 +268,7 @@ impl FsTraceConfig {
         enable_query_log: bool,
         show_options: HashSet<ShowOptions>,
         show_all_deprecations: bool,
+        warn_error_options: WarnErrorOptions,
         log_file_name: Option<&str>,
         log_file_max_bytes: u64,
         disable_console_output: bool,
@@ -254,16 +305,9 @@ impl FsTraceConfig {
             enable_query_log,
             show_options,
             show_all_deprecations,
+            warn_error_options,
             disable_console_output,
         }
-    }
-
-    /// Returns the resolved absolute path to the log directory.
-    ///
-    /// This is the directory where `dbt.log`, query logs, and OTEL files are written.
-    /// It is always an absolute path after construction.
-    pub fn log_dir(&self) -> &Path {
-        &self.log_path
     }
 
     /// Creates a new FsTraceConfig with proper path resolution.
@@ -273,6 +317,7 @@ impl FsTraceConfig {
         project_dir: Option<&PathBuf>,
         target_path: Option<&PathBuf>,
         io_args: &IoArgs,
+        warn_error_options: Option<&WarnErrorOptions>,
         package: &'static str,
     ) -> Self {
         let max_log_verbosity = io_args
@@ -302,6 +347,7 @@ impl FsTraceConfig {
             true, // Always enable query log for now
             io_args.show.clone(),
             io_args.show_all_deprecations,
+            warn_error_options.cloned().unwrap_or_default(),
             None, // log_file_name - use default dbt.log
             io_args.log_file_max_bytes,
             false, // disable_console_output defaults to false for CLI
@@ -311,15 +357,11 @@ impl FsTraceConfig {
     /// Builds the configured tracing layers and corresponding shutdown items.
     /// This method handles all path creation and file opening as needed.
     /// If no layers are configured, returns an empty layer and no shutdown items.
-    pub fn build_layers(
-        &self,
-    ) -> FsResult<(
-        Vec<MiddlewareLayer>,
-        Vec<ConsumerLayer>,
-        Vec<TelemetryShutdownItem>,
-    )> {
+    pub fn build_layers(&self) -> FsResult<FsTraceLayers> {
         let mut shutdown_items = Vec::new();
         let mut consumer_layers = Vec::new();
+        let (warn_error_options_middleware, warn_error_options) =
+            TelemetryWarnErrorOptionsMiddleware::new(self.warn_error_options.clone());
 
         // Create jsonl writer layer if file path provided
         if let Some(file_path) = &self.otel_file_path {
@@ -411,7 +453,7 @@ impl FsTraceConfig {
             crate::stdfs::create_dir_all(&self.log_path)?;
         }
 
-        if self.max_file_log_verbosity != LevelFilter::OFF {
+        let file_log_path = if self.max_file_log_verbosity != LevelFilter::OFF {
             let log_file_name = self
                 .log_file_name
                 .as_deref()
@@ -449,7 +491,16 @@ impl FsTraceConfig {
                 // Create layer. User specified filtering is not applied here
                 consumer_layers.push(file_log_layer)
             }
+
+            Some(file_log_path)
+        } else {
+            None
         };
+
+        let tracing_feature_handle: TracingFeaturesHandle = Box::new(FsTracingFeatures {
+            warn_error_options,
+            file_log_path,
+        });
 
         // Create query log writer layer (always enabled; internal-only event sink)
         if self.enable_query_log {
@@ -471,15 +522,17 @@ impl FsTraceConfig {
             consumer_layers.push(otlp_layer)
         };
 
-        Ok((
-            vec![
+        Ok(FsTraceLayers {
+            middleware_layers: vec![
                 // Order important! First downgrade markdown errors, then handle parsing errors, then aggregate metrics
                 Box::new(TelemetryMarkdownLogFilter),
                 Box::new(TelemetryParsingErrorFilter::new(self.show_all_deprecations)),
+                Box::new(warn_error_options_middleware),
                 Box::new(TelemetryMetricAggregator),
             ],
             consumer_layers,
             shutdown_items,
-        ))
+            tracing_feature_handle,
+        })
     }
 }

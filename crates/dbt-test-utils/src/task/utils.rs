@@ -1,7 +1,7 @@
-use crate::task::env::TracingReloadHandle;
-
 use super::TestResult;
 use super::log_capture::JsonLogEvent;
+use crate::task::env::TracingReloadHandle;
+use crate::task::task_seq::FeatureStackFactory;
 use dbt_cli_lib::ctrl_c::run_future_with_ctrlc_support;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, cli_parser_trait::CliParserTrait, tracing::FsTraceConfig};
@@ -319,7 +319,7 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 // Util function to execute fusion commands in tests
 #[allow(clippy::too_many_arguments)]
 pub fn exec_fs<'a, P: CliParserTrait + Default, Fut>(
-    feature_stack: Arc<FeatureStack>,
+    feature_stack_factory: Arc<FeatureStackFactory>,
     cmd_vec: Vec<String>,
     project_dir: PathBuf,
     target_dir: PathBuf,
@@ -340,28 +340,33 @@ where
         dotenvy::from_path(conformance_file).unwrap();
     }
 
-    let cst = feature_stack.cancellation_token_source.clone();
-    let fail_fast = feature_stack.fail_fast.clone();
-    let token = cst.token();
     let parser = P::default();
     let cli = parser.parse_from(cmd_vec);
     let arg = from_lib(&cli);
+    let warn_error_options = parser.warn_error_options(&cli);
     let fail_fast_flag = parser.fail_fast_flag(&cli);
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
         Some(&project_dir),
         Some(&target_dir),
         &arg.io,
+        warn_error_options.as_ref(),
         "dbt-tests",
     );
-    let (middlewares, consumer_layers, mut shutdown_items) = match trace_config.build_layers() {
-        Ok(layers) => layers,
-        Err(err) => {
-            return Box::pin(async move { Err(err) });
-        }
-    };
+    let (middlewares, consumer_layers, mut shutdown_items, feature_handle) =
+        match trace_config.build_layers() {
+            Ok(layers) => layers.into_parts(),
+            Err(err) => {
+                return Box::pin(async move { Err(err) });
+            }
+        };
 
     tracing_handle.with_tracing_consumer(middlewares, consumer_layers);
+
+    let feature_stack = feature_stack_factory(feature_handle);
+    let cst = feature_stack.cancellation_token_source.clone();
+    let fail_fast = feature_stack.fail_fast.clone();
+    let token = cst.token();
 
     let future = Box::pin(execute_fs(arg, cli, feature_stack, token));
     Box::pin(async move {

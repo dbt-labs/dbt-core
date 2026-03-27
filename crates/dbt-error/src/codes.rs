@@ -188,6 +188,7 @@ pub enum ErrorCode {
     NotYetSupportedOption = 1701,
     DeprecatedOption = 1702,
     DeprecatedStaticAnalysisValue = 1703,
+    NotSupportedWarnErrorOption = 1704,
 
     // --------------------------------------------------------------------------------------------
     // Local execution

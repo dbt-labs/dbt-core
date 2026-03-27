@@ -1,35 +1,41 @@
 use std::collections::BTreeMap;
 
+use crate::ErrorCode;
 use crate::collections::HashMap;
 use dbt_yaml::{Value, Verbatim};
 use serde::{Deserialize, Serialize};
+use strum::EnumString;
 
 // TODO: these models should live in dbt-schemas crate. It currently lives in dbt-common because
 // EvalArgs is defined here and dbt-common cannot depend on dbt-schemas without creating a cycle.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum SupportedLegacyWarnError {}
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, EnumString,
+)]
+pub enum SupportedLegacyWarnError {
+    NothingToDo,
+    NoNodesSelected,
+}
 
-// Serde serializes untagged unit enum variants as null, so we use a single-value
-// enum here to keep `WarnErrorOptionValue::All` round-tripping as the canonical
-// string "all".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum WarnErrorAllValue {
+pub enum WarnErrorGroupValue {
     #[serde(rename = "all", alias = "*")]
     All,
+    #[serde(rename = "Deprecations")]
+    Deprecations,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WarnErrorOptionValue {
     FusionCode(u16),
-    All(WarnErrorAllValue),
+    LegacyGroup(WarnErrorGroupValue),
     SupportedLegacy(SupportedLegacyWarnError),
     Unsupported(String),
 }
 
 impl WarnErrorOptionValue {
     pub fn all() -> Self {
-        Self::All(WarnErrorAllValue::All)
+        Self::LegacyGroup(WarnErrorGroupValue::All)
     }
 }
 
@@ -45,6 +51,18 @@ pub struct WarnErrorOptions {
     pub __ignored__: Verbatim<HashMap<String, Value>>,
 }
 
+/// Decisions order in their precedence order, from lowest to highest:
+/// - Upgrade the warning to an error
+/// - Retain the warning as is
+/// - Silence the warning entirely
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WarnErrorDecision {
+    UpgradeToError,
+    Retain,
+    Silence,
+}
+
+// Parsing related implementations. For resolving logic see separate block below
 impl WarnErrorOptions {
     pub fn from_cli_mapping(mapping: BTreeMap<String, Value>) -> Self {
         Self::from_key_value_pairs(mapping.iter().map(|(key, value)| (key.as_str(), value)))
@@ -62,8 +80,28 @@ impl WarnErrorOptions {
         )
     }
 
-    fn add_all_to_error(&mut self) {
+    pub fn add_all_to_error(&mut self) {
         self.extend_error([WarnErrorOptionValue::all()]);
+    }
+
+    pub fn has_unsupported_values(&self) -> bool {
+        self.error
+            .iter()
+            .chain(self.warn.iter())
+            .chain(self.silence.iter())
+            .any(|value| {
+                matches!(
+                    value,
+                    WarnErrorOptionValue::Unsupported(_) | WarnErrorOptionValue::LegacyGroup(_)
+                ) || matches!(
+                    value,
+                    // Here we are super conservative. In reality we would match all error codes,
+                    // but since some of them may happen in places where user would expect short-circuiting
+                    // of execution and we only currently explicitly checkpoin after the following codes
+                    // we would emit the unsupported warning for all other codes for now
+                    WarnErrorOptionValue::FusionCode(c) if *c != ErrorCode::NoNodesSelected as u16
+                )
+            })
     }
 
     fn extend_error(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
@@ -79,6 +117,9 @@ impl WarnErrorOptions {
     }
 
     fn from_key_value_pairs<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a Value)>) -> Self {
+        // TODO: we currently allow `warn` to be present even when `All` or `Deprecations` are not
+        // present in `error` which is not matching dbt-core which errors. But resolution logic
+        // is still honoring precedence correctly
         let mut warn_error_options = Self::default();
 
         for (key, value) in pairs {
@@ -177,15 +218,153 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
         return Some(WarnErrorOptionValue::all());
     }
 
+    if raw.eq_ignore_ascii_case("Deprecations") {
+        return Some(WarnErrorOptionValue::LegacyGroup(
+            WarnErrorGroupValue::Deprecations,
+        ));
+    }
+
+    if let Ok(legacy) = raw.try_into() {
+        return Some(WarnErrorOptionValue::SupportedLegacy(legacy));
+    }
+
     Some(WarnErrorOptionValue::Unsupported(raw.to_string()))
 }
 
+impl WarnErrorOptions {
+    pub fn decision_for_error_code(&self, error_code: ErrorCode) -> WarnErrorDecision {
+        if error_code == ErrorCode::NotSupportedWarnErrorOption {
+            // This is a special case for when we encounter an error code that we know is not supported by the current options.
+            // In this case we want to emit the warning about unsupported code, but we don't want to apply any silencing or upgrading logic to it.
+            // Otherwise we may exit so early even manifest is not available, which breaks tests & possibly
+            // some downstream assumption
+            return WarnErrorDecision::Retain;
+        }
+
+        // dbt-core precedence logic is as follows:
+        // 1. named event > Deprecations > "all" / "*"
+        // 2. silence > warn > error
+
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        enum MatchType {
+            NotMatched,
+            All, // least specific match, matches all error codes
+            Deprecation,
+            NamedEvent,
+        }
+
+        let matches = |value: &WarnErrorOptionValue| match value {
+            WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => MatchType::All,
+            WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::Deprecations) => {
+                MatchType::Deprecation
+            }
+            WarnErrorOptionValue::FusionCode(code) if *code == error_code as u16 => {
+                MatchType::NamedEvent
+            }
+            WarnErrorOptionValue::SupportedLegacy(legacy)
+                if matches_legacy_error_code(*legacy, error_code) =>
+            {
+                MatchType::NamedEvent
+            }
+            _ => MatchType::NotMatched,
+        };
+
+        let max_matches_and_verdict = [
+            (
+                self.silence
+                    .iter()
+                    .map(matches)
+                    .max()
+                    .unwrap_or(MatchType::NotMatched),
+                WarnErrorDecision::Silence,
+            ),
+            (
+                self.warn
+                    .iter()
+                    .map(matches)
+                    .max()
+                    .unwrap_or(MatchType::NotMatched),
+                WarnErrorDecision::Retain,
+            ),
+            (
+                self.error
+                    .iter()
+                    .map(matches)
+                    .max()
+                    .unwrap_or(MatchType::NotMatched),
+                WarnErrorDecision::UpgradeToError,
+            ),
+        ];
+
+        max_matches_and_verdict
+            .into_iter()
+            // Do not consider options that do not match the error code at all
+            .filter(|(match_type, _verdict)| *match_type != MatchType::NotMatched)
+            // Order first by most specific match type, then by verdict precedence (silence > warn > error)
+            .max()
+            // If one exist, then this is the verdict we return
+            .map(|(_match_type, verdict)| verdict)
+            // default to retaining the warning if no matches at all, including "all"
+            .unwrap_or(WarnErrorDecision::Retain)
+    }
+}
+
+fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
+    match legacy {
+        SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
+            error_code == ErrorCode::NoNodesSelected
+        }
+    }
+}
+
+// Tests here are only for things not covered with e2e dbt-cli tests
 #[cfg(test)]
 mod tests {
-    use super::{
-        WarnErrorOptionValue, WarnErrorOptions, parse_warn_error_options,
-        resolve_warn_error_options,
-    };
+    use super::*;
+    use crate::ErrorCode;
+
+    #[test]
+    fn error_decision_honors_precedence() {
+        // TODO: we can't test deprecations group precedence yet as we have no mapping of our
+        // error codes to dbt-core deprecations.
+        let options = WarnErrorOptions {
+            error: vec![
+                WarnErrorOptionValue::FusionCode(ErrorCode::Generic as u16),
+                WarnErrorOptionValue::FusionCode(ErrorCode::NoNodesSelected as u16),
+                WarnErrorOptionValue::FusionCode(ErrorCode::IoError as u16),
+                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All),
+            ],
+            warn: vec![
+                // This one in silence, so silence should win
+                WarnErrorOptionValue::FusionCode(ErrorCode::NoNodesSelected as u16),
+                // This one should win over error because it's a specific match,
+                // neither All, nor direct code should override it
+                WarnErrorOptionValue::FusionCode(ErrorCode::IoError as u16),
+            ],
+            silence: vec![WarnErrorOptionValue::FusionCode(
+                ErrorCode::NoNodesSelected as u16,
+            )],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            options.decision_for_error_code(ErrorCode::NoNodesSelected),
+            WarnErrorDecision::Silence,
+            "Specific code match in silence should take precedence over all matches in warn and error, including specific matches"
+        );
+
+        assert_eq!(
+            options.decision_for_error_code(ErrorCode::JsonError),
+            WarnErrorDecision::UpgradeToError,
+            "All group in error should take precedence over all match in warn and all in silence"
+        );
+
+        assert_eq!(
+            options.decision_for_error_code(ErrorCode::IoError),
+            WarnErrorDecision::Retain,
+            "Specific code match in warn should take precedence over all matches in error"
+        );
+    }
 
     #[test]
     fn parses_legacy_cli_shape_case_insensitively_and_deduplicates() {
@@ -248,91 +427,6 @@ mod tests {
                 "warn": [],
                 "silence": [],
             })
-        );
-    }
-
-    #[test]
-    fn resolve_warn_error_options_prefers_cli_or_env_over_project_flags() {
-        let from_cli_or_env = WarnErrorOptions {
-            warn: vec![WarnErrorOptionValue::FusionCode(11)],
-            ..Default::default()
-        };
-
-        let resolved = resolve_warn_error_options(
-            Some(true),
-            Some(&from_cli_or_env),
-            Some(
-                &dbt_yaml::from_str("{warn_error_options: {error: [7, all]}, warn_error: true}")
-                    .unwrap(),
-            ),
-        );
-
-        assert_eq!(
-            resolved,
-            (
-                true,
-                WarnErrorOptions {
-                    error: vec![WarnErrorOptionValue::all()],
-                    warn: vec![WarnErrorOptionValue::FusionCode(11)],
-                    silence: vec![],
-                    ..Default::default()
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn resolve_warn_error_options_falls_back_to_project_flags() {
-        let resolved = resolve_warn_error_options(
-            None,
-            None,
-            Some(
-                &dbt_yaml::from_str(
-                    "{warn_error_options: {error: [7, all], silence: [foo, foo]}, warn_error: true}",
-                )
-                .unwrap(),
-            ),
-        );
-
-        assert_eq!(
-            resolved,
-            (
-                true,
-                WarnErrorOptions {
-                    error: vec![
-                        WarnErrorOptionValue::FusionCode(7),
-                        WarnErrorOptionValue::all(),
-                    ],
-                    warn: vec![],
-                    silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
-                    ..Default::default()
-                }
-            )
-        );
-    }
-
-    #[test]
-    fn resolve_warn_error_options_honors_explicit_no_warn_error_from_cli() {
-        let resolved = resolve_warn_error_options(
-            Some(false),
-            None,
-            Some(
-                &dbt_yaml::from_str("{warn_error_options: {error: [7]}, warn_error: true}")
-                    .unwrap(),
-            ),
-        );
-
-        assert_eq!(
-            resolved,
-            (
-                false,
-                WarnErrorOptions {
-                    error: vec![WarnErrorOptionValue::FusionCode(7)],
-                    warn: vec![],
-                    silence: vec![],
-                    ..Default::default()
-                }
-            )
         );
     }
 }

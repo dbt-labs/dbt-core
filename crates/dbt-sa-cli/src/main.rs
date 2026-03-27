@@ -47,20 +47,22 @@ fn main() -> ExitCode {
     let arg = from_main(&cli);
 
     // Init tracing
-    let mut telemetry_handle = match init_tracing(FsTraceConfig::new_from_io_args(
-        arg.command,
-        cli.project_dir().as_ref(),
-        cli.target_path().as_ref(),
-        &arg.io,
-        "dbt-sa",
-    )) {
-        Ok(handle) => handle,
-        Err(e) => {
-            let msg = e.to_string();
-            print_trimmed_error(msg);
-            std::process::exit(1);
-        }
-    };
+    let (mut telemetry_shutdown_handle, _tracing_features_handle) =
+        match init_tracing(FsTraceConfig::new_from_io_args(
+            arg.command,
+            cli.project_dir().as_ref(),
+            cli.target_path().as_ref(),
+            &arg.io,
+            None,
+            "dbt-sa",
+        )) {
+            Ok(handle) => handle,
+            Err(e) => {
+                let msg = e.to_string();
+                print_trimmed_error(msg);
+                std::process::exit(1);
+            }
+        };
 
     // XXX: when dbt-sa-cli and dbt-cli are unified, this will be the event emitter
     // we inject into execute_fs. This instantiation is here as proof that our build
@@ -122,7 +124,7 @@ fn main() -> ExitCode {
     let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
 
     // Shut down telemetry
-    for err in telemetry_handle.shutdown() {
+    for err in telemetry_shutdown_handle.shutdown() {
         eprintln!("{}", err.pretty());
     }
 

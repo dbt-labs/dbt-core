@@ -12,6 +12,7 @@ use tracing_subscriber::{
 use super::{
     config::FsTraceConfig, constants::PROCESS_SPAN_NAME, event_info::store_event_attributes,
     layers::data_layer::TelemetryDataLayer, shutdown::TelemetryShutdownItem,
+    tracing_features_handle::TracingFeaturesHandle,
 };
 use dbt_error::{FsError, FsResult};
 
@@ -90,11 +91,12 @@ impl TelemetryHandle {
 /// # Returns
 ///
 /// On success, returns a `TelemetryHandle` that should be used for graceful shutdown.
-pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
+pub fn init_tracing(config: FsTraceConfig) -> FsResult<(TelemetryHandle, TracingFeaturesHandle)> {
     // Convert invocation ID to trace ID
     let trace_id = config.invocation_id.as_u128();
 
-    let (middlewares, consumer_layers, shutdown_items) = config.build_layers()?;
+    let (middlewares, consumer_layers, shutdown_items, feature_handle) =
+        config.build_layers()?.into_parts();
 
     // Strip code location in non-debug builds
     let strip_code_location = !cfg!(debug_assertions);
@@ -115,7 +117,10 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
     let process_span =
         init_tracing_with_consumer_layer(effective_max_verbosity, config.package, data_layer)?;
 
-    Ok(TelemetryHandle::new(shutdown_items, process_span))
+    Ok((
+        TelemetryHandle::new(shutdown_items, process_span),
+        feature_handle,
+    ))
 }
 
 /// Initializes tracing with the provided data layer, which is ultimately

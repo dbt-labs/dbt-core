@@ -202,6 +202,10 @@ impl CliParserTrait for CliParser {
     fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {
         cli.common_args.fail_fast
     }
+
+    fn warn_error_options(&self, cli: &Self::CliType) -> Option<WarnErrorOptions> {
+        Some(cli.common_args.get_cli_warn_error_options())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1376,10 +1380,10 @@ pub struct CommonArgs {
     #[arg(long, default_value_t = 8000, value_name = "PORT")]
     pub port: u16,
 
-    /// Warn on error (TODO: need to wire this in)
+    /// Warn on error
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_WARN_ERROR",hide = true, value_parser = BoolishValueParser::new())]
     pub warn_error: bool,
-    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue,  env = "DBT_WARN_ERROR",hide = true, value_parser = BoolishValueParser::new())]
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = true, value_parser = BoolishValueParser::new())]
     pub no_warn_error: bool,
 
     /// Warning error options
@@ -1991,6 +1995,17 @@ impl CommonArgs {
 
     pub fn get_introspect(&self) -> bool {
         !self.no_introspect
+    }
+
+    /// Returns warn_error_options resolved purely from cli args (including `--warn-error`)
+    pub fn get_cli_warn_error_options(&self) -> WarnErrorOptions {
+        let mut options = self.warn_error_options.clone().unwrap_or_default();
+
+        if self.warn_error {
+            options.add_all_to_error();
+        }
+
+        options
     }
 }
 

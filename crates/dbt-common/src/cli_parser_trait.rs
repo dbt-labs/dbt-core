@@ -1,5 +1,7 @@
 use std::ffi::OsString;
 
+use crate::warn_error_options::WarnErrorOptions;
+
 pub trait CliParserTrait {
     type CliType;
 
@@ -27,4 +29,9 @@ pub trait CliParserTrait {
     /// until we unify both dbt-cli and dbt-sa-cli into
     /// a single one.
     fn fail_fast_flag(&self, cli: &Self::CliType) -> bool;
+
+    /// Extract warn-error options from the parsed CLI.
+    fn warn_error_options(&self, _cli: &Self::CliType) -> Option<WarnErrorOptions> {
+        None
+    }
 }

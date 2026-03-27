@@ -6,6 +6,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
+use dbt_common::tracing::TracingFeaturesHandle;
 use dbt_dag::schedule::Schedule;
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::schemas::manifest::DbtManifestV12;
@@ -103,6 +104,7 @@ pub struct FeatureStack {
     pub formatter: FormatterFeature,
     pub linter: LinterFeature,
     pub cli_extension: CliExtensionFeature,
+    pub tracing: TracingFeaturesHandle,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
