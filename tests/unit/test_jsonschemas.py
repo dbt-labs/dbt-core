@@ -9,6 +9,7 @@ from dbt.deprecations import (
 )
 from dbt.jsonschemas.jsonschemas import (
     jsonschema_validate,
+    project_schema,
     resources_schema,
     validate_model_config,
 )
@@ -166,3 +167,33 @@ class TestSourceBigQueryAliases:
 
         jsonschema_validate(resources_schema(), source_with_dataset, "test.yml")
         assert active_deprecations == {"custom-key-in-object-deprecation": 1}
+
+
+class TestProjectBigQueryAliases:
+    @pytest.fixture(scope="class")
+    def project_with_dataset(self):
+        return {
+            "models": {
+                "jaffle_shop": {
+                    "+dataset": "my_dataset",
+                }
+            }
+        }
+
+    def test_bigquery_project_dataset_no_warning(self, project_with_dataset):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("bigquery")
+
+        jsonschema_validate(project_schema(), project_with_dataset, "dbt_project.yml")
+        assert active_deprecations == {}
+
+    def test_snowflake_project_dataset_warns(self, project_with_dataset):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("snowflake")
+
+        jsonschema_validate(project_schema(), project_with_dataset, "dbt_project.yml")
+        assert active_deprecations == {"custom-key-in-config-deprecation": 1}

@@ -131,7 +131,9 @@ def _get_allowed_config_fields_for_project_property(schema, property_field_name)
         return []
 
     allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
-    allowed_config_fields.update(_get_allowed_config_key_aliases())
+    aliases = _get_allowed_config_key_aliases()
+    allowed_config_fields.update(aliases)
+    allowed_config_fields.update(f"+{alias}" for alias in aliases)
     return list(allowed_config_fields)
 
 
