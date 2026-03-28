@@ -543,6 +543,14 @@ class ModelNode(ModelResource, CompiledNode):
         return self.version is not None and self.version == self.latest_version
 
     @property
+    def is_prerelease(self) -> bool:
+        if self.version is None or self.latest_version is None:
+            return False
+        from dbt.contracts.graph.unparsed import UnparsedVersion
+
+        return UnparsedVersion(v=self.version) > UnparsedVersion(v=self.latest_version)
+
+    @property
     def is_past_deprecation_date(self) -> bool:
         return (
             self.deprecation_date is not None
@@ -700,6 +708,16 @@ class ModelNode(ModelResource, CompiledNode):
                 UnversionedBreakingChange(
                     breaking_changes=[breaking_change],
                     model_name=self.name,
+                    model_file_path=self.original_file_path,
+                ),
+                node=self,
+            )
+            return False
+        elif self.is_prerelease:
+            warn_or_error(
+                UnversionedBreakingChange(
+                    breaking_changes=[breaking_change],
+                    model_name=f"{self.name}.v{self.version} (pre-release)",
                     model_file_path=self.original_file_path,
                 ),
                 node=self,
@@ -922,6 +940,15 @@ class ModelNode(ModelResource, CompiledNode):
                         enforced_model_constraint_removed=enforced_model_constraint_removed,
                         breaking_changes=breaking_changes,
                         model_name=self.name,
+                        model_file_path=self.original_file_path,
+                    ),
+                    node=self,
+                )
+            elif self.is_prerelease:
+                warn_or_error(
+                    UnversionedBreakingChange(
+                        breaking_changes=breaking_changes,
+                        model_name=f"{self.name}.v{self.version} (pre-release)",
                         model_file_path=self.original_file_path,
                     ),
                     node=self,

@@ -1,0 +1,6 @@
+kind: Features
+body: Pre-release model versions now warn instead of error on contract breaking changes
+time: 2026-03-09T16:37:00.000000-04:00
+custom:
+  Author: jecolvin
+  Issue: "12164"
