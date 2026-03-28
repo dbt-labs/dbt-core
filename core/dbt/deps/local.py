@@ -3,17 +3,27 @@ from typing import Dict
 
 from dbt.config.project import PartialProject, Project
 from dbt.config.renderer import PackageRenderer
-from dbt.contracts.project import LocalPackage, ProjectPackageMetadata
+from dbt.contracts.project import (
+    LocalPackage,
+    LocalPackageInstallMode,
+    ProjectPackageMetadata,
+)
 from dbt.deps.base import PinnedPackage, UnpinnedPackage
 from dbt.events.types import DepsCreatingLocalSymlink, DepsSymlinkNotAvailable
+from dbt.exceptions import DependencyError
 from dbt_common.clients import system
 from dbt_common.events.functions import fire_event
 
 
 class LocalPackageMixin:
-    def __init__(self, local: str) -> None:
+    def __init__(
+        self,
+        local: str,
+        install_mode: LocalPackageInstallMode = LocalPackageInstallMode.auto,
+    ) -> None:
         super().__init__()
         self.local = local
+        self.install_mode = install_mode
 
     @property
     def name(self):
@@ -24,13 +34,15 @@ class LocalPackageMixin:
 
 
 class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
-    def __init__(self, local: str) -> None:
-        super().__init__(local)
+    def __init__(
+        self,
+        local: str,
+        install_mode: LocalPackageInstallMode = LocalPackageInstallMode.auto,
+    ) -> None:
+        super().__init__(local, install_mode)
 
     def to_dict(self) -> Dict[str, str]:
-        return {
-            "local": self.local,
-        }
+        return {"local": self.local, "install_mode": self.install_mode.value}
 
     def get_version(self):
         return None
@@ -59,21 +71,33 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
                 system.rmdir(dest_path)
             else:
                 system.remove_file(dest_path)
-        try:
+
+        if self.install_mode == LocalPackageInstallMode.frozen:
+            shutil.copytree(src_path, dest_path)
+        elif self.install_mode == LocalPackageInstallMode.editable:
             fire_event(DepsCreatingLocalSymlink())
             system.make_symlink(src_path, dest_path)
-        except OSError:
-            fire_event(DepsSymlinkNotAvailable())
-            shutil.copytree(src_path, dest_path)
+        elif self.install_mode == LocalPackageInstallMode.auto:
+            try:
+                fire_event(DepsCreatingLocalSymlink())
+                system.make_symlink(src_path, dest_path)
+            except OSError:
+                fire_event(DepsSymlinkNotAvailable())
+                shutil.copytree(src_path, dest_path)
+        else:
+            # should never happen
+            raise DependencyError(
+                f"Invalid install mode: {self.install_mode} for 'local' package: {self.local}"
+            )
 
 
 class LocalUnpinnedPackage(LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]):
     @classmethod
     def from_contract(cls, contract: LocalPackage) -> "LocalUnpinnedPackage":
-        return cls(local=contract.local)
+        return cls(local=contract.local, install_mode=contract.install_mode)
 
     def incorporate(self, other: "LocalUnpinnedPackage") -> "LocalUnpinnedPackage":
-        return LocalUnpinnedPackage(local=self.local)
+        return LocalUnpinnedPackage(local=self.local, install_mode=self.install_mode)
 
     def resolved(self) -> LocalPinnedPackage:
-        return LocalPinnedPackage(local=self.local)
+        return LocalPinnedPackage(local=self.local, install_mode=self.install_mode)
