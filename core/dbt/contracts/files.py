@@ -220,6 +220,7 @@ class SchemaSourceFile(BaseSourceFile):
     unrendered_configs: Dict[str, Any] = field(default_factory=dict)
     unrendered_databases: Dict[str, Any] = field(default_factory=dict)
     unrendered_schemas: Dict[str, Any] = field(default_factory=dict)
+    unrendered_external_locations: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -399,6 +400,24 @@ class SchemaSourceFile(BaseSourceFile):
             return None
 
         return self.unrendered_schemas[yaml_key].get(name)
+
+    def add_unrendered_external_location(
+        self, yaml_key: str, source_name: str, table_name: str, unrendered_location: str
+    ) -> None:
+        if yaml_key not in self.unrendered_external_locations:
+            self.unrendered_external_locations[yaml_key] = {}
+
+        key = f"{source_name}.{table_name}"
+        self.unrendered_external_locations[yaml_key][key] = unrendered_location
+
+    def get_unrendered_external_location(
+        self, yaml_key: str, source_name: str, table_name: str
+    ) -> Optional[str]:
+        if yaml_key not in self.unrendered_external_locations:
+            return None
+
+        key = f"{source_name}.{table_name}"
+        return self.unrendered_external_locations[yaml_key].get(key)
 
 
 @dataclass
