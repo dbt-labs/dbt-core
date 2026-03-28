@@ -16,6 +16,7 @@ from dbt import tracking
 from dbt.adapters.base.plugin import AdapterPlugin
 from dbt.artifacts.resources import (
     ExposureType,
+    MacroDependsOn,
     MaturityType,
     MetricInputMeasure,
     MetricTypeParams,
@@ -31,6 +32,7 @@ from dbt.contracts.graph.nodes import (
     DependsOn,
     Exposure,
     Group,
+    Macro,
     Metric,
     ModelConfig,
     ModelNode,
@@ -347,6 +349,20 @@ class ManifestTest(unittest.TestCase):
             ),
         }
 
+        self.macros = {
+            "macro.root.my_macro": Macro(
+                name="my_macro",
+                resource_type=NodeType.Macro,
+                unique_id="macro.root.my_macro",
+                package_name="root",
+                path="macros/my_macro.sql",
+                original_file_path="macros/my_macro.sql",
+                macro_sql="select 1",
+                depends_on=MacroDependsOn(),
+                description="Test macro",
+            )
+        }
+
         self.semantic_models = {}
         self.saved_queries = {}
 
@@ -358,6 +374,8 @@ class ManifestTest(unittest.TestCase):
             node.validate(node.to_dict(omit_none=True))
         for source in self.sources.values():
             source.validate(source.to_dict(omit_none=True))
+        for macro in self.macros.values():
+            macro.validate(macro.to_dict(omit_none=True))
 
         os.environ["DBT_ENV_CUSTOM_ENV_key"] = "value"
 
@@ -487,6 +505,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_build_flat_graph(self):
         exposures = deepcopy(self.exposures)
+        macros = deepcopy(self.macros)
         metrics = deepcopy(self.metrics)
         groups = deepcopy(self.groups)
         nodes = deepcopy(self.nested_nodes)
@@ -494,7 +513,7 @@ class ManifestTest(unittest.TestCase):
         manifest = Manifest(
             nodes=nodes,
             sources=sources,
-            macros={},
+            macros=macros,
             docs={},
             disabled={},
             files={},
@@ -507,6 +526,7 @@ class ManifestTest(unittest.TestCase):
         flat_graph = manifest.flat_graph
         flat_exposures = flat_graph["exposures"]
         flat_groups = flat_graph["groups"]
+        flat_macros = flat_graph["macros"]
         flat_metrics = flat_graph["metrics"]
         flat_nodes = flat_graph["nodes"]
         flat_sources = flat_graph["sources"]
@@ -522,6 +542,7 @@ class ManifestTest(unittest.TestCase):
                     "groups",
                     "nodes",
                     "sources",
+                    "macros",
                     "metrics",
                     "semantic_models",
                     "saved_queries",
@@ -531,6 +552,7 @@ class ManifestTest(unittest.TestCase):
         )
         self.assertEqual(set(flat_exposures), set(self.exposures))
         self.assertEqual(set(flat_groups), set(self.groups))
+        self.assertEqual(set(flat_macros), set(self.macros))
         self.assertEqual(set(flat_metrics), set(self.metrics))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         self.assertEqual(set(flat_sources), set(self.sources))
@@ -562,7 +584,7 @@ class ManifestTest(unittest.TestCase):
         manifest = Manifest(
             nodes=nodes,
             sources=deepcopy(self.sources),
-            macros={},
+            macros=deepcopy(self.macros),
             docs={},
             disabled={},
             files={},
@@ -1090,6 +1112,7 @@ class MixedManifestTest(unittest.TestCase):
                     "exposures",
                     "functions",
                     "groups",
+                    "macros",
                     "metrics",
                     "nodes",
                     "sources",
