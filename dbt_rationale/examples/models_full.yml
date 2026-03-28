@@ -1,0 +1,38 @@
+# Fully documented model rationale — all optional fields populated.
+models:
+  - name: fct_revenue
+    description: "Revenue fact table used for board-level financial reporting"
+    meta:
+      rationale:
+        intent: "Canonical revenue definition aligned with GAAP recognition rules"
+        owner: "finance-analytics@acme.com"
+        domain: "Revenue Analytics"
+        decision_type: "Business Definition"
+        references:
+          - type: "jira"
+            id: "FIN-1024"
+          - type: "confluence"
+            url: "https://wiki.acme.com/revenue-spec"
+        policy_bindings:
+          - "GAAP_v2"
+          - "SOX_reporting"
+        exceptions:
+          - rule: "GAAP_v2.refund_window"
+            justification: "90-day refund window excluded per CFO directive"
+            approved_by: "cfo@acme.com"
+            expires: "2026-12-31"
+            reference:
+              type: "jira"
+              id: "FIN-2048"
+
+  - name: dim_customers
+    description: "Customer dimension — the single source of truth for customer attributes"
+    meta:
+      rationale:
+        intent: "Master customer entity for all downstream joins and segmentation"
+        owner: "customer-data@acme.com"
+        domain: "Customer"
+        decision_type: "Business Definition"
+        references:
+          - type: "notion"
+            url: "https://notion.so/acme/customer-entity-spec"

@@ -1,0 +1,46 @@
+# Source-level rationale — documents intent for external data sources and their tables.
+sources:
+  - name: stripe
+    description: "Stripe payment platform data"
+    meta:
+      rationale:
+        intent: "Primary payment processing data source"
+        owner: "payments-team@acme.com"
+        domain: "Payments"
+        decision_type: "Technical Optimization"
+    tables:
+      - name: charges
+        description: "Individual charge transactions"
+        meta:
+          rationale:
+            intent: "Raw charge events used to build payment fact tables"
+            owner: "payments-team@acme.com"
+      - name: refunds
+        description: "Refund transactions linked back to charges"
+        meta:
+          rationale:
+            intent: "Track refund events for revenue reconciliation"
+            owner: "payments-team@acme.com"
+            policy_bindings:
+              - "GAAP_v2"
+
+  - name: salesforce
+    description: "Salesforce CRM data"
+    meta:
+      rationale:
+        intent: "CRM source for customer and opportunity data"
+        owner: "sales-ops@acme.com"
+        domain: "Sales"
+    tables:
+      - name: accounts
+        meta:
+          rationale:
+            intent: "Master account records from CRM"
+            owner: "sales-ops@acme.com"
+      - name: opportunities
+        meta:
+          rationale:
+            intent: "Sales pipeline and closed-won deals"
+            owner: "sales-ops@acme.com"
+            domain: "Sales"
+            decision_type: "Business Definition"
