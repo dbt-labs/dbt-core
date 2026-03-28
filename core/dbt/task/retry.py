@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Set
 
 from click import get_current_context
 from click.core import ParameterSource
@@ -11,6 +12,7 @@ from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
 from dbt.graph import GraphQueue
+from dbt.node_types import NodeType
 from dbt.parser.manifest import parse_manifest
 from dbt.task.base import ConfiguredTask
 from dbt.task.build import BuildTask
@@ -132,6 +134,23 @@ class RetryTask(ConfiguredTask):
                 and result.unique_id.startswith("operation.")
             )
         }
+
+        # Include parent nodes for failed tests so they get rebuilt before the test runs.
+        # This ensures that when a test fails due to a model issue, fixing and retrying
+        # will rebuild the model first, then run the test against the fresh model.
+        test_parent_ids: Set[str] = set()
+        for unique_id in unique_ids:
+            # Check data tests (generic and singular) in manifest.nodes
+            if unique_id in self.manifest.nodes:
+                node = self.manifest.nodes[unique_id]
+                if node.resource_type == NodeType.Test:
+                    test_parent_ids.update(node.depends_on_nodes)
+            # Check unit tests in manifest.unit_tests
+            elif unique_id in self.manifest.unit_tests:
+                node = self.manifest.unit_tests[unique_id]
+                test_parent_ids.update(node.depends_on_nodes)
+
+        unique_ids = unique_ids | test_parent_ids
 
         # We need this so that re-running of a microbatch model will only rerun
         # batches that previously failed. Note _explicitly_ do no pass the
