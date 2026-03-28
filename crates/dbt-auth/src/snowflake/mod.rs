@@ -11,7 +11,7 @@ use std::fs;
 const APP_NAME: &str = "dbt";
 
 // WARNING: Still needs adjustment on what is considered must-have
-const CONNECTION_PARAMS_STR: [&str; 7] = [
+const CONNECTION_PARAMS_STR: [&str; 9] = [
     "account",
     "role",
     "warehouse",
@@ -19,9 +19,11 @@ const CONNECTION_PARAMS_STR: [&str; 7] = [
     "schema",
     "host",
     "protocol",
+    snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
+    snowflake::QUERY_TAG_PARAM_KEY,
 ];
 
-const CONNECTION_PARAMS: [&str; 1] = ["port"];
+const CONNECTION_PARAMS: [&str; 2] = ["port", "client_session_keep_alive"];
 
 /// Configuration values that are needed for an auth method in a dbt-snowflake profile.
 ///
@@ -534,6 +536,12 @@ fn apply_connection_args(
                 "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
                 "host" => builder.with_named_option(snowflake::HOST, value),
                 "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
+                snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY => {
+                    builder.with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, value)
+                }
+                snowflake::QUERY_TAG_PARAM_KEY => {
+                    builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, value)
+                }
                 _ => panic!("unexpected key: {key}"),
             }?;
         }
@@ -543,21 +551,14 @@ fn apply_connection_args(
         if let Some(value) = config.get_string(key) {
             match key {
                 "port" => builder.with_named_option(snowflake::PORT, value.as_ref()),
+                "client_session_keep_alive" => {
+                    builder.with_named_option(snowflake::KEEP_SESSION_ALIVE, value.as_ref())
+                }
                 _ => panic!("unexpected key: {key}"),
             }?;
         }
     }
     builder.with_named_option(snowflake::APPLICATION_NAME, APP_NAME)?;
-
-    // S3 VPCE Logic
-    if let Some(s3_dns) = config.get_str(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY) {
-        builder.with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, s3_dns)?;
-    }
-
-    // Query Tag Logic
-    if let Some(query_tag) = config.get_str(snowflake::QUERY_TAG_PARAM_KEY) {
-        builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, query_tag)?;
-    }
 
     // Timeout Logic
     let connect_timeout = config
@@ -1607,6 +1608,48 @@ mod tests {
             (snowflake::WAREHOUSE, "warehouse"),
             (snowflake::APPLICATION_NAME, "dbt"),
             (snowflake::QUERY_TAG_PARAM_KEY, "custom-query-tag"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_keep_session_alive_with_method() {
+        let mut config = base_config();
+        config.insert("method".into(), "warehouse".into());
+        config.insert("client_session_keep_alive".into(), YmlValue::bool(true));
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, "dbt"),
+            (snowflake::KEEP_SESSION_ALIVE, "true"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_keep_session_alive_string_value() {
+        let mut config = base_config();
+        config.insert(
+            "client_session_keep_alive".into(),
+            YmlValue::string("true".to_owned()),
+        );
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, "dbt"),
+            (snowflake::KEEP_SESSION_ALIVE, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
             (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
