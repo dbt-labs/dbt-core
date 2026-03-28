@@ -109,7 +109,8 @@ users_sql = """
 {{
     config(
         materialized = 'table',
-        tags=['bi', 'users']
+        tags=['bi', 'users'],
+        meta={'contains_pii':true}
     )
 }}
 
