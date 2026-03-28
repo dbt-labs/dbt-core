@@ -1,0 +1,6 @@
+kind: Fixes
+body: Data test run results always report 0 failures on a pass even if number is higher.
+time: 2025-03-11T13:08:51.055237+01:00
+custom:
+    Author: vglocus
+    Issue: "11312"
