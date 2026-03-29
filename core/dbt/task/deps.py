@@ -272,10 +272,15 @@ class DepsTask(BaseTask):
             self.project.packages.packages
         )
 
-        with open(lock_filepath, "w") as lock_obj:
-            yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
-
-        fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
+        try:
+            with open(lock_filepath, "w") as lock_obj:
+                yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
+            fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
+        except OSError as exc:
+            fire_event(
+                Formatting(msg=f"Warning: Could not write lock file at {lock_filepath}: {exc}. "
+                           "Proceeding without updating the lock file.")
+            )
 
     def run(self) -> None:
         move_to_nearest_project_dir(self.args.project_dir)
