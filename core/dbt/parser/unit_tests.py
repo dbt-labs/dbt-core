@@ -126,6 +126,21 @@ class UnitTestManifestLoader:
             original_input_node = self._get_original_input_node(
                 given.input, tested_node, test_case.name, ctx, unit_test_node
             )
+
+            # Ephemeral models have no database relation, so the get_fixture_sql
+            # macro cannot introspect column types. Require SQL format (#11618).
+            if (
+                given.format != UnitTestFormat.SQL
+                and hasattr(original_input_node, "config")
+                and getattr(original_input_node.config, "materialized", None) == "ephemeral"
+            ):
+                raise ParsingError(
+                    f"Unit test '{test_case.name}' has input '{given.input}' with "
+                    f"format '{given.format.value}', but ephemeral models require "
+                    f"'format: sql' because they have no database relation to "
+                    f"introspect column types from."
+                )
+
             input_name = original_input_node.name
             common_fields = {
                 "resource_type": NodeType.Model,

@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Show clear error when unit test uses dict/csv format for ephemeral model inputs"
+time: 2026-03-29T15:00:00.000000+00:00
+custom:
+    Author: claygeo
+    Issue: "11618"
