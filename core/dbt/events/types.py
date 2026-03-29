@@ -1204,8 +1204,13 @@ class UnsupportedConstraintMaterialization(WarnLevel):
         return "I068"
 
     def message(self) -> str:
+        location = ""
+        if self.model_name:
+            location = f" in model '{self.model_name}'"
+            if self.file_path:
+                location += f" ({self.file_path})"
         msg = (
-            f"Constraint types are not supported for {self.materialized} materializations and will "
+            f"Constraint types are not supported for {self.materialized} materializations{location} and will "
             "be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
         )
 

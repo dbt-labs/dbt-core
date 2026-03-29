@@ -1237,7 +1237,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         # if any constraint has `warn_unsupported` as True then send the warning
         if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
             warn_or_error(
-                UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
+                UnsupportedConstraintMaterialization(
+                    materialized=model_node.config.materialized,
+                    model_name=model_node.name,
+                    file_path=model_node.original_file_path,
+                ),
                 node=model_node,
             )
 
