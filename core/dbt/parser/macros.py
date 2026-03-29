@@ -8,6 +8,7 @@ from dbt.contracts.files import FilePath, SourceFile
 from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.exceptions import ParsingError
+from dbt_common.exceptions import CompilationError
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
@@ -70,7 +71,7 @@ class MacroParser(BaseParser[Macro]):
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
-            except ParsingError as e:
+            except (ParsingError, CompilationError) as e:
                 e.add_node(base_node)
                 raise
 
