@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Include model name and file path in unsupported constraint materialization warnings"
+time: 2026-03-29T14:22:22.117206+00:00
+custom:
+    Author: claygeo
+    Issue: "11752"
