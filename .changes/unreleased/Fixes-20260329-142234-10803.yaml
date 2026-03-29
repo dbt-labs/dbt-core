@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Include node context in env var missing error messages"
+time: 2026-03-29T14:22:22.117206+00:00
+custom:
+    Author: claygeo
+    Issue: "10803"
