@@ -130,7 +130,7 @@ from dbt.version import __version__
 from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
-from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.dataclass_schema import StrEnum, ValidationError, dbtClassMixin
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
 from dbt_common.events.types import Note
@@ -1460,7 +1460,12 @@ class ManifestLoader:
                 continue
             if node.created_at < self.started_at:
                 continue
-            node.config.final_validate()
+            try:
+                node.config.final_validate()
+            except ValidationError as exc:
+                raise ValidationError(
+                    f"{exc.message} (node: {node.unique_id})"
+                ) from exc
 
     def check_valid_microbatch_config(self):
         if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):

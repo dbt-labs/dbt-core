@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
 from dbt.adapters.factory import get_config_class_by_name
@@ -258,7 +259,13 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             return finalized.to_dict(omit_none=True)
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
-            raise SchemaConfigError(exc, node=config) from exc
+            # Provide a node-like object with identity info so the error
+            # message tells the user which node has invalid config (#8276).
+            node_ref = SimpleNamespace(
+                resource_type=resource_type,
+                name=".".join(fqn),
+            )
+            raise SchemaConfigError(exc, node=node_ref) from exc
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
