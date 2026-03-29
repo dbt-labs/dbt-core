@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Include macro filename in compilation error messages"
+time: 2026-03-29T14:22:22.117206+00:00
+custom:
+    Author: claygeo
+    Issue: "11392"
