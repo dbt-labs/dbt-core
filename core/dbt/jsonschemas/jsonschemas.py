@@ -131,7 +131,8 @@ def _get_allowed_config_fields_for_project_property(schema, property_field_name)
         return []
 
     allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
-    allowed_config_fields.update(_get_allowed_config_key_aliases())
+    # in dbt_project.yml keys should have a + prefix
+    allowed_config_fields.update([f"+{key}" for key in _get_allowed_config_key_aliases()])
     return list(allowed_config_fields)
 
 
@@ -267,7 +268,6 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     had_valid_config_key_in_path = any(
                         k in allowed_config_fields for k in sub_error.path
                     )
-
                     if f"+{key}" in allowed_config_fields and not had_valid_config_key_in_path:
                         deprecations.warn(
                             "missing-plus-prefix-in-config-deprecation",
