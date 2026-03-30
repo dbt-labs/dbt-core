@@ -2078,6 +2078,67 @@ class SingularTestParserTest(BaseParserTest):
         self.assertIn(file_id, self.parser.manifest.files)
         self.assertEqual(self.parser.manifest.files[file_id].nodes, ["test.snowplow.test_1"])
 
+    def test_config_name_overrides_filename(self):
+        """A `name` set in {{ config() }} must override the filename-derived name."""
+        raw_code = (
+            "{{\n"
+            "  config(\n"
+            "    name='My custom assertion',\n"
+            "    severity='error',\n"
+            "  )\n"
+            "}}\n"
+            'select * from {{ ref("blah") }} limit 0'
+        )
+        block = self.file_block_for(raw_code, "assert_something.sql")
+        self.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+        node = list(self.parser.manifest.nodes.values())[0]
+
+        # The name, alias, and unique_id must use the config-provided name, not the filename.
+        self.assertEqual(node.name, "My custom assertion")
+        self.assertEqual(node.alias, "My custom assertion")
+        self.assertEqual(node.unique_id, "test.snowplow.My custom assertion")
+        self.assertEqual(node.fqn[-1], "My custom assertion")
+
+    def test_config_name_absent_keeps_filename(self):
+        """Without a `name` in config(), the node name must stay as the filename stem."""
+        raw_code = (
+            "{{\n"
+            "  config(\n"
+            "    severity='error',\n"
+            "  )\n"
+            "}}\n"
+            'select * from {{ ref("blah") }} limit 0'
+        )
+        block = self.file_block_for(raw_code, "assert_something.sql")
+        self.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+
+        self.assertEqual(node.name, "assert_something")
+        self.assertEqual(node.unique_id, "test.snowplow.assert_something")
+
+    def test_config_name_non_string_is_ignored(self):
+        """A non-string `name` in config() must not crash — the filename name is kept."""
+        raw_code = (
+            "{{\n"
+            "  config(\n"
+            "    name=123,\n"
+            "    severity='error',\n"
+            "  )\n"
+            "}}\n"
+            'select * from {{ ref("blah") }} limit 0'
+        )
+        block = self.file_block_for(raw_code, "assert_something.sql")
+        self.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+
+        # Non-string name must be ignored — node keeps its filename-derived identity.
+        self.assertEqual(node.name, "assert_something")
+        self.assertEqual(node.unique_id, "test.snowplow.assert_something")
+
 
 class GenericTestParserTest(BaseParserTest):
     # generic tests in the test-paths directory currently leverage the macro parser

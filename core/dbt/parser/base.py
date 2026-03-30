@@ -450,6 +450,17 @@ class ConfiguredParser(
 
         # tests don't have hooks
         if parsed_node.resource_type == NodeType.Test:
+            # For singular data tests, honour a `name` set in {{ config() }} the same
+            # way generic tests honour a `name` set in models.yml.  The name must be
+            # applied here (after the config block has been rendered) because it is
+            # not known at initial node-creation time.
+            config_name = config_dict.get("name")
+            if config_name and isinstance(config_name, str) and config_name != parsed_node.name:
+                parsed_node.fqn[-1] = config_name
+                parsed_node.name = config_name
+                # Keep alias in sync so that store_failures relation names are consistent.
+                parsed_node.alias = config_name
+                parsed_node.unique_id = self.generate_unique_id(config_name)
             return
 
         # at this point, we've collected our hooks. Use the node context to
