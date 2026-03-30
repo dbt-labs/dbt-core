@@ -396,6 +396,26 @@ class TestMicrobatchBuilder:
                     ),
                 ],
             ),
+            # BatchSize.week
+            (
+                datetime(2024, 9, 2, 0, 0, 0, 0, pytz.UTC),
+                datetime(2024, 9, 18, 3, 56, 0, 0, pytz.UTC),
+                BatchSize.week,
+                [
+                    (
+                        datetime(2024, 9, 2, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 9, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 9, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 16, 0, 0, 0, 0, pytz.UTC),
+                    ),
+                    (
+                        datetime(2024, 9, 16, 0, 0, 0, 0, pytz.UTC),
+                        datetime(2024, 9, 18, 3, 56, 0, 0, pytz.UTC),
+                    ),
+                ],
+            ),
             # BatchSize.hour
             (
                 datetime(2024, 9, 5, 1, 0, 0, 0, pytz.UTC),
@@ -545,6 +565,18 @@ class TestMicrobatchBuilder:
             ),
             (
                 datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.week,
+                1,
+                datetime(2024, 9, 9, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.week,
+                -1,
+                datetime(2024, 8, 26, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
                 BatchSize.day,
                 1,
                 datetime(2024, 9, 6, 0, 0, 0, 0, pytz.UTC),
@@ -589,6 +621,11 @@ class TestMicrobatchBuilder:
             ),
             (
                 datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.week,
+                datetime(2024, 9, 2, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
                 BatchSize.day,
                 datetime(2024, 9, 5, 0, 0, 0, 0, pytz.UTC),
             ),
@@ -607,6 +644,7 @@ class TestMicrobatchBuilder:
         [
             (BatchSize.year, datetime(2020, 1, 1, 1), "2020"),
             (BatchSize.month, datetime(2020, 1, 1, 1), "202001"),
+            (BatchSize.week, datetime(2020, 1, 6, 1), "2020W02"),
             (BatchSize.day, datetime(2020, 1, 1, 1), "20200101"),
             (BatchSize.hour, datetime(2020, 1, 1, 1), "20200101T01"),
         ],
@@ -621,6 +659,7 @@ class TestMicrobatchBuilder:
         [
             (BatchSize.year, datetime(2020, 1, 1, 1), "2020"),
             (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01"),
+            (BatchSize.week, datetime(2020, 1, 6, 1), "2020-W02"),
             (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
             (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01T01"),
         ],
@@ -655,6 +694,16 @@ class TestMicrobatchBuilder:
                 datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
                 BatchSize.day,
                 datetime(2024, 9, 17, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
+                BatchSize.week,
+                datetime(2024, 9, 23, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 16, 0, 0, 0, 0, pytz.UTC),
+                BatchSize.week,
+                datetime(2024, 9, 16, 0, 0, 0, 0, pytz.UTC),
             ),
             (
                 datetime(2024, 9, 17, 16, 6, 0, 0, pytz.UTC),
