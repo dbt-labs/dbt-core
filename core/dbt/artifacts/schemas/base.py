@@ -11,6 +11,7 @@ from mashumaro.jsonschema.dialects import DRAFT_2020_12
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.version import __version__
 from dbt_common.clients.system import read_json, write_json
+from dbt_common.utils.encoding import JSONEncoder
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
@@ -49,7 +50,7 @@ class Writable:
         if indent is not None:
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=indent)
+                json.dump(data, f, indent=indent, cls=JSONEncoder)
         else:
             write_json(path, data)
 

@@ -81,3 +81,31 @@ class TestWritable:
             with patch("dbt.artifacts.schemas.base.write_json") as mock_write:
                 obj.write(dest)
                 mock_write.assert_called_once()
+
+    def test_write_indented_uses_json_encoder(self, tmp_path):
+        """write() with indent must use JSONEncoder so that Decimal and datetime
+        values are serialised correctly, matching the compact write_json() path."""
+        import datetime
+        import decimal
+
+        class SpecialWritable(Writable):
+            def to_dict(self, omit_none=False, context=None):
+                return {
+                    "price": decimal.Decimal("9.99"),
+                    "created_at": datetime.datetime(2024, 1, 1, 12, 0, 0),
+                }
+
+        mock_flags = MagicMock()
+        mock_flags.WRITE_JSON_INDENT = True
+
+        obj = SpecialWritable()
+        dest = os.path.join(tmp_path, "manifest.json")
+
+        with patch("dbt.flags.get_flags", return_value=mock_flags):
+            obj.write(dest)
+
+        with open(dest) as f:
+            data = json.load(f)
+
+        assert data["price"] == 9.99, "Decimal must be serialized as a float by JSONEncoder"
+        assert data["created_at"] == "2024-01-01T12:00:00", "datetime must be ISO-formatted by JSONEncoder"
