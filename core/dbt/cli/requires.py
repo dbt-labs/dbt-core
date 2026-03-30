@@ -41,6 +41,7 @@ from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_event
@@ -184,6 +185,9 @@ def postflight(func):
             fire_event(MainEncounteredError(exc=str(e)))
             raise ResultExit(e.result)
         except DbtException as e:
+            fire_event(MainEncounteredError(exc=str(e)))
+            raise ExceptionExit(e)
+        except ValidationError as e:
             fire_event(MainEncounteredError(exc=str(e)))
             raise ExceptionExit(e)
         except BaseException as e:
