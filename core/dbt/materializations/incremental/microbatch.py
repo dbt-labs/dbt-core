@@ -38,13 +38,19 @@ class MicrobatchBuilder:
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
         self.default_end_time = default_end_time or datetime.now(pytz.UTC)
 
+    def _get_week_start(self) -> int:
+        """Returns the configured week_start as an integer (0=Monday, 6=Sunday).
+
+        Defaults to 0 (Monday) if week_start is not set or is not a valid integer.
+        """
+        week_start = getattr(self.model.config, "week_start", None)
+        return week_start if isinstance(week_start, int) else 0
+
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
         end_time = self.event_time_end or self.default_end_time
-        week_start = getattr(self.model.config, "week_start", 0)
-        week_start = week_start if isinstance(week_start, int) else 0
         return MicrobatchBuilder.ceiling_timestamp(
-            end_time, self.model.config.batch_size, week_start
+            end_time, self.model.config.batch_size, self._get_week_start()
         )
 
     def build_start_time(self, checkpoint: Optional[datetime]):
@@ -57,8 +63,7 @@ class MicrobatchBuilder:
         """
         assert isinstance(self.model.config, NodeConfig)
         batch_size = self.model.config.batch_size
-        week_start = getattr(self.model.config, "week_start", 0)
-        week_start = week_start if isinstance(week_start, int) else 0
+        week_start = self._get_week_start()
 
         # Use event_time_start if it is provided.
         if self.event_time_start:
@@ -96,8 +101,7 @@ class MicrobatchBuilder:
         the size of the model's batch_size.
         """
         batch_size = self.model.config.batch_size
-        week_start = getattr(self.model.config, "week_start", 0)
-        week_start = week_start if isinstance(week_start, int) else 0
+        week_start = self._get_week_start()
         curr_batch_start: datetime = start
         curr_batch_end: datetime = MicrobatchBuilder.offset_timestamp(
             curr_batch_start, batch_size, 1, week_start

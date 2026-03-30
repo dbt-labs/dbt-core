@@ -888,7 +888,7 @@ class TestMicrobatchBuilder:
             model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
         )
 
-        # 2024-09-01 is a Sunday, 2024-09-22 is a Sunday
+        # 2024-09-01 is a Sunday; end date is 2024-09-18 (a Wednesday)
         start = datetime(2024, 9, 1, 0, 0, 0, 0, pytz.UTC)
         end = datetime(2024, 9, 18, 3, 56, 0, 0, pytz.UTC)
         batches = microbatch_builder.build_batches(start, end)
