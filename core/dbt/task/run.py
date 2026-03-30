@@ -22,6 +22,7 @@ from typing import (
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.capability import Capability
+from dbt.adapters.catalogs import DbtCatalogIntegrationNotFoundError
 from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Hook
@@ -39,7 +40,13 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
+from dbt.contracts.graph.nodes import (
+    BatchContext,
+    HookNode,
+    ModelConfig,
+    ModelNode,
+    ResultNode,
+)
 from dbt.events.types import (
     GenericExceptionOnRun,
     LogBatchResult,
@@ -132,6 +139,17 @@ def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
     return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
 
 
+def _get_catalog_type(model_node_config: ModelConfig, adapter: BaseAdapter) -> Optional[str]:
+    catalog_name = model_node_config._extra.get("catalog_name")
+    if catalog_name is None:
+        return None
+
+    try:
+        return adapter.get_catalog_integration(catalog_name).catalog_type
+    except DbtCatalogIntegrationNotFoundError:
+        return None
+
+
 def track_model_run(index, num_nodes, run_model_result, adapter=None):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
@@ -143,11 +161,13 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
         contract_enforced = node.contract.enforced
         versioned = True if node.version else False
         incremental_strategy = node.config.incremental_strategy
+        model_config = node.config
     else:
         access = None
         contract_enforced = False
         versioned = False
         incremental_strategy = None
+        model_config = None
 
     tracking.track_model_run(
         {
@@ -169,6 +189,7 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
             "access": access,
             "versioned": versioned,
             "adapter_info": _get_adapter_info(adapter, run_model_result),
+            "catalog_type": model_config and _get_catalog_type(model_config, adapter),
         }
     )
 
