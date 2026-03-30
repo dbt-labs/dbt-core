@@ -2035,6 +2035,41 @@ class MacroParserTest(BaseParserTest):
         )
 
 
+    def test_syntax_error_includes_macro_name(self):
+        """Compilation errors should mention the macro name and file path so users
+        can find the offending macro without guessing.
+        See https://github.com/dbt-labs/dbt-core/issues/11392
+        """
+        raw_code = "{% macro my_broken_macro(arg) %} {{ / }} {% endmacro %}"
+        block = self.file_block_for(raw_code, "macro.sql")
+        self.parser.manifest.files[block.file.file_id] = block.file
+
+        with self.assertRaises(CompilationError) as ctx:
+            self.parser.parse_file(block)
+
+        error_msg = str(ctx.exception)
+        self.assertIn("my_broken_macro", error_msg)
+        self.assertIn("macro.sql", error_msg)
+
+    def test_syntax_error_second_macro_includes_correct_name(self):
+        """When a file has multiple macros, the error should name the specific
+        macro that has the syntax error, not an adjacent one.
+        """
+        raw_code = (
+            "{% macro good_macro(arg) %}{{ arg }}{% endmacro %}\n"
+            "{% macro bad_macro(arg) %} {{ / }} {% endmacro %}"
+        )
+        block = self.file_block_for(raw_code, "macros.sql")
+        self.parser.manifest.files[block.file.file_id] = block.file
+
+        with self.assertRaises(CompilationError) as ctx:
+            self.parser.parse_file(block)
+
+        error_msg = str(ctx.exception)
+        self.assertIn("bad_macro", error_msg)
+        self.assertIn("macros.sql", error_msg)
+
+
 class SingularTestParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()

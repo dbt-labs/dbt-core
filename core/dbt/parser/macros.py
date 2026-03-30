@@ -14,6 +14,7 @@ from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
 from dbt_common.clients import jinja
 from dbt_common.clients._jinja_blocks import ExtractWarning
+from dbt_common.exceptions import CompilationError
 from dbt_common.utils import MACRO_PREFIX
 
 
@@ -70,7 +71,17 @@ class MacroParser(BaseParser[Macro]):
         for block in blocks:
             try:
                 ast = jinja.parse(block.full_block)
-            except ParsingError as e:
+            except (CompilationError, ParsingError) as e:
+                # Enrich the error message with the macro name and file path so
+                # that users don't have to guess which macro caused the syntax error.
+                # block.block_name is the macro identifier extracted by the block
+                # tokeniser (e.g. "my_macro" from "{% macro my_macro(...) %}").
+                # jinja.parse() raises CompilationError for Jinja TemplateSyntaxError;
+                # earlier stages can raise ParsingError — both are enriched here.
+                e.msg = (
+                    f"In macro '{block.block_name}' "
+                    f"({base_node.original_file_path}): {e.msg}"
+                )
                 e.add_node(base_node)
                 raise
 
