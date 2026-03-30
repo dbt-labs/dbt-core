@@ -257,6 +257,9 @@ Here are some general rules for adding tests:
 * unit tests (`tests/unit`) don’t need to access a database; "pure Python" tests should be written as unit tests
 * functional tests (`tests/functional`) cover anything that interacts with a database, namely adapter
 
+For detailed guidance on writing tests and examples to follow, see [TESTING.md](TESTING.md).
+
+
 ## Debugging
 
 1. The logs for a `dbt run` have stack traces and other information for debugging errors (in `logs/dbt.log` in your project directory).
