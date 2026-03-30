@@ -1180,7 +1180,20 @@ class ProviderContext(ManifestContext):
                 self.sql_results[name] = None
                 return ret_val
         else:
-            # Handle trying to load a result that was never stored
+            # Handle trying to load a result that was never stored.
+            # If dbt is not in execute mode (parse phase), warn the user — they likely
+            # forgot to wrap their introspective call (e.g. run_query) in {% if execute %}.
+            if not self.provider.execute:
+                fire_event(
+                    JinjaLogWarning(
+                        msg=(
+                            f"Statement result '{name}' is None because dbt is not in "
+                            f"execute mode. Wrap any code that depends on query results "
+                            f"in a {{% if execute %}} block to avoid this error. "
+                            f"See https://docs.getdbt.com/reference/dbt-jinja-functions/execute"
+                        )
+                    )
+                )
             return None
 
     @contextmember()

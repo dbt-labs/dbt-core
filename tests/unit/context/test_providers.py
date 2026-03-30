@@ -12,6 +12,7 @@ from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
     EventTimeFilter,
+    ProviderContext,
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
@@ -497,3 +498,50 @@ class TestRuntimeSourceResolver:
         # create limited relation
         relation = resolver.resolve("test", "test")
         assert relation.limit == expected_limit
+
+
+class TestLoadResultExecuteModeWarning:
+    """Tests that load_result warns users when called during parse phase (execute=False)
+    for a result that was never stored — the root cause of the cryptic
+    `'None' has no attribute 'table'` error from run_query without {% if execute %}.
+    """
+
+    def _make_provider_context(self, execute: bool) -> ProviderContext:
+        """Build a minimal ProviderContext with a mocked provider."""
+        provider = mock.Mock()
+        provider.execute = execute
+        provider.DatabaseWrapper = mock.Mock(return_value=mock.Mock())
+
+        ctx = mock.create_autospec(ProviderContext, instance=True)
+        ctx.sql_results = {}
+        ctx.provider = provider
+        return ctx
+
+    def test_warns_when_execute_false_and_result_not_stored(self):
+        """When execute=False (parse phase) and the result was never stored,
+        load_result should fire a JinjaLogWarning pointing to the execute docs."""
+        ctx = self._make_provider_context(execute=False)
+
+        with mock.patch("dbt.context.providers.fire_event") as mock_fire:
+            result = ProviderContext.load_result(ctx, "my_query")
+
+        assert result is None
+        mock_fire.assert_called_once()
+        event_arg = mock_fire.call_args[0][0]
+        from dbt.events.types import JinjaLogWarning
+
+        assert isinstance(event_arg, JinjaLogWarning)
+        assert "my_query" in event_arg.msg
+        assert "if execute" in event_arg.msg
+        assert "docs.getdbt.com" in event_arg.msg
+
+    def test_no_warning_when_execute_true_and_result_not_stored(self):
+        """When execute=True (runtime phase) and no result is stored,
+        load_result should return None silently — no warning fired."""
+        ctx = self._make_provider_context(execute=True)
+
+        with mock.patch("dbt.context.providers.fire_event") as mock_fire:
+            result = ProviderContext.load_result(ctx, "my_query")
+
+        assert result is None
+        mock_fire.assert_not_called()
