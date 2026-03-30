@@ -1408,16 +1408,28 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         else:
             macro.arguments = patch.arguments
 
+    # Generic tests always receive these args implicitly and users do not document them.
+    _GENERIC_TEST_IMPLICIT_ARGS = frozenset({"model", "column_name"})
+
     def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
         if not patch.arguments:
             return
 
-        for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
+        # Generic tests (macros named test_*) implicitly receive 'model' and
+        # 'column_name' as their first arguments. Users do not document these in
+        # YAML, so we strip them before comparing to avoid false-positive warnings.
+        macro_args = macro.arguments
+        if macro.name.startswith("test_"):
+            macro_args = [
+                arg for arg in macro_args if arg.name not in self._GENERIC_TEST_IMPLICIT_ARGS
+            ]
+
+        for macro_arg, patch_arg in zip(macro_args, patch.arguments):
             if patch_arg.name != macro_arg.name:
                 msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
                 self._fire_macro_arg_warning(msg, macro)
 
-        if len(patch.arguments) != len(macro.arguments):
+        if len(patch.arguments) != len(macro_args):
             msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
             self._fire_macro_arg_warning(msg, macro)
 

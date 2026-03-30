@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix false-positive validate_macro_args warnings for custom generic tests by ignoring implicit model and column_name arguments
+time: 2026-03-29T16:00:00.000000-04:00
+custom:
+  Author: claygeo
+  Issue: "11792"
