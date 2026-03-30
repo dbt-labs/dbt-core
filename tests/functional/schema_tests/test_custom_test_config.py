@@ -185,6 +185,21 @@ class TestMixedDataTestConfig(BaseDataTestsConfig):
         assert test_node.config["severity"] == "warn"
 
 
+null_config_yml = """
+models:
+  - name: null_config_model
+    columns:
+      - name: id
+        data_tests:
+          - not_null:
+              severity: error
+              config:
+"""
+
+null_config_model_sql = """
+select 1 as id
+"""
+
 string_config_yml = """
 models:
   - name: table
@@ -194,6 +209,24 @@ models:
           - not_null:
               config: "severity"
 """
+
+
+class TestNullConfigParsesSuccessfully:
+    """
+    Regression test: when 'config' is null (empty YAML value), dbt should parse
+    successfully, treating it as an empty config dict rather than raising
+    TypeError: argument of type 'NoneType' is not iterable.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "null_config_model.sql": null_config_model_sql,
+            "null_config.yml": null_config_yml,
+        }
+
+    def test_null_config_parses_without_error(self, project):
+        run_dbt(["parse"])
 
 
 class TestConfigNotDictError:
