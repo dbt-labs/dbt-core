@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.results import NodeStatus
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
+from dbt.config.catalogs import load_catalogs
 from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
@@ -118,7 +119,12 @@ class RetryTask(ConfiguredTask):
 
         # Parse manifest using resolved config/flags
         manifest = parse_manifest(retry_config, False, True, retry_flags.write_json, [])  # type: ignore
-        super().__init__(args, retry_config, manifest)
+        catalogs = load_catalogs(
+            str(retry_config.project_root),
+            retry_config.project_name,
+            retry_config.cli_vars,
+        )
+        super().__init__(args, retry_config, manifest, catalogs=catalogs)
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
     def run(self):
@@ -169,6 +175,7 @@ class RetryTask(ConfiguredTask):
             get_flags(),
             self.config,
             self.manifest,
+            catalogs=self.catalogs,
         )
 
         if self.task_class == RunTask or self.task_class == BuildTask:

@@ -119,12 +119,17 @@ def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
 # holding a manifest, and moving direcories.
 class ConfiguredTask(BaseTask):
     def __init__(
-        self, args: Flags, config: RuntimeConfig, manifest: Optional[Manifest] = None
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Optional[Manifest] = None,
+        catalogs: Optional[List[Any]] = None,
     ) -> None:
         super().__init__(args)
         self.config = config
         self.graph: Optional[Graph] = None
         self.manifest = manifest
+        self.catalogs = catalogs
         self.compiler = Compiler(self.config)
 
     def compile_manifest(self) -> None:
@@ -133,7 +138,7 @@ class ConfiguredTask(BaseTask):
 
         start_compile_manifest = time.perf_counter()
 
-        self.graph = self.compiler.compile(self.manifest)
+        self.graph = self.compiler.compile(self.manifest, catalogs=self.catalogs)
 
         compile_time = time.perf_counter() - start_compile_manifest
         if dbt.tracking.active_user is not None:

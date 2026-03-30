@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, List, Optional, Set, Type
+from typing import Any, Dict, Iterable, List, Optional, Set, Type
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.schemas.results import NodeStatus
@@ -49,8 +49,14 @@ class BuildTask(RunTask):
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
-    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
-        super().__init__(args, config, manifest)
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        catalogs: Optional[List[Any]] = None,
+    ) -> None:
+        super().__init__(args, config, manifest, catalogs=catalogs)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
 
@@ -214,4 +220,6 @@ class BuildTask(RunTask):
     def compile_manifest(self) -> None:
         if self.manifest is None:
             raise DbtInternalError("compile_manifest called before manifest was loaded")
-        self.graph: Graph = self.compiler.compile(self.manifest, add_test_edges=True)
+        self.graph: Graph = self.compiler.compile(
+            self.manifest, add_test_edges=True, catalogs=self.catalogs
+        )

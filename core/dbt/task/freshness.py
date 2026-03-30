@@ -197,8 +197,8 @@ class FreshnessSelector(ResourceTypeSelector):
 
 
 class FreshnessTask(RunTask):
-    def __init__(self, args, config, manifest) -> None:
-        super().__init__(args, config, manifest)
+    def __init__(self, args, config, manifest, catalogs) -> None:
+        super().__init__(args, config, manifest, catalogs)
 
         if self.args.output:
             deprecations.warn(

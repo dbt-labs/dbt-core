@@ -839,8 +839,9 @@ class RunTask(CompileTask):
         config: RuntimeConfig,
         manifest: Manifest,
         batch_map: Optional[Dict[str, BatchResults]] = None,
+        catalogs: Optional[List[Any]] = None,
     ) -> None:
-        super().__init__(args, config, manifest)
+        super().__init__(args, config, manifest, catalogs=catalogs)
         self.batch_map = batch_map
         self.original_invocation_started_at: Optional[datetime] = None
 
