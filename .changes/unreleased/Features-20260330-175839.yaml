@@ -1,0 +1,6 @@
+kind: Features
+body: Implement week batch size for microbatch incremental strategy
+time: 2026-03-30T17:58:39.551005181Z
+custom:
+    Author: burglarhobbit
+    Issue: "11141"
