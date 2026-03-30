@@ -24,6 +24,7 @@ import dbt.utils
 import dbt_common.utils.formatting
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
+from dbt.artifacts.resources import Catalog
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeStatus,
@@ -95,7 +96,7 @@ class GraphRunnableTask(ConfiguredTask):
         args: Flags,
         config: RuntimeConfig,
         manifest: Manifest,
-        catalogs: Optional[List[Any]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args, config, manifest, catalogs=catalogs)
         self.config = config

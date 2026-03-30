@@ -1,6 +1,7 @@
 import json
-from typing import Any, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
+from dbt.artifacts.resources import Catalog
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -61,7 +62,7 @@ class ListTask(GraphRunnableTask):
         args: Flags,
         config: RuntimeConfig,
         manifest: Manifest,
-        catalogs: Optional[List[Any]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args, config, manifest, catalogs=catalogs)
         if self.args.models:

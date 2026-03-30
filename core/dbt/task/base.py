@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set
 import dbt.exceptions
 import dbt_common.exceptions.base
 from dbt import tracking
+from dbt.artifacts.resources import Catalog
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.results import (
     NodeStatus,
@@ -123,7 +124,7 @@ class ConfiguredTask(BaseTask):
         args: Flags,
         config: RuntimeConfig,
         manifest: Optional[Manifest] = None,
-        catalogs: Optional[List[Any]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args)
         self.config = config

@@ -25,7 +25,7 @@ from dbt.adapters.capability import Capability
 from dbt.adapters.catalogs import DbtCatalogIntegrationNotFoundError
 from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.artifacts.resources import Hook
+from dbt.artifacts.resources import Catalog, Hook
 from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
 from dbt.artifacts.schemas.results import (
     NodeStatus,
@@ -860,7 +860,7 @@ class RunTask(CompileTask):
         config: RuntimeConfig,
         manifest: Manifest,
         batch_map: Optional[Dict[str, BatchResults]] = None,
-        catalogs: Optional[List[Any]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args, config, manifest, catalogs=catalogs)
         self.batch_map = batch_map

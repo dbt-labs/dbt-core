@@ -1,6 +1,7 @@
-from typing import Any, Dict, Iterable, List, Optional, Set, Type
+from typing import Dict, Iterable, List, Optional, Set, Type
 
 from dbt.adapters.base import BaseRelation
+from dbt.artifacts.resources import Catalog
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
@@ -54,7 +55,7 @@ class BuildTask(RunTask):
         args: Flags,
         config: RuntimeConfig,
         manifest: Manifest,
-        catalogs: Optional[List[Any]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
         super().__init__(args, config, manifest, catalogs=catalogs)
         self.selected_unit_tests: Set = set()
