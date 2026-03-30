@@ -50,6 +50,7 @@ def get_flag_dict():
         "warn_error",
         "warn_error_options",
         "write_json",
+        "write_json_indent",
         "partial_parse",
         "use_colors",
         "profiles_dir",

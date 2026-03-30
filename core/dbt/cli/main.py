@@ -150,6 +150,7 @@ def global_flags(func):
     @p.warn_error
     @p.warn_error_options
     @p.write_json
+    @p.write_json_indent
     @p.use_fast_test_edges
     @p.upload_artifacts
     @functools.wraps(func)

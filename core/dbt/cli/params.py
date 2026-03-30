@@ -841,6 +841,13 @@ write_json = _create_option_and_track_env_var(
     default=True,
 )
 
+write_json_indent = _create_option_and_track_env_var(
+    "--write-json-indent/--no-write-json-indent",
+    envvar="DBT_WRITE_JSON_INDENT",
+    help="Whether or not to pretty-print (indent) JSON artifact files such as manifest.json and run_results.json",
+    default=False,
+)
+
 upload_artifacts = _create_option_and_track_env_var(
     "--upload-to-artifacts-ingest-api/--no-upload-to-artifacts-ingest-api",
     envvar="DBT_UPLOAD_TO_ARTIFACTS_INGEST_API",

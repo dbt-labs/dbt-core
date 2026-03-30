@@ -1,0 +1,6 @@
+kind: Features
+body: Add --write-json-indent / DBT_WRITE_JSON_INDENT flag to pretty-print JSON artifact files
+time: 2026-03-30T00:00:00.000000+00:00
+custom:
+    Author: claygeo
+    Issue: "9363"

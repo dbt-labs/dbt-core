@@ -1,5 +1,7 @@
 import dataclasses
 import functools
+import json
+import os
 from datetime import datetime, timezone
 from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 
@@ -33,7 +35,23 @@ class SchemaVersion:
 
 class Writable:
     def write(self, path: str):
-        write_json(path, self.to_dict(omit_none=False, context={"artifact": True}))  # type: ignore
+        data = self.to_dict(omit_none=False, context={"artifact": True})  # type: ignore
+        # Lazily import to avoid a circular dependency at module load time.
+        # dbt.flags depends on dbt.artifacts indirectly, so we defer the import
+        # until the first artifact write rather than at import time.
+        try:
+            from dbt.flags import get_flags
+
+            indent = 2 if getattr(get_flags(), "WRITE_JSON_INDENT", False) else None
+        except Exception:
+            indent = None
+
+        if indent is not None:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=indent)
+        else:
+            write_json(path, data)
 
 
 class Readable:
