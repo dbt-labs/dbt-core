@@ -38,10 +38,20 @@ class MicrobatchBuilder:
         self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
         self.default_end_time = default_end_time or datetime.now(pytz.UTC)
 
+    def _get_week_start(self) -> int:
+        """Returns the configured week_start as an integer (0=Monday, 6=Sunday).
+
+        Defaults to 0 (Monday) if week_start is not set or is not a valid integer.
+        """
+        week_start = getattr(self.model.config, "week_start", None)
+        return week_start if isinstance(week_start, int) else 0
+
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
         end_time = self.event_time_end or self.default_end_time
-        return MicrobatchBuilder.ceiling_timestamp(end_time, self.model.config.batch_size)
+        return MicrobatchBuilder.ceiling_timestamp(
+            end_time, self.model.config.batch_size, self._get_week_start()
+        )
 
     def build_start_time(self, checkpoint: Optional[datetime]):
         """Create a start time based off the passed in checkpoint.
@@ -53,10 +63,13 @@ class MicrobatchBuilder:
         """
         assert isinstance(self.model.config, NodeConfig)
         batch_size = self.model.config.batch_size
+        week_start = self._get_week_start()
 
         # Use event_time_start if it is provided.
         if self.event_time_start:
-            return MicrobatchBuilder.truncate_timestamp(self.event_time_start, batch_size)
+            return MicrobatchBuilder.truncate_timestamp(
+                self.event_time_start, batch_size, week_start
+            )
 
         # First run, use model's configured 'begin' as start.
         if not self.is_incremental or checkpoint is None:
@@ -65,7 +78,9 @@ class MicrobatchBuilder:
                     f"Microbatch model '{self.model.name}' requires a 'begin' configuration."
                 )
 
-            return MicrobatchBuilder.truncate_timestamp(self.model.config.begin, batch_size)
+            return MicrobatchBuilder.truncate_timestamp(
+                self.model.config.begin, batch_size, week_start
+            )
 
         lookback = self.model.config.lookback
 
@@ -73,10 +88,12 @@ class MicrobatchBuilder:
         # the batch line. In this case the last batch will end with the checkpoint, but start
         # should be the previous hour/day/month/year. Thus we need to increase the lookback by
         # 1 to get this affect properly.
-        if checkpoint == MicrobatchBuilder.truncate_timestamp(checkpoint, batch_size):
+        if checkpoint == MicrobatchBuilder.truncate_timestamp(checkpoint, batch_size, week_start):
             lookback += 1
 
-        return MicrobatchBuilder.offset_timestamp(checkpoint, batch_size, -1 * lookback)
+        return MicrobatchBuilder.offset_timestamp(
+            checkpoint, batch_size, -1 * lookback, week_start
+        )
 
     def build_batches(self, start: datetime, end: datetime) -> List[BatchType]:
         """
@@ -84,15 +101,18 @@ class MicrobatchBuilder:
         the size of the model's batch_size.
         """
         batch_size = self.model.config.batch_size
+        week_start = self._get_week_start()
         curr_batch_start: datetime = start
         curr_batch_end: datetime = MicrobatchBuilder.offset_timestamp(
-            curr_batch_start, batch_size, 1
+            curr_batch_start, batch_size, 1, week_start
         )
 
         batches: List[BatchType] = [(curr_batch_start, curr_batch_end)]
         while curr_batch_end < end:
             curr_batch_start = curr_batch_end
-            curr_batch_end = MicrobatchBuilder.offset_timestamp(curr_batch_start, batch_size, 1)
+            curr_batch_end = MicrobatchBuilder.offset_timestamp(
+                curr_batch_start, batch_size, 1, week_start
+            )
             batches.append((curr_batch_start, curr_batch_end))
 
         # use exact end value as stop
@@ -122,7 +142,9 @@ class MicrobatchBuilder:
         return jinja_context
 
     @staticmethod
-    def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
+    def offset_timestamp(
+        timestamp: datetime, batch_size: BatchSize, offset: int, week_start: int = 0
+    ) -> datetime:
         """Truncates the passed in timestamp based on the batch_size and then applies the offset by the batch_size.
 
         Note: It's important to understand that the offset applies to the truncated timestamp, not
@@ -142,7 +164,7 @@ class MicrobatchBuilder:
         2024-09-17 16:06:00 + Batchsize.year -1 -> 2023-01-01 00:00:00
         2024-09-17 16:06:00 + Batchsize.year +1 -> 2025-01-01 00:00:00
         """
-        truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+        truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size, week_start)
 
         offset_timestamp: datetime
         if batch_size == BatchSize.hour:
@@ -167,12 +189,17 @@ class MicrobatchBuilder:
         return offset_timestamp
 
     @staticmethod
-    def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
+    def truncate_timestamp(
+        timestamp: datetime, batch_size: BatchSize, week_start: int = 0
+    ) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
+
+        The week_start parameter (0=Monday, 6=Sunday) controls which day a week begins on,
+        and is only relevant when batch_size is BatchSize.week.
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
         2024-09-17 16:06:00 + Batchsize.day -> 2024-09-17 00:00:00
-        2024-09-17 16:06:00 + Batchsize.week -> 2024-09-16 00:00:00
+        2024-09-17 16:06:00 + Batchsize.week -> 2024-09-16 00:00:00  (week_start=0, Monday)
         2024-09-17 16:06:00 + Batchsize.month -> 2024-09-01 00:00:00
         2024-09-17 16:06:00 + Batchsize.year -> 2024-01-01 00:00:00
         """
@@ -192,11 +219,11 @@ class MicrobatchBuilder:
                 timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
             )
         elif batch_size == BatchSize.week:
-            # Truncate to the start of the ISO week (Monday)
-            days_since_monday = timestamp.weekday()
+            # Truncate to the start of the week based on week_start (0=Monday, 6=Sunday)
+            days_since_week_start = (timestamp.weekday() - week_start) % 7
             truncated = datetime(
                 timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
-            ) - timedelta(days=days_since_monday)
+            ) - timedelta(days=days_since_week_start)
         elif batch_size == BatchSize.month:
             truncated = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
         elif batch_size == BatchSize.year:
@@ -205,16 +232,21 @@ class MicrobatchBuilder:
         return truncated
 
     @staticmethod
-    def batch_id(start_time: datetime, batch_size: BatchSize) -> str:
-        return MicrobatchBuilder.format_batch_start(start_time, batch_size).replace("-", "")
+    def batch_id(start_time: datetime, batch_size: BatchSize, week_start: int = 0) -> str:
+        return MicrobatchBuilder.format_batch_start(start_time, batch_size, week_start).replace(
+            "-", ""
+        )
 
     @staticmethod
-    def format_batch_start(batch_start: datetime, batch_size: BatchSize) -> str:
+    def format_batch_start(
+        batch_start: datetime, batch_size: BatchSize, week_start: int = 0
+    ) -> str:
         """Format the passed in datetime based on the batch_size.
 
         2024-09-17 16:06:00 + Batchsize.hour  -> 2024-09-17T16
         2024-09-17 16:06:00 + Batchsize.day   -> 2024-09-17
-        2024-09-17 16:06:00 + Batchsize.week  -> 2024-W38
+        2024-09-17 16:06:00 + Batchsize.week  -> 2024-W38  (when week_start=0, Monday-based ISO week)
+        2024-09-15 00:00:00 + Batchsize.week  -> 2024-09-15 (when week_start != 0, date of week start)
         2024-09-17 16:06:00 + Batchsize.month -> 2024-09
         2024-09-17 16:06:00 + Batchsize.year  -> 2024
         """
@@ -223,14 +255,19 @@ class MicrobatchBuilder:
         elif batch_size == BatchSize.month:
             return batch_start.strftime("%Y-%m")
         elif batch_size == BatchSize.week:
-            return batch_start.strftime("%G-W%V")
+            if week_start == 0:
+                return batch_start.strftime("%G-W%V")
+            else:
+                return batch_start.strftime("%Y-%m-%d")
         elif batch_size == BatchSize.day:
             return batch_start.strftime("%Y-%m-%d")
         else:  # batch_size == BatchSize.hour
             return batch_start.strftime("%Y-%m-%dT%H")
 
     @staticmethod
-    def ceiling_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
+    def ceiling_timestamp(
+        timestamp: datetime, batch_size: BatchSize, week_start: int = 0
+    ) -> datetime:
         """Takes the given timestamp and moves it to the ceiling for the given batch size
 
         Note, if the timestamp is already the batch size ceiling, that is returned
@@ -244,7 +281,9 @@ class MicrobatchBuilder:
         2024-01-01 00:00:00 + BatchSize.year -> 2024-01-01 00:00:00
 
         """
-        ceiling = truncated = MicrobatchBuilder.truncate_timestamp(timestamp, batch_size)
+        ceiling = truncated = MicrobatchBuilder.truncate_timestamp(
+            timestamp, batch_size, week_start
+        )
         if truncated != timestamp:
-            ceiling = MicrobatchBuilder.offset_timestamp(truncated, batch_size, 1)
+            ceiling = MicrobatchBuilder.offset_timestamp(truncated, batch_size, 1, week_start)
         return ceiling
