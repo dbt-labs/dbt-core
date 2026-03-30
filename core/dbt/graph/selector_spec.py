@@ -138,17 +138,53 @@ class SelectionCriteria:
         )
 
     @classmethod
+    def _validate_graph_operator_spec(cls, raw: str, groups: Dict[str, Any]) -> None:
+        """Raise DbtRuntimeError if a graph operator (+/@) has no target node or is
+        separated from its target by whitespace.
+
+        Called from both from_single_spec() and dict_from_single_spec() so that
+        validation applies to both CLI selectors and YAML-defined selectors.
+        """
+        value = groups.get("value") or ""
+        has_graph_operator = bool(
+            groups.get("parents") or groups.get("children") or groups.get("childrens_parents")
+        )
+        if has_graph_operator and not value.strip():
+            raise DbtRuntimeError(
+                f'Invalid selector "{raw}": graph operator requires a target node. '
+                f'Specify a model name directly after the operator (e.g., "+my_model" or "my_model+").'
+            )
+        if has_graph_operator and value != value.strip():
+            # Build a direction-aware suggestion: leading space → parents side,
+            # trailing space → children side.
+            stripped = value.strip()
+            if groups.get("parents") and value.startswith(" "):
+                suggestion = f'"+{stripped}"'
+            elif groups.get("children") and value.endswith(" "):
+                suggestion = f'"{stripped}+"'
+            else:
+                suggestion = f'"+{stripped}" or "{stripped}+"'
+            raise DbtRuntimeError(
+                f'Invalid selector "{raw}": unexpected whitespace between graph operator and '
+                f"selector value. Remove the space (e.g., {suggestion})."
+            )
+
+    @classmethod
     def dict_from_single_spec(cls, raw: str):
         result = RAW_SELECTOR_PATTERN.match(raw)
         if result is None:
             return {"error": "Invalid selector spec"}
-        dct: Dict[str, Any] = result.groupdict()
-        method_name, method_arguments = cls.parse_method(dct)
+        groups: Dict[str, Any] = result.groupdict()
+        try:
+            cls._validate_graph_operator_spec(raw, groups)
+        except DbtRuntimeError as e:
+            return {"error": str(e)}
+        method_name, method_arguments = cls.parse_method(groups)
         meth_name = str(method_name)
         if method_arguments:
             meth_name += "." + ".".join(method_arguments)
-        dct["method"] = meth_name
-        dct = {k: v for k, v in dct.items() if (v is not None and v != "")}
+        groups["method"] = meth_name
+        dct = {k: v for k, v in groups.items() if (v is not None and v != "")}
         if "childrens_parents" in dct:
             dct["childrens_parents"] = bool(dct.get("childrens_parents"))
         if "parents" in dct:
@@ -164,7 +200,10 @@ class SelectionCriteria:
             # bad spec!
             raise DbtRuntimeError(f'Invalid selector spec "{raw}"')
 
-        return cls.selection_criteria_from_dict(raw, result.groupdict())
+        groups = result.groupdict()
+        cls._validate_graph_operator_spec(raw, groups)
+
+        return cls.selection_criteria_from_dict(raw, groups)
 
 
 class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMeta):

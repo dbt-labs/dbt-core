@@ -180,6 +180,101 @@ def test_raw_parse_invalid():
         SelectionCriteria.from_single_spec("@foo+")
 
 
+class TestUnaccompaniedGraphOperators:
+    """Graph operators with no target node should raise a clear DbtRuntimeError.
+
+    Valid: '+my_model', 'my_model+', '2+my_model+3', '@my_model'
+    Invalid: '+' (bare parents operator), '@' (bare childrens_parents), '1+' (depth with no target),
+             '+ my_model' (space-separated — ambiguous and almost certainly a typo).
+    """
+
+    def test_bare_parents_operator_raises(self):
+        with pytest.raises(DbtRuntimeError, match="graph operator requires a target node"):
+            SelectionCriteria.from_single_spec("+")
+
+    def test_space_separated_children_raises(self):
+        with pytest.raises(DbtRuntimeError, match="unexpected whitespace"):
+            SelectionCriteria.from_single_spec("my_model +")  # trailing space before children op
+        with pytest.raises(DbtRuntimeError, match="unexpected whitespace"):
+            SelectionCriteria.from_single_spec("+ my_model +")  # spaces on both sides
+
+    def test_bare_childrens_parents_operator_raises(self):
+        with pytest.raises(DbtRuntimeError, match="graph operator requires a target node"):
+            SelectionCriteria.from_single_spec("@")
+
+    def test_depth_with_no_target_raises(self):
+        with pytest.raises(DbtRuntimeError, match="graph operator requires a target node"):
+            SelectionCriteria.from_single_spec("2+")
+
+    def test_space_separated_parents_raises(self):
+        with pytest.raises(DbtRuntimeError, match="unexpected whitespace"):
+            SelectionCriteria.from_single_spec("+ my_model")
+
+    def test_valid_parents_still_works(self):
+        result = SelectionCriteria.from_single_spec("+my_model")
+        assert result.parents
+        assert result.value == "my_model"
+
+    def test_valid_children_still_works(self):
+        result = SelectionCriteria.from_single_spec("my_model+")
+        assert result.children
+        assert result.value == "my_model"
+
+    def test_valid_childrens_parents_still_works(self):
+        result = SelectionCriteria.from_single_spec("@my_model")
+        assert result.childrens_parents
+        assert result.value == "my_model"
+
+    def test_valid_depth_selector_still_works(self):
+        result = SelectionCriteria.from_single_spec("2+my_model+3")
+        assert result.parents
+        assert result.parents_depth == 2
+        assert result.children
+        assert result.children_depth == 3
+        assert result.value == "my_model"
+
+    def test_direction_aware_error_message_parents_side(self):
+        """Whitespace on the parents side suggests +model, not model+."""
+        with pytest.raises(DbtRuntimeError, match=r'\+my_model'):
+            SelectionCriteria.from_single_spec("+ my_model")
+
+    def test_direction_aware_error_message_children_side(self):
+        """Whitespace on the children side suggests model+, not +model."""
+        with pytest.raises(DbtRuntimeError, match=r'my_model\+'):
+            SelectionCriteria.from_single_spec("my_model +")
+
+
+class TestDictFromSingleSpec:
+    """Validation applied via dict_from_single_spec should return an error key
+    (not raise) for invalid YAML-defined selectors, and produce correct dicts for valid ones."""
+
+    def test_bare_parents_operator_returns_error(self):
+        result = SelectionCriteria.dict_from_single_spec("+")
+        assert "error" in result
+        assert "graph operator requires a target node" in result["error"]
+
+    def test_bare_childrens_parents_operator_returns_error(self):
+        result = SelectionCriteria.dict_from_single_spec("@")
+        assert "error" in result
+        assert "graph operator requires a target node" in result["error"]
+
+    def test_space_separated_returns_error(self):
+        result = SelectionCriteria.dict_from_single_spec("+ my_model")
+        assert "error" in result
+        assert "unexpected whitespace" in result["error"]
+
+    def test_valid_selector_returns_dict(self):
+        result = SelectionCriteria.dict_from_single_spec("+my_model")
+        assert result.get("parents") is True
+        assert result.get("value") == "my_model"
+        assert "error" not in result
+
+    def test_valid_fqn_selector_returns_dict(self):
+        result = SelectionCriteria.dict_from_single_spec("fqn:my_model")
+        assert result.get("value") == "my_model"
+        assert "error" not in result
+
+
 def test_intersection():
     fqn_a = SelectionCriteria.from_single_spec("fqn:model_a")
     fqn_b = SelectionCriteria.from_single_spec("fqn:model_b")

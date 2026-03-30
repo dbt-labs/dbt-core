@@ -1,0 +1,6 @@
+kind: Fixes
+body: Raise a clear error when a graph operator (+ or @) is used without a target node in a selector (e.g. "+" or "@ " or "+ model_name" with a space)
+time: 2026-03-29T18:00:00.000000-04:00
+custom:
+  Author: claygeo
+  Issue: "10388"
