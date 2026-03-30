@@ -135,6 +135,8 @@ class MicrobatchBuilder:
         2024-09-17 16:06:00 + Batchsize.hour +1 -> 2024-09-17 17:00:00
         2024-09-17 16:06:00 + Batchsize.day -1 -> 2024-09-16 00:00:00
         2024-09-17 16:06:00 + Batchsize.day +1 -> 2024-09-18 00:00:00
+        2024-09-17 16:06:00 + Batchsize.week -1 -> 2024-09-09 00:00:00
+        2024-09-17 16:06:00 + Batchsize.week +1 -> 2024-09-23 00:00:00
         2024-09-17 16:06:00 + Batchsize.month -1 -> 2024-08-01 00:00:00
         2024-09-17 16:06:00 + Batchsize.month +1 -> 2024-10-01 00:00:00
         2024-09-17 16:06:00 + Batchsize.year -1 -> 2023-01-01 00:00:00
@@ -147,6 +149,8 @@ class MicrobatchBuilder:
             offset_timestamp = truncated + timedelta(hours=offset)
         elif batch_size == BatchSize.day:
             offset_timestamp = truncated + timedelta(days=offset)
+        elif batch_size == BatchSize.week:
+            offset_timestamp = truncated + timedelta(weeks=offset)
         elif batch_size == BatchSize.month:
             offset_timestamp = truncated
             for _ in range(abs(offset)):
@@ -168,6 +172,7 @@ class MicrobatchBuilder:
 
         2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
         2024-09-17 16:06:00 + Batchsize.day -> 2024-09-17 00:00:00
+        2024-09-17 16:06:00 + Batchsize.week -> 2024-09-16 00:00:00
         2024-09-17 16:06:00 + Batchsize.month -> 2024-09-01 00:00:00
         2024-09-17 16:06:00 + Batchsize.year -> 2024-01-01 00:00:00
         """
@@ -186,6 +191,12 @@ class MicrobatchBuilder:
             truncated = datetime(
                 timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
             )
+        elif batch_size == BatchSize.week:
+            # Truncate to the start of the ISO week (Monday)
+            days_since_monday = timestamp.weekday()
+            truncated = datetime(
+                timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
+            ) - timedelta(days=days_since_monday)
         elif batch_size == BatchSize.month:
             truncated = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
         elif batch_size == BatchSize.year:
@@ -203,6 +214,7 @@ class MicrobatchBuilder:
 
         2024-09-17 16:06:00 + Batchsize.hour  -> 2024-09-17T16
         2024-09-17 16:06:00 + Batchsize.day   -> 2024-09-17
+        2024-09-17 16:06:00 + Batchsize.week  -> 2024-W38
         2024-09-17 16:06:00 + Batchsize.month -> 2024-09
         2024-09-17 16:06:00 + Batchsize.year  -> 2024
         """
@@ -210,6 +222,8 @@ class MicrobatchBuilder:
             return batch_start.strftime("%Y")
         elif batch_size == BatchSize.month:
             return batch_start.strftime("%Y-%m")
+        elif batch_size == BatchSize.week:
+            return batch_start.strftime("%G-W%V")
         elif batch_size == BatchSize.day:
             return batch_start.strftime("%Y-%m-%d")
         else:  # batch_size == BatchSize.hour

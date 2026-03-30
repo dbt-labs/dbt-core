@@ -50,6 +50,18 @@ class TestEventTime:
             ),
             (
                 datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.week,
+                1,
+                datetime(2024, 9, 12, 3, 56, 1, 1, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
+                BatchSize.week,
+                -1,
+                datetime(2024, 8, 29, 3, 56, 1, 1, pytz.UTC),
+            ),
+            (
+                datetime(2024, 9, 5, 3, 56, 1, 1, pytz.UTC),
                 BatchSize.hour,
                 1,
                 datetime(2024, 9, 5, 4, 56, 1, 1, pytz.UTC),
