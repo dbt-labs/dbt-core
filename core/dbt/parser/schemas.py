@@ -1236,15 +1236,17 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         # if any constraint has `warn_unsupported` as True then send the warning
         if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
+            # Embed model identity in the materialized string so the warning message
+            # pinpoints which model has the unsupported constraint config.
+            # UnsupportedConstraintMaterialization only has a 'materialized' proto field
+            # (the proto is managed externally in dbt-protos), so we encode the model
+            # context there rather than adding new fields.
+            mat = model_node.config.materialized
+            mat_with_ctx = f"{mat} (model '{model_node.name}', {model_node.original_file_path})"
             warn_or_error(
-                UnsupportedConstraintMaterialization(
-                    materialized=model_node.config.materialized,
-                    model_name=model_node.name,
-                    file_path=model_node.original_file_path,
-                ),
+                UnsupportedConstraintMaterialization(materialized=mat_with_ctx),
                 node=model_node,
             )
-
         errors = []
         if not model_node.columns:
             errors.append(
