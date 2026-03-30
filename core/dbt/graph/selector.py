@@ -108,6 +108,13 @@ class NodeSelector(MethodManager):
         # if --indirect-selection EMPTY, do not expand to adjacent tests
         if spec.indirect_selection == IndirectSelection.Empty:
             return selected, set()
+        # The `selector` method calls get_selected() internally, which already
+        # runs the full selection pipeline including expand_selection() and any
+        # exclusions (e.g. exclude: test_name:not_null). Re-running
+        # expand_selection here would re-introduce tests that were explicitly
+        # excluded by the referenced selector.
+        elif spec.method == MethodName.Selector:
+            return selected, set()
         else:
             direct_nodes, indirect_nodes = self.expand_selection(
                 selected=selected, indirect_selection=spec.indirect_selection
