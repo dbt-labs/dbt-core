@@ -3,25 +3,67 @@ from typing import AbstractSet, Any, Collection, Iterable, List, Optional, Set, 
 
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import LogModelResult, LogStartLine
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import REFABLE_NODE_TYPES
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import _validate_materialization_relations_dict
 from dbt.task.runnable import GraphRunnableMode, GraphRunnableTask
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
 class CloneRunner(BaseRunner):
+    def describe_node(self) -> str:
+        return f"clone {self.node.unique_id}"
+
+    def print_start_line(self) -> None:
+        fire_event(
+            LogStartLine(
+                description=self.describe_node(),
+                index=self.node_index,
+                total=self.num_nodes,
+                node_info=self.node.node_info,
+            )
+        )
+
+    def print_result_line(self, result) -> None:
+        description = self.describe_node()
+        group = group_lookup.get(self.node.unique_id)
+        if result.status == NodeStatus.Error:
+            status = result.status
+            level = EventLevel.ERROR
+        else:
+            # Show the adapter response (e.g. "CREATE TABLE") or "No-op" when the
+            # relation already matched the source and no work was performed.
+            status = result.message
+            level = EventLevel.INFO
+        fire_event(
+            LogModelResult(
+                description=description,
+                status=status,
+                index=self.node_index,
+                total=self.num_nodes,
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+                group=group,
+            ),
+            level=level,
+        )
+
     def before_execute(self) -> None:
-        pass
+        self.print_start_line()
 
     def after_execute(self, result) -> None:
-        pass
+        self.print_result_line(result)
 
     def _build_run_model_result(self, model, context):
         result = context["load_result"]("main")
