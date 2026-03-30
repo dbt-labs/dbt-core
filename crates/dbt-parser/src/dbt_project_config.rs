@@ -55,7 +55,29 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
         configs: &S,
         dependency_package_name: Option<&str>,
     ) -> FsResult<Self> {
-        recur_build_dbt_project_config(io, dbt_config, configs, "", dependency_package_name)
+        let on_error = |variant: &ShouldBe<S>, key_path: &str| {
+            if let Some(err) = variant.take_err() {
+                let filename = if let Some(raw) = variant.as_ref_raw()
+                    && let Some(filename) = raw.span().get_filename()
+                {
+                    Some(filename)
+                } else {
+                    None
+                };
+                let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
+                    "Invalid {} definition `{}`: {}",
+                    S::type_name(),
+                    key_path,
+                    variant
+                        .as_err_msg()
+                        .expect("Error message always present on ShouldBe::ButIsnt variant")
+                ));
+                emit_strict_parse_error(&fs_err, dependency_package_name, io);
+            }
+        };
+        Ok(recur_build_dbt_project_config(
+            dbt_config, configs, "", &on_error,
+        ))
     }
 
     /// Get the configuration for a fully qualified name (fqn)
@@ -104,14 +126,21 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
     }
 }
 
-/// Recursively build the [DbtProjectConfig] from a parent and child configuration
-pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + TypedRecursiveConfig>(
-    io: &IoArgs,
+/// Recursively build the [DbtProjectConfig] from a parent and child configuration.
+///
+/// The `on_error` closure is called for each `ShouldBe::ButIsnt` variant encountered
+/// during traversal. Use this to emit parse errors or silently skip invalid children.
+pub fn recur_build_dbt_project_config<T, S, F>(
     parent_config: &T,
     child: &S,
     key_path: &str,
-    dependency_package_name: Option<&str>,
-) -> FsResult<DbtProjectConfig<T>> {
+    on_error: &F,
+) -> DbtProjectConfig<T>
+where
+    T: DefaultTo<T>,
+    S: Into<T> + TypedRecursiveConfig,
+    F: Fn(&ShouldBe<S>, &str),
+{
     let mut child_config: T = child.clone().into();
     child_config.default_to(parent_config);
     let mut children = IndexMap::new();
@@ -126,25 +155,7 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + TypedRecursi
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,
             ShouldBe::ButIsnt(..) => {
-                if let Some(err) = maybe_child_config_variant.take_err() {
-                    let filename = if let Some(raw) = maybe_child_config_variant.as_ref_raw()
-                        && let Some(filename) = raw.span().get_filename()
-                    {
-                        Some(filename)
-                    } else {
-                        None
-                    };
-                    let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
-                        "Invalid {} definition `{}`: {}",
-                        S::type_name(),
-                        key_path,
-                        maybe_child_config_variant
-                            .as_err_msg()
-                            .expect("Error message always present on ShouldBe::ButIsnt variant")
-                    ));
-                    emit_strict_parse_error(&fs_err, dependency_package_name, io);
-                }
-                // Otherwise, the error has already been processed, so we skip this child
+                on_error(maybe_child_config_variant, &key_path);
                 continue;
             }
         };
@@ -152,19 +163,18 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + TypedRecursi
         children.insert(
             key.clone(),
             recur_build_dbt_project_config(
-                io,
                 &child_config,
                 child_config_variant,
                 &key_path,
-                dependency_package_name,
-            )?,
+                on_error,
+            ),
         );
     }
 
-    Ok(DbtProjectConfig {
+    DbtProjectConfig {
         config: child_config,
         children,
-    })
+    }
 }
 
 /// Config wrapping propagated configs for the root project

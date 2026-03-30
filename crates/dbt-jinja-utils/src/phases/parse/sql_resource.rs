@@ -21,7 +21,8 @@ pub enum SqlResource<T: DefaultTo<T>> {
     /// A metric call (e.g. `{{ metric('a', 'b') }}`)
     Metric((String, Option<String>)),
     // If all can be made numeric it is ordered numerically, if not it is ordered lexicographically
-    /// The initial "base" config pushed into the parse context before evaluating the file.
+    /// A base config layer (package-level or root project override for dependencies).
+    /// Multiple BaseConfig resources may be pushed; later ones take precedence.
     BaseConfig(Box<T>),
     /// An explicit `{{ config(...) }}` call encountered in the SQL.
     ConfigCall(Box<T>),

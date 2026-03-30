@@ -90,8 +90,10 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                 SqlResource::Function(function) => functions.push(function),
                 SqlResource::Metric(metric) => metrics.push(metric),
                 SqlResource::BaseConfig(mut resource_config) => {
-                    // The parse context always pushes exactly one initial "base" config before
-                    // evaluating the file.
+                    // The parse context may push multiple base configs:
+                    // 1. Pre-merged config from: dbt_project.yml + schema.yml + version config (always)
+                    // 2. Root project overrides (for dependency packages only)
+                    // Later configs take precedence; earlier ones provide defaults.
                     resource_config.default_to(&*config);
                     config = resource_config;
                 }

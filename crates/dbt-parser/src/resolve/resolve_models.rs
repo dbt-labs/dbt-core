@@ -60,7 +60,6 @@ use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::ModelConfig;
-use dbt_schemas::schemas::project::TypedRecursiveConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::state::DbtPackage;
@@ -92,44 +91,6 @@ async fn build_raw_model_project_config(
     package: &DbtPackage,
     package_quoting: DbtQuoting,
 ) -> FsResult<crate::dbt_project_config::DbtProjectConfig<ModelConfig>> {
-    /// Build a `DbtProjectConfig` tree without emitting strict-parse errors.
-    ///
-    /// This is used only for hydrating `unrendered_config` for state comparisons and must
-    /// not impact the user-visible parse/compile output. In particular, malformed keys or
-    /// Jinja-y values in `dbt_project.yml` should not add extra errors/warnings.
-    fn recur_build_dbt_project_config_silent<
-        T: DefaultTo<T>,
-        S: TypedRecursiveConfig + Into<T> + Clone,
-    >(
-        parent_config: &T,
-        child: &S,
-    ) -> crate::dbt_project_config::DbtProjectConfig<T> {
-        let mut child_config: T = child.clone().into();
-        child_config.default_to(parent_config);
-
-        let mut children = indexmap::IndexMap::new();
-        for (key, maybe_child_config_variant) in child.iter_children() {
-            let child_config_variant = match maybe_child_config_variant {
-                dbt_yaml::ShouldBe::AndIs(config) => config,
-                dbt_yaml::ShouldBe::ButIsnt(..) => {
-                    // Skip invalid children silently: the fully-rendered dbt_project.yml loader
-                    // will report errors. This raw/unrendered pass must not add noise.
-                    continue;
-                }
-            };
-
-            children.insert(
-                key.clone(),
-                recur_build_dbt_project_config_silent(&child_config, child_config_variant),
-            );
-        }
-
-        crate::dbt_project_config::DbtProjectConfig {
-            config: child_config,
-            children,
-        }
-    }
-
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
     let dbt_project_yml_path = package.package_root_path.join("dbt_project.yml");
 
@@ -155,6 +116,7 @@ async fn build_raw_model_project_config(
         },
     };
 
+    // TODO: This is unfinished and will lead to strange / incorrect discrepancies that fail silently.
     // NOTE: This is intentionally best-effort. We use it only to populate `unrendered_config`
     // for state comparisons, and it must not break compilation when the dbt_project.yml contains
     // Jinja-templated values that don't conform to our typed schema (e.g. model-paths).
@@ -173,13 +135,21 @@ async fn build_raw_model_project_config(
     let default_config = ModelConfig {
         enabled: Some(true),
         quoting: Some(package_quoting),
+        sync: package.dbt_project.sync.clone(),
         ..Default::default()
     };
 
     // Use the parsed model config if available; otherwise build an empty config tree.
     // This must be best-effort and must not emit extra errors.
+    // Use a no-op closure to silently skip invalid children; the fully-rendered
+    // dbt_project.yml loader will report errors.
     Ok(match raw_models_only.and_then(|p| p.models) {
-        Some(models_cfg) => recur_build_dbt_project_config_silent(&default_config, &models_cfg),
+        Some(models_cfg) => crate::dbt_project_config::recur_build_dbt_project_config(
+            &default_config,
+            &models_cfg,
+            "",
+            &|_, _| {},
+        ),
         None => crate::dbt_project_config::DbtProjectConfig {
             config: default_config,
             children: indexmap::IndexMap::new(),
