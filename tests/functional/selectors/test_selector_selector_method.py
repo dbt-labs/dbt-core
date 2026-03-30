@@ -308,9 +308,9 @@ class TestExcludeTestNameInheritedViaSelectorMethod:
 
     def test_exclude_test_name_directly(self, project):
         result = run_dbt(["ls", "--selector", "exclude_not_null_selector"])
-        assert not any("not_null" in node for node in result), (
-            "not_null tests should be excluded by the direct selector"
-        )
+        assert not any(
+            "not_null" in node for node in result
+        ), "not_null tests should be excluded by the direct selector"
 
     def test_exclude_test_name_inherited_via_selector_method(self, project):
         # Confirm not_null tests exist in the project
@@ -318,17 +318,15 @@ class TestExcludeTestNameInheritedViaSelectorMethod:
         assert len(all_not_null) > 0, "not_null tests must exist to make this test meaningful"
 
         direct_result = set(run_dbt(["ls", "--selector", "exclude_not_null_selector"]))
-        inherited_result = set(
-            run_dbt(["ls", "--selector", "inherit_exclude_not_null_selector"])
-        )
+        inherited_result = set(run_dbt(["ls", "--selector", "inherit_exclude_not_null_selector"]))
 
         assert not any("not_null" in node for node in inherited_result), (
             "not_null tests should still be excluded when the selector is inherited "
             "via method: selector"
         )
-        assert direct_result == inherited_result, (
-            "inherited selector result should match the directly-referenced selector result"
-        )
+        assert (
+            direct_result == inherited_result
+        ), "inherited selector result should match the directly-referenced selector result"
 
 
 class TestSelectExcludeIgnoredWithSelectorWarning:
