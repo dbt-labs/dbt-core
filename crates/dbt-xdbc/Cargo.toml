@@ -19,7 +19,7 @@ workspace = true
 default = []
 odbc = ["odbc-sys"]
 xdbc-fuzzying = []
-repl = ["dialoguer", "clap", "dbt-common"]
+repl = ["dialoguer", "clap", "dbt-pretty-table"]
 
 [dependencies]
 adbc-core = { workspace = true }
@@ -61,9 +61,9 @@ name = "dbt-xdbc-repl"
 path = "src/bin/repl.rs"
 required-features = ["repl"]
 
-[dependencies.dbt-common]
+[dependencies.dbt-pretty-table]
 optional = true
-path = "../dbt-common"
+path = "../dbt-pretty-table"
 
 [dependencies.dialoguer]
 features = ["history"]

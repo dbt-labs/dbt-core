@@ -1,4 +1,3 @@
-use dbt_frontend_common::Dialect;
 use std::sync::Arc;
 
 use arrow::array::Array;
@@ -11,11 +10,6 @@ use arrow::{
 use arrow_schema::{Field, Schema};
 use comfy_table::*;
 use comfy_table::{Table, presets::UTF8_FULL_CONDENSED};
-use term_size;
-
-use crate::FsResult;
-use crate::fs_err;
-use crate::io_args::DisplayFormat;
 
 pub fn make_table_name<T: AsRef<str>>(catalog: T, schema: T, table: T) -> String {
     [catalog.as_ref(), schema.as_ref(), table.as_ref()].join(".")
@@ -42,15 +36,37 @@ macro_rules! batches_to_json {
                 .with_explicit_nulls(true)
                 .build::<_, $TYPE>(&mut bytes);
             for b in $batches.as_slice() {
-                writer.write(b)?;
+                writer.write(b).map_err(Error::Arrow)?;
             }
-            writer.finish()?;
+            writer.finish().map_err(Error::Arrow)?;
         }
-        String::from_utf8(bytes)?
+        String::from_utf8(bytes).map_err(|_| Error::FromUtf8)?
     }};
 }
 
-pub fn print_csv_batches_with_sep(batches: &[RecordBatch], delimiter: u8) -> FsResult<String> {
+#[derive(Debug, Clone, Copy)]
+pub enum DisplayFormat {
+    Table,
+    Csv,
+    Tsv,
+    Json,
+    NdJson,
+    Yml,
+    /// Output nodes as selector strings (e.g. "source:pkg.source_name.table_name")
+    Selector,
+    /// Output nodes as search names (node.search_name)
+    Name,
+    /// Output nodes as file paths (node.original_file_path)
+    Path,
+}
+
+pub enum Error {
+    FromUtf8,
+    Arrow(arrow::error::ArrowError),
+    UnsupportedFormat(DisplayFormat),
+}
+
+pub fn print_csv_batches_with_sep(batches: &[RecordBatch], delimiter: u8) -> Result<String, Error> {
     let mut bytes = vec![];
     if !batches.is_empty() {
         {
@@ -59,11 +75,10 @@ pub fn print_csv_batches_with_sep(batches: &[RecordBatch], delimiter: u8) -> FsR
                 .with_delimiter(delimiter);
             let mut writer = builder.build(&mut bytes);
             for batch in batches {
-                writer.write(batch)?;
+                writer.write(batch).map_err(Error::Arrow)?;
             }
         }
-        let formatted = String::from_utf8(bytes)
-            .map_err(|_| fs_err!(crate::ErrorCode::Generic, "bytes to utf8 conversion failed"))?;
+        let formatted = String::from_utf8(bytes).map_err(|_| Error::FromUtf8)?;
         Ok(formatted)
     } else {
         Ok("".to_owned())
@@ -80,7 +95,7 @@ pub fn pretty_data_table(
     limit: Option<usize>,
     show_footer: bool,
     actual_rows: Option<usize>,
-) -> FsResult<String> {
+) -> Result<String, Error> {
     let mut out = String::new();
 
     // If the actual row count is provided, use it. Otherwise, compute the row
@@ -163,7 +178,7 @@ pub fn pretty_data_table(
                     let mut cells = Vec::new();
                     for index in indices_to_include.iter() {
                         let column = batch.column(*index);
-                        let value = array_value_to_string(column, row)?;
+                        let value = array_value_to_string(column, row).map_err(Error::Arrow)?;
                         // if the column's data_type is decimal, remove the trailing zeros after the decimal point
                         let content = if value.contains('.')
                             && matches!(
@@ -221,17 +236,14 @@ pub fn pretty_data_table(
                 out.push_str(&format!("{row_count} rows."));
             }
         }
-        // The new DisplayFormat variants are handled differently - they output node information rather than tabular data
-        // These should be handled at a higher level in the list command logic, not in this pretty_table function
+        // The new DisplayFormat variants are handled differently - they output node information
+        // rather than tabular data These should be handled at a higher level in the list command
+        // logic, not in this pretty_table function
         DisplayFormat::Selector | DisplayFormat::Name | DisplayFormat::Path => {
             // These formats are not applicable for tabular data display
             // They should be handled by the list command's show_dbt_nodes method
             // For now, we'll treat them as unsupported in this context
-            return err!(
-                crate::ErrorCode::UnsupportedFeature,
-                "DisplayFormat::{:?} is not supported for tabular data display",
-                display_format
-            );
+            return Err(Error::UnsupportedFormat(display_format));
         }
     };
     Ok(out)
@@ -391,10 +403,9 @@ pub fn pretty_schema_table(
     subtitle: &str,
     display_format: DisplayFormat,
     table_schema: &Schema,
-    _dialect: Dialect,
     limit: Option<usize>,
     show_footer: bool,
-) -> FsResult<String> {
+) -> Result<String, Error> {
     // Define column names for the schema table
     let column_names = vec!["column_name".to_owned(), "data_type".to_owned()];
 
@@ -453,7 +464,7 @@ pub fn pretty_schema_table(
 /// * `show_index` - Whether to show an index column (1-based)
 ///
 /// # Returns
-/// * `FsResult<String>` - The formatted table as a string
+/// * `Result<String, _>` - The formatted table as a string
 #[allow(clippy::too_many_arguments)]
 pub fn pretty_vec_table(
     title: &str,
@@ -464,7 +475,7 @@ pub fn pretty_vec_table(
     limit: Option<usize>,
     show_footer: bool,
     show_index: bool,
-) -> FsResult<String> {
+) -> Result<String, Error> {
     // Create the full set of column names (including index if requested)
     let display_column_names = if show_index {
         let mut cols = vec!["#".to_string()];
@@ -498,7 +509,7 @@ pub fn pretty_vec_table(
 
     // Create a RecordBatch with the schema and arrays
     let schema = Arc::new(Schema::new(fields));
-    let record_batch = RecordBatch::try_new(schema, columns)?;
+    let record_batch = RecordBatch::try_new(schema, columns).map_err(Error::Arrow)?;
     let record_batches = &[record_batch];
 
     // Use the existing pretty_data_table function to format the output

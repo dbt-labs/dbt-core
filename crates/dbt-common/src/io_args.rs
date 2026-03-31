@@ -2,7 +2,7 @@ use crate::warn_error_options::WarnErrorOptions;
 use clap::ValueEnum;
 use dbt_adapter_core::AdapterType;
 use dbt_base::{HashMap, HashSet};
-use dbt_telemetry::{NodeType, ShowDataOutputFormat};
+use dbt_telemetry::NodeType;
 use dbt_yaml::{JsonSchema, Value};
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
@@ -798,22 +798,6 @@ pub enum DisplayFormat {
     Name,
     /// Output nodes as file paths (node.original_file_path)
     Path,
-}
-
-impl TryFrom<DisplayFormat> for ShowDataOutputFormat {
-    type Error = ();
-
-    fn try_from(format: DisplayFormat) -> Result<Self, Self::Error> {
-        match format {
-            DisplayFormat::Json => Ok(Self::Json),
-            DisplayFormat::Table => Ok(Self::Text),
-            DisplayFormat::Csv => Ok(Self::Csv),
-            DisplayFormat::Tsv => Ok(Self::Tsv),
-            DisplayFormat::NdJson => Ok(Self::Ndjson),
-            DisplayFormat::Yml => Ok(Self::Yml),
-            _ => Err(()),
-        }
-    }
 }
 
 /// Output format for the list command. This is a subset of DisplayFormat

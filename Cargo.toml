@@ -12,6 +12,7 @@ members = [
   "crates/dbt-adapter-core",
   "crates/dbt-common",
   "crates/dbt-csv",
+  "crates/dbt-pretty-table",
   "crates/dbt-cloud-api",
   "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
@@ -208,6 +209,7 @@ dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }
+dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
 
