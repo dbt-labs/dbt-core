@@ -1,0 +1,6 @@
+kind: Fixes
+body: ' handle null config in generic test builder'
+time: 2026-03-31T14:55:00.481742-04:00
+custom:
+    Author: michelleark
+    Issue: "12755"
