@@ -213,6 +213,7 @@ def build(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -281,6 +282,7 @@ def docs_generate(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -352,6 +354,7 @@ def compile(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -402,6 +405,7 @@ def show(ctx, **kwargs):
             ctx.obj["flags"],
             ctx.obj["runtime_config"],
             ctx.obj["manifest"],
+            catalogs=ctx.obj.get("catalogs"),
         )
 
     results = task.run()
@@ -527,6 +531,7 @@ def list(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -593,6 +598,7 @@ def run(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -659,6 +665,7 @@ def clone(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -691,6 +698,7 @@ def run_operation(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -727,6 +735,7 @@ def seed(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
     results = task.run()
     success = task.interpret_results(results)
@@ -761,6 +770,7 @@ def snapshot(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -804,6 +814,7 @@ def freshness(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -847,6 +858,7 @@ def test(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()

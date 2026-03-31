@@ -411,6 +411,8 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     catalogs = load_catalogs(flags.PROJECT_DIR, ctx.obj["project"].project_name, flags.VARS)
     active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
 
+    ctx.obj["catalogs"] = catalogs
+
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
         ctx.obj["manifest"] = parse_manifest(
