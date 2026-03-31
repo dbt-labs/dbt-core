@@ -834,7 +834,9 @@ pub fn resolve_dependencies(
                         .with_location(location);
                         emit_error_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
-                        node_base.depends_on.nodes.push(dependency_id.clone());
+                        if !node_base.depends_on.nodes.contains(&dependency_id) {
+                            node_base.depends_on.nodes.push(dependency_id.clone());
+                        }
                         node_base
                             .depends_on
                             .nodes_with_ref_location
@@ -877,7 +879,9 @@ pub fn resolve_dependencies(
 
             match node_resolver.lookup_source(&node_package_name, &source_name, &table_name) {
                 Ok((dependency_id, _, _)) => {
-                    node_base.depends_on.nodes.push(dependency_id.clone());
+                    if !node_base.depends_on.nodes.contains(&dependency_id) {
+                        node_base.depends_on.nodes.push(dependency_id.clone());
+                    }
                     node_base
                         .depends_on
                         .nodes_with_ref_location
@@ -921,7 +925,9 @@ pub fn resolve_dependencies(
 
             match node_resolver.lookup_function(node_package_name_value, name, package) {
                 Ok((dependency_id, _, _)) => {
-                    node_base.depends_on.nodes.push(dependency_id.clone());
+                    if !node_base.depends_on.nodes.contains(&dependency_id) {
+                        node_base.depends_on.nodes.push(dependency_id.clone());
+                    }
                     node_base
                         .depends_on
                         .nodes_with_ref_location
@@ -991,11 +997,18 @@ pub fn resolve_dependencies(
                         &Some(operation_package.clone()),
                     ) {
                         Ok((dependency_id, _, _, _)) => {
-                            operation
+                            if !operation
                                 .__base_attr__
                                 .depends_on
                                 .nodes
-                                .push(dependency_id.clone());
+                                .contains(&dependency_id)
+                            {
+                                operation
+                                    .__base_attr__
+                                    .depends_on
+                                    .nodes
+                                    .push(dependency_id.clone());
+                            }
                             operation
                                 .__base_attr__
                                 .depends_on
@@ -1036,7 +1049,14 @@ pub fn resolve_dependencies(
                             table_name,
                         ) {
                             Ok((dependency_id, _, _)) => {
-                                operation.__base_attr__.depends_on.nodes.push(dependency_id);
+                                if !operation
+                                    .__base_attr__
+                                    .depends_on
+                                    .nodes
+                                    .contains(&dependency_id)
+                                {
+                                    operation.__base_attr__.depends_on.nodes.push(dependency_id);
+                                }
                             }
                             Err(e) => {
                                 nodes_with_errors.insert(operation_unique_id.clone());
