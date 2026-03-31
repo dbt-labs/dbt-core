@@ -137,9 +137,11 @@ WARNING: BigQuery ADBC driver is being loaded from /Users/felipe/code/fs/lib in 
 ...
 ```
 
-The driver is being looked for in two locations (assuming you keep all the repos in the `~/code` folder): 
-* First, as `~/code/arrow-adbc/go/adbc/pkg/libadbc_driver_bigquery.dylib` 
-* Second, *only if the above folder does not exist*,  as `~/code/fs/lib/libadbc_driver_bigquery.dylib`
+The driver is being looked for as a file with the bare driver name with no `lib` prefix or extension (e.g. `adbc_driver_bigquery`, not `libadbc_driver_bigquery.dylib`).
+
+The driver is being looked for in two locations (assuming you keep all the repos in the `~/code` folder).
+* First, as `~/code/arrow-adbc/go/adbc/pkg/adbc_driver_bigquery`
+* Second, *only if the above folder does not exist*, as `~/code/fs/lib/adbc_driver_bigquery`
 
 Since the 2nd option is pre-empted by the first, it is only useful for people who do not do driver development 
 (do not have `~/code/arrow-adbc`) but need to try some pre-built non-CDN driver.
@@ -188,11 +190,12 @@ ln -s arrow-adbc adbc
 When successful, this should build the driver as 
 `~/code/adbc_build/duckdb/adbc_driver_duckdb-0.18.0+dbt99.1.0-x86_64-apple-darwin.dylib`.
 
-To load this driver when fs runs, 
+To load this driver when fs runs,
 * place it at the 1st location option above:
   ```
-  ln -s ~/code/adbc_build/duckdb/adbc_driver_duckdb-0.18.0+dbt99.1.0-x86_64-apple-darwin.dylib ~/code/arrow-adbc/go/adbc/pkg/libduckdb.dylib
-  ``` 
+  ln -s ~/code/adbc_build/duckdb/adbc_driver_duckdb-0.18.0+dbt99.1.0-x86_64-apple-darwin.dylib ~/code/arrow-adbc/go/adbc/pkg/duckdb
+  ```
+  (Reminder: the loader searches for a file named `duckdb` in that directory — not `libduckdb.dylib`)
 * Make sure `DISABLE_CDN_DRIVER_CACHE=true` and `DISABLE_AUTO_DRIVER_REBUILD=true` are set
 
 
