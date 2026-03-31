@@ -3,10 +3,12 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
+from mashumaro.exceptions import InvalidFieldValue
+
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
-from dbt.exceptions import SchemaConfigError, ParsingError
+from dbt.exceptions import ParsingError, SchemaConfigError
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
@@ -14,7 +16,6 @@ from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtInternalError
 
-from mashumaro.exceptions import InvalidFieldValue
 
 @dataclass
 class ModelParts(IsFQNResource):
@@ -228,7 +229,7 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             updated = result.update_from(translated, adapter_config_cls, validate=validate)
         except InvalidFieldValue as e:
             raise ParsingError(str(e))
-    
+
         return updated
 
     def translate_hook_names(self, project_dict):
