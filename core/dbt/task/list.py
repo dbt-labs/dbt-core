@@ -1,5 +1,9 @@
 import json
-from typing import Iterator, List
+import sys
+from dataclasses import dataclass, field
+from typing import Iterator, List, Optional
+
+import click
 
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
@@ -22,6 +26,83 @@ from dbt_common.events.contextvars import task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import PrintEvent
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+
+# dbt brand orange (RGB) plus standard ANSI names for other resource types.
+_RESOURCE_TYPE_COLORS: dict = {
+    "model": 208,              # xterm-256 orange (#FF8700), closest to dbt brand
+    "source": "green",
+    "seed": "yellow",
+    "snapshot": "magenta",
+    "test": 167,      # xterm-256 muted rose-red (#D75F5F)
+    "unit_test": 167,
+    "exposure": "bright_cyan",
+    "metric": "bright_blue",
+    "semantic_model": "bright_blue",
+    "saved_query": "bright_blue",
+}
+
+
+def _colorize(text: str, resource_type: str) -> str:
+    """Apply color to text if stdout is a TTY, otherwise return plain text."""
+    if not sys.stdout.isatty():
+        return text
+    color = _RESOURCE_TYPE_COLORS.get(resource_type)
+    if color is None:
+        return text
+    return click.style(text, fg=color, bold=True)
+
+
+# Resource types that can have depends_on — show the line even if the list is empty.
+# Types omitted here (e.g. Source, Seed) have the line omitted entirely.
+_DEPENDS_ON_RESOURCE_TYPES = frozenset(
+    (
+        NodeType.Model,
+        NodeType.Snapshot,
+        NodeType.Test,
+        NodeType.Analysis,
+        NodeType.Exposure,
+        NodeType.Metric,
+        NodeType.SemanticModel,
+        NodeType.SavedQuery,
+        NodeType.Unit,
+        NodeType.Function,
+    )
+)
+
+# Only show materialization for models — it's redundant for seeds (always table)
+# and snapshots (always table), and not meaningful for other resource types.
+_MATERIALIZED_RESOURCE_TYPES = frozenset((NodeType.Model,))
+
+
+@dataclass
+class _ColumnDetail:
+    name: str
+    data_type: str  # empty string when not set
+    description: str  # empty string when not set
+
+
+@dataclass
+class _VerboseRow:
+    """Intermediate representation of one node for verbose rendering."""
+
+    # Fixed columns — always present, padded to align across all rows.
+    name: str
+    resource_type: str
+    package_name: str
+    original_file_path: str
+
+    # Inline fields — all padded to align across rows. Add new fields here in
+    # declaration order; generate_verbose picks them up via INLINE_ATTRS.
+    tags: str = ""           # e.g. "[finance,core]" or ""
+    materialized: str = ""   # e.g. "table", "view", "" when not applicable
+
+    # Continuation lines — None means omit the line entirely.
+    description: Optional[str] = field(default=None)
+    depends_on_names: Optional[List[str]] = field(default=None)
+    column_details: Optional[List[_ColumnDetail]] = field(default=None)
+
+    # All main-line attributes in render order.
+    INLINE_ATTRS = ("name", "resource_type", "package_name", "original_file_path", "tags", "materialized")
 
 
 class ListTask(GraphRunnableTask):
@@ -173,6 +254,119 @@ class ListTask(GraphRunnableTask):
         for node in self._iterate_selected_nodes():
             yield node.original_file_path
 
+    def _short_dep_name(self, unique_id: str, current_package: str) -> str:
+        """Return a human-readable dep name.
+
+        Same-package deps use bare name; cross-package deps use ``pkg.name``
+        to preserve full context without repeating the resource-type prefix.
+        """
+        parts = unique_id.split(".")
+        # unique_id format: resource_type.package_name.name[.version]
+        if len(parts) >= 3:
+            pkg, name = parts[1], parts[2]
+            return name if pkg == current_package else f"{pkg}.{name}"
+        return unique_id
+
+    def _build_verbose_row(self, node, show_columns: bool) -> _VerboseRow:
+        tags = getattr(node, "tags", [])
+        tags_str = f"[{','.join(tags)}]" if tags else ""
+
+        mat = ""
+        if node.resource_type in _MATERIALIZED_RESOURCE_TYPES:
+            config = getattr(node, "config", None)
+            if config:
+                mat = getattr(config, "materialized", "") or ""
+
+        depends_on_names: Optional[List[str]] = None
+        if node.resource_type in _DEPENDS_ON_RESOURCE_TYPES:
+            dep_nodes = getattr(node, "depends_on", None)
+            node_ids = getattr(dep_nodes, "nodes", []) if dep_nodes else []
+            depends_on_names = [
+                self._short_dep_name(uid, node.package_name) for uid in node_ids
+            ]
+
+        column_details: Optional[List[_ColumnDetail]] = None
+        if show_columns:
+            cols = getattr(node, "columns", None)
+            if cols is not None:
+                column_details = [
+                    _ColumnDetail(
+                        name=col.name,
+                        data_type=col.data_type or "",
+                        description=col.description or "",
+                    )
+                    for col in cols.values()
+                ]
+
+        raw_description = getattr(node, "description", None)
+        description = raw_description if raw_description else None
+
+        return _VerboseRow(
+            name=node.name,
+            resource_type=node.resource_type.value,
+            package_name=node.package_name,
+            original_file_path=node.original_file_path,
+            tags=tags_str,
+            materialized=mat,
+            depends_on_names=depends_on_names,
+            column_details=column_details,
+            description=description,
+        )
+
+    def generate_verbose(self, show_columns: bool = False) -> Iterator[str]:
+        rows = [
+            self._build_verbose_row(node, show_columns)
+            for node in self._iterate_selected_nodes()
+        ]
+        if not rows:
+            return
+
+        # Two-pass render: compute max width for every inline column across all rows.
+        col_widths = [
+            max(len(getattr(row, a)) for row in rows)
+            for a in _VerboseRow.INLINE_ATTRS
+        ]
+
+        for row in rows:
+            parts = []
+            for a, w in zip(_VerboseRow.INLINE_ATTRS, col_widths):
+                val = getattr(row, a)
+                if a == "name":
+                    # Colorize the text only, then pad with plain spaces so
+                    # escape codes don't bleed into the whitespace.
+                    parts.append(_colorize(val, row.resource_type) + " " * (w - len(val)))
+                else:
+                    parts.append(val.ljust(w))
+            yield "  ".join(parts).rstrip()
+
+            if row.description is not None:
+                lines = row.description.splitlines()
+                yield f"  description: {lines[0]}"
+                for line in lines[1:]:
+                    yield f"    {line}"
+
+            if row.depends_on_names is not None:
+                deps = ', '.join(row.depends_on_names) if row.depends_on_names else '[]'
+                yield f"  depends_on: {deps}"
+
+            if row.column_details is not None:
+                if not row.column_details:
+                    yield "  columns: []"
+                else:
+                    yield "  columns:"
+                    name_w = max(len(c.name) for c in row.column_details)
+                    type_w = max(len(c.data_type) for c in row.column_details)
+                    for col in row.column_details:
+                        prefix = f"    {col.name.ljust(name_w)}  {col.data_type.ljust(type_w)}"
+                        if not col.description:
+                            yield prefix.rstrip()
+                        else:
+                            desc_lines = col.description.splitlines()
+                            yield f"{prefix}  {desc_lines[0]}"
+                            hang = " " * (len(prefix) + 2)
+                            for desc_line in desc_lines[1:]:
+                                yield f"{hang}{desc_line}"
+
     def run(self):
         # We set up a context manager here with "task_contextvars" because we
         # we need the project_root in compile_manifest.
@@ -187,6 +381,9 @@ class ListTask(GraphRunnableTask):
                 generator = self.generate_json
             elif output == "path":
                 generator = self.generate_paths
+            elif output == "verbose":
+                show_columns = getattr(self.args, "columns", False)
+                generator = lambda: self.generate_verbose(show_columns=show_columns)
             else:
                 raise DbtInternalError("Invalid output {}".format(output))
 

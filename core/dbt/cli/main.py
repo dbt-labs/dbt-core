@@ -501,6 +501,7 @@ def init(ctx, **kwargs):
 @cli.command("list")
 @click.pass_context
 @global_flags
+@p.columns
 @p.exclude
 @p.models
 @p.output

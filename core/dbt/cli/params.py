@@ -428,8 +428,16 @@ output = _create_option_and_track_env_var(
     "--output",
     envvar=None,
     help="Specify the output format: either JSON or a newline-delimited list of selectors, paths, or names",
-    type=click.Choice(["json", "name", "path", "selector"], case_sensitive=False),
+    type=click.Choice(["json", "name", "path", "selector", "verbose"], case_sensitive=False),
     default="selector",
+)
+
+columns = _create_option_and_track_env_var(
+    "--columns",
+    envvar=None,
+    help="When used with --output verbose, expand column names instead of showing a count",
+    is_flag=True,
+    default=False,
 )
 
 output_keys = _create_option_and_track_env_var(
