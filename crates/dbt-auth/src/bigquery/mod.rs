@@ -217,6 +217,10 @@ fn apply_connection_args(
     let dataset_id = dataset_id(config)?;
     builder.with_named_option(bigquery::DATASET_ID, dataset_id)?;
 
+    if let Some(api_endpoint) = config.get_str("api_endpoint") {
+        builder.with_named_option(bigquery::API_ENDPOINT, api_endpoint)?;
+    }
+
     if let Some(location) = config.get_str("location") {
         builder.with_named_option(bigquery::LOCATION, location)?;
     }
@@ -419,6 +423,7 @@ mod tests {
 method: service-account-json
 database: my_db
 schema: my_schema
+api_endpoint: https://bigquery.googleapis.com/bigquery/v2/
 keyfile_json:
     type: service_account
     project_id: bq-project
@@ -452,6 +457,10 @@ location: my_location
             "my_schema"
         );
         assert_eq!(
+            other_option_value(&builder, bigquery::API_ENDPOINT).unwrap(),
+            "https://bigquery.googleapis.com/bigquery/v2/"
+        );
+        assert_eq!(
             other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
             auth_type::JSON_CREDENTIAL_STRING
         );
@@ -478,12 +487,33 @@ location: my_location
             bigquery::AUTH_CREDENTIALS,
             bigquery::AUTH_TYPE,
             bigquery::DATASET_ID,
+            bigquery::API_ENDPOINT,
             bigquery::IMPERSONATE_SCOPES,
             bigquery::LOCATION,
             bigquery::PROJECT_ID,
         ];
         expected.sort_unstable();
         assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_with_api_endpoint() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+api_endpoint: https://definitely-not-bigquery.invalid
+"#;
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let builder = try_configure(config).unwrap();
+        assert_eq!(
+            other_option_value(&builder, bigquery::API_ENDPOINT).unwrap(),
+            "https://definitely-not-bigquery.invalid"
+        );
+        assert_eq!(
+            other_option_value(&builder, bigquery::AUTH_TYPE).unwrap(),
+            auth_type::DEFAULT
+        );
     }
 
     #[test]
