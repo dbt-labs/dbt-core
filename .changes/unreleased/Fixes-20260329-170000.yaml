@@ -1,0 +1,6 @@
+kind: Fixes
+body: Suppress "see test failures table" log message when store_failures is true but the test errored due to a SQL or database compilation error
+time: 2026-03-29T17:00:00.000000-04:00
+custom:
+  Author: claygeo
+  Issue: "11350"

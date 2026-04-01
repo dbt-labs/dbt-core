@@ -122,7 +122,11 @@ def print_run_result_error(
             fire_event(Formatting(""))
             fire_event(SQLCompiledPath(path=result.node.compiled_path, node_info=node_info))
 
-        if getattr(result.node, "should_store_failures", None):
+        # Only point users to the test failures table when the test actually ran
+        # and produced failures (NodeStatus.Fail). When the status is Error, the
+        # SQL compilation or DB execution failed before the table could be created,
+        # so directing users there would result in a confusing "table not found" error.
+        if getattr(result.node, "should_store_failures", None) and result.status == NodeStatus.Fail:
             fire_event(Formatting(""))
             fire_event(
                 CheckNodeTestFailure(relation_name=result.node.relation_name, node_info=node_info)
