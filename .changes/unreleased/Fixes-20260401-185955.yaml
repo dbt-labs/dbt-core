@@ -1,0 +1,6 @@
+kind: Fixes
+body: Repurpose config key alias function to extended config keys and add trino specific keys
+time: 2026-04-01T18:59:55.679459+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12349"

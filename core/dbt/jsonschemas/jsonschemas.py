@@ -37,9 +37,7 @@ _HIERARCHICAL_CONFIG_KEYS = {
     "unit_tests",
 }
 
-_ADAPTER_TO_CONFIG_ALIASES = {
-    "bigquery": ["dataset", "project"],
-}
+_ADAPTER_TO_EXTENDED_CONFIG_KEYS = {"bigquery": ["dataset", "project"], "trino": ["properties"]}
 
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
@@ -108,12 +106,12 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
-def _get_allowed_config_key_aliases() -> List[str]:
+def _get_allowed_extended_config_keys() -> List[str]:
     config_aliases = []
     invocation_context = get_invocation_context()
     for adapter in invocation_context.adapter_types:
-        if adapter in _ADAPTER_TO_CONFIG_ALIASES:
-            config_aliases.extend(_ADAPTER_TO_CONFIG_ALIASES[adapter])
+        if adapter in _ADAPTER_TO_EXTENDED_CONFIG_KEYS:
+            config_aliases.extend(_ADAPTER_TO_EXTENDED_CONFIG_KEYS[adapter])
 
     return config_aliases
 
@@ -132,7 +130,7 @@ def _get_allowed_config_fields_for_project_property(schema, property_field_name)
 
     allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
     # in dbt_project.yml keys should have a + prefix
-    allowed_config_fields.update([f"+{key}" for key in _get_allowed_config_key_aliases()])
+    allowed_config_fields.update([f"+{key}" for key in _get_allowed_extended_config_keys()])
     return list(allowed_config_fields)
 
 
@@ -165,7 +163,7 @@ def _get_allowed_config_fields_from_error_path(
     ][0]["$ref"].split("/")[-1]
 
     allowed_config_fields = list(set(yml_schema["definitions"][config_field_name]["properties"]))
-    allowed_config_fields.extend(_get_allowed_config_key_aliases())
+    allowed_config_fields.extend(_get_allowed_extended_config_keys())
 
     return allowed_config_fields
 
@@ -204,7 +202,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         len(error_path) == 2
                         and error_path[0] == "sources"
                         and isinstance(error_path[1], int)
-                        and key in _get_allowed_config_key_aliases()
+                        and key in _get_allowed_extended_config_keys()
                     ):
                         continue
 
@@ -244,7 +242,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         keys = _additional_properties_violation_keys(sub_error)
                         key_path = error_path_to_string(error)
                         for key in keys:
-                            if key in _get_allowed_config_key_aliases():
+                            if key in _get_allowed_extended_config_keys():
                                 continue
 
                             deprecations.warn(
@@ -340,7 +338,7 @@ def validate_model_config(
                         continue
 
                     # Dont raise deprecation warnings for adapter specific config key aliases
-                    if key in _get_allowed_config_key_aliases():
+                    if key in _get_allowed_extended_config_keys():
                         continue
 
                     # For everything else, emit deprecation warning
