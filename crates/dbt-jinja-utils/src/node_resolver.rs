@@ -42,7 +42,9 @@ pub struct NodeResolver {
     pub refs: BTreeMap<String, Vec<RefRecord>>,
     /// Map of (package_name.source_name.name ) to (unique_id, relation, status)
     pub sources: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
-    /// Map of function_name (either {project}.{function_name}, {function_name}) to (unique_id, function_object, status)
+    /// Map of function_name (either {project}.{function_name}, {function_name}) to
+    /// (unique_id, function_object, status). The function object may be replaced
+    /// with its deferred version during defer hydration.
     pub functions: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
     /// Root project name (needed for resolving refs)
     pub root_package_name: String,
@@ -211,6 +213,17 @@ impl NodeResolver {
                     *relation = deferred_relation.clone();
                 }
             });
+    }
+
+    fn set_deferred_function(
+        entries: &mut [(String, MinijinjaValue, ModelStatus)],
+        unique_id: &str,
+        deferred_function: &MinijinjaValue,
+    ) {
+        entries
+            .iter_mut()
+            .filter(|(id, _, _)| id == unique_id)
+            .for_each(|(_, function, _)| *function = deferred_function.clone());
     }
 }
 
@@ -670,6 +683,25 @@ impl NodeResolverTracker for NodeResolver {
         adapter_type: AdapterType,
         is_frontier: bool,
     ) -> FsResult<()> {
+        if node.resource_type() == NodeType::Function {
+            let package_name = node.package_name();
+            let function_name = node.name();
+            let unique_id = node.unique_id();
+            let deferred_function =
+                create_function_object_from_node(adapter_type, node)?.into_value();
+
+            let function_entry = self.functions.entry(function_name.clone()).or_default();
+            Self::set_deferred_function(function_entry, &unique_id, &deferred_function);
+
+            let package_function_entry = self
+                .functions
+                .entry(format!("{package_name}.{function_name}"))
+                .or_default();
+            Self::set_deferred_function(package_function_entry, &unique_id, &deferred_function);
+
+            return Ok(());
+        }
+
         let package_name = &node.package_name();
         let model_name = node.name();
         let unique_id = node.unique_id();
