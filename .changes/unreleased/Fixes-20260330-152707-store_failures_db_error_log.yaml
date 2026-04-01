@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Suppress store_failures table message when test errors rather than fails"
+time: 2026-03-30T15:27:05.000000+00:00
+custom:
+    Author: claygeo
+    Issue: "12738"
