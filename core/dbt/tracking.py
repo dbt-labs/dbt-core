@@ -100,7 +100,10 @@ class TimeoutEmitter(Emitter):
             self.endpoint,
             data=payload,
             headers={"content-type": "application/json; charset=utf-8"},
-            timeout=5.0,
+            # Keep the timeout short so that a missing or unreachable collector
+            # does not noticeably delay the end of every dbt invocation.
+            # See https://github.com/dbt-labs/dbt-core/issues/9989
+            timeout=1.0,
         )
 
         self._log_result("GET", r.status_code)
@@ -109,7 +112,14 @@ class TimeoutEmitter(Emitter):
     def http_get(self, payload):
         self._log_request("GET", payload)
 
-        r = requests.get(self.endpoint, params=payload, timeout=5.0)
+        r = requests.get(
+            self.endpoint,
+            params=payload,
+            # Keep the timeout short so that a missing or unreachable collector
+            # does not noticeably delay the end of every dbt invocation.
+            # See https://github.com/dbt-labs/dbt-core/issues/9989
+            timeout=1.0,
+        )
 
         self._log_result("GET", r.status_code)
         return r
