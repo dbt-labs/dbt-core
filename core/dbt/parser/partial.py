@@ -590,7 +590,7 @@ class PartialParsing:
                 if node.resource_type == NodeType.Test and node.test_node_type == "generic":
                     schema_file_id = node.file_id
                     schema_file = self.saved_manifest.files[schema_file_id]
-                    (key, name) = schema_file.get_key_and_name_for_test(node.unique_id)
+                    key, name = schema_file.get_key_and_name_for_test(node.unique_id)
                     if key and name:
                         patch_list = []
                         if key in schema_file.dict_from_yaml:
@@ -1124,9 +1124,7 @@ class PartialParsing:
 
         # v1 semantic models are declared under the "semantic_models:" top-level YAML key.
         # They are handled by the normal semantic_models diff path — never touch them here.
-        v1_sm_names = {
-            e["name"] for e in schema_file.dict_from_yaml.get("semantic_models", [])
-        }
+        v1_sm_names = {e["name"] for e in schema_file.dict_from_yaml.get("semantic_models", [])}
 
         sm_names_to_clean = []
         for unique_id in schema_file.semantic_models.copy():
@@ -1237,7 +1235,7 @@ class PartialParsing:
         return (orig_source_schema_file, orig_source)
 
     def remove_source_override_target(self, source_dict):
-        (orig_file, orig_source) = self.get_source_override_file_and_dict(source_dict)
+        orig_file, orig_source = self.get_source_override_file_and_dict(source_dict)
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
             self.merge_patch(orig_file, "sources", orig_source)

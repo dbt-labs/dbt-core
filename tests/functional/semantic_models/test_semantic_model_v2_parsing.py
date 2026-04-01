@@ -1059,4 +1059,6 @@ class TestV2SemanticModelPartialParsingDisabled:
         result = runner.invoke(["parse"])
         assert result.success, result.exception
         assert len(result.result.semantic_models) == 0
+
+
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set
