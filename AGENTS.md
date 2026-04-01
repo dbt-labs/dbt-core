@@ -1,18 +1,5 @@
 # AGENTS.md — AI Coding Agent Guidelines for dbt-core
 
-## Architecture Documentation
-
-Before investigating parsing bugs or adding new resource types, read the relevant doc in `docs/arch/`:
-
-| Doc | Covers |
-|---|---|
-| `3_Parsing.md` | Full parse flow, `ManifestLoader`, `SchemaParser`, parser hierarchy |
-| `3.1_Partial_Parsing.md` | Partial parse internals, `PartialParsing` class, file diff and change detection |
-| `3.2_Deferral.md` | State-based deferral |
-| `3.3_Semantic_Models.md` | Semantic model parsing (v1 standalone vs v2 inline), partial parsing edge cases, key files |
-
-These docs describe where things live and how they connect — read them before doing exploratory code search.
-
 ## Project Overview
 
 dbt-core is the open-source core of [dbt](https://www.getdbt.com/) (data build tool). It transforms data in warehouses by running SQL and Python models, managing dependencies, and producing artifacts. The main Python package lives in `core/` and is built with Hatch/Hatchling.
@@ -71,6 +58,19 @@ Import order should follow isort conventions:
 2. Standard library
 3. Third-party
 4. dbt-internal (`dbt`, `dbt_common`, `dbt_adapters`, `dbt_extractor`, `dbt_semantic_interfaces`)
+
+## Architecture Documentation
+
+Before investigating parsing bugs or adding new resource types, read the relevant doc in `docs/arch/`:
+
+| Doc | Covers |
+|---|---|
+| `3_Parsing.md` | Full parse flow, `ManifestLoader`, `SchemaParser`, parser hierarchy |
+| `3.1_Partial_Parsing.md` | Partial parse internals, `PartialParsing` class, file diff and change detection |
+| `3.2_Deferral.md` | State-based deferral |
+| `3.3_Semantic_Models.md` | Semantic model parsing (v1 standalone vs v2 inline), partial parsing edge cases, key files |
+
+These docs describe where things live and how they connect — read them before doing exploratory code search.
 
 ## Key Architectural Conventions
 

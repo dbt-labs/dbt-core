@@ -26,7 +26,9 @@ When adding such a test, use `ContractTestCase.assert_fails_validation_with_mess
 (in `tests/unit/utils/__init__.py`) to assert both that validation fails *and*
 that the error message is actionable.
 
-## Union-typed fields produce even vaguer errors
+If you need a clear PR example, refer to PR12766.
+
+## Union-typed fields produce even more vague errors
 
 Several fields in `unparsed.py` use `Union[SomeConfig, bool, None]` (e.g.
 `UnparsedModelUpdate.semantic_model`). When validation fails on the `SomeConfig`
@@ -54,8 +56,8 @@ it for a simple metric raises:
 simple metrics in v2 YAML must be attached to semantic_model
 ```
 
-Move the `metrics:` list to be indented under the model entry (same level as
-`columns:`) to fix this:
+Move the metrics with type 'simple' to a `metrics:` list to indented under the
+model entry (same level as `columns:`) to fix this:
 
 ```yaml
 # Wrong — top-level metrics: key
