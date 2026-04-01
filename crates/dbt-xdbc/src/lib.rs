@@ -88,8 +88,8 @@ pub fn str_from_sqlstate(sqlstate: &[c_char; 5]) -> &str {
     res.unwrap_or("")
 }
 
-pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.21.0+dbt0.21.6";
-pub const BIGQUERY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.8";
+pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.9";
+pub const BIGQUERY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.9";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0+dbt0.21.7";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
