@@ -47,7 +47,8 @@ jobs:
     with:
         github_team: 'core-group'
         label: 'community'
-    secrets: inherit
+    secrets:
+        IT_TEAM_MEMBERSHIP: ${{ secrets.IT_TEAM_MEMBERSHIP }}
 
   label_community_issue:
     # If this issue already has the triage label, no need to relabel it
@@ -62,4 +63,5 @@ jobs:
     with:
         github_team: 'core-group'
         label: 'triage'
-    secrets: inherit
+    secrets:
+        IT_TEAM_MEMBERSHIP: ${{ secrets.IT_TEAM_MEMBERSHIP }}
