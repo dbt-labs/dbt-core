@@ -14,6 +14,9 @@ from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
     base_schema_yml_v2_with_custom_sm_name,
+    customer_yaml_semantic_model_description_removed,
+    customer_yaml_semantic_model_with_description,
+    customer_yaml_standalone_simple_metrics,
     derived_semantics_with_doc_jinja_yml,
     derived_semantics_yml,
     fct_revenue_sql,
@@ -992,3 +995,71 @@ class TestMetricOnModelWithoutCustomSemanticModelName:
 
 # TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set
+
+
+# Regression tests for customer-reported YAML parsing errors (Slack thread C03KHQRQUBX).
+#
+# Root cause: the v2 in-model semantic_model spec docs showed `description:` as a valid
+# field inside the `semantic_model:` config object. It is not — UnparsedSemanticModelConfig
+# only allows name, enabled, group, config.
+
+
+class TestSemanticModelConfigWithDescriptionFails:
+    """Reproduces: 'is not valid under any of the given schemas' when description is placed
+    inside the semantic_model: config object (e.g. semantic_model: {enabled: true, description: ...})."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": customer_yaml_semantic_model_with_description,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_description_in_semantic_model_config_fails(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "not valid under any of the given schemas" in str(result.exception)
+
+
+class TestSemanticModelConfigWithDescriptionRemovedWorks:
+    """Verifies the fix: removing description from the semantic_model config allows parsing."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": customer_yaml_semantic_model_description_removed,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_config_without_description_works(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.purchases"]
+        assert semantic_model.name == "purchases"
+
+
+class TestStandaloneSimpleMetricsV2Fails:
+    """Reproduces: 'simple metrics in v2 YAML must be attached to semantic_model' when the
+    metrics: section is a top-level YAML key instead of nested under the model entry."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + customer_yaml_standalone_simple_metrics,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_standalone_simple_metrics_fail(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "simple metrics in v2 YAML must be attached to semantic_model" in str(
+            result.exception
+        )

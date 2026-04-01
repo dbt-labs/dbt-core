@@ -1102,3 +1102,94 @@ derived_semantics_with_doc_jinja_yml = """
           type: categorical
           expr: id
 """
+
+# Reproduces: "is not valid under any of the given schemas" when `description` is placed
+# inside the `semantic_model:` config object. UnparsedSemanticModelConfig only allows
+# name, enabled, group, config — not description.
+customer_yaml_semantic_model_with_description = """
+models:
+  - name: fct_revenue
+    description: This model provides a detailed view of purchase transactions.
+    semantic_model:
+      enabled: true
+      name: purchases
+      description: purchases semantic model
+    agg_time_dimension: ds
+    columns:
+      - name: id
+        entity:
+          name: id_entity
+          type: primary
+        dimension:
+          name: id_dim
+          type: categorical
+      - name: second_col
+        granularity: day
+        dimension:
+          name: ds
+          type: time
+"""
+
+# Same YAML with description removed — this should parse successfully.
+customer_yaml_semantic_model_description_removed = """
+models:
+  - name: fct_revenue
+    description: This model provides a detailed view of purchase transactions.
+    semantic_model:
+      enabled: true
+      name: purchases
+    agg_time_dimension: ds
+    columns:
+      - name: id
+        entity:
+          name: id_entity
+          type: primary
+        dimension:
+          name: id_dim
+          type: categorical
+      - name: second_col
+        granularity: day
+        dimension:
+          name: ds
+          type: time
+"""
+
+# Reproduces: "simple metrics in v2 YAML must be attached to semantic_model"
+# The user's metrics section is a top-level YAML key (same level as `models:`),
+# which makes them standalone metrics. Simple metrics cannot be standalone — they
+# must be nested under the model entry.
+customer_yaml_standalone_simple_metrics = """
+metrics:
+  - name: total_item_count
+    description: Total number of items purchased
+    label: Total Item Count
+    type: simple
+    agg: sum
+    expr: item_count
+    fill_nulls_with: 0
+  - name: distinct_user_count
+    description: Number of unique users
+    label: Unique Users Count
+    type: simple
+    agg: count_distinct
+    expr: id
+    fill_nulls_with: 0
+"""
+
+# SQL fixture for the customer's f_purchases model columns used in full repro tests.
+f_purchases_sql = """select
+  1 as purchase_id,
+  10 as user_id,
+  100 as venue_id,
+  'US' as venue_country,
+  'completed' as status,
+  'standard' as delivery_method,
+  'express' as delivery_model,
+  5 as item_count,
+  10 as total_units_ordered,
+  8 as total_units_delivered,
+  1.50 as gov_service_fee_vat_amount_local,
+  2.00 as gov_delivery_fee_vat_amount_local,
+  1.00 as gov_delivery_fee_base_vat_amount_local,
+  'NYC' as city,
+  current_timestamp as time_delivered_utc"""
