@@ -551,6 +551,19 @@ class UnparsedSemanticModelConfig(dbtClassMixin):
     group: Optional[str] = None
     config: Optional[UnparsedSemanticResourceConfig] = None
 
+    @classmethod
+    @override
+    def validate(cls, data: Any) -> None:
+        if isinstance(data, dict):
+            allowed = set(cls.__dataclass_fields__.keys())
+            extra = set(data.keys()) - allowed
+            if extra:
+                raise ValidationError(
+                    f"Unknown field(s) in semantic_model config: {', '.join(sorted(extra))}. "
+                    f"Valid fields are: {', '.join(sorted(allowed))}."
+                )
+        super().validate(data)
+
 
 @dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
@@ -569,6 +582,18 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     agg_time_dimension: Optional[str] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
+
+    @classmethod
+    @override
+    def validate(cls, data: Any) -> None:
+        # Validate the semantic_model sub-object before the full JSON Schema runs so
+        # that unknown fields produce a clear error instead of the opaque JSON Schema
+        # message "is not valid under any of the given schemas".
+        if isinstance(data, dict):
+            sm = data.get("semantic_model")
+            if isinstance(sm, dict):
+                UnparsedSemanticModelConfig.validate(sm)
+        super().validate(data)
 
     def __post_init__(self) -> None:
         if self.latest_version:
