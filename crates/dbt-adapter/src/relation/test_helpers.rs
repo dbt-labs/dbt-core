@@ -3,8 +3,8 @@ use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigChange, RelationComponentConfigChangeSet, RelationConfig,
     RelationConfigLoader,
 };
-use dbt_jinja_utils::test_helpers::jinja_diff;
 use dbt_schemas::schemas::nodes::DbtModel;
+use minijinja_contrib::testing::jinja_diff;
 
 const JINJA_INTROSPECT: &str = "
 {% macro introspect(obj) %}

@@ -9,7 +9,7 @@ homepage = "https://github.com/mitsuhiko/minijinja"
 repository = "https://github.com/mitsuhiko/minijinja"
 keywords = ["jinja", "jinja2", "templates"]
 readme = "README.md"
-rust-version = "1.70"
+rust-version = "1.80"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs", "--html-in-header", "doc-header.html"]
@@ -18,6 +18,7 @@ all-features = true
 [features]
 default = []
 pycompat = ["minijinja/builtins"]
+testing = []
 datetime = ["time"]
 timezone = ["time-tz"]
 rand = ["dep:rand"]

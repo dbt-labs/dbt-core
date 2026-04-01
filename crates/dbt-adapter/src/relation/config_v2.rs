@@ -731,8 +731,8 @@ mod tests {
     /// Tests related to the jinja Object implementation
     mod jinja {
         use super::*;
-        use dbt_jinja_utils::test_helpers::jinja_assert;
         use minijinja::value::{Enumerator, Object, Value};
+        use minijinja_contrib::testing::jinja_assert;
         use std::sync::Arc;
 
         #[derive(Debug)]

@@ -1,8 +1,8 @@
 //! Utilities for testing `impl Object` blocks of things across the codebase.
 
 use minijinja::{
-    Environment,
     value::{Object, Value},
+    Environment,
 };
 use regex::Regex;
 use std::collections::HashMap;

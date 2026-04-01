@@ -47,6 +47,3 @@ pub mod mangled_ref;
 /// Mock Jinja object
 #[cfg(any(test, feature = "testing"))]
 pub mod mock_object;
-
-#[cfg(any(test, feature = "testing"))]
-pub mod test_helpers;

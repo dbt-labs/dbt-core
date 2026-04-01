@@ -29,6 +29,9 @@ pub mod globals;
 /// Datetime & re functino
 pub mod modules;
 
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
+
 /// Registers all features of this crate with an [`Environment`].
 ///
 /// All the filters that are available will be added, same with global
