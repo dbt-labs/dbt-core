@@ -33,6 +33,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedNode,
     UnparsedNodeUpdate,
     UnparsedRunHook,
+    UnparsedSemanticModelConfig,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
     UnparsedVersion,
@@ -805,6 +806,31 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "docs": {"show": True},
         }
         self.assert_fails_validation(dct)
+
+
+class TestUnparsedSemanticModelConfig(ContractTestCase):
+    ContractType = UnparsedSemanticModelConfig
+
+    def test_valid_config_passes(self):
+        self.ContractType.validate({"name": "purchases", "enabled": True})
+
+    def test_extra_field_gives_clear_error(self):
+        self.assert_fails_validation_with_message(
+            {"enabled": True, "name": "purchases", "description": "my semantic model"},
+            "Unknown field(s) in semantic_model config: description",
+        )
+
+    def test_extra_field_error_lists_valid_fields(self):
+        self.assert_fails_validation_with_message(
+            {"enabled": True, "unexpected_key": "value"},
+            "Valid fields are:",
+        )
+
+    def test_multiple_extra_fields_all_listed(self):
+        self.assert_fails_validation_with_message(
+            {"enabled": True, "description": "oops", "label": "also wrong"},
+            "Unknown field(s) in semantic_model config: description, label",
+        )
 
 
 class TestUnparsedExposure(ContractTestCase):
