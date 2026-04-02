@@ -39,13 +39,16 @@
 
 -- funcsign: (list[base_column], list[base_column]) -> list[dict[string, string]]
 {% macro diff_column_data_types(source_columns, target_columns) %}
+  {{ return(adapter.dispatch('diff_column_data_types', 'dbt')(source_columns, target_columns)) }}
+{% endmacro %}
 
+{% macro default__diff_column_data_types(source_columns, target_columns) %}
   {% set result = [] %}
   {% for sc in source_columns %}
     {% set tc = target_columns | selectattr("name", "equalto", sc.name) | list | first %}
     {% if tc %}
-      {% if sc.data_type != tc.data_type and not sc.can_expand_to(other_column=tc) %}
-        {{ result.append( { 'column_name': tc.name, 'new_type': sc.data_type } ) }}
+      {% if sc.expanded_data_type != tc.expanded_data_type and not sc.can_expand_to(other_column=tc) %}
+        {{ result.append( { 'column_name': tc.name, 'new_type': sc.expanded_data_type } ) }}
       {% endif %}
     {% endif %}
   {% endfor %}

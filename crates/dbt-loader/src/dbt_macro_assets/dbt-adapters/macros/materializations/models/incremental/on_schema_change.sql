@@ -34,7 +34,11 @@
 
   {% set new_target_types = diff_column_data_types(source_columns, target_columns) %}
 
-  {% if source_not_in_target != [] or target_not_in_source != [] or new_target_types != [] %}
+  {% if source_not_in_target != [] %}
+    {% set schema_changed = True %}
+  {% elif target_not_in_source != [] or new_target_types != [] %}
+    {% set schema_changed = True %}
+  {% elif new_target_types != [] %}
     {% set schema_changed = True %}
   {% endif %}
 

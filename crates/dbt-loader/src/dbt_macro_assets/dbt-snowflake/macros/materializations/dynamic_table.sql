@@ -90,6 +90,7 @@
 {% endmacro %}
 
 
+{# DIVERGENCE: FIXME: support transient for Dynamic Table #}
 {% macro snowflake__get_dynamic_table_configuration_changes(existing_relation, new_config) -%}
     {% set _existing_dynamic_table = snowflake__describe_dynamic_table(existing_relation) %}
     {% set _configuration_changes = existing_relation.dynamic_table_config_changeset(_existing_dynamic_table, new_config.model) %}

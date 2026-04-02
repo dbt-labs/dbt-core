@@ -22,6 +22,7 @@
   -- Otherwise, this will be a view
 
   {% set can_clone_table = can_clone_table() %}
+  {%- set grant_config = config.get('grants') -%}
 
   {%- if other_existing_relation and other_existing_relation.type == 'table' and can_clone_table -%}
 

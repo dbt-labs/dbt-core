@@ -114,8 +114,8 @@ create or replace {{ transient }} table {{ relation }}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     as (
-    {#- TODO: when we store this under the Catalog Relation, we can change this back to how it is in Core -#}
-	{%- if cluster_by_string -%} {# DIVERGENCE #}
+    {#- DIVERGENCE: when we store this under the Catalog Relation, we can change this back to how it is in Core -#}
+	{%- if cluster_by_string -%}
         select * from (
             {{ compiled_code }}
         )

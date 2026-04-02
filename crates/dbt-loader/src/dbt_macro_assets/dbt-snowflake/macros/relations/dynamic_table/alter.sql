@@ -1,4 +1,5 @@
 -- funcsign: (relation, snowflake_node_config, relation, string) -> string
+{# DIVERGENCE: FIXME: support dynamic_table.immutable_where #}
 {% macro snowflake__get_alter_dynamic_table_as_sql(
     existing_relation,
     configuration_changes,

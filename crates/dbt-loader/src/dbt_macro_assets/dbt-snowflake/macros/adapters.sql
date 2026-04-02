@@ -200,7 +200,7 @@
       {{ column.data_type }}
     {% endif %}
   {% else %}
-    {{ column.expanded_data_type }}
+    {{ column.data_type }}
   {% endif %}
 {% endmacro %}
 
@@ -245,8 +245,7 @@
 
 {% macro snowflake__is_catalog_linked_database(relation=none, catalog_relation=none) -%}
     {#-- Helper macro to detect if we're in a catalog-linked database context --#}
-    {#-- CORE DISCREPANCY: there's supposed to be a relation.catalog based arm here. This is a core
-      -- hack that won't work in Fusion. #}
+    {# DIVERGENCE BEGIN: there is supposed to be a relation.catalog based arm here. This is a core hack that does not work in Fusion. #}
     {%- if catalog_relation is not none -%}
         {#-- Direct catalog_relation object provided --#}
         {%- if catalog_relation|attr('catalog_linked_database') -%}
@@ -262,6 +261,7 @@
             {{ return(false) }}
         {%- endif -%}
     {%- endif -%}
+    {# DIVERGENCE END #}
 {%- endmacro %}
 
 -- funcsign: (string) -> string

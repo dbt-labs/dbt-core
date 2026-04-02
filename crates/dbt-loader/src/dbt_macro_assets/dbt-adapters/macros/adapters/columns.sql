@@ -146,11 +146,11 @@
      alter {{ relation.type }} {{ relation.render() }}
 
             {% for column in add_columns %}
-               add column {{ column.name }} {{ column.expanded_data_type }}{{ ',' if not loop.last }}
+               add column {{ column.quoted }} {{ column.expanded_data_type }}{{ ',' if not loop.last }}
             {% endfor %}{{ ',' if add_columns and remove_columns }}
 
             {% for column in remove_columns %}
-                drop column {{ column.name }}{{ ',' if not loop.last }}
+                drop column {{ column.quoted }}{{ ',' if not loop.last }}
             {% endfor %}
 
   {%- endset -%}

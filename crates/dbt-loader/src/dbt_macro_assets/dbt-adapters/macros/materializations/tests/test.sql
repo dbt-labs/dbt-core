@@ -2,6 +2,7 @@
 
   {% set relations = [] %}
   {% set limit = config.get('limit') %}
+  {# DIVERGENCE: FIXME: support REQUIRE_SQL_HEADER_IN_TEST_CONFIGS flag #}
   {% set sql_header = config.get('sql_header') %}
 
   {% set sql_with_limit %}

@@ -84,7 +84,7 @@
 	type='table',
 	table_format=catalog_relation.table_format,
   ) -%}
-  {# -- Core discrepancy: catalog=config.model.catalog is a metadata hack I found another solution to using build_catalog_relation #}
+  {# DIVERGENCE: catalog=config.model.catalog is a metadata hack I found another solution to using build_catalog_relation #}
 
   {% set existing_relation = load_relation(this) %}
 
