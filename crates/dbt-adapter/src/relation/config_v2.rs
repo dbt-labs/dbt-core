@@ -324,16 +324,16 @@ pub(crate) trait ComponentConfigLoader<R> {
 
 /// Holds a collection of `ComponentConfigLoader` to populate a `RelationConfig`
 /// by loading each of its components one by one
-pub(crate) struct RelationConfigLoader<R> {
+pub(crate) struct RelationConfigLoader<'a, R> {
     adapter_type: AdapterType,
-    component_loaders: Vec<Box<dyn ComponentConfigLoader<R>>>,
+    component_loaders: Vec<Box<dyn ComponentConfigLoader<R> + 'a>>,
     requires_full_refresh_fn: RequiresFullRefreshFn,
 }
 
-impl<R> RelationConfigLoader<R> {
+impl<'a, R> RelationConfigLoader<'a, R> {
     pub(crate) fn new(
         adapter_type: AdapterType,
-        component_loaders: impl IntoIterator<Item = Box<dyn ComponentConfigLoader<R>>>,
+        component_loaders: impl IntoIterator<Item = Box<dyn ComponentConfigLoader<R> + 'a>>,
         requires_full_refresh_fn: RequiresFullRefreshFn,
     ) -> Self {
         Self {

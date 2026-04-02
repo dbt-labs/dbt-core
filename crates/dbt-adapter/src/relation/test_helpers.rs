@@ -34,7 +34,7 @@ pub(crate) struct TestCase<L, C> {
     pub description: &'static str,
     pub current_state: C,
     pub desired_state: C,
-    pub relation_loader: RelationConfigLoader<L>,
+    pub relation_loader: RelationConfigLoader<'static, L>,
     pub expected_changeset: RelationComponentConfigChangeSet,
     pub changeset_jinja: &'static str,
     pub requires_full_refresh: bool,

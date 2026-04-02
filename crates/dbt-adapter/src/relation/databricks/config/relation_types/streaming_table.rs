@@ -11,7 +11,7 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 }
 
 /// Create a `RelationConfigLoader` for Databricks streaming tables
-pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
+pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
     // - liquid clustering
     // - relation tags
