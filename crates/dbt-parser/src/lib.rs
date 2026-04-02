@@ -10,6 +10,8 @@
 #![deny(missing_docs)]
 
 pub mod args;
+/// Compile-time constants for the dbt-parser crate
+pub mod constants;
 /// DbtNamespace for intercepting dbt macro calls during parse phase
 pub mod dbt_namespace;
 pub mod dbt_project_config;
