@@ -90,7 +90,6 @@ class TestTracking:
         assert dbt.tracking.active_user.do_not_track != send_anonymous_usage_stats
 
 
-<<<<<<< HEAD
 class TestCompileStatsTracking:
     def test_generate_stats_includes_catalog_count(self) -> None:
         mock_manifest = mock.MagicMock()
