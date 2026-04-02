@@ -146,13 +146,13 @@ impl CliParserTrait for CliParser {
     type CliType = Cli;
 
     /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
-    fn parse(&self) -> Cli {
+    fn parse(&self) -> Box<Cli> {
         let mut matches = self.app().get_matches();
         let res = self
             .try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err));
         match res {
-            Ok(s) => s,
+            Ok(s) => Box::new(s),
             Err(e) => {
                 // Since this is more of a development-time error, we aren't doing as fancy of a quit
                 // as `get_matches`
@@ -162,14 +162,16 @@ impl CliParserTrait for CliParser {
     }
 
     /// Parse from `std::env::args_os()`, return Err on error.
-    fn try_parse(&self) -> Result<Cli, clap::Error> {
+    fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
         let mut matches = self.app().try_get_matches()?;
-        self.try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err))
+        let cli = self
+            .try_parse_from_arg_matches_mut(&mut matches)
+            .map_err(|err| self.format_error(err))?;
+        Ok(Box::new(cli))
     }
 
     /// Parse from iterator, [exit][clap::Error::exit] on error.
-    fn parse_from<I, T>(&self, itr: I) -> Self::CliType
+    fn parse_from<I, T>(&self, itr: I) -> Box<Self::CliType>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
@@ -179,7 +181,7 @@ impl CliParserTrait for CliParser {
             .try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err));
         match res {
-            Ok(s) => s,
+            Ok(s) => Box::new(s),
             Err(e) => {
                 // Since this is more of a development-time error, we aren't doing as fancy of a quit
                 // as `get_matches_from`
@@ -189,14 +191,16 @@ impl CliParserTrait for CliParser {
     }
 
     /// Parse from iterator, return Err on error.
-    fn try_parse_from<I, T>(&self, itr: I) -> Result<Cli, clap::Error>
+    fn try_parse_from<I, T>(&self, itr: I) -> Result<Box<Cli>, clap::Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
         let mut matches = self.app().try_get_matches_from(itr)?;
-        self.try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err))
+        let cli = self
+            .try_parse_from_arg_matches_mut(&mut matches)
+            .map_err(|err| self.format_error(err))?;
+        Ok(Box::new(cli))
     }
 
     fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {

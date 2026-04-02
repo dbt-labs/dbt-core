@@ -49,7 +49,7 @@ use serde_json::to_string_pretty;
 
 pub async fn execute_fs(
     system_arg: SystemArgs,
-    cli: Cli,
+    cli: Box<Cli>,
     token: CancellationToken,
 ) -> FsResult<()> {
     // Resolve EvalArgs from SystemArgs and Cli. This will create out folders,
@@ -80,7 +80,11 @@ pub async fn execute_fs(
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) -> FsResult<()> {
+async fn do_execute_fs(
+    eval_arg: &EvalArgs,
+    cli: Box<Cli>,
+    token: CancellationToken,
+) -> FsResult<()> {
     if let Commands::Man(_) = &cli.command {
         return execute_man_command(eval_arg).await;
     } else if let Commands::Init(init_args) = &cli.command {
@@ -139,7 +143,7 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
 #[allow(clippy::cognitive_complexity)]
 async fn execute_setup_and_all_phases(
     eval_arg: &EvalArgs,
-    cli: Cli,
+    cli: Box<Cli>,
     token: &CancellationToken,
 ) -> FsResult<()> {
     // Header ..

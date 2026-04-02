@@ -59,31 +59,35 @@ impl CliParserTrait for CliParser {
     type CliType = Cli;
 
     /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
-    fn parse(&self) -> Cli {
-        Cli::parse()
+    fn parse(&self) -> Box<Cli> {
+        let cli = Cli::parse();
+        Box::new(cli)
     }
 
     /// Parse from `std::env::args_os()`, return Err on error.
-    fn try_parse(&self) -> Result<Cli, clap::Error> {
-        Cli::try_parse()
+    fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
+        let cli = Cli::try_parse()?;
+        Ok(Box::new(cli))
     }
 
     /// Parse from iterator, return Err on error.
-    fn try_parse_from<I, T>(&self, itr: I) -> Result<Cli, clap::Error>
+    fn try_parse_from<I, T>(&self, itr: I) -> Result<Box<Cli>, clap::Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        Cli::try_parse_from(itr)
+        let cli = Cli::try_parse_from(itr)?;
+        Ok(Box::new(cli))
     }
 
     /// Parse from iterator, return Err on error.
-    fn parse_from<I, T>(&self, itr: I) -> Self::CliType
+    fn parse_from<I, T>(&self, itr: I) -> Box<Self::CliType>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        Cli::parse_from(itr)
+        let cli = Cli::parse_from(itr);
+        Box::new(cli)
     }
 
     fn fail_fast_flag(&self, _cli: &Self::CliType) -> bool {

@@ -325,7 +325,7 @@ pub fn exec_fs<'a, P: CliParserTrait + Default, Fut>(
     target_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
-    execute_fs: impl FnOnce(SystemArgs, P::CliType, Arc<FeatureStack>, CancellationToken) -> Fut,
+    execute_fs: impl FnOnce(SystemArgs, Box<P::CliType>, Arc<FeatureStack>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
 ) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
