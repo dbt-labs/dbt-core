@@ -160,7 +160,9 @@ def extended_msgpack_encoder(obj):
 
 
 def extended_mashumuro_decoder(data):
-    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False)
+    return msgpack.unpackb(
+        data, ext_hook=extended_msgpack_decoder, raw=False, strict_map_key=False
+    )
 
 
 def extended_msgpack_decoder(code, data):

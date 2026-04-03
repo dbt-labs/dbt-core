@@ -911,7 +911,7 @@ class PartialParsingNotEnabled(DebugLevel):
         return "Partial parsing not enabled"
 
 
-class ParsedFileLoadFailed(DebugLevel):
+class ParsedFileLoadFailed(WarnLevel):
     def code(self) -> str:
         return "I029"
 
