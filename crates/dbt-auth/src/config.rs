@@ -87,6 +87,15 @@ impl AdapterConfig {
     pub fn require_string(&self, field: &str) -> Result<Cow<'_, str>, dbt_yaml::Error> {
         self.require(field).map(yml_value_to_string)
     }
+
+    /// Whether this config indicates that authentication should be handled by
+    /// dbt Cloud credentials (via the flock/remote driver) instead of
+    /// adapter-specific auth.
+    pub fn use_dbt_cloud_credentials(&self) -> bool {
+        self.get("use_dbt_cloud_credentials")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]

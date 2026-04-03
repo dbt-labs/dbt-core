@@ -1,11 +1,11 @@
-use core::fmt;
 use std::ffi::OsString;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::result::Result;
 use std::time::Duration;
-use std::{env, io};
+use std::{env, fmt, io};
 
+use crate::driver::DriverFilenameDisplay;
 use crate::*;
 use adbc_core::error::{Error, Status};
 use percent_encoding::AsciiSet;
@@ -51,7 +51,7 @@ pub enum InstallError {
 }
 
 impl fmt::Display for InstallError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             InstallError::Http(error) => write!(f, "HTTP error: {error}"),
             InstallError::GetRandom(error) => write!(f, "getrandom error: {error}"),
@@ -211,23 +211,19 @@ pub fn format_driver_url(backend_name: &str, version: &str, os: &str) -> String 
 /// Windows
 ///
 /// ${FOLDERID_LocalAppData}/com.getdbt/adbc/x86_64-pc-windows-msvc/adbc_driver_snowflake-0.17.0+dbt0.0.1.dll
-pub fn format_driver_path(
-    backend_name: &str,
-    version: &str,
-    os: &str,
-) -> Result<PathBuf, InstallError> {
+pub fn format_driver_path(name: &str, version: &str, os: &str) -> Result<PathBuf, InstallError> {
     const APP_ID: &str = "com.getdbt";
     dirs::cache_dir()
         .map(|cache_dir| {
             let driver_relpath = format!(
-                "{}/adbc/{}-{}/{}adbc_driver_{}-{}{}",
+                "{}/adbc/{}-{}/{}",
                 APP_ID,
                 env::consts::ARCH,
                 os,
-                env::consts::DLL_PREFIX,
-                backend_name,
-                version,
-                env::consts::DLL_SUFFIX
+                DriverFilenameDisplay {
+                    name,
+                    version: Some(version)
+                }
             );
             cache_dir.join(driver_relpath)
         })

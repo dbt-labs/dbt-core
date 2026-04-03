@@ -16,11 +16,8 @@ use adbc_core::{
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
 use parking_lot::RwLockUpgradableReadGuard;
-use std::sync::Arc;
-use std::{
-    collections::HashMap, env, ffi::c_int, fmt, fmt::Display, hash::Hash, path::Path,
-    path::PathBuf, sync::LazyLock,
-};
+use std::{collections::HashMap, env, ffi::c_int, fmt, path::Path, path::PathBuf, sync::LazyLock};
+use std::{hash, sync::Arc};
 
 #[cfg(debug_assertions)]
 use {crate::env_var::env_var_bool, std::io::ErrorKind, std::process::Command};
@@ -44,6 +41,12 @@ pub enum LoadStrategy {
     System(Option<String>),
     /// Try loading from system paths first; if not found, fall back to CDN cache.
     SystemThenCdnCache,
+    /// Load the `flock` driver that proxies all ADBC calls to a service multiplexing
+    /// different ADBC drivers.
+    ///
+    /// In this strategy, we load the "adbc_driver_flock" driver and configure it
+    /// to make calls to the server that loads the actual drivers.
+    Remote,
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -88,7 +91,7 @@ pub enum Backend {
     },
 }
 
-impl Display for Backend {
+impl fmt::Display for Backend {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Backend::Snowflake => write!(f, "Snowflake"),
@@ -186,12 +189,40 @@ pub trait Driver {
 struct AdbcDriverKey {
     backend: Backend,
     adbc_version: AdbcVersion,
+    // TODO: include load strategy
 }
 
-impl Hash for AdbcDriverKey {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl hash::Hash for AdbcDriverKey {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.backend.hash(state);
         c_int::from(self.adbc_version).hash(state);
+    }
+}
+
+pub struct DriverFilenameDisplay<'a> {
+    pub name: &'a str,
+    pub version: Option<&'a str>,
+}
+
+impl<'a> fmt::Display for DriverFilenameDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.version {
+            Some(version) => write!(
+                f,
+                "{}adbc_driver_{}-{}{}",
+                env::consts::DLL_PREFIX,
+                self.name,
+                version,
+                env::consts::DLL_SUFFIX
+            ),
+            None => write!(
+                f,
+                "{}adbc_driver_{}{}",
+                env::consts::DLL_PREFIX,
+                self.name,
+                env::consts::DLL_SUFFIX
+            ),
+        }
     }
 }
 
@@ -402,13 +433,19 @@ impl AdbcDriver {
                 ));
             }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
-            (CdnCache | SystemThenCdnCache, ClickHouse) => System(None),
+            (CdnCache | SystemThenCdnCache | Remote, ClickHouse) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
-            (CdnCache | SystemThenCdnCache, Generic { library_name, .. }) => {
+            (CdnCache | SystemThenCdnCache | Remote, Generic { library_name, .. }) => {
                 System(Some(library_name.to_string()))
             }
             // System strategy: load from a provided library name (e.g. "adbc_driver_snowflake").
             (load_strategy @ System(_), _) => load_strategy,
+            // Remote drivers are used via the "adbc_driver_flock" library
+            (
+                load_strategy @ Remote,
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                | Salesforce | SQLServer,
+            ) => load_strategy,
         };
 
         debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
@@ -422,6 +459,7 @@ impl AdbcDriver {
                 };
                 Self::try_load_driver_from_name(backend, name, adbc_version)
             }
+            Remote => Self::prepare_for_remote_driver(backend, adbc_version),
             SystemThenCdnCache => {
                 // Safe to unwrap because it's an ADBC backend and non-CDN backends were already
                 // redirected to System(_) above.
@@ -508,6 +546,34 @@ Second error:\n\
             )?;
             Ok(driver)
         })
+    }
+
+    /// Load the driver virtually using the [LoadStrategy::Remote] strategy.
+    fn prepare_for_remote_driver(
+        backend: Backend,
+        adbc_version: AdbcVersion,
+    ) -> Result<ManagedAdbcDriver> {
+        if let Some(libs_dir) = ADBC_LIBS_DIRECTORY.as_ref() {
+            let filename = DriverFilenameDisplay {
+                name: "flock",
+                version: None,
+            };
+            let full_path = libs_dir.join(format!("{}", filename));
+            return ManagedAdbcDriver::load_dynamic_from_filename(
+                backend,
+                &full_path,
+                None, // entrypoint
+                adbc_version,
+            );
+        }
+
+        Err(Error::with_message_and_status(
+            "Remote driver strategy requires the `adbc_driver_flock` driver to be \
+located in a `lib/` directory next to the executable, but no such directory could \
+be found."
+                .to_string(),
+            Status::Internal,
+        ))
     }
 }
 
@@ -640,6 +706,30 @@ mod tests {
                 AdbcVersion::default(),
                 None,
                 LoadStrategy::CdnCache,
+            )?;
+        }
+        Ok(())
+    }
+
+    #[test_with::env(FLOCK_DRIVER_TESTS)]
+    #[test]
+    fn load_flock_driver() -> Result<()> {
+        for backend in [
+            Backend::Snowflake,
+            Backend::BigQuery,
+            Backend::Postgres,
+            Backend::Databricks,
+            Backend::Redshift,
+            Backend::Spark,
+            Backend::DuckDB,
+            Backend::Salesforce,
+            Backend::SQLServer,
+        ] {
+            AdbcDriver::try_load_dynamic(
+                backend,
+                AdbcVersion::default(),
+                None,
+                LoadStrategy::Remote,
             )?;
         }
         Ok(())

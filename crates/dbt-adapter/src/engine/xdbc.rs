@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use serde::Deserialize;
 
 use crate::cache::RelationCache;
-use crate::errors::{AdapterError, adbc_error_to_adapter_error};
+use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
 use crate::query_cache::QueryCache;
 use crate::query_comment::QueryCommentConfig;
 use crate::record_and_replay::{RecordEngineConnection, ReplayEngineConnection};
@@ -276,23 +276,39 @@ impl XdbcEngine {
             "load_driver_and_configure_database called in {:?} mode",
             self.mode,
         );
-        let builder = self
-            .auth
-            .configure(config)
-            .map_err(crate::errors::auth_error_to_adapter_error)?;
+        let use_cloud_credentials = config.use_dbt_cloud_credentials();
+        let backend = self.auth.backend();
 
-        let load_strategy = match self.adapter_type {
-            AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
-            _ => LoadStrategy::CdnCache,
+        let (database_builder, load_strategy) = if use_cloud_credentials {
+            // Cloud credentials are used to connect to a service that manages
+            // drivers and warehouse credentials for us. The "flock" driver takes
+            // these credentials and behaves as a proxy to the actual.
+            let builder = Self::configure_cloud_database(backend)?;
+            (builder, LoadStrategy::Remote)
+        } else {
+            // Delegate configuration to the Auth implementation configuring
+            // the warehouse driver locally.
+            let database_builder = self
+                .auth
+                .configure(config)
+                .map_err(crate::errors::auth_error_to_adapter_error)?;
+
+            let load_strategy = match self.adapter_type {
+                AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
+                _ => LoadStrategy::CdnCache,
+            };
+            (database_builder, load_strategy)
         };
-        let mut driver = driver::Builder::new(self.auth.backend(), load_strategy)
+
+        // This will load the "flock" driver if load_strategy is Remote.
+        let mut driver = driver::Builder::new(backend, load_strategy)
             .with_semaphore(self.semaphore.clone())
             .try_load()
             .map_err(adbc_error_to_adapter_error)?;
 
         // The database is configured only once even if this runs multiple times,
         // unless a different configuration is provided.
-        let opts = builder.into_iter().collect::<Vec<_>>();
+        let opts = database_builder.into_iter().collect::<Vec<_>>();
         let fingerprint = database::Builder::fingerprint(opts.iter());
         {
             let read_guard = self.configured_databases.read();
@@ -317,6 +333,29 @@ impl XdbcEngine {
                 Ok(database)
             }
         }
+    }
+
+    /// Build a [database::Builder] configured with dbt Cloud credentials
+    /// read from `~/.dbt/dbt_cloud.yml` (with env-var overrides applied).
+    fn configure_cloud_database(backend: Backend) -> AdapterResult<database::Builder> {
+        let mut builder = database::Builder::new(backend);
+        let cloud_config_path = dbt_cloud_config::get_cloud_project_path()
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
+        let cloud_yml = dbt_cloud_config::parse_cloud_config(&cloud_config_path)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
+        let resolved = dbt_cloud_config::resolve_cloud_config(cloud_yml.as_ref(), None);
+        if let Some(credentials) = resolved.and_then(|r| r.credentials) {
+            builder
+                .with_named_option("dbt_cloud.token", credentials.token)
+                .map_err(adbc_error_to_adapter_error)?;
+            builder
+                .with_named_option("dbt_cloud.host", credentials.host)
+                .map_err(adbc_error_to_adapter_error)?;
+            builder
+                .with_named_option("dbt_cloud.account_id", credentials.account_id)
+                .map_err(adbc_error_to_adapter_error)?;
+        }
+        Ok(builder)
     }
 
     /// Apply DuckDB init SQL (extensions, settings, secrets, attachments)
