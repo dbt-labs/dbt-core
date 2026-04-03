@@ -71,7 +71,7 @@ pub struct DbtProjectNameOnly {
 pub struct DbtProjectSimplified {
     #[serde(rename = "packages-install-path")]
     pub packages_install_path: Option<String>,
-    pub profile: Option<String>,
+    pub profile: Spanned<Option<String>>,
     #[serde(rename = "dbt-cloud")]
     pub dbt_cloud: Option<ProjectDbtCloudConfig>,
     pub flags: Option<YmlValue>,

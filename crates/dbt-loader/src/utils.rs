@@ -7,6 +7,7 @@ use dbt_common::{
 };
 use dbt_jinja_utils::serde::{MinijinjaContext, value_from_file};
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
+use dbt_yaml::Spanned;
 use pathdiff::diff_paths;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -132,7 +133,7 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     target_override: &Option<String>,
     jinja_env: &JinjaEnv,
     ctx: &S,
-    profile_str: &str,
+    profile: &Spanned<String>,
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
     let prepared_profile_val = value_from_file(io_args, &profile_path, true, None)?;
@@ -145,11 +146,14 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
         );
     }
 
+    let profile_str = profile.clone().into_inner();
+
     // get the profile value
     let profile_val: &dbt_yaml::Value =
-        dbt_profiles.__profiles__.get(profile_str).ok_or_else(|| {
+        dbt_profiles.__profiles__.get(&profile_str).ok_or_else(|| {
             fs_err!(
-                ErrorCode::IoError,
+                code => ErrorCode::IoError,
+                loc => profile.span().clone(),
                 "Profile '{}' not found in profiles.yml",
                 profile_str
             )

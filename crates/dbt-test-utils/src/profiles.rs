@@ -71,7 +71,7 @@ pub fn load_db_config<P: AsRef<Path>>(
         &Some(target.to_string()),
         &env,
         &load_context,
-        TEST_PROFILE,
+        &TEST_PROFILE.to_string().into(),
         profile_path.as_ref().to_path_buf(),
     )?;
 

@@ -7,6 +7,7 @@ use dbt_common::constants::DBT_PROFILES_YML;
 use dbt_common::stdfs::canonicalize;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 
+use dbt_yaml::{Span, Spanned};
 use pathdiff::diff_paths;
 use std::path::PathBuf;
 
@@ -24,7 +25,7 @@ pub fn load_profiles<S: MinijinjaContext>(
     jinja_env: &JinjaEnv,
     ctx: &S,
 ) -> FsResult<DbtProfile> {
-    let profile_str = get_profile_string(arg.profile.as_ref(), raw_dbt_project.profile.as_ref())?;
+    let profile = get_profile_with_span(arg.profile.as_ref(), raw_dbt_project.profile.clone())?;
 
     // TODO: Add Secret Renderer logic to profile renderer
 
@@ -70,7 +71,7 @@ pub fn load_profiles<S: MinijinjaContext>(
         &arg.target,
         jinja_env,
         ctx,
-        &profile_str,
+        &profile,
         profile_path,
     )?;
 
@@ -95,7 +96,7 @@ pub fn load_profiles<S: MinijinjaContext>(
     Ok(DbtProfile {
         database,
         schema,
-        profile: profile_str,
+        profile: profile.into_inner(),
         target,
         db_config,
         relative_profile_path,
@@ -106,22 +107,25 @@ pub fn load_profiles<S: MinijinjaContext>(
 /// Resolve the profile name to use.
 /// # Parameters
 /// - `arg_profile`: the profile name provided via the `--profile` command-line argument. If present, this value takes precedence over the project file.
-/// - `proj_profile`: the profile name provided via the `dbt_project.yml` file. Used as a fallback if `--profile` is not provided.
+/// - `proj_profile`: the Spanned profile provided via the `dbt_project.yml` file. Used as a fallback if `--profile` is not provided.
 ///
 /// # Returns
 /// - The profile name to use.
-fn get_profile_string(
+/// - The profile span, if from dbt_project.yml
+fn get_profile_with_span(
     arg_profile: Option<&String>,
-    proj_profile: Option<&String>,
-) -> FsResult<String> {
-    match (proj_profile, arg_profile) {
+    proj_profile: Spanned<Option<String>>,
+) -> FsResult<Spanned<String>> {
+    match (proj_profile.as_ref(), arg_profile) {
         (None, None) => {
             err!(
                 ErrorCode::InvalidConfig,
                 "No profile specified in dbt_project.yml"
             )
         }
-        (None, Some(prof)) | (Some(prof), None) | (Some(_), Some(prof)) => Ok(prof.to_string()),
+        (None, Some(prof)) | (Some(_), Some(prof)) => Ok(Spanned::new(prof.to_string())
+            .map_span(|_| Span::default().with_filename(PathBuf::from("<cmdline>")))),
+        (Some(_), None) => Ok(proj_profile.map(|x| x.unwrap())),
     }
 }
 
