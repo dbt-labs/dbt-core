@@ -42,8 +42,7 @@
     RETURNS {{ model.returns.data_type }}
     LANGUAGE PYTHON
     {{ scalar_function_volatility_sql() }}
-    RUNTIME_VERSION = '{{ model.config.get('runtime_version') }}'
-    HANDLER = '{{ model.config.get('entry_point') }}'
+    {{ get_function_python_options() }}
     AS
 {% endmacro %}
 
