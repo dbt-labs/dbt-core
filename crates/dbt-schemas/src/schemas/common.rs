@@ -1151,6 +1151,7 @@ pub enum StoreFailuresAs {
 }
 
 #[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema)]
+#[schemars(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Severity {
     #[default]
