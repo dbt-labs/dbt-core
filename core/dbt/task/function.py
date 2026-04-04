@@ -1,6 +1,7 @@
 import threading
 from typing import Any, Dict
 
+from dbt.adapters.capability import Capability
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
@@ -8,12 +9,16 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_function_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import FunctionNode
-from dbt.events.types import LogFunctionResult, LogStartLine
+from dbt.events.types import (
+    FunctionParameterColumnConflict,
+    LogFunctionResult,
+    LogStartLine,
+)
 from dbt.task import group_lookup
 from dbt.task.compile import CompileRunner
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
+from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.exceptions import DbtValidationError
 
 
@@ -87,7 +92,36 @@ class FunctionRunner(CompileRunner):
             batch_results=None,
         )
 
+    def _check_parameter_column_conflicts(
+        self, compiled_node: FunctionNode, manifest: Manifest
+    ) -> None:
+        """Warn if any SQL function parameter name matches a column name in a referenced model,
+        which the database resolves silently to the column."""
+        if compiled_node.language != "sql":
+            return
+        if not self.adapter.supports(Capability.SqlFunctionParameterColumnShadowing):
+            return
+        param_names = {arg.name for arg in compiled_node.arguments}
+        if not param_names:
+            return
+        for node_id in compiled_node.depends_on.nodes:
+            ref_node = manifest.nodes.get(node_id) or manifest.sources.get(node_id)
+            if ref_node is None:
+                continue
+            relation = self.adapter.Relation.create_from(self.config, ref_node)
+            for col in self.adapter.get_columns_in_relation(relation):
+                if col.name in param_names:
+                    warn_or_error(
+                        FunctionParameterColumnConflict(
+                            function_name=compiled_node.name,
+                            param_name=col.name,
+                            column_name=col.name,
+                            model_name=ref_node.name,
+                        )
+                    )
+
     def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
+        self._check_parameter_column_conflicts(compiled_node, manifest)
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
         context = generate_runtime_function_context(compiled_node, self.config, manifest)

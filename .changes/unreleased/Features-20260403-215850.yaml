@@ -1,0 +1,6 @@
+kind: Features
+body: Warn at build time when a SQL function parameter name shadows a column in a referenced model
+time: 2026-04-03T21:58:50.48321-05:00
+custom:
+    Author: nitrajen
+    Issue: "12707"
