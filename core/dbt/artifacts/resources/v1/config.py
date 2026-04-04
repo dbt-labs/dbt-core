@@ -128,6 +128,8 @@ class NodeConfig(NodeAndTestConfig):
     )
     event_time: Any = None
     concurrent_batches: Any = None
+    # Priority tie-breaker for nodes at the same topological level. Higher values are scheduled first.
+    priority: int = 0
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing

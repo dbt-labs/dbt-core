@@ -11,8 +11,8 @@ from dbt.graph.queue import GraphQueue
 from dbt.graph.selector import NodeSelector
 
 
-def _mock_manifest(nodes):
-    config = mock.MagicMock(enabled=True)
+def _mock_manifest(nodes, priorities=None):
+    priorities = priorities or {}
     manifest = mock.MagicMock(
         nodes={
             n: mock.MagicMock(
@@ -20,7 +20,7 @@ def _mock_manifest(nodes):
                 package_name="pkg",
                 name=n,
                 empty=False,
-                config=config,
+                config=mock.MagicMock(enabled=True, priority=priorities.get(n, 0)),
                 fqn=["pkg", n],
                 is_versioned=False,
             )
@@ -114,6 +114,21 @@ class TestLinker:
         queue.mark_done("A")
         self.assert_would_join(queue)
         assert queue.empty()
+
+    def test_priority_does_not_override_dependencies(self, linker: Linker) -> None:
+        linker.dependency("A", "B")
+
+        queue = self._get_graph_queue(
+            _mock_manifest("AB", priorities={"A": 100, "B": -100}),
+            linker,
+        )
+
+        first = queue.get(block=False)
+        assert first.unique_id == "B"
+        queue.mark_done("B")
+
+        second = queue.get(block=False)
+        assert second.unique_id == "A"
 
     def test_linker_add_disjoint_dependencies(self, linker: Linker) -> None:
         actual_deps = [("A", "B")]

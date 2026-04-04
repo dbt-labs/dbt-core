@@ -48,7 +48,7 @@ class GraphQueue:
         self.queued: Set[UniqueId] = set()
         # this lock controls most things
         self.lock = threading.Lock()
-        # store the 'score' of each node as a number. Lower is higher priority.
+        # store each node's topological score. Lower scores are dequeued first.
         self._scores = self._get_scores(self.graph)
         # populate the initial queue
         self._find_new_additions(list(self.graph.nodes()))
@@ -133,7 +133,7 @@ class GraphQueue:
         See `queue.PriorityQueue` for more information on `get()` behavior and
         exceptions.
         """
-        _, node_id = self.inner.get(block=block, timeout=timeout)
+        _, _, node_id = self.inner.get(block=block, timeout=timeout)
         node = self.manifest.expect(node_id)
         is_microbatch = (
             isinstance(node, ModelNode) and node.config.incremental_strategy == "microbatch"
@@ -179,8 +179,18 @@ class GraphQueue:
         """
         for node in candidates:
             if self.graph.in_degree(node) == 0 and not self._already_known(node):
-                self.inner.put((self._scores[node], node))
+                configured_priority = self._get_node_priority(node)
+                # PriorityQueue pops the smallest tuple first.
+                heap_priority = -configured_priority
+                self.inner.put((self._scores[node], heap_priority, node))
                 self.queued.add(node)
+
+    def _get_node_priority(self, node_id: UniqueId) -> int:
+        node = self.manifest.nodes.get(node_id)
+        if node is None:
+            return 0
+        priority = getattr(node.config, "priority", 0)
+        return priority if isinstance(priority, int) else 0
 
     def mark_done(self, node_id: UniqueId) -> None:
         """Given a node's unique ID, mark it as done.
