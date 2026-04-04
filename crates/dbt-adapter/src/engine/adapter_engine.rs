@@ -11,7 +11,9 @@ use dbt_auth::AdapterConfig;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::hashing::code_hash;
-use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
+use dbt_common::tracing::span_info::{
+    read_current_span_start_info, record_current_span_status_from_attrs,
+};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, Cancellable, create_debug_span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_telemetry::{QueryExecuted, QueryOutcome};
@@ -259,6 +261,16 @@ pub(crate) fn adbc_execute_with_options(
             OptionStatement::Other(DBT_FETCH.to_string()),
             OptionValue::Int(fetch as i64),
         )?;
+        if engine.adapter_type() == AdapterType::Snowflake
+            && let Some(traceparent) = read_current_span_start_info(|info| {
+                format!("00-{:032x}-{:016x}-01", info.trace_id, info.span_id)
+            })
+        {
+            stmt.set_option(
+                OptionStatement::Other("adbc.telemetry.trace_parent".to_string()),
+                OptionValue::String(traceparent),
+            )?;
+        }
         options
             .into_iter()
             .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;
