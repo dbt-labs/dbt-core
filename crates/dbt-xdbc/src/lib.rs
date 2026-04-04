@@ -60,7 +60,7 @@ pub(crate) mod builder;
 pub(crate) mod checksums;
 pub mod driver_manager;
 pub mod duration;
-pub(crate) mod install;
+pub mod install;
 
 // Constants for different backends
 pub mod bigquery;

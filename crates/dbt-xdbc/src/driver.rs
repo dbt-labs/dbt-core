@@ -2,13 +2,13 @@
 //!
 //!
 
-use crate::Database;
 use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
 use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
 use crate::install;
 use crate::semaphore::Semaphore;
+use crate::{Database, install::build_http_agent};
 use adbc_core::{
     Driver as _, LOAD_FLAG_ALLOW_RELATIVE_PATHS, LOAD_FLAG_SEARCH_ENV, LOAD_FLAG_SEARCH_SYSTEM,
     LOAD_FLAG_SEARCH_USER,
@@ -524,10 +524,11 @@ Second error:\n\
         backend: Backend,
         adbc_version: AdbcVersion,
     ) -> Result<ManagedAdbcDriver> {
+        let http_agent = build_http_agent();
         let entrypoint = backend.adbc_driver_entrypoint();
-        let (backend_name, version, target_os) = install::driver_parameters(backend);
-        let full_driver_path = install::format_driver_path(backend_name, version, target_os)
-            .map_err(|e| e.to_adbc_error())?;
+        let (backend_name, triplet) = install::driver_parameters(backend);
+        let full_driver_path =
+            install::format_driver_path(backend_name, triplet).map_err(|e| e.to_adbc_error())?;
         ManagedAdbcDriver::load_dynamic_from_filename(
             backend,
             &full_driver_path,
@@ -535,7 +536,7 @@ Second error:\n\
             adbc_version,
         )
         .or_else(|_| {
-            install::install_driver_internal(backend_name, version, target_os)
+            install::install_driver_internal(&http_agent, backend_name, triplet)
                 .map_err(|e| Error::with_message_and_status(e.to_string(), Status::IO))?;
 
             let driver = ManagedAdbcDriver::load_dynamic_from_filename(

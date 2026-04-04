@@ -57,6 +57,10 @@ zstd-safe = { workspace = true }
 test-with = { version = "0.14.7", default-features = false }
 
 [[bin]]
+name = "xdbc-sync"
+path = "src/bin/xdbc_sync.rs"
+
+[[bin]]
 name = "dbt-xdbc-repl"
 path = "src/bin/repl.rs"
 required-features = ["repl"]
