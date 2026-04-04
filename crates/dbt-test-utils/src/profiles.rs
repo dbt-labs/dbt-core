@@ -1,14 +1,10 @@
-use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_jinja_utils::phases::load::LoadContext;
-use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_loader::args::LoadArgs;
-use dbt_loader::utils::read_profiles_and_extract_db_config;
+use dbt_profile::{ProfileEnvironment, resolve_with_env};
 use dbt_schemas::schemas::profiles::{DbConfig, DbTargets};
 
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_yaml;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -59,21 +55,19 @@ pub fn load_db_config<P: AsRef<Path>>(
     schema: &str,
     profile_path: P,
 ) -> FsResult<DbConfig> {
-    let arg = LoadArgs::default();
+    let penv = ProfileEnvironment::new(BTreeMap::new());
+    let resolved = resolve_with_env(&penv, profile_path.as_ref(), TEST_PROFILE, Some(target))
+        .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", e))?;
 
-    // Get all the profiles
-    let env = initialize_load_profile_jinja_environment();
-
-    let load_context = LoadContext::new(arg.vars);
-
-    let (_, mut db_config) = read_profiles_and_extract_db_config(
-        &IoArgs::default(),
-        &Some(target.to_string()),
-        &env,
-        &load_context,
-        &TEST_PROFILE.to_string().into(),
-        profile_path.as_ref().to_path_buf(),
-    )?;
+    let credentials_value =
+        dbt_yaml::Value::Mapping(resolved.credentials, dbt_yaml::Span::default());
+    let mut db_config: DbConfig = dbt_yaml::from_value(credentials_value).map_err(|e| {
+        fs_err!(
+            ErrorCode::InvalidConfig,
+            "Failed to parse profiles.yml: {}",
+            e
+        )
+    })?;
 
     match &mut db_config {
         DbConfig::Postgres(pg) => {

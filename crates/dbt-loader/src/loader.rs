@@ -516,7 +516,7 @@ pub async fn load_simplified_project_and_profiles(
         );
     }
 
-    let dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
+    let dbt_profile = load_profiles(arg, &simplified_dbt_project)?;
 
     Ok((simplified_dbt_project, dbt_profile))
 }

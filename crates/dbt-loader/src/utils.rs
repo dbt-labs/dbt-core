@@ -3,26 +3,17 @@ use dbt_common::path::DbtPath;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
-    err, fs_err, stdfs,
+    fs_err, stdfs,
 };
-use dbt_jinja_utils::serde::{MinijinjaContext, value_from_file};
-use dbt_schemas::schemas::serde::yaml_to_fs_error;
-use dbt_yaml::Spanned;
+use dbt_jinja_utils::serde::from_yaml_raw;
 use pathdiff::diff_paths;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv,
-    serde::{from_yaml_raw, into_typed_with_jinja},
-};
-use dbt_schemas::schemas::{
-    packages::{DbtPackageEntry, DbtPackages},
-    profiles::{DbConfig, DbTargets, DbtProfilesIntermediate},
-};
+use dbt_schemas::schemas::packages::{DbtPackageEntry, DbtPackages};
 use fs_deps::utils::get_local_package_full_path;
 use serde::de::DeserializeOwned;
 use std::{fs::metadata, io, time::SystemTime};
@@ -102,122 +93,6 @@ pub fn indent(data: &str, spaces: usize) -> String {
 
 // ------------------------------------------------------------------------------------------------
 // stupid other helpers:
-
-pub fn get_db_config(
-    _io_args: &IoArgs,
-    db_targets: DbTargets,
-    maybe_target: Option<String>,
-) -> FsResult<DbConfig> {
-    let target_name = maybe_target.unwrap_or_else(|| db_targets.default_target.clone());
-    // 6. Find the desired target
-    let db_config_yml = db_targets.outputs.get(&target_name).ok_or_else(|| {
-        fs_err!(
-            ErrorCode::InvalidConfig,
-            "Could not find target {} in profiles.yml",
-            target_name,
-        )
-    })?;
-    let db_config: DbConfig = dbt_yaml::from_value(db_config_yml.clone()).map_err(|e| {
-        fs_err!(
-            ErrorCode::InvalidConfig,
-            "Failed to parse profiles.yml: {}",
-            e
-        )
-    })?;
-
-    Ok(db_config)
-}
-
-pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
-    io_args: &IoArgs,
-    target_override: &Option<String>,
-    jinja_env: &JinjaEnv,
-    ctx: &S,
-    profile: &Spanned<String>,
-    profile_path: PathBuf,
-) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
-    let prepared_profile_val = value_from_file(io_args, &profile_path, true, None)?;
-    let dbt_profiles = dbt_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
-        .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
-    if dbt_profiles.config.is_some() {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "Unexpected 'config' key in profiles.yml"
-        );
-    }
-
-    let profile_str = profile.clone().into_inner();
-
-    // get the profile value
-    let profile_val: &dbt_yaml::Value =
-        dbt_profiles.__profiles__.get(&profile_str).ok_or_else(|| {
-            fs_err!(
-                code => ErrorCode::IoError,
-                loc => profile.span().clone(),
-                "Profile '{}' not found in profiles.yml",
-                profile_str
-            )
-        })?;
-
-    // if dbt_target_override is None, render the target name in case the user uses an an env_var jinja expression here
-    let rendered_target = if let Some(dbt_target_override) = target_override {
-        dbt_target_override.clone()
-    } else {
-        profile_val
-            .get("target")
-            .and_then(|v| v.as_str())
-            .map(|s| jinja_env.render_str(s, ctx, &[]))
-            .transpose()?
-            .unwrap_or_else(|| "default".to_string())
-    };
-    let unrendered_outputs = profile_val.get("outputs").ok_or_else(|| {
-        fs_err!(
-            ErrorCode::InvalidConfig,
-            "No 'outputs' key found in dbt profiles.yml"
-        )
-    })?;
-
-    // filter the db_targets to only include the target we want to use
-    let unrendered_outputs_filtered: BTreeMap<String, dbt_yaml::Value> = unrendered_outputs
-        .as_mapping()
-        .unwrap()
-        .iter()
-        .filter(|(k, _)| k.as_str().unwrap() == rendered_target)
-        .map(|(k, v)| (k.as_str().unwrap().to_string(), v.clone()))
-        .collect();
-
-    if unrendered_outputs_filtered.is_empty() {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "Target '{}' not found in profiles.yml",
-            rendered_target
-        );
-    }
-    // render just the target output we want to use
-    let rendered_db_target = into_typed_with_jinja(
-        io_args,
-        dbt_yaml::to_value(BTreeMap::from([
-            (
-                "outputs".to_string(),
-                dbt_yaml::to_value(&unrendered_outputs_filtered).unwrap(),
-            ),
-            (
-                "target".to_string(),
-                dbt_yaml::to_value(&rendered_target).unwrap(),
-            ),
-        ]))
-        .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?,
-        true,
-        jinja_env,
-        ctx,
-        &[],
-        None,
-        true,
-    )?;
-    let db_config = get_db_config(io_args, rendered_db_target, Some(rendered_target.clone()))?;
-
-    Ok((rendered_target, db_config))
-}
 
 // TODO: this function should read to a yaml::Value so as to avoid double-io
 ///

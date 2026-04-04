@@ -63,10 +63,7 @@ fn load_profile_with_loader(
         __ignored__: Default::default(),
     };
 
-    let jinja_env = initialize_load_profile_jinja_environment();
-    let empty_context = HashMap::<String, String>::new();
-
-    let dbt_profile = load_profiles(&load_args, &dbt_project, &jinja_env, &empty_context)?;
+    let dbt_profile = load_profiles(&load_args, &dbt_project)?;
     Ok(dbt_profile.db_config)
 }
 
