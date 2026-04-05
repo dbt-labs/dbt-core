@@ -1,4 +1,4 @@
-use dbt_adapter::{BaseAdapter, BridgeAdapter, factory::create_static_relation};
+use dbt_adapter::{AdapterTyping, BridgeAdapter, factory::create_static_relation};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
@@ -180,7 +180,7 @@ impl JinjaEnv {
     }
 
     /// Set the adapter
-    pub(crate) fn set_adapter(&mut self, adapter: Arc<dyn BaseAdapter>) {
+    pub(crate) fn set_adapter(&mut self, adapter: Arc<BridgeAdapter>) {
         let mut api_map = BTreeMap::new();
         api_map.insert(
             "Relation".to_string(),
@@ -208,9 +208,9 @@ impl JinjaEnv {
     }
 
     /// Get the adapter from the environment
-    pub fn get_base_adapter(&self) -> Option<Arc<dyn BaseAdapter>> {
+    pub fn get_base_adapter(&self) -> Option<Arc<BridgeAdapter>> {
         self.get_adapter()
-            .map(|bridge| bridge as Arc<dyn BaseAdapter>)
+            .map(|bridge| bridge as Arc<BridgeAdapter>)
     }
 
     /// Set the undefined behavior for the environment.

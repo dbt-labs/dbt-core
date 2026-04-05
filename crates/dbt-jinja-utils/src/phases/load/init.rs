@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
+use dbt_adapter::{BridgeAdapter, sql_types::SATypeOpsImpl};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_schemas::{
@@ -74,7 +74,7 @@ pub fn initialize_load_jinja_environment(
         catalogs,
     );
     Ok(JinjaEnvBuilder::new()
-        .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+        .with_adapter(Arc::new(adapter))
         .with_root_package("dbt".to_string())
         .with_io_args(io_args)
         .with_globals(globals)

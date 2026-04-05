@@ -3,7 +3,7 @@
 //! This requires us to move the ConnectionGuard to TypedBaseAdapter
 //! More details see https://github.com/dbt-labs/fs/pull/4039#discussion_r2159864154
 
-use crate::{BaseAdapter, BridgeAdapter};
+use crate::BridgeAdapter;
 
 pub struct UseWarehouseGuard<'a> {
     adapter: &'a BridgeAdapter,

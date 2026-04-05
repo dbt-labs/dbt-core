@@ -1,11 +1,11 @@
 use crate::column::ColumnStatic;
 use crate::engine::AdapterEngine;
-use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;
 use crate::stmt_splitter::StmtSplitter;
 use crate::typed_adapter::*;
 use crate::{AdapterResponse, AdapterResult};
+use crate::{BridgeAdapter, metadata::*};
 
 use dbt_agate::AgateTable;
 use dbt_common::FsResult;
@@ -19,7 +19,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_xdbc::Backend;
+use dbt_xdbc::{Backend, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{State, Value};
@@ -389,9 +389,11 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     ///     :rtype: Tuple[AdapterResponse, "agate.Table"]
     ///     """
     /// ```
+    #[allow(clippy::too_many_arguments)]
     fn execute(
         &self,
         state: &State,
+        ctx: Option<&QueryCtx>,
         sql: &str,
         auto_begin: bool,
         fetch: bool,
@@ -407,7 +409,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         auto_begin: bool,
     ) -> AdapterResult<AdapterResponse> {
         let (response, _) = self.execute(
-            state, sql, auto_begin, false, // fetch
+            state, None, // query_ctx
+            sql, auto_begin, false, // fetch
             None,  // limit
             None,  // options
         )?;
@@ -421,7 +424,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         sql: &str,
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        self.execute(state, sql, false, true, limit, None)
+        self.execute(state, None, sql, false, true, limit, None)
     }
 
     /// Add Query
@@ -1282,7 +1285,7 @@ pub trait AdapterFactory: Send + Sync {
         query_comment: Option<QueryComment>,
         token: CancellationToken,
         cloud_config: Option<&ResolvedCloudConfig>,
-    ) -> FsResult<Arc<dyn BaseAdapter>>;
+    ) -> FsResult<Arc<BridgeAdapter>>;
 
     /// Return the statement splitter used by this factory.
     fn stmt_splitter(&self) -> Arc<dyn StmtSplitter>;

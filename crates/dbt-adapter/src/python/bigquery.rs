@@ -204,7 +204,7 @@ pub fn submit_python_job(
     adapter.execute(
         None,
         conn,
-        ctx,
+        Some(ctx),
         "SELECT 1",
         false,
         false,
@@ -312,7 +312,7 @@ fn submit_cluster_job(
     let response = job_ctx.adapter.execute(
         None,
         job_ctx.conn,
-        job_ctx.ctx,
+        Some(job_ctx.ctx),
         "SELECT 1",
         false,
         false,
@@ -364,7 +364,7 @@ fn submit_serverless_job(
     let response = job_ctx.adapter.execute(
         None,
         job_ctx.conn,
-        job_ctx.ctx,
+        Some(job_ctx.ctx),
         "SELECT 1",
         false,
         false,
@@ -492,7 +492,7 @@ fn submit_bigframes_job(
     let response = job_ctx.adapter.execute(
         None,
         job_ctx.conn,
-        job_ctx.ctx,
+        Some(job_ctx.ctx),
         "SELECT 1",
         false,
         true,

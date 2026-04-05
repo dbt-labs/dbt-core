@@ -45,9 +45,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use dbt_adapter::BridgeAdapter;
 use dbt_adapter::relation::create_relation;
 use dbt_adapter::sql_types::SATypeOpsImpl;
-use dbt_adapter::{BaseAdapter, BridgeAdapter};
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
@@ -513,7 +513,7 @@ impl MacroTestHarnessBuilder {
         }
 
         let quoting = default_dbt_quoting_for(self.adapter_type);
-        let adapter: Arc<dyn BaseAdapter> = Arc::new(BridgeAdapter::new_parse_phase_adapter(
+        let adapter: Arc<BridgeAdapter> = Arc::new(BridgeAdapter::new_parse_phase_adapter(
             self.adapter_type,
             dbt_yaml::Mapping::default(),
             quoting,

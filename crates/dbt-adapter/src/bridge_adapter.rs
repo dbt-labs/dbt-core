@@ -19,14 +19,14 @@ use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
 use crate::typed_adapter;
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterResponse, AdapterResult, BaseAdapter};
+use crate::{AdapterResponse, AdapterResult};
 
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
-use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
+use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
@@ -37,8 +37,10 @@ use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_xdbc::QueryCtx;
 use indexmap::IndexMap;
 use minijinja::constants::TARGET_UNIQUE_ID;
+use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
 use minijinja::{State, Value};
@@ -244,6 +246,34 @@ impl BridgeAdapter {
             Parse(state) => Some(state),
         }
     }
+
+    pub fn commit(&self) -> Result<Value, minijinja::Error> {
+        Ok(Value::from(true))
+    }
+
+    pub fn exec_stmt(
+        &self,
+        state: &State,
+        sql: &str,
+        auto_begin: bool,
+    ) -> AdapterResult<AdapterResponse> {
+        let (response, _) = self.execute(
+            state, None, // query_ctx
+            sql, auto_begin, false, // fetch
+            None,  // limit
+            None,  // options
+        )?;
+        Ok(response)
+    }
+
+    pub fn exec_query(
+        &self,
+        state: &State,
+        sql: &str,
+        limit: Option<i64>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        self.execute(state, None, sql, false, true, limit, None)
+    }
 }
 
 impl AdapterTyping for BridgeAdapter {
@@ -290,26 +320,22 @@ impl AdapterTyping for BridgeAdapter {
     }
 }
 
-impl BaseAdapter for BridgeAdapter {
-    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+impl BridgeAdapter {
+    pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match &self.inner {
             Typed { adapter, .. } => adapter.metadata_adapter(),
             Parse(_) => None, // TODO: implement metadata_adapter() for ParseAdapter
         }
     }
 
-    fn cancellation_token(&self) -> CancellationToken {
-        self.cancellation_token.clone()
-    }
-
-    fn as_value(&self) -> Value {
+    pub fn as_value(&self) -> Value {
         Value::from_object(self.clone())
     }
 
     /// Used internally to hydrate the relation cache with the given schema -> relation map
     ///
     /// This operation should be additive and not reset the cache.
-    fn update_relation_cache(
+    pub fn update_relation_cache(
         &self,
         schema_to_relations_map: BTreeMap<CatalogAndSchema, RelationVec>,
     ) -> FsResult<()> {
@@ -329,7 +355,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
+    pub fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
         match &self.inner {
             Typed { adapter, .. } => adapter
                 .engine()
@@ -339,7 +365,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
+    pub fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
         match &self.inner {
             Typed { adapter, .. } => adapter
                 .engine()
@@ -350,7 +376,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn cache_added(
+    pub fn cache_added(
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
@@ -364,7 +390,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn cache_dropped(
+    pub fn cache_dropped(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -376,7 +402,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn cache_renamed(
+    pub fn cache_renamed(
         &self,
         state: &State,
         from_relation: &Arc<dyn BaseRelation>,
@@ -389,7 +415,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn standardize_grants_dict(
+    pub fn standardize_grants_dict(
         &self,
         _state: &State,
         grants_table: &Arc<AgateTable>,
@@ -405,7 +431,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote(&self, _state: &State, identifier: &str) -> Result<Value, minijinja::Error> {
+    pub fn quote(&self, _state: &State, identifier: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let quoted_identifier = adapter.quote(identifier);
@@ -418,7 +444,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_as_configured(
+    pub fn quote_as_configured(
         &self,
         state: &State,
         identifier: &str,
@@ -442,7 +468,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_seed_column(
+    pub fn quote_seed_column(
         &self,
         state: &State,
         column: &str,
@@ -458,7 +484,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn convert_type(
+    pub fn convert_type(
         &self,
         state: &State,
         table: &Arc<AgateTable>,
@@ -475,7 +501,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1839-L1840
     #[tracing::instrument(skip_all, level = "trace")]
-    fn render_raw_model_constraints(
+    pub fn render_raw_model_constraints(
         &self,
         state: &State,
         raw_constraints: &[ModelConstraint],
@@ -501,7 +527,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn render_raw_columns_constraints(
+    pub fn render_raw_columns_constraints(
         &self,
         state: &State,
         raw_columns: &Value,
@@ -531,10 +557,12 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, state), level = "trace")]
-    fn execute(
+    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(self, state, ctx), level = "trace")]
+    pub fn execute(
         &self,
         state: &State,
+        ctx: Option<&QueryCtx>,
         sql: &str,
         auto_begin: bool,
         fetch: bool,
@@ -545,11 +573,10 @@ impl BaseAdapter for BridgeAdapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let ctx = query_ctx_from_state(state)?.with_desc("execute adapter call");
                 let (response, table) = adapter.execute(
                     Some(state),
                     conn.as_mut(),
-                    &ctx,
+                    ctx,
                     sql,
                     auto_begin,
                     fetch,
@@ -581,7 +608,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state, bindings), level = "trace")]
-    fn add_query(
+    pub fn add_query(
         &self,
         state: &State,
         sql: &str,
@@ -591,21 +618,12 @@ impl BaseAdapter for BridgeAdapter {
     ) -> AdapterResult<()> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let adapter_type = adapter.adapter_type();
-                let formatted_sql = if let Some(bindings) = bindings {
-                    format_sql_with_bindings(adapter_type, sql, bindings)?
-                } else {
-                    sql.to_string()
-                };
-
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let ctx = query_ctx_from_state(state)?.with_desc("add_query adapter call");
-
                 adapter.add_query(
-                    &ctx,
+                    state,
                     conn.as_mut(),
-                    &formatted_sql,
+                    sql,
                     auto_begin,
                     bindings,
                     abridge_sql_log,
@@ -617,7 +635,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn submit_python_job(
+    pub fn submit_python_job(
         &self,
         state: &State,
         model: &Value,
@@ -649,7 +667,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn drop_relation(
+    pub fn drop_relation(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -667,7 +685,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn truncate_relation(
+    pub fn truncate_relation(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -680,7 +698,7 @@ impl BaseAdapter for BridgeAdapter {
 
     // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/include/global_project/macros/relations/rename.sql
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn rename_relation(
+    pub fn rename_relation(
         &self,
         state: &State,
         from_relation: &Arc<dyn BaseRelation>,
@@ -701,7 +719,7 @@ impl BaseAdapter for BridgeAdapter {
     /// Expand the to_relation table's column types to match the schema of from_relation.
     /// https://docs.getdbt.com/reference/dbt-jinja-functions/adapter#expand_target_column_types
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn expand_target_column_types(
+    pub fn expand_target_column_types(
         &self,
         state: &State,
         from_relation: &Arc<dyn BaseRelation>,
@@ -719,7 +737,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L212-L213
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn list_schemas(&self, state: &State, database: &str) -> Result<Value, minijinja::Error> {
+    pub fn list_schemas(&self, state: &State, database: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
@@ -735,7 +753,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn create_schema(
+    pub fn create_schema(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -748,7 +766,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L172-L173
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn drop_schema(
+    pub fn drop_schema(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -761,7 +779,7 @@ impl BaseAdapter for BridgeAdapter {
 
     #[tracing::instrument(skip(self, state), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
-    fn valid_snapshot_target(
+    pub fn valid_snapshot_target(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -773,7 +791,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_incremental_strategy_macro(
+    pub fn get_incremental_strategy_macro(
         &self,
         state: &State,
         strategy: &str,
@@ -785,7 +803,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn assert_valid_snapshot_target_given_strategy(
+    pub fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -807,7 +825,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn get_hard_deletes_behavior(
+    pub fn get_hard_deletes_behavior(
         &self,
         _state: &State,
         config: BTreeMap<String, Value>,
@@ -820,7 +838,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_relation(
+    pub fn get_relation(
         &self,
         state: &State,
         database: &str,
@@ -947,7 +965,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
-    fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
+    pub fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let relation = adapter.build_catalog_relation(model)?;
@@ -965,7 +983,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_missing_columns(
+    pub fn get_missing_columns(
         &self,
         state: &State,
         from_relation: &Arc<dyn BaseRelation>,
@@ -981,7 +999,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_columns_in_relation(
+    pub fn get_columns_in_relation(
         &self,
         state: &State,
         relation: &dyn BaseRelation,
@@ -1044,7 +1062,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn check_schema_exists(
+    pub fn check_schema_exists(
         &self,
         state: &State,
         database: &str,
@@ -1056,8 +1074,9 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_relations_by_pattern(
+    pub fn get_relations_by_pattern(
         &self,
         state: &State,
         schema_pattern: &str,
@@ -1090,7 +1109,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_column_schema_from_query(
+    pub fn get_column_schema_from_query(
         &self,
         state: &State,
         sql: &str,
@@ -1119,7 +1138,7 @@ impl BaseAdapter for BridgeAdapter {
     /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
     /// get_columns_in_select_sql returns a schema using the BigQuery Job and GetTable APIs
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_columns_in_select_sql(
+    pub fn get_columns_in_select_sql(
         &self,
         state: &State,
         sql: &str,
@@ -1144,7 +1163,11 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn verify_database(&self, _state: &State, database: String) -> Result<Value, minijinja::Error> {
+    pub fn verify_database(
+        &self,
+        _state: &State,
+        database: String,
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let result = adapter.verify_database(database);
@@ -1154,8 +1177,45 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    /// Dispatch.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L226
+    ///
+    /// ```python
+    /// def dispatch(
+    ///     self,
+    ///     macro_name: str,
+    ///     macro_namespace: Optional[str] = None
+    /// ) -> DispatchObject
+    /// ```
+    pub fn dispatch(
+        &self,
+        state: &State,
+        macro_name: &str,
+        macro_namespace: Option<&str>,
+    ) -> Result<Value, minijinja::Error> {
+        if macro_name.contains('.') {
+            let parts: Vec<&str> = macro_name.split('.').collect();
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!(
+                    "In adapter.dispatch, got a macro name of \"{}\", but \".\" is not a valid macro name component. Did you mean `adapter.dispatch(\"{}\", macro_namespace=\"{}\")`?",
+                    macro_name, parts[1], parts[0]
+                ),
+            ));
+        }
+
+        Ok(Value::from_object(DispatchObject {
+            macro_name: macro_name.to_string(),
+            package_name: macro_namespace.map(|s| s.to_string()),
+            strict: false,
+            auto_execute: false,
+            context: Some(state.get_base_context()),
+        }))
+    }
+
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn nest_column_data_types(
+    pub fn nest_column_data_types(
         &self,
         state: &State,
         columns: &Value,
@@ -1168,7 +1228,7 @@ impl BaseAdapter for BridgeAdapter {
 
     #[tracing::instrument(skip(self), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
-    fn get_bq_table(
+    pub fn get_bq_table(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1180,7 +1240,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn is_replaceable(
+    pub fn is_replaceable(
         &self,
         state: &State,
         relation: Option<&Arc<dyn BaseRelation>>,
@@ -1239,7 +1299,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn upload_file(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
+    pub fn upload_file(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.upload_file(state, args),
             Parse(_) => Ok(none_value()),
@@ -1251,7 +1311,7 @@ impl BaseAdapter for BridgeAdapter {
     /// # Panics
     /// This method will panic if called on a non-BigQuery adapter
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_partition_by(
+    pub fn parse_partition_by(
         &self,
         _state: &State,
         raw_partition_by: &Value,
@@ -1266,7 +1326,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_table_options(
+    pub fn get_table_options(
         &self,
         state: &State,
         config: ModelConfig,
@@ -1283,7 +1343,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_view_options(
+    pub fn get_view_options(
         &self,
         state: &State,
         config: ModelConfig,
@@ -1300,7 +1360,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_common_options(
+    pub fn get_common_options(
         &self,
         state: &State,
         config: ModelConfig,
@@ -1317,7 +1377,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn add_time_ingestion_partition_column(
+    pub fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
         columns: &Value,
@@ -1334,7 +1394,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn grant_access_to(
+    pub fn grant_access_to(
         &self,
         state: &State,
         entity: &Arc<dyn BaseRelation>,
@@ -1364,7 +1424,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_dataset_location(
+    pub fn get_dataset_location(
         &self,
         state: &State,
         relation: &dyn BaseRelation,
@@ -1386,7 +1446,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn update_table_description(
+    pub fn update_table_description(
         &self,
         state: &State,
         database: &str,
@@ -1414,7 +1474,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn alter_table_add_columns(
+    pub fn alter_table_add_columns(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1438,7 +1498,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn update_columns(
+    pub fn update_columns(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1462,7 +1522,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn behavior(&self) -> Value {
+    pub fn behavior(&self) -> Value {
         match &self.inner {
             Typed { adapter, .. } => Value::from_object((**adapter.behavior_object()).clone()),
             Parse(_) => Value::from_object(Behavior::new(vec![], &BTreeMap::new())),
@@ -1470,7 +1530,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn list_relations_without_caching(
+    pub fn list_relations_without_caching(
         &self,
         state: &State,
         schema_relation: &Arc<dyn BaseRelation>,
@@ -1510,7 +1570,7 @@ impl BaseAdapter for BridgeAdapter {
     /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
     /// Use `has_feature(capability_name)` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn has_dbr_capability(
+    pub fn has_dbr_capability(
         &self,
         state: &State,
         capability_name: &str,
@@ -1534,7 +1594,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn compare_dbr_version(
+    pub fn compare_dbr_version(
         &self,
         state: &State,
         major: i64,
@@ -1558,7 +1618,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
+    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
         let result = match &self.inner {
             Typed { adapter, .. } => {
                 adapter.has_feature(state, name, self.cancellation_token.clone())?
@@ -1571,7 +1631,7 @@ impl BaseAdapter for BridgeAdapter {
     /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
     /// Use `has_feature("motherduck")` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
+    pub fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
         match self.adapter_type() {
             AdapterType::DuckDB => self.has_feature(state, "motherduck"),
             _ => Err(AdapterError::new(
@@ -1584,7 +1644,7 @@ impl BaseAdapter for BridgeAdapter {
     /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
     /// Use `!has_feature("transactions")` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn disable_transactions(&self, state: &State) -> AdapterResult<Value> {
+    pub fn disable_transactions(&self, state: &State) -> AdapterResult<Value> {
         let result = match &self.inner {
             Typed { adapter, .. } => match adapter.adapter_type() {
                 AdapterType::DuckDB => {
@@ -1608,7 +1668,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
-    fn get_temp_relation_path(
+    pub fn get_temp_relation_path(
         &self,
         database: &str,
         identifier: &str,
@@ -1624,7 +1684,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn external_root(&self, _state: &State) -> Result<Value, minijinja::Error> {
+    pub fn external_root(&self, _state: &State) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => Ok(Value::from(adapter.external_root())),
             Parse(_) => Ok(Value::from(".")),
@@ -1632,7 +1692,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn external_write_options(
+    pub fn external_write_options(
         &self,
         _state: &State,
         write_location: &str,
@@ -1647,7 +1707,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn external_read_location(
+    pub fn external_read_location(
         &self,
         _state: &State,
         write_location: &str,
@@ -1662,11 +1722,15 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn location_exists(&self, state: &State, location: &str) -> Result<Value, minijinja::Error> {
+    pub fn location_exists(
+        &self,
+        state: &State,
+        location: &str,
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { .. } => {
                 let sql = format!("select 1 from '{}' where 1=0", location);
-                let result = self.execute(state, &sql, false, false, None, None);
+                let result = self.execute(state, None, &sql, false, false, None, None);
                 Ok(Value::from(result.is_ok()))
             }
             Parse(_) => Ok(Value::from(false)),
@@ -1674,7 +1738,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn compute_external_path(
+    pub fn compute_external_path(
         &self,
         _state: &State,
         config: ModelConfig,
@@ -1695,7 +1759,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn update_tblproperties_for_uniform_iceberg(
+    pub fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
         config: ModelConfig,
@@ -1747,7 +1811,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn is_uniform(
+    pub fn is_uniform(
         &self,
         state: &State,
         config: ModelConfig,
@@ -1774,7 +1838,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, config), level = "trace")]
-    fn resolve_file_format(
+    pub fn resolve_file_format(
         &self,
         _: &State,
         config: ModelConfig,
@@ -1789,7 +1853,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn copy_table(
+    pub fn copy_table(
         &self,
         state: &State,
         tmp_relation_partitioned: &Arc<dyn BaseRelation>,
@@ -1820,7 +1884,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
-    fn describe_relation(
+    pub fn describe_relation(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1837,7 +1901,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn generate_unique_temporary_table_suffix(
+    pub fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
         suffix_initial: Option<String>,
@@ -1853,7 +1917,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, minijinja::Error> {
+    pub fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => Ok(Value::from_serialize(
                 adapter.valid_incremental_strategies(),
@@ -1863,7 +1927,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn redact_credentials(&self, _state: &State, sql: &str) -> Result<Value, minijinja::Error> {
+    pub fn redact_credentials(&self, _state: &State, sql: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let sql_redacted = adapter.redact_credentials(sql)?;
@@ -1874,7 +1938,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_partitions_metadata(
+    pub fn get_partitions_metadata(
         &self,
         state: &State,
         relation: &dyn BaseRelation,
@@ -1886,7 +1950,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_persist_doc_columns(
+    pub fn get_persist_doc_columns(
         &self,
         state: &State,
         existing_columns: &Value,
@@ -1900,7 +1964,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn get_column_tags_from_model(
+    pub fn get_column_tags_from_model(
         &self,
         _state: &State,
         node: &dyn InternalDbtNodeAttributes,
@@ -1915,7 +1979,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_columns_and_constraints(
+    pub fn parse_columns_and_constraints(
         &self,
         state: &State,
         existing_columns: &Value,
@@ -1937,7 +2001,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn get_relation_config(
+    pub fn get_relation_config(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1959,7 +2023,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn get_config_from_model(
+    pub fn get_config_from_model(
         &self,
         _state: &State,
         node: &InternalDbtNodeWrapper,
@@ -1971,7 +2035,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn get_relations_without_caching(
+    pub fn get_relations_without_caching(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -1983,7 +2047,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_index(&self, state: &State, raw_index: &Value) -> Result<Value, minijinja::Error> {
+    pub fn parse_index(&self, state: &State, raw_index: &Value) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.parse_index(state, raw_index),
             Parse(_) => Ok(none_value()),
@@ -1991,7 +2055,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn clean_sql(&self, sql: &str) -> Result<Value, minijinja::Error> {
+    pub fn clean_sql(&self, sql: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => Ok(Value::from(adapter.clean_sql(sql)?)),
             Parse(_) => unimplemented!("clean_sql"),
@@ -2004,7 +2068,7 @@ impl BaseAdapter for BridgeAdapter {
     ///
     /// Returns true if the warehouse was overridden, false otherwise
     #[tracing::instrument(skip(self), level = "trace")]
-    fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
+    pub fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
         // TODO(jason): Record/replay non-jinja internal calls non-invasively
         // https://github.com/dbt-labs/fs/issues/7736
         if let Some(tm) = self.time_machine()
@@ -2019,9 +2083,7 @@ impl BaseAdapter for BridgeAdapter {
                     return Ok(false);
                 }
 
-                let mut conn = adapter
-                    .borrow_tlocal_connection(None, Some(node_id.to_string()))
-                    .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
+                let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
                 adapter.use_warehouse(
                     conn.as_mut(),
                     warehouse.unwrap(),
@@ -2038,7 +2100,7 @@ impl BaseAdapter for BridgeAdapter {
     ///
     /// To restore to the warehouse configured in profiles.yml
     #[tracing::instrument(skip(self), level = "trace")]
-    fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
+    pub fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
         // TODO(jason): Record/replay non-jinja internal calls non-invasively
         // https://github.com/dbt-labs/fs/issues/7736
         if let Some(tm) = self.time_machine()
@@ -2049,9 +2111,7 @@ impl BaseAdapter for BridgeAdapter {
 
         match &self.inner {
             Typed { adapter, .. } => {
-                let mut conn = adapter
-                    .borrow_tlocal_connection(None, Some(node_id.to_string()))
-                    .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
+                let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
                 adapter.restore_warehouse(
                     conn.as_mut(),
                     node_id,
@@ -2063,8 +2123,9 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn load_dataframe(
+    pub fn load_dataframe(
         &self,
         state: &State,
         database: &str,
@@ -2101,7 +2162,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn describe_dynamic_table(
+    pub fn describe_dynamic_table(
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
@@ -2125,6 +2186,28 @@ impl BaseAdapter for BridgeAdapter {
             }
         }
     }
+
+    pub fn get_catalog_integration(
+        &self,
+        _state: &State,
+        _args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        unimplemented!(
+            "get_catalog_integration is unavailable in Fusion. Access catalogs metadata directly from a catalog relation obtained using adapter.build_catalog_relation(model: RelationConfig)"
+        )
+    }
+}
+
+impl BridgeAdapter {
+    fn call_method_impl(
+        self: &Arc<Self>,
+        state: &State,
+        name: &str,
+        args: &[Value],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        dispatch_adapter_calls(self, state, name, args, listeners)
+    }
 }
 
 impl Object for BridgeAdapter {
@@ -2136,7 +2219,7 @@ impl Object for BridgeAdapter {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         if let Parse(_) = &self.inner {
-            return dispatch_adapter_calls(&**self, state, name, args, listeners);
+            return self.call_method_impl(state, name, args, listeners);
         }
         // NOTE(jason): This function uses the time machine - cross version Fusion snapshot tests
         // not to be confused with conformance ReplayAdapter or Adapter Record/Replay modes
@@ -2215,7 +2298,7 @@ impl Object for BridgeAdapter {
                 "Replay mode requires mock engine; attempted on non-mock engine which risks leaking queries"
             );
         }
-        let result = dispatch_adapter_calls(&**self, state, name, args, listeners);
+        let result = self.call_method_impl(state, name, args, listeners);
 
         // Record if time machine is in recording mode
         if !is_pure_or_cache
@@ -2249,7 +2332,7 @@ impl Object for BridgeAdapter {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        dispatch_adapter_get_value(&**self, key)
+        dispatch_adapter_get_value(self, key)
     }
 }
 

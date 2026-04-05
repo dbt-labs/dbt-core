@@ -8,7 +8,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
+use dbt_adapter::{BridgeAdapter, sql_types::SATypeOpsImpl};
 use dbt_adapter_core::*;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_jinja_vars::DbtVars;
@@ -123,7 +123,7 @@ pub fn initialize_parse_jinja_environment(
 
     let mut env = JinjaEnvBuilder::new()
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
-        .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+        .with_adapter(Arc::new(adapter))
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)

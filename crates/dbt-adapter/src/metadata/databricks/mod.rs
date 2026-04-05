@@ -210,7 +210,7 @@ impl DatabricksMetadataAdapter {
                 // Returns a row like: (key, value) = ("spark.databricks.clusterUsageTags.sparkVersion", "15.4.x-scala2.12")
                 let sql = "SET spark.databricks.clusterUsageTags.sparkVersion";
                 let (_response, table) =
-                    adapter.execute(None, conn, ctx, sql, false, true, None, None, token)?;
+                    adapter.execute(None, conn, Some(ctx), sql, false, true, None, None, token)?;
                 let batch = table.original_record_batch();
 
                 // The result has two columns: "key" and "value"
@@ -223,7 +223,7 @@ impl DatabricksMetadataAdapter {
             AdapterType::Spark => {
                 let sql = "SELECT version() AS version";
                 let (_response, table) =
-                    adapter.execute(None, conn, ctx, sql, false, true, None, None, token)?;
+                    adapter.execute(None, conn, Some(ctx), sql, false, true, None, None, token)?;
                 let batch = table.original_record_batch();
                 let values = get_column_values::<StringArray>(&batch, "version")?;
                 debug_assert_eq!(values.len(), 1);
@@ -476,7 +476,7 @@ impl DatabricksMetadataAdapter {
         self.adapter.execute(
             Some(state),
             conn,
-            &ctx,
+            Some(&ctx),
             sql,
             false, // auto_begin
             true,  // fetch

@@ -1,5 +1,3 @@
-use crate::AdapterType;
-use crate::base_adapter::BaseAdapter;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
@@ -8,6 +6,7 @@ use crate::formatter::SqlLiteralFormatter;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::response::ResultObject;
 use crate::snapshots::SnapshotStrategy;
+use crate::{AdapterType, AdapterTyping, BridgeAdapter};
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
@@ -33,7 +32,7 @@ use std::sync::Arc;
 
 /// Performs method dispatch on the given adapter.
 pub fn dispatch_adapter_calls(
-    adapter: &dyn BaseAdapter,
+    adapter: &BridgeAdapter,
     state: &State,
     name: &str,
     args: &[Value],
@@ -81,7 +80,7 @@ pub fn dispatch_adapter_calls(
             }
 
             let (response, table) =
-                adapter.execute(state, sql, auto_begin, fetch, limit, options)?;
+                adapter.execute(state, None, sql, auto_begin, fetch, limit, options)?;
             Ok(Value::from_iter([
                 Value::from_object(response),
                 Value::from_object(table),
@@ -1358,7 +1357,7 @@ pub fn dispatch_adapter_calls(
 /// Helper to call `dispatch_adapter_calls` with positional args.
 #[cfg(test)]
 fn dispatch_test(
-    adapter: &dyn BaseAdapter,
+    adapter: &BridgeAdapter,
     name: &str,
     args: &[Value],
 ) -> Result<Value, minijinja::Error> {
@@ -1367,7 +1366,7 @@ fn dispatch_test(
     dispatch_adapter_calls(adapter, &state, name, args, &[])
 }
 
-pub fn dispatch_adapter_get_value(adapter: &dyn BaseAdapter, key: &Value) -> Option<Value> {
+pub fn dispatch_adapter_get_value(adapter: &BridgeAdapter, key: &Value) -> Option<Value> {
     match key.as_str() {
         Some("behavior") => Some(adapter.behavior()),
         // NOTE(serramatutu): BigQuery adapter calls `Relation` from `adapter.Relation`

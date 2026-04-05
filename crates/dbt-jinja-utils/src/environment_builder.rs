@@ -1,7 +1,7 @@
 use crate::{
     functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
 };
-use dbt_adapter::BaseAdapter;
+use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, UndefinedFunctionType,
@@ -41,7 +41,7 @@ impl MacroUnitsWrapper {
 // Default Jinja Env Behaves differently than Envirornment::new()
 pub struct JinjaEnvBuilder {
     env: Environment<'static>,
-    adapter: Option<Arc<dyn BaseAdapter>>,
+    adapter: Option<Arc<BridgeAdapter>>,
     globals: BTreeMap<String, Value>,
     root_package: Option<String>,
     undefined_behavior: minijinja::UndefinedBehavior,
@@ -83,7 +83,7 @@ impl JinjaEnvBuilder {
     }
 
     /// Specify an adapter type (e.g. "parse", "compile") or other distinguishing feature.
-    pub fn with_adapter(mut self, adapter: Arc<dyn BaseAdapter>) -> Self {
+    pub fn with_adapter(mut self, adapter: Arc<BridgeAdapter>) -> Self {
         self.adapter = Some(adapter);
         self
     }
@@ -589,7 +589,7 @@ all okay!");
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
@@ -676,7 +676,7 @@ all okay!");
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
@@ -739,7 +739,7 @@ all okay!");
         );
         let env = JinjaEnvBuilder::new()
             .with_root_package("test_package".to_string())
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .try_with_macros(MacroUnitsWrapper::new(BTreeMap::from([(
                 "test_package".to_string(),
                 vec![
@@ -862,7 +862,7 @@ all okay!");
 
         // Build environment with the empty root package
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .with_root_package("empty_root".to_string())
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
@@ -915,7 +915,7 @@ all okay!");
         )]);
 
         let env = JinjaEnvBuilder::new()
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .with_root_package("test_package".to_string())
             .with_globals(globals)
             .try_with_macros(macro_units)
@@ -960,7 +960,7 @@ all okay!");
         )]);
 
         let env = JinjaEnvBuilder::new()
-            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_adapter(Arc::new(adapter) as Arc<BridgeAdapter>)
             .with_root_package("test_package".to_string())
             .with_globals(globals)
             .try_with_macros(macro_units)

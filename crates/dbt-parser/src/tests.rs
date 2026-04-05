@@ -2,8 +2,8 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use dbt_adapter::BridgeAdapter;
     use dbt_adapter::sql_types::SATypeOpsImpl;
-    use dbt_adapter::{BaseAdapter, BridgeAdapter};
     use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::StaticAnalysisKind;
     use dbt_common::{FsResult, io_args::IoArgs};
@@ -342,7 +342,7 @@ mod tests {
                 DEFAULT_DBT_QUOTING,
                 Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
                 None,
-            )) as Arc<dyn BaseAdapter>;
+            ));
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();
             let vm = Vm::new(&env);

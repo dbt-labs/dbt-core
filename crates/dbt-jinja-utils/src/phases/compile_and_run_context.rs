@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnv;
-use dbt_adapter::BaseAdapter;
+use dbt_adapter::BridgeAdapter;
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::relation::RelationObject;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
@@ -29,7 +29,7 @@ use std::rc::Rc;
 /// Configure the Jinja environment for the compile phase.
 pub fn configure_compile_and_run_jinja_environment(
     env: &mut JinjaEnv,
-    adapter: Arc<dyn BaseAdapter>,
+    adapter: Arc<BridgeAdapter>,
 ) {
     env.set_adapter(adapter);
     env.set_undefined_behavior(UndefinedBehavior::Lenient);

@@ -109,7 +109,7 @@ pub(crate) fn borrow_tlocal_connection<'a>(
     engine: &dyn AdapterEngine,
     state: Option<&State>,
     node_id: Option<String>,
-) -> Result<ConnectionGuard<'a>, minijinja::Error> {
+) -> AdapterResult<ConnectionGuard<'a>> {
     let _span = span!("borrow_thread_local_connection");
     borrow_tlocal_connection_impl(
         engine.adapter_type(),
@@ -126,7 +126,7 @@ pub(crate) fn borrow_tlocal_connection_impl<'a>(
     node_id: Option<String>,
     recordings_dir: Option<&Path>,
     new_connection_fn: impl Fn(Option<&State>, Option<String>) -> AdapterResult<Box<dyn Connection>>,
-) -> Result<ConnectionGuard<'a>, minijinja::Error> {
+) -> AdapterResult<ConnectionGuard<'a>> {
     let conn = match CONNECTION.with(|c| c.take()) {
         None => {
             // No connection in thread-local, try to get one from the recycling pool.

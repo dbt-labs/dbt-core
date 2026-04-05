@@ -5,7 +5,9 @@ use crate::engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
-use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
+use crate::funcs::{
+    convert_macro_result_to_record_batch, execute_macro, format_sql_with_bindings, none_value,
+};
 use crate::information_schema::InformationSchema;
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
@@ -350,7 +352,7 @@ impl ConcreteAdapter {
         &self,
         state: Option<&State>,
         node_id: Option<String>,
-    ) -> Result<ConnectionGuard<'_>, minijinja::Error> {
+    ) -> Result<ConnectionGuard<'_>, AdapterError> {
         borrow_tlocal_connection(self.engine().as_ref(), state, node_id)
     }
 
@@ -456,7 +458,7 @@ impl ConcreteAdapter {
         &self,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
-        ctx: &QueryCtx,
+        ctx: Option<&QueryCtx>,
         sql: &str,
         auto_begin: bool,
         fetch: bool,
@@ -490,15 +492,33 @@ impl ConcreteAdapter {
 
             return Ok((response, table));
         }
-        match self.inner_adapter() {
-            Replay(_, replay) => {
-                replay.replay_execute(state, conn, ctx, sql, auto_begin, fetch, limit, options)
+        let ctx = match ctx.map(Cow::Borrowed) {
+            Some(ctx) => ctx,
+            None => {
+                let ctx = match state {
+                    Some(s) => query_ctx_from_state(s)?,
+                    None => QueryCtx::default(),
+                }
+                .with_desc("execute adapter call");
+                Cow::Owned(ctx)
             }
+        };
+        match self.inner_adapter() {
+            Replay(_, replay) => replay.replay_execute(
+                state,
+                conn,
+                ctx.as_ref(),
+                sql,
+                auto_begin,
+                fetch,
+                limit,
+                options,
+            ),
             Impl(_, engine) => self.execute_inner(
                 Arc::clone(engine),
                 state,
                 conn,
-                ctx,
+                ctx.as_ref(),
                 sql,
                 auto_begin,
                 fetch,
@@ -522,7 +542,7 @@ impl ConcreteAdapter {
         let (response, _) = self.execute(
             None,       // empty state
             conn,       // connection
-            ctx,        // context around the SQL string
+            Some(ctx),  // context around the SQL string
             sql,        // the SQL string
             auto_begin, // auto_begin
             false,      // fetch
@@ -543,14 +563,14 @@ impl ConcreteAdapter {
         token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         self.execute(
-            None,  // state
-            conn,  // connection
-            ctx,   // context around the SQL string
-            sql,   // the SQL string
-            false, // auto_begin
-            true,  // fetch
-            limit, // limit
-            None,  // options
+            None,      // state
+            conn,      // connection
+            Some(ctx), // context around the SQL string
+            sql,       // the SQL string
+            false,     // auto_begin
+            true,      // fetch
+            limit,     // limit
+            None,      // options
             token,
         )
     }
@@ -558,7 +578,7 @@ impl ConcreteAdapter {
     #[allow(clippy::too_many_arguments)]
     pub fn add_query(
         &self,
-        ctx: &QueryCtx,
+        state: &State,
         conn: &'_ mut dyn Connection,
         sql: &str,
         auto_begin: bool,
@@ -569,10 +589,25 @@ impl ConcreteAdapter {
         if self.mock_state().is_some() {
             unimplemented!("query addition to connection in MockAdapter")
         }
+        let sql = if let Some(bindings) = bindings {
+            Cow::Owned(format_sql_with_bindings(
+                self.adapter_type(),
+                sql,
+                bindings,
+            )?)
+        } else {
+            Cow::Borrowed(sql)
+        };
+        let ctx = query_ctx_from_state(state)?.with_desc("add_query adapter call");
         match self.inner_adapter() {
-            Replay(_, replay) => {
-                replay.replay_add_query(ctx, conn, sql, auto_begin, bindings, abridge_sql_log)
-            }
+            Replay(_, replay) => replay.replay_add_query(
+                &ctx,
+                conn,
+                sql.as_ref(),
+                auto_begin,
+                bindings,
+                abridge_sql_log,
+            ),
             Impl(Bigquery, _) => {
                 // Bigquery does not support add_query
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L476-L477
@@ -586,8 +621,8 @@ impl ConcreteAdapter {
                     Arc::clone(engine),
                     None,
                     conn,
-                    ctx,
-                    sql,
+                    &ctx,
+                    sql.as_ref(),
                     auto_begin,
                     false,
                     None,
