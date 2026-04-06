@@ -400,7 +400,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         )
 
     @property
-    def is_external_node(self):
+    def is_external_node(self) -> bool:
         return False
 
 
