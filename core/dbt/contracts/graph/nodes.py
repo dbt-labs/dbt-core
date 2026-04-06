@@ -141,7 +141,7 @@ class BaseNode(BaseResource):
         raise NotImplementedError
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @property
@@ -550,7 +550,7 @@ class ModelNode(ModelResource, CompiledNode):
         )
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         if self.version is None:
             return self.name
         else:
@@ -1120,7 +1120,7 @@ class UnitTestSourceDefinition(ModelNode):
         return self.unique_id.split(".")[-1]
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return f"{self.source_name}.{self.name}"
 
 
@@ -1245,7 +1245,7 @@ class Documentation(DocumentationResource, BaseNode):
         return DocumentationResource
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     def same_contents(self, other: Optional["Documentation"]) -> bool:
@@ -1448,7 +1448,7 @@ class SourceDefinition(
         return bool(self.freshness)
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return f"{self.source_name}.{self.name}"
 
     @property
@@ -1468,7 +1468,7 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
         return self.depends_on.nodes
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @classmethod
@@ -1544,7 +1544,7 @@ class Metric(GraphNode, MetricResource):
         return self.depends_on.nodes
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @classmethod
