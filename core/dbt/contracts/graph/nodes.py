@@ -1423,7 +1423,7 @@ class SourceDefinition(
         return False
 
     @property
-    def is_ephemeral(self):
+    def is_ephemeral(self) -> bool:
         return False
 
     @property
