@@ -68,7 +68,7 @@ pub use engine::AdapterEngine;
 /// Functions exposed to jinja
 pub mod load_store;
 
-pub use base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
+pub use base_adapter::{AdapterType, AdapterTyping};
 pub use bridge_adapter::BridgeAdapter;
 pub use column::{Column, ColumnBuilder};
 pub use errors::AdapterResult;

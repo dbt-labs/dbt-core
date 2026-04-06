@@ -117,6 +117,19 @@ impl fmt::Debug for BridgeAdapter {
     }
 }
 
+impl fmt::Display for BridgeAdapter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match &self.inner {
+            Typed { adapter, .. } => match adapter.inner_adapter() {
+                typed_adapter::InnerAdapter::Impl(_, _) => "Adapter",
+                typed_adapter::InnerAdapter::Replay(_, _) => "DbtReplayAdapter",
+            },
+            Parse(_) => "ParseAdapter",
+        };
+        write!(f, "{}({})", name, self.adapter_type())
+    }
+}
+
 impl BridgeAdapter {
     /// Create a new bridge adapter.
     ///
@@ -247,10 +260,18 @@ impl BridgeAdapter {
         }
     }
 
+    /// Commit
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L000
+    ///
+    /// ```python
+    /// def commit(self) -> None
+    /// ```
     pub fn commit(&self) -> Result<Value, minijinja::Error> {
         Ok(Value::from(true))
     }
 
+    /// Execute a statement, expect no results.
     pub fn exec_stmt(
         &self,
         state: &State,
@@ -266,6 +287,7 @@ impl BridgeAdapter {
         Ok(response)
     }
 
+    /// Execute a query and get results in an [AgateTable].
     pub fn exec_query(
         &self,
         state: &State,
@@ -321,6 +343,7 @@ impl AdapterTyping for BridgeAdapter {
 }
 
 impl BridgeAdapter {
+    /// Build an instance of the metadata adapter if supported.
     pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match &self.inner {
             Typed { adapter, .. } => adapter.metadata_adapter(),
@@ -328,6 +351,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// This adapter as a Value
     pub fn as_value(&self) -> Value {
         Value::from_object(self.clone())
     }
@@ -375,6 +399,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Cache added
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L644
+    ///
+    /// ```python
+    /// def cache_added(
+    ///     self,
+    ///     relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn cache_added(
         &self,
@@ -389,6 +423,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Cache dropped
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L655
+    ///
+    /// ```python
+    /// def cache_dropped(
+    ///     self,
+    ///     relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn cache_dropped(
         &self,
@@ -401,6 +445,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Cache renamed
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L667
+    ///
+    /// ```python
+    /// def cache_renamed(
+    ///     self,
+    ///     from_relation: Optional[BaseRelation],
+    ///     to_relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn cache_renamed(
         &self,
@@ -414,6 +469,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Standardize grants dict
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L823
+    ///
+    /// ```python
+    /// def standardize_grants_dict(
+    ///     self,
+    ///     grants_table: "agate.Table"
+    /// ) -> dict
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn standardize_grants_dict(
         &self,
@@ -430,6 +495,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Encloses identifier in the correct quotes for the adapter when escaping reserved column names etc.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1064
+    ///
+    /// ```python
+    /// @classmethod
+    /// def quote(
+    ///     cls,
+    ///     identifier: str
+    /// ) -> str
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn quote(&self, _state: &State, identifier: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -443,6 +519,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Quote as configured.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1070C5-L1070C75
+    ///
+    /// ```python
+    /// def quote_as_configured(
+    ///     self,
+    ///     identifier: str,
+    ///     quote_key: str
+    /// ) -> str
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn quote_as_configured(
         &self,
@@ -467,6 +554,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Quote seed column.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1091
+    ///
+    /// ```python
+    /// def quote_seed_column(
+    ///     self,
+    ///     column: str,
+    ///     quote_config: Optional[bool]
+    /// ) -> str
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn quote_seed_column(
         &self,
@@ -483,6 +581,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Convert type.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1221
+    ///
+    /// ```python
+    /// def convert_type(
+    ///     cls,
+    ///     agate_table: "agate.Table",
+    ///     col_idx: int
+    /// ) -> Optional[str]
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn convert_type(
         &self,
@@ -499,7 +608,17 @@ impl BridgeAdapter {
         }
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1839-L1840
+    /// Render raw model constraints.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1891
+    ///
+    /// ```python
+    /// def render_raw_model_constraints(
+    ///     cls,
+    ///     raw_constraints: List[Dict[str, Any]]
+    /// ) -> List[str]
+    ///
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn render_raw_model_constraints(
         &self,
@@ -526,6 +645,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Render raw columns constraints.
+    ///
+    /// Used by BigQuery adapter to render column constraints.
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn render_raw_columns_constraints(
         &self,
@@ -557,6 +679,28 @@ impl BridgeAdapter {
         }
     }
 
+    /// Execute the given SQL. This is a thin wrapper around [SqlEngine.execute].
+    ///
+    /// ```python
+    /// def execute(
+    ///     self,
+    ///     sql: str,
+    ///     auto_begin: bool = False,
+    ///     fetch: bool = False,
+    ///     limit: Optional[int] = None,
+    ///     options: Optional[Dict[str, str]],
+    /// ) -> Tuple[AdapterResponse, "agate.Table"]:
+    ///     """
+    ///     :param str sql: The sql to execute.
+    ///     :param bool auto_begin: If set, and dbt is not currently inside a transaction,
+    ///                             automatically begin one.
+    ///     :param bool fetch: If set, fetch results.
+    ///     :param Optional[int] limit: If set, only fetch n number of rows
+    ///     :param Optional[Dict[str, str]] options: If set, pass ADBC options to the execute call
+    ///     :return: A tuple of the query status and results (empty if fetch=False).
+    ///     :rtype: Tuple[AdapterResponse, "agate.Table"]
+    ///     """
+    /// ```
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(self, state, ctx), level = "trace")]
     pub fn execute(
@@ -607,6 +751,21 @@ impl BridgeAdapter {
         }
     }
 
+    /// Add Query
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/9f39ba3d94b02eeb3aef40fe161af844e15944e4/dbt-adapters/src/dbt/adapters/sql/connections.py#L69
+    ///
+    /// ```python
+    /// def add_query(
+    ///    self,
+    ///    sql: str,
+    ///    auto_begin: bool = True,
+    ///    bindings: Optional[Any] = None,
+    ///    abridge_sql_log: bool = False,
+    ///    retryable_exceptions: Tuple[Type[Exception], ...] = tuple(),
+    ///    retry_limit: int = 1,
+    /// ) -> Tuple[Connection, Any]:
+    /// ```
     #[tracing::instrument(skip(self, state, bindings), level = "trace")]
     pub fn add_query(
         &self,
@@ -635,6 +794,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Submit Python job
+    ///
+    /// Executes Python code in the warehouse's Python runtime.
+    /// For Snowflake, this wraps the Python code in a stored procedure.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1603
+    ///
+    /// ```python
+    /// def submit_python_job(self, parsed_model: dict, compiled_code: str) -> AdapterResponse:
+    /// ```
     pub fn submit_python_job(
         &self,
         state: &State,
@@ -666,6 +835,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Drop relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L145
+    ///
+    /// ```python
+    /// def drop_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn drop_relation(
         &self,
@@ -684,6 +863,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Truncate relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L152
+    ///
+    /// ```python
+    /// def truncate_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn truncate_relation(
         &self,
@@ -696,7 +885,17 @@ impl BridgeAdapter {
         }
     }
 
-    // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/include/global_project/macros/relations/rename.sql
+    /// Rename relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L155
+    ///
+    /// ```python
+    /// def rename_relation(
+    ///     self,
+    ///     from_relation: BaseRelation,
+    ///     to_relation: BaseRelation
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn rename_relation(
         &self,
@@ -777,6 +976,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Valid snapshot target.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L884
+    ///
+    /// ```python
+    /// def valid_snapshot_target(
+    ///     relation: BaseRelation,
+    ///     column_names: Optional[Dict[str, str]] = None
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
     pub fn valid_snapshot_target(
@@ -790,6 +999,22 @@ impl BridgeAdapter {
         }
     }
 
+    /// Gets the macro for the given incremental strategy.
+    ///
+    /// Additionally some validations are done:
+    /// 1. Assert that if the given strategy is a "builtin" strategy, then it must
+    ///    also be defined as a "valid" strategy for the associated adapter
+    /// 2. Assert that the incremental strategy exists in the model context
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1704
+    ///
+    /// ```python
+    /// def get_incremental_strategy_macro(
+    ///     self,
+    ///     context: dict,
+    ///     strategy: str
+    /// ) -> DispatchObject
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_incremental_strategy_macro(
         &self,
@@ -802,6 +1027,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Assert valid snapshot target given strategy.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L917
+    ///
+    /// ```python
+    /// def assert_valid_snapshot_target_given_strategy(
+    ///     relation: BaseRelation,
+    ///     column_names: Dict[str, str],
+    ///     strategy: SnapshotStrategy
+    /// ) -> None
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn assert_valid_snapshot_target_given_strategy(
         &self,
@@ -824,6 +1060,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get hard deletes behavior.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1964
+    ///
+    /// ```python
+    /// def get_hard_deletes_behavior(
+    ///     cls,
+    ///     config: Dict[str, str]
+    /// ) -> str
+    /// ```
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn get_hard_deletes_behavior(
         &self,
@@ -837,6 +1083,23 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1014
+    ///
+    /// ```python
+    /// def get_relation(
+    ///     self,
+    ///     database: str,
+    ///     schema: str,
+    ///     identifier: str,
+    ///     needs_information: bool = False
+    /// )  -> Optional[BaseRelation]
+    /// ```
+    ///
+    /// When `needs_information` is false (default): returns cached relation only; no extra
+    /// database call. When true: guarantees the relation has catalog metadata (Provider, Owner,
+    /// Statistics, etc.), running DESCRIBE EXTENDED if needed (Databricks).
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_relation(
         &self,
@@ -964,6 +1227,20 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get a catalog relation object.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L338
+    ///
+    /// ```python
+    /// def build_catalog_relation(
+    ///     self,
+    ///     model: RelationConfig
+    /// )  -> Optional[CatalogRelation]
+    /// ```
+    ///
+    /// In Core, there are numerous derived flavors of CatalogRelation.
+    /// We handle this in Fusion as a piecemeal instantiated flat object
+    /// and push down validation to the DDL level.
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -982,6 +1259,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get missing columns.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L852
+    ///
+    /// ```python
+    /// def get_missing_columns(
+    ///     from_relation: BaseRelation,
+    ///     to_relation: BaseRelation
+    /// ) -> List[BaseColumn]
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_missing_columns(
         &self,
@@ -998,6 +1285,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get columns in relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L741
+    ///
+    /// ```python
+    /// def get_columns_in_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> List[Column]
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_columns_in_relation(
         &self,
@@ -1061,6 +1358,17 @@ impl BridgeAdapter {
         }
     }
 
+    /// Check if schema exists
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L849
+    ///
+    /// ```python
+    /// def check_schema_exists(
+    ///     self,
+    ///     database: str,
+    ///     schema: str
+    /// ) -> bool
+    /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn check_schema_exists(
         &self,
@@ -1074,6 +1382,21 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get relations by pattern
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L858
+    ///
+    /// ```python
+    /// def get_relations_by_pattern(
+    ///     self,
+    ///     schema_pattern: str,
+    ///     table_pattern: str,
+    ///     exclude: Optional[str] = None,
+    ///     database: Optional[str] = None,
+    ///     quote_table: Optional[bool] = None,
+    ///     excluded_schemas: Optional[List[str]] = None
+    /// ) -> List[BaseRelation]
+    /// ```
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_relations_by_pattern(
@@ -1108,6 +1431,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get column schema from query
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_column_schema_from_query(
         &self,
@@ -1133,6 +1457,8 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get columns in select sql
+    ///
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L443-L444
     /// Shares the same input and output as get_column_schema_from_query.
     /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
@@ -1162,6 +1488,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// Verify database.
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn verify_database(
         &self,
@@ -1214,6 +1541,10 @@ impl BridgeAdapter {
         }))
     }
 
+    /// Nest column data types for BigQuery STRUCT/ARRAY types.
+    ///
+    /// Converts flat column definitions into nested structures.
+    /// Only available with BigQuery adapter.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn nest_column_data_types(
         &self,
@@ -1239,6 +1570,18 @@ impl BridgeAdapter {
         }
     }
 
+    /// Is replaceable
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
+    ///
+    /// ```python
+    /// def is_replaceable(
+    ///     self,
+    ///     relation: Optional[BaseRelation],
+    ///     partition_by: Optional[dict],
+    ///     cluster_by: Optional[dict]
+    /// ) -> bool
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn is_replaceable(
         &self,
@@ -1325,6 +1668,15 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get table options
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/57b131a11ea24b79cfebda003c15456972892427/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L793
+    ///
+    /// ```python
+    /// def get_table_options(
+    ///     self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool
+    /// ) -> Dict[str, Any]:
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_table_options(
         &self,
@@ -1376,6 +1728,18 @@ impl BridgeAdapter {
         }
     }
 
+    /// Add time ingestion partition column
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L259
+    ///
+    /// ```python
+    /// @available.parse(lambda *a, **k: [])
+    /// def add_time_ingestion_partition_column(
+    ///     self,
+    ///     partition_by,
+    ///     columns
+    /// ) -> List[BigQueryColumn]
+    /// ```
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn add_time_ingestion_partition_column(
         &self,
@@ -1521,6 +1885,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// Behavior (flags)
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn behavior(&self) -> Value {
         match &self.inner {
@@ -1529,6 +1894,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// List relations without caching.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn list_relations_without_caching(
         &self,
@@ -1567,6 +1933,12 @@ impl BridgeAdapter {
         }
     }
 
+    /// Check if a DBR capability is available for current compute.
+    ///
+    /// Accepts capability names as strings (e.g. 'replace_on', 'insert_by_name').
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    ///
     /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
     /// Use `has_feature(capability_name)` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -1593,6 +1965,14 @@ impl BridgeAdapter {
         }
     }
 
+    /// Compare Databricks Runtime version.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
+    ///
+    /// Returns:
+    /// - 1 if current version > expected
+    /// - 0 if current version == expected
+    /// - -1 if current version < expected
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn compare_dbr_version(
         &self,
@@ -1617,6 +1997,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// Returns true if the adapter supports the given feature.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
         let result = match &self.inner {
@@ -1737,6 +2118,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Compute external path for Databricks external tables.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L208-L209
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn compute_external_path(
         &self,
@@ -1758,6 +2142,15 @@ impl BridgeAdapter {
         }
     }
 
+    /// Add UniForm Iceberg table properties.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/bfcb5c7c7714e97e67023119f674d2938b04acb0/dbt/adapters/databricks/impl.py#L280
+    ///
+    /// ```python
+    /// def update_tblproperties_for_uniform_iceberg(
+    ///     self, config: BaseConfig, tblproperties: Optional[dict[str, str]] = None
+    /// )  -> dict[str, str]
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn update_tblproperties_for_uniform_iceberg(
         &self,
@@ -1810,6 +2203,13 @@ impl BridgeAdapter {
         }
     }
 
+    /// Is table UniForm Iceberg
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/bfcb5c7c7714e97e67023119f674d2938b04acb0/dbt/adapters/databricks/impl.py#L256C6-L256C7
+    ///
+    /// ```python
+    /// def is_uniform(self, config: BaseConfig) -> bool:
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn is_uniform(
         &self,
@@ -1837,6 +2237,13 @@ impl BridgeAdapter {
         }
     }
 
+    /// Resolve file format from model config.
+    ///
+    /// Returns the file_format from config, or adapter-specific default.
+    /// Databricks default: "delta". Used by clone materialization.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
+    /// DatabricksConfig has file_format: str = "delta"
     #[tracing::instrument(skip(self, config), level = "trace")]
     pub fn resolve_file_format(
         &self,
@@ -1900,6 +2307,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Generate a unique temporary table suffix.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/4dc395b42dae78e895adf9c66ad6811534e879a6/dbt-athena/src/dbt/adapters/athena/impl.py#L445
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn generate_unique_temporary_table_suffix(
         &self,
@@ -1916,6 +2326,7 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get the list of valid incremental strategies for this adapter.
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -1949,6 +2360,10 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get columns to persist documentation for.
+    ///
+    /// Given existing columns and columns from the model, determines which columns
+    /// to update and persist docs for. Only supported by Databricks.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_persist_doc_columns(
         &self,
@@ -1978,6 +2393,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Parse columns and constraints for table creation.
+    ///
+    /// Used by Databricks adapter for table creation with constraints.
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn parse_columns_and_constraints(
         &self,
@@ -2000,6 +2418,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get the configuration of an existing relation from the remote data warehouse.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn get_relation_config(
         &self,
@@ -2022,6 +2443,10 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get configuration from a model node.
+    ///
+    /// Given a model, parse and build its configurations.
+    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn get_config_from_model(
         &self,
@@ -2054,6 +2479,9 @@ impl BridgeAdapter {
         }
     }
 
+    /// Clean SQL by removing extra whitespace and normalizing format.
+    ///
+    /// Only available with Databricks adapter.
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn clean_sql(&self, sql: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -2161,6 +2589,13 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get all relevant metadata about a dynamic table to return as a dict to Agate Table row
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/703180a871f2960cd0c91765ffc4b1dc111d615b/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L510
+    ///
+    /// ```python
+    /// def describe_dynamic_table(self, relation: SnowflakeRelation) -> Dict[str, Any]
+    /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn describe_dynamic_table(
         &self,
@@ -2187,6 +2622,16 @@ impl BridgeAdapter {
         }
     }
 
+    /// Get a catalog integration object.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334
+    ///
+    /// ```python
+    /// def get_catalog_integration(
+    ///     self,
+    ///     name: str,
+    /// )  -> Optional[CatalogRelation]
+    /// ```
     pub fn get_catalog_integration(
         &self,
         _state: &State,
