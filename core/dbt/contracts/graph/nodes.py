@@ -409,7 +409,7 @@ class CompiledNode(CompiledResource, ParsedNode):
     """Contains attributes necessary for SQL files and nodes with refs, sources, etc,
     so all ManifestNodes except SeedNode."""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._lock = threading.Lock()
 
     def __getstate__(self):
