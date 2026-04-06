@@ -422,7 +422,7 @@ class CompiledNode(CompiledResource, ParsedNode):
         self._lock = threading.Lock()
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         return not self.raw_code.strip()
 
     def set_cte(self, cte_id: str, sql: str):
