@@ -439,11 +439,11 @@ class CompiledNode(CompiledResource, ParsedNode):
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
 
@@ -1036,7 +1036,7 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         return self.same_seeds(other)
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return []
 
     @property
@@ -1143,7 +1143,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
         return UnitTestDefinitionResource
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
@@ -1232,7 +1232,7 @@ class Macro(MacroResource, BaseNode):
         return self.macro_sql == other.macro_sql
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
 
@@ -1431,7 +1431,7 @@ class SourceDefinition(
         return False
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return []
 
     @property
@@ -1467,7 +1467,7 @@ class SourceDefinition(
 @dataclass
 class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
@@ -1543,7 +1543,7 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
 @dataclass
 class Metric(GraphNode, MetricResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
@@ -1659,11 +1659,11 @@ class FunctionNode(CompiledNode, FunctionResource):
 @dataclass
 class SemanticModel(GraphNode, SemanticModelResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
     @classmethod
