@@ -149,7 +149,7 @@ class BaseNode(BaseResource):
         return f"{self.package_name}://{self.original_file_path}"
 
     @property
-    def is_refable(self):
+    def is_refable(self) -> bool:
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
@@ -1416,7 +1416,7 @@ class SourceDefinition(
         return f'source("{self.source.name}", "{self.table.name}")'
 
     @property
-    def is_refable(self):
+    def is_refable(self) -> bool:
         return False
 
     @property
