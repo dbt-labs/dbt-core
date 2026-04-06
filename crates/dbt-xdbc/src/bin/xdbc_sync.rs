@@ -5,32 +5,6 @@ use std::path::PathBuf;
 use dbt_xdbc::install::{self, DriverTriplet, find_expected_checksum, format_driver_url};
 use sha2::{Digest, Sha256};
 
-const BACKEND_AND_VERSIONS: &[&str] = &[
-    "bigquery-0.21.0.dev+dbt0.21.7",
-    "bigquery-0.21.0.dev+dbt0.21.8",
-    "bigquery-0.21.0.dev+dbt0.21.9",
-    "databricks-0.21.0+dbt0.21.5",
-    "databricks-0.21.0+dbt0.21.6",
-    "databricks-0.21.0+dbt0.21.7",
-    "duckdb-0.21.0+dbt0.0.5",
-    "duckdb-0.21.0+dbt0.0.6",
-    "duckdb-0.21.0.dev+dbt0.0.7",
-    "postgresql-0.18.0+dbt0.0.3",
-    "postgresql-0.21.0+dbt0.21.0",
-    // skipped: "snowflake-0.21.0.dev+dbt0.21.8"
-    "snowflake-0.21.0.dev+dbt0.21.9",
-    "snowflake-0.21.0.dev+dbt0.21.10",
-    "redshift-0.18.0+dbt0.18.2",
-    "redshift-0.18.0+dbt0.18.3",
-    "redshift-0.18.0+dbt0.18.4",
-    "salesforce-0.18.0+dbt0.0.4",
-    "salesforce-0.21.0+dbt0.21.1",
-    "salesforce-0.21.0.dev+dbt0.21.2",
-    "spark-0.21.0.dev+dbt0.1.0",
-    "mssql-1.3.0",
-    "mssql-1.3.1",
-];
-
 const OS_ARCH: &[(&str, &str)] = &[
     ("apple-darwin", "aarch64"),
     ("apple-darwin", "x86_64"),
@@ -66,9 +40,15 @@ fn parse_backend_and_version(s: &str) -> (&str, &str) {
     (&s[..pos], &s[pos + 1..])
 }
 
-fn build_driver_entries() -> Vec<DriverEntry> {
+fn build_driver_entries(toml: &toml::Table) -> Vec<DriverEntry> {
+    let drivers = toml["drivers"]
+        .as_array()
+        .expect("drivers.toml: 'drivers' must be an array");
     let mut entries = Vec::new();
-    for bv in BACKEND_AND_VERSIONS {
+    for value in drivers {
+        let bv = value
+            .as_str()
+            .expect("drivers.toml: each driver entry must be a string");
         let (backend, version) = parse_backend_and_version(bv);
         for &(os, arch) in OS_ARCH {
             entries.push((
@@ -105,9 +85,16 @@ fn main() {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let output_path = crate_dir.join("src/checksums.rs");
 
+    let toml_path = crate_dir.join("drivers.toml");
+    let toml_content = std::fs::read_to_string(&toml_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", toml_path.display()));
+    let toml_table: toml::Table = toml_content
+        .parse()
+        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", toml_path.display()));
+
     let http_agent = install::build_http_agent();
 
-    let entries = build_driver_entries();
+    let entries = build_driver_entries(&toml_table);
     let mut checksums: Vec<ChecksumEntry> = Vec::new();
     let mut new_count: usize = 0;
     let mut not_found_count: usize = 0;
