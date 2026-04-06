@@ -11,6 +11,8 @@ mod config;
 mod bigquery;
 mod databricks;
 mod duckdb;
+#[cfg(test)]
+mod flock;
 mod postgres;
 mod redshift;
 mod salesforce;
