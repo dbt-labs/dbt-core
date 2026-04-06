@@ -173,7 +173,7 @@ class BaseNode(BaseResource):
         return self.config.materialized == "ephemeral"
 
     @property
-    def is_ephemeral_model(self):
+    def is_ephemeral_model(self) -> bool:
         return self.is_refable and self.is_ephemeral
 
     def get_materialization(self):
@@ -1427,7 +1427,7 @@ class SourceDefinition(
         return False
 
     @property
-    def is_ephemeral_model(self):
+    def is_ephemeral_model(self) -> bool:
         return False
 
     @property
