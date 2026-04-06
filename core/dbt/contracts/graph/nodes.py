@@ -252,7 +252,7 @@ class NodeInfoMixin:
             self._event_status[k] = v
         set_log_contextvars(node_info=self.node_info)
 
-    def clear_event_status(self):
+    def clear_event_status(self) -> None:
         self._event_status = dict()
 
 
