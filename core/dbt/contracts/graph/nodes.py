@@ -378,11 +378,11 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
     def build_contract_checksum(self) -> None:
         pass
 
-    def same_contract(self, old, adapter_type=None) -> bool:
+    def same_contract(self, old: "ParsedNode", adapter_type: Optional[str] = None) -> bool:
         # This would only apply to seeds
         return True
 
-    def same_contents(self, old, adapter_type) -> bool:
+    def same_contents(self, old: Optional["ParsedNode"], adapter_type: Optional[str]) -> bool:
         if old is None:
             return False
 
