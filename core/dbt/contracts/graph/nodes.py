@@ -162,8 +162,11 @@ class BaseNode(BaseResource):
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
-    def is_versioned(self):
-        return self.resource_type in VERSIONED_NODE_TYPES and self.version is not None
+    def is_versioned(self) -> bool:
+        return (
+            self.resource_type in VERSIONED_NODE_TYPES
+            and getattr(self, "version", None) is not None
+        )
 
     @property
     def is_ephemeral(self):
