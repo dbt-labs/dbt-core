@@ -260,7 +260,7 @@ class NodeInfoMixin:
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def get_target_write_path(
         self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
-    ):
+    ) -> str:
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -1195,7 +1195,7 @@ class SnapshotNode(SnapshotResource, CompiledNode):
 
     def get_target_write_path(
         self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
-    ):
+    ) -> str:
         # Always use many-to-one path for snapshots. Multiple snapshot blocks
         # can share a single file, and the basename heuristic in the base class
         # fails when one snapshot's name matches the source filename — producing
