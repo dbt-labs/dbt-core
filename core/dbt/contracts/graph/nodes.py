@@ -375,7 +375,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
             old.unrendered_config,
         )
 
-    def build_contract_checksum(self):
+    def build_contract_checksum(self) -> None:
         pass
 
     def same_contract(self, old, adapter_type=None) -> bool:
@@ -656,7 +656,7 @@ class ModelNode(ModelResource, CompiledNode):
             and self.deprecation_date == old.deprecation_date
         )
 
-    def build_contract_checksum(self):
+    def build_contract_checksum(self) -> None:
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
