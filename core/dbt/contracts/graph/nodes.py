@@ -158,7 +158,7 @@ class BaseNode(BaseResource):
 
     # will this node map to an object in the database?
     @property
-    def is_relational(self):
+    def is_relational(self) -> bool:
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
@@ -1071,7 +1071,7 @@ class TestShouldStoreFailures:
         return get_flags().STORE_FAILURES
 
     @property
-    def is_relational(self):
+    def is_relational(self) -> bool:
         if self.should_store_failures:
             return True
         return False
@@ -1627,7 +1627,7 @@ class Group(GroupResource, BaseNode):
 class FunctionNode(CompiledNode, FunctionResource):
 
     @property
-    def is_relational(self):
+    def is_relational(self) -> bool:
         return True
 
     @classmethod
