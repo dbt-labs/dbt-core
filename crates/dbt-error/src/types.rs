@@ -24,6 +24,24 @@ pub type FsResult<T, E = Box<FsError>> = Result<T, E>;
 // TODO(jasonlin45): Report stack trace on CodeLocation
 struct StackTraceFormatter<'a>(&'a minijinja::Error);
 
+/// Walk the error source chain of a minijinja error looking for an `AdapterError`.
+///
+/// This is needed because adapter errors can surface under different Jinja error
+/// kinds (`Execution`, `InvalidOperation`, etc.) depending on where they are raised
+/// in the macro call chain.
+fn find_adapter_error_in_chain(
+    err: &minijinja::Error,
+) -> Option<&super::adapter_errors::AdapterError> {
+    let mut current: Option<&(dyn Error + 'static)> = err.source();
+    while let Some(source) = current {
+        if let Some(adapter_err) = source.downcast_ref::<super::adapter_errors::AdapterError>() {
+            return Some(adapter_err);
+        }
+        current = source.source();
+    }
+    None
+}
+
 impl<'a> Display for StackTraceFormatter<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.stack_trace(f)
@@ -196,24 +214,34 @@ impl FsError {
     }
 
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
+        // Check for AdapterError as source regardless of Jinja error kind.
+        // Previously this was limited to ErrorKind::Execution, but adapter errors
+        // can also surface as ErrorKind::InvalidOperation (e.g. from run_query calls),
+        // so we check unconditionally by walking the source chain.
+        if let Some(adapter_err) = find_adapter_error_in_chain(&err) {
+            let mut fs_err = Box::<FsError>::from(adapter_err.clone());
+            if !err.is_stack_empty() {
+                let stack_trace = format!("{}", StackTraceFormatter(&err));
+                let mut frames = stack_trace.lines().filter(|s| !s.is_empty());
+                // Always show the first frame (points to user code / compiled SQL)
+                if let Some(first_frame) = frames.next() {
+                    fs_err.context.push('\n');
+                    fs_err.context.push_str(first_frame);
+                }
+                // Only include remaining internal macro frames in debug mode
+                if is_sdf_debug() {
+                    for frame in frames {
+                        fs_err.context.push('\n');
+                        fs_err.context.push_str(frame);
+                    }
+                }
+            }
+            return fs_err.with_location(MiniJinjaErrorWrapper(err));
+        }
         let err_code = match err.kind() {
             minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxError,
             minijinja::ErrorKind::DisabledModel => ErrorCode::DisabledModel,
-            minijinja::ErrorKind::Execution => {
-                if let Some(adapter_err) = err.source().and_then(|err_source| {
-                    err_source.downcast_ref::<super::adapter_errors::AdapterError>()
-                }) {
-                    // Grab stack trace from the Jinja error and append it to the adapter error context
-                    let mut fs_err = Box::<FsError>::from(adapter_err.clone());
-                    if !err.is_stack_empty() {
-                        let stack_trace = format!("{}", StackTraceFormatter(&err));
-                        fs_err.context.push_str(&stack_trace);
-                    }
-                    return fs_err.with_location(MiniJinjaErrorWrapper(err));
-                } else {
-                    ErrorCode::ExecutionError
-                }
-            }
+            minijinja::ErrorKind::Execution => ErrorCode::ExecutionError,
             _ => ErrorCode::JinjaError,
         };
         FsError::new(err_code, format!("{context} {err}")).with_location(MiniJinjaErrorWrapper(err))

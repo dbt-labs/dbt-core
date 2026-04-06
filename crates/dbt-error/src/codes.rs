@@ -259,6 +259,27 @@ impl ErrorCode {
     pub fn is_frontend(&self) -> bool {
         (*self as u16) < (Self::Generic as u16)
     }
+
+    /// Returns true if this code represents a database-level error.
+    ///
+    /// Used to distinguish adapter/database errors from other Jinja execution
+    /// errors so they can be formatted in a user-friendly way (similar to
+    /// dbt-core's "Database Error in model X" format).
+    pub fn is_database_error(&self) -> bool {
+        matches!(
+            self,
+            ErrorCode::DbConnectionFailed
+                | ErrorCode::DbAuthFailed
+                | ErrorCode::DbSyntaxError
+                | ErrorCode::DbResourceExceeded
+                | ErrorCode::DbUnavailable
+                | ErrorCode::DbTxnConflict
+                | ErrorCode::DbNotFound
+                | ErrorCode::DbUnsupportedFeature
+                | ErrorCode::DbDriverError
+                | ErrorCode::ExecutorError
+        )
+    }
 }
 
 impl From<dbt_frontend_common::error::ErrorCode> for ErrorCode {
