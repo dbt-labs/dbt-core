@@ -42,6 +42,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
 from dbt.events.types import (
     GenericExceptionOnRun,
+    JinjaLogInfo,
     LogBatchResult,
     LogHookEndLine,
     LogHookStartLine,
@@ -206,6 +207,94 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
 
 
 class ModelRunner(CompileRunner):
+    def _relation_identifier(self, relation: BaseRelation) -> str:
+        identifier = getattr(relation, "identifier", None)
+        if identifier is not None:
+            return identifier
+        return relation.name or ""
+
+    def _latest_pointer_identifier(self, model: ModelNode) -> str:
+        configured_alias = getattr(model.config, "alias", None)
+        if configured_alias:
+            return str(configured_alias).strip()
+        return model.name
+
+    def _should_generate_latest_pointer(self, model: ModelNode) -> bool:
+        return (
+            isinstance(model, ModelNode)
+            and model.version is not None
+            and model.is_latest_version
+            and getattr(model.config, "generate_latest_pointer", True)
+        )
+
+    def _materialize_latest_pointer(
+        self,
+        manifest: Manifest,
+        model: ModelNode,
+        context: Dict[str, Any],
+        relations: List[BaseRelation],
+    ) -> List[BaseRelation]:
+        if not relations or not self._should_generate_latest_pointer(model):
+            return []
+
+        source_relation = relations[0]
+        pointer_identifier = self._latest_pointer_identifier(model)
+
+        if self._relation_identifier(source_relation) == pointer_identifier:
+            return []
+
+        pointer_relation = self.adapter.Relation.create(
+            database=source_relation.database,
+            schema=source_relation.schema,
+            identifier=pointer_identifier,
+            type="view",
+        )
+        existing_relation = self.adapter.get_relation(
+            pointer_relation.database,
+            pointer_relation.schema,
+            self._relation_identifier(pointer_relation),
+        )
+
+        # Safety guard: refuse to replace a non-view relation (e.g. a table with data)
+        # to avoid silent data loss on upgrade. Users must drop it manually first.
+        if existing_relation is not None and not existing_relation.is_view:
+            fire_event(
+                JinjaLogInfo(
+                    msg=(
+                        f"Skipping latest version pointer: a {existing_relation.type} "
+                        f"already exists at {pointer_relation}. Drop it first to enable "
+                        f"automatic pointer view creation."
+                    ),
+                    node_info=model.node_info,
+                )
+            )
+            return []
+
+        pointer_sql = f"select * from {source_relation}"
+        macro_name = "get_replace_sql" if existing_relation is not None else "get_create_sql"
+        pointer_macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
+        if pointer_macro is None:
+            raise DbtInternalError(f'Missing macro "{macro_name}" for latest version pointer')
+
+        macro_generator = MacroGenerator(
+            pointer_macro,
+            context,
+            stack=context["context_macro_stack"],
+        )
+        rendered_sql = (
+            macro_generator(existing_relation, pointer_relation, pointer_sql)
+            if existing_relation is not None
+            else macro_generator(pointer_relation, pointer_sql)
+        )
+        self.adapter.execute(rendered_sql, auto_begin=False, fetch=False)
+        fire_event(
+            JinjaLogInfo(
+                msg=f"Created latest version pointer view {pointer_relation} for {source_relation}",
+                node_info=model.node_info,
+            )
+        )
+        return [pointer_relation]
+
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
@@ -292,15 +381,19 @@ class ModelRunner(CompileRunner):
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
+        relations: List[BaseRelation] = []
         try:
             result = MacroGenerator(
                 materialization_macro, context, stack=context["context_macro_stack"]
             )()
+            relations = self._materialization_relations(result, model)
+            relations.extend(self._materialize_latest_pointer(manifest, model, context, relations))
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
-        for relation in self._materialization_relations(result, model):
+        for relation in relations:
             self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self._build_run_model_result(model, context)
@@ -334,7 +427,9 @@ class ModelRunner(CompileRunner):
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
 
-        return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
+        return self._execute_model(
+            hook_ctx, context_config, model, context, materialization_macro, manifest
+        )
 
 
 class MicrobatchBatchRunner(ModelRunner):
@@ -560,6 +655,7 @@ class MicrobatchBatchRunner(ModelRunner):
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
         try:
             batch_result = self._execute_microbatch_materialization(
@@ -828,6 +924,12 @@ class MicrobatchModelRunner(ModelRunner):
 
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
+
+        if result.status == RunStatus.Success:
+            context = generate_runtime_model_context(model, self.config, manifest)
+            relations = [self.adapter.Relation.create_from(self.config, model)]
+            for relation in self._materialize_latest_pointer(manifest, model, context, relations):
+                self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return result
 

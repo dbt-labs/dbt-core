@@ -78,6 +78,10 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
+    generate_latest_pointer: bool = field(
+        default=True,
+        metadata=MergeBehavior.Clobber.meta(),
+    )
 
     def __post_init__(self):
         super().__post_init__()

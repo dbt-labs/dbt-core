@@ -159,6 +159,227 @@ class TestModelRunner:
         model_runner.execute(model=table_model, manifest=manifest)
         # TODO: Assert that the model was executed
 
+    def test_materialize_latest_pointer_for_latest_version(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+            def __str__(self) -> str:
+                return f'"{self.database}"."{self.schema}"."{self.identifier}"'
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(materialized="table")
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model", type="view"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        model_runner.adapter.Relation.create.return_value = pointer_relation
+        model_runner.adapter.get_relation.return_value = None
+
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = mocker.sentinel.pointer_macro
+
+        macro_generator = mocker.Mock(return_value="create latest pointer sql")
+        mocker.patch("dbt.task.run.MacroGenerator", return_value=macro_generator)
+
+        pointer_relations = model_runner._materialize_latest_pointer(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        assert pointer_relations == [pointer_relation]
+        model_runner.adapter.Relation.create.assert_called_once_with(
+            database="dbt",
+            schema="dbt_schema",
+            identifier="versioned_model",
+            type="view",
+        )
+        manifest.find_macro_by_name.assert_called_once_with(
+            "get_create_sql", model_runner.config.project_name, None
+        )
+        macro_generator.assert_called_once_with(
+            pointer_relation, 'select * from "dbt"."dbt_schema"."versioned_model_v2"'
+        )
+        model_runner.adapter.execute.assert_called_once_with(
+            "create latest pointer sql", auto_begin=False, fetch=False
+        )
+
+    def test_materialize_latest_pointer_uses_custom_alias(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(materialized="table", alias="latest_alias")
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="latest_alias_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="latest_alias", type="view"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        model_runner.adapter.Relation.create.return_value = pointer_relation
+        model_runner.adapter.get_relation.return_value = None
+
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = mocker.sentinel.pointer_macro
+
+        mocker.patch("dbt.task.run.MacroGenerator", return_value=mocker.Mock(return_value="sql"))
+
+        model_runner._materialize_latest_pointer(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        model_runner.adapter.Relation.create.assert_called_once_with(
+            database="dbt",
+            schema="dbt_schema",
+            identifier="latest_alias",
+            type="view",
+        )
+
+    @pytest.mark.parametrize(
+        "version,latest_version,generate_latest_pointer",
+        [
+            (1, 2, True),
+            (2, 2, False),
+        ],
+    )
+    def test_materialize_latest_pointer_skips_when_not_needed(
+        self,
+        mocker: MockerFixture,
+        model_runner: ModelRunner,
+        version: int,
+        latest_version: int,
+        generate_latest_pointer: bool,
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = version
+        model.latest_version = latest_version
+        model.config = ModelConfig(
+            materialized="table", generate_latest_pointer=generate_latest_pointer
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+
+        pointer_relations = model_runner._materialize_latest_pointer(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[
+                FakeRelation(
+                    database="dbt",
+                    schema="dbt_schema",
+                    identifier="versioned_model_v2",
+                    type="table",
+                )
+            ],
+        )
+
+        assert pointer_relations == []
+        model_runner.adapter.Relation.create.assert_not_called()
+        manifest.find_macro_by_name.assert_not_called()
+
+    def test_materialize_latest_pointer_skips_when_existing_table(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+            is_view: bool = False
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(materialized="table")
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model", type="view"
+        )
+        existing_table = FakeRelation(
+            database="dbt",
+            schema="dbt_schema",
+            identifier="versioned_model",
+            type="table",
+            is_view=False,
+        )
+
+        model_runner.adapter = mocker.Mock()
+        model_runner.adapter.Relation.create.return_value = pointer_relation
+        model_runner.adapter.get_relation.return_value = existing_table
+
+        manifest = mocker.Mock(spec=Manifest)
+
+        pointer_relations = model_runner._materialize_latest_pointer(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        assert pointer_relations == []
+        model_runner.adapter.execute.assert_not_called()
+        manifest.find_macro_by_name.assert_not_called()
+
 
 class TestMicrobatchModelRunner:
     @pytest.fixture

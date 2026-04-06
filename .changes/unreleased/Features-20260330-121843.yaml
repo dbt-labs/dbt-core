@@ -1,0 +1,6 @@
+kind: Features
+body: create an unsuffixed latest-version pointer relation for versioned models
+time: 2026-03-30T12:18:43+05:30
+custom:
+    Author: aahel
+    Issue: "7442"
