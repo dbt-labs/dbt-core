@@ -247,7 +247,7 @@ class NodeInfoMixin:
         }
         return node_info
 
-    def update_event_status(self, **kwargs):
+    def update_event_status(self, **kwargs: Any) -> None:
         for k, v in kwargs.items():
             self._event_status[k] = v
         set_log_contextvars(node_info=self.node_info)
