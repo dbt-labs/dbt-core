@@ -336,7 +336,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
             return bool(self.config.persist_docs.get("relation"))
         return False
 
-    def same_persisted_description(self, other) -> bool:
+    def same_persisted_description(self, other: "ParsedNode") -> bool:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
