@@ -425,7 +425,7 @@ class CompiledNode(CompiledResource, ParsedNode):
     def empty(self) -> bool:
         return not self.raw_code.strip()
 
-    def set_cte(self, cte_id: str, sql: str):
+    def set_cte(self, cte_id: str, sql: str) -> None:
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
         do if extra_ctes were an OrderedDict
         """
