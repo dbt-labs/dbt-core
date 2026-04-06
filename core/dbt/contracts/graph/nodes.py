@@ -153,7 +153,7 @@ class BaseNode(BaseResource):
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
-    def should_store_failures(self):
+    def should_store_failures(self) -> bool:
         return False
 
     # will this node map to an object in the database?
