@@ -925,7 +925,7 @@ class MicrobatchModelRunner(ModelRunner):
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
 
-        if result.status == RunStatus.Success:
+        if result.status == RunStatus.Success and self._should_generate_latest_pointer(model):
             context = generate_runtime_model_context(model, self.config, manifest)
             relations = [self.adapter.Relation.create_from(self.config, model)]
             for relation in self._materialize_latest_pointer(manifest, model, context, relations):
