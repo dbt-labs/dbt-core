@@ -7292,8 +7292,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotConfig": {
