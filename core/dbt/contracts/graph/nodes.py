@@ -145,7 +145,7 @@ class BaseNode(BaseResource):
         return self.name
 
     @property
-    def file_id(self):
+    def file_id(self) -> str:
         return f"{self.package_name}://{self.original_file_path}"
 
     @property
