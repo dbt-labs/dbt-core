@@ -1,4 +1,4 @@
-use dbt_adapter::{BridgeAdapter, factory::create_static_relation};
+use dbt_adapter::{Adapter, relation::factory::create_static_relation};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
@@ -180,7 +180,7 @@ impl JinjaEnv {
     }
 
     /// Set the adapter
-    pub(crate) fn set_adapter(&mut self, adapter: Arc<BridgeAdapter>) {
+    pub(crate) fn set_adapter(&mut self, adapter: Arc<Adapter>) {
         let mut api_map = BTreeMap::new();
         api_map.insert(
             "Relation".to_string(),
@@ -196,21 +196,20 @@ impl JinjaEnv {
     }
 
     /// Get the adapter from the environment
-    pub fn get_adapter(&self) -> Option<Arc<BridgeAdapter>> {
+    pub fn get_adapter(&self) -> Option<Arc<Adapter>> {
         let adapter = self.env.get_global("adapter")?;
-        adapter.downcast_object::<BridgeAdapter>()
+        adapter.downcast_object::<Adapter>()
     }
 
     /// Get the adapter reference from the environment.
-    pub fn get_adapter_ref(&self) -> Option<&BridgeAdapter> {
+    pub fn get_adapter_ref(&self) -> Option<&Adapter> {
         let adapter = self.env.get_global_ref("adapter")?;
-        adapter.downcast_object_ref::<BridgeAdapter>()
+        adapter.downcast_object_ref::<Adapter>()
     }
 
     /// Get the adapter from the environment
-    pub fn get_base_adapter(&self) -> Option<Arc<BridgeAdapter>> {
-        self.get_adapter()
-            .map(|bridge| bridge as Arc<BridgeAdapter>)
+    pub fn get_base_adapter(&self) -> Option<Arc<Adapter>> {
+        self.get_adapter().map(|bridge| bridge as Arc<Adapter>)
     }
 
     /// Set the undefined behavior for the environment.

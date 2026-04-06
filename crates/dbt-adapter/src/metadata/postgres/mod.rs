@@ -1,5 +1,5 @@
 use crate::AdapterEngine;
-use crate::typed_adapter::ConcreteAdapter;
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
 };
@@ -21,12 +21,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub struct PostgresMetadataAdapter {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
 }
 
 impl PostgresMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }

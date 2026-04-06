@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{BridgeAdapter, sql_types::SATypeOpsImpl};
+use dbt_adapter::{Adapter, sql_types::SATypeOpsImpl};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_schemas::{
@@ -66,7 +66,7 @@ pub fn initialize_load_jinja_environment(
     let package_quoting = resolve_package_quoting(None, adapter_type);
     let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
 
-    let adapter = BridgeAdapter::new_parse_phase_adapter(
+    let adapter = Adapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,
         package_quoting,

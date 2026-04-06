@@ -418,7 +418,7 @@ impl Recording {
     /// For MetadataRead operations: Can match any read in the current segment with matching args.
     ///     Reads are NOT tracked - the same read can be matched multiple times.
     ///
-    /// PRECONDITION: Pure/Cache operations are filtered at the bridge_adapter level and should never reach here.
+    /// PRECONDITION: Pure/Cache operations are filtered at the adapter level and should never reach here.
     ///
     /// Returns the matched event if found.
     pub fn take_semantic_match(

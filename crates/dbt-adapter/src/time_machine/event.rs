@@ -11,7 +11,7 @@ use super::semantic::SemanticCategory;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "source")]
 pub enum RecordedEvent {
-    /// From BridgeAdapter::call_method
+    /// From Adapter::call_method
     AdapterCall(AdapterCallEvent),
     /// From MetadataAdapter
     MetadataCall(MetadataCallEvent),
@@ -58,7 +58,7 @@ impl RecordedEvent {
     }
 }
 
-/// An adapter call event captured from BridgeAdapter::call_method.
+/// An adapter call event captured from Adapter::call_method.
 ///
 /// These are synchronous calls made from Jinja templates via `adapter.xxx()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,7 +188,7 @@ impl From<SaoStatus> for dbt_common::stats::NodeStatus {
 
 /// A direct engine query event captured from `run_remote_adhoc()`.
 ///
-/// These are queries executed outside the BridgeAdapter layer, such as
+/// These are queries executed outside the Adapter layer, such as
 /// `dbt show --inline` queries that go directly through the ADBC connection.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunRemoteAdhocEvent {

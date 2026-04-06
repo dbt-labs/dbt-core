@@ -1,9 +1,9 @@
+use crate::adapter::adapter_impl::*;
 use crate::connection;
 use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
-use crate::typed_adapter::*;
 use crate::{AdapterEngine, AdapterResult, AdapterType};
 
 use arrow_array::{
@@ -140,12 +140,12 @@ pub fn list_relations(
 }
 
 pub struct SnowflakeMetadataAdapter {
-    pub adapter: ConcreteAdapter,
+    pub adapter: AdapterImpl,
 }
 
 impl SnowflakeMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }

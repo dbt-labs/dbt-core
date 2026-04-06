@@ -1,8 +1,8 @@
 use crate::AdapterEngine;
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::connection;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
-use crate::typed_adapter::ConcreteAdapter;
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
 };
@@ -30,12 +30,12 @@ use std::sync::Arc;
 const MAX_CONNECTIONS: usize = 4;
 
 pub struct DuckDBMetadataAdapter {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
 }
 
 impl DuckDBMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }

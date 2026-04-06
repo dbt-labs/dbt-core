@@ -1,4 +1,4 @@
-use crate::typed_adapter::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific_behavior_flags};
+use crate::adapter::adapter_impl::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific_behavior_flags};
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::AdapterType;

@@ -7,7 +7,7 @@
 //!
 //! The system captures events at two levels:
 //!
-//! 1. **BridgeAdapter** (sync): Jinja `adapter.xxx()` calls via `Object::call_method`
+//! 1. **Adapter** (sync): Jinja `adapter.xxx()` calls via `Object::call_method`
 //! 2. **MetadataAdapter** (async): Schema discovery, freshness, and relation listing
 //!
 //! Events are emitted via an MPSC channel to a background writer task, ensuring
@@ -35,9 +35,9 @@
 //! // Initialize at start of run (returns a handle)
 //! let handle = init_recording("./recordings/run-123", "snowflake", invocation_id, token)?;
 //!
-//! // BridgeAdapter: pass TimeMachine explicitly
-//! let bridge = BridgeAdapter::with_time_machine(
-//!     typed_adapter,
+//! // Adapter: pass TimeMachine explicitly
+//! let bridge = Adapter::with_time_machine(
+//!     adapter_impl,
 //!     db,
 //!     cache,
 //!     TimeMachine::recorder(global_recorder().unwrap().clone()),
@@ -214,14 +214,14 @@ pub fn is_recording() -> bool {
 /// If a replayer is already set, returns a clone of it.
 /// Otherwise, calls the closure to create one, stores it globally, and returns it.
 ///
-/// This enables sharing the same replayer between `BridgeAdapter` (which holds
+/// This enables sharing the same replayer between `Adapter` (which holds
 /// `TimeMachine` directly) and `MetadataAdapter` (which accesses via `global_replayer()`).
 ///
 /// ```ignore
 /// let replayer = get_or_init_replayer(|| {
 ///     Arc::new(EventReplayer::load(path)?.with_replay_mode(mode))
 /// })?;
-/// let bridge = BridgeAdapter::with_time_machine(..., TimeMachine::replayer(replayer));
+/// let bridge = Adapter::with_time_machine(..., TimeMachine::replayer(replayer));
 /// ```
 pub fn get_or_init_replayer<F>(f: F) -> Result<Arc<EventReplayer>, ReplayError>
 where

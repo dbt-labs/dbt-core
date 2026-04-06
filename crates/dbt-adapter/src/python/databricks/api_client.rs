@@ -1,4 +1,4 @@
-use crate::typed_adapter::ConcreteAdapter;
+use crate::adapter::adapter_impl::AdapterImpl;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -28,7 +28,7 @@ pub(crate) struct DatabricksApiClient {
 }
 
 impl DatabricksApiClient {
-    pub(crate) fn new(adapter: &ConcreteAdapter, use_user_folder: bool) -> AdapterResult<Self> {
+    pub(crate) fn new(adapter: &AdapterImpl, use_user_folder: bool) -> AdapterResult<Self> {
         let host = adapter.get_db_config("host").ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,

@@ -1,10 +1,10 @@
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::connection;
 use crate::errors::*;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::redshift::RedshiftRelation;
 use crate::sql_types::make_arrow_field_v2;
-use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResult};
 use arrow::array::*;
 use arrow::datatypes::GenericStringType;
@@ -90,12 +90,12 @@ where table_schema ilike '{}'",
 }
 
 pub(crate) struct RedshiftListRelationsSchemasStrategy {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
     max_connections: usize,
 }
 
 impl RedshiftListRelationsSchemasStrategy {
-    pub(crate) fn new(adapter: ConcreteAdapter, max_connections: usize) -> Self {
+    pub(crate) fn new(adapter: AdapterImpl, max_connections: usize) -> Self {
         Self {
             adapter,
             max_connections,
@@ -298,12 +298,12 @@ const TABLES_WITH_OID: [&str; 10] = [
 ];
 
 pub(crate) struct RedshiftFreshnessStrategy {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
     max_connections: usize,
 }
 
 impl RedshiftFreshnessStrategy {
-    pub(crate) fn new(adapter: ConcreteAdapter, max_connections: usize) -> Self {
+    pub(crate) fn new(adapter: AdapterImpl, max_connections: usize) -> Self {
         Self {
             adapter,
             max_connections,
@@ -421,12 +421,12 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
 }
 
 pub struct RedshiftMetadataAdapter {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
 }
 
 impl RedshiftMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }

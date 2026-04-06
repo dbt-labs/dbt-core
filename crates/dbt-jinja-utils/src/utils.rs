@@ -1,4 +1,4 @@
-use dbt_adapter::BridgeAdapter;
+use dbt_adapter::Adapter;
 use dbt_adapter::relation::create_relation;
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{ErrorCode, FsError, fs_err};
@@ -474,7 +474,7 @@ pub fn clear_template_cache() {
 
 /// Generate a relation name from database, schema, alias
 pub fn generate_relation_name(
-    parse_adapter: Arc<BridgeAdapter>,
+    parse_adapter: Arc<Adapter>,
     database: &str,
     schema: &str,
     identifier: &str,

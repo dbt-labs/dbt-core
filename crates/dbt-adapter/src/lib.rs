@@ -5,8 +5,7 @@
 #[macro_use]
 mod macros;
 
-pub mod adapter_factory;
-pub mod bridge_adapter;
+pub mod adapter;
 pub mod cache;
 pub mod catalog_relation;
 pub mod column;
@@ -14,7 +13,6 @@ pub mod column;
 pub mod connection;
 pub mod engine;
 pub mod errors;
-pub mod factory;
 pub mod format_ident;
 pub mod formatter;
 pub mod funcs;
@@ -40,7 +38,6 @@ pub mod stmt_splitter;
 
 /// Cross-Version Record/Replay System
 pub mod time_machine;
-pub mod typed_adapter;
 #[allow(dead_code)]
 mod use_warehouse;
 
@@ -68,10 +65,10 @@ pub use engine::AdapterEngine;
 /// Functions exposed to jinja
 pub mod load_store;
 
-pub use bridge_adapter::BridgeAdapter;
+pub use adapter::Adapter;
+pub use adapter::AdapterImpl;
 pub use column::{Column, ColumnBuilder};
 pub use dbt_adapter_core::AdapterType;
 pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
 pub use response::AdapterResponse;
-pub use typed_adapter::ConcreteAdapter;

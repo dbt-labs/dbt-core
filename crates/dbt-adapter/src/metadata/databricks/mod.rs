@@ -24,6 +24,7 @@ use minijinja::State;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
@@ -36,7 +37,6 @@ use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
-use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResponse};
 
 pub mod dbr_capabilities;
@@ -149,16 +149,16 @@ fn get_relation_with_quote_policy(
 }
 
 pub struct DatabricksMetadataAdapter {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
 }
 
 impl DatabricksMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 
-    pub fn new_from_adapter(adapter: ConcreteAdapter) -> Self {
+    pub fn new_from_adapter(adapter: AdapterImpl) -> Self {
         Self { adapter }
     }
 
@@ -193,7 +193,7 @@ impl DatabricksMetadataAdapter {
     /// Spark:
     /// This runs a `SELECT version()`
     pub fn get_engine_version(
-        adapter: &ConcreteAdapter,
+        adapter: &AdapterImpl,
         ctx: &QueryCtx,
         conn: &mut dyn Connection,
         token: CancellationToken,

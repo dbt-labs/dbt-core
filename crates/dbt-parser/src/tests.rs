@@ -2,7 +2,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use dbt_adapter::BridgeAdapter;
+    use dbt_adapter::Adapter;
     use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::StaticAnalysisKind;
@@ -336,7 +336,7 @@ mod tests {
             ctx: S,
         ) -> Result<String, Error> {
             let mut env = Environment::new();
-            let adapter = Arc::new(BridgeAdapter::new_parse_phase_adapter(
+            let adapter = Arc::new(Adapter::new_parse_phase_adapter(
                 AdapterType::Postgres,
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,

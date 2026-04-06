@@ -1,5 +1,5 @@
 use crate::AdapterResponse;
-use crate::typed_adapter::ConcreteAdapter;
+use crate::adapter::adapter_impl::AdapterImpl;
 use std::collections::HashMap;
 
 use dbt_common::cancellation::CancellationToken;
@@ -31,7 +31,7 @@ enum SubmissionMethod {
 }
 
 pub struct JobContext<'a> {
-    pub adapter: &'a ConcreteAdapter,
+    pub adapter: &'a AdapterImpl,
     pub ctx: &'a QueryCtx,
     pub conn: &'a mut dyn Connection,
     pub config: &'a Value,
@@ -76,7 +76,7 @@ impl SubmissionMethod {
 }
 
 pub fn submit_python_job(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     _state: &State,

@@ -170,7 +170,7 @@ impl EventReplayer {
 
     /// Get the result for an adapter call.
     ///
-    /// Pure/Cache calls are filtered at the bridge_adapter level and should never reach here.
+    /// Pure/Cache calls are filtered at the adapter level and should never reach here.
     pub fn get_result(
         &self,
         node_id: &str,

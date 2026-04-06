@@ -9,6 +9,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::formatter::SqlLiteralFormatter;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
@@ -20,7 +21,6 @@ use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
-use crate::typed_adapter::ConcreteAdapter;
 use dbt_common::cancellation::CancellationToken;
 
 // TODO: turn this into a struct and collapse all the common code from X_get_relation functions
@@ -28,7 +28,7 @@ use dbt_common::cancellation::CancellationToken;
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
 pub fn get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -84,7 +84,7 @@ pub fn get_relation(
 // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
 #[allow(clippy::too_many_arguments)]
 fn snowflake_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -204,7 +204,7 @@ fn snowflake_get_relation(
 
 #[allow(clippy::too_many_arguments)]
 fn bigquery_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -279,7 +279,7 @@ fn bigquery_get_relation(
 }
 
 fn spark_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &mut dyn Connection,
@@ -333,7 +333,7 @@ fn spark_get_relation(
 
 #[allow(clippy::too_many_arguments)]
 fn databricks_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &mut dyn Connection,
@@ -492,7 +492,7 @@ fn databricks_get_relation(
 
 #[allow(clippy::too_many_arguments)]
 fn redshift_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &mut dyn Connection,
@@ -574,7 +574,7 @@ LEFT JOIN materialized_views mv
 // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85
 #[allow(clippy::too_many_arguments)]
 fn postgres_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -649,7 +649,7 @@ fn postgres_get_relation(
 }
 
 fn salesforce_get_relation(
-    _adapter: &ConcreteAdapter,
+    _adapter: &AdapterImpl,
     _state: &State,
     _query_ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -671,7 +671,7 @@ fn salesforce_get_relation(
 
 #[allow(clippy::too_many_arguments)]
 fn duckdb_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -746,7 +746,7 @@ fn duckdb_get_relation(
 
 #[allow(clippy::too_many_arguments)]
 fn fabric_get_relation(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,

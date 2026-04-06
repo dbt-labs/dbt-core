@@ -3,17 +3,17 @@
 //! This requires us to move the ConnectionGuard to TypedBaseAdapter
 //! More details see https://github.com/dbt-labs/fs/pull/4039#discussion_r2159864154
 
-use crate::BridgeAdapter;
+use crate::Adapter;
 
 pub struct UseWarehouseGuard<'a> {
-    adapter: &'a BridgeAdapter,
+    adapter: &'a Adapter,
     /// The original warehouse that we need to restore to when the guard is dropped.
     original_wh: Option<String>,
     node_id: String,
 }
 
 impl<'a> UseWarehouseGuard<'a> {
-    pub fn new(adapter: &'a BridgeAdapter, original_wh: Option<String>, node_id: &str) -> Self {
+    pub fn new(adapter: &'a Adapter, original_wh: Option<String>, node_id: &str) -> Self {
         Self {
             adapter,
             original_wh,

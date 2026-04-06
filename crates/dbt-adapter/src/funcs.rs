@@ -1,12 +1,12 @@
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
-use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
+use crate::relation::factory::create_static_relation;
 use crate::response::ResultObject;
 use crate::snapshots::SnapshotStrategy;
-use crate::{AdapterType, BridgeAdapter};
+use crate::{Adapter, AdapterType};
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 /// Performs method dispatch on the given adapter.
 pub fn dispatch_adapter_calls(
-    adapter: &BridgeAdapter,
+    adapter: &Adapter,
     state: &State,
     name: &str,
     args: &[Value],
@@ -1347,17 +1347,13 @@ pub fn dispatch_adapter_calls(
 
 /// Helper to call `dispatch_adapter_calls` with positional args.
 #[cfg(test)]
-fn dispatch_test(
-    adapter: &BridgeAdapter,
-    name: &str,
-    args: &[Value],
-) -> Result<Value, minijinja::Error> {
+fn dispatch_test(adapter: &Adapter, name: &str, args: &[Value]) -> Result<Value, minijinja::Error> {
     let env = minijinja::Environment::new();
     let state = State::new_for_env(&env);
     dispatch_adapter_calls(adapter, &state, name, args, &[])
 }
 
-pub fn dispatch_adapter_get_value(adapter: &BridgeAdapter, key: &Value) -> Option<Value> {
+pub fn dispatch_adapter_get_value(adapter: &Adapter, key: &Value) -> Option<Value> {
     match key.as_str() {
         Some("behavior") => Some(adapter.behavior()),
         // NOTE(serramatutu): BigQuery adapter calls `Relation` from `adapter.Relation`
@@ -1552,29 +1548,29 @@ pub fn format_sql_with_bindings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bridge_adapter::BridgeAdapter;
+    use crate::adapter::Adapter;
+    use crate::adapter::adapter_impl::AdapterImpl;
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
-    use crate::typed_adapter::ConcreteAdapter;
     use dbt_adapter_core::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 
     /// Create a Typed-phase DuckDB adapter backed by MockEngine.
-    fn make_duckdb_adapter() -> BridgeAdapter {
-        let concrete = ConcreteAdapter::new_mock(
+    fn make_duckdb_adapter() -> Adapter {
+        let concrete = AdapterImpl::new_mock(
             AdapterType::DuckDB,
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
             Box::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
             Arc::new(NaiveStmtSplitter),
         );
-        BridgeAdapter::new(Arc::new(concrete), None, None, never_cancels())
+        Adapter::new(Arc::new(concrete), None, None, never_cancels())
     }
 
     /// Create a parse-phase DuckDB adapter (returns defaults, no real execution).
-    fn make_duckdb_parse_adapter() -> BridgeAdapter {
-        BridgeAdapter::new_parse_phase_adapter(
+    fn make_duckdb_parse_adapter() -> Adapter {
+        Adapter::new_parse_phase_adapter(
             AdapterType::DuckDB,
             dbt_yaml::Mapping::new(),
             DEFAULT_DBT_QUOTING,

@@ -12,6 +12,7 @@ pub mod redshift;
 pub mod salesforce;
 pub mod snowflake;
 
+pub mod factory;
 mod relation_object;
 pub use relation_object::{
     RelationObject, StaticBaseRelation, StaticBaseRelationObject, create_relation,

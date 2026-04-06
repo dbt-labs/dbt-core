@@ -126,7 +126,7 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
 
 /// Discriminator for the adapter implementation path.
 ///
-/// Used by [ConcreteAdapter] methods to dispatch between the
+/// Used by [AdapterImpl] methods to dispatch between the
 /// live-database path and the recorded-trace replay path.
 pub enum InnerAdapter<'a> {
     /// The standard implementation for running against live databases.
@@ -135,8 +135,7 @@ pub enum InnerAdapter<'a> {
     Replay(AdapterType, &'a dyn Replayer),
 }
 
-/// Methods formerly on the `TypedBaseAdapter` trait, now inherent on [ConcreteAdapter].
-impl ConcreteAdapter {
+impl AdapterImpl {
     pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.metadata_adapter(),
@@ -715,7 +714,7 @@ impl ConcreteAdapter {
         }
     }
 
-    /// Quote like [ConcreteAdapter::quote] when the adapter is not in mock mode.
+    /// Quote like [AdapterImpl::quote] when the adapter is not in mock mode.
     pub fn quote_identifier_for_adapter_type(
         adapter_type: AdapterType,
         identifier: &str,
@@ -3394,7 +3393,7 @@ impl ConcreteAdapter {
         use crate::relation::databricks::config::relation_types;
 
         let (relation_type, remote_state) = {
-            // IMPORTANT: do not bypass replay by constructing a concrete adapter from the engine.
+            // IMPORTANT: do not bypass replay by constructing an AdapterImpl from the engine.
             // In replay mode, adapter calls must go through the replay adapter so they consume
             // the recording stream.
             let metadata_adapter = DatabricksMetadataAdapter::new_from_adapter(self.clone());
@@ -4008,10 +4007,10 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
     }
 }
 
-/// The concrete adapter implementation. All typed adapter methods live here.
+/// The adapter implementation. All adapter methods live here.
 #[derive(Clone)]
-pub struct ConcreteAdapter {
-    inner: ConcreteAdapterInner,
+pub struct AdapterImpl {
+    inner: AdapterImplInner,
 }
 
 #[derive(Clone)]
@@ -4022,22 +4021,22 @@ struct MockState {
 }
 
 #[derive(Clone)]
-enum ConcreteAdapterInner {
+enum AdapterImplInner {
     Impl(Arc<dyn AdapterEngine>),
     Replay(Arc<dyn Replayer>),
     Mock(MockState),
 }
 
-impl ConcreteAdapter {
+impl AdapterImpl {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         Self {
-            inner: ConcreteAdapterInner::Impl(engine),
+            inner: AdapterImplInner::Impl(engine),
         }
     }
 
     pub fn new_replay(replay: Arc<dyn Replayer>) -> Self {
         Self {
-            inner: ConcreteAdapterInner::Replay(replay),
+            inner: AdapterImplInner::Replay(replay),
         }
     }
 
@@ -4048,7 +4047,7 @@ impl ConcreteAdapter {
         type_ops: Box<dyn crate::sql_types::TypeOps>,
         stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
     ) -> Self {
-        let backend = crate::adapter_factory::backend_of(adapter_type);
+        let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
         let engine: Arc<dyn AdapterEngine> = Arc::new(crate::engine::XdbcEngine::new_mock(
             adapter_type,
@@ -4072,7 +4071,7 @@ impl ConcreteAdapter {
             &BTreeMap::new(),
         ));
         Self {
-            inner: ConcreteAdapterInner::Mock(MockState {
+            inner: AdapterImplInner::Mock(MockState {
                 engine,
                 flags,
                 behavior,
@@ -4082,13 +4081,13 @@ impl ConcreteAdapter {
 
     fn mock_state(&self) -> Option<&MockState> {
         match &self.inner {
-            ConcreteAdapterInner::Mock(state) => Some(state),
+            AdapterImplInner::Mock(state) => Some(state),
             _ => None,
         }
     }
 
     fn is_explicit_mock(&self) -> bool {
-        matches!(&self.inner, ConcreteAdapterInner::Mock(_))
+        matches!(&self.inner, AdapterImplInner::Mock(_))
     }
 
     fn introspect_enabled(&self) -> bool {
@@ -4103,14 +4102,14 @@ impl ConcreteAdapter {
     }
 }
 
-impl ConcreteAdapter {
+impl AdapterImpl {
     pub fn inner_adapter(&self) -> InnerAdapter<'_> {
         match &self.inner {
-            ConcreteAdapterInner::Impl(engine) => Impl(engine.adapter_type(), engine),
-            ConcreteAdapterInner::Replay(replay) => {
+            AdapterImplInner::Impl(engine) => Impl(engine.adapter_type(), engine),
+            AdapterImplInner::Replay(replay) => {
                 Replay(replay.engine().adapter_type(), replay.as_ref())
             }
-            ConcreteAdapterInner::Mock(mock) => Impl(mock.engine.adapter_type(), &mock.engine),
+            AdapterImplInner::Mock(mock) => Impl(mock.engine.adapter_type(), &mock.engine),
         }
     }
 
@@ -4147,7 +4146,7 @@ impl ConcreteAdapter {
     }
 }
 
-impl fmt::Debug for ConcreteAdapter {
+impl fmt::Debug for AdapterImpl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.adapter_type())
     }
@@ -4326,7 +4325,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter_factory::backend_of;
+    use crate::adapter::adapter_factory::backend_of;
     use crate::cache::RelationCache;
     use crate::column::Column;
     use crate::config::AdapterConfig;
@@ -4382,25 +4381,25 @@ mod tests {
 
     #[test]
     fn test_adapter_type() {
-        let adapter = ConcreteAdapter::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake));
         assert_eq!(adapter.adapter_type(), Snowflake);
     }
 
     #[test]
     fn test_quote_for_snowflake() {
-        let adapter = ConcreteAdapter::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
     #[test]
     fn test_quote_for_bigquery() {
-        let adapter = ConcreteAdapter::new(engine(Bigquery));
+        let adapter = AdapterImpl::new(engine(Bigquery));
         assert_eq!(adapter.quote("abc"), "`abc`");
     }
 
     #[test]
     fn test_quote_seed_column_for_snowflake() -> AdapterResult<()> {
-        let adapter = ConcreteAdapter::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake));
         let env = Environment::new();
         let state = State::new_for_env(&env);
         let quoted = adapter
@@ -4420,7 +4419,7 @@ mod tests {
 
     #[test]
     fn test_quote_as_configured_for_snowflake() -> AdapterResult<()> {
-        let adapter = ConcreteAdapter::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake));
 
         let env = Environment::new();
         let state = State::new_for_env(&env);
@@ -4443,7 +4442,7 @@ mod tests {
 
     #[test]
     fn test_redshift_quote() {
-        let adapter = ConcreteAdapter::new(engine(Redshift));
+        let adapter = AdapterImpl::new(engine(Redshift));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
@@ -4451,7 +4450,7 @@ mod tests {
     // warehouse comment is non-empty.
     #[test]
     fn test_get_persist_doc_columns_clear_comment_only_when_needed() {
-        let adapter = ConcreteAdapter::new_mock(
+        let adapter = AdapterImpl::new_mock(
             Databricks,
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,

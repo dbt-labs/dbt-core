@@ -1,4 +1,4 @@
-use crate::BridgeAdapter;
+use crate::Adapter;
 use crate::query_cache::QueryCache;
 use crate::stmt_splitter::StmtSplitter;
 use dbt_adapter_core::AdapterType;
@@ -41,7 +41,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
 
 /// A factory for adapters, relations and columns.
 ///
-/// It can create [BridgeAdapter] instances wrapped in `Arc`.
+/// It can create [Adapter] instances wrapped in `Arc`.
 /// Similarly, it can create boxed `dyn BaseRelation`
 /// and `Column` objects.
 pub trait AdapterFactory: Send + Sync {
@@ -58,7 +58,7 @@ pub trait AdapterFactory: Send + Sync {
         query_comment: Option<QueryComment>,
         token: CancellationToken,
         cloud_config: Option<&ResolvedCloudConfig>,
-    ) -> FsResult<Arc<BridgeAdapter>>;
+    ) -> FsResult<Arc<Adapter>>;
 
     /// Return the statement splitter used by this factory.
     fn stmt_splitter(&self) -> Arc<dyn StmtSplitter>;

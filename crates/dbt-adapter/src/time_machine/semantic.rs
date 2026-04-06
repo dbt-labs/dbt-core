@@ -33,7 +33,7 @@ pub enum SemanticCategory {
 }
 
 impl SemanticCategory {
-    /// Classify a BridgeAdapter method by its semantic category.
+    /// Classify a Adapter method by its semantic category.
     ///
     /// This is derived from analyzing what each method does:
     /// - MetadataRead: DB queries (SELECT/SHOW), no mutations

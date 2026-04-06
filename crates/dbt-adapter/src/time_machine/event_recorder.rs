@@ -1,7 +1,7 @@
 //! Event recorder with MPSC channel for non-blocking event emission.
 //!
 //! The recorder provides a unified interface for emitting events from both
-//! synchronous (BridgeAdapter) and asynchronous (MetadataAdapter) contexts.
+//! synchronous (Adapter) and asynchronous (MetadataAdapter) contexts.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
@@ -122,7 +122,7 @@ impl EventRecorder {
     // Helper methods for recording specific event types
     // -------------------------------------------------------------------------
 
-    /// Record an adapter call from BridgeAdapter::call_method.
+    /// Record an adapter call from Adapter::call_method.
     ///
     /// This is the primary entry point for recording Jinja adapter.xxx() calls.
     #[allow(clippy::too_many_arguments)]
@@ -208,7 +208,7 @@ impl EventRecorder {
 
     /// Record a direct engine query from `run_remote_adhoc()`.
     ///
-    /// This captures queries that bypass the BridgeAdapter layer, such as
+    /// This captures queries that bypass the Adapter layer, such as
     /// `dbt show --inline` queries executed via ADBC connections.
     pub fn record_run_remote_adhoc(
         &self,

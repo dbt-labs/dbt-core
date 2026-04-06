@@ -1,4 +1,5 @@
 use crate::AdapterEngine;
+use crate::adapter::adapter_impl::*;
 use crate::connection;
 use crate::metadata::{
     CatalogAndSchema, MAX_CONNECTIONS, MetadataAdapter, MetadataFreshness, RelationSchemaPair,
@@ -7,7 +8,6 @@ use crate::metadata::{
 use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::GenericRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
-use crate::typed_adapter::*;
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
@@ -76,12 +76,12 @@ pub fn list_relations(
 
 pub struct FabricMetadataAdapter {
     #[allow(dead_code, reason = "TODO implement FabricMetadataAdapter")]
-    pub adapter: ConcreteAdapter,
+    pub adapter: AdapterImpl,
 }
 
 impl FabricMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }

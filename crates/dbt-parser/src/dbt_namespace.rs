@@ -2,7 +2,7 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dbt_adapter::BridgeAdapter;
+use dbt_adapter::Adapter;
 use dbt_adapter::cast_util::downcast_value_to_dyn_base_relation;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
@@ -15,15 +15,15 @@ use minijinja::{
 /// (in parse-phase mode) before delegating to the original templates.
 #[derive(Debug, Clone)]
 pub struct DbtNamespace {
-    parse_adapter: Arc<BridgeAdapter>,
+    parse_adapter: Arc<Adapter>,
 }
 
 impl DbtNamespace {
     /// Creates a new DbtNamespace that tracks calls in the adapter
-    pub fn new(parse_adapter: Arc<BridgeAdapter>) -> Self {
+    pub fn new(parse_adapter: Arc<Adapter>) -> Self {
         debug_assert!(
             parse_adapter.is_parse(),
-            "DbtNamespace should be created with a BridgeAdapter in parse mode",
+            "DbtNamespace should be created with a Adapter in parse mode",
         );
         Self { parse_adapter }
     }
@@ -91,7 +91,7 @@ impl Object for DbtNamespace {
                 // parse-phase tracking; the adapter ignores it when relations cache isn't implemented.
                 let _ = iter.next_kwarg::<Option<bool>>("needs_information")?;
                 iter.finish()?;
-                // NOTE(felipecrv): this doens't have to be called directly when we move to BridgeAdapter
+                // NOTE(felipecrv): this doens't have to be called directly when we move to Adapter
                 self.parse_adapter
                     .parse_adapter_state()
                     .expect("adapter should be configured for the parse phase")

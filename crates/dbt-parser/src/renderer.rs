@@ -720,7 +720,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
+    parse_adapter: Arc<dbt_adapter::Adapter>,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
     let mut nodes = Vec::new();

@@ -1,8 +1,8 @@
+use crate::adapter::adapter_impl::AdapterImpl;
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
-use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResult};
 use crate::{connection, errors::*};
 
@@ -492,7 +492,7 @@ pub fn build_relation_clauses_bigquery(
 
 fn make_map_f(
     relations: Vec<Arc<dyn BaseRelation>>,
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
     token: CancellationToken,
 ) -> impl Fn(&mut dyn Connection, &(String, Vec<String>)) -> AdapterResult<Arc<RecordBatch>>
 + Send
@@ -544,12 +544,12 @@ fn make_map_f(
 }
 
 pub struct BigqueryMetadataAdapter {
-    adapter: ConcreteAdapter,
+    adapter: AdapterImpl,
 }
 
 impl BigqueryMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = AdapterImpl::new(engine);
         Self { adapter }
     }
 }
@@ -877,7 +877,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let adapter: ConcreteAdapter = self.adapter.clone(); // clone needed to move it into lambda
+        let adapter: AdapterImpl = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
             // FIXME(harry): this is not taking into account that we will have multiple connections open
             // when relations are more than one, do we want to enforce single connection in record and replay tests?

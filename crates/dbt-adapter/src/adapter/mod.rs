@@ -1,4 +1,5 @@
-use crate::adapter_factory::*;
+pub mod adapter_factory;
+pub mod adapter_impl;
 use crate::cache::RelationCache;
 use crate::catalog_relation::CatalogRelation;
 #[cfg(debug_assertions)]
@@ -17,9 +18,9 @@ use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
-use crate::typed_adapter;
-use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterResponse, AdapterResult};
+pub use adapter_factory::*;
+pub use adapter_impl::AdapterImpl;
 
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
@@ -59,13 +60,13 @@ thread_local! {
     static ADAPTER_CALL_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
-/// The inner adapter implementation inside a [BridgeAdapter].
+/// The inner adapter implementation inside a [Adapter].
 #[derive(Clone)]
 enum InnerAdapter {
     /// The actual implementation for all phases except parsing.
     /// The relation cache is now stored in the engine, not here.
     Typed {
-        adapter: Arc<ConcreteAdapter>,
+        adapter: Arc<AdapterImpl>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
     },
     /// The state necessary to perform operation in a shallow way during the parsing phase.
@@ -100,7 +101,7 @@ use InnerAdapter::*;
 ///
 /// The relation cache is now managed by the engine. Access via `engine().relation_cache()`.
 #[derive(Clone)]
-pub struct BridgeAdapter {
+pub struct Adapter {
     inner: InnerAdapter,
     /// Time-machine for cross-version snapshot testing (optional)
     time_machine: Option<TimeMachine>,
@@ -108,7 +109,7 @@ pub struct BridgeAdapter {
     cancellation_token: CancellationToken,
 }
 
-impl fmt::Debug for BridgeAdapter {
+impl fmt::Debug for Adapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.inner {
             Typed { adapter, .. } => adapter.fmt(f),
@@ -117,12 +118,12 @@ impl fmt::Debug for BridgeAdapter {
     }
 }
 
-impl fmt::Display for BridgeAdapter {
+impl fmt::Display for Adapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match &self.inner {
             Typed { adapter, .. } => match adapter.inner_adapter() {
-                typed_adapter::InnerAdapter::Impl(_, _) => "Adapter",
-                typed_adapter::InnerAdapter::Replay(_, _) => "DbtReplayAdapter",
+                adapter_impl::InnerAdapter::Impl(_, _) => "Adapter",
+                adapter_impl::InnerAdapter::Replay(_, _) => "DbtReplayAdapter",
             },
             Parse(_) => "ParseAdapter",
         };
@@ -130,12 +131,12 @@ impl fmt::Display for BridgeAdapter {
     }
 }
 
-impl BridgeAdapter {
+impl Adapter {
     /// Create a new bridge adapter.
     ///
     /// The relation cache is obtained from the engine. No longer needs to be passed explicitly.
     pub fn new(
-        adapter: Arc<ConcreteAdapter>,
+        adapter: Arc<AdapterImpl>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
         time_machine: Option<TimeMachine>,
         cancellation_token: CancellationToken,
@@ -151,14 +152,14 @@ impl BridgeAdapter {
         }
     }
 
-    /// Create an instance of [BridgeAdapter] that operates in parse phase mode.
+    /// Create an instance of [Adapter] that operates in parse phase mode.
     pub fn new_parse_phase_adapter(
         adapter_type: AdapterType,
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Box<dyn TypeOps>,
         catalogs: Option<Arc<DbtCatalogs>>,
-    ) -> BridgeAdapter {
+    ) -> Adapter {
         let state = Self::make_parse_adapter_state(
             adapter_type,
             config,
@@ -167,7 +168,7 @@ impl BridgeAdapter {
             Arc::new(RelationCache::default()),
             catalogs,
         );
-        BridgeAdapter {
+        Adapter {
             inner: Parse(state),
             time_machine: None,
             cancellation_token: never_cancels(),
@@ -298,7 +299,7 @@ impl BridgeAdapter {
     }
 }
 
-impl BridgeAdapter {
+impl Adapter {
     pub fn adapter_type(&self) -> AdapterType {
         match &self.inner {
             Typed { adapter, .. } => adapter.adapter_type(),
@@ -310,11 +311,11 @@ impl BridgeAdapter {
         matches!(&self.inner, Parse(_))
     }
 
-    pub fn as_replay(&self) -> Option<&dyn typed_adapter::Replayer> {
+    pub fn as_replay(&self) -> Option<&dyn adapter_impl::Replayer> {
         match &self.inner {
             Typed { adapter, .. } => match adapter.inner_adapter() {
-                typed_adapter::InnerAdapter::Replay(_, replay) => Some(replay),
-                typed_adapter::InnerAdapter::Impl(..) => None,
+                adapter_impl::InnerAdapter::Replay(_, replay) => Some(replay),
+                adapter_impl::InnerAdapter::Impl(..) => None,
             },
             Parse(_) => None,
         }
@@ -357,7 +358,7 @@ impl BridgeAdapter {
         };
         if quoted {
             let quoted =
-                ConcreteAdapter::quote_identifier_for_adapter_type(self.adapter_type(), identifier);
+                AdapterImpl::quote_identifier_for_adapter_type(self.adapter_type(), identifier);
             Ok(quoted)
         } else {
             Ok(identifier.to_string())
@@ -365,7 +366,7 @@ impl BridgeAdapter {
     }
 }
 
-impl BridgeAdapter {
+impl Adapter {
     /// Execute a SQL query without requiring a Jinja [State].
     ///
     /// Used for lightweight operations like `dbt debug` connection tests
@@ -565,9 +566,10 @@ impl BridgeAdapter {
                 let quoted_identifier = adapter.quote(identifier);
                 Ok(Value::from(quoted_identifier))
             }
-            Parse(state) => Ok(Value::from(
-                ConcreteAdapter::quote_identifier_for_adapter_type(state.adapter_type, identifier),
-            )),
+            Parse(state) => Ok(Value::from(AdapterImpl::quote_identifier_for_adapter_type(
+                state.adapter_type,
+                identifier,
+            ))),
         }
     }
 
@@ -1991,7 +1993,7 @@ impl BridgeAdapter {
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
     ///
-    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature(capability_name)` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn has_dbr_capability(
@@ -2061,7 +2063,7 @@ impl BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature("motherduck")` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
@@ -2074,7 +2076,7 @@ impl BridgeAdapter {
         }
     }
 
-    /// DEPRECATED: in favor of [`ConcreteAdapter::has_feature`]
+    /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `!has_feature("transactions")` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn disable_transactions(&self, state: &State) -> AdapterResult<Value> {
@@ -2703,7 +2705,7 @@ impl BridgeAdapter {
     }
 }
 
-impl BridgeAdapter {
+impl Adapter {
     fn call_method_impl(
         self: &Arc<Self>,
         state: &State,
@@ -2715,7 +2717,7 @@ impl BridgeAdapter {
     }
 }
 
-impl Object for BridgeAdapter {
+impl Object for Adapter {
     fn call_method(
         self: &Arc<Self>,
         state: &State,
@@ -2840,7 +2842,7 @@ impl Object for BridgeAdapter {
     }
 }
 
-impl BridgeAdapter {
+impl Adapter {
     fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
         if let Some(cached_entry) = self.engine().relation_cache().get_relation(temp_relation) {
             Some(cached_entry.relation().as_value())
@@ -2863,11 +2865,11 @@ impl BridgeAdapter {
 fn debug_compare_column_types(
     state: &State,
     relation: &dyn BaseRelation,
-    typed_adapter: &ConcreteAdapter,
+    adapter_impl: &AdapterImpl,
     mut from_local: Vec<Column>,
 ) {
     if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
-        match typed_adapter.get_columns_in_relation(state, relation) {
+        match adapter_impl.get_columns_in_relation(state, relation) {
             Ok(mut from_remote) => {
                 from_remote.sort_by(|a, b| a.name().cmp(b.name()));
 

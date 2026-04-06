@@ -1,5 +1,5 @@
 use crate::AdapterResponse;
-use crate::typed_adapter::ConcreteAdapter;
+use crate::adapter::adapter_impl::AdapterImpl;
 
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
@@ -11,7 +11,7 @@ mod api_client;
 use api_client::DatabricksApiClient;
 
 pub fn submit_python_job(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     _ctx: &QueryCtx,
     _conn: &'_ mut dyn Connection,
     _state: &State,
@@ -91,7 +91,7 @@ pub fn submit_python_job(
 
 /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/python_models/python_submissions.py#L412
 fn submit_all_purpose_cluster(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     catalog: &str,
     schema: &str,
@@ -151,7 +151,7 @@ fn submit_all_purpose_cluster(
 
 /// https://github.com/databricks/dbt-databricks/blob/87954785bc43167b7bb4a404b793c34d36140dc9/dbt/adapters/databricks/python_models/python_submissions.py#L461
 fn submit_serverless_cluster(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     catalog: &str,
     schema: &str,
@@ -173,7 +173,7 @@ fn submit_serverless_cluster(
 
 /// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L465
 fn submit_workflow_job(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     catalog: &str,
     schema: &str,
@@ -239,7 +239,7 @@ fn submit_workflow_job(
 
 /// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L392
 fn submit_job_cluster(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     catalog: &str,
     schema: &str,
@@ -301,7 +301,7 @@ fn submit_job_cluster(
 
 /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/python_models/python_submissions.py#L61
 fn submit_via_command_api(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     compiled_code: &str,
     cluster_id: &str,
@@ -343,7 +343,7 @@ fn submit_via_command_api(
 }
 
 fn submit_via_notebook(
-    adapter: &ConcreteAdapter,
+    adapter: &AdapterImpl,
     config: &Value,
     catalog: &str,
     schema: &str,
@@ -408,7 +408,7 @@ fn submit_via_notebook(
     })
 }
 
-fn resolve_cluster_id(adapter: &ConcreteAdapter, config: &Value) -> AdapterResult<String> {
+fn resolve_cluster_id(adapter: &AdapterImpl, config: &Value) -> AdapterResult<String> {
     // Precedence order: cluster_id -> http_path -> http_path from profile
 
     if let Some(cluster_id) = config
