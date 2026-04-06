@@ -5,7 +5,6 @@ use std::result::Result;
 use std::time::Duration;
 use std::{env, fmt, io};
 
-use crate::driver::DriverFilenameDisplay;
 use crate::*;
 use adbc_core::error::{Error, Status};
 use percent_encoding::AsciiSet;
@@ -38,6 +37,13 @@ pub struct DriverTriplet<'a> {
 }
 
 impl<'a> DriverTriplet<'a> {
+    pub fn dll_prefix(&self) -> &'static str {
+        match self.os {
+            WINDOWS_TARGET_OS => "",
+            _ => "lib",
+        }
+    }
+
     pub fn dll_suffix(&self) -> &'static str {
         match self.os {
             MACOS_TARGET_OS => ".dylib",
@@ -244,14 +250,14 @@ pub fn format_driver_path(name: &str, triplet: DriverTriplet) -> Result<PathBuf,
     dirs::cache_dir()
         .map(|cache_dir| {
             let driver_relpath = format!(
-                "{}/adbc/{}-{}/{}",
+                "{}/adbc/{}-{}/{}adbc_driver_{}-{}{}",
                 APP_ID,
                 triplet.arch,
                 triplet.os,
-                DriverFilenameDisplay {
-                    name,
-                    version: Some(triplet.version),
-                }
+                triplet.dll_prefix(),
+                name,
+                triplet.version,
+                triplet.dll_suffix(),
             );
             cache_dir.join(driver_relpath)
         })
@@ -634,10 +640,12 @@ mod tests {
         let dbt_cache_dir = format!("{}/com.getdbt", dirs::cache_dir().unwrap().display());
 
         let expected = PathBuf::from(format!(
-            "{}/adbc/{}-manylinux_2_17-linux-gnu/{}",
+            "{}/adbc/{}-{}/{}adbc_driver_snowflake-0.17.0+dbt0.2.0{}",
             dbt_cache_dir,
-            env::consts::ARCH,
-            "libadbc_driver_snowflake-0.17.0+dbt0.2.0.so"
+            triplet.arch,
+            triplet.os,
+            triplet.dll_prefix(),
+            triplet.dll_suffix(),
         ));
         assert_eq!(path, expected);
     }
