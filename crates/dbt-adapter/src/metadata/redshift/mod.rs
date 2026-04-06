@@ -5,7 +5,7 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::redshift::RedshiftRelation;
 use crate::sql_types::make_arrow_field_v2;
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterEngine, AdapterResult, AdapterTyping};
+use crate::{AdapterEngine, AdapterResult};
 use arrow::array::*;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};

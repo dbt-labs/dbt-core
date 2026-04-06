@@ -6,7 +6,7 @@ use crate::formatter::SqlLiteralFormatter;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::response::ResultObject;
 use crate::snapshots::SnapshotStrategy;
-use crate::{AdapterType, AdapterTyping, BridgeAdapter};
+use crate::{AdapterType, BridgeAdapter};
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
@@ -989,16 +989,7 @@ pub fn dispatch_adapter_calls(
 
             adapter.redact_credentials(state, sql)
         }
-        "is_cluster" => {
-            if adapter.is_parse() {
-                return Ok(Value::from(false));
-            }
-            let is_cluster = adapter
-                .as_concrete_adapter()
-                .is_cluster()
-                .map_err(minijinja::Error::from)?;
-            Ok(Value::from(is_cluster))
-        }
+        "is_cluster" => adapter.is_cluster(),
         "has_dbr_capability" => {
             // capability_name: str
             let iter = ArgsIter::new(name, &["capability_name"], args);

@@ -28,6 +28,7 @@ use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::databricks::version::EngineVersion;
+use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::GenericRelation;
@@ -37,7 +38,6 @@ use crate::relation::databricks::config::{
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResponse};
-use crate::{AdapterTyping, metadata::*};
 
 pub mod dbr_capabilities;
 pub mod describe_table;

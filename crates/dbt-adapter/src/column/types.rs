@@ -16,7 +16,7 @@ use minijinja::{
 
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 
-use crate::base_adapter::backend_of;
+use crate::adapter_factory::backend_of;
 
 static LOG_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex"));

@@ -9,7 +9,6 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
-use crate::AdapterTyping;
 use crate::formatter::SqlLiteralFormatter;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};

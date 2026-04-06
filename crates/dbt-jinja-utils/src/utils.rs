@@ -1,5 +1,5 @@
+use dbt_adapter::BridgeAdapter;
 use dbt_adapter::relation::create_relation;
-use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{ErrorCode, FsError, fs_err};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, stdfs};

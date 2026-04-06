@@ -1,4 +1,3 @@
-use crate::AdapterTyping;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::relation::{create_relation, do_create_relation};

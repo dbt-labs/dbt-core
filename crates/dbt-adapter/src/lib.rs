@@ -5,7 +5,7 @@
 #[macro_use]
 mod macros;
 
-pub mod base_adapter;
+pub mod adapter_factory;
 pub mod bridge_adapter;
 pub mod cache;
 pub mod catalog_relation;
@@ -68,9 +68,9 @@ pub use engine::AdapterEngine;
 /// Functions exposed to jinja
 pub mod load_store;
 
-pub use base_adapter::{AdapterType, AdapterTyping};
 pub use bridge_adapter::BridgeAdapter;
 pub use column::{Column, ColumnBuilder};
+pub use dbt_adapter_core::AdapterType;
 pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
 pub use response::AdapterResponse;

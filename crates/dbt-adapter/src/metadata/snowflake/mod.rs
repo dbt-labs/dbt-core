@@ -4,7 +4,7 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::typed_adapter::*;
-use crate::{AdapterEngine, AdapterResult, AdapterType, AdapterTyping};
+use crate::{AdapterEngine, AdapterResult, AdapterType};
 
 use arrow_array::{
     Array, BooleanArray, Decimal128Array, RecordBatch, StringArray, TimestampMillisecondArray,

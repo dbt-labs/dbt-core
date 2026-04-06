@@ -1,7 +1,7 @@
 use dbt_schemas::schemas::common::{Constraint, ConstraintType};
 use dbt_schemas::schemas::properties::ModelConstraint;
 
-use crate::base_adapter::AdapterType;
+use dbt_adapter_core::AdapterType;
 
 /// Render the given constraint as DDL text. Should be overridden by adapters which need custom constraint
 /// default: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1849-L1850

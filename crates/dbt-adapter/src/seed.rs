@@ -6,7 +6,7 @@ use dbt_xdbc::sql::types::metadata_sql_type_key;
 use indexmap::IndexMap;
 
 use crate::AdapterResult;
-use crate::base_adapter::backend_of;
+use crate::adapter_factory::backend_of;
 
 pub(crate) fn ingest_schema_with_column_overrides(
     arrow_schema: &Schema,

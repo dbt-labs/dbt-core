@@ -37,8 +37,8 @@ use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::{
-    AdapterResult, AdapterTyping, execute_macro_with_package, execute_macro_wrapper_with_package,
-    load_catalogs, python,
+    AdapterResult, execute_macro_with_package, execute_macro_wrapper_with_package, load_catalogs,
+    python,
 };
 
 use adbc_core::options::OptionValue;
@@ -2959,7 +2959,9 @@ impl ConcreteAdapter {
             Impl(DuckDB, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
-            Impl(Fabric, _) => fabric::list_relations(self, query_ctx, conn, db_schema, token),
+            Impl(Fabric, engine) => {
+                fabric::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
+            }
             Impl(
                 adapter_type @ (Postgres | Salesforce | Sidecar | ClickHouse | Starburst | Athena
                 | Trino | Dremio | Oracle),
@@ -4046,7 +4048,7 @@ impl ConcreteAdapter {
         type_ops: Box<dyn crate::sql_types::TypeOps>,
         stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
     ) -> Self {
-        let backend = crate::base_adapter::backend_of(adapter_type);
+        let backend = crate::adapter_factory::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
         let engine: Arc<dyn AdapterEngine> = Arc::new(crate::engine::XdbcEngine::new_mock(
             adapter_type,
@@ -4101,8 +4103,8 @@ impl ConcreteAdapter {
     }
 }
 
-impl AdapterTyping for ConcreteAdapter {
-    fn inner_adapter(&self) -> InnerAdapter<'_> {
+impl ConcreteAdapter {
+    pub fn inner_adapter(&self) -> InnerAdapter<'_> {
         match &self.inner {
             ConcreteAdapterInner::Impl(engine) => Impl(engine.adapter_type(), engine),
             ConcreteAdapterInner::Replay(replay) => {
@@ -4112,8 +4114,36 @@ impl AdapterTyping for ConcreteAdapter {
         }
     }
 
-    fn as_concrete_adapter(&self) -> &ConcreteAdapter {
-        self
+    pub fn adapter_type(&self) -> AdapterType {
+        match self.inner_adapter() {
+            Impl(adapter_type, _) | Replay(adapter_type, _) => adapter_type,
+        }
+    }
+
+    pub fn as_replay(&self) -> Option<&dyn Replayer> {
+        match self.inner_adapter() {
+            Replay(_, replay) => Some(replay),
+            Impl(..) => None,
+        }
+    }
+
+    pub fn column_type(&self) -> Option<Value> {
+        let value = Value::from_object(crate::column::ColumnStatic::new(self.adapter_type()));
+        Some(value)
+    }
+
+    pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
+        match self.inner_adapter() {
+            Impl(_, engine) => engine,
+            Replay(_, replay) => replay.engine(),
+        }
+    }
+
+    pub fn quoting(&self) -> ResolvedQuoting {
+        match self.inner_adapter() {
+            Impl(_, engine) => engine.quoting(),
+            Replay(_, replay) => replay.engine().quoting(),
+        }
     }
 }
 
@@ -4296,7 +4326,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::base_adapter::backend_of;
+    use crate::adapter_factory::backend_of;
     use crate::cache::RelationCache;
     use crate::column::Column;
     use crate::config::AdapterConfig;

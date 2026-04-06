@@ -1,7 +1,7 @@
 use crate::{
     functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
 };
-use dbt_adapter::{AdapterTyping, BridgeAdapter};
+use dbt_adapter::BridgeAdapter;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, UndefinedFunctionType,

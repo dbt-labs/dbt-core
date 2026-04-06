@@ -1,4 +1,4 @@
-use dbt_adapter::{AdapterTyping, BridgeAdapter, factory::create_static_relation};
+use dbt_adapter::{BridgeAdapter, factory::create_static_relation};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,

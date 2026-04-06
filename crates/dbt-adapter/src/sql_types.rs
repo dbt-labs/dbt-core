@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AdapterResult;
-use crate::base_adapter::backend_of;
+use crate::adapter_factory::backend_of;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;

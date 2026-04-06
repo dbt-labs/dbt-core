@@ -9,8 +9,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use crate::AdapterTyping;
-
     #[test]
     fn test_adapter_type() {
         let adapter = ConcreteAdapter::new_mock(

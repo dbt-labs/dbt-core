@@ -2,8 +2,8 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use dbt_adapter::BridgeAdapter;
 use dbt_adapter::cast_util::downcast_value_to_dyn_base_relation;
-use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;

@@ -1,4 +1,4 @@
-use crate::base_adapter::*;
+use crate::adapter_factory::*;
 use crate::cache::RelationCache;
 use crate::catalog_relation::CatalogRelation;
 #[cfg(debug_assertions)]
@@ -298,33 +298,29 @@ impl BridgeAdapter {
     }
 }
 
-impl AdapterTyping for BridgeAdapter {
-    fn inner_adapter(&self) -> typed_adapter::InnerAdapter<'_> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.inner_adapter(),
-            Parse(state) => typed_adapter::InnerAdapter::Impl(state.adapter_type, &state.engine),
-        }
-    }
-
-    fn adapter_type(&self) -> AdapterType {
+impl BridgeAdapter {
+    pub fn adapter_type(&self) -> AdapterType {
         match &self.inner {
             Typed { adapter, .. } => adapter.adapter_type(),
             Parse(state) => state.adapter_type,
         }
     }
 
-    fn as_concrete_adapter(&self) -> &ConcreteAdapter {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.as_ref(),
-            Parse(_) => unimplemented!("as_concrete_adapter"),
-        }
-    }
-
-    fn is_parse(&self) -> bool {
+    pub fn is_parse(&self) -> bool {
         matches!(&self.inner, Parse(_))
     }
 
-    fn column_type(&self) -> Option<Value> {
+    pub fn as_replay(&self) -> Option<&dyn typed_adapter::Replayer> {
+        match &self.inner {
+            Typed { adapter, .. } => match adapter.inner_adapter() {
+                typed_adapter::InnerAdapter::Replay(_, replay) => Some(replay),
+                typed_adapter::InnerAdapter::Impl(..) => None,
+            },
+            Parse(_) => None,
+        }
+    }
+
+    pub fn column_type(&self) -> Option<Value> {
         match &self.inner {
             Typed { adapter, .. } => adapter.column_type(),
             Parse(_) => {
@@ -334,15 +330,71 @@ impl AdapterTyping for BridgeAdapter {
         }
     }
 
-    fn quoting(&self) -> ResolvedQuoting {
+    pub fn engine(&self) -> &Arc<dyn crate::AdapterEngine> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.engine(),
+            Parse(state) => &state.engine,
+        }
+    }
+
+    pub fn quoting(&self) -> ResolvedQuoting {
         match &self.inner {
             Typed { adapter, .. } => adapter.quoting(),
             Parse(state) => state.engine.quoting(),
         }
     }
+
+    pub fn quote_component(
+        &self,
+        _state: &State,
+        identifier: &str,
+        component: ComponentName,
+    ) -> AdapterResult<String> {
+        let quoted = match component {
+            ComponentName::Database => self.quoting().database,
+            ComponentName::Schema => self.quoting().schema,
+            ComponentName::Identifier => self.quoting().identifier,
+        };
+        if quoted {
+            let quoted =
+                ConcreteAdapter::quote_identifier_for_adapter_type(self.adapter_type(), identifier);
+            Ok(quoted)
+        } else {
+            Ok(identifier.to_string())
+        }
+    }
 }
 
 impl BridgeAdapter {
+    /// Execute a SQL query without requiring a Jinja [State].
+    ///
+    /// Used for lightweight operations like `dbt debug` connection tests
+    /// where no Jinja environment is available.
+    pub fn execute_without_state(
+        &self,
+        ctx: Option<&QueryCtx>,
+        sql: &str,
+        fetch: bool,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let mut conn = adapter.borrow_tlocal_connection(None, None)?;
+                adapter.execute(
+                    None,
+                    conn.as_mut(),
+                    ctx,
+                    sql,
+                    false,
+                    fetch,
+                    None,
+                    None,
+                    self.cancellation_token.clone(),
+                )
+            }
+            Parse(_) => Ok((AdapterResponse::default(), AgateTable::default())),
+        }
+    }
+
     /// Build an instance of the metadata adapter if supported.
     pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match &self.inner {
@@ -2337,6 +2389,14 @@ impl BridgeAdapter {
         }
     }
 
+    pub fn is_cluster(&self) -> Result<Value, minijinja::Error> {
+        let is_cluster = match &self.inner {
+            Typed { adapter, .. } => adapter.is_cluster().map_err(minijinja::Error::from)?,
+            Parse(_) => false,
+        };
+        Ok(Value::from(is_cluster))
+    }
+
     #[tracing::instrument(skip(self, _state), level = "trace")]
     pub fn redact_credentials(&self, _state: &State, sql: &str) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -2727,17 +2787,16 @@ impl Object for BridgeAdapter {
             });
         }
 
-        // Execute the actual adapter call
-        // Pre-condition: In Replay mode leaked calls are safe because this adapter should not have an actual connection
-        // to the warehouse.
+        // Execute the actual adapter call.
+        //
+        // Pre-condition: In Replay mode leaked calls are safe because this
+        // adapter should not have an actual connection to the warehouse.
+        //
         // If replaying, assert the engine is mock (for safety)
         if let Some(ref tm) = self.time_machine
             && tm.is_replaying()
         {
-            let is_mock = match self.inner_adapter() {
-                typed_adapter::InnerAdapter::Impl(_, engine) => engine.is_mock(),
-                typed_adapter::InnerAdapter::Replay(_, replay) => replay.engine().is_mock(),
-            };
+            let is_mock = self.engine().is_mock();
             assert!(
                 is_mock,
                 "Replay mode requires mock engine; attempted on non-mock engine which risks leaking queries"

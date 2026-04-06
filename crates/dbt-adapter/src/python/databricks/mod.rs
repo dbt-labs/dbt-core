@@ -1,5 +1,5 @@
+use crate::AdapterResponse;
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterResponse, AdapterTyping};
 
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};

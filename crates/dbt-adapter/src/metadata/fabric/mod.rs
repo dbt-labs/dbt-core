@@ -1,3 +1,4 @@
+use crate::AdapterEngine;
 use crate::connection;
 use crate::metadata::{
     CatalogAndSchema, MAX_CONNECTIONS, MetadataAdapter, MetadataFreshness, RelationSchemaPair,
@@ -7,7 +8,6 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::GenericRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::typed_adapter::*;
-use crate::{AdapterEngine, AdapterTyping};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
 pub fn list_relations(
-    adapter: &dyn AdapterTyping,
+    engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -37,7 +37,7 @@ pub fn list_relations(
         db_schema.resolved_catalog, db_schema.resolved_schema,
     );
 
-    let batch = adapter.engine().execute(None, conn, ctx, &sql, token)?;
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -65,7 +65,7 @@ pub fn list_relations(
             Some(schema_name.value(i).to_string()),
             Some(table_name.value(i).to_string()),
             relation_type,
-            adapter.quoting(),
+            engine.quoting(),
         )) as Arc<dyn BaseRelation>;
 
         relations.push(relation);
