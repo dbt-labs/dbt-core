@@ -16,7 +16,7 @@ on:
     types: [labeled, closed]
   push:
     branches:
-      - ash2shukla/fix/comment-injection-in-open-issue-workflow
+      - ash2shukla/test/open-issues-in-repo-action
 
 defaults:
   run:
