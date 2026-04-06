@@ -356,7 +356,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
     def same_body(self, other: "ParsedNode") -> bool:
         return self.raw_code == other.raw_code
 
-    def same_database_representation(self, other) -> bool:
+    def same_database_representation(self, other: "ParsedNode") -> bool:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
