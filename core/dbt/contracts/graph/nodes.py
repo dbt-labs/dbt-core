@@ -353,7 +353,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
 
         return True
 
-    def same_body(self, other) -> bool:
+    def same_body(self, other: "ParsedNode") -> bool:
         return self.raw_code == other.raw_code
 
     def same_database_representation(self, other) -> bool:
@@ -1032,7 +1032,7 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
     def metrics(self):
         self._disallow_implicit_dependencies()
 
-    def same_body(self, other) -> bool:
+    def same_body(self, other: "SeedNode") -> bool:  # type: ignore[override]
         return self.same_seeds(other)
 
     @property
