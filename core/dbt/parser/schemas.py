@@ -1161,6 +1161,27 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     f"Invalid constraint type on model {node.name}: "
                     f"Type must be one of {[ct.value for ct in ConstraintType]}"
                 )
+        else:
+            invalid_constraints = [
+                c
+                for c in constraints
+                if "type" not in c or not ConstraintType.is_valid(c["type"])
+            ]
+            if invalid_constraints:
+                if getattr(get_flags(), "require_valid_unenforced_constraints", False):
+                    raise ParsingError(
+                        f"Invalid constraint type on model {node.name}: "
+                        f"Type must be one of {[ct.value for ct in ConstraintType]}"
+                    )
+                for c in invalid_constraints:
+                    fire_event(
+                        Note(
+                            msg=f"Constraint on model '{node.name}' has an invalid or missing "
+                            f"type and will not be serialized. "
+                            f"Type must be one of {[ct.value for ct in ConstraintType]}."
+                        )
+                    )
+                constraints = [c for c in constraints if c not in invalid_constraints]
 
         self._validate_pk_constraints(node, constraints)
         node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]

@@ -130,6 +130,31 @@ models:
 """
 
 
+model_invalid_constraint_type_schema_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: invalid_type
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+"""
+
+model_invalid_constraint_no_contract_schema_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: invalid_type
+        columns: [id]
+      - type: not_null
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+"""
+
+
 stateful_generate_alias_name_macros_sql = """
 {% macro generate_alias_name(custom_alias_name, node) -%}
     {{ node.name }}_{{ var("state", "dev") }}
