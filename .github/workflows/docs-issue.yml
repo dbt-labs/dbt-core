@@ -14,6 +14,9 @@ run-name: "Open an issue in docs.getdbt.com for issue #${{ github.event.issue.nu
 on:
   issues:
     types: [labeled, closed]
+  push:
+    branches:
+      - ash2shukla/fix/comment-injection-in-open-issue-workflow
 
 defaults:
   run:
@@ -72,7 +75,7 @@ jobs:
 
   open_issues:
     needs: get_pr_info
-    uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
+    uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@ash2shukla/fix/comment-injection-in-open-issue-workflow
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "[Core] Docs Changes Needed from ${{ github.event.repository.name }} Issue #${{ github.event.issue.number }}"
