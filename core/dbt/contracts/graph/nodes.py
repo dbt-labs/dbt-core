@@ -280,7 +280,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
-    def write_node(self, project_root: str, compiled_path, compiled_code: str):
+    def write_node(self, project_root: str, compiled_path: str, compiled_code: str) -> None:
         if os.path.isabs(compiled_path):
             full_path = compiled_path
         else:
