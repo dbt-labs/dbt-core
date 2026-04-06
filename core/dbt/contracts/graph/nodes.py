@@ -369,7 +369,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
                 return False
         return True
 
-    def same_config(self, old) -> bool:
+    def same_config(self, old: "ParsedNode") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
