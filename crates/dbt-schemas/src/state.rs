@@ -545,23 +545,26 @@ pub struct ResolvedNodes {
 // files are represented by their relative path to the project root
 #[derive(Debug, Clone, Default)]
 pub struct FileChanges {
-    pub unchanged_files: HashSet<String>,
-    // updated files
-    pub changed_files: HashSet<String>,
+    // changed files
+    pub changed_files: HashSet<DbtPath>,
+    // unimpacted files
+    pub unimpacted_files: HashSet<DbtPath>,
+    // impacted files
+    pub impacted_files: HashSet<DbtPath>,
     // deleted files
-    pub deleted_files: HashSet<String>,
+    pub deleted_files: HashSet<DbtPath>,
     // new files
-    pub new_files: HashSet<String>,
+    pub new_files: HashSet<DbtPath>,
 }
 impl FileChanges {
     pub fn no_change(&self) -> bool {
-        self.changed_files.is_empty()
+        self.impacted_files.is_empty()
             && self.deleted_files.is_empty()
             && self.new_files.is_empty()
-            && !self.unchanged_files.is_empty()
+            && !self.unimpacted_files.is_empty()
     }
     pub fn has_changes(&self) -> bool {
-        !self.changed_files.is_empty() || !self.new_files.is_empty()
+        !self.impacted_files.is_empty() || !self.new_files.is_empty()
     }
 }
 /// Represents the execution state of a node in the dbt project.

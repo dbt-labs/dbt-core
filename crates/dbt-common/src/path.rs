@@ -59,6 +59,17 @@ impl DbtPath {
     }
 
     /// Case-sensitivity based on the OS.
+    pub fn has_extension(&self, ext: &str) -> bool {
+        self.extension().is_some_and(|x| {
+            if cfg!(target_os = "linux") {
+                x.eq(ext)
+            } else {
+                x.eq_ignore_ascii_case(ext)
+            }
+        })
+    }
+
+    /// Case-sensitivity based on the OS.
     pub fn get_relative_path(&self, base_path: &DbtPath) -> Option<Self> {
         Some(Self(
             diff_paths_os_ascii_case(&self.0, &base_path.0)?.normalize(),

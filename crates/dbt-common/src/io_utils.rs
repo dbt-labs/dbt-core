@@ -1,4 +1,4 @@
-use crate::io_args::{EvalArgs, Phases, StaticAnalysisOffReason};
+use crate::io_args::{EvalArgs, Phases, StaticAnalysisKind, StaticAnalysisOffReason};
 use crate::path::DbtPath;
 use crate::stdfs::File;
 use crate::tracing::metrics::{error_count_checkpoint, return_exit_code_from_error_counter};
@@ -26,6 +26,7 @@ pub trait StatusReporter: Any + Send + Sync {
         execution_phase: ExecutionPhase,
         node_outcome: NodeOutcome,
         upstream_target: Option<(String, String, bool)>,
+        static_analysis: StaticAnalysisKind,
         static_analysis_off_reason: (Option<StaticAnalysisOffReason>, Span),
     );
     /// Called to show progress in the UI
@@ -65,7 +66,7 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
     if let Some(input) = inputs.iter().next() {
         let input_path = Path::new(&input);
         if input_path.is_file()
-            && (is_allowed_extension(input_path)
+            && (is_allowed_extension_for_project(input_path)
                 || input_path.file_name() == Some(OsStr::new(project_file)))
         {
             match canonicalize(input_path) {
@@ -150,8 +151,9 @@ pub fn find_file(starting_directory: &Path, file: &Path) -> Option<PathBuf> {
 pub const YML_EXT: &str = "yml";
 pub const SQL_EXT: &str = "sql";
 pub const JSON_EXT: &str = "json";
+pub const CSV_EXT: &str = "csv";
 
-pub fn is_allowed_extension(input_path: &Path) -> bool {
+pub fn is_allowed_extension_for_project(input_path: &Path) -> bool {
     let extension = input_path.extension().unwrap();
     extension == SQL_EXT || extension == JSON_EXT || extension == YML_EXT
 }

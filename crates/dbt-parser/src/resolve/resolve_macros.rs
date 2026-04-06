@@ -373,7 +373,7 @@ pub fn apply_macro_patches(
 mod tests {
     use super::*;
     use dbt_common::FsError;
-    use dbt_common::io_args::{IoArgs, StaticAnalysisOffReason};
+    use dbt_common::io_args::{IoArgs, StaticAnalysisKind, StaticAnalysisOffReason};
     use dbt_common::io_utils::StatusReporter;
     use dbt_common::path::DbtPath;
     use dbt_telemetry::{ExecutionPhase, NodeOutcome};
@@ -410,6 +410,7 @@ mod tests {
             _execution_phase: ExecutionPhase,
             _node_outcome: NodeOutcome,
             _upstream_target: Option<(String, String, bool)>,
+            _static_analysis: StaticAnalysisKind,
             _static_analysis_off_reason: (Option<StaticAnalysisOffReason>, Span),
         ) {
         }
