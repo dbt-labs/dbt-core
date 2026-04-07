@@ -12,6 +12,7 @@ from typing import (
     Literal,
     NoReturn,
     Optional,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -181,11 +182,11 @@ class BaseNode(BaseResource):
         return self.config.materialized
 
     @classmethod
-    def from_resource(cls, resource_instance: BaseResource):
+    def from_resource(cls, resource_instance: BaseResource) -> Self:
         assert isinstance(resource_instance, cls.resource_class())
         return cls.from_dict(resource_instance.to_dict())
 
-    def to_resource(self):
+    def to_resource(self) -> BaseResource:
         return self.resource_class().from_dict(self.to_dict())
 
 
