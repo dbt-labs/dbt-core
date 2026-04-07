@@ -16,6 +16,7 @@ from typing import (
     MutableMapping,
     Optional,
     Set,
+    SupportsIndex,
     Tuple,
     TypeVar,
     Union,
@@ -1882,7 +1883,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     # The order of the arguments must match the order of the attributes
     # in the Manifest class declaration, because they are used as
     # positional arguments to construct a Manifest.
-    def __reduce_ex__(self, protocol):
+    def __reduce_ex__(self, protocol: SupportsIndex) -> Any:
         args = (
             self.nodes,
             self.sources,
@@ -1934,7 +1935,7 @@ class Manifest(MacroMethods, dbtClassMixin):
 
 
 class MacroManifest(MacroMethods):
-    def __init__(self, macros) -> None:
+    def __init__(self, macros: MutableMapping[str, Macro]) -> None:
         self.macros = macros
         self.metadata = ManifestMetadata(
             user_id=tracking.active_user.id if tracking.active_user else None,
