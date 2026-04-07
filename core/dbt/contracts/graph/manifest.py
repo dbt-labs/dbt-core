@@ -1414,7 +1414,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self._function_lookup
 
     @property
-    def external_node_unique_ids(self):
+    def external_node_unique_ids(self) -> List[str]:
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
 
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
