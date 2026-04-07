@@ -1016,7 +1016,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self
 
     @classmethod
-    def __post_deserialize__(cls, obj):
+    def __post_deserialize__(cls, obj: "Manifest") -> "Manifest":
         obj._lock = get_mp_context().Lock()
         return obj
 
