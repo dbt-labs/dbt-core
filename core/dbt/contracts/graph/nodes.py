@@ -1439,15 +1439,15 @@ class SourceDefinition(
         return []
 
     @property
-    def depends_on(self):
+    def depends_on(self) -> DependsOn:
         return DependsOn(macros=[], nodes=[])
 
     @property
-    def refs(self):
+    def refs(self) -> List[str]:
         return []
 
     @property
-    def sources(self):
+    def sources(self) -> List[str]:
         return []
 
     @property
@@ -1459,7 +1459,7 @@ class SourceDefinition(
         return f"{self.source_name}.{self.name}"
 
     @property
-    def group(self):
+    def group(self) -> None:
         return None
 
 
@@ -1529,7 +1529,7 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
         )
 
     @property
-    def group(self):
+    def group(self) -> None:
         return None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
