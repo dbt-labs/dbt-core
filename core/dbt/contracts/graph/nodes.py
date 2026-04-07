@@ -644,10 +644,14 @@ class ModelNode(ModelResource, CompiledNode):
 
         return []
 
-    def same_contents(self, old, adapter_type) -> bool:
-        return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
+    def same_contents(self, old: Optional["ModelNode"], adapter_type: Optional[str]) -> bool:  # type: ignore[override]
+        return (
+            old is not None
+            and super().same_contents(old, adapter_type)
+            and self.same_ref_representation(old)
+        )
 
-    def same_ref_representation(self, old) -> bool:
+    def same_ref_representation(self, old: "ModelNode") -> bool:
         return (
             # Changing the latest_version may break downstream unpinned refs
             self.latest_version == old.latest_version
@@ -746,7 +750,7 @@ class ModelNode(ModelResource, CompiledNode):
         base_type, _, _ = data_type.partition("(")
         return base_type.strip().lower()
 
-    def same_contract(self, old, adapter_type=None) -> bool:
+    def same_contract(self, old: "ModelNode", adapter_type: Optional[str] = None) -> bool:  # type: ignore[override]
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
             # No change -- same_contract: True
@@ -767,7 +771,7 @@ class ModelNode(ModelResource, CompiledNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Dict[str, str]] = []
-        enforced_column_constraint_removed: List[Dict[str, str]] = (
+        enforced_column_constraint_removed: List[Dict[str, Optional[str]]] = (
             []
         )  # column_name, constraint_type
         enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
