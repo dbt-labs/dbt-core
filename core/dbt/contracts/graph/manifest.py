@@ -237,7 +237,7 @@ class RefableLookup(dbtClassMixin):
         package: Optional[PackageName],
         version: Optional[NodeVersion],
         node: Optional[GraphMemberNode] = None,
-    ):
+    ) -> Optional[UniqueID]:
         if version:
             key = f"{key}.v{version}"
 
@@ -254,7 +254,7 @@ class RefableLookup(dbtClassMixin):
         version: Optional[NodeVersion],
         manifest: "Manifest",
         source_node: Optional[GraphMemberNode] = None,
-    ):
+    ) -> Optional[ManifestNode]:
         unique_id = self.get_unique_id(key, package, version, source_node)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
@@ -293,7 +293,7 @@ class RefableLookup(dbtClassMixin):
             return node
         return None
 
-    def add_node(self, node: ManifestNode):
+    def add_node(self, node: ManifestNode) -> None:
         if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
@@ -307,11 +307,11 @@ class RefableLookup(dbtClassMixin):
             else:
                 self.storage[node.name][node.package_name] = node.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for node in manifest.nodes.values():
             self.add_node(node)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ManifestNode:
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
         else:
@@ -320,7 +320,7 @@ class RefableLookup(dbtClassMixin):
             )
         return node
 
-    def _find_unique_ids_for_package(self, key, package: Optional[PackageName]) -> List[str]:
+    def _find_unique_ids_for_package(self, key: str, package: Optional[PackageName]) -> List[str]:
         if key not in self.storage:
             return []
 
@@ -1840,10 +1840,10 @@ class Manifest(MacroMethods, dbtClassMixin):
 
     def find_node_from_ref_or_source(
         self, expression: str
-    ) -> Optional[Union[ModelNode, SourceDefinition]]:
+    ) -> Optional[Union[ManifestNode, SourceDefinition]]:
         ref_or_source = statically_parse_ref_or_source(expression)
 
-        node = None
+        node: Optional[Union[ManifestNode, SourceDefinition]] = None
         if isinstance(ref_or_source, RefArgs):
             node = self.ref_lookup.find(
                 ref_or_source.name, ref_or_source.package, ref_or_source.version, self
