@@ -594,7 +594,7 @@ def _sort_values(dct):
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_node_edges(nodes: List[ManifestNode]):
+def build_node_edges(nodes: List[GraphMemberNode]):
     """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -1171,7 +1171,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         copy.build_flat_graph()
         return copy
 
-    def build_parent_and_child_maps(self):
+    def build_parent_and_child_maps(self) -> None:
         edge_members = list(
             chain(
                 self.nodes.values(),
