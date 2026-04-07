@@ -171,15 +171,15 @@ class BaseNode(BaseResource):
         )
 
     @property
-    def is_ephemeral(self):
-        return self.config.materialized == "ephemeral"
+    def is_ephemeral(self) -> bool:
+        return self.config.materialized == "ephemeral"  # type: ignore[attr-defined]
 
     @property
     def is_ephemeral_model(self) -> bool:
         return self.is_refable and self.is_ephemeral
 
-    def get_materialization(self):
-        return self.config.materialized
+    def get_materialization(self) -> str:
+        return self.config.materialized  # type: ignore[attr-defined]
 
     @classmethod
     def from_resource(cls, resource_instance: BaseResource) -> Self:
@@ -1081,9 +1081,9 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
 
 class TestShouldStoreFailures:
     @property
-    def should_store_failures(self):
-        if self.config.store_failures:
-            return self.config.store_failures
+    def should_store_failures(self) -> bool:
+        if self.config.store_failures:  # type: ignore[attr-defined]
+            return self.config.store_failures  # type: ignore[attr-defined]
         return get_flags().STORE_FAILURES
 
     @property
