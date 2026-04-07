@@ -475,7 +475,9 @@ class BatchContext(dbtClassMixin):
     event_time_start: datetime
     event_time_end: datetime
 
-    def __post_serialize__(self, data, context):
+    def __post_serialize__(
+        self, data: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         # This is insane, but necessary, I apologize. Mashumaro handles the
         # dictification of this class via a compile time generated `to_dict`
         # method based off of the _typing_ of th class. By default `datetime`
@@ -495,7 +497,9 @@ class ModelNode(ModelResource, CompiledNode):
     batch: Optional[BatchContext] = None
     _has_this: Optional[bool] = None
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_has_this" in dct:
             del dct["_has_this"]
@@ -1535,7 +1539,9 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     def group(self) -> None:
         return None
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
@@ -1793,7 +1799,9 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and True
         )
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
