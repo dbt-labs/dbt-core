@@ -1048,15 +1048,15 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         return self.depends_on.macros
 
     @property
-    def extra_ctes(self):
+    def extra_ctes(self) -> List[InjectedCTE]:
         return []
 
     @property
-    def extra_ctes_injected(self):
+    def extra_ctes_injected(self) -> bool:
         return False
 
     @property
-    def language(self):
+    def language(self) -> str:
         return "sql"
 
 
