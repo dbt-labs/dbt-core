@@ -424,7 +424,9 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
         self.populate(manifest)
 
-    def get_unique_id(self, search_name: str, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
     def find(
@@ -436,12 +438,12 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add(self, semantic_model: SemanticModel):
+    def add(self, semantic_model: SemanticModel) -> None:
         """Sets all measures for a SemanticModel as paths to the SemanticModel's `unique_id`"""
         for measure in semantic_model.measures:
             self.storage[measure.name][semantic_model.package_name] = semantic_model.unique_id
 
-    def populate(self, manifest: "Manifest"):
+    def populate(self, manifest: "Manifest") -> None:
         """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
         for semantic_model in manifest.semantic_models.values():
             self.add(semantic_model=semantic_model)
