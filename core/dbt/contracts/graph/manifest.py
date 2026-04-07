@@ -1041,8 +1041,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             "unit_tests": {k: v.to_dict(omit_none=False) for k, v in self.unit_tests.items()},
         }
 
-    def build_disabled_by_file_id(self):
-        disabled_by_file_id = {}
+    def build_disabled_by_file_id(self) -> Dict[str, GraphMemberNode]:
+        disabled_by_file_id: Dict[str, GraphMemberNode] = {}
         for node_list in self.disabled.values():
             for node in node_list:
                 disabled_by_file_id[node.file_id] = node
