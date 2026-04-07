@@ -1416,11 +1416,11 @@ class SourceDefinition(
             and True
         )
 
-    def get_full_source_name(self):
+    def get_full_source_name(self) -> str:
         return f"{self.source_name}_{self.name}"
 
-    def get_source_representation(self):
-        return f'source("{self.source.name}", "{self.table.name}")'
+    def get_source_representation(self) -> str:
+        return f'source("{self.source_name}", "{self.name}")'
 
     @property
     def is_refable(self) -> bool:
