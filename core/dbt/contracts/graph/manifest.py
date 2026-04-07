@@ -1309,7 +1309,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
         )
 
-    def write(self, path):
+    def write(self, path: str) -> None:
         writable = self.writable_manifest()
         writable.write(path)
         fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
