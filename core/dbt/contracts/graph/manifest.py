@@ -190,22 +190,26 @@ class FunctionLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[FunctionNode]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_function(self, function: FunctionNode):
+    def add_function(self, function: FunctionNode) -> None:
         if function.search_name not in self.storage:
             self.storage[function.search_name] = {}
 
         self.storage[function.search_name][function.package_name] = function.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for function in manifest.functions.values():
             if hasattr(function, "name"):
                 self.add_function(function)
