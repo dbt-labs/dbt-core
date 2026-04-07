@@ -1283,13 +1283,13 @@ class UnpatchedSourceDefinition(BaseNode):
     resource_type: Literal[NodeType.Source]
     patch_path: Optional[str] = None
 
-    def get_full_source_name(self):
+    def get_full_source_name(self) -> str:
         return f"{self.source.name}_{self.table.name}"
 
-    def get_source_representation(self):
+    def get_source_representation(self) -> str:
         return f'source("{self.source.name}", "{self.table.name}")'
 
-    def validate_data_tests(self, is_root_project: bool):
+    def validate_data_tests(self, is_root_project: bool) -> None:
         """
         sources parse tests differently than models, so we need to do some validation
         here where it's done in the PatchParser for other nodes
