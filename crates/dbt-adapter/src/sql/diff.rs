@@ -56,6 +56,7 @@ fn compare_sql_inner(
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
+    let actual = canonicalize_python_meta_get_calls(&actual);
     let actual = canonicalize_python_meta_dict(&actual);
     let expected = canonicalize_python_meta_dict(&expected);
     let actual = canonicalize_databricks_legacy_alter_column_comment_to_modern(&actual);
@@ -2231,9 +2232,27 @@ fn canonicalize_python_config_dict(actual: &str, expected: &str) -> String {
     actual.to_string()
 }
 
-/// Strip the `meta_dict = {}` variable and the `meta_get` static method that Fusion emits inside
-/// the Python `config` helper class for Snowflake Python models.  Mantle does not emit these, but
-/// they are semantically inert – removing them makes both sides identical.
+/// Canonicalize `dbt.config.meta_get(` call sites to `dbt.config.get(` to match what Mantle
+/// emits in the Snowflake stored procedure body.  Fusion passes the user's Python source verbatim,
+/// preserving `meta_get` calls; Mantle rewrites them to `get`.  Both are semantically equivalent
+/// because the generated `config` class routes all lookups through the same `config_dict`.
+fn canonicalize_python_meta_get_calls(sql: &str) -> String {
+    if !sql.contains("dbt.config.meta_get(") {
+        return sql.to_string();
+    }
+    sql.replace("dbt.config.meta_get(", "dbt.config.get(")
+}
+
+/// Strip the `meta_dict` variable and the `meta_get` static method that Fusion emits inside
+/// the Python `config` helper class for Snowflake Python models.  Mantle does not emit these.
+///
+/// Two cases are handled:
+///
+/// 1. **Empty** `meta_dict = {}` – remove the line outright (original behaviour).
+/// 2. **Populated** `meta_dict = {…}` – Fusion puts meta config values here while leaving
+///    `config_dict = {}` empty; Mantle puts the same values directly in `config_dict`.
+///    When this pattern is detected, the meta_dict content is first promoted into config_dict,
+///    then the meta_dict line is removed, making both sides identical.
 fn canonicalize_python_meta_dict(sql: &str) -> String {
     // Fast-path: nothing to do when there is no meta_dict.
     if !sql.contains("meta_dict") {
@@ -2241,10 +2260,17 @@ fn canonicalize_python_meta_dict(sql: &str) -> String {
     }
 
     // 1. Remove the standalone `meta_dict = {}` line (with surrounding blank lines collapsed).
-    static RE_META_DICT_VAR: once_cell::sync::Lazy<Regex> =
+    static RE_META_DICT_EMPTY: once_cell::sync::Lazy<Regex> =
         once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^\s*meta_dict\s*=\s*\{\}\s*\n").unwrap());
 
-    // 2. Remove the `meta_get` static method block inside the config class.
+    // 2. Match a non-empty `meta_dict = {…}` line and capture the dict literal.
+    //    The assignment is always on a single line; greedy [^\n]* followed by \} finds the last
+    //    closing brace on that line, correctly handling nested dicts.
+    static RE_META_DICT_NONEMPTY: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?m)^[ \t]*meta_dict\s*=\s*(\{[^\n]*\})\s*\n").unwrap()
+    });
+
+    // 3. Remove the `meta_get` static method block inside the config class.
     //    Matches:
     //        @staticmethod
     //        def meta_get(key, default=None):
@@ -2257,7 +2283,23 @@ fn canonicalize_python_meta_dict(sql: &str) -> String {
             .unwrap()
     });
 
-    let result = RE_META_DICT_VAR.replace_all(sql, "");
+    let mut result = sql.to_string();
+
+    // When config_dict is empty and meta_dict is populated, promote meta_dict → config_dict.
+    if result.contains("config_dict = {}") {
+        if let Some(caps) = RE_META_DICT_NONEMPTY.captures(&result.clone()) {
+            if let Some(meta_content) = caps.get(1).map(|m| m.as_str()) {
+                result = result.replacen(
+                    "config_dict = {}",
+                    &format!("config_dict = {}", meta_content),
+                    1,
+                );
+            }
+        }
+    }
+
+    let result = RE_META_DICT_EMPTY.replace_all(&result, "");
+    let result = RE_META_DICT_NONEMPTY.replace_all(&result, "");
     let result = RE_META_GET_METHOD.replace_all(&result, "");
     result.into_owned()
 }
@@ -5279,6 +5321,69 @@ class this:
         assert!(
             result.is_ok(),
             "meta_dict and meta_get differences should be ignorable: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_nonempty_meta_dict_promoted_to_config_dict_and_meta_get_calls_rewritten() {
+        // Regression test for: Fusion emits `config_dict = {}` (empty) + `meta_dict = {data}`
+        // + `dbt.config.meta_get(...)` call sites in the model body, while Mantle emits
+        // `config_dict = {data}` (populated from meta) + no meta_dict + `dbt.config.get(...)`
+        // call sites. The two forms are semantically equivalent and should not cause a mismatch.
+        //
+        // This covers models like rte_followup_key_message, clinical_trial_start_end,
+        // event_congress_activity, email_bounced, etc. that use dbt.config.meta_get() to read
+        // values defined under `meta:` in their config.yml.
+        let actual = r#"
+config_dict = {}
+meta_dict = {'days': {'ID': 7, 'TH': 7}, 'countries': ['ID', 'TH']}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+class this:
+    database = "DB"
+    schema = "SCH"
+    identifier = "my_model"
+
+def model(dbt, session):
+    last_n_days = dbt.config.meta_get("days")
+    countries = dbt.config.meta_get("countries")
+    return session.table("something")
+"#;
+
+        let expected = r#"
+config_dict = {'days': {'ID': 7, 'TH': 7}, 'countries': ['ID', 'TH']}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+class this:
+    database = "DB"
+    schema = "SCH"
+    identifier = "my_model"
+
+def model(dbt, session):
+    last_n_days = dbt.config.get("days")
+    countries = dbt.config.get("countries")
+    return session.table("something")
+"#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Populated meta_dict + meta_get call sites should be treated as equivalent \
+             to populated config_dict + get call sites: {result:?}"
         );
     }
 

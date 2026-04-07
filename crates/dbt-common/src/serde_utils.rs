@@ -4,6 +4,7 @@ use std::{fmt, marker::PhantomData};
 use crate::dashmap::DashMap;
 use indexmap::IndexMap;
 use minijinja::value::ValueMap;
+use minijinja::value::mutable_vec::MutableVec;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{Visitor, value::UnitDeserializer},
@@ -15,17 +16,19 @@ type YmlValue = dbt_yaml::Value;
 fn convert_yml_value(yml: YmlValue) -> minijinja::Value {
     match yml {
         YmlValue::Mapping(map, _) => {
-            let mut value_map = BTreeMap::new();
+            let mut value_map = ValueMap::new();
             for (k, v) in map {
                 value_map.insert(
-                    k.as_str().expect("key is not a string").to_string(),
+                    minijinja::Value::from(k.as_str().expect("key is not a string").to_string()),
                     convert_yml_value(v),
                 );
             }
-            minijinja::Value::from(value_map)
+            minijinja::Value::from_object(value_map)
         }
         YmlValue::Sequence(arr, _) => {
-            minijinja::Value::from_iter(arr.into_iter().map(convert_yml_value))
+            let items: MutableVec<minijinja::Value> =
+                arr.into_iter().map(convert_yml_value).collect();
+            minijinja::Value::from_object(items)
         }
         YmlValue::Null(_) => minijinja::Value::from(None::<()>),
         _ => minijinja::Value::from_serialize(yml),
@@ -92,7 +95,9 @@ fn convert_yml_value_ordered(yml: YmlValue) -> minijinja::Value {
             minijinja::Value::from_object(value_map)
         }
         YmlValue::Sequence(arr, _) => {
-            minijinja::Value::from_iter(arr.into_iter().map(convert_yml_value))
+            let items: MutableVec<minijinja::Value> =
+                arr.into_iter().map(convert_yml_value).collect();
+            minijinja::Value::from_object(items)
         }
         YmlValue::Null(_) => minijinja::Value::from(None::<()>),
         _ => minijinja::Value::from_serialize(yml),
@@ -501,5 +506,48 @@ properties:
     type: string
 "}
         );
+    }
+
+    #[test]
+    fn test_convert_yml_mapping_preserves_insertion_order() {
+        // Regression test: YAML mappings must render with keys in insertion order,
+        // not sorted alphabetically, when embedded in compiled Python models
+        // (e.g. lifetime/days/score dicts in config_dict / meta_dict).
+        //
+        // Keys here are deliberately NOT in alphabetical order:
+        //   insertion: ID, TH, PH
+        //   alphabetical (BTreeMap): ID, PH, TH  ← P sorts before T
+        let yaml = "ID: 30\nTH: 30\nPH: 30\n";
+        let yml_value: YmlValue = dbt_yaml::from_str(yaml).unwrap();
+
+        let mj_value = convert_yml_value(yml_value);
+        let rendered = mj_value.to_string();
+
+        assert_eq!(
+            rendered, "{'ID': 30, 'TH': 30, 'PH': 30}",
+            "expected insertion order but got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn test_convert_yml_sequence_renders_as_list_not_tuple() {
+        // Regression test: YAML sequences must render as Python lists `[...]`,
+        // not as Python tuples `(...)`, when embedded in compiled Python models
+        // (e.g. config_dict / meta_dict in the py_script_postfix template).
+        let yaml = "- ID\n- TH\n- PH\n- SG\n";
+        let yml_value: YmlValue = dbt_yaml::from_str(yaml).unwrap();
+
+        let mj_value = convert_yml_value(yml_value);
+        let rendered = mj_value.to_string();
+
+        assert!(
+            rendered.starts_with('['),
+            "expected list syntax `[...]` but got: {rendered}"
+        );
+        assert!(
+            rendered.ends_with(']'),
+            "expected list syntax `[...]` but got: {rendered}"
+        );
+        assert_eq!(rendered, "['ID', 'TH', 'PH', 'SG']");
     }
 }
