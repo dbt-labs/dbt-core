@@ -1188,7 +1188,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.child_map = forward_edges
         self.parent_map = backward_edges
 
-    def build_macro_child_map(self):
+    def build_macro_child_map(self) -> Dict[str, List[str]]:
         edge_members = list(
             chain(
                 self.nodes.values(),
