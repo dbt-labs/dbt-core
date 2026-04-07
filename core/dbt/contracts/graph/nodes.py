@@ -200,7 +200,7 @@ class GraphNode(GraphResource, BaseNode):
 @dataclass
 class HasRelationMetadata(HasRelationMetadataResource):
     @classmethod
-    def __pre_deserialize__(cls, data):
+    def __pre_deserialize__(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         data = super().__pre_deserialize__(data)
         if "database" not in data:
             data["database"] = None
