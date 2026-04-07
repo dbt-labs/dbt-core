@@ -10,6 +10,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    NoReturn,
     Optional,
     Sequence,
     Tuple,
@@ -1003,7 +1004,7 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
-    def _disallow_implicit_dependencies(self) -> None:
+    def _disallow_implicit_dependencies(self) -> NoReturn:
         """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
         # Seeds are root nodes in the DAG. They cannot depend on other nodes.
         # However, it's possible to define pre- and post-hooks on seeds, and for those
@@ -1025,15 +1026,15 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         raise ParsingError(message)
 
     @property
-    def refs(self):
+    def refs(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
     @property
-    def sources(self):
+    def sources(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
     @property
-    def metrics(self):
+    def metrics(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
     def same_body(self, other: "SeedNode") -> bool:  # type: ignore[override]
