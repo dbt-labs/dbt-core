@@ -1091,7 +1091,7 @@ class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNo
         return SingularTestResource
 
     @property
-    def test_node_type(self):
+    def test_node_type(self) -> str:
         return "singular"
 
 
@@ -1106,14 +1106,14 @@ class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode
     def resource_class(cls) -> Type[GenericTestResource]:
         return GenericTestResource
 
-    def same_contents(self, other, adapter_type: Optional[str]) -> bool:
+    def same_contents(self, other: Optional["GenericTestNode"], adapter_type: Optional[str]) -> bool:  # type: ignore[override]
         if other is None:
             return False
 
         return self.same_config(other) and self.same_fqn(other) and True
 
     @property
-    def test_node_type(self):
+    def test_node_type(self) -> str:
         return "generic"
 
 
@@ -1123,7 +1123,7 @@ class UnitTestSourceDefinition(ModelNode):
     quoting: QuotingResource = field(default_factory=QuotingResource)
 
     @property
-    def cte_name(self):
+    def cte_name(self) -> str:
         return self.unique_id.split(".")[-1]
 
     @property
