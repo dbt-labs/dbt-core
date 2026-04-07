@@ -1220,7 +1220,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
-    def fill_tracking_metadata(self):
+    def fill_tracking_metadata(self) -> None:
         self.metadata.user_id = tracking.active_user.id if tracking.active_user else None
         self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
