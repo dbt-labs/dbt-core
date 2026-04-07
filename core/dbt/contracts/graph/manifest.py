@@ -9,6 +9,7 @@ from typing import (
     ClassVar,
     DefaultDict,
     Dict,
+    FrozenSet,
     Generic,
     List,
     Mapping,
@@ -1137,7 +1138,9 @@ class Manifest(MacroMethods, dbtClassMixin):
             resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
 
-    def get_used_schemas(self, resource_types=None):
+    def get_used_schemas(
+        self, resource_types: Optional[List[NodeType]] = None
+    ) -> FrozenSet[Tuple[Optional[str], str]]:
         return frozenset(
             {
                 (node.database, node.schema)
@@ -1146,10 +1149,10 @@ class Manifest(MacroMethods, dbtClassMixin):
             }
         )
 
-    def get_used_databases(self):
+    def get_used_databases(self) -> FrozenSet[Optional[str]]:
         return frozenset(x.database for x in chain(self.nodes.values(), self.sources.values()))
 
-    def deepcopy(self):
+    def deepcopy(self) -> "Manifest":
         copy = Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
             sources={k: _deepcopy(v) for k, v in self.sources.items()},
