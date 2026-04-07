@@ -1019,7 +1019,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         obj._lock = get_mp_context().Lock()
         return obj
 
-    def build_flat_graph(self):
+    def build_flat_graph(self) -> None:
         """This attribute is used in context.common by each node, so we want to
         only build it once and avoid any concurrency issues around it.
         Make sure you don't call this until you're done with building your
