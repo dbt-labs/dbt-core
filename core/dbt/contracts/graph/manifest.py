@@ -589,14 +589,16 @@ def _packages_to_search(
             return [current_project, node_package, None]
 
 
-def _sort_values(dct):
+def _sort_values(dct: Dict[str, List[str]]) -> Dict[str, List[str]]:
     """Given a dictionary, sort each value. This makes output deterministic,
     which helps for tests.
     """
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_node_edges(nodes: List[GraphMemberNode]):
+def build_node_edges(
+    nodes: List[GraphMemberNode],
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -613,7 +615,7 @@ def build_node_edges(nodes: List[GraphMemberNode]):
 
 
 # Build a map of children of macros and generic tests
-def build_macro_edges(nodes: List[Any]):
+def build_macro_edges(nodes: List[Any]) -> Dict[str, List[str]]:
     forward_edges: Dict[str, List[str]] = {
         n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
     }
@@ -624,7 +626,7 @@ def build_macro_edges(nodes: List[Any]):
     return _sort_values(forward_edges)
 
 
-def _deepcopy(value):
+def _deepcopy(value: Any) -> Any:
     return value.from_dict(value.to_dict(omit_none=True))
 
 
@@ -1957,7 +1959,7 @@ class MacroManifest(MacroMethods):
 AnyManifest = Union[Manifest, MacroManifest]
 
 
-def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
+def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]) -> None:
     if value.unique_id in src:
         raise DuplicateResourceNameError(value, src[value.unique_id])
 
