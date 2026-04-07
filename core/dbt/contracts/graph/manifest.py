@@ -342,22 +342,26 @@ class MetricLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[Metric]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_metric(self, metric: Metric):
+    def add_metric(self, metric: Metric) -> None:
         if metric.search_name not in self.storage:
             self.storage[metric.search_name] = {}
 
         self.storage[metric.search_name][metric.package_name] = metric.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for metric in manifest.metrics.values():
             if hasattr(metric, "name"):
                 self.add_metric(metric)
@@ -377,22 +381,26 @@ class SavedQueryLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SavedQuery]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_saved_query(self, saved_query: SavedQuery):
+    def add_saved_query(self, saved_query: SavedQuery) -> None:
         if saved_query.search_name not in self.storage:
             self.storage[saved_query.search_name] = {}
 
         self.storage[saved_query.search_name][saved_query.package_name] = saved_query.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for saved_query in manifest.saved_queries.values():
             if hasattr(saved_query, "name"):
                 self.add_saved_query(saved_query)
