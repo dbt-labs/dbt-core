@@ -475,7 +475,7 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest: "Manifest"):
+    def populate(self, manifest: "Manifest") -> None:
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
@@ -490,7 +490,7 @@ class DisabledLookup(dbtClassMixin):
     # the other Lookup functions in that it returns full nodes, not just unique_ids
     def find(
         self,
-        search_name,
+        search_name: str,
         package: Optional[PackageName],
         version: Optional[NodeVersion] = None,
         resource_types: Optional[List[NodeType]] = None,
