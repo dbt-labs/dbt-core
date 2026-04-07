@@ -999,7 +999,7 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         return result
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         """Seeds are never empty"""
         return False
 
