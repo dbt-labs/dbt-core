@@ -5,6 +5,7 @@ use std::result::Result;
 use std::time::Duration;
 use std::{env, fmt, io};
 
+use crate::driver::DriverFilenameDisplay;
 use crate::*;
 use adbc_core::error::{Error, Status};
 use percent_encoding::AsciiSet;
@@ -250,16 +251,12 @@ pub fn format_driver_path(name: &str, triplet: DriverTriplet) -> Result<PathBuf,
     dirs::cache_dir()
         .map(|cache_dir| {
             let driver_relpath = format!(
-                "{}/adbc/{}-{}/{}adbc_driver_{}-{}{}",
-                APP_ID,
+                "{}-{}/{}",
                 triplet.arch,
                 triplet.os,
-                triplet.dll_prefix(),
-                name,
-                triplet.version,
-                triplet.dll_suffix(),
+                DriverFilenameDisplay { name, triplet }
             );
-            cache_dir.join(driver_relpath)
+            cache_dir.join(APP_ID).join("adbc").join(driver_relpath)
         })
         .ok_or(InstallError::DetermineCacheDir)
 }
@@ -634,18 +631,10 @@ mod tests {
         };
         let path = format_driver_path("snowflake", triplet).unwrap();
 
-        #[cfg(target_os = "windows")]
-        let dbt_cache_dir = format!("{}\\com.getdbt", dirs::cache_dir().unwrap().display());
-        #[cfg(not(target_os = "windows"))]
-        let dbt_cache_dir = format!("{}/com.getdbt", dirs::cache_dir().unwrap().display());
-
+        let dbt_cache_dir = dirs::cache_dir().unwrap().join("com.getdbt").join("adbc");
         let expected = PathBuf::from(format!(
-            "{}/adbc/{}-{}/{}adbc_driver_snowflake-0.17.0+dbt0.2.0{}",
-            dbt_cache_dir,
-            triplet.arch,
-            triplet.os,
-            triplet.dll_prefix(),
-            triplet.dll_suffix(),
+            "{}/x86_64-manylinux_2_17-linux-gnu/libadbc_driver_snowflake-0.17.0+dbt0.2.0.so",
+            dbt_cache_dir.display(),
         ));
         assert_eq!(path, expected);
     }

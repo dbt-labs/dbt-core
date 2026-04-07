@@ -6,7 +6,7 @@ use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
 use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
-use crate::install;
+use crate::install::{self, DriverTriplet};
 use crate::semaphore::Semaphore;
 use crate::{Database, install::build_http_agent};
 use adbc_core::{
@@ -201,26 +201,20 @@ impl hash::Hash for AdbcDriverKey {
 
 pub struct DriverFilenameDisplay<'a> {
     pub name: &'a str,
-    pub version: Option<&'a str>,
+    /// OS, arch, and version (all optional).
+    pub triplet: DriverTriplet<'a>,
 }
 
 impl<'a> fmt::Display for DriverFilenameDisplay<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.version {
-            Some(version) => write!(
+        let prefix = self.triplet.dll_prefix();
+        let suffix = self.triplet.dll_suffix();
+        match self.triplet.version {
+            "" => write!(f, "{}adbc_driver_{}{}", prefix, self.name, suffix),
+            version => write!(
                 f,
                 "{}adbc_driver_{}-{}{}",
-                env::consts::DLL_PREFIX,
-                self.name,
-                version,
-                env::consts::DLL_SUFFIX
-            ),
-            None => write!(
-                f,
-                "{}adbc_driver_{}{}",
-                env::consts::DLL_PREFIX,
-                self.name,
-                env::consts::DLL_SUFFIX
+                prefix, self.name, version, suffix
             ),
         }
     }
@@ -554,17 +548,20 @@ Second error:\n\
         backend: Backend,
         adbc_version: AdbcVersion,
     ) -> Result<ManagedAdbcDriver> {
+        let mut additional_search_paths: Vec<PathBuf> = Vec::new();
         if let Some(libs_dir) = ADBC_LIBS_DIRECTORY.as_ref() {
-            let filename = DriverFilenameDisplay {
-                name: "flock",
-                version: None,
-            };
-            let full_path = libs_dir.join(format!("{}", filename));
-            return ManagedAdbcDriver::load_dynamic_from_filename(
+            additional_search_paths.push(libs_dir.clone());
+            let load_flags = LOAD_FLAG_SEARCH_ENV
+                | LOAD_FLAG_SEARCH_USER
+                | LOAD_FLAG_SEARCH_SYSTEM
+                | LOAD_FLAG_ALLOW_RELATIVE_PATHS;
+            return ManagedAdbcDriver::load_from_name(
                 backend,
-                &full_path,
+                "adbc_driver_flock",
                 None, // entrypoint
                 adbc_version,
+                load_flags,
+                Some(additional_search_paths),
             );
         }
 
