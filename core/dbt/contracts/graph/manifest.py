@@ -1739,18 +1739,20 @@ class Manifest(MacroMethods, dbtClassMixin):
         my_checksum = self.files[key].checksum
         return my_checksum == source_file.checksum
 
-    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition):
+    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition) -> None:
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source  # type: ignore
         source_file.sources.append(source.unique_id)
 
-    def add_node_nofile(self, node: ManifestNode):
+    def add_node_nofile(self, node: ManifestNode) -> None:
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
 
-    def add_node(self, source_file: AnySourceFile, node: ManifestNode, test_from=None):
+    def add_node(
+        self, source_file: AnySourceFile, node: ManifestNode, test_from: Optional[str] = None
+    ) -> None:
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1769,19 +1771,19 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_exposure(self, source_file: SchemaSourceFile, exposure: Exposure):
+    def add_exposure(self, source_file: SchemaSourceFile, exposure: Exposure) -> None:
         _check_duplicates(exposure, self.exposures)
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_function(self, source_file: SourceFile, function: FunctionNode):
+    def add_function(self, source_file: SourceFile, function: FunctionNode) -> None:
         _check_duplicates(function, self.functions)
         self.functions[function.unique_id] = function
         source_file.functions.append(function.unique_id)
 
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
-    ):
+    ) -> None:
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
         if not generated_from:
@@ -1789,19 +1791,21 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.add_metrics_from_measures(generated_from, metric.unique_id)
 
-    def add_group(self, source_file: SchemaSourceFile, group: Group):
+    def add_group(self, source_file: SchemaSourceFile, group: Group) -> None:
         _check_duplicates(group, self.groups)
         self.groups[group.unique_id] = group
         source_file.groups.append(group.unique_id)
 
-    def add_disabled_nofile(self, node: GraphMemberNode):
+    def add_disabled_nofile(self, node: GraphMemberNode) -> None:
         # There can be multiple disabled nodes for the same unique_id
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: GraphMemberNode, test_from=None):
+    def add_disabled(
+        self, source_file: AnySourceFile, node: GraphMemberNode, test_from: Optional[str] = None
+    ) -> None:
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1824,23 +1828,25 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_doc(self, source_file: SourceFile, doc: Documentation):
+    def add_doc(self, source_file: SourceFile, doc: Documentation) -> None:
         _check_duplicates(doc, self.docs)
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
-    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
+    def add_semantic_model(
+        self, source_file: SchemaSourceFile, semantic_model: SemanticModel
+    ) -> None:
         _check_duplicates(semantic_model, self.semantic_models)
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
 
-    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition) -> None:
         if unit_test.unique_id in self.unit_tests:
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test
         source_file.unit_tests.append(unit_test.unique_id)
 
-    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture) -> None:
         if fixture.unique_id in self.fixtures:
             raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
         self.fixtures[fixture.unique_id] = fixture
