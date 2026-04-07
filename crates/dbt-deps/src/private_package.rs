@@ -18,7 +18,7 @@ pub struct ProviderDetail {
 
 impl ProviderDetail {
     fn resolved_url(&self, repo: &str) -> String {
-        if self.provider.as_deref() == Some("azure_active_directory") {
+        if self.is_azure_devops() {
             let git_url = ADOGitURL::new(self.url.clone());
             git_url.resolve(&self.token, repo)
         } else {
@@ -27,22 +27,43 @@ impl ProviderDetail {
         }
     }
 
+    fn is_ado(&self) -> bool {
+        self.provider.as_deref() == Some("ado")
+    }
+
+    fn is_azure_active_directory(&self) -> bool {
+        self.provider.as_deref() == Some("azure_active_directory")
+    }
+
+    fn is_azure_devops(&self) -> bool {
+        self.is_ado() || self.is_azure_active_directory()
+    }
+
     fn matches_private_definition(
         &self,
         private_def: &PrivateDefinition,
         provider: Option<&str>,
     ) -> bool {
         // Check if provider matches (if specified)
-        if let Some(requested_provider) = provider
-            && self.provider.as_deref() != Some(requested_provider)
-        {
-            return false;
+        // "ado" and "azure_active_directory" are distinct providers with different path requirements
+        if let Some(requested_provider) = provider {
+            if self.provider.as_deref() != Some(requested_provider) {
+                return false;
+            }
         }
 
-        // Use appropriate GitURL type based on provider
-        if self.provider.as_deref() == Some("azure_active_directory") {
+        // Validate path structure based on provider type
+        // "ado" expects 3-part names (org/project/repo)
+        // "azure_active_directory" expects 2-part names (org/repo) for backward compatibility
+        if self.is_ado() {
+            // For "ado", the private definition should have groups (project)
+            // URL template contains the project, so we match org and repo
             let git_url = ADOGitURL::new(self.url.clone());
-            git_url.can_resolve(private_def)
+            git_url.can_resolve_ado(private_def)
+        } else if self.is_azure_active_directory() {
+            // For "azure_active_directory", backward compatibility with 2-part names
+            let git_url = ADOGitURL::new(self.url.clone());
+            git_url.can_resolve_azure_active_directory(private_def)
         } else {
             let git_url = GitURL::new(self.url.clone());
             git_url.can_resolve(private_def)
@@ -180,9 +201,37 @@ impl ADOGitURL {
     }
 
     pub fn can_resolve(&self, private_def: &PrivateDefinition) -> bool {
+        // Default behavior for backward compatibility
+        self.can_resolve_azure_active_directory(private_def)
+    }
+
+    pub fn can_resolve_azure_active_directory(&self, private_def: &PrivateDefinition) -> bool {
         let url_def = self.get_definition();
 
-        // For ADO, we only compare org and repo, not groups (project is ignored)
+        // For azure_active_directory, we only compare org and repo, not groups (project is in URL template)
+        // Private definition should be 2-part: org/repo
+        if url_def.org_name != private_def.org_name {
+            return false;
+        }
+
+        // Compare repo names (allowing for {repo} wildcard)
+        if url_def.is_repo_wildcard() || url_def.repo_name == private_def.repo_name {
+            return true;
+        }
+
+        false
+    }
+
+    pub fn can_resolve_ado(&self, private_def: &PrivateDefinition) -> bool {
+        // "ado" requires 3-part names: org/project/repo
+        if private_def.groups.is_empty() {
+            return false;
+        }
+
+        let url_def = self.get_definition();
+
+        // The project in private_def is informational — the URL template contains the actual project.
+        // We only match on org and repo.
         if url_def.org_name != private_def.org_name {
             return false;
         }
@@ -265,14 +314,26 @@ fn get_local_resolved_url(private_package: &PrivatePackage) -> FsResult<String> 
             "git@gitlab.com:{}.git",
             private_package.private.deref()
         )),
-        "ado" | "azure_devops" => Ok(format!(
-            "git@ssh.dev.azure.com:v3/{}",
-            private_package.private.deref()
-        )),
+        "ado" | "azure_devops" => {
+            // "ado"/"azure_devops" requires 3-part names: org/project/repo
+            let def = PrivateDefinition::build(private_package.private.deref());
+            if def.groups.is_empty() {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "The '{}' provider requires org/project/repo format (3 parts), got: '{}'",
+                    private_package.provider.as_deref().unwrap_or_default(),
+                    private_package.private.deref()
+                );
+            }
+            Ok(format!(
+                "git@ssh.dev.azure.com:v3/{}",
+                private_package.private.deref()
+            ))
+        }
         _ => {
             err!(
                 ErrorCode::InvalidConfig,
-                r#"Invalid private package configuration: '{}' provider: '{}'"#,
+                r#"Invalid private package configuration: '{}' provider: '{}'. Valid providers are: github, gitlab, ado, azure_active_directory"#,
                 private_package.private.deref(),
                 private_package.provider.as_deref().unwrap_or_default()
             )
