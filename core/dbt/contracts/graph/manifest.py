@@ -1252,19 +1252,23 @@ class Manifest(MacroMethods, dbtClassMixin):
 
         return manifest
 
-    def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
+    def _map_nodes_to_map_resources(
+        cls, nodes_map: MutableMapping[str, NodeClassT]
+    ) -> Dict[str, Any]:
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
 
     def _map_list_nodes_to_map_list_resources(
         cls, nodes_map: MutableMapping[str, List[NodeClassT]]
-    ):
+    ) -> Dict[str, Any]:
         return {
             node_id: [node.to_resource() for node in node_list]
             for node_id, node_list in nodes_map.items()
         }
 
     @classmethod
-    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, ResourceClassT]):
+    def _map_resources_to_map_nodes(
+        cls, resources_map: Mapping[str, ResourceClassT]
+    ) -> Dict[str, Any]:
         return {
             node_id: RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
             for node_id, resource in resources_map.items()
@@ -1273,7 +1277,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     @classmethod
     def _map_list_resources_to_map_list_nodes(
         cls, resources_map: Optional[Mapping[str, List[ResourceClassT]]]
-    ):
+    ) -> Dict[str, Any]:
         if resources_map is None:
             return {}
 
