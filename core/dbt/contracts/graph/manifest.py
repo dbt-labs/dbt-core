@@ -153,22 +153,26 @@ class SourceLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SourceDefinition]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_source(self, source: SourceDefinition):
+    def add_source(self, source: SourceDefinition) -> None:
         if source.search_name not in self.storage:
             self.storage[source.search_name] = {}
 
         self.storage[source.search_name][source.package_name] = source.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for source in manifest.sources.values():
             if hasattr(source, "source_name"):
                 self.add_source(source)
