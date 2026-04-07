@@ -120,21 +120,23 @@ class DocLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName]):
+    def get_unique_id(self, key: str, package: Optional[PackageName]) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, key: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[Documentation]:
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_doc(self, doc: Documentation):
+    def add_doc(self, doc: Documentation) -> None:
         if doc.name not in self.storage:
             self.storage[doc.name] = {}
         self.storage[doc.name][doc.package_name] = doc.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for doc in manifest.docs.values():
             self.add_doc(doc)
 
