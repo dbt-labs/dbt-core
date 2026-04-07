@@ -1705,7 +1705,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.build_flat_graph()
 
     # Methods that were formerly in ParseResult
-    def add_macro(self, source_file: SourceFile, macro: Macro):
+    def add_macro(self, source_file: SourceFile, macro: Macro) -> None:
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
             raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
