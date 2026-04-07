@@ -1758,7 +1758,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.nodes[node.unique_id] = node
 
     def add_node(
-        self, source_file: AnySourceFile, node: ManifestNode, test_from: Optional[str] = None
+        self,
+        source_file: AnySourceFile,
+        node: ManifestNode,
+        test_from: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
@@ -1811,7 +1814,10 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.disabled[node.unique_id] = [node]
 
     def add_disabled(
-        self, source_file: AnySourceFile, node: GraphMemberNode, test_from: Optional[str] = None
+        self,
+        source_file: AnySourceFile,
+        node: GraphMemberNode,
+        test_from: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
