@@ -213,32 +213,45 @@ class ModelRunner(CompileRunner):
             return identifier
         return relation.name or ""
 
-    def _latest_pointer_identifier(self, model: ModelNode) -> str:
-        configured_alias = getattr(model.config, "alias", None)
-        if configured_alias:
-            return str(configured_alias).strip()
+    def _latest_version_view_identifier(
+        self,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+    ) -> str:
+        lvv = getattr(model.config, "latest_version_view", None)
+        if lvv and lvv.alias:
+            return str(lvv.alias).strip()
+        alias_macro = manifest.find_macro_by_name(
+            "generate_latest_version_view_alias", self.config.project_name, None
+        )
+        if alias_macro is not None:
+            return MacroGenerator(alias_macro, context, stack=context["context_macro_stack"])(
+                context["model"]
+            ).strip()
         return model.name
 
-    def _should_generate_latest_pointer(self, model: ModelNode) -> bool:
+    def _should_create_latest_version_view(self, model: ModelNode) -> bool:
+        lvv = getattr(model.config, "latest_version_view", None)
         return (
             isinstance(model, ModelNode)
             and model.version is not None
             and model.is_latest_version
-            and getattr(model.config, "generate_latest_pointer", True)
+            and (lvv.enabled if lvv else True)
         )
 
-    def _materialize_latest_pointer(
+    def _materialize_latest_version_view(
         self,
         manifest: Manifest,
         model: ModelNode,
         context: Dict[str, Any],
         relations: List[BaseRelation],
     ) -> List[BaseRelation]:
-        if not relations or not self._should_generate_latest_pointer(model):
+        if not relations or not self._should_create_latest_version_view(model):
             return []
 
         source_relation = relations[0]
-        pointer_identifier = self._latest_pointer_identifier(model)
+        pointer_identifier = self._latest_version_view_identifier(model, manifest, context)
 
         if self._relation_identifier(source_relation) == pointer_identifier:
             return []
@@ -261,7 +274,7 @@ class ModelRunner(CompileRunner):
             fire_event(
                 JinjaLogInfo(
                     msg=(
-                        f"Skipping latest version pointer: a {existing_relation.type} "
+                        f"Skipping latest version view: a {existing_relation.type} "
                         f"already exists at {pointer_relation}. Drop it first to enable "
                         f"automatic pointer view creation."
                     ),
@@ -274,7 +287,7 @@ class ModelRunner(CompileRunner):
         macro_name = "get_replace_sql" if existing_relation is not None else "get_create_sql"
         pointer_macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
         if pointer_macro is None:
-            raise DbtInternalError(f'Missing macro "{macro_name}" for latest version pointer')
+            raise DbtInternalError(f'Missing macro "{macro_name}" for latest version view')
 
         macro_generator = MacroGenerator(
             pointer_macro,
@@ -289,7 +302,7 @@ class ModelRunner(CompileRunner):
         self.adapter.execute(rendered_sql, auto_begin=False, fetch=False)
         fire_event(
             JinjaLogInfo(
-                msg=f"Created latest version pointer view {pointer_relation} for {source_relation}",
+                msg=f"Created latest version view {pointer_relation} for {source_relation}",
                 node_info=model.node_info,
             )
         )
@@ -389,7 +402,9 @@ class ModelRunner(CompileRunner):
                 materialization_macro, context, stack=context["context_macro_stack"]
             )()
             relations = self._materialization_relations(result, model)
-            relations.extend(self._materialize_latest_pointer(manifest, model, context, relations))
+            relations.extend(
+                self._materialize_latest_version_view(manifest, model, context, relations)
+            )
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
@@ -925,10 +940,12 @@ class MicrobatchModelRunner(ModelRunner):
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
 
-        if result.status == RunStatus.Success and self._should_generate_latest_pointer(model):
+        if result.status == RunStatus.Success and self._should_create_latest_version_view(model):
             context = generate_runtime_model_context(model, self.config, manifest)
             relations = [self.adapter.Relation.create_from(self.config, model)]
-            for relation in self._materialize_latest_pointer(manifest, model, context, relations):
+            for relation in self._materialize_latest_version_view(
+                manifest, model, context, relations
+            ):
                 self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return result

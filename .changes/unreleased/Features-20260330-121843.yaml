@@ -1,5 +1,5 @@
 kind: Features
-body: create an unsuffixed latest-version pointer relation for versioned models
+body: create an unsuffixed latest-version view for versioned models, configurable via `latest_version_view` with `enabled` and `alias` options
 time: 2026-03-30T12:18:43+05:30
 custom:
     Author: aahel

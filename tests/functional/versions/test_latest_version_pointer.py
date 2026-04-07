@@ -32,7 +32,8 @@ models:
   - name: disabled_pointer_model
     config:
       materialized: table
-      generate_latest_pointer: false
+      latest_version_view:
+        enabled: false
     latest_version: 2
     versions:
       - v: 1
@@ -44,6 +45,19 @@ models:
   - name: view_versioned_model
     config:
       materialized: view
+    latest_version: 2
+    versions:
+      - v: 1
+      - v: 2
+"""
+
+custom_alias_schema_yml = """
+models:
+  - name: aliased_model
+    config:
+      materialized: table
+      latest_version_view:
+        alias: my_custom_latest
     latest_version: 2
     versions:
       - v: 1
@@ -168,3 +182,54 @@ class TestLatestVersionPointerViewMaterialization:
             },
         )
         check_relations_equal(project.adapter, ["view_versioned_model", "view_versioned_model_v2"])
+
+
+class TestLatestVersionViewCustomAlias:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "aliased_model_v1.sql": versioned_model_v1_sql,
+            "aliased_model_v2.sql": versioned_model_v2_sql,
+            "schema.yml": custom_alias_schema_yml,
+        }
+
+    def test_custom_alias_creates_correct_view(self, project):
+        run_dbt(["run"])
+
+        check_relation_types(
+            project.adapter,
+            {
+                "my_custom_latest": "view",
+                "aliased_model_v2": "table",
+            },
+        )
+        check_relations_equal(project.adapter, ["my_custom_latest", "aliased_model_v2"])
+
+
+class TestLatestVersionViewProjectDisabled:
+    """Project-level latest_version_view config cascades to models."""
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"+latest_version_view": {"enabled": False}}}
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "versioned_model_v1.sql": versioned_model_v1_sql,
+            "versioned_model_v2.sql": versioned_model_v2_sql,
+            "schema.yml": schema_yml,
+        }
+
+    def test_project_level_disables_view(self, project):
+        run_dbt(["run"])
+
+        pointer_relation = relation_from_name(project.adapter, "versioned_model")
+        with get_connection(project.adapter):
+            relation = project.adapter.get_relation(
+                pointer_relation.database,
+                pointer_relation.schema,
+                pointer_relation.identifier,
+            )
+
+        assert relation is None
