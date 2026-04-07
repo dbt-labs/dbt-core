@@ -1003,7 +1003,7 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         """Seeds are never empty"""
         return False
 
-    def _disallow_implicit_dependencies(self):
+    def _disallow_implicit_dependencies(self) -> None:
         """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
         # Seeds are root nodes in the DAG. They cannot depend on other nodes.
         # However, it's possible to define pre- and post-hooks on seeds, and for those
