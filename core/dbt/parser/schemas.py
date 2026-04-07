@@ -904,9 +904,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
         if patch.yaml_key == "functions":
-            node = self.manifest.functions.get(unique_id)
+            node = self.manifest.functions.get(unique_id)  # type: ignore[arg-type]
         else:
-            node = self.manifest.nodes.get(unique_id)
+            node = self.manifest.nodes.get(unique_id)  # type: ignore[arg-type]
 
         if node:
             # patches can't be overwritten
