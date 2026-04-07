@@ -1162,7 +1162,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
             versioned_name += f"_v{self.version}"
         return versioned_name
 
-    def build_unit_test_checksum(self):
+    def build_unit_test_checksum(self) -> None:
         # everything except 'description'
         data = f"{self.model}-{self.versions}-{self.given}-{self.expect}-{self.overrides}"
 
