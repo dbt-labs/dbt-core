@@ -36,18 +36,16 @@ class SnapshotParser(SQLParser[SnapshotNode]):
         return fqn
 
     def parse_node(self, block: FileBlock) -> SnapshotNode:
-        compiled_path: str = self.get_compiled_path(block)
-        # Use the file's relative_path for FQN computation (not the compiled_path)
-        # to maintain backward compatibility. The compiled_path is based on the
-        # snapshot name for uniqueness (multiple snapshots can share one file),
-        # but the FQN should still reflect the file structure.
+        # Use the file's relative_path for node.path and FQN, preserving subdirectory
+        # information (e.g. "mart/snappy.sql" not just "snappy.sql"). The compiled
+        # output path is derived independently via get_target_write_path on SnapshotNode.
         fqn = self.get_fqn(block.path.relative_path, block.name)
 
         config: ContextConfig = self.initial_config(fqn)
 
         node = self._create_parsetime_node(
             block=block,
-            path=compiled_path,
+            path=block.path.relative_path,
             config=config,
             fqn=fqn,
         )

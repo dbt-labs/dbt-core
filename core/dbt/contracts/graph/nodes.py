@@ -1197,7 +1197,10 @@ class SnapshotNode(SnapshotResource, CompiledNode):
         # can share a single file, and the basename heuristic in the base class
         # fails when one snapshot's name matches the source filename — producing
         # both a file and a directory at the same path (EISDIR).
-        path = os.path.join(self.original_file_path, self.path)
+        # Use self.name + ".sql" rather than self.path: node.path reflects the
+        # file's subdirectory structure (e.g. "mart/snappy.sql"), not the
+        # compiled output filename.
+        path = os.path.join(self.original_file_path, self.name + ".sql")
 
         if split_suffix:
             pathlib_path = Path(path)
