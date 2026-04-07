@@ -10,6 +10,7 @@ use reqwest_retry::{
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -24,6 +25,21 @@ pub struct HubPackageDownloads {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+pub struct FusionHubPackageDownloads {
+    pub tarball: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct HubPackageFusionCompatibility {
+    pub require_dbt_version_defined: Option<bool>,
+    pub require_dbt_version_compatible: Option<bool>,
+    pub parse_compatible: Option<bool>,
+    pub manually_verified_compatible: Option<bool>,
+    pub manually_verified_incompatible: Option<bool>,
+    pub fusion_compatible_download: Option<FusionHubPackageDownloads>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct HubPackageVersion {
     pub name: String,
     pub packages: Vec<DbtPackageEntry>,
@@ -32,6 +48,7 @@ pub struct HubPackageVersion {
     pub fusion_schema_compat: Option<bool>,
     #[serde(default)]
     pub require_dbt_version: Option<StringOrArrayOfStrings>,
+    pub fusion_compatibility: Option<HubPackageFusionCompatibility>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -100,8 +117,9 @@ impl HubClient {
                     let index: Vec<String> = res.json().await.map_err(|e| {
                         fs_err!(
                             ErrorCode::RuntimeError,
-                            "Failed to parse index from {url}; status: {}",
-                            e
+                            "Failed to parse index from {url}; {}",
+                            e.source()
+                                .map_or_else(|| "unknown".to_string(), |source| source.to_string())
                         )
                     })?;
                     Ok(index.into_iter().collect())
@@ -132,8 +150,9 @@ impl HubClient {
             let hub_package: HubPackageJson = res.json().await.map_err(|e| {
                 fs_err!(
                     ErrorCode::RuntimeError,
-                    "Failed to parse package from {url}; status: {}",
-                    e.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+                    "Failed to get package from {url}; {}",
+                    e.source()
+                        .map_or_else(|| "unknown".to_string(), |source| source.to_string())
                 )
             })?;
             // insert_async returns a bool (inserted/not), discard it.
@@ -369,6 +388,7 @@ mod tests {
                 },
                 fusion_schema_compat: None,
                 require_dbt_version: None,
+                fusion_compatibility: None,
             },
         );
 
@@ -395,6 +415,7 @@ mod tests {
                 },
                 fusion_schema_compat: None,
                 require_dbt_version: None,
+                fusion_compatibility: None,
             },
         );
 
@@ -421,6 +442,7 @@ mod tests {
                 },
                 fusion_schema_compat: None,
                 require_dbt_version: None,
+                fusion_compatibility: None,
             },
         );
 
@@ -447,6 +469,7 @@ mod tests {
                 },
                 fusion_schema_compat: None,
                 require_dbt_version: None,
+                fusion_compatibility: None,
             },
         );
 
@@ -728,6 +751,7 @@ mod tests {
             },
             fusion_schema_compat: None,
             require_dbt_version: Some(StringOrArrayOfStrings::String(">=1.5.0".to_string())),
+            fusion_compatibility: None,
         };
 
         let (io_args, reporter) = create_test_io_args_with_reporter();
@@ -754,6 +778,7 @@ mod tests {
             },
             fusion_schema_compat: None,
             require_dbt_version: Some(StringOrArrayOfStrings::String(">=100.0.0".to_string())),
+            fusion_compatibility: None,
         };
 
         let (io_args, reporter) = create_test_io_args_with_reporter();
@@ -792,6 +817,7 @@ mod tests {
                 ">=1.0.0".to_string(),
                 "<100.0.0".to_string(),
             ])),
+            fusion_compatibility: None,
         };
 
         let (io_args, reporter) = create_test_io_args_with_reporter();
@@ -821,6 +847,7 @@ mod tests {
                 ">=100.0.0".to_string(),
                 "<200.0.0".to_string(),
             ])),
+            fusion_compatibility: None,
         };
 
         let (io_args, reporter) = create_test_io_args_with_reporter();
@@ -856,6 +883,7 @@ mod tests {
             },
             fusion_schema_compat: None,
             require_dbt_version: None, // No version requirement
+            fusion_compatibility: None,
         };
 
         let (io_args, reporter) = create_test_io_args_with_reporter();
@@ -868,6 +896,125 @@ mod tests {
             reporter.warning_count(),
             0,
             "Expected no warnings when no version requirement exists"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_version_with_fusion_compatibility() {
+        let json = r#"
+        {
+            "id": "get-select/dbt_snowflake_query_tags/2.6.0",
+            "name": "dbt_snowflake_query_tags",
+            "version": "2.6.0",
+            "published_at": "1970-01-01T00:00:00.000000+00:00",
+            "packages": [],
+            "require_dbt_version": "<3.0.0",
+            "works_with": [],
+            "_source": {
+                "type": "github",
+                "url": "https://github.com/get-select/dbt-snowflake-query-tags/tree/2.6.0/",
+                "readme": "https://raw.githubusercontent.com/get-select/dbt-snowflake-query-tags/2.6.0/README.md"
+            },
+            "downloads": {
+                "tarball": "https://codeload.github.com/get-select/dbt-snowflake-query-tags/tar.gz/2.6.0",
+                "format": "tgz",
+                "sha1": "a37691d43a990655b703f7d847badce2a7ab87d1"
+            },
+            "fusion_compatibility": {
+                "version": "2.6.0",
+                "require_dbt_version_defined": true,
+                "require_dbt_version_compatible": true,
+                "parse_compatible": true,
+                "parse_compatibility_result": {
+                    "parse_exit_code": 0,
+                    "total_errors": 0,
+                    "total_warnings": 0,
+                    "errors": [],
+                    "warnings": [],
+                    "fusion_version": "2.0.0-preview.101"
+                },
+                "manually_verified_compatible": true,
+                "manually_verified_incompatible": false,
+                "download_failed": false,
+                "fusion_compatible_download": {}
+            }
+        }
+        "#;
+
+        let package_version: HubPackageVersion = serde_json::from_str(json).unwrap();
+        assert_eq!(package_version.name, "dbt_snowflake_query_tags");
+        let fusion_compatibility: HubPackageFusionCompatibility =
+            package_version.fusion_compatibility.unwrap();
+        assert_eq!(
+            fusion_compatibility.require_dbt_version_compatible,
+            Some(true)
+        );
+        assert_eq!(fusion_compatibility.require_dbt_version_defined, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_version_with_fusion_compatible_download() {
+        let json = r#"
+        {
+            "id": "get-select/dbt_snowflake_query_tags/2.6.0",
+            "name": "dbt_snowflake_query_tags",
+            "version": "2.6.0",
+            "published_at": "1970-01-01T00:00:00.000000+00:00",
+            "packages": [],
+            "require_dbt_version": "<3.0.0",
+            "works_with": [],
+            "_source": {
+                "type": "github",
+                "url": "https://github.com/get-select/dbt-snowflake-query-tags/tree/2.6.0/",
+                "readme": "https://raw.githubusercontent.com/get-select/dbt-snowflake-query-tags/2.6.0/README.md"
+            },
+            "downloads": {
+                "tarball": "https://codeload.github.com/get-select/dbt-snowflake-query-tags/tar.gz/2.6.0",
+                "format": "tgz",
+                "sha1": "a37691d43a990655b703f7d847badce2a7ab87d1"
+            },
+            "fusion_compatibility": {
+                "version": "2.6.0",
+                "require_dbt_version_defined": true,
+                "require_dbt_version_compatible": true,
+                "parse_compatible": true,
+                "parse_compatibility_result": {
+                    "parse_exit_code": 0,
+                    "total_errors": 0,
+                    "total_warnings": 0,
+                    "errors": [],
+                    "warnings": [],
+                    "fusion_version": "2.0.0-preview.101"
+                },
+                "manually_verified_compatible": true,
+                "manually_verified_incompatible": false,
+                "download_failed": false,
+                "fusion_compatible_download": {
+                    "tarball": "https://codeload.github.com/get-select/dbt-snowflake-query-tags/tar.gz/2.6.0",
+                    "format": "tgz",
+                    "sha1": "a37691d43a990655b703f7d847badce2a7ab87d1"
+                }
+            }
+        }
+        "#;
+
+        let package_version: HubPackageVersion = serde_json::from_str(json).unwrap();
+        assert_eq!(package_version.name, "dbt_snowflake_query_tags");
+        let fusion_compatibility: HubPackageFusionCompatibility =
+            package_version.fusion_compatibility.unwrap();
+        assert_eq!(
+            fusion_compatibility.require_dbt_version_compatible,
+            Some(true)
+        );
+        assert_eq!(fusion_compatibility.require_dbt_version_defined, Some(true));
+        let fusion_compatible_download: FusionHubPackageDownloads =
+            fusion_compatibility.fusion_compatible_download.unwrap();
+        assert_eq!(
+            fusion_compatible_download.tarball,
+            Some(
+                "https://codeload.github.com/get-select/dbt-snowflake-query-tags/tar.gz/2.6.0"
+                    .to_string()
+            )
         );
     }
 }
