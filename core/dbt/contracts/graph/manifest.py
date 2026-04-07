@@ -1198,7 +1198,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
-    def build_group_map(self):
+    def build_group_map(self) -> None:
         groupable_nodes = list(
             chain(
                 self.nodes.values(),
@@ -1207,7 +1207,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.metrics.values(),
             )
         )
-        group_map = {group.name: [] for group in self.groups.values()}
+        group_map: Dict[str, List[str]] = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
             if node.group is not None:
                 # group updates are not included with state:modified and
