@@ -1345,7 +1345,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._doc_lookup = DocLookup(self)
         return self._doc_lookup
 
-    def rebuild_doc_lookup(self):
+    def rebuild_doc_lookup(self) -> None:
         self._doc_lookup = DocLookup(self)
 
     @property
@@ -1354,7 +1354,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._source_lookup = SourceLookup(self)
         return self._source_lookup
 
-    def rebuild_source_lookup(self):
+    def rebuild_source_lookup(self) -> None:
         self._source_lookup = SourceLookup(self)
 
     @property
@@ -1383,7 +1383,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._semantic_model_by_measure_lookup = SemanticModelByMeasureLookup(self)
         return self._semantic_model_by_measure_lookup
 
-    def rebuild_ref_lookup(self):
+    def rebuild_ref_lookup(self) -> None:
         self._ref_lookup = RefableLookup(self)
 
     @property
@@ -1392,7 +1392,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._disabled_lookup = DisabledLookup(self)
         return self._disabled_lookup
 
-    def rebuild_disabled_lookup(self):
+    def rebuild_disabled_lookup(self) -> None:
         self._disabled_lookup = DisabledLookup(self)
 
     @property
