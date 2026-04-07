@@ -288,17 +288,19 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
             full_path = os.path.join(project_root, compiled_path)
         write_file(full_path, compiled_code)
 
-    def _serialize(self):
+    def _serialize(self) -> Dict[str, Any]:
         return self.to_dict()
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
         return dct
 
     @classmethod
-    def _deserialize(cls, dct: Dict[str, int]):
+    def _deserialize(cls, dct: Dict[str, Any]) -> "ParsedNode":
         # The serialized ParsedNodes do not differ from each other
         # in fields that would allow 'from_dict' to distinguis
         # between them.
