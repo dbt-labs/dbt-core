@@ -537,11 +537,13 @@ class SingularTestLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]) -> Optional[UniqueID]:
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
     def find(
-        self, search_name, package: Optional[PackageName], manifest: "Manifest"
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
     ) -> Optional[SingularTestNode]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
@@ -774,11 +776,11 @@ T = TypeVar("T", bound=GraphMemberNode)
 # and the MacroManifest
 class MacroMethods:
     # Just to make mypy happy. There must be a better way.
-    def __init__(self):
-        self.macros = []
-        self.metadata = {}
-        self._macros_by_name = {}
-        self._macros_by_package = {}
+    def __init__(self) -> None:
+        self.macros: MutableMapping[str, Macro] = {}
+        self.metadata: ManifestMetadata
+        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
 
     def find_macro_candidate_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
@@ -1006,7 +1008,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
-    def __pre_serialize__(self, context: Optional[Dict] = None):
+    def __pre_serialize__(self, context: Optional[Dict[str, Any]] = None) -> "Manifest":
         # serialization won't work with anything except an empty source_patches because
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}
