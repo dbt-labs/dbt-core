@@ -86,9 +86,15 @@ pub static EMPTY_CONFIG: LazyLock<QueryCommentConfig> = LazyLock::new(|| QueryCo
     job_label: false,
 });
 
-/// Returns true if a resolved cloud config is available.
+/// Returns true if a resolved cloud config indicates a dbt Cloud job.
+///
+/// Checks for full credentials first (local dbt Cloud CLI with dbt_cloud.yml),
+/// then falls back to environment_id, which orchestration always sets via
+/// DBT_CLOUD_ENVIRONMENT_ID even when token/host are not available.
 fn has_cloud_config(cloud_config: Option<&ResolvedCloudConfig>) -> bool {
-    cloud_config.and_then(|c| c.credentials.as_ref()).is_some()
+    cloud_config
+        .map(|c| c.credentials.is_some() || c.environment_id.is_some())
+        .unwrap_or(false)
 }
 
 impl QueryCommentConfig {
@@ -546,6 +552,78 @@ mod tests {
         // No cloud config should not trigger the cloud template
         let config =
             QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true, None);
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: DEFAULT_QUERY_COMMENT.to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+    }
+
+    #[test]
+    fn test_cloud_query_comment_with_environment_id_only() {
+        // Orchestration sets DBT_CLOUD_ENVIRONMENT_ID but not token/host, so
+        // credentials is always None in production cloud jobs. environment_id
+        // is the reliable signal that we're running as a cloud job.
+        let cloud_config = ResolvedCloudConfig {
+            environment_id: Some("411414".to_string()),
+            ..Default::default()
+        };
+        for adapter_type in [
+            AdapterType::Redshift,
+            AdapterType::Snowflake,
+            AdapterType::Bigquery,
+        ] {
+            let config = QueryCommentConfig::from_query_comment(
+                None,
+                adapter_type,
+                true,
+                Some(&cloud_config),
+            );
+            assert_eq!(
+                config.comment, DEFAULT_QUERY_COMMENT_WITH_CLOUD,
+                "{adapter_type:?} should use cloud template when environment_id is set",
+            );
+        }
+    }
+
+    #[test]
+    fn test_cloud_query_comment_redshift_with_cloud_config() {
+        use dbt_schemas::schemas::CloudCredentials;
+        // Redshift is the primary adapter for cloud query ID resolution via SYS_QUERY_HISTORY.
+        // Verify it selects the cloud template when credentials are present.
+        let cloud_config = ResolvedCloudConfig {
+            credentials: Some(CloudCredentials {
+                account_id: "123".to_string(),
+                host: "cloud.getdbt.com".to_string(),
+                token: "tok".to_string(),
+            }),
+            ..Default::default()
+        };
+        let config = QueryCommentConfig::from_query_comment(
+            None,
+            AdapterType::Redshift,
+            true,
+            Some(&cloud_config),
+        );
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+    }
+
+    #[test]
+    fn test_cloud_query_comment_redshift_without_cloud_config_uses_default() {
+        // Without cloud config, Redshift must use DEFAULT_QUERY_COMMENT (no cloud fields).
+        // This is the pre-fix behaviour that caused zero rows in SYS_QUERY_HISTORY.
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Redshift, true, None);
         assert_configs_equal(
             &config,
             &QueryCommentConfig {
