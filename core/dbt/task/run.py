@@ -17,6 +17,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    cast,
 )
 
 from dbt import tracking, utils
@@ -982,7 +983,11 @@ class RunTask(CompileTask):
                         msg=f"{batch_runner.describe_batch()} is being run sequentially"
                     )
                 )
-                batch_results.append(self.call_runner(batch_runner))
+                # MicrobatchBatchRunner always returns RunResult; cast required
+                # because call_runner() returns NodeResult after being broadened
+                # to accommodate FreshnessRunner. Resolved when NodeT TypeVar is
+                # added to BaseRunner so call_runner can return runner.RunnerResultT.
+                batch_results.append(cast(RunResult, self.call_runner(batch_runner)))
                 relation_exists = batch_runner.relation_exists
         else:
             batch_results.append(
