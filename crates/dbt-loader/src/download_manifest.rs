@@ -171,6 +171,11 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             "".to_string()
         };
 
+        let defer_env_hint = if config.defer_env_id.is_none() {
+            " To target a specific environment, set `defer-env-id` in your dbt_project.yml under the `dbt-cloud` block.".to_string()
+        } else {
+            String::new()
+        };
         emit_warn_log_message(
             if status.as_u16() == 429 {
                 ErrorCode::RateLimited
@@ -178,8 +183,8 @@ pub async fn hydrate_or_download_manifest_from_cloud(
                 ErrorCode::HttpError
             },
             format!(
-                "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
-                project_id, status, error_message
+                "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. {}{}{}",
+                project_id, status, error_message, defer_env_hint
             ),
             io.status_reporter.as_ref(),
         );
