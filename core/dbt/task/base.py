@@ -168,6 +168,7 @@ class ConfiguredTask(BaseTask):
 
 
 RunnerResultT = TypeVar("RunnerResultT", bound=NodeResult)
+NodeT = TypeVar("NodeT", bound=ResultNode)
 
 
 class ExecutionContext:
@@ -180,19 +181,19 @@ class ExecutionContext:
         self.node: ResultNode = node
 
 
-class BaseRunner(Generic[RunnerResultT], metaclass=ABCMeta):
+class BaseRunner(Generic[NodeT, RunnerResultT], metaclass=ABCMeta):
     def __init__(
         self,
         config: RuntimeConfig,
         adapter: BaseAdapter,
-        node: ResultNode,
+        node: NodeT,
         node_index: int,
         num_nodes: int,
     ) -> None:
         self.config: RuntimeConfig = config
         self.compiler: Compiler = Compiler(config)
         self.adapter: BaseAdapter = adapter
-        self.node: ResultNode = node
+        self.node: NodeT = node
         self.node_index: int = node_index
         self.num_nodes: int = num_nodes
 
@@ -429,11 +430,14 @@ class BaseRunner(Generic[RunnerResultT], metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def execute(self, compiled_node: ResultNode, manifest: Manifest) -> RunnerResultT:
+    def execute(self, compiled_node: NodeT, manifest: Manifest) -> RunnerResultT:
         pass
 
     def run(self, compiled_node: ResultNode, manifest: Manifest) -> RunnerResultT:
-        return self.execute(compiled_node, manifest)
+        # compiled_node comes from ExecutionContext.node (ResultNode), but at
+        # runtime it is always a NodeT; the cast is safe because runners only
+        # receive nodes of the type they were constructed with.
+        return self.execute(compiled_node, manifest)  # type: ignore[arg-type]
 
     @abstractmethod
     def after_execute(self, result: RunnerResultT) -> None:
