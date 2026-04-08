@@ -5,7 +5,7 @@ import time
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.nodes import SeedNode
+from dbt.contracts.graph.nodes import ManifestSQLNode, SeedNode
 from dbt.events.types import ShowNode
 from dbt.flags import get_flags
 from dbt.task.base import ConfiguredTask
@@ -17,7 +17,7 @@ from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 
 
-class ShowRunner(CompileRunner):
+class ShowRunner(CompileRunner[ManifestSQLNode]):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
         self.run_ephemeral_models = True
