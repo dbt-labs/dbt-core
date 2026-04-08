@@ -22,7 +22,7 @@ class ShowRunner(CompileRunner):
         super().__init__(config, adapter, node, node_index, num_nodes)
         self.run_ephemeral_models = True
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         start_time = time.time()
 
         # Allow passing in -1 (or any negative number) to get all rows
