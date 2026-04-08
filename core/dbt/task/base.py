@@ -48,7 +48,7 @@ from dbt.task import group_lookup
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
-from dbt_common.exceptions import DbtInternalError, DbtRuntimeError, NotImplementedError
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 
 def read_profiles(profiles_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -416,17 +416,20 @@ class BaseRunner(metaclass=ABCMeta):
 
         return None
 
+    @abstractmethod
     def before_execute(self) -> None:
-        raise NotImplementedError("before_execute is not implemented")
+        pass
 
-    def execute(self, compiled_node, manifest):
-        raise NotImplementedError("execute is not implemented")
+    @abstractmethod
+    def execute(self, compiled_node: ResultNode, manifest: Manifest):
+        pass
 
-    def run(self, compiled_node, manifest):
+    def run(self, compiled_node: ResultNode, manifest: Manifest):
         return self.execute(compiled_node, manifest)
 
+    @abstractmethod
     def after_execute(self, result) -> None:
-        raise NotImplementedError("after_execute is not implemented")
+        pass
 
     def _skip_caused_by_ephemeral_failure(self) -> bool:
         if self.skip_cause is None or self.skip_cause.node is None:
