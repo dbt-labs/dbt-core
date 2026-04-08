@@ -6,10 +6,11 @@ use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, stdfs};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::schemas::{
     CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
 };
-use dbt_yaml::Spanned;
+use dbt_yaml::{Spanned, Value as YmlValue};
 use minijinja::Environment;
 use minijinja::arg_utils::ArgParser;
 use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID, THREAD_ID};
@@ -445,7 +446,30 @@ pub fn generate_component_name(
         .map(|name| vec![Value::from(name)])
         .unwrap_or_else(|| vec![Value::from(())]); // If no custom name, pass in none so the macro reads from the target context
     if let Some(node) = node {
-        args.push(Value::from_serialize(node.serialize()));
+        let mut serialized = node.serialize();
+        // Strip resource-type prefix from path so node.path inside macros like
+        // generate_schema_name matches dbt-core convention ("staging/model.sql"
+        // not "models/staging/model.sql"). build_flat_graph does the same for
+        // graph.nodes.
+        let prefix = match node.resource_type() {
+            NodeType::Model => "models/",
+            NodeType::Snapshot => "snapshots/",
+            NodeType::Seed => "seeds/",
+            NodeType::Analysis => "analyses/",
+            _ => "",
+        };
+        if !prefix.is_empty() {
+            if let YmlValue::Mapping(ref mut map, _) = serialized {
+                let path_key = YmlValue::string("path".to_string());
+                if let Some(path_value) = map.get(&path_key) {
+                    if let Some(path_str) = path_value.as_str() {
+                        let stripped = path_str.strip_prefix(prefix).unwrap_or(path_str);
+                        map.insert(path_key, YmlValue::string(stripped.to_string()));
+                    }
+                }
+            }
+        }
+        args.push(Value::from_serialize(serialized));
     }
 
     // Call the macro
