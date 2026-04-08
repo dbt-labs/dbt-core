@@ -41,7 +41,7 @@ use dbt_schemas::state::{
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -364,7 +364,7 @@ pub async fn resolve(
     check_for_model_deprecations(&arg.io, &nodes);
 
     // Check access
-    check_access(arg, &nodes, &all_runtime_configs);
+    let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);
 
     // Set the project name on nodes so that `package:this` selectors can resolve
     nodes.project_name = Some(root_project_name.to_string());
@@ -395,6 +395,7 @@ pub async fn resolve(
             render_results: collector,
             run_started_at: dbt_state.run_started_at,
             nodes_with_resolution_errors,
+            nodes_with_access_errors,
             node_resolver: Arc::new(node_resolver),
             get_relation_calls,
             get_columns_in_relation_calls,
@@ -412,14 +413,17 @@ pub async fn resolve(
 }
 
 // Check that models accessing other models (dependecies) can do so.
+// Returns the set of unique_ids that have access violations.
 fn check_access(
     arg: &ResolveArgs,
     nodes: &Nodes,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
-) {
+) -> HashSet<String> {
+    let mut violations = HashSet::new();
+
     // Check access for models
     for (unique_id, node) in nodes.models.iter() {
-        check_node_access(
+        if check_node_access(
             arg,
             unique_id,
             &node.base().depends_on.nodes_with_ref_location,
@@ -430,12 +434,14 @@ fn check_access(
                 // Models can access private models if they're in the same group and same package
                 node.__model_attr__.group != target_node.__model_attr__.group || diffent_packages
             },
-        );
+        ) {
+            violations.insert(unique_id.clone());
+        }
     }
 
     // Check access for exposures
     for (unique_id, node) in nodes.exposures.iter() {
-        check_node_access(
+        if check_node_access(
             arg,
             unique_id,
             &node.base().depends_on.nodes_with_ref_location,
@@ -447,11 +453,16 @@ fn check_access(
                 // unless the private model has no group and they're in the same package
                 target_node.__model_attr__.group.is_some() || diffent_packages
             },
-        );
+        ) {
+            violations.insert(unique_id.clone());
+        }
     }
+
+    violations
 }
 
-/// Helper function to check access for a node referencing other models
+/// Helper function to check access for a node referencing other models.
+/// Returns true if any access violation was found.
 fn check_node_access<F>(
     arg: &ResolveArgs,
     unique_id: &str,
@@ -460,9 +471,11 @@ fn check_node_access<F>(
     nodes: &Nodes,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
     should_deny_private_access: F,
-) where
+) -> bool
+where
     F: Fn(&dbt_schemas::schemas::nodes::DbtModel, bool) -> bool,
 {
+    let mut had_violation = false;
     for (target_unique_id, location) in node_dependencies {
         if let Some(target_node) = nodes.models.get(target_unique_id) {
             let restricted_access = all_runtime_configs
@@ -484,6 +497,7 @@ fn check_node_access<F>(
                     target_node.__model_attr__.group.as_deref().unwrap_or(""),
                 );
                 emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                had_violation = true;
             } else if target_node.__model_attr__.access == Access::Protected && diffent_packages {
                 let err = fs_err!(
                     code => ErrorCode::AccessDenied,
@@ -494,9 +508,11 @@ fn check_node_access<F>(
                     target_node.common().package_name,
                 );
                 emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                had_violation = true;
             }
         }
     }
+    had_violation
 }
 
 /// Inner resolve function that resolves a single package.

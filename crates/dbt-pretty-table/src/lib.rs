@@ -44,6 +44,14 @@ macro_rules! batches_to_json {
     }};
 }
 
+pub fn batches_to_json_rows(batches: &[RecordBatch]) -> Vec<serde_json::Value> {
+    (|| -> Result<Vec<serde_json::Value>, Error> {
+        let json_str = batches_to_json!(arrow::json::writer::JsonArray, batches.to_vec());
+        serde_json::from_str(&json_str).map_err(|_| Error::FromUtf8)
+    })()
+    .unwrap_or_default()
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum DisplayFormat {
     Table,
@@ -523,4 +531,71 @@ pub fn pretty_vec_table(
         show_footer,
         Some(rows.len()),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::{Int32Array, StringArray};
+    use arrow_schema::{DataType, Field, Schema};
+    use std::sync::Arc;
+
+    fn make_batch(names: &[&str], ages: &[i32]) -> RecordBatch {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("name", DataType::Utf8, false),
+            Field::new("age", DataType::Int32, false),
+        ]));
+        RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringArray::from(names.to_vec())),
+                Arc::new(Int32Array::from(ages.to_vec())),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_batches_to_json_rows_empty() {
+        let rows = batches_to_json_rows(&[]);
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_batches_to_json_rows_single_batch() {
+        let batch = make_batch(&["alice", "bob"], &[30, 25]);
+        let rows = batches_to_json_rows(&[batch]);
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["name"], "alice");
+        assert_eq!(rows[0]["age"], 30);
+        assert_eq!(rows[1]["name"], "bob");
+        assert_eq!(rows[1]["age"], 25);
+    }
+
+    #[test]
+    fn test_batches_to_json_rows_multiple_batches() {
+        let batch1 = make_batch(&["alice"], &[30]);
+        let batch2 = make_batch(&["bob"], &[25]);
+        let rows = batches_to_json_rows(&[batch1, batch2]);
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["name"], "alice");
+        assert_eq!(rows[1]["name"], "bob");
+    }
+
+    #[test]
+    fn test_batches_to_json_rows_null_values() {
+        let schema = Arc::new(Schema::new(vec![Field::new("name", DataType::Utf8, true)]));
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![Arc::new(StringArray::from(vec![Some("alice"), None]))],
+        )
+        .unwrap();
+        let rows = batches_to_json_rows(&[batch]);
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["name"], "alice");
+        assert!(rows[1]["name"].is_null());
+    }
 }

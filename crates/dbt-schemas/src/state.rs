@@ -491,6 +491,8 @@ pub struct ResolverState {
     pub defer_nodes: Option<Nodes>,
     /// Nodes that had resolution errors (e.g., unresolved refs/sources)
     pub nodes_with_resolution_errors: HashSet<String>,
+    /// Nodes whose SQL references models they are not permitted to access (group/access violations)
+    pub nodes_with_access_errors: HashSet<String>,
     pub semantic_layer_spec_is_legacy: bool,
     /// Mapping from truncated/hashed generic test names to their original pre-hash full names.
     ///

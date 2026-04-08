@@ -77,7 +77,7 @@ impl LoadArgs {
             install_deps: arg.phase == Phases::Deps,
             debug_profile: arg.phase == Phases::Debug,
             version_check: arg.version_check,
-            inline_sql: None, // Will be set separately when needed
+            inline_sql: None,
             cli_warn_error: None,
             cli_warn_error_options: None,
             enable_persist_compare_package: arg.command == FsCommand::Extension("compare"),
