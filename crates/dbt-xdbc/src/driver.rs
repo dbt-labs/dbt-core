@@ -10,8 +10,8 @@ use crate::install::{self, DriverTriplet};
 use crate::semaphore::Semaphore;
 use crate::{Database, install::build_http_agent};
 use adbc_core::{
-    Driver as _, LOAD_FLAG_ALLOW_RELATIVE_PATHS, LOAD_FLAG_SEARCH_ENV, LOAD_FLAG_SEARCH_SYSTEM,
-    LOAD_FLAG_SEARCH_USER,
+    Driver as _, LOAD_FLAG_ALLOW_RELATIVE_PATHS, LOAD_FLAG_DEFAULT, LOAD_FLAG_SEARCH_ENV,
+    LOAD_FLAG_SEARCH_SYSTEM, LOAD_FLAG_SEARCH_USER,
     error::{Error, Result, Status},
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
@@ -41,6 +41,8 @@ pub enum LoadStrategy {
     System(Option<String>),
     /// Try loading from system paths first; if not found, fall back to CDN cache.
     SystemThenCdnCache,
+    /// Load the driver from the sibling lib/ folder.
+    Bundled,
     /// Load the `flock` driver that proxies all ADBC calls to a service multiplexing
     /// different ADBC drivers.
     ///
@@ -407,7 +409,7 @@ impl AdbcDriver {
                             backend,
                             ADBC_LIBS_DIRECTORY.as_ref().unwrap().display()
                         );
-                        System(None)
+                        Bundled
                     } else {
                         load_strategy
                     }
@@ -434,6 +436,8 @@ impl AdbcDriver {
             }
             // System strategy: load from a provided library name (e.g. "adbc_driver_snowflake").
             (load_strategy @ System(_), _) => load_strategy,
+            // Bundled strategy doesn't change for any backend.
+            (Bundled, _) => Bundled,
             // Remote drivers are used via the "adbc_driver_flock" library
             (
                 load_strategy @ Remote,
@@ -451,14 +455,13 @@ impl AdbcDriver {
                     // Safe to unwrap because it's an ADBC backend
                     None => backend.adbc_library_name().unwrap(),
                 };
-                Self::try_load_driver_from_name(backend, name, adbc_version)
+                Self::try_load_driver_from_name(backend, name, LOAD_FLAG_DEFAULT, adbc_version)
             }
-            Remote => Self::prepare_for_remote_driver(backend, adbc_version),
             SystemThenCdnCache => {
                 // Safe to unwrap because it's an ADBC backend and non-CDN backends were already
                 // redirected to System(_) above.
                 let name = backend.adbc_library_name().unwrap();
-                Self::try_load_driver_from_name(backend, name, adbc_version)
+                Self::try_load_driver_from_name(backend, name, LOAD_FLAG_DEFAULT, adbc_version)
                     .or_else(|e1| {
                         Self::try_load_driver_through_cdn_cache(backend, adbc_version)
                             .map_err(|e2| {
@@ -475,13 +478,22 @@ Second error:\n\
                             })
                     })
             }
+            Remote => Self::prepare_for_remote_driver(backend, adbc_version),
+            Bundled => {
+                let name = backend.adbc_library_name().unwrap();
+                // don't search system paths, only the provided
+                // additional paths (e.g. sibling lib/ directory)
+                let load_flags = 0;
+                Self::try_load_driver_from_name(backend, name, load_flags, adbc_version)
+            }
         }
     }
 
-    /// Load the driver using the [LoadStrategy::System] strategy.
+    /// Load the driver using the [LoadStrategy::System] or [LoadStrategy::Bundled] strategies.
     fn try_load_driver_from_name(
         backend: Backend,
         name: &str,
+        load_flags: u32,
         adbc_version: AdbcVersion,
     ) -> Result<ManagedAdbcDriver> {
         let entrypoint = backend.adbc_driver_entrypoint();
@@ -498,11 +510,6 @@ Second error:\n\
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         additional_search_paths.push(PathBuf::from("/opt/homebrew/lib"));
 
-        // Rely on the OS to find the library in the system path or something like LD_LIBRARY_PATH.
-        let load_flags = LOAD_FLAG_SEARCH_ENV
-            | LOAD_FLAG_SEARCH_USER
-            | LOAD_FLAG_SEARCH_SYSTEM
-            | LOAD_FLAG_ALLOW_RELATIVE_PATHS;
         ManagedAdbcDriver::load_from_name(
             backend,
             name,
