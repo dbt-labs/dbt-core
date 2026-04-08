@@ -83,7 +83,7 @@ fn process_docs_macro_file(
                         path: docs_asset.path.clone(),
                         original_file_path: relative_docs_file_path.clone(),
                         unique_id,
-                        block_contents: part.to_string(),
+                        block_contents: part.trim().to_string(),
                     },
                 );
             }
