@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add config and allow meta and docs to exist under it for macros
-time: 2026-03-02T00:07:39.088118+05:30
-custom:
-    Author: ash2shukla
-    Issue: 12383 9447
