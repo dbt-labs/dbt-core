@@ -35,7 +35,7 @@ from .printer import print_run_result_error
 from .run import RunTask
 
 
-class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
+class FreshnessRunner(BaseRunner[SourceDefinition, FreshnessNodeResult]):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
         self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
@@ -49,7 +49,7 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
         raise DbtRuntimeError("Freshness: nodes cannot be skipped!")
 
     def before_execute(self) -> None:
-        description = f"freshness of {self.node.source_name}.{self.node.name}"  # type: ignore[union-attr]
+        description = f"freshness of {self.node.source_name}.{self.node.name}"
         fire_event(
             LogStartLine(
                 description=description,
@@ -60,12 +60,9 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
         )
 
     def after_execute(self, result: FreshnessNodeResult) -> None:
-        if hasattr(result, "node"):
-            source_name = result.node.source_name  # type: ignore[union-attr]
-            table_name = result.node.name
-        else:
-            source_name = result.source_name  # type: ignore[union-attr]
-            table_name = result.table_name  # type: ignore[union-attr]
+        # self.node is SourceDefinition so source_name is available directly
+        source_name = self.node.source_name
+        table_name = self.node.name
         level = LogFreshnessResult.status_to_level(str(result.status))
         fire_event(
             LogFreshnessResult(
