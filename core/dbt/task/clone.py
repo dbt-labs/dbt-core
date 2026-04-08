@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import REFABLE_NODE_TYPES
 from dbt.task.base import BaseRunner, resource_types_from_args
@@ -16,7 +17,7 @@ from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
-class CloneRunner(BaseRunner[RunResult]):
+class CloneRunner(BaseRunner[ResultNode, RunResult]):
     def before_execute(self) -> None:
         pass
 
