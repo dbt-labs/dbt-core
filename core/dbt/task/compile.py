@@ -19,14 +19,14 @@ from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtInternalError
 
 
-class CompileRunner(BaseRunner):
+class CompileRunner(BaseRunner[RunResult]):
     def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         pass
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         return RunResult(
             node=compiled_node,
             status=RunStatus.Success,
@@ -40,7 +40,10 @@ class CompileRunner(BaseRunner):
         )
 
     def compile(self, manifest: Manifest):
-        return self.compiler.compile_node(self.node, manifest, {})
+        # CompileRunner is only ever used with compileable node types; the broader
+        # ResultNode union includes SeedNode and SourceDefinition which compile_node
+        # does not accept, but they are never passed to this runner in practice.
+        return self.compiler.compile_node(self.node, manifest, {})  # type: ignore[arg-type]
 
     def get_node_representation(self):
         display_quote_policy = {"database": False, "schema": False, "identifier": False}
