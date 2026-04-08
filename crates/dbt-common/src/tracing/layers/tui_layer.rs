@@ -872,6 +872,17 @@ impl TuiLayer {
             }
         }
 
+        // Run/Compare NodeEvaluated spans were upgraded from Debug to Info level so they
+        // appear in dbt.log and structured telemetry (JSONL, Parquet, OTLP). However, in
+        // the TUI they should only render when debug verbosity is explicitly requested,
+        // preserving their previous behavior as Debug-level spans. In interactive mode,
+        // progress bars already provide per-node feedback for these phases.
+        if matches!(phase, ExecutionPhase::Run | ExecutionPhase::Compare)
+            && self.max_log_verbosity < LevelFilter::DEBUG
+        {
+            return;
+        }
+
         // Print line in debug mode using new format (also used by file log & json)
         if span.severity_number <= self.max_log_verbosity {
             let formatted = format_node_evaluated_start(ne, true);
@@ -921,6 +932,17 @@ impl TuiLayer {
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
                 progress.finish_bar_context(&ProgressId::Phase(phase), &formatted_item, status);
             }
+        }
+
+        // Run/Compare NodeEvaluated spans were upgraded from Debug to Info level so they
+        // appear in dbt.log and structured telemetry (JSONL, Parquet, OTLP). However, in
+        // the TUI they should only render when debug verbosity is explicitly requested,
+        // preserving their previous behavior as Debug-level spans. In interactive mode,
+        // progress bars already provide per-node feedback for these phases.
+        if matches!(phase, ExecutionPhase::Run | ExecutionPhase::Compare)
+            && self.max_log_verbosity < LevelFilter::DEBUG
+        {
+            return;
         }
 
         // Do not emit anything for skipped node phases even in debug
