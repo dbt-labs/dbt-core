@@ -258,6 +258,7 @@ class ParsedResource(ParsedResourceMandatory):
     unrendered_config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
+    vars: Dict[str, Any] = field(default_factory=dict)
     doc_blocks: List[str] = field(default_factory=list)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):

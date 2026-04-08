@@ -579,6 +579,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     @mock.patch("dbt.parser.sources.get_adapter")
     def test_parse_source_custom_freshness_at_source(self, _):
         block = self.file_block_for(SOURCE_CUSTOM_FRESHNESS_AT_SOURCE, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -590,6 +591,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         block = self.file_block_for(
             SOURCE_CUSTOM_FRESHNESS_AT_SOURCE_FIELD_AT_TABLE, "test_one.yml"
         )
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -602,6 +604,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         block = self.file_block_for(
             SOURCE_FIELD_AT_SOURCE_CUSTOM_FRESHNESS_AT_TABLE, "test_one.yml"
         )
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -611,6 +614,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     @mock.patch("dbt.parser.sources.get_adapter")
     def test_parse_source_field_at_custom_freshness_both_at_table_fails(self, _):
         block = self.file_block_for(SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_TABLE, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -620,6 +624,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     @mock.patch("dbt.parser.sources.get_adapter")
     def test_parse_source_resulting_node_freshness_matches_config_freshness(self, _):
         block = self.file_block_for(SOURCE_FRESHNESS_AT_TABLE_AND_CONFIG, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -635,6 +640,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         block = self.file_block_for(
             SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_SOURCE, "test_one.yml"
         )
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
@@ -657,6 +663,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     @mock.patch("dbt.parser.sources.get_adapter")
     def test__parse_basic_source_meta(self, mock_get_adapter):
         block = self.file_block_for(MULTIPLE_TABLE_SOURCE_META, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, sources=2)
