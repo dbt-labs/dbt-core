@@ -1,6 +1,0 @@
-kind: Fixes
-body: Ensure MAX_GROUPING_TOKENS and MAX_GROUPING_DEPTH default to None independently
-time: 2026-03-23T15:07:11.497539-04:00
-custom:
-    Author: michelleark
-    Issue: "12694"

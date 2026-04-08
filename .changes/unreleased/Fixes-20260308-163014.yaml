@@ -1,6 +1,0 @@
-kind: Fixes
-body: Raise PropertyMovedToConfigDeprecation instead of MissingArgumentsPropertyInGenericTestDeprecation
-time: 2026-03-08T16:30:14.0620755Z
-custom:
-    Author: kalluripradeep
-    Issue: "12572"
