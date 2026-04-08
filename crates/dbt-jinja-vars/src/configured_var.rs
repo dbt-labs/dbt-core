@@ -234,4 +234,58 @@ mod tests {
         let rendered = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(rendered, "False");
     }
+
+    /// Build an environment where the project vars are parsed directly from a
+    /// YAML snippet — the same path taken when loading `dbt_project.yml`. This
+    /// is important for the null-var tests: constructing `DbtVars` by hand would
+    /// bypass the deserialization bug being tested.
+    fn make_env_with_yaml_vars(vars_yaml: &str) -> minijinja::Environment<'static> {
+        let parsed: IndexMap<String, DbtVars> = dbt_yaml::from_str(vars_yaml).unwrap();
+
+        let mut vars: BTreeMap<String, IndexMap<String, DbtVars>> = BTreeMap::new();
+        vars.insert("my_new_project".to_string(), parsed);
+
+        let mut env = minijinja::Environment::new();
+        env.add_global("None", MinijinjaValue::from(()));
+        env.add_global("True", MinijinjaValue::from(true));
+        env.add_global("False", MinijinjaValue::from(false));
+        env.add_global(TARGET_PACKAGE_NAME, MinijinjaValue::from("my_new_project"));
+        env.add_global(
+            "var",
+            MinijinjaValue::from_object(ConfiguredVar::new(vars, BTreeMap::new())),
+        );
+        env
+    }
+
+    /// A var defined as a bare YAML null (`key:`) must be visible to Jinja as
+    /// `none`, so that `var('x') is none` evaluates to true.
+    /// Regression test for the bug where YAML null was misdeserialized as
+    /// `DbtVars::Vars({})` and rendered as `{}` in Jinja.
+    #[test]
+    fn yaml_null_var_is_jinja_none() {
+        let env = make_env_with_yaml_vars("inc_ref_date_override:\n");
+        let template = env
+            .template_from_str(
+                "{% if var('inc_ref_date_override') is none %}NONE{% else %}NOT NONE{% endif %}",
+            )
+            .unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "NONE");
+    }
+
+    /// The `== None` equality check (Python-style, capital N) must also work,
+    /// because that is what `delete_by_period.sql` actually uses.
+    #[test]
+    fn yaml_null_var_equals_none_global() {
+        let env = make_env_with_yaml_vars("inc_ref_date_override:\n");
+        let template = env
+            .template_from_str(
+                "{% if var('inc_ref_date_override') == None %}NONE{% else %}NOT NONE{% endif %}",
+            )
+            .unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "NONE");
+    }
 }
