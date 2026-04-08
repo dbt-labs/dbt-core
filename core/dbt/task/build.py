@@ -214,7 +214,7 @@ class BuildTask(RunTask):
         ):
             return MicrobatchModelRunner
 
-        return self.RUNNER_MAP.get(node.resource_type)
+        return self.RUNNER_MAP.get(node.resource_type)  # type: ignore[return-value]
 
     # Special build compile_manifest method to pass add_test_edges to the compiler
     def compile_manifest(self) -> None:
