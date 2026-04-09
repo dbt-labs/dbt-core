@@ -19,6 +19,7 @@ dbt-jinja-vars = { workspace = true }
 dbt-yaml = { workspace = true }
 dirs = { workspace = true }
 minijinja = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

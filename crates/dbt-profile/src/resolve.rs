@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use minijinja::Environment;
 use minijinja::listener::RenderingEventListener;
+use regex::Regex;
 use serde::Serialize;
 
 use crate::error::{ProfileError, Result};
@@ -324,21 +326,26 @@ fn render_value_recursive<S: Serialize>(
 
     match value {
         dbt_yaml::Value::String(s, span) => {
-            if s.contains("{{") || s.contains("{%") {
-                let rendered = env
-                    .render_str(s, ctx, listeners)
-                    .map_err(ProfileError::Jinja)?;
-                match dbt_yaml::from_str::<dbt_yaml::Value>(&rendered) {
+            let has_jinja = s.contains("{{") || s.contains("{%");
+            let rendered = if has_jinja {
+                env.render_str(s, ctx, listeners)
+                    .map_err(ProfileError::Jinja)?
+            } else {
+                s.clone()
+            };
+            let resolved = render_secrets(&rendered)?;
+            if !has_jinja && resolved == rendered {
+                Ok(value.clone())
+            } else {
+                match dbt_yaml::from_str::<dbt_yaml::Value>(&resolved) {
                     Ok(parsed) => match &parsed {
                         dbt_yaml::Value::String(_, _) => {
-                            Ok(dbt_yaml::Value::String(rendered, span.clone()))
+                            Ok(dbt_yaml::Value::String(resolved, span.clone()))
                         }
                         _ => Ok(parsed),
                     },
-                    Err(_) => Ok(dbt_yaml::Value::String(rendered, span.clone())),
+                    Err(_) => Ok(dbt_yaml::Value::String(resolved, span.clone())),
                 }
-            } else {
-                Ok(value.clone())
             }
         }
         dbt_yaml::Value::Mapping(map, span) => {
@@ -362,6 +369,41 @@ fn render_value_recursive<S: Serialize>(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Resolve `DBT_ENV_SECRET_*` sentinel placeholders inserted by the Jinja
+/// `env_var` function (when `placeholder_on_secret_access = true`) to their
+/// real environment variable values.
+///
+/// Mirrors `dbt_jinja_utils::phases::load::secret_renderer::render_secrets`
+/// but is duplicated here to keep `dbt-profile` free of `dbt-jinja-utils`.
+fn render_secrets(s: &str) -> Result<String> {
+    use dbt_jinja_vars::{SECRET_ENV_VAR_PREFIX, SECRET_PLACEHOLDER};
+
+    if !s.contains(SECRET_ENV_VAR_PREFIX) {
+        return Ok(s.to_owned());
+    }
+
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let pattern = SECRET_PLACEHOLDER
+        .replace("{}", &format!("({SECRET_ENV_VAR_PREFIX}(.*))"))
+        .replace("$", r"\$");
+    let re = RE.get_or_init(|| Regex::new(&pattern).expect("valid secret placeholder regex"));
+
+    let mut result = s.to_owned();
+    for caps in re.captures_iter(s) {
+        let var_name = &caps[1];
+        let full_match = &caps[0];
+        match std::env::var(var_name) {
+            Ok(value) => result = result.replace(full_match, &value),
+            Err(_) => {
+                return Err(ProfileError::Other(format!(
+                    "Secret environment variable '{var_name}' not found"
+                )));
+            }
+        }
+    }
+    Ok(result)
+}
 
 // FIXME(jason): Duplicated from dbt_jinja_utils::serde::dbt_sanitize_yml because
 // IoArgs poisons that module's public API.

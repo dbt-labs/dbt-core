@@ -487,3 +487,95 @@ proj:
 
     unsafe { std::env::remove_var("DBT_PROFILE_TEST_TARGET") };
 }
+
+// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/XXXX
+// DBT_ENV_SECRET_* variables must be resolved in profiles.yml, not blocked.
+#[test]
+fn test_resolve_secret_env_var() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    unsafe {
+        std::env::set_var("DBT_ENV_SECRET_PROFILE_TEST_PASS", "super_secret");
+        std::env::set_var("DBT_ENV_SECRET_PROFILE_TEST_TOKEN", "secret_token");
+    }
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: my_account
+      user: my_user
+      password: "{{ env_var('DBT_ENV_SECRET_PROFILE_TEST_PASS') }}"
+      private_key_passphrase: "{{ env_var('DBT_ENV_SECRET_PROFILE_TEST_TOKEN') }}"
+      warehouse: WH
+      database: DB
+      schema: SCH
+      role: ADMIN
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(result.adapter_type, "snowflake");
+    // Secret values must be resolved to their real values
+    assert_eq!(result.get_str("password"), Some("super_secret"));
+    assert_eq!(
+        result.get_str("private_key_passphrase"),
+        Some("secret_token")
+    );
+
+    unsafe {
+        std::env::remove_var("DBT_ENV_SECRET_PROFILE_TEST_PASS");
+        std::env::remove_var("DBT_ENV_SECRET_PROFILE_TEST_TOKEN");
+    }
+}
+
+#[test]
+fn test_resolve_secret_env_var_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: my_account
+      user: my_user
+      password: "{{ env_var('DBT_ENV_SECRET_MISSING_VAR') }}"
+      warehouse: WH
+      database: DB
+      schema: SCH
+      role: ADMIN
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args);
+    assert!(result.is_err());
+    let err = format!("{}", result.unwrap_err());
+    assert!(
+        err.contains("DBT_ENV_SECRET_MISSING_VAR"),
+        "Error should mention the missing variable: {err}"
+    );
+}

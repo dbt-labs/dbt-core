@@ -30,7 +30,10 @@ impl ProfileContext {
     pub fn new(vars: BTreeMap<String, dbt_yaml::Value>) -> Self {
         Self {
             env_var: Value::from_func_func("env_var", |state, args| {
-                dbt_jinja_vars::env_var(false, None, None, state, args)
+                // Use placeholder_on_secret_access=true so that DBT_ENV_SECRET_*
+                // variables are substituted with a sentinel placeholder during
+                // Jinja rendering; render_secrets() resolves them afterwards.
+                dbt_jinja_vars::env_var(true, None, None, state, args)
             }),
             var: Value::from_object(Var::new(vars)),
             context: Value::from_serialize(BTreeMap::<String, Value>::new()),
