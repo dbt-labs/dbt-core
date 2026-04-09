@@ -20,6 +20,7 @@ from typing import (
     get_args,
 )
 
+# TODO: Collapse into just using the >3.11 case once we drop support for python 3.10
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
