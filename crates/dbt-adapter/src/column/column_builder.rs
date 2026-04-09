@@ -26,8 +26,9 @@ impl ColumnBuilder {
             Bigquery => Ok(Self::build_bigquery(field, type_ops)),
             Databricks | Spark => Ok(Self::build_databricks(field, type_ops)),
             Redshift => Ok(Self::build_redshift(field, type_ops)),
-            Postgres | Salesforce | Sidecar => Ok(Self::build_postgres_like(field, type_ops)),
-            DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
+            Postgres | Salesforce | Sidecar | DuckDB => {
+                Ok(Self::build_postgres_like(field, type_ops))
+            }
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => todo!("ClickHouse"),
             Starburst => todo!("Starburst"),

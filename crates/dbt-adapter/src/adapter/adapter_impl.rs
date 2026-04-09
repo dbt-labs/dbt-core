@@ -1362,7 +1362,7 @@ impl AdapterImpl {
         };
 
         match self.adapter_type() {
-            adapter_type @ (Postgres | Redshift | Sidecar | Fabric) => {
+            adapter_type @ (Postgres | Redshift | Sidecar | Fabric | DuckDB) => {
                 let result = macro_execution_result?;
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
@@ -1465,10 +1465,6 @@ impl AdapterImpl {
             }
             Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
-            }
-            adapter_type @ DuckDB => {
-                let result = macro_execution_result?;
-                Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
         }
     }
@@ -2028,7 +2024,7 @@ impl AdapterImpl {
         let record_batch = grants_table.original_record_batch();
 
         match self.adapter_type() {
-            Postgres | Bigquery | Redshift | Sidecar => {
+            Postgres | Bigquery | Redshift | Sidecar | DuckDB => {
                 let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
                 let privilege_cols =
                     get_column_values::<StringArray>(&record_batch, "privilege_type")?;
@@ -2092,22 +2088,6 @@ impl AdapterImpl {
             Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
             | Oracle => {
                 unimplemented!("grants not implemented")
-            }
-            DuckDB => {
-                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
-                let privilege_cols =
-                    get_column_values::<StringArray>(&record_batch, "privilege_type")?;
-
-                let mut result = BTreeMap::new();
-                for i in 0..record_batch.num_rows() {
-                    let privilege = privilege_cols.value(i);
-                    let grantee = grantee_cols.value(i);
-
-                    let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
-                    list.push(grantee.to_string());
-                }
-
-                Ok(result)
             }
         }
     }
@@ -2582,7 +2562,7 @@ impl AdapterImpl {
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
-            Impl(adapter_type @ (Postgres | Sidecar), engine) => {
+            Impl(adapter_type @ (Postgres | Sidecar | DuckDB), engine) => {
                 if let Some(configured_database) = engine.get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -2625,23 +2605,6 @@ impl AdapterImpl {
                 }
 
                 Ok(Value::from(()))
-            }
-            Impl(adapter_type @ DuckDB, engine) => {
-                if let Some(configured_database) = engine.get_configured_database_name() {
-                    if database == configured_database {
-                        Ok(Value::from(()))
-                    } else {
-                        Err(AdapterError::new(
-                            AdapterErrorKind::UnexpectedDbReference,
-                            format!(
-                                "Cross-db references not allowed in the {} adapter ({} vs {})",
-                                adapter_type, database, configured_database
-                            ),
-                        ))
-                    }
-                } else {
-                    Ok(Value::from(()))
-                }
             }
             Impl(
                 adapter_type @ (Snowflake | Bigquery | Databricks | Salesforce | Spark | Fabric
