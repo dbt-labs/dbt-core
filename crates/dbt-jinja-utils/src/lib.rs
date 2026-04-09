@@ -14,6 +14,7 @@ pub mod utils;
 mod functions;
 pub use functions::Var;
 pub use functions::env_var;
+pub use functions::register_base_functions;
 pub use functions::silence_base_context;
 
 /// Module for the Jinja Environment

@@ -6,6 +6,7 @@ use dbt_common::{ErrorCode, FsResult, err, fs_err};
 
 use dbt_yaml::{Span, Spanned};
 
+use dbt_jinja_utils::register_base_functions;
 use dbt_profile::{
     ProfileEnvironment, ProfileError, ResolvedProfile, find_profiles_path, resolve_with_env,
 };
@@ -63,8 +64,10 @@ pub fn load_profiles(
 
     let profile_name = profile.clone().into_inner();
 
-    // Resolve the profile using dbt-profile's Jinja environment
-    let penv = ProfileEnvironment::new(arg.vars.clone());
+    // Resolve the profile using dbt-profile's Jinja environment, plus the same base
+    // functions as full dbt Jinja (`tojson`, `fromjson`, etc.) so profiles.yml matches dbt-core.
+    let mut penv = ProfileEnvironment::new(arg.vars.clone());
+    register_base_functions(&mut penv.env, arg.io.clone());
     let resolved: ResolvedProfile =
         resolve_with_env(&penv, &profile_path, &profile_name, arg.target.as_deref()).map_err(
             |e| match e {
@@ -132,5 +135,23 @@ fn get_profile_with_span(
         (None, Some(prof)) | (Some(_), Some(prof)) => Ok(Spanned::new(prof.to_string())
             .map_span(|_| Span::default().with_filename(PathBuf::from("<cmdline>")))),
         (Some(_), None) => Ok(proj_profile.map(|x| x.unwrap())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dbt_common::io_args::IoArgs;
+    use dbt_jinja_utils::register_base_functions;
+    use dbt_profile::ProfileEnvironment;
+
+    #[test]
+    fn loader_registers_tojson_function_on_profile_env() {
+        let mut penv = ProfileEnvironment::new(Default::default());
+        register_base_functions(&mut penv.env, IoArgs::default());
+        let out = penv
+            .env
+            .render_str("{{ tojson({'a': 1}) }}", &penv.ctx, &[])
+            .expect("tojson should be registered for loader profile resolution");
+        assert!(out.contains("\"a\""), "unexpected tojson output: {out}");
     }
 }
