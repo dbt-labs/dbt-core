@@ -5,3 +5,4 @@ custom:
     author: chasewalden
     issue: ""
     project: dbt-fusion
+    semver: patch

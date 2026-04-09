@@ -9,6 +9,14 @@ versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: "### {{.Kind}}"
 
 custom:
+  - key: semver
+    label: Semantic version impact for this PR
+    type: enum
+    required: true
+    enumOptions:
+      - patch
+      - minor
+      - major
   - key: issue
     label: dbt-fusion issue number (leave empty if not applicable)
     type: string

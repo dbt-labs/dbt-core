@@ -5,3 +5,4 @@ custom:
     author: felipecrv
     issue: ""
     project: dbt-fusion
+    semver: minor
