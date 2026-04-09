@@ -1,5 +1,6 @@
 import hashlib
 import os
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -12,13 +13,17 @@ from typing import (
     Literal,
     NoReturn,
     Optional,
-    Self,
     Sequence,
     Tuple,
     Type,
     Union,
     get_args,
 )
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 from mashumaro.types import SerializableType
 
