@@ -225,6 +225,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     // Selector functions
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool;
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool;
+    fn has_same_body(&self, other: &dyn InternalDbtNode) -> bool {
+        self.common().checksum == other.common().checksum
+    }
+
     fn set_detected_introspection(&mut self, introspection: IntrospectionKind);
     fn introspection(&self) -> IntrospectionKind {
         IntrospectionKind::None

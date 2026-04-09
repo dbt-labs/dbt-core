@@ -214,7 +214,7 @@ impl PreviousState {
         }
 
         match modification_type {
-            Some(ModificationType::Body) => self.check_modified_content(node),
+            Some(ModificationType::Body) => self.check_body_modified(node),
             Some(ModificationType::Configs) => self.check_configs_modified(node),
             Some(ModificationType::Relation) => self.check_relation_modified(node),
             Some(ModificationType::PersistedDescriptions) => {
@@ -624,5 +624,25 @@ impl PreviousState {
         } else {
             false
         }
+    }
+
+    fn check_body_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest (unique_id first, then test signature fallback).
+        let Some(previous_node) = self.previous_node_for(current_node) else {
+            // If previous node doesn't exist, consider it modified.
+            return true;
+        };
+
+        let same_body = current_node.has_same_body(previous_node);
+
+        if !same_body {
+            log_state_mod_diff(
+                &current_node.common().unique_id,
+                "body",
+                [("body", false, None)],
+            );
+        }
+
+        !same_body
     }
 }
