@@ -452,10 +452,10 @@ pub fn generate_component_name(
         // not "models/staging/model.sql"). build_flat_graph does the same for
         // graph.nodes.
         let prefix = match node.resource_type() {
-            NodeType::Model => "models/",
-            NodeType::Snapshot => "snapshots/",
-            NodeType::Seed => "seeds/",
-            NodeType::Analysis => "analyses/",
+            NodeType::Model => "models",
+            NodeType::Snapshot => "snapshots",
+            NodeType::Seed => "seeds",
+            NodeType::Analysis => "analyses",
             _ => "",
         };
         if !prefix.is_empty() {
@@ -463,8 +463,11 @@ pub fn generate_component_name(
                 let path_key = YmlValue::string("path".to_string());
                 if let Some(path_value) = map.get(&path_key) {
                     if let Some(path_str) = path_value.as_str() {
-                        let stripped = path_str.strip_prefix(prefix).unwrap_or(path_str);
-                        map.insert(path_key, YmlValue::string(stripped.to_string()));
+                        let stripped = Path::new(path_str)
+                            .strip_prefix(prefix)
+                            .map(|p| p.to_string_lossy().into_owned())
+                            .unwrap_or_else(|_| path_str.to_string());
+                        map.insert(path_key, YmlValue::string(stripped));
                     }
                 }
             }
