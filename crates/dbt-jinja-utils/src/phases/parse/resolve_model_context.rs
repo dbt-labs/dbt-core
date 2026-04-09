@@ -802,12 +802,19 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match name {
-            // At compile time, this will return the value of the config variable if it exists
-            // Here, we return a stub value.
+            // At compile time, this will return the value of the config variable if it exists.
+            // During parse, config isn't populated yet.  If the caller supplied a default
+            // value we return it so that downstream code that requires a concrete type
+            // (e.g. adapter.get_relation(identifier=...)) receives a usable value.
+            // Without a default we fall back to the ParseConfigValue stub.
             "get" => {
                 let mut args = ArgParser::new(args, None);
                 let _: String = args.get("name")?;
-                Ok(MinijinjaValue::from_object(ParseConfigValue))
+                if let Some(default) = args.get_optional::<MinijinjaValue>("default") {
+                    Ok(default)
+                } else {
+                    Ok(MinijinjaValue::from_object(ParseConfigValue))
+                }
             }
             // At compile time, this just returns an empty string
             "set" => {
@@ -929,5 +936,76 @@ mod test {
         assert_contains!(result, "test_db");
         assert_contains!(result, "test_schema");
         assert_contains!(result, "my_table");
+    }
+
+    /// Creates a ParseConfig for use in unit tests.
+    fn make_test_parse_config() -> ParseConfig<ModelConfig> {
+        ParseConfig {
+            sql_resources: Arc::new(Mutex::new(Vec::new())),
+            enabled: true,
+            io_args: Arc::new(IoArgs::default()),
+            package_dependency: None,
+            error_path: None,
+        }
+    }
+
+    /// Regression test: config.get('key', 'default') should return the default
+    /// value during parse phase, not a ParseConfigValue stub.
+    /// Without this, passing the result to adapter.get_relation(identifier=...)
+    /// fails with "incompatible type ParseConfigValue; value is not a string".
+    #[test]
+    fn test_config_get_with_default_returns_default() {
+        let mut env = minijinja::Environment::new();
+
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        // config.get('alias', 'my_fallback') should render as "my_fallback"
+        let template = env
+            .template_from_str("{{ config.get('alias', 'my_fallback') }}")
+            .unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+
+        assert_eq!(result, "my_fallback");
+    }
+
+    /// Regression test: the rendered default from config.get must be usable as
+    /// a string argument (i.e. pass Value::as_str()).  This simulates what
+    /// adapter.get_relation(identifier=config.get('alias', 'tbl')) does.
+    #[test]
+    fn test_config_get_default_is_string_typed() {
+        let mut env = minijinja::Environment::new();
+
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        // Evaluate config.get with a default and inspect the Value directly
+        let expr = env
+            .compile_expression("config.get('alias', 'tbl')")
+            .unwrap();
+        let value = expr.eval(minijinja::context!(), &[]).unwrap();
+
+        assert!(
+            value.as_str().is_some(),
+            "config.get with a default must return a string-typed Value, got: {:?}",
+            value
+        );
+        assert_eq!(value.as_str().unwrap(), "tbl");
+    }
+
+    /// Verify that config.get('key') without a default still returns a
+    /// ParseConfigValue stub (preserving backward compatibility).
+    #[test]
+    fn test_config_get_without_default_returns_stub() {
+        let mut env = minijinja::Environment::new();
+
+        let config = make_test_parse_config();
+        env.add_global("config", MinijinjaValue::from_object(config));
+
+        // Without a default, should render as empty string (ParseConfigValue::render)
+        let template = env.template_from_str("{{ config.get('alias') }}").unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+
+        assert_eq!(result, "");
     }
 }
