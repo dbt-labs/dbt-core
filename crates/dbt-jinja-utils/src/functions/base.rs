@@ -1422,6 +1422,20 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         Value::from("saved_queries"),
         Value::from_serialize(saved_queries_insert),
     );
+    let functions_insert: BTreeMap<String, Value> = nodes
+        .functions
+        .iter()
+        .map(|(unique_id, function)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize((Arc::as_ref(function) as &dyn InternalDbtNode).serialize()),
+            )
+        })
+        .collect();
+    graph.insert(
+        Value::from("functions"),
+        Value::from_serialize(functions_insert),
+    );
     MutableMap::from(graph)
 }
 
