@@ -9,6 +9,7 @@ mod config;
 
 // Database-specific auth implementations
 mod bigquery;
+mod clickhouse;
 mod databricks;
 mod duckdb;
 #[cfg(test)]
@@ -60,7 +61,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::Spark => Box::new(spark::SparkAuth {}),
         Backend::DuckDB => Box::new(duckdb::DuckDbAuth {}),
         Backend::SQLServer => Box::new(sqlserver::SQLServerAuth {}),
-        Backend::ClickHouse => unimplemented!("ClickHouse authentication"),
+        Backend::ClickHouse => Box::new(clickhouse::ClickHouseAuth {}),
         Backend::Generic { .. } => unimplemented!("generic backend authentication"),
     }
 }

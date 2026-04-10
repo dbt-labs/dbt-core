@@ -1202,10 +1202,13 @@ impl SqlType {
             }
             (SQLServer, DateTime) => arrow_timestamp(Some(6), None),
             // }}}
+
+            // ClickHouse {{{
             (ClickHouse, Numeric(None) | BigNumeric(None)) => {
                 // https://clickhouse.com/docs/sql-reference/data-types/decimal#parameters
                 DataType::Decimal128(10, 0)
             }
+            // }}}
 
             // PostgreSQL {{{
             (Postgres | Salesforce | Generic { .. }, Numeric(None) | BigNumeric(None)) => {

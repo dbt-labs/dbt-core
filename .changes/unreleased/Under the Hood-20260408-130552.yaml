@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Add ClickHouse authentication support to dbt-auth
+time: 2026-04-08T13:05:52.896851+02:00
+custom:
+    author: koletzilla
+    issue: ""
+    project: dbt-fusion
