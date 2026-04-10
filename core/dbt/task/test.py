@@ -91,12 +91,12 @@ class UnitTestResultData(dbtClassMixin):
     diff: Optional[UnitTestDiff] = None
 
 
-class TestRunner(CompileRunner):
+class TestRunner(CompileRunner):  # type: ignore[type-arg]
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     def describe_node_name(self) -> str:
-        if self.node.resource_type == NodeType.Unit:
-            name = f"{self.node.model}::{self.node.versioned_name}"  # type: ignore[attr-defined]
+        if isinstance(self.node, UnitTestDefinition):
+            name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
@@ -280,7 +280,7 @@ class TestRunner(CompileRunner):
 
         return unit_test_node, unit_test_result_data
 
-    def execute(self, test: Union[TestNode, UnitTestNode], manifest: Manifest) -> RunResult:  # type: ignore[override]
+    def execute(self, test: Union[TestNode, UnitTestDefinition], manifest: Manifest) -> RunResult:
         if isinstance(test, UnitTestDefinition):
             unit_test_node, unit_test_result = self.execute_unit_test(test, manifest)
             return self.build_unit_test_run_result(unit_test_node, unit_test_result)

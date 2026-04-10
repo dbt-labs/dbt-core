@@ -3,12 +3,13 @@ import threading
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.types import LogNodeNoOpResult
 from dbt.task.base import BaseRunner
 from dbt_common.events.functions import fire_event
 
 
-class NoOpRunner(BaseRunner[RunResult]):
+class NoOpRunner(BaseRunner[ResultNode, RunResult]):
     @property
     def description(self) -> str:
         raise NotImplementedError("description not implemented")

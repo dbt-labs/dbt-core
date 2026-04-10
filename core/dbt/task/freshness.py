@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from typing import AbstractSet, Dict, List, Optional, Type
+from typing import AbstractSet, Any, Dict, List, Optional, Type
 
 from dbt import deprecations
 from dbt.adapters.base import BaseAdapter
@@ -35,13 +35,13 @@ from .printer import print_run_result_error
 from .run import RunTask
 
 
-class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
+class FreshnessRunner(BaseRunner[SourceDefinition, FreshnessNodeResult]):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
-        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
+        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse] = {}
 
     def set_metadata_freshness_cache(
-        self, metadata_freshness_cache: Dict[BaseRelation, FreshnessResult]
+        self, metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse]
     ) -> None:
         self._metadata_freshness_cache = metadata_freshness_cache
 
@@ -49,7 +49,7 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
         raise DbtRuntimeError("Freshness: nodes cannot be skipped!")
 
     def before_execute(self) -> None:
-        description = f"freshness of {self.node.source_name}.{self.node.name}"  # type: ignore[union-attr]
+        description = f"freshness of {self.node.source_name}.{self.node.name}"
         fire_event(
             LogStartLine(
                 description=description,
@@ -60,12 +60,9 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
         )
 
     def after_execute(self, result: FreshnessNodeResult) -> None:
-        if hasattr(result, "node"):
-            source_name = result.node.source_name  # type: ignore[union-attr]
-            table_name = result.node.name
-        else:
-            source_name = result.source_name  # type: ignore[union-attr]
-            table_name = result.table_name  # type: ignore[union-attr]
+        # self.node is SourceDefinition so source_name is available directly
+        source_name = self.node.source_name
+        table_name = self.node.name
         level = LogFreshnessResult.status_to_level(str(result.status))
         fire_event(
             LogFreshnessResult(
@@ -155,22 +152,23 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
 
                 metadata_source = self.adapter.Relation.create_from(self.config, compiled_node)
                 if metadata_source in self._metadata_freshness_cache:
-                    freshness = self._metadata_freshness_cache[metadata_source]  # type: ignore[assignment]
+                    freshness = self._metadata_freshness_cache[metadata_source]
                 else:
                     adapter_response, freshness = self.adapter.calculate_freshness_from_metadata(
                         relation,
                         macro_resolver=manifest,
                     )
 
-                status = compiled_node.freshness.status(freshness["age"])  # type: ignore[index]
+                status = compiled_node.freshness.status(freshness["age"])
             else:
                 raise DbtRuntimeError(
                     f"Could not compute freshness for source {compiled_node.name}: no 'loaded_at_field' provided and {self.adapter.type()} adapter does not support metadata-based freshness checks."
                 )
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
-        if adapter_response:
-            adapter_response = adapter_response.to_dict(omit_none=True)  # type: ignore[assignment]
+        adapter_response_dict: Dict[str, Any] = (
+            adapter_response.to_dict(omit_none=True) if adapter_response else {}
+        )
 
         return SourceFreshnessResult(
             node=compiled_node,
@@ -179,9 +177,9 @@ class FreshnessRunner(BaseRunner[FreshnessNodeResult]):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response=adapter_response or {},  # type: ignore[arg-type]
+            adapter_response=adapter_response_dict,
             failures=None,
-            **freshness,  # type: ignore[arg-type]
+            **freshness,
         )
 
     def compile(self, manifest: Manifest):
@@ -210,7 +208,7 @@ class FreshnessTask(RunTask):
                 "custom-output-path-in-source-freshness-deprecation", path=str(self.args.output)
             )
 
-        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
+        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse] = {}
 
     def result_path(self) -> str:
         if self.args.output:
@@ -324,5 +322,5 @@ class FreshnessTask(RunTask):
             )
             return RunStatus.Error
 
-    def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
+    def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResponse]:
         return self._metadata_freshness_cache

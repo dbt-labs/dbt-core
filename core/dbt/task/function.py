@@ -17,14 +17,7 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtValidationError
 
 
-class FunctionRunner(CompileRunner):
-
-    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
-        super().__init__(config, adapter, node, node_index, num_nodes)
-
-        # doing this gives us type hints for the node :D
-        assert isinstance(node, FunctionNode)
-        self.node = node
+class FunctionRunner(CompileRunner[FunctionNode]):
 
     def describe_node(self) -> str:
         return f"function {self.get_node_representation()}"
@@ -87,7 +80,7 @@ class FunctionRunner(CompileRunner):
             batch_results=None,
         )
 
-    def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:  # type: ignore[override]
+    def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
         context = generate_runtime_function_context(compiled_node, self.config, manifest)
