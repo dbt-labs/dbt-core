@@ -8,10 +8,23 @@ use crate::schemas::{
     nodes::is_invalid_for_relation_comparison, nodes::same_persisted_description,
 };
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
+use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err};
 use dbt_telemetry::NodeType;
 use std::fmt;
 use std::path::{Path, PathBuf};
+
+/// Controls how a manifest load failure is handled in [`PreviousState::try_new_with_target_path`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnManifestLoadFailure {
+    /// Propagate as a hard error. Use when `--state` is explicitly provided by the user.
+    Error,
+    /// Emit a warning and continue with no manifest nodes. Use when state is auto-loaded
+    /// and the selector requires `state:modified` / `state:new`.
+    Warn,
+    /// Silently ignore and continue with no manifest nodes. Use when state is auto-loaded
+    /// and the selector does not require the manifest.
+    Ignore,
+}
 
 #[derive(Debug, Clone)]
 pub struct PreviousState {
@@ -120,7 +133,12 @@ impl PreviousState {
     }
 
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
-        Self::try_new_with_target_path(state_path, root_project_quoting, None, true)
+        Self::try_new_with_target_path(
+            state_path,
+            root_project_quoting,
+            None,
+            OnManifestLoadFailure::Warn,
+        )
     }
 
     /// Creates a new `PreviousState` from the given state path.
@@ -129,14 +147,15 @@ impl PreviousState {
     /// * `state_path` - The path to the state directory containing manifest.json and other artifacts
     /// * `root_project_quoting` - The quoting configuration for the root project
     /// * `target_path` - Optional target path for the output directory
-    /// * `warn_on_manifest_load_failure` - If true, emits a warning when manifest.json fails to load.
-    ///   This should be set to true when the selector includes `state:modified` or `state:new`,
-    ///   and false for other selectors like `source_status:fresher+` that don't require the manifest.
+    /// * `on_failure` - How to handle a manifest load failure:
+    ///   - `Error`: propagate as a hard error (use when `--state` is explicitly provided)
+    ///   - `Warn`: emit a warning and continue (use when state is auto-loaded and selector requires manifest)
+    ///   - `Ignore`: silently continue (use when state is auto-loaded and selector doesn't require manifest)
     pub fn try_new_with_target_path(
         state_path: &Path,
         root_project_quoting: ResolvedQuoting,
         target_path: Option<PathBuf>,
-        warn_on_manifest_load_failure: bool,
+        on_failure: OnManifestLoadFailure,
     ) -> FsResult<Self> {
         // Try to load manifest.json, but make it optional
         let manifest_path = state_path.join(DBT_MANIFEST_JSON);
@@ -157,16 +176,39 @@ impl PreviousState {
                 Some(nodes_from_dbt_manifest(manifest, quoting))
             }
             Err(e) => {
-                if warn_on_manifest_load_failure {
-                    emit_warn_log_message(
+                // If the file physically exists but failed to load or parse, that is always
+                // a hard error regardless of the caller's policy — a corrupt manifest must
+                // never be silently skipped (issue #1319).
+                // Only apply the caller's on_failure policy when the file is simply absent.
+                if manifest_path.exists() {
+                    return Err(fs_err!(
                         ErrorCode::ManifestLoadFailed,
-                        format!(
+                        "Failed to load manifest.json from state path '{}': {}",
+                        state_path.display(),
+                        e
+                    ));
+                }
+                match on_failure {
+                    OnManifestLoadFailure::Error => {
+                        return Err(fs_err!(
+                            ErrorCode::ManifestLoadFailed,
                             "Failed to load manifest.json from state path '{}': {}",
                             state_path.display(),
                             e
-                        ),
-                        None,
-                    );
+                        ));
+                    }
+                    OnManifestLoadFailure::Warn => {
+                        emit_warn_log_message(
+                            ErrorCode::ManifestLoadFailed,
+                            format!(
+                                "Failed to load manifest.json from state path '{}': {}",
+                                state_path.display(),
+                                e
+                            ),
+                            None,
+                        );
+                    }
+                    OnManifestLoadFailure::Ignore => {}
                 }
                 None
             }
