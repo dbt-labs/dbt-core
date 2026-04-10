@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use dbt_common::FsResult;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
@@ -85,6 +86,8 @@ pub struct ContextRunResult {
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
+    /// Reason why static analysis was disabled for this node.
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
 impl From<ContextRunResult> for RunResultOutput {
@@ -113,6 +116,7 @@ impl From<ContextRunResult> for RunResultOutput {
             compiled_code: None, // TODO: Handle compiled_code i think its a deprecated field
             relation_name,
             batch_results: result.batch_results,
+            static_analysis_off_reason: result.static_analysis_off_reason,
         }
     }
 }
@@ -147,6 +151,8 @@ pub struct RunResultOutput {
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
+    /// Reason why static analysis was disabled for this node.
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
 /// Arguments passed to the dbt command.
