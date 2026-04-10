@@ -130,6 +130,9 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                             break;
                         }
                         prefix = token_in_the_past.value.clone() + &prefix;
+                        if i == 0 {
+                            break;
+                        }
                         i -= 1;
                     } else {
                         break;
@@ -393,5 +396,36 @@ mod tests {
             AbstractToken::Timestamp { value } => assert_eq!(value, "2023-01-01T12:34:56"),
             _ => panic!("Expected Timestamp"),
         }
+    }
+
+    #[test]
+    fn test_abstract_tokenize_servicenow_40char_hex_identifier() {
+        // Regression test: a model name containing a 40-char hex ServiceNow sys_id
+        // (e.g. srvnow_u_cmdb_qb_result_d3bda2a94c2c358b33baadf23f7d36b956043856_deleted)
+        // must not be mistaken for a dbt-truncated test name with a 32-char MD5 suffix.
+        // The tokenizer auto-flushes at 32 hex chars, splitting the 40-char sys_id into
+        // d3bda2a94c2c358b33baadf23f7d36b9 + 56043856. abstract_tokenize must not treat
+        // the first 32 chars as a hash, which previously caused a usize underflow panic.
+        let input = "srvnow_u_cmdb_qb_result_d3bda2a94c2c358b33baadf23f7d36b956043856_deleted";
+        let abstract_tokens = abstract_tokenize(tokenize(input));
+
+        // Every token must be a plain Token — no Hash variants.
+        for token in &abstract_tokens {
+            assert!(
+                matches!(token, AbstractToken::Token(_)),
+                "Expected only plain Token variants, got a Hash or Timestamp: {:?}",
+                token,
+            );
+        }
+
+        // Reconstructing the values must reproduce the original input exactly.
+        let reconstructed: String = abstract_tokens
+            .iter()
+            .map(|t| match t {
+                AbstractToken::Token(tok) => tok.value.as_str(),
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(reconstructed, input);
     }
 }

@@ -272,12 +272,12 @@ fn insert_unrendered_tags(
 
 fn insert_unrendered_persist_docs(
     unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
-    unrendered_project_cfg: &ModelConfig,
+    pd: Option<&dbt_schemas::schemas::common::PersistDocsConfig>,
 ) {
     use dbt_yaml::Value as YmlValue;
 
     // Persist docs: store the configured/unrendered mapping if present.
-    if let Some(pd) = unrendered_project_cfg.persist_docs.as_ref() {
+    if let Some(pd) = pd {
         let mut pd_map = dbt_yaml::Mapping::new();
         if let Some(relation) = pd.relation {
             pd_map.insert(
@@ -394,7 +394,15 @@ fn set_model_unrendered_relation_config(
     insert_unrendered_grants(&mut unrendered, unrendered_project_cfg);
     insert_unrendered_hooks(&mut unrendered, unrendered_project_cfg);
     insert_unrendered_tags(&mut unrendered, unrendered_project_cfg);
-    insert_unrendered_persist_docs(&mut unrendered, unrendered_project_cfg);
+    // Follow the same hierarchy as database/schema/alias: root sub-section first,
+    // then local project config, then root global. This ensures dep-package models
+    // inherit the root project's global +persist_docs even when a package sub-section
+    // exists (e.g., `elementary: +database: ...`), matching Mantle's behavior.
+    let effective_persist_docs = unrendered_root_cfg
+        .and_then(|cfg| cfg.persist_docs.as_ref())
+        .or(unrendered_project_cfg.persist_docs.as_ref())
+        .or_else(|| raw_root_project_models_cfg.and_then(|root| root.persist_docs.as_ref()));
+    insert_unrendered_persist_docs(&mut unrendered, effective_persist_docs);
 
     dbt_model.__base_attr__.unrendered_config = unrendered;
 }

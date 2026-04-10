@@ -7,11 +7,16 @@ use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::DbtTest,
     nodes::is_invalid_for_relation_comparison, nodes::same_persisted_description,
 };
+use dbt_common::string_utils::test_name_from_uid;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err};
 use dbt_telemetry::NodeType;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+#[cfg(test)]
+pub static TEST_SIG_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Controls how a manifest load failure is handled in [`PreviousState::try_new_with_target_path`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +38,16 @@ pub struct PreviousState {
     pub source_freshness_results: Option<FreshnessResultsArtifact>,
     pub state_path: PathBuf,
     pub target_path: Option<PathBuf>,
+    /// Pre-built index: test signature → unique_id of the matching previous test.
+    /// `None` value means the signature is ambiguous (two or more tests share it).
+    test_sig_index: std::collections::HashMap<TestSignature, Option<String>>,
+    /// Index of state-manifest test names (3rd unique_id component) → unique_id.
+    /// Used to match Mantle-produced manifests where unique_ids use the full untruncated
+    /// test name, against Fusion's truncated names after translating via the truncation map.
+    test_full_name_index: std::collections::HashMap<String, String>,
+    /// Lazily populated map of truncated_test_name → state unique_id.
+    /// Set once via `set_test_name_truncations` after the current project is parsed.
+    truncated_name_to_state_uid: std::sync::OnceLock<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +79,8 @@ impl fmt::Display for PreviousState {
 
 impl PreviousState {
     fn test_signature(test: &DbtTest) -> Option<TestSignature> {
+        #[cfg(test)]
+        TEST_SIG_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let attached_node = test.__test_attr__.attached_node.clone()?;
         let metadata = test.__test_attr__.test_metadata.as_ref()?;
 
@@ -90,27 +107,110 @@ impl PreviousState {
         })
     }
 
+    fn build_test_sig_index(
+        nodes: &Nodes,
+    ) -> std::collections::HashMap<TestSignature, Option<String>> {
+        let mut index = std::collections::HashMap::new();
+        for (uid, test) in &nodes.tests {
+            if let Some(sig) = Self::test_signature(test.as_ref()) {
+                index
+                    .entry(sig)
+                    .and_modify(|v| *v = None) // second occurrence → ambiguous
+                    .or_insert_with(|| Some(uid.clone()));
+            }
+        }
+        index
+    }
+
+    fn build_test_full_name_index(nodes: &Nodes) -> std::collections::HashMap<String, String> {
+        let mut index = std::collections::HashMap::new();
+        for uid in nodes.tests.keys() {
+            if let Some(name_part) = test_name_from_uid(uid) {
+                index.insert(name_part.to_string(), uid.clone());
+            }
+        }
+        index
+    }
+
+    /// Seed the truncated-name → state-uid lookup from the current project's
+    /// `test_name_truncations` map (built during parsing).  Should be called once
+    /// after parsing, before scheduling.
+    pub fn set_test_name_truncations(
+        &self,
+        truncations: &std::collections::HashMap<String, String>,
+    ) {
+        let mut index = std::collections::HashMap::new();
+        for (truncated, full_name) in truncations {
+            if let Some(uid) = self.test_full_name_index.get(full_name.as_str()) {
+                index.insert(truncated.clone(), uid.clone());
+            }
+        }
+        // OnceLock::set silently no-ops if already set.
+        let _ = self.truncated_name_to_state_uid.set(index);
+    }
+
     fn find_previous_test_by_signature<'a>(
         &'a self,
         current: &DbtTest,
         nodes: &'a Nodes,
     ) -> Option<&'a dyn InternalDbtNode> {
         let sig = Self::test_signature(current)?;
+        // Look up in the pre-built index; a `None` value means ambiguous.
+        let uid = self.test_sig_index.get(&sig)?.as_deref()?;
+        nodes
+            .tests
+            .get(uid)
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+    }
 
-        let mut found: Option<&'a dyn InternalDbtNode> = None;
-        for prev in nodes.tests.values() {
-            if let Some(prev_sig) = Self::test_signature(prev.as_ref()) {
-                if prev_sig == sig {
-                    if found.is_some() {
-                        // Ambiguous match; avoid incorrect "exists" classification.
-                        return None;
-                    }
-                    found = Some(prev.as_ref() as &dyn InternalDbtNode);
-                }
-            }
+    fn find_previous_test_by_truncation_map<'a>(
+        &'a self,
+        current: &dyn InternalDbtNode,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let truncation_index = self.truncated_name_to_state_uid.get()?;
+        let truncated_name = test_name_from_uid(current.common().unique_id.as_str())?;
+        let state_uid = truncation_index.get(truncated_name)?;
+        nodes
+            .tests
+            .get(state_uid.as_str())
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+    }
+
+    /// Returns true if `node` is a test that exists in the state manifest but was matched
+    /// only via the truncation map (Mantle full name ↔ Fusion truncated name).
+    /// Such tests are semantically unmodified — the name difference is an artifact.
+    fn is_test_matched_only_via_truncation_map(&self, node: &dyn InternalDbtNode) -> bool {
+        if node.resource_type() != NodeType::Test {
+            return false;
         }
+        let Some(nodes) = self.nodes.as_ref() else {
+            return false;
+        };
+        // If found by unique_id, it's a real match — not a truncation map match.
+        if nodes.get_node(node.common().unique_id.as_str()).is_some() {
+            return false;
+        }
+        self.find_previous_test_by_truncation_map(node, nodes)
+            .is_some()
+    }
 
-        found
+    /// Strips a trailing `.{10-hex-char}` hash suffix from `test.pkg.name.{hash}` and
+    /// looks up the result in the state nodes.  Handles the case where Fusion appends a
+    /// hash to singular test UIDs but Mantle does not.
+    fn find_previous_test_by_stripping_hash_suffix<'a>(
+        &'a self,
+        current: &dyn InternalDbtNode,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let uid = current.common().unique_id.as_str();
+        let suffix = uid.rsplit_once('.')?;
+        let (base, hash) = suffix;
+        // Must be exactly 10 lowercase hex characters.
+        if hash.len() != 10 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+        nodes.get_node(base).map(|n| n as &dyn InternalDbtNode)
     }
 
     fn previous_node_for<'a>(
@@ -125,11 +225,43 @@ impl PreviousState {
 
         if current.resource_type() == NodeType::Test {
             if let Some(cur_test) = current.as_any().downcast_ref::<DbtTest>() {
-                return self.find_previous_test_by_signature(cur_test, nodes);
+                if let Some(found) = self.find_previous_test_by_signature(cur_test, nodes) {
+                    return Some(found);
+                }
+            }
+            // Fallback: match via truncation map for Mantle-produced state manifests
+            // where unique_ids use the full untruncated test name.
+            if let Some(found) = self.find_previous_test_by_truncation_map(current, nodes) {
+                return Some(found);
+            }
+            // Fallback: Fusion appends a `.{10-hex-char}` hash to singular test UIDs
+            // (e.g., `test.pkg.my_test.b7f479170d`) while Mantle omits it
+            // (`test.pkg.my_test`).  If the direct lookup failed and the UID ends with
+            // such a suffix, try again without it.
+            if let Some(found) = self.find_previous_test_by_stripping_hash_suffix(current, nodes) {
+                return Some(found);
             }
         }
 
         None
+    }
+
+    /// Constructs a minimal `PreviousState` for use in tests that only need source freshness data.
+    pub fn new_for_source_freshness(
+        state_path: PathBuf,
+        target_path: Option<PathBuf>,
+        source_freshness_results: Option<FreshnessResultsArtifact>,
+    ) -> Self {
+        Self {
+            nodes: None,
+            run_results: None,
+            source_freshness_results,
+            state_path,
+            target_path,
+            test_sig_index: Default::default(),
+            test_full_name_index: Default::default(),
+            truncated_name_to_state_uid: Default::default(),
+        }
     }
 
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
@@ -214,6 +346,15 @@ impl PreviousState {
             }
         };
 
+        let test_sig_index = nodes
+            .as_ref()
+            .map(Self::build_test_sig_index)
+            .unwrap_or_default();
+        let test_full_name_index = nodes
+            .as_ref()
+            .map(Self::build_test_full_name_index)
+            .unwrap_or_default();
+
         Ok(Self {
             nodes,
             run_results: RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok(),
@@ -221,6 +362,9 @@ impl PreviousState {
                 .ok(),
             state_path: state_path.to_path_buf(),
             target_path,
+            test_sig_index,
+            test_full_name_index,
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
         })
     }
 
@@ -253,6 +397,13 @@ impl PreviousState {
                 [("new node", false, None)],
             );
             return true;
+        }
+
+        // Tests matched via the truncation map are semantically identical to their state
+        // counterpart — the unique_id difference is purely an artifact of Fusion truncating
+        // long test names while Mantle preserves them in full. Treat such tests as unmodified.
+        if self.is_test_matched_only_via_truncation_map(node) {
+            return false;
         }
 
         match modification_type {
@@ -422,39 +573,6 @@ impl PreviousState {
                 }
             }
 
-            // dbt-core (and Mantle-produced manifests) may represent a single tag as a scalar
-            // string, while Fusion may produce a one-element list. These are semantically equal.
-            fn tags_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> Option<bool> {
-                fn norm(v: Option<&YmlValue>) -> Option<Vec<String>> {
-                    use dbt_yaml::Value as YmlValue;
-                    match v {
-                        None => Some(vec![]),
-                        Some(YmlValue::Null(_)) => Some(vec![]),
-                        Some(YmlValue::String(s, _)) => Some(vec![canonicalize_str(s).to_string()]),
-                        Some(YmlValue::Sequence(seq, _)) => {
-                            let mut out = Vec::with_capacity(seq.len());
-                            for item in seq {
-                                match item {
-                                    YmlValue::String(s, _) => {
-                                        out.push(canonicalize_str(s).to_string());
-                                    }
-                                    // Unexpected element types: fall back to raw equality.
-                                    _ => return None,
-                                }
-                            }
-                            // Tags are order-insensitive.
-                            out.sort_unstable();
-                            out.dedup();
-                            Some(out)
-                        }
-                        // Unexpected tags type: fall back to raw equality.
-                        _ => None,
-                    }
-                }
-
-                Some(norm(a)? == norm(b)?)
-            }
-
             fn get_any<'a>(
                 m: &'a std::collections::BTreeMap<String, YmlValue>,
                 keys: &[&str],
@@ -463,11 +581,16 @@ impl PreviousState {
             }
 
             // Key groups: dbt-core has historically used both dash and underscore variants for hooks.
-            let checks: [(&'static str, &[&str]); 5] = [
+            //
+            // NOTE: `tags` is intentionally excluded here. In dbt-core/Mantle, tags carry
+            // `CompareBehavior::Exclude` and are explicitly skipped in the `same_contents`
+            // comparison. Including tags would cause false positives when the state manifest
+            // (Mantle-produced) stores only model-level tags while Fusion stores project-level
+            // inherited tags — a provenance difference, not a semantic one.
+            let checks: [(&'static str, &[&str]); 4] = [
                 ("grants", &["grants"]),
                 ("pre_hook", &["pre-hook", "pre_hook"]),
                 ("post_hook", &["post-hook", "post_hook"]),
-                ("tags", &["tags"]),
                 ("persist_docs", &["persist_docs"]),
             ];
 
@@ -488,11 +611,15 @@ impl PreviousState {
                 for (name, keys) in checks {
                     let a = get_any(current_uc, keys);
                     let b = get_any(previous_uc, keys);
-                    let eq = if name == "tags" {
-                        tags_eq(a, b).unwrap_or_else(|| uc_eq(a, b))
-                    } else {
-                        uc_eq(a, b)
-                    };
+                    // Only compare a key when it is present on *both* sides.
+                    // If one manifest omits a key (e.g. Mantle records post-hook in
+                    // unrendered_config but Fusion does not, or vice-versa), skip it here:
+                    // the rendered-config fallback (`has_same_config`) will catch any genuine
+                    // change in that field.
+                    if a.is_none() || b.is_none() {
+                        continue;
+                    }
+                    let eq = uc_eq(a, b);
                     if !eq {
                         any_diff = true;
                         log_state_mod_diff(
@@ -507,7 +634,6 @@ impl PreviousState {
         }
 
         let same_config = current_node.has_same_config(previous_node);
-
         !same_config
     }
 
@@ -686,5 +812,87 @@ impl PreviousState {
         }
 
         !same_body
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schemas::nodes::{DbtTestAttr, Nodes, TestMetadata};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    fn make_test(uid: &str, attached_node: &str, test_name: &str) -> DbtTest {
+        let mut t = DbtTest::default();
+        t.__common_attr__.unique_id = uid.to_string();
+        t.__test_attr__ = DbtTestAttr {
+            attached_node: Some(attached_node.to_string()),
+            test_metadata: Some(TestMetadata {
+                name: test_name.to_string(),
+                kwargs: BTreeMap::default(),
+                namespace: None,
+            }),
+            ..DbtTestAttr::default()
+        };
+        t
+    }
+
+    /// Regression test: `test_signature` must be called O(N) times, not O(N²).
+    ///
+    /// Before the fix, `find_previous_test_by_signature` recomputes `test_signature`
+    /// for every previous test on every current-test lookup, giving N*N calls.
+    /// After the fix (pre-built index), total calls should be proportional to N.
+    #[test]
+    fn test_signature_calls_are_linear_not_quadratic() {
+        const N: usize = 200;
+
+        // Previous state: N tests whose unique_ids will NOT match the current tests,
+        // forcing every lookup to fall through to `find_previous_test_by_signature`.
+        let mut prev_nodes = Nodes::default();
+        for i in 0..N {
+            let uid = format!("test.pkg.prev_{i}");
+            let t = make_test(&uid, &format!("model.pkg.m{i}"), "not_null");
+            prev_nodes.tests.insert(uid, Arc::new(t));
+        }
+
+        // Current tests: different unique_ids but identical signatures to the prev tests.
+        let current_tests: Vec<DbtTest> = (0..N)
+            .map(|i| {
+                make_test(
+                    &format!("test.pkg.curr_{i}"),
+                    &format!("model.pkg.m{i}"),
+                    "not_null",
+                )
+            })
+            .collect();
+
+        let test_sig_index = PreviousState::build_test_sig_index(&prev_nodes);
+        let test_full_name_index = PreviousState::build_test_full_name_index(&prev_nodes);
+        let state = PreviousState {
+            nodes: Some(prev_nodes),
+            run_results: None,
+            source_freshness_results: None,
+            state_path: PathBuf::from("/tmp/fake_state"),
+            target_path: None,
+            test_sig_index,
+            test_full_name_index,
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
+        };
+
+        TEST_SIG_CALLS.store(0, Ordering::SeqCst);
+        for test in &current_tests {
+            state.is_new(test);
+        }
+        let calls = TEST_SIG_CALLS.load(Ordering::SeqCst);
+
+        // Linear bound: O(N) calls expected (e.g. N for index build + N for lookups).
+        // Quadratic would give N*N = 40_000 calls.
+        assert!(
+            calls <= 3 * N,
+            "test_signature called {calls} times for N={N} tests; \
+             expected O(N) ≤ {} but got O(N²) behavior",
+            3 * N,
+        );
     }
 }

@@ -26,6 +26,7 @@ use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
 use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
+use dbt_yaml::Value as YmlValue;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -309,6 +310,27 @@ pub fn resolve_seeds(
             &components,
             adapter_type,
         )?;
+
+        // Populate unrendered_config.database/schema/alias for dbt-core compatible
+        // state:* comparisons (mirrors what resolve_models does for model nodes).
+        if let Some(db) = &properties_config.database {
+            dbt_seed
+                .__base_attr__
+                .unrendered_config
+                .insert("database".to_string(), YmlValue::string(db.clone()));
+        }
+        if let Some(sch) = &properties_config.schema {
+            dbt_seed
+                .__base_attr__
+                .unrendered_config
+                .insert("schema".to_string(), YmlValue::string(sch.clone()));
+        }
+        if let Some(alias) = &properties_config.alias {
+            dbt_seed
+                .__base_attr__
+                .unrendered_config
+                .insert("alias".to_string(), YmlValue::string(alias.clone()));
+        }
 
         let status = if is_enabled {
             ModelStatus::Enabled

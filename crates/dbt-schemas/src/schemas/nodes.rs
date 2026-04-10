@@ -587,10 +587,23 @@ fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) ->
 
 // Helper function to normalize descriptions: treat None and Some("") as equal
 // and strip all whitespace for non-empty descriptions
+fn canonicalize_typographic_quotes(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '\u{201C}' | '\u{201D}' => '"',
+            '\u{2018}' | '\u{2019}' => '\'',
+            other => other,
+        })
+        .collect()
+}
+
 pub(crate) fn normalize_description(desc: &Option<String>) -> Option<String> {
-    desc.as_deref()
-        .filter(|s| !s.is_empty())
-        .map(|s| s.chars().filter(|c| !c.is_whitespace()).collect())
+    desc.as_deref().filter(|s| !s.is_empty()).map(|s| {
+        canonicalize_typographic_quotes(s)
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect()
+    })
 }
 
 pub(crate) fn same_persisted_description(
@@ -640,13 +653,23 @@ pub(crate) fn same_persisted_description(
         let self_column_descriptions: Vec<_> = self_base
             .columns
             .iter()
-            .map(|column| column.description.clone())
+            .map(|column| {
+                column
+                    .description
+                    .as_deref()
+                    .map(canonicalize_typographic_quotes)
+            })
             .collect();
 
         let other_column_descriptions: Vec<_> = other_base
             .columns
             .iter()
-            .map(|column| column.description.clone())
+            .map(|column| {
+                column
+                    .description
+                    .as_deref()
+                    .map(canonicalize_typographic_quotes)
+            })
             .collect();
 
         if !optional_string_vecs_equal(&self_column_descriptions, &other_column_descriptions) {

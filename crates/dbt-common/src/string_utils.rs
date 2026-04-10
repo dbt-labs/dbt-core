@@ -58,6 +58,16 @@ pub fn split_into_whitespace_and_brackets(input: &str) -> Vec<String> {
     results
 }
 
+/// Extracts the test-name component (3rd dot-separated part) from a dbt test unique_id.
+///
+/// Test unique_ids follow the format `test.<pkg>.<name>.<trailing_hash>`.
+/// Returns `None` if the uid doesn't have at least three components.
+pub fn test_name_from_uid(uid: &str) -> Option<&str> {
+    let mut parts = uid.splitn(4, '.');
+    let _ = (parts.next(), parts.next()); // skip "test" and package
+    parts.next()
+}
+
 /// Truncates a test name to 63 characters if it's too long, following dbt-core's logic.
 /// This is done by including the first 30 identifying chars plus a 32-character hash of the full contents.
 /// See the function `synthesize_generic_test_name` in `dbt-core`:
