@@ -87,6 +87,8 @@ impl Flags {
         self.flags
             .insert("STORE_FAILURES".to_string(), Value::from(false));
         self.flags
+            .insert("FAVOR_STATE".to_string(), Value::from(false));
+        self.flags
             .insert("INTROSPECT".to_string(), Value::from(true));
         self.flags.insert("EMPTY".to_string(), Value::from(false));
         self.flags.insert(
@@ -185,6 +187,7 @@ impl Flags {
             "PROJECT_DIR",
             "RESOURCE_TYPE",
             "STORE_FAILURES",
+            "FAVOR_STATE",
             // Default flags set by set_defaults()
             "FULL_REFRESH",
             "STRICT_MODE",
@@ -278,6 +281,10 @@ impl Flags {
         self.flags.insert(
             "STORE_FAILURES".to_string(),
             Value::from(invocation_args.store_failures),
+        );
+        self.flags.insert(
+            "FAVOR_STATE".to_string(),
+            Value::from(invocation_args.favor_state),
         );
         self.flags
             .insert("EMPTY".to_string(), Value::from(invocation_args.empty));

@@ -1963,7 +1963,11 @@ impl CommonArgs {
             target_path: self.target_path.clone(),
             empty: self.empty,
             sample: None,
-            favor_state: self.favor_state,
+            favor_state: if self.no_favor_state {
+                false
+            } else {
+                self.favor_state
+            },
             refresh_sources: false,
             run_cache_mode: RunCacheMode::Noop,
             task_cache_url: self.task_cache_url.clone(),

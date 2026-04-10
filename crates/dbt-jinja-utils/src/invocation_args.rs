@@ -71,6 +71,8 @@ pub struct InvocationArgs {
     pub full_refresh: bool,
     /// Store test failures in the database
     pub store_failures: bool,
+    /// Favor state over current environment for deferral
+    pub favor_state: bool,
     /// Empty flag
     pub empty: bool,
 
@@ -110,6 +112,7 @@ impl Default for InvocationArgs {
             write_json: false,
             full_refresh: false,
             store_failures: false,
+            favor_state: false,
             empty: false,
             replay: None,
         }
@@ -185,6 +188,7 @@ impl InvocationArgs {
             write_json: arg.write_json,
             full_refresh: arg.full_refresh,
             store_failures: arg.store_failures,
+            favor_state: arg.favor_state,
             empty: arg.empty,
             replay: arg.replay.clone(),
         }
@@ -267,6 +271,7 @@ impl InvocationArgs {
             "STORE_FAILURES".to_string(),
             Value::from(self.store_failures),
         );
+        dict.insert("FAVOR_STATE".to_string(), Value::from(self.favor_state));
         dict.insert("EMPTY".to_string(), Value::from(self.empty));
         dict.insert("REPLAY".to_string(), Value::from(self.replay.is_some()));
 
