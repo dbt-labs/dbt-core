@@ -8,7 +8,7 @@ from dbt.task.base import BaseRunner
 from dbt_common.events.functions import fire_event
 
 
-class NoOpRunner(BaseRunner):
+class NoOpRunner(BaseRunner[RunResult]):
     @property
     def description(self) -> str:
         raise NotImplementedError("description not implemented")
@@ -19,7 +19,7 @@ class NoOpRunner(BaseRunner):
     def compile(self, manifest: Manifest):
         return self.node
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         fire_event(
             LogNodeNoOpResult(
                 description=self.description,
@@ -29,7 +29,7 @@ class NoOpRunner(BaseRunner):
             )
         )
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         # no-op
         return RunResult(
             node=compiled_node,

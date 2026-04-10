@@ -19,9 +19,13 @@ from dbt_common.events.functions import fire_event
 SQLResult = TypeVar("SQLResult", bound=RemoteCompileResultMixin)
 
 
-class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
+# GenericSqlRunner intentionally violates the CompileRunner[RunResult] contract:
+# its result type (SQLResult bound to RemoteCompileResultMixin) is a completely
+# separate hierarchy from NodeResult/RunResult, used for programmatic SQL execution.
+# The overriding methods are marked accordingly.
+class GenericSqlRunner(CompileRunner, Generic[SQLResult]):  # type: ignore[misc]
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
-        CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)
+        CompileRunner.__init__(self, config, adapter, node, node_index, num_nodes)  # type: ignore[arg-type]
 
     def handle_exception(self, e, ctx):
         fire_event(
@@ -38,31 +42,31 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
     def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result) -> None:  # type: ignore[override]
         pass
 
     def compile(self, manifest: Manifest):
-        return self.compiler.compile_node(self.node, manifest, {}, write=False)
+        return self.compiler.compile_node(self.node, manifest, {}, write=False)  # type: ignore[arg-type]
 
     @abstractmethod
-    def execute(self, compiled_node, manifest) -> SQLResult:
+    def execute(self, compiled_node, manifest) -> SQLResult:  # type: ignore[override]
         pass
 
     @abstractmethod
-    def from_run_result(self, result, start_time, timing_info) -> SQLResult:
+    def from_run_result(self, result, start_time, timing_info) -> SQLResult:  # type: ignore[override]
         pass
 
-    def error_result(self, node, error, start_time, timing_info):
+    def error_result(self, node, error, start_time, timing_info):  # type: ignore[override]
         raise error
 
-    def ephemeral_result(self, node, start_time, timing_info):
+    def ephemeral_result(self, node, start_time, timing_info):  # type: ignore[override]
         raise dbt_common.exceptions.base.NotImplementedError(
             "cannot execute ephemeral nodes remotely!"
         )
 
 
 class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
-    def execute(self, compiled_node, manifest) -> RemoteCompileResult:
+    def execute(self, compiled_node, manifest) -> RemoteCompileResult:  # type: ignore[override]
         return RemoteCompileResult(
             raw_code=compiled_node.raw_code,
             compiled_code=compiled_node.compiled_code,
@@ -71,7 +75,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
-    def from_run_result(self, result, start_time, timing_info) -> RemoteCompileResult:
+    def from_run_result(self, result, start_time, timing_info) -> RemoteCompileResult:  # type: ignore[override]
         return RemoteCompileResult(
             raw_code=result.raw_code,
             compiled_code=result.compiled_code,
@@ -82,7 +86,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
 
 
 class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
-    def execute(self, compiled_node, manifest) -> RemoteRunResult:
+    def execute(self, compiled_node, manifest) -> RemoteRunResult:  # type: ignore[override]
         _, execute_result = self.adapter.execute(compiled_node.compiled_code, fetch=True)
 
         table = ResultTable(
@@ -99,7 +103,7 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
-    def from_run_result(self, result, start_time, timing_info) -> RemoteRunResult:
+    def from_run_result(self, result, start_time, timing_info) -> RemoteRunResult:  # type: ignore[override]
         return RemoteRunResult(
             raw_code=result.raw_code,
             compiled_code=result.compiled_code,

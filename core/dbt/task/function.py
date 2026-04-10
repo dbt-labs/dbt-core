@@ -87,7 +87,7 @@ class FunctionRunner(CompileRunner):
             batch_results=None,
         )
 
-    def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
+    def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:  # type: ignore[override]
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
         context = generate_runtime_function_context(compiled_node, self.config, manifest)

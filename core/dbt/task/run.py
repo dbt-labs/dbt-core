@@ -17,6 +17,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    cast,
 )
 
 from dbt import tracking, utils
@@ -229,7 +230,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
 class ModelRunner(CompileRunner):
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
-        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
+        return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"  # type: ignore[union-attr]
 
     def print_start_line(self):
         fire_event(
@@ -266,7 +267,7 @@ class ModelRunner(CompileRunner):
     def before_execute(self) -> None:
         self.print_start_line()
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
@@ -326,7 +327,7 @@ class ModelRunner(CompileRunner):
 
         return self._build_run_model_result(model, context)
 
-    def execute(self, model, manifest):
+    def execute(self, model, manifest) -> RunResult:
         context = generate_runtime_model_context(model, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
@@ -383,7 +384,7 @@ class MicrobatchBatchRunner(ModelRunner):
     def describe_batch(self) -> str:
         batch_start = self.batches[self.batch_idx][0]
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
-            batch_start, self.node.config.batch_size
+            batch_start, self.node.config.batch_size  # type: ignore[union-attr]
         )
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
@@ -427,17 +428,17 @@ class MicrobatchBatchRunner(ModelRunner):
         elif not self.relation_exists:
             # If the relation doesn't exist, we can't run in parallel
             run_in_parallel = False
-        elif self.node.config.concurrent_batches is not None:
+        elif self.node.config.concurrent_batches is not None:  # type: ignore[union-attr]
             # If the relation exists and the `concurrent_batches` config isn't None, use the config value
-            run_in_parallel = self.node.config.concurrent_batches
+            run_in_parallel = self.node.config.concurrent_batches  # type: ignore[union-attr]
         else:
             # If the relation exists, the `concurrent_batches` config is None, check if the model self references `this`.
             # If the model self references `this` then we assume the model batches _can't_ be run in parallel
-            run_in_parallel = not self.node.has_this
+            run_in_parallel = not self.node.has_this  # type: ignore[union-attr]
 
         return run_in_parallel
 
-    def on_skip(self):
+    def on_skip(self) -> RunResult:
         result = RunResult(
             node=self.node,
             status=RunStatus.Skipped,
@@ -452,7 +453,7 @@ class MicrobatchBatchRunner(ModelRunner):
         self.print_result_line(result=result)
         return result
 
-    def error_result(self, node, message, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info) -> RunResult:
         """Necessary to return a result with a batch result
 
         Called by `BaseRunner.safe_run` when an error occurs
@@ -474,18 +475,18 @@ class MicrobatchBatchRunner(ModelRunner):
         self.node.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
         self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
         # Create batch context on model node prior to re-compiling
-        self.node.batch = BatchContext(
-            id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),
+        self.node.batch = BatchContext(  # type: ignore[union-attr]
+            id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),  # type: ignore[union-attr]
             event_time_start=batch[0],
             event_time_end=batch[1],
         )
         # Recompile node to re-resolve refs with event time filters rendered, update context
         self.compiler.compile_node(
-            self.node,
+            self.node,  # type: ignore[arg-type]
             manifest,
             {},
             split_suffix=MicrobatchBuilder.format_batch_start(
-                batch[0], self.node.config.batch_size
+                batch[0], self.node.config.batch_size  # type: ignore[union-attr]
             ),
         )
 
@@ -629,7 +630,7 @@ class MicrobatchModelRunner(ModelRunner):
 
     def _has_relation(self, model: ModelNode) -> bool:
         """Check whether the relation for the model exists in the data warehouse"""
-        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation_info = self.adapter.Relation.create_from(self.config, model)  # type: ignore[arg-type]
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
         )
@@ -671,7 +672,7 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
     def describe_node(self) -> str:
-        return f"{self.node.language} microbatch model {self.get_node_representation()}"
+        return f"{self.node.language} microbatch model {self.get_node_representation()}"  # type: ignore[union-attr]
 
     def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
         """merge batch_results into result"""
@@ -701,8 +702,8 @@ class MicrobatchModelRunner(ModelRunner):
         result.batch_results.failed = sorted(result.batch_results.failed)
 
         # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
-        if self.node.previous_batch_results is not None:
-            result.batch_results.successful += self.node.previous_batch_results.successful
+        if self.node.previous_batch_results is not None:  # type: ignore[union-attr]
+            result.batch_results.successful += self.node.previous_batch_results.successful  # type: ignore[union-attr]
 
     def _update_result_with_unfinished_batches(
         self, result: RunResult, batches: Dict[int, BatchType]
@@ -772,7 +773,7 @@ class MicrobatchModelRunner(ModelRunner):
         """Don't do anything here because this runner doesn't need to compile anything"""
         return self.node
 
-    def execute(self, model: ModelNode, manifest: Manifest) -> RunResult:
+    def execute(self, model: ModelNode, manifest: Manifest) -> RunResult:  # type: ignore[override]
         # Execution really means orchestration in this case
 
         batches = self.get_batches(model=model)
@@ -982,7 +983,11 @@ class RunTask(CompileTask):
                         msg=f"{batch_runner.describe_batch()} is being run sequentially"
                     )
                 )
-                batch_results.append(self.call_runner(batch_runner))
+                # MicrobatchBatchRunner always returns RunResult; cast required
+                # because call_runner() returns NodeResult after being broadened
+                # to accommodate FreshnessRunner. Resolved when NodeT TypeVar is
+                # added to BaseRunner so call_runner can return runner.RunnerResultT.
+                batch_results.append(cast(RunResult, self.call_runner(batch_runner)))
                 relation_exists = batch_runner.relation_exists
         else:
             batch_results.append(
