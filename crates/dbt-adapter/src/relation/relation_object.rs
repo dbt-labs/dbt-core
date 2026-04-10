@@ -271,7 +271,6 @@ impl Object for RelationObject {
 
 /// Creates a relation based on the adapter type
 ///
-/// Unlike [internal_create_relation]
 /// This is supposed to be used in places that are invoked by the Jinja rendering process
 pub fn do_create_relation(
     adapter_type: AdapterType,
