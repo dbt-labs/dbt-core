@@ -593,6 +593,7 @@ static CONFIG_ARGS: &[&str] = &[
     "store_failures_as",
     "quoting",
     "static_analysis",
+    "sql_header",
 ];
 
 /// Extract config keys from a BTreeMap, filtering to only include valid config fields
