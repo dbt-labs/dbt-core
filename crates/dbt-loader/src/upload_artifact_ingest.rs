@@ -13,7 +13,7 @@ use dbt_telemetry::ProgressMessage;
 use reqwest_middleware::ClientWithMiddleware;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
-use zip::{CompressionMethod, ZipWriter, write::FileOptions};
+use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 const RUN_RESULTS_JSON: &str = "run_results.json";
 const PUBLICATION_JSON: &str = ".publication.json";
@@ -453,7 +453,7 @@ async fn build_artifact_zip(
     publication_path: Option<&Path>,
     log_path: Option<&Path>,
 ) -> FsResult<Vec<u8>> {
-    let options = FileOptions::default()
+    let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
         .unix_permissions(0o644);
 
@@ -487,7 +487,7 @@ async fn add_file_to_zip(
     zip: &mut ZipWriter<Cursor<Vec<u8>>>,
     file_path: &Path,
     archive_path: &str,
-    options: FileOptions,
+    options: SimpleFileOptions,
 ) -> FsResult<()> {
     emit_debug_log_message(format!(
         "Adding {} to ingest ZIP (source: {})",
