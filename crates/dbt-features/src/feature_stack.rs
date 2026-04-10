@@ -39,6 +39,11 @@ pub struct LinterFeature {
 #[async_trait]
 #[allow(clippy::too_many_arguments)]
 pub trait CliExtensionHooks: Send + Sync {
+    /// Called early in execution, before any tasks are scheduled or run.
+    fn will_execute(&self, _cli: &Cli, _arg: &EvalArgs) -> FsResult<()> {
+        Ok(())
+    }
+
     /// Called after tasks have been scheduled and run, but before manifest
     /// update and further phases.
     ///
