@@ -477,6 +477,13 @@ object:
         dbt_updated_at: string,
         dbt_is_deleted: string
       },
+      snapshot_meta_column_names: struct{
+        dbt_valid_to: string,
+        dbt_valid_from: string,
+        dbt_scd_id: string,
+        dbt_updated_at: string,
+        dbt_is_deleted: string
+      },
       dbt_valid_to_current: string,
       strategy: string,
       check_cols: list[string]|string,

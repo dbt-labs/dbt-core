@@ -2516,7 +2516,21 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        let mut value =
+            dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML");
+
+        // Snapshot macros read `snapshot_table_column_names` (legacy key), but users write
+        // `snapshot_meta_column_names`. Normalize here so both compile and run see the legacy key.
+        if let YmlValue::Mapping(ref mut map, _) = value {
+            if !map.contains_key("snapshot_table_column_names") {
+                if let Some(v) = map.get("snapshot_meta_column_names").cloned() {
+                    if !v.is_null() {
+                        map.insert("snapshot_table_column_names".into(), v);
+                    }
+                }
+            }
+        }
+        value
     }
 
     fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
