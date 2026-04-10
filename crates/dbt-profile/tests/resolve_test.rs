@@ -488,6 +488,54 @@ proj:
     unsafe { std::env::remove_var("DBT_PROFILE_TEST_TARGET") };
 }
 
+// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/1564
+// YAML merge keys (<<: *anchor) must be resolved so inherited fields are visible.
+#[test]
+fn test_resolve_yaml_anchor_merge_keys() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+
+  outputs:
+    dev: &default_config
+      type: bigquery
+      method: oauth
+      project: my-project-dev
+      dataset: my_dataset
+      threads: 2
+      timeout_seconds: 300
+      location: US
+
+    prod:
+      <<: *default_config
+      project: my-project-prod
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        target: Some("prod".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(result.target_name, "prod");
+    // type must be inherited from the anchor via <<: *default_config
+    assert_eq!(result.adapter_type, "bigquery");
+    assert_eq!(result.get_str("method"), Some("oauth"));
+    // overridden field must take the local value
+    assert_eq!(result.get_str("project"), Some("my-project-prod"));
+    // inherited field not overridden
+    assert_eq!(result.get_str("location"), Some("US"));
+}
+
 // Regression test for https://github.com/dbt-labs/dbt-fusion/issues/XXXX
 // DBT_ENV_SECRET_* variables must be resolved in profiles.yml, not blocked.
 #[test]

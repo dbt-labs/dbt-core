@@ -138,7 +138,12 @@ pub fn resolve_with_env(
 ) -> Result<ResolvedProfile> {
     let raw_yaml = std::fs::read_to_string(profile_path)?;
     let sanitized = sanitize_yml(&raw_yaml);
-    let doc: dbt_yaml::Value = dbt_yaml::from_str(sanitized).map_err(|e| ProfileError::Yaml {
+    let mut doc: dbt_yaml::Value =
+        dbt_yaml::from_str(sanitized).map_err(|e| ProfileError::Yaml {
+            path: profile_path.to_path_buf(),
+            source: e,
+        })?;
+    doc.apply_merge().map_err(|e| ProfileError::Yaml {
         path: profile_path.to_path_buf(),
         source: e,
     })?;
