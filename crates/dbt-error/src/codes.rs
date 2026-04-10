@@ -176,6 +176,9 @@ pub enum ErrorCode {
     MacroVarNotFound = 1503,
     InvalidSeedValue = 1504,
     MacroUseIllegal = 1505,
+    /// Emitted when `validate_macro_args` is enabled and a YAML-documented
+    /// macro argument name or type does not match the Jinja macro definition.
+    ValidateMacroArgs = 1506,
 
     // --------------------------------------------------------------------------------------------
     // Local execution

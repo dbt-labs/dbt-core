@@ -277,8 +277,97 @@ fn read_file_content(
     }
 }
 
+/// Returns true if the given type string is a valid dbt macro argument type.
+///
+/// Grammar (dbt Core v1.10+):
+/// ```text
+/// type      = atom ("|" atom)*
+/// atom      = primitive | "list" "[" type "]" | "optional" "[" type "]"
+///           | "dict" "[" type "," type "]"
+/// primitive = "string" | "str" | "boolean" | "bool" | "integer" | "int"
+///           | "float" | "any" | "relation" | "column"
+/// ```
+/// Union (`|`) and container separators (`,`) are only recognised at bracket
+/// depth 0, so `list[str|int]` and `dict[str, list[int|bool]]` are both valid.
+pub fn is_valid_macro_arg_type(s: &str) -> bool {
+    /// Split `s` on `sep` only at bracket depth 0.
+    fn split_shallow(s: &str, sep: char) -> Vec<&str> {
+        let mut parts = Vec::new();
+        let mut depth: usize = 0;
+        let mut start = 0;
+        for (i, c) in s.char_indices() {
+            match c {
+                '[' => depth += 1,
+                ']' => depth = depth.saturating_sub(1),
+                _ if c == sep && depth == 0 => {
+                    parts.push(&s[start..i]);
+                    start = i + c.len_utf8();
+                }
+                _ => {}
+            }
+        }
+        parts.push(&s[start..]);
+        parts
+    }
+
+    /// A type is one or more atoms joined by `|` at depth 0.
+    fn parse_type(s: &str) -> bool {
+        let s = s.trim();
+        split_shallow(s, '|')
+            .iter()
+            .all(|part| parse_atom(part.trim()))
+    }
+
+    /// An atom is a primitive or a bracketed container.
+    fn parse_atom(s: &str) -> bool {
+        let s = s.trim();
+        if matches!(
+            s,
+            "string"
+                | "str"
+                | "boolean"
+                | "bool"
+                | "integer"
+                | "int"
+                | "float"
+                | "any"
+                | "relation"
+                | "column"
+                | "list"
+                | "dict"
+                | "optional"
+        ) {
+            return true;
+        }
+        if let Some(bracket) = s.find('[') {
+            if !s.ends_with(']') {
+                return false;
+            }
+            let prefix = s[..bracket].trim();
+            let inner = &s[bracket + 1..s.len() - 1];
+            match prefix {
+                "list" | "optional" => parse_type(inner),
+                "dict" => {
+                    let parts = split_shallow(inner, ',');
+                    parts.len() == 2 && parse_type(parts[0].trim()) && parse_type(parts[1].trim())
+                }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    parse_type(&s.to_lowercase())
+}
+
 /// Apply macro patches from YAML schema files to the resolved macros.
 /// This updates description and patch_path fields based on YAML macro definitions.
+///
+/// When `validate_macro_args` is true (from dbt_project.yml flags), this function also:
+/// - Warns when YAML argument names don't match the actual Jinja macro parameters
+/// - Warns when YAML argument `type` values use unsupported or malformed type syntax
+/// - Infers undocumented parameters from the Jinja definition and adds them to `arguments`
 pub fn apply_macro_patches(
     io: &IoArgs,
     macros: &mut BTreeMap<String, DbtMacro>,
@@ -286,6 +375,7 @@ pub fn apply_macro_patches(
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    validate_macro_args: bool,
 ) -> FsResult<()> {
     for (macro_name, props_entry) in macro_properties {
         // Build the unique_id to look up the macro
@@ -335,12 +425,77 @@ pub fn apply_macro_patches(
 
             // Update arguments if provided in YAML
             if let Some(yml_arguments) = macro_props.arguments {
-                dbt_macro.arguments = yml_arguments
+                let mut arguments: Vec<MacroArgument> = yml_arguments
                     .into_iter()
                     .map(|arg| MacroArgument {
                         name: arg.name,
                         type_: arg.type_,
                         description: arg.description.unwrap_or_default(),
+                    })
+                    .collect();
+
+                if validate_macro_args {
+                    let jinja_arg_names: Vec<&str> =
+                        dbt_macro.args.iter().map(|a| a.name.as_str()).collect();
+
+                    // Warn about YAML argument names not present in Jinja definition
+                    for yml_arg in &arguments {
+                        if !jinja_arg_names.contains(&yml_arg.name.as_str()) {
+                            emit_warn_log_message(
+                                ErrorCode::ValidateMacroArgs,
+                                format!(
+                                    "Macro \"{macro_name}\": documented argument \"{}\" not found \
+                                     in macro definition",
+                                    yml_arg.name
+                                ),
+                                io.status_reporter.as_ref(),
+                            );
+                        }
+                    }
+
+                    // Warn about invalid type strings
+                    for yml_arg in &arguments {
+                        if let Some(type_str) = &yml_arg.type_ {
+                            if !is_valid_macro_arg_type(type_str) {
+                                emit_warn_log_message(
+                                    ErrorCode::ValidateMacroArgs,
+                                    format!(
+                                        "Macro \"{macro_name}\": argument \"{}\" has unsupported \
+                                         type \"{type_str}\". Supported types are: string, str, \
+                                         boolean, bool, integer, int, float, any, relation, \
+                                         column, list[T], dict[K,V], optional[T], T1|T2|...",
+                                        yml_arg.name
+                                    ),
+                                    io.status_reporter.as_ref(),
+                                );
+                            }
+                        }
+                    }
+
+                    // Infer undocumented Jinja args and append them to the arguments list
+                    let documented_names: std::collections::HashSet<String> =
+                        arguments.iter().map(|a| a.name.clone()).collect();
+                    for jinja_arg in &dbt_macro.args {
+                        if !documented_names.contains(&jinja_arg.name) {
+                            arguments.push(MacroArgument {
+                                name: jinja_arg.name.clone(),
+                                type_: None,
+                                description: String::new(),
+                            });
+                        }
+                    }
+                }
+
+                dbt_macro.arguments = arguments;
+            } else if validate_macro_args && !dbt_macro.args.is_empty() {
+                // No YAML arguments at all — infer all from Jinja definition
+                dbt_macro.arguments = dbt_macro
+                    .args
+                    .iter()
+                    .map(|a| MacroArgument {
+                        name: a.name.clone(),
+                        type_: None,
+                        description: String::new(),
                     })
                     .collect();
             }
@@ -538,5 +693,39 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_is_valid_macro_arg_type_primitives() {
+        for ty in &[
+            "string", "str", "boolean", "bool", "integer", "int", "float", "any", "relation",
+            "column",
+        ] {
+            assert!(
+                is_valid_macro_arg_type(ty),
+                "{ty} should be a valid primitive type"
+            );
+        }
+        assert!(!is_valid_macro_arg_type("text"));
+        assert!(!is_valid_macro_arg_type("varchar"));
+        assert!(!is_valid_macro_arg_type(""));
+    }
+
+    #[test]
+    fn test_is_valid_macro_arg_type_containers() {
+        assert!(is_valid_macro_arg_type("list[string]"));
+        assert!(is_valid_macro_arg_type("list[int]"));
+        assert!(is_valid_macro_arg_type("optional[boolean]"));
+        assert!(is_valid_macro_arg_type("dict[str, int]"));
+        assert!(is_valid_macro_arg_type("dict[str, list[int]]"));
+        assert!(is_valid_macro_arg_type("list[dict[str, int]]"));
+        assert!(is_valid_macro_arg_type("optional[list[string]]"));
+
+        // Invalid containers
+        assert!(!is_valid_macro_arg_type("list[]"));
+        assert!(!is_valid_macro_arg_type("list[unknown]"));
+        assert!(!is_valid_macro_arg_type("dict[str]")); // missing second type arg
+        assert!(!is_valid_macro_arg_type("map[str, int]")); // unsupported container
+        assert!(!is_valid_macro_arg_type("list[str")); // missing closing bracket
     }
 }

@@ -260,6 +260,13 @@ pub async fn resolve(
     test_name_truncations.extend(resolved_test_name_truncations);
     all_macro_properties = resolved_macro_properties;
 
+    // Read the validate_macro_args flag from dbt_project.yml (defaults to true)
+    let validate_macro_args = dbt_state
+        .root_project_flags()
+        .get("validate_macro_args")
+        .map(|v| v.is_true())
+        .unwrap_or(true);
+
     // Apply macro patches from YAML schema files
     for (package_name, macro_properties) in all_macro_properties {
         // Get the jinja env and base context for this package
@@ -287,6 +294,7 @@ pub async fn resolve(
                 &package_name,
                 &jinja_env,
                 &base_ctx,
+                validate_macro_args,
             )?;
         }
     }
