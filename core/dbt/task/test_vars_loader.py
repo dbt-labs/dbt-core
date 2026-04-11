@@ -10,6 +10,7 @@ def test_vars_data_from_root(tests_root: str, target: Optional[str] = None) -> D
     Returns a dict of test vars, with target vars taking precedence over default test vars.
     """
     import yaml
+
     base_vars = {}
     target_vars = {}
     vars_yml_path = os.path.join(tests_root, VARS_FILE_NAME)
@@ -18,7 +19,9 @@ def test_vars_data_from_root(tests_root: str, target: Optional[str] = None) -> D
             with open(vars_yml_path, "r") as f:
                 data = yaml.safe_load(f) or {}
                 if isinstance(data, dict):
-                    base_vars = data.get("vars", {}) if isinstance(data.get("vars", {}), dict) else {}
+                    base_vars = (
+                        data.get("vars", {}) if isinstance(data.get("vars", {}), dict) else {}
+                    )
         except Exception:
             # Ignore malformed or unreadable file
             base_vars = {}
@@ -32,7 +35,9 @@ def test_vars_data_from_root(tests_root: str, target: Optional[str] = None) -> D
                 with open(target_vars_path, "r") as f:
                     data = yaml.safe_load(f) or {}
                     if isinstance(data, dict):
-                        target_vars = data.get("vars", {}) if isinstance(data.get("vars", {}), dict) else {}
+                        target_vars = (
+                            data.get("vars", {}) if isinstance(data.get("vars", {}), dict) else {}
+                        )
             except Exception:
                 # Ignore malformed or unreadable file
                 target_vars = {}
