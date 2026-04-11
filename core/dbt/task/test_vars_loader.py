@@ -2,7 +2,7 @@ import os
 import re
 from typing import Any, Dict, Optional
 
-from dbt.config.project import VARS_FILE_NAME, vars_data_from_root
+from dbt.config.project import VARS_FILE_NAME
 
 
 def test_vars_data_from_root(tests_root: str, target: Optional[str] = None) -> Dict[str, Any]:
