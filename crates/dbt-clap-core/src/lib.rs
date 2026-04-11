@@ -1424,8 +1424,8 @@ pub struct CommonArgs {
     pub write_catalog: bool,
 
     /// Write a parquet index alongside JSON artifacts for fast querying
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
-    pub use_index: bool,
+    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
+    pub write_index: bool,
 
     /// Directory for the index output (default: <target>/index/)
     #[arg(global = true, long, env = "DBT_INDEX_DIR")]
@@ -1957,7 +1957,7 @@ impl CommonArgs {
                 self.write_json
             },
             write_catalog: self.write_catalog,
-            use_index: self.use_index,
+            write_index: self.write_index,
             index_dir: self.index_dir.clone(),
             fail_fast: self.fail_fast,
             target_path: self.target_path.clone(),

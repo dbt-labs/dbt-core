@@ -443,7 +443,7 @@ pub struct EvalArgs {
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
     /// Write parquet index alongside JSON artifacts
-    pub use_index: bool,
+    pub write_index: bool,
     /// Directory for the parquet index output (default: <target>/index/)
     pub index_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
