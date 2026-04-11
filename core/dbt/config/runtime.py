@@ -57,13 +57,18 @@ def load_project(
     cli_vars: Optional[Dict[str, Any]] = None,
     validate: bool = False,
     require_vars: bool = True,
+    target: Optional[str] = None,
 ) -> Project:
 
     if cli_vars is None:
         cli_vars = {}
 
-    # Load vars.yml first (before rendering dbt_project.yml)
-    vars_from_file = vars_data_from_root(project_root)
+    effective_target = None
+    if not isinstance(profile, UnsetProfile):
+        effective_target = getattr(profile, "target_name", None)
+
+    # Load vars.yml and vars per target
+    vars_from_file = vars_data_from_root(project_root, effective_target)
 
     # Merge: CLI vars take precedence over file vars
     merged_vars = {**vars_from_file, **cli_vars}
@@ -294,7 +299,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         # unless the command is explicitly "deps"
         require_vars = getattr(flags, "WHICH", None) != "deps"
         project = load_project(
-            project_root, bool(flags.VERSION_CHECK), profile, cli_vars, require_vars=require_vars
+            project_root,
+            bool(flags.VERSION_CHECK),
+            profile,
+            cli_vars,
+            require_vars=require_vars,
+            target=profile.target_name,
         )
         return project, profile
 
