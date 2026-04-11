@@ -7,7 +7,7 @@ if [ "${SKIP_HOMEBREW:-false}" = "false" ]; then
     export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
 
     # Start PostgreSQL using the full command instead of brew services
-    pg_ctl -D /opt/homebrew/var/postgresql@16 start
+    pg_ctl -D /opt/homebrew/var/postgresql@16 start -o "-c fsync=off"
 
     echo "Check PostgreSQL service is running"
     i=10
