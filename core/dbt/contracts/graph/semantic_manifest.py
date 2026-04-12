@@ -167,6 +167,21 @@ class SemanticManifest:
                     "Expected to find granularity set for time spine standard granularity column, but did not. "
                     "This should have been caught in YAML parsing."
                 )
+
+            # Validate relation_name before creating PydanticNodeRelation.
+            # Ephemeral models have relation_name=None since they don't create
+            # a warehouse relation, but time spine models must be queryable.
+            if not node.relation_name:
+                raise ParsingError(
+                    f'Semantic layer validation failed for model "{node.name}"'
+                    f" ({node.original_file_path}):"
+                    f" relation_name is required but was not set."
+                    f" Time spine models must have a materialization that creates"
+                    f" a relation in the warehouse (e.g. table, view, incremental)."
+                    f' Models with "ephemeral" materialization cannot be used as'
+                    f" time spines because they do not exist as queryable relations."
+                )
+
             pydantic_time_spine = PydanticTimeSpine(
                 node_relation=PydanticNodeRelation(
                     alias=node.alias,
