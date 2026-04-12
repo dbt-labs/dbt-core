@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve error message when snapshot unique_key has duplicate values in source query
+time: 2026-04-12T22:59:00.000000-04:00
+custom:
+    Author: psaikaushik
+    Issue: "12775"
