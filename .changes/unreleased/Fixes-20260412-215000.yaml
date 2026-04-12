@@ -1,0 +1,6 @@
+kind: Fixes
+body: Remove exact version pin for libpq-dev in Dockerfile to prevent recurring build failures when Debian publishes security updates.
+time: 2026-04-12T21:50:00.000000-07:00
+custom:
+  Author: psaikaushik
+  Issue: "12808"
