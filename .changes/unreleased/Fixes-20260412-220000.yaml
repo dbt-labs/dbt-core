@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add model name and file path to semantic manifest validation error when relation_name is None (e.g. ephemeral time spine models).
+time: 2026-04-12T22:00:00.000000-07:00
+custom:
+  Author: psaikaushik
+  Issue: "12722"
