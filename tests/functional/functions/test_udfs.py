@@ -929,3 +929,112 @@ class TestJavaScriptUDFConfigFromJinjaAndYmlCombined:
         assert function_node.language == "javascript"
         # Jinja config sets deterministic, yml sets stable — jinja should win
         assert function_node.config.volatility == FunctionVolatility.Deterministic
+
+
+aggregate_js = """
+export function initialState() {
+  return {sum: 0}
+}
+export function aggregate(state, x) {
+  if (x > 0) { state.sum += x; }
+}
+export function merge(state, partialState) {
+  state.sum += partialState.sum;
+}
+export function finalize(state) {
+  return state.sum;
+}
+"""
+
+aggregate_js_yml = """
+functions:
+  - name: sum_positive
+    config:
+      type: aggregate
+    arguments:
+      - name: x
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+
+class TestJavaScriptAggregateUDFParsing:
+    """Test that aggregate JS UDFs are parsed correctly with type=aggregate."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "sum_positive.js": aggregate_js,
+            "sum_positive.yml": aggregate_js_yml,
+        }
+
+    def test_aggregate_type_parsed(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.sum_positive"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "javascript"
+        assert function_node.config.type == FunctionType.Aggregate
+        assert len(function_node.arguments) == 1
+        assert function_node.arguments[0].name == "x"
+
+
+quote_args_js = """
+return price * quantity;
+"""
+
+quote_args_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    config:
+      snowflake:
+        quote_args: false
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+quote_args_default_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+
+class TestJavaScriptUDFQuoteArgsConfig:
+    """Test that the snowflake.quote_args config is parsed correctly."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "compute_total.js": quote_args_js,
+            "compute_total.yml": quote_args_js_yml,
+        }
+
+    def test_quote_args_false(self, project):
+        manifest = run_dbt(["parse"])
+        function_node = manifest.functions["function.test.compute_total"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "javascript"
+        assert function_node.config.snowflake.quote_args is False
+
+    def test_quote_args_default_is_true(self, project):
+        write_file(
+            quote_args_default_js_yml, project.project_root, "functions", "compute_total.yml"
+        )
+        manifest = run_dbt(["parse", "--no-partial-parse"])
+        function_node = manifest.functions["function.test.compute_total"]
+        assert function_node.config.snowflake.quote_args is True
