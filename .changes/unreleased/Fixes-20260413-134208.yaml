@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allows rendering of data_tests in versioned models
+time: 2026-04-13T13:42:08.054974+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12805"
