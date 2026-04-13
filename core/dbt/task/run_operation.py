@@ -48,7 +48,43 @@ class RunOperationTask(ConfiguredTask):
 
         return res
 
+    def _run_inline_unsafe(self):
+        from dbt.parser.manifest import process_node
+        from dbt.parser.sql import SqlBlockParser
+
+        adapter = get_adapter(self.config)
+
+        block_parser = SqlBlockParser(
+            project=self.config, manifest=self.manifest, root_project=self.config
+        )
+        sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
+        process_node(self.config, self.manifest, sql_node)
+
+        # Compile the node to resolve Jinja (ref, source, var, etc.)
+        compiled_node = self.compiler.compile_node(
+            sql_node, self.manifest, extra_context=None, write=False
+        )
+
+        with adapter.connection_named("inline_query"):
+            adapter.clear_transaction()
+            adapter.execute(compiled_node.compiled_code, auto_begin=True, fetch=False)
+
+    def _is_inline(self):
+        return bool(getattr(self.args, "inline", None))
+
     def run(self) -> RunResultsArtifact:
+        inline = self._is_inline()
+        macro_name = getattr(self.args, "macro", None)
+
+        if not inline and not macro_name:
+            raise dbt_common.exceptions.DbtRuntimeError(
+                "Either a macro name or --inline must be passed to run-operation"
+            )
+        if inline and macro_name:
+            raise dbt_common.exceptions.DbtRuntimeError(
+                "Cannot specify both a macro name and --inline for run-operation"
+            )
+
         timing: List[TimingInfo] = []
 
         with collect_timing_info("compile", timing.append):
@@ -58,11 +94,20 @@ class RunOperationTask(ConfiguredTask):
 
         success = True
         error_message = None
-        package_name, macro_name = self._get_macro_parts()
+
+        if inline:
+            operation_name = "inline_query"
+            unique_id = f"sqloperation.{self.config.project_name}.inline_query"
+            fqn = unique_id.split(".")
+        else:
+            package_name, operation_name = self._get_macro_parts()
 
         with collect_timing_info("execute", timing.append):
             try:
-                self._run_unsafe(package_name, macro_name)
+                if inline:
+                    self._run_inline_unsafe()
+                else:
+                    self._run_unsafe(package_name, operation_name)
             except dbt_common.exceptions.DbtBaseException as exc:
                 fire_event(RunningOperationCaughtError(exc=str(exc)))
                 fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
@@ -76,19 +121,22 @@ class RunOperationTask(ConfiguredTask):
 
         end = timing[1].completed_at
 
-        macro = (
-            self.manifest.find_macro_by_name(macro_name, self.config.project_name, package_name)
-            if self.manifest
-            else None
-        )
-
-        if macro:
-            unique_id = macro.unique_id
-            fqn = unique_id.split(".")
-        else:
-            raise dbt_common.exceptions.UndefinedMacroError(
-                f"dbt could not find a macro with the name '{macro_name}' in any package"
+        if not inline:
+            macro = (
+                self.manifest.find_macro_by_name(
+                    operation_name, self.config.project_name, package_name
+                )
+                if self.manifest
+                else None
             )
+
+            if macro:
+                unique_id = macro.unique_id
+                fqn = unique_id.split(".")
+            else:
+                raise dbt_common.exceptions.UndefinedMacroError(
+                    f"dbt could not find a macro with the name '{operation_name}' in any package"
+                )
 
         execution_time = (end - start).total_seconds() if start and end else 0.0
 
@@ -99,15 +147,15 @@ class RunOperationTask(ConfiguredTask):
             failures=0 if success else 1,
             message=error_message,
             node=HookNode(
-                alias=macro_name,
+                alias=operation_name,
                 checksum=FileHash.from_contents(unique_id),
                 database=self.config.credentials.database,
                 schema=self.config.credentials.schema,
                 resource_type=NodeType.Operation,
                 fqn=fqn,
-                name=macro_name,
+                name=operation_name,
                 unique_id=unique_id,
-                package_name=package_name,
+                package_name=self.config.project_name if inline else package_name,
                 path="",
                 original_file_path="",
             ),
