@@ -19,6 +19,8 @@
 
     {% set statements = [] %}
 
+    {% do adapter.add_query('BEGIN', auto_begin=False) %}
+
     {% for chunk in agate_table.rows | batch(batch_size) %}
         {% set bindings = [] %}
 
@@ -27,7 +29,7 @@
         {% endfor %}
 
         {% set sql %}
-            insert overwrite into {{ this.render() }} ({{ cols_sql }}) values
+            insert {% if loop.first %}overwrite {% endif %}into {{ this.render() }} ({{ cols_sql }}) values
             {% for row in chunk -%}
                 ({%- for column in agate_table.column_names -%}
                     %s
@@ -37,14 +39,14 @@
             {%- endfor %}
         {% endset %}
 
-        {% do adapter.add_query('BEGIN', auto_begin=False) %}
         {% do adapter.add_query(sql, bindings=bindings, abridge_sql_log=True) %}
-        {% do adapter.add_query('COMMIT', auto_begin=False) %}
 
         {% if loop.index0 == 0 %}
             {% do statements.append(sql) %}
         {% endif %}
     {% endfor %}
+
+    {% do adapter.add_query('COMMIT', auto_begin=False) %}
 
     {# Return SQL so we can render it out into the compiled files #}
     {{ return(statements[0]) }}
