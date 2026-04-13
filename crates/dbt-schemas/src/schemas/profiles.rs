@@ -288,36 +288,26 @@ impl DbConfig {
         }
     }
 
-    // TODO: change to enum AdapterType
-    pub fn adapter_type(&self) -> &str {
+    pub fn adapter_type(&self) -> AdapterType {
         match self {
-            DbConfig::Redshift(..) => "redshift",
-            DbConfig::Snowflake(..) => "snowflake",
-            DbConfig::Postgres(..) => "postgres",
-            DbConfig::Bigquery(..) => "bigquery",
-            DbConfig::Trino(..) => "trino",
-            DbConfig::Datafusion(..) => "datafusion",
-            DbConfig::Databricks(..) => "databricks",
-            DbConfig::Salesforce(..) => "salesforce",
-            DbConfig::DuckDB(..) => "duckdb",
-            DbConfig::Spark(..) => "spark",
-            DbConfig::Fabric(..) => "fabric",
+            DbConfig::Redshift(..) => AdapterType::Redshift,
+            DbConfig::Snowflake(..) => AdapterType::Snowflake,
+            DbConfig::Postgres(..) => AdapterType::Postgres,
+            DbConfig::Bigquery(..) => AdapterType::Bigquery,
+            DbConfig::Trino(..) => AdapterType::Trino,
+            DbConfig::Datafusion(..) => AdapterType::Datafusion,
+            DbConfig::Databricks(..) => AdapterType::Databricks,
+            DbConfig::Salesforce(..) => AdapterType::Salesforce,
+            DbConfig::DuckDB(..) => AdapterType::DuckDB,
+            DbConfig::Spark(..) => AdapterType::Spark,
+            DbConfig::Fabric(..) => AdapterType::Fabric,
         }
     }
 
     pub fn adapter_type_if_supported(&self) -> Option<AdapterType> {
-        match self {
-            DbConfig::Redshift(..) => Some(AdapterType::Redshift),
-            DbConfig::Snowflake(..) => Some(AdapterType::Snowflake),
-            DbConfig::Postgres(..) => Some(AdapterType::Postgres),
-            DbConfig::Bigquery(..) => Some(AdapterType::Bigquery),
-            DbConfig::Trino(..) => None,
-            DbConfig::Datafusion(..) => None,
-            DbConfig::Databricks(..) => Some(AdapterType::Databricks),
-            DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
-            DbConfig::DuckDB(..) => Some(AdapterType::DuckDB),
-            DbConfig::Spark(..) => Some(AdapterType::Spark),
-            DbConfig::Fabric(..) => Some(AdapterType::Fabric),
+        match self.adapter_type() {
+            AdapterType::Trino | AdapterType::Datafusion => None,
+            supported => Some(supported),
         }
     }
 

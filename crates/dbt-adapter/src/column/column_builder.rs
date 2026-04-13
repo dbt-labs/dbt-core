@@ -36,6 +36,7 @@ impl ColumnBuilder {
             Trino => todo!("Trino"),
             Dremio => todo!("Dremio"),
             Oracle => todo!("Oracle"),
+            Datafusion => todo!("Datafusion"),
         }
     }
 
@@ -99,6 +100,7 @@ impl ColumnBuilder {
             Trino => todo!("Trino"),
             Dremio => todo!("Dremio"),
             Oracle => todo!("Oracle"),
+            Datafusion => todo!("Datafusion"),
             Fabric => Column::new(
                 Fabric,
                 name,

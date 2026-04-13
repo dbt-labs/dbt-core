@@ -38,6 +38,8 @@ pub enum AdapterType {
     Starburst,
     /// Trino
     Trino,
+    /// Datafusion
+    Datafusion,
     /// Dremio
     Dremio,
     /// Oracle
@@ -55,6 +57,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Fabric => '"',
         DuckDB => '"',
         Athena | Trino | Starburst => '"',
+        Datafusion => '"',
         ClickHouse => '"',
         Sidecar => '"',
         Dremio => todo!("Dremio"),

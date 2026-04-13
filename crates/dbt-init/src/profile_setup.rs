@@ -265,6 +265,7 @@ impl ProfileSetup {
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),
+            AdapterType::Datafusion => todo!("Datafusion"),
             AdapterType::Dremio => todo!("Dremio"),
             AdapterType::Oracle => todo!("Oracle"),
         };
@@ -528,10 +529,7 @@ impl ProfileSetup {
 
         let should_use_existing_config = existing_config
             .as_ref()
-            .map(|d| {
-                d.adapter_type()
-                    .eq_ignore_ascii_case(adapter.to_string().as_str())
-            })
+            .map(|d| d.adapter_type() == adapter)
             .unwrap_or(false);
 
         let final_existing_config = if should_use_existing_config {

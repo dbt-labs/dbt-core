@@ -120,5 +120,6 @@ pub fn infer_seed_column_name_strategy(
         (false, AdapterType::Trino) => todo!("Trino"),
         (false, AdapterType::Dremio) => todo!("Dremio"),
         (false, AdapterType::Oracle) => todo!("Oracle"),
+        (false, AdapterType::Datafusion) => todo!("Datafusion"),
     }
 }

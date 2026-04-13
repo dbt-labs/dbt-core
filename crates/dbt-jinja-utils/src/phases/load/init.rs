@@ -1,6 +1,6 @@
 //! This module contains the functions for initializing the Jinja environment for the load phase.
 
-use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
@@ -30,7 +30,7 @@ pub fn initialize_load_profile_jinja_environment() -> JinjaEnv {
 pub fn initialize_load_jinja_environment(
     profile: &str,
     target: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     db_config: DbConfig,
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
@@ -55,13 +55,6 @@ pub fn initialize_load_jinja_environment(
         ),
         ("flags".to_string(), MinijinjaValue::from_serialize(flags)),
     ]);
-
-    let adapter_type = AdapterType::from_str(adapter_type).map_err(|_| {
-        fs_err!(
-            ErrorCode::InvalidConfig,
-            "Unknown or unsupported adapter type '{adapter_type}'",
-        )
-    })?;
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
     let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));

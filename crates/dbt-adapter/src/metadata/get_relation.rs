@@ -78,6 +78,7 @@ pub fn get_relation(
         AdapterType::Trino => todo!("Trino"),
         AdapterType::Dremio => todo!("Dremio"),
         AdapterType::Oracle => todo!("Oracle"),
+        AdapterType::Datafusion => todo!("Datafusion"),
     }
 }
 

@@ -359,6 +359,7 @@ pub fn do_create_relation(
         Trino => todo!("Trino"),
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
+        Datafusion => todo!("Datafusion"),
     };
     Ok(relation)
 }

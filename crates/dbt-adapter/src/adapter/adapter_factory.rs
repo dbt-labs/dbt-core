@@ -36,6 +36,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Trino => todo!("Trino"),
         AdapterType::Dremio => todo!("Dremio"),
         AdapterType::Oracle => todo!("Oracle"),
+        AdapterType::Datafusion => todo!("Datafusion"),
     }
 }
 

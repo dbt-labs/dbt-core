@@ -54,6 +54,7 @@ pub fn create_static_relation(
         Trino => todo!("Trino"),
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
+        Datafusion => todo!("Datafusion"),
     };
     Some(Value::from_object(result))
 }
