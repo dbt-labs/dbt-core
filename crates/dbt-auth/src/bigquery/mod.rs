@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 use dbt_xdbc::bigquery::auth_type;
 use dbt_xdbc::{Backend, bigquery, database};
@@ -284,7 +284,7 @@ impl Auth for BigqueryAuth {
         Backend::BigQuery
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
@@ -354,7 +354,7 @@ mod tests {
     fn try_configure(config: Mapping) -> Result<database::Builder, AuthError> {
         let auth = BigqueryAuth {};
         let adapter_config = AdapterConfig::new(config);
-        auth.configure(&adapter_config)
+        auth.configure(&adapter_config).map(|r| r.builder)
     }
 
     #[test]

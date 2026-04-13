@@ -1,4 +1,4 @@
-use crate::{Auth, AuthError, config::AdapterConfig};
+use crate::{Auth, AuthError, AuthOutcome, config::AdapterConfig};
 use dbt_xdbc::{Backend, database};
 
 /// DuckDB authentication (no-op - local file database)
@@ -9,7 +9,7 @@ impl Auth for DuckDBAuth {
         Backend::DuckDB
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         let mut builder = database::Builder::new(self.backend());
 
         // Set path if provided
@@ -21,6 +21,9 @@ impl Auth for DuckDBAuth {
             }
         }
 
-        Ok(builder)
+        Ok(AuthOutcome {
+            builder,
+            warnings: vec![],
+        })
     }
 }

@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
 use dbt_xdbc::{Backend, database};
@@ -78,7 +78,7 @@ impl Auth for ClickHouseAuth {
         Backend::ClickHouse
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
@@ -97,7 +97,8 @@ mod tests {
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://localhost:8123");
@@ -114,7 +115,8 @@ mod tests {
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://ch.prod.internal:9000");
@@ -129,7 +131,8 @@ mod tests {
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.cloud:8443");
@@ -147,7 +150,8 @@ secure: true
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.cloud:8443");
@@ -162,7 +166,8 @@ secure: true
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.local:8443");
@@ -177,7 +182,8 @@ secure: true
 
         let builder = ClickHouseAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://ch.local:8123");

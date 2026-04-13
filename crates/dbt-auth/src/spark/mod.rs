@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use dbt_xdbc::{Backend, database, spark};
 pub use dbt_yaml::Value as YmlValue;
 
@@ -283,7 +283,7 @@ impl Auth for SparkAuth {
         Backend::Spark
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
@@ -311,7 +311,8 @@ mod tests {
 
             let builder = SparkAuth {}
                 .configure(&AdapterConfig::new(config))
-                .expect("configure");
+                .expect("configure")
+                .builder;
 
             assert_eq!(other_option_value(&builder, spark::HOST), Some("myhost"));
             assert_eq!(other_option_value(&builder, spark::PORT), Some("1234"));
@@ -352,7 +353,8 @@ mod tests {
 
             let builder = SparkAuth {}
                 .configure(&AdapterConfig::new(config))
-                .expect("configure");
+                .expect("configure")
+                .builder;
 
             assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
         }
@@ -387,7 +389,8 @@ mod tests {
 
             let builder = SparkAuth {}
                 .configure(&AdapterConfig::new(config))
-                .expect("configure");
+                .expect("configure")
+                .builder;
 
             assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
             assert_eq!(
@@ -424,7 +427,8 @@ mod tests {
 
         let builder = SparkAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         assert_eq!(
             other_option_value(&builder, spark::livy::SESSION_TTL),

@@ -26,13 +26,23 @@ mod test_options;
 pub use config::AdapterConfig;
 pub use duckdb::init::{generate_duckdb_init_sql, is_motherduck_path, motherduck_database_name};
 
+/// The result of configuring an auth backend.
+///
+/// Contains the configured database builder and any warnings emitted during
+/// configuration (e.g. ignored profile fields).
+#[derive(Debug)]
+pub struct AuthOutcome {
+    pub builder: database::Builder,
+    pub warnings: Vec<String>,
+}
+
 /// Authorization trait.
 pub trait Auth: Send + Sync {
     /// Return the XDBC backend this authenticator is for.
     fn backend(&self) -> Backend;
 
     /// Configure the XDBC database builder.
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError>;
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError>;
 }
 
 /// Macro used to structure the AdapterConfig -> database::Builder pipeline
@@ -45,7 +55,10 @@ macro_rules! auth_configure_pipeline {
         let builder = authentication_args.apply(builder)?;
         let builder = $apply_connection_args($cfg, builder)?;
 
-        Ok(builder)
+        Ok($crate::AuthOutcome {
+            builder,
+            warnings: vec![],
+        })
     }};
 }
 

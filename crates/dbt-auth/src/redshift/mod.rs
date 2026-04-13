@@ -1,6 +1,6 @@
 mod token_service;
 
-use crate::{AdapterConfig, Auth, AuthError};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 use std::borrow::Cow;
 use tokio::runtime::Runtime;
 use tokio::task;
@@ -35,7 +35,7 @@ impl Auth for RedshiftAuth {
         }
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         // Reference: https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
         const SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
             .remove(b'.')
@@ -202,7 +202,10 @@ impl Auth for RedshiftAuth {
             };
         }
 
-        Ok(builder)
+        Ok(AuthOutcome {
+            builder,
+            warnings: vec![],
+        })
     }
 }
 
@@ -229,7 +232,8 @@ mod tests {
 
         let builder = auth
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         let mut unknown_options = 0;
         builder.into_iter().for_each(|(k, v)| match k {

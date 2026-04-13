@@ -1,8 +1,7 @@
 mod key_format;
 
-use crate::{AdapterConfig, Auth, AuthError, PrivateKeySource, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, PrivateKeySource};
 use database::Builder as DatabaseBuilder;
-use dbt_common::{ErrorCode, tracing::emit::emit_warn_log_message};
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
 
@@ -63,14 +62,10 @@ fn validate_warehouse_auth_fields(config: &AdapterConfig) -> Result<(), AuthErro
     Ok(())
 }
 
-fn warn_ignored_auth_field(auth_method: &str, field: &str) {
-    emit_warn_log_message(
-        ErrorCode::InvalidConfig,
-        format!(
-            "For Snowflake {auth_method} authentication, '{field}' will be ignored and can be safely removed from your profile."
-        ),
-        None,
-    );
+fn warn_ignored_auth_field(warnings: &mut Vec<String>, auth_method: &str, field: &str) {
+    warnings.push(format!(
+        "For Snowflake {auth_method} authentication, '{field}' will be ignored and can be safely removed from your profile."
+    ));
 }
 
 #[derive(Debug)]
@@ -213,7 +208,19 @@ impl<'a> SnowflakeAuthIR<'a> {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, AuthError> {
+fn parse_auth<'a>(
+    config: &'a AdapterConfig,
+) -> Result<(SnowflakeAuthIR<'a>, Vec<String>), AuthError> {
+    let mut warnings = Vec::new();
+    let ir = parse_auth_inner(config, &mut warnings)?;
+    Ok((ir, warnings))
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn parse_auth_inner<'a>(
+    config: &'a AdapterConfig,
+    warnings: &mut Vec<String>,
+) -> Result<SnowflakeAuthIR<'a>, AuthError> {
     // Case 1: Profile has `method`. We can do strict evaluation of their profiles.yml
     if let Some(method) = config.get_str("method") {
         if config.get_str("authenticator").is_some() {
@@ -230,7 +237,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                     ));
                 }
                 if config.contains_key("password") {
-                    warn_ignored_auth_field("keypair", "password");
+                    warn_ignored_auth_field(warnings, "keypair", "password");
                 }
 
                 let pk_path = config.get_str("private_key_path");
@@ -257,7 +264,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
             }
             "sso" => {
                 if config.contains_key("password") {
-                    warn_ignored_auth_field("SSO", "password");
+                    warn_ignored_auth_field(warnings, "SSO", "password");
                 }
 
                 config
@@ -272,10 +279,10 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
             }
             "snowflake_oauth" => {
                 if config.contains_key("user") {
-                    warn_ignored_auth_field("OAuth", "user");
+                    warn_ignored_auth_field(warnings, "OAuth", "user");
                 }
                 if config.contains_key("password") {
-                    warn_ignored_auth_field("OAuth", "password");
+                    warn_ignored_auth_field(warnings, "OAuth", "password");
                 }
 
                 // TODO(versusfacit): update upstream to allow for refresh_token
@@ -359,7 +366,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                             ));
                         }
                         if config.contains_key("password") {
-                            warn_ignored_auth_field("keypair", "password");
+                            warn_ignored_auth_field(warnings, "keypair", "password");
                         }
 
                         Ok(SnowflakeAuthIR::Keypair {
@@ -376,7 +383,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                             ));
                         }
                         if config.contains_key("password") {
-                            warn_ignored_auth_field("keypair", "password");
+                            warn_ignored_auth_field(warnings, "keypair", "password");
                         }
 
                         Ok(SnowflakeAuthIR::Keypair {
@@ -393,7 +400,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                             ));
                         }
                         if config.contains_key("password") {
-                            warn_ignored_auth_field("keypair", "password");
+                            warn_ignored_auth_field(warnings, "keypair", "password");
                         }
 
                         // We found a passphrase, so we MUST find a key source to go with it
@@ -419,10 +426,10 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                     }
                     "oauth_client_id" | "oauth_client_secret" => {
                         if config.contains_key("user") {
-                            warn_ignored_auth_field("OAuth", "user");
+                            warn_ignored_auth_field(warnings, "OAuth", "user");
                         }
                         if config.contains_key("password") {
-                            warn_ignored_auth_field("OAuth", "password");
+                            warn_ignored_auth_field(warnings, "OAuth", "password");
                         }
 
                         let cid = config.get_str("oauth_client_id");
@@ -447,7 +454,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                     "authenticator" => {
                         if value == "externalbrowser" {
                             if config.contains_key("password") {
-                                warn_ignored_auth_field("SSO", "password");
+                                warn_ignored_auth_field(warnings, "SSO", "password");
                             }
 
                             config
@@ -463,10 +470,10 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                                 })
                         } else if value == "oauth" {
                             if config.contains_key("user") {
-                                warn_ignored_auth_field("OAuth", "user");
+                                warn_ignored_auth_field(warnings, "OAuth", "user");
                             }
                             if config.contains_key("password") {
-                                warn_ignored_auth_field("OAuth", "password");
+                                warn_ignored_auth_field(warnings, "OAuth", "password");
                             }
 
                             let cid = config.get_str("oauth_client_id");
@@ -586,8 +593,12 @@ impl Auth for SnowflakeAuth {
         Backend::Snowflake
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<DatabaseBuilder, AuthError> {
-        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
+        let (auth_ir, warnings) = parse_auth(config)?;
+        let builder = database::Builder::new(self.backend());
+        let builder = auth_ir.apply(builder)?;
+        let builder = apply_connection_args(config, builder)?;
+        Ok(AuthOutcome { builder, warnings })
     }
 }
 
@@ -649,13 +660,13 @@ mod tests {
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) {
         let auth = SnowflakeAuth {};
-        let builder = auth
+        let auth_result = auth
             .configure(&AdapterConfig::new(config))
             .expect("configure");
 
         let mut results = Mapping::default();
 
-        for (k, v) in builder.into_iter() {
+        for (k, v) in auth_result.builder.into_iter() {
             let key = match k {
                 OptionDatabase::Username => "user".to_owned(),
                 OptionDatabase::Password => "password".to_owned(),

@@ -1,6 +1,8 @@
 use std::fs;
 
-use crate::{AdapterConfig, Auth, AuthError, PrivateKeySource, auth_configure_pipeline};
+use crate::{
+    AdapterConfig, Auth, AuthError, AuthOutcome, PrivateKeySource, auth_configure_pipeline,
+};
 use database::Builder as DatabaseBuilder;
 
 use dbt_xdbc::salesforce::auth_type;
@@ -105,7 +107,7 @@ impl Auth for SalesforceAuth {
         Backend::Salesforce
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
@@ -129,7 +131,8 @@ mod tests {
 
         let builder = SalesforceAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         assert_eq!(
             other_option_value(&builder, salesforce::AUTH_TYPE).unwrap(),

@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 use database::Builder as DatabaseBuilder;
 use dbt_yaml::Value;
 use std::borrow::Cow;
@@ -152,7 +152,7 @@ impl Auth for DatabricksAuth {
         }
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         #[cfg(feature = "odbc")]
         {
             configure_odbc(self.backend(), config)
@@ -171,10 +171,7 @@ impl Auth for DatabricksAuth {
 }
 
 #[cfg(feature = "odbc")]
-fn configure_odbc(
-    backend: Backend,
-    config: &AdapterConfig,
-) -> Result<database::Builder, AuthError> {
+fn configure_odbc(backend: Backend, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
     let http_path = resolve_http_path(config)?;
 
     let mut builder = DatabaseBuilder::new(backend);
@@ -205,7 +202,10 @@ fn configure_odbc(
         .with_named_option(odbc::THRIFT_TRANSPORT, "2")?
         .with_named_option(odbc::AUTH_MECHANISM, odbc::auth_mechanism_options::TOKEN)?;
 
-    Ok(builder)
+    Ok(AuthOutcome {
+        builder,
+        warnings: vec![],
+    })
 }
 
 fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<'_, str>, AuthError> {
@@ -288,7 +288,7 @@ mod tests {
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};
-        let builder = auth.configure(&AdapterConfig::new(config))?;
+        let builder = auth.configure(&AdapterConfig::new(config))?.builder;
         assert_eq!(builder.clone().into_iter().count(), expected.len());
 
         for &(key, expected_val) in expected {
@@ -827,7 +827,8 @@ mod odbc_tests {
 
         let builder = DatabricksAuth {}
             .configure(&AdapterConfig::new(config))
-            .expect("configure");
+            .expect("configure")
+            .builder;
 
         assert_eq!(
             other_option_value(&builder, databricks::USER_AGENT),

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 
 use dbt_xdbc::{
     Backend,
@@ -102,7 +102,7 @@ impl Auth for SQLServerAuth {
         Backend::SQLServer
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }

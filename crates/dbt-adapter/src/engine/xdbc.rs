@@ -288,16 +288,24 @@ impl XdbcEngine {
         } else {
             // Delegate configuration to the Auth implementation configuring
             // the warehouse driver locally.
-            let database_builder = self
+            let auth_result = self
                 .auth
                 .configure(config)
                 .map_err(crate::errors::auth_error_to_adapter_error)?;
+
+            for warning in &auth_result.warnings {
+                dbt_common::tracing::emit::emit_warn_log_message(
+                    dbt_common::ErrorCode::InvalidConfig,
+                    warning,
+                    None,
+                );
+            }
 
             let load_strategy = match self.adapter_type {
                 AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
                 _ => LoadStrategy::CdnCache,
             };
-            (database_builder, load_strategy)
+            (auth_result.builder, load_strategy)
         };
 
         // This will load the "flock" driver if load_strategy is Remote.

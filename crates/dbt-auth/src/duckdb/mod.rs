@@ -1,6 +1,6 @@
 pub mod init;
 
-use crate::{AdapterConfig, Auth, AuthError};
+use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 
 use dbt_xdbc::{Backend, database};
 
@@ -11,7 +11,7 @@ impl Auth for DuckDbAuth {
         Backend::DuckDB
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
         let mut builder = database::Builder::new(self.backend());
 
         // DuckDB requires the database path to be specified
@@ -29,7 +29,10 @@ impl Auth for DuckDbAuth {
                 .map_err(|e| AuthError::Config(e.to_string()))?;
         }
 
-        Ok(builder)
+        Ok(AuthOutcome {
+            builder,
+            warnings: vec![],
+        })
     }
 }
 
@@ -56,7 +59,7 @@ path: "md:stocks_dev"
 "#,
         );
 
-        let builder = auth.configure(&config).unwrap();
+        let builder = auth.configure(&config).unwrap().builder;
         assert!(builder.other.iter().any(|(name, value)| {
             matches!(
                 (name, value),
@@ -83,7 +86,7 @@ path: "/tmp/local.duckdb"
 "#,
         );
 
-        let builder = auth.configure(&config).unwrap();
+        let builder = auth.configure(&config).unwrap().builder;
         assert!(builder.other.iter().any(|(name, value)| {
             matches!(
                 (name, value),
