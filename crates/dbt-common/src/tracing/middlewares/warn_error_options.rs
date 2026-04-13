@@ -34,6 +34,9 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
         let Some(log_message) = record.attributes.downcast_ref::<LogMessage>() else {
             return Some(record);
         };
+        if log_message.original_severity_number() != SeverityNumber::Warn {
+            return Some(record);
+        }
         let Some(code) = log_message
             .code
             .and_then(|code| u16::try_from(code).ok())
