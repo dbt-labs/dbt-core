@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 use crate::AdapterType;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -63,6 +63,8 @@ fn compare_sql_inner(
     let expected = canonicalize_databricks_legacy_alter_column_comment_to_modern(&expected);
     let actual = canonicalize_snowflake_grant_select_to_roles(&actual);
     let expected = canonicalize_snowflake_grant_select_to_roles(&expected);
+    let actual = canonicalize_privilege_statement_order(&actual);
+    let expected = canonicalize_privilege_statement_order(&expected);
     let actual = canonicalize_numeric_to_decimal(&actual);
     let expected = canonicalize_numeric_to_decimal(&expected);
     let actual = canonicalize_alter_table_set_tblproperties_order(&actual);
@@ -850,7 +852,7 @@ fn canonicalize_databricks_tmp_view_definition(sql: &str) -> Option<String> {
         return None;
     }
 
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         // Note: we only strip *leading* line comments; we do not attempt full comment-aware parsing.
         Regex::new(
             r"(?is)^\s*(?:--[^\n]*\n\s*)*create\s+or\s+replace\s+(?:(?P<temp>temporary)\s+)?view\s+(?P<name>.+?)\s+as\s+(?P<body>.*)$",
@@ -897,7 +899,7 @@ fn canonicalize_databricks_tmp_merge_using(sql: &str) -> Option<String> {
         return None;
     }
 
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         // Match the USING <relation> portion of a MERGE statement, allowing leading line comments.
         // The relation may be a multi-part quoted name like `db`.`schema`.`table__dbt_tmp`.
         Regex::new(
@@ -938,7 +940,7 @@ fn canonicalize_databricks_tmp_merge_using(sql: &str) -> Option<String> {
 /// For replay diffs we treat them as equivalent by rewriting the legacy form into the modern form.
 fn canonicalize_databricks_legacy_alter_column_comment_to_modern(sql: &str) -> String {
     // NOTE: We scope this extremely narrowly (anchored) to avoid masking unrelated DDL.
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
             r#"(?is)^\s*alter\s+table\s+(?P<rel>.+?)\s+change\s+column\s+(?P<col>`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*)\s+comment\s+'(?P<comment>(?:\\'|''|[^'])*)'\s*;?\s*$"#,
         )
@@ -998,7 +1000,7 @@ fn canonicalize_snowflake_grant_select_to_roles(sql: &str) -> String {
     }
 
     // Match "grant select on <obj> to <to>"
-    static GRANT_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static GRANT_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r#"(?is)^\s*grant\s+select\s+on\s+(?P<object>.+?)\s+to\s+(?P<to>.+?)\s*$"#)
             .unwrap()
     });
@@ -1110,13 +1112,148 @@ fn unquote_identifier_like(s: &str) -> Option<String> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PrivilegeStatement {
+    pub(crate) verb: String,
+    pub(crate) privilege: String,
+    pub(crate) object: String,
+    pub(crate) principal: String,
+}
+
+impl PrivilegeStatement {
+    pub(crate) fn render(&self) -> String {
+        match self.verb.as_str() {
+            "grant" => format!(
+                "grant {} on {} to {};",
+                self.privilege, self.object, self.principal
+            ),
+            "revoke" => format!(
+                "revoke {} on {} from {};",
+                self.privilege, self.object, self.principal
+            ),
+            _ => unreachable!("unexpected privilege statement verb"),
+        }
+    }
+}
+
+/// Canonicalize batches of semicolon-separated GRANT/REVOKE privilege statements by sorting
+/// statements within contiguous verb groups.
+///
+/// This is intentionally narrow:
+/// - every statement must be a simple `grant <priv> on <obj> to <principal>` or
+///   `revoke <priv> on <obj> from <principal>`
+/// - all statements must target the same object and principal
+/// - the relative order of GRANT groups vs REVOKE groups is preserved
+///
+/// This lets replay ignore nondeterministic privilege iteration order without collapsing a
+/// semantically meaningful revoke-then-grant sequence into grant-then-revoke.
+fn canonicalize_privilege_statement_order(sql: &str) -> String {
+    let trimmed = sql.trim();
+    if trimmed.is_empty() {
+        return sql.to_string();
+    }
+
+    let statements = sql_split_statements(trimmed, None);
+    if statements.len() < 2 {
+        return sql.to_string();
+    }
+
+    static PRIVILEGE_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r#"(?is)^\s*(?P<verb>grant|revoke)\s+(?P<privilege>.+?)\s+on\s+(?P<object>.+?)\s+(?P<direction>to|from)\s+(?P<principal>.+?)\s*$"#,
+        )
+        .unwrap()
+    });
+
+    let mut parsed = Vec::with_capacity(statements.len());
+    for stmt in statements {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+
+        let Some(caps) = PRIVILEGE_RE.captures(stmt) else {
+            return sql.to_string();
+        };
+
+        let verb = caps
+            .name("verb")
+            .expect("verb capture exists")
+            .as_str()
+            .trim()
+            .to_ascii_lowercase();
+        let direction = caps
+            .name("direction")
+            .expect("direction capture exists")
+            .as_str()
+            .trim()
+            .to_ascii_lowercase();
+        if (verb == "grant" && direction != "to") || (verb == "revoke" && direction != "from") {
+            return sql.to_string();
+        }
+
+        parsed.push(PrivilegeStatement {
+            verb,
+            privilege: caps
+                .name("privilege")
+                .expect("privilege capture exists")
+                .as_str()
+                .trim()
+                .to_string(),
+            object: caps
+                .name("object")
+                .expect("object capture exists")
+                .as_str()
+                .trim()
+                .to_string(),
+            principal: caps
+                .name("principal")
+                .expect("principal capture exists")
+                .as_str()
+                .trim()
+                .to_string(),
+        });
+    }
+
+    let Some(first) = parsed.first() else {
+        return sql.to_string();
+    };
+    if parsed
+        .iter()
+        .any(|stmt| stmt.object != first.object || stmt.principal != first.principal)
+    {
+        return sql.to_string();
+    }
+
+    let mut out = Vec::with_capacity(parsed.len());
+    let mut start = 0usize;
+    while start < parsed.len() {
+        let verb = parsed[start].verb.clone();
+        let mut end = start + 1;
+        while end < parsed.len() && parsed[end].verb == verb {
+            end += 1;
+        }
+
+        let mut group = parsed[start..end].to_vec();
+        group.sort_by(|a, b| {
+            a.privilege
+                .cmp(&b.privilege)
+                .then_with(|| a.render().cmp(&b.render()))
+        });
+        out.extend(group.into_iter().map(|stmt| stmt.render()));
+        start = end;
+    }
+
+    out.join("\n")
+}
+
 /// Canonicalize `ALTER TABLE ... SET tblproperties (...)` by sorting the key-value
 /// entries alphabetically by key. Databricks/Spark tblproperties are an unordered set
 /// of key-value pairs, but Fusion and dbt-databricks may emit them in different order.
 fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
     // Match: ALTER TABLE <name> SET tblproperties (<entries>)
     // Anchored to the full statement to avoid masking unrelated DDL.
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?is)^(\s*ALTER\s+TABLE\s+.+?\s+SET\s+tblproperties\s*\()(.+?)(\)\s*)$")
             .unwrap()
     });
@@ -1130,9 +1267,8 @@ fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
     let suffix = &caps[3]; // ")"
 
     // Extract 'key' = 'value' pairs via regex to avoid breaking on commas inside quoted values.
-    static ENTRY_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-        Regex::new(r"'(?:[^'\\]|\\.)*'\s*=\s*'(?:[^'\\]|\\.)*'").unwrap()
-    });
+    static ENTRY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"'(?:[^'\\]|\\.)*'\s*=\s*'(?:[^'\\]|\\.)*'").unwrap());
 
     let mut entries: Vec<&str> = ENTRY_RE
         .find_iter(entries_raw)
@@ -1149,8 +1285,8 @@ fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
 /// NUMERIC and DECIMAL are SQL-standard synonyms. Fusion may emit one while the
 /// recording uses the other. Normalize `numeric(` → `decimal(` so comparisons succeed.
 fn canonicalize_numeric_to_decimal(sql: &str) -> String {
-    static NUMERIC_RE: once_cell::sync::Lazy<Regex> =
-        once_cell::sync::Lazy::new(|| Regex::new(r"(?i)\bnumeric\s*\(").unwrap());
+    static NUMERIC_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)\bnumeric\s*\(").unwrap());
     NUMERIC_RE
         .replace_all(sql, |caps: &regex::Captures<'_>| {
             // Preserve original whitespace between "numeric" and "("
@@ -1729,7 +1865,7 @@ fn canonicalize_query_tag(sql: &str) -> String {
     // Match: ALTER SESSION SET QUERY_TAG = '...'
     // Flags: (?i) case-insensitive, (?s) allow '.' to match newlines (defensive)
     // We specifically capture a single-quoted literal to avoid over-matching.
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?is)\balter\s+session\s+set\s+query_tag\s*=\s*'[^']*'").unwrap()
     });
     RE.replace_all(sql, "alter session set query_tag = '__TAG__'")
@@ -1743,7 +1879,7 @@ fn canonicalize_query_tag(sql: &str) -> String {
 /// is available in manifest.json. We should consider using it in replay. TODO: Do this!
 fn canonicalize_uuid_literals(sql: &str) -> String {
     // Case-insensitive UUID regex inside single quotes
-    static UUID_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'").unwrap()
     });
     UUID_RE.replace_all(sql, "'UUID'").to_string()
@@ -1777,7 +1913,7 @@ fn canonicalize_elementary_metadata_pkg_version(sql: &str) -> String {
         return sql.to_string();
     }
 
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?i)'[0-9]+(?:\.[0-9]+){2}'\s+as\s+dbt_pkg_version").unwrap()
     });
     RE.replace_all(sql, "'DBT_PKG_VERSION' as dbt_pkg_version")
@@ -1967,7 +2103,7 @@ fn remove_redundant_nested_ctes_recursive(
 /// Mantle/Fusion can differ in invocation_id and in how they truncate/hash test names, but
 /// the specific embedded literal is not semantically meaningful for replay comparison.
 fn canonicalize_uuid_prefixed_test_unique_id_literals(sql: &str) -> String {
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
             r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.test\.[^']*'",
         )
@@ -1985,8 +2121,7 @@ fn canonicalize_uuid_prefixed_test_unique_id_literals(sql: &str) -> String {
 /// This is intentionally narrow (must start with `test.` inside single quotes) to avoid
 /// masking unrelated string literals.
 fn canonicalize_dbt_test_unique_id_literals(sql: &str) -> String {
-    static RE: once_cell::sync::Lazy<Regex> =
-        once_cell::sync::Lazy::new(|| Regex::new(r"(?i)'test\.[^']*'").unwrap());
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)'test\.[^']*'").unwrap());
     RE.replace_all(sql, "'test.TEST_UNIQUE_ID'").to_string()
 }
 
@@ -1996,7 +2131,7 @@ fn canonicalize_dbt_test_unique_id_literals(sql: &str) -> String {
 /// patterns like:
 ///   '2025-12-23 07:06:03' -> '2025-12-23T07:06:03'
 fn canonicalize_quoted_timestamp_space_separator(sql: &str) -> String {
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         // Narrow to single-quoted literals to avoid touching non-literal SQL fragments.
         // Supports optional fractional seconds and optional timezone suffix (e.g. +00:00 or Z).
         Regex::new(r"'(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:([+-]\d{2}:\d{2}|Z))?'")
@@ -2013,9 +2148,8 @@ fn canonicalize_elementary_tmp_suffix(sql: &str) -> String {
     // Case-insensitive; match "__tmp_" followed by a long digit run (timestamps/unique suffixes)
     // Scope it to a plausible leading year 2000-2100 to avoid over-matching.
     // Example matched: "__tmp_20251203160139043240"
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-        Regex::new(r"(?i)(__tmp_)(?:20[0-9]{2}|2100)\d{8,}").unwrap()
-    });
+    static RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)(__tmp_)(?:20[0-9]{2}|2100)\d{8,}").unwrap());
     RE.replace_all(sql, "${1}TIMESTAMP").to_string()
 }
 
@@ -2036,11 +2170,11 @@ fn canonicalize_test_temp_relation_identifiers(sql: &str) -> String {
         return sql.to_string();
     }
 
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         // Replace the variable middle portion of `test_<...>__tmp_TIMESTAMP` with `ALPHA`.
         Regex::new(r"(?i)(\btest_)[0-9a-z_]+(__tmp_TIMESTAMP\b)").unwrap()
     });
-    static QUOTED_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static QUOTED_RE: LazyLock<Regex> = LazyLock::new(|| {
         // When the identifier is quoted (e.g. Snowflake), the quotes become separate tokens and
         // can cause mismatches even after normalizing the middle portion. Strip quotes only for
         // canonical dbt test temp identifiers.
@@ -2068,7 +2202,7 @@ fn canonicalize_dbt_model_tmp_suffix(sql: &str) -> String {
         return sql.to_string();
     }
 
-    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
         // Match __dbt_tmp followed by one or more digits
         // This captures the pattern used by dbt for temporary table suffixes
         Regex::new(r"(?i)(__dbt_tmp_?)\d*\b").unwrap()
@@ -2108,8 +2242,7 @@ fn normalize_for_wrapper_diff(sql: &str) -> String {
     }
     // Collapse all whitespace and lowercase
     // Precompiled regex for performance
-    static WS_RE: once_cell::sync::Lazy<Regex> =
-        once_cell::sync::Lazy::new(|| Regex::new(r"\s+").unwrap());
+    static WS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
     WS_RE.replace_all(&out, "").to_lowercase()
 }
 
@@ -2260,15 +2393,14 @@ fn canonicalize_python_meta_dict(sql: &str) -> String {
     }
 
     // 1. Remove the standalone `meta_dict = {}` line (with surrounding blank lines collapsed).
-    static RE_META_DICT_EMPTY: once_cell::sync::Lazy<Regex> =
-        once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^\s*meta_dict\s*=\s*\{\}\s*\n").unwrap());
+    static RE_META_DICT_EMPTY: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^\s*meta_dict\s*=\s*\{\}\s*\n").unwrap());
 
     // 2. Match a non-empty `meta_dict = {…}` line and capture the dict literal.
     //    The assignment is always on a single line; greedy [^\n]* followed by \} finds the last
     //    closing brace on that line, correctly handling nested dicts.
-    static RE_META_DICT_NONEMPTY: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-        Regex::new(r"(?m)^[ \t]*meta_dict\s*=\s*(\{[^\n]*\})\s*\n").unwrap()
-    });
+    static RE_META_DICT_NONEMPTY: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^[ \t]*meta_dict\s*=\s*(\{[^\n]*\})\s*\n").unwrap());
 
     // 3. Remove the `meta_get` static method block inside the config class.
     //    Matches:
@@ -2276,7 +2408,7 @@ fn canonicalize_python_meta_dict(sql: &str) -> String {
     //        def meta_get(key, default=None):
     //            return meta_dict.get(key, default)
     //    (with flexible indentation and an optional trailing blank line)
-    static RE_META_GET_METHOD: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+    static RE_META_GET_METHOD: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
                 r"(?m)^[ \t]*@staticmethod\s*\n[ \t]*def meta_get\(.*?\):\s*\n[ \t]*return meta_dict\.get\(.*?\)\s*\n?"
             )
@@ -3285,6 +3417,60 @@ qualify row_number() over (partition by billing_group_id, __as_of order by rn de
         assert!(
             result.is_ok(),
             "Expected python-list GRANT form to be equivalent to multiple GRANT statements"
+        );
+    }
+
+    #[test]
+    fn test_snowflake_revoke_privilege_order_drift_should_be_ignorable() {
+        let actual = r#"
+            revoke delete on DB.SCH.tbl from ROLE_A;
+            revoke rebuild on DB.SCH.tbl from ROLE_A;
+            revoke evolve schema on DB.SCH.tbl from ROLE_A;
+            revoke select error table on DB.SCH.tbl from ROLE_A;
+            revoke truncate on DB.SCH.tbl from ROLE_A;
+            revoke update on DB.SCH.tbl from ROLE_A;
+            revoke insert on DB.SCH.tbl from ROLE_A;
+            revoke references on DB.SCH.tbl from ROLE_A;
+            revoke select on DB.SCH.tbl from ROLE_A;
+            revoke applybudget on DB.SCH.tbl from ROLE_A;
+            grant all on DB.SCH.tbl to ROLE_A;
+        "#;
+        let expected = r#"
+            revoke select error table on DB.SCH.tbl from ROLE_A;
+            revoke delete on DB.SCH.tbl from ROLE_A;
+            revoke rebuild on DB.SCH.tbl from ROLE_A;
+            revoke evolve schema on DB.SCH.tbl from ROLE_A;
+            revoke insert on DB.SCH.tbl from ROLE_A;
+            revoke truncate on DB.SCH.tbl from ROLE_A;
+            revoke update on DB.SCH.tbl from ROLE_A;
+            revoke references on DB.SCH.tbl from ROLE_A;
+            revoke select on DB.SCH.tbl from ROLE_A;
+            revoke applybudget on DB.SCH.tbl from ROLE_A;
+            grant all on DB.SCH.tbl to ROLE_A;
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Expected Snowflake revoke privilege ordering drift to be ignored"
+        );
+    }
+
+    #[test]
+    fn test_snowflake_grant_revoke_group_order_is_not_ignorable() {
+        let actual = r#"
+            revoke select on DB.SCH.tbl from ROLE_A;
+            grant all on DB.SCH.tbl to ROLE_A;
+        "#;
+        let expected = r#"
+            grant all on DB.SCH.tbl to ROLE_A;
+            revoke select on DB.SCH.tbl from ROLE_A;
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_err(),
+            "Expected grant/revoke group ordering to remain significant"
         );
     }
 

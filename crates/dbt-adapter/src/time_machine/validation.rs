@@ -9,9 +9,11 @@
 
 use std::{fmt, sync::LazyLock};
 
+use dbt_sql_utils::sql_split_statements;
 use regex::Regex;
 use similar::{ChangeTag, TextDiff};
 
+use crate::sql::diff::PrivilegeStatement;
 use crate::sql::normalize::strip_sql_comments;
 use crate::time_machine::event::AdapterCallEvent;
 
@@ -589,12 +591,13 @@ impl SqlSanitizer for UuidSanitizer {
     }
 }
 
-/// Sanitizer that normalizes the ordering of semicolon-separated GRANT statements.
+/// Sanitizer that normalizes the ordering of semicolon-separated GRANT/REVOKE privilege
+/// statements within contiguous verb groups.
 ///
-/// Some hooks (e.g. `on_run_end`) generate a batch of GRANT statements whose
-/// iteration order is non-deterministic. When the entire SQL is a sequence of
-/// GRANT statements, this sanitizer sorts them so that ordering differences
-/// don't cause false validation mismatches.
+/// Some hooks generate a batch of privilege statements whose iteration order is
+/// non-deterministic. When the entire SQL is a same-target sequence of simple
+/// GRANT/REVOKE statements, this sanitizer sorts statements inside contiguous
+/// GRANT or REVOKE runs while preserving the run order itself.
 pub struct GrantOrderingSanitizer;
 
 impl SqlSanitizer for GrantOrderingSanitizer {
@@ -603,22 +606,73 @@ impl SqlSanitizer for GrantOrderingSanitizer {
     }
 
     fn sanitize(&self, sql: &str) -> String {
-        let parts: Vec<&str> = sql
-            .split(';')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if parts.len() > 1
-            && parts
-                .iter()
-                .all(|p| p.to_ascii_uppercase().starts_with("GRANT"))
-        {
-            let mut sorted = parts;
-            sorted.sort_unstable();
-            sorted.join("; ") + ";"
-        } else {
-            sql.to_string()
+        let statements = sql_split_statements(sql.trim(), None);
+        if statements.len() < 2 {
+            return sql.to_string();
         }
+
+        static PRIVILEGE_RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(
+                r#"(?is)^\s*(?P<verb>grant|revoke)\s+(?P<privilege>.+?)\s+on\s+(?P<object>.+?)\s+(?P<direction>to|from)\s+(?P<principal>.+?)\s*$"#,
+            )
+            .expect("valid privilege regex")
+        });
+
+        let mut parsed = Vec::with_capacity(statements.len());
+        for stmt in statements {
+            let stmt = stmt.trim();
+            if stmt.is_empty() {
+                continue;
+            }
+
+            let Some(caps) = PRIVILEGE_RE.captures(stmt) else {
+                return sql.to_string();
+            };
+
+            let verb = caps["verb"].trim().to_ascii_lowercase();
+            let direction = caps["direction"].trim().to_ascii_lowercase();
+            if (verb == "grant" && direction != "to") || (verb == "revoke" && direction != "from") {
+                return sql.to_string();
+            }
+
+            parsed.push(PrivilegeStatement {
+                verb,
+                privilege: caps["privilege"].trim().to_string(),
+                object: caps["object"].trim().to_string(),
+                principal: caps["principal"].trim().to_string(),
+            });
+        }
+
+        let Some(first) = parsed.first() else {
+            return sql.to_string();
+        };
+        if parsed
+            .iter()
+            .any(|stmt| stmt.object != first.object || stmt.principal != first.principal)
+        {
+            return sql.to_string();
+        }
+
+        let mut out = Vec::with_capacity(parsed.len());
+        let mut start = 0usize;
+        while start < parsed.len() {
+            let verb = parsed[start].verb.clone();
+            let mut end = start + 1;
+            while end < parsed.len() && parsed[end].verb == verb {
+                end += 1;
+            }
+
+            let mut group = parsed[start..end].to_vec();
+            group.sort_by(|a, b| {
+                a.privilege
+                    .cmp(&b.privilege)
+                    .then_with(|| a.render().cmp(&b.render()))
+            });
+            out.extend(group.into_iter().map(|stmt| stmt.render()));
+            start = end;
+        }
+
+        out.join(" ")
     }
 }
 
@@ -1029,7 +1083,23 @@ mod tests {
         let sanitizer = GrantOrderingSanitizer;
         let sql1 = "grant USAGE on schema A to role R1; grant USAGE on schema B to role R2;";
         let sql2 = "grant USAGE on schema B to role R2; grant USAGE on schema A to role R1;";
+        assert_ne!(sanitizer.sanitize(sql1), sanitizer.sanitize(sql2));
+    }
+
+    #[test]
+    fn test_grant_ordering_sanitizer_same_target_revoke_batch() {
+        let sanitizer = GrantOrderingSanitizer;
+        let sql1 = "revoke DELETE on DB.SCH.tbl from ROLE_A; revoke SELECT on DB.SCH.tbl from ROLE_A; grant ALL on DB.SCH.tbl to ROLE_A;";
+        let sql2 = "revoke SELECT on DB.SCH.tbl from ROLE_A; revoke DELETE on DB.SCH.tbl from ROLE_A; grant ALL on DB.SCH.tbl to ROLE_A;";
         assert_eq!(sanitizer.sanitize(sql1), sanitizer.sanitize(sql2));
+    }
+
+    #[test]
+    fn test_grant_ordering_sanitizer_preserves_grant_revoke_group_order() {
+        let sanitizer = GrantOrderingSanitizer;
+        let sql1 = "revoke SELECT on DB.SCH.tbl from ROLE_A; grant ALL on DB.SCH.tbl to ROLE_A;";
+        let sql2 = "grant ALL on DB.SCH.tbl to ROLE_A; revoke SELECT on DB.SCH.tbl from ROLE_A;";
+        assert_ne!(sanitizer.sanitize(sql1), sanitizer.sanitize(sql2));
     }
 
     #[test]
