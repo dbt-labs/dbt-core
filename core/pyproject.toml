@@ -77,6 +77,9 @@ Changelog = "https://github.com/dbt-labs/dbt-core/blob/main/CHANGELOG.md"
 [project.scripts]
 dbt = "dbt.cli.main:cli"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.version]
 path = "dbt/__version__.py"
 
