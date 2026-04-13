@@ -56,7 +56,7 @@
 create or replace {{ transient_keyword }}dynamic table {{ relation }}
     target_lag = '{{ dynamic_table.target_lag }}'
     warehouse = {{ dynamic_table.snowflake_warehouse }}
-    {# DIVERGENCE: FIXME: support dynamic_table.snowflake_initialization_warehouse #}
+    {{ optional('initialization_warehouse', dynamic_table.snowflake_initialization_warehouse) }}
     {{ optional('refresh_mode', dynamic_table.refresh_mode) }}
     {{ optional('initialize', dynamic_table.initialize) }}
     {{ optional('with row access policy', dynamic_table.row_access_policy, equals_char='') }}
@@ -92,7 +92,7 @@ create or replace {{ transient_keyword }}dynamic table {{ relation }}
 create or replace dynamic iceberg table {{ relation }}
     target_lag = '{{ dynamic_table.target_lag }}'
     warehouse = {{ dynamic_table.snowflake_warehouse }}
-    {# DIVERGENCE: FIXME: support dynamic_table.snowflake_initialization_warehouse #}
+    {{ optional('initialization_warehouse', dynamic_table.snowflake_initialization_warehouse) }}
     {{ optional('external_volume', catalog_relation.external_volume, "'") }}
     catalog = 'snowflake'
     base_location = '{{ catalog_relation.base_location }}'

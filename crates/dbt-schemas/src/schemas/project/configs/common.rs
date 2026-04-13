@@ -340,6 +340,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
     pub target_lag: Option<String>,
+    pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
@@ -450,6 +451,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             base_location_root,
             base_location_subpath,
             target_lag,
+            snowflake_initialization_warehouse,
             snowflake_warehouse,
             refresh_mode,
             initialize,
@@ -542,6 +544,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 base_location_root,
                 base_location_subpath,
                 target_lag,
+                snowflake_initialization_warehouse,
                 snowflake_warehouse,
                 refresh_mode,
                 initialize,
@@ -714,6 +717,8 @@ pub fn same_warehouse_config(
     let base_location_root_eq = self_wh.base_location_root == other_wh.base_location_root;
     let base_location_subpath_eq = self_wh.base_location_subpath == other_wh.base_location_subpath;
     let target_lag_eq = self_wh.target_lag == other_wh.target_lag;
+    let snowflake_initialization_warehouse_eq =
+        self_wh.snowflake_initialization_warehouse == other_wh.snowflake_initialization_warehouse;
     let refresh_mode_eq = self_wh.refresh_mode == other_wh.refresh_mode;
     let initialize_eq = self_wh.initialize == other_wh.initialize;
     let tmp_relation_type_eq = self_wh.tmp_relation_type == other_wh.tmp_relation_type;
@@ -778,6 +783,7 @@ pub fn same_warehouse_config(
         && base_location_root_eq
         && base_location_subpath_eq
         && target_lag_eq
+        && snowflake_initialization_warehouse_eq
         && refresh_mode_eq
         && initialize_eq
         && tmp_relation_type_eq
@@ -1153,6 +1159,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.target_lag),
                         format!("{:?}", &other_wh.target_lag),
+                    )),
+                ),
+                (
+                    "snowflake_initialization_warehouse",
+                    snowflake_initialization_warehouse_eq,
+                    Some((
+                        format!("{:?}", &self_wh.snowflake_initialization_warehouse),
+                        format!("{:?}", &other_wh.snowflake_initialization_warehouse),
                     )),
                 ),
                 (

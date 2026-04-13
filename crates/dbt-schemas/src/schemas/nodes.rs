@@ -5042,6 +5042,9 @@ impl AdapterAttr {
                     base_location_root: config.base_location_root.clone(),
                     base_location_subpath: config.base_location_subpath.clone(),
                     target_lag: config.target_lag.clone(),
+                    snowflake_initialization_warehouse: config
+                        .snowflake_initialization_warehouse
+                        .clone(),
                     snowflake_warehouse: config.snowflake_warehouse.clone(),
                     refresh_mode: config.refresh_mode.clone(),
                     initialize: config.initialize.clone(),
@@ -5132,6 +5135,9 @@ impl AdapterAttr {
                         base_location_root: config.base_location_root.clone(),
                         base_location_subpath: config.base_location_subpath.clone(),
                         target_lag: config.target_lag.clone(),
+                        snowflake_initialization_warehouse: config
+                            .snowflake_initialization_warehouse
+                            .clone(),
                         snowflake_warehouse: config.snowflake_warehouse.clone(),
                         refresh_mode: config.refresh_mode.clone(),
                         initialize: config.initialize.clone(),
@@ -5221,6 +5227,7 @@ pub struct SnowflakeAttr {
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
     pub target_lag: Option<String>,
+    pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
