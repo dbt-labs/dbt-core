@@ -345,13 +345,30 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 fqn.append(snapshot["name"])
 
                 compiled_path = snapshot["name"] + ".sql"
+
+                # Fix for GitHub issue #12756:
+                # Store initial_config in a variable so we can pass it to
+                # update_parsed_node_config() after node creation. Without this
+                # call, +schema (and any other project-level config) set in
+                # dbt_project.yml is silently ignored for YAML snapshots that
+                # have no config: block at all. The normal SQL parse path in
+                # base.py calls render_update() -> update_parsed_node_config()
+                # -> update_parsed_node_relation_names() -> _update_node_schema(),
+                # but this YAML path skipped all of that.
+                initial_config = parser.initial_config(fqn)
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     compiled_path,
-                    parser.initial_config(fqn),
+                    initial_config,
                     fqn,
                     snapshot["name"],
                 )
+
+                # Apply project-level configs (e.g. +schema from dbt_project.yml)
+                # to the node immediately. This mirrors what render_update() does
+                # in the normal SQL parser path and ensures the schema is resolved
+                # correctly even when no config: block exists in the snapshot YAML.
+                parser.update_parsed_node_config(snapshot_node, initial_config)
 
                 # Parse the expected ref() or source() expression given by
                 # 'relation' so that we know what we are snapshotting.
