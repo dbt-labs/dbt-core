@@ -79,7 +79,7 @@ pub(crate) async fn download_publication_artifacts(
         .ok_or_else(|| {
             fs_err!(
                 ErrorCode::InvalidConfig,
-                "Cannot download publication artifacts: no dbt Cloud credentials configured."
+                "Cannot resolve cross-project refs: no dbt Cloud credentials configured. Publication artifact download requires valid credentials."
             )
         })?;
     let project_id = dbt_cloud_config
@@ -88,7 +88,7 @@ pub(crate) async fn download_publication_artifacts(
         .ok_or_else(|| {
             fs_err!(
                 ErrorCode::InvalidConfig,
-                "Cannot download publication artifacts: no project ID configured."
+                "Cannot resolve cross-project refs: no project ID configured. Publication artifact download requires a project ID."
             )
         })?;
     let (account_id, account_host, token) = (
@@ -152,7 +152,10 @@ pub(crate) async fn download_publication_artifacts(
         emit_info_progress_message(
             ProgressMessage::new_from_action_and_target(
                 "Downloading".to_string(),
-                format!("publication artifact for {}", upstream_project.name),
+                format!(
+                    "publication artifact for {} (resolving cross-project refs)",
+                    upstream_project.name
+                ),
             ),
             io.status_reporter.as_ref(),
         );
@@ -237,7 +240,7 @@ pub(crate) async fn download_publication_artifacts(
             ProgressMessage::new_from_action_and_target(
                 "Downloaded".to_string(),
                 format!(
-                    "publication artifact for {} to {}",
+                    "publication artifact for {} to {} (resolving cross-project refs)",
                     upstream_project.name,
                     artifact_path.display()
                 ),
