@@ -34,7 +34,7 @@ pub fn typecheck(
     content: &str,
     offset: &dbt_common::CodeLocationWithFile,
     unique_id: &str,
-    adapter_type: Option<AdapterType>,
+    adapter_type: AdapterType,
     skip_redundant_template_syntax_error_log: bool,
 ) -> FsResult<()> {
     let function_signatures = env.jinja_function_registry.clone();
@@ -44,8 +44,7 @@ pub fn typecheck(
         .map_err(|e| FsError::from_jinja_err(e, "Failed to load built-ins"))?;
 
     let mut typecheck_resolved_context: BTreeMap<String, Value> = BTreeMap::new();
-    AdapterDispatchFunction::instance()
-        .set_adapter_type(&adapter_type.map(|adapter_type| adapter_type.to_string()));
+    AdapterDispatchFunction::instance().set_adapter_type(&adapter_type.to_string().into());
 
     if let Some(target_package_name) = target_package_name {
         typecheck_resolved_context.insert(

@@ -317,7 +317,7 @@ where
             &sql,
             &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
             unique_id,
-            Some(*adapter_type),
+            *adapter_type,
             true,
         );
     }
@@ -368,6 +368,7 @@ where
                 collect_hook_dependencies_from_config(
                     &*temp_sql_file_info.config,
                     jinja_env.clone(),
+                    *adapter_type,
                     &display_path,
                     args.io.clone(),
                     &resolve_model_context,
@@ -824,6 +825,7 @@ fn chunk_vec<T>(mut v: Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
 pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
     config: &T,
     jinja_env: Arc<JinjaEnv>,
+    adapter_type: AdapterType,
     resource_path: &std::path::Path,
     io: IoArgs,
     hook_context: &BTreeMap<String, MinijinjaValue>,
@@ -854,7 +856,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
     };
 
     // Helper function to render hook SQL and collect dependencies into the shared sql_resources
-    let render_hook_for_deps = |sql: &str| -> FsResult<()> {
+    let render_hook_for_deps = |sql: &str, adapter_type: AdapterType| -> FsResult<()> {
         if let Some(model) = hook_context.get("model")
             && let Ok(unique_id) = model.get_attr("unique_id")
             && let Some(unique_id) = unique_id.as_str()
@@ -878,7 +880,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 sql,
                 &dbt_common::CodeLocationWithFile::new(1, 1, 0, resource_path.to_path_buf()),
                 unique_id,
-                None,
+                adapter_type,
                 true,
             );
         }
@@ -915,7 +917,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 continue;
             }
 
-            render_hook_for_deps(sql)?;
+            render_hook_for_deps(sql, adapter_type)?;
         }
     }
 
@@ -927,7 +929,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 continue;
             }
 
-            render_hook_for_deps(sql)?;
+            render_hook_for_deps(sql, adapter_type)?;
         }
     }
 

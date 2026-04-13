@@ -499,9 +499,7 @@ impl ProfileSetup {
             _ => unreachable!(),
         }
 
-        let adapter_type = existing_config
-            .as_ref()
-            .and_then(|d| d.adapter_type_if_supported());
+        let adapter_type = existing_config.as_ref().map(|d| d.adapter_type());
         let adapter = Self::ask_for_adapter_choice(adapter_type)?;
 
         let cloud_config = if profile_action == 1 {

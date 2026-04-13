@@ -306,13 +306,6 @@ impl DbConfig {
         }
     }
 
-    pub fn adapter_type_if_supported(&self) -> Option<AdapterType> {
-        match self.adapter_type() {
-            AdapterType::Trino | AdapterType::Datafusion => None,
-            supported => Some(supported),
-        }
-    }
-
     /// Returns a hint string if the adapter is gated behind an environment variable.
     /// Used by call sites to produce helpful error messages.
     pub fn unsupported_adapter_hint(&self) -> Option<&'static str> {

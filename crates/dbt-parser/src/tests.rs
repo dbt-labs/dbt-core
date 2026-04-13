@@ -86,7 +86,7 @@ mod tests {
             "common",
             "profile",
             "target",
-            "postgres",
+            AdapterType::Postgres,
             (PostgresDbConfig {
                 port: Some(StringOrInteger::Integer(5432)),
                 database: Some("postgres".to_string()),

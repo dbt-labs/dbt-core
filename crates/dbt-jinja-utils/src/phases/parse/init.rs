@@ -2,7 +2,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    str::FromStr as _,
     sync::{Arc, Mutex},
 };
 
@@ -39,7 +38,7 @@ pub fn initialize_parse_jinja_environment(
     project_name: &str,
     profile: &str,
     target: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     db_config: DbConfig,
     package_quoting: DbtQuoting,
     macro_units: BTreeMap<String, Vec<MacroUnit>>,
@@ -106,12 +105,6 @@ pub fn initialize_parse_jinja_environment(
         ("write".to_string(), MinijinjaValue::NONE),
     ]);
 
-    let adapter_type = AdapterType::from_str(adapter_type).map_err(|_| {
-        fs_err!(
-            ErrorCode::InvalidConfig,
-            "Unknown or unsupported adapter type '{adapter_type}'",
-        )
-    })?;
     let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
     let adapter = Adapter::new_parse_phase_adapter(
         adapter_type,

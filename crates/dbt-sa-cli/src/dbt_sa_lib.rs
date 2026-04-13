@@ -199,7 +199,7 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli, token: &CancellationToke
         .with_additional(
             dbt_state.dbt_profile.target.to_string(),
             dbt_state.dbt_profile.threads,
-            dbt_state.dbt_profile.db_config.adapter_type_if_supported(),
+            dbt_state.dbt_profile.db_config.adapter_type(),
         )
         .build();
 

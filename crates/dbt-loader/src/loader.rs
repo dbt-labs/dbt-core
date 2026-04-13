@@ -212,24 +212,7 @@ pub async fn load(
         dbt_state.catalogs.clone(),
     )?;
 
-    let adapter_type = dbt_state
-        .dbt_profile
-        .db_config
-        .adapter_type_if_supported()
-        .ok_or_else(|| {
-            let hint = dbt_state
-                .dbt_profile
-                .db_config
-                .unsupported_adapter_hint()
-                .map(|h| format!(" {h}"))
-                .unwrap_or_default();
-            fs_err!(
-                ErrorCode::InvalidConfig,
-                "Unknown or unsupported adapter type '{}'.{hint}",
-                dbt_state.dbt_profile.db_config.adapter_type()
-            )
-        })?;
-
+    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
     let arg_ref = &arg;
     if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
         let prev_root_package = prev_dbt_state.root_package();

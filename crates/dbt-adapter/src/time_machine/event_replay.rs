@@ -33,6 +33,7 @@ use super::event::{
 };
 use super::semantic::SemanticCategory;
 use super::serde::values_match;
+use crate::AdapterType;
 use crate::sql::diff::compare_sql;
 
 /// Extract the SQL string from args (first string in array, or the string itself).
@@ -947,6 +948,7 @@ pub fn validate_replay(
     recorded: &AdapterCallEvent,
     method: &str,
     args: &serde_json::Value,
+    adapter_type: AdapterType,
 ) -> ReplayResult {
     let mut differences = Vec::new();
 
@@ -966,7 +968,7 @@ pub fn validate_replay(
 
         match (recorded_sql, actual_sql) {
             (Some(exp_sql), Some(act_sql)) => {
-                match compare_sql(exp_sql, act_sql) {
+                match compare_sql(exp_sql, act_sql, adapter_type) {
                     Ok(()) => {
                         // SQL is semantically equivalent, no difference to report
                     }
@@ -1026,12 +1028,16 @@ mod tests {
     use crate::sql::diff::compare_sql;
 
     /// Compare SQL args for execute/run_query methods.
-    fn sql_args_match(recorded: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    fn sql_args_match(
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+        adapter_type: AdapterType,
+    ) -> bool {
         let recorded_sql = extract_sql_from_args(recorded);
         let actual_sql = extract_sql_from_args(actual);
 
         match (recorded_sql, actual_sql) {
-            (Some(r), Some(a)) => compare_sql(r, a).is_ok(),
+            (Some(r), Some(a)) => compare_sql(r, a, adapter_type).is_ok(),
             (None, None) => true,
             _ => false,
         }
@@ -1683,7 +1689,7 @@ mod tests {
         let sql1 = serde_json::json!(["SELECT   *\nFROM    users"]);
         let sql2 = serde_json::json!(["SELECT*FROMusers"]);
         assert!(
-            sql_args_match(&sql1, &sql2),
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "SQL strings should match ignoring whitespace"
         );
     }
@@ -1694,7 +1700,7 @@ mod tests {
         let sql1 = serde_json::json!([r#"alter session set query_tag = '{"model": "a"}'"#]);
         let sql2 = serde_json::json!([r#"alter session set query_tag = '{"model": "b"}'"#]);
         assert!(
-            sql_args_match(&sql1, &sql2),
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "Query tag payloads should be canonicalized"
         );
     }
@@ -1705,7 +1711,7 @@ mod tests {
         let sql1 = serde_json::json!(["SELECT '8f439b7e-752f-460a-8d1a-f469231d169c' AS id"]);
         let sql2 = serde_json::json!(["SELECT '019a71ca-e5ad-7ca3-99d8-49b58a470d82' AS id"]);
         assert!(
-            sql_args_match(&sql1, &sql2),
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "UUID literals should be canonicalized"
         );
     }
@@ -1716,7 +1722,7 @@ mod tests {
         let sql1 = serde_json::json!(["WHERE created_at >= '2025-09-10T18:07:45'"]);
         let sql2 = serde_json::json!(["WHERE created_at >= '2025-09-10T14:16:52'"]);
         assert!(
-            sql_args_match(&sql1, &sql2),
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "Timestamp literals should be matched flexibly"
         );
     }
@@ -1727,7 +1733,7 @@ mod tests {
         let sql1 = serde_json::json!(["SELECT * FROM users"]);
         let sql2 = serde_json::json!(["SELECT * FROM orders"]);
         assert!(
-            !sql_args_match(&sql1, &sql2),
+            !sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "Different table names should not match"
         );
     }
@@ -1738,7 +1744,7 @@ mod tests {
         let sql1 = serde_json::json!("SELECT   *  FROM  users");
         let sql2 = serde_json::json!("SELECT * FROM users");
         assert!(
-            sql_args_match(&sql1, &sql2),
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
             "Direct SQL strings should be matched with fuzzy comparison"
         );
     }

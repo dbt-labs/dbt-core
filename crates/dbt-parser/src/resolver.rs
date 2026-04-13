@@ -144,23 +144,7 @@ pub async fn resolve(
             block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
         });
 
-    let adapter_type = dbt_state
-        .dbt_profile
-        .db_config
-        .adapter_type_if_supported()
-        .ok_or_else(|| {
-            let hint = dbt_state
-                .dbt_profile
-                .db_config
-                .unsupported_adapter_hint()
-                .map(|h| format!(" {h}"))
-                .unwrap_or_default();
-            fs_err!(
-                ErrorCode::InvalidConfig,
-                "Invalid or unsupported adapter type in profile: {}.{hint}",
-                dbt_state.dbt_profile.db_config.adapter_type()
-            )
-        })?;
+    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
 
     // Build the root project config
     let root_project_quoting =
@@ -170,7 +154,7 @@ pub async fn resolve(
         root_project_name,
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        adapter_type.as_ref(),
+        adapter_type,
         dbt_state.dbt_profile.db_config.clone(),
         root_project_quoting,
         build_macro_units(&macros.macros),

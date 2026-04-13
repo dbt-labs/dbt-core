@@ -492,7 +492,7 @@ impl EvalArgsBuilder {
         self,
         target: String,
         threads: Option<usize>,
-        adapter_type: Option<AdapterType>,
+        adapter_type: AdapterType,
     ) -> Self {
         self.with_target(target)
             .with_threads(threads)
@@ -525,13 +525,8 @@ impl EvalArgsBuilder {
 
     /// Disable the static analysis for a specific adapter if the relevant dialect is unsupported.
     /// Otherwise, it's a noop
-    pub fn disable_static_analysis_if_not_supported(
-        mut self,
-        adapter_type: Option<AdapterType>,
-    ) -> Self {
-        let supported = adapter_type
-            .map(dbt_adapter_core::adapter_type_supports_static_analysis)
-            .unwrap_or(false);
+    pub fn disable_static_analysis_if_not_supported(mut self, adapter_type: AdapterType) -> Self {
+        let supported = dbt_adapter_core::adapter_type_supports_static_analysis(adapter_type);
 
         // FIXME(serramatutu): there is a bug in Postgres' frontend parser that makes
         // all our recordings invalid if enable it, but we can't disable it otherwise
@@ -539,7 +534,7 @@ impl EvalArgsBuilder {
         // following for Postgres:
         // dbt1058: Column 'id' in node 'model.test.a' has a type mismatch. Overriding
         // 'int' with 'integer'.
-        let skip = adapter_type == Some(AdapterType::Postgres);
+        let skip = adapter_type == AdapterType::Postgres;
 
         if !supported && !skip {
             #[cfg(debug_assertions)]
