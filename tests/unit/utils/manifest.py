@@ -483,7 +483,7 @@ def make_semantic_model(
     return SemanticModel(
         name=name,
         resource_type=NodeType.SemanticModel,
-        model=model,
+        model=f"{{{{ref(model.name)}}}}",
         node_relation=NodeRelation(
             alias=model.alias,
             schema_name="dbt",

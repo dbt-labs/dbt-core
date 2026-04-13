@@ -17,7 +17,7 @@ from dbt_semantic_interfaces.type_enums import (
     TimeGranularity,
 )
 
-NodeVersion = Union[str, float]
+NodeVersion = Union[int, float, str]
 
 
 def _backcompat_doc_blocks(doc_blocks: Any) -> List[str]:
