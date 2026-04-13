@@ -37,7 +37,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, GrantAccessToTarget};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::QueryCtx;
@@ -2067,6 +2067,21 @@ impl Adapter {
         Ok(Value::from(result))
     }
 
+    /// Extract the database name from a Jinja relation Value and look up its table format.
+    fn table_format(&self, relation_val: &Value) -> Option<TableFormat> {
+        let database = relation_val.get_attr("database").ok().and_then(|v| {
+            if v.is_undefined() || v.is_none() {
+                None
+            } else {
+                v.as_str().map(|s| s.to_owned())
+            }
+        })?;
+        match &self.inner {
+            Typed { adapter, .. } => Some(adapter.table_format_for_database(&database)),
+            Parse(_) => None,
+        }
+    }
+
     /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature("motherduck")` instead.
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -3680,15 +3695,27 @@ impl Adapter {
 
                 self.has_dbr_capability(state, capability_name)
             }
-            "is_ducklake" => {
-                // DuckLake is a MotherDuck feature that allows using cloud storage with ACID transactions.
-                // The macro passes a relation, but we just return false since DuckLake isn't supported yet.
+            "table_format" => {
+                // Returns the table format for a relation's database (e.g. "ducklake", "iceberg", "default").
                 // relation: Relation
                 let iter = ArgsIter::new(name, &["relation"], args);
-                // Consume the relation argument but don't use it
-                let _ = iter.next_arg::<&Value>()?;
+                let relation_val = iter.next_arg::<&Value>()?;
                 iter.finish()?;
-                Ok(Value::from(false))
+                let format_str = self
+                    .table_format(relation_val)
+                    .map(|f| f.as_str(self.adapter_type()))
+                    .unwrap_or("default");
+                Ok(Value::from(format_str))
+            }
+            "is_ducklake" => {
+                // Backwards-compatible alias: adapter.is_ducklake(relation) == (table_format(relation) == "ducklake")
+                // relation: Relation
+                let iter = ArgsIter::new(name, &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(Value::from(
+                    self.table_format(relation_val) == Some(TableFormat::DuckLake),
+                ))
             }
             // DEPRECATED: in favor of "has_feature"
             "is_motherduck" => Ok(self.is_motherduck(state).map_err(minijinja::Error::from)?),

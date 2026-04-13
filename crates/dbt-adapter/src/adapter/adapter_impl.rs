@@ -61,6 +61,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
+use dbt_schemas::schemas::profiles::DuckDBPathInfo;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
@@ -280,6 +281,64 @@ impl AdapterImpl {
             return engine.get_config().get(key);
         }
         None
+    }
+
+    /// Returns the table format for `database` (e.g. `DuckLake` for DuckLake-backed databases).
+    ///
+    /// Mirrors the Python reference implementation in dbt-duckdb:
+    /// https://github.com/duckdb/dbt-duckdb/blob/main/dbt/adapters/duckdb/credentials.py
+    pub fn table_format_for_database(&self, database: &str) -> TableFormat {
+        if self.adapter_type() != DuckDB {
+            return TableFormat::Default;
+        }
+
+        let path_config = self.get_db_config("path");
+        let path_info = DuckDBPathInfo::parse_path(path_config.as_deref());
+        let primary_database = self
+            .get_db_config("database")
+            .map(|value| value.into_owned())
+            .unwrap_or_else(|| path_info.database.to_owned());
+        let primary_is_ducklake = self
+            .get_db_config_value("is_ducklake")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+            || path_info.is_ducklake;
+        if primary_is_ducklake && primary_database.eq_ignore_ascii_case(database) {
+            return TableFormat::DuckLake;
+        }
+
+        let Some(attach_val) = self.get_db_config_value("attach") else {
+            return TableFormat::Default;
+        };
+        let YmlValue::Sequence(seq, _) = attach_val else {
+            return TableFormat::Default;
+        };
+        for item in seq {
+            let YmlValue::Mapping(map, _) = item else {
+                continue;
+            };
+            let Some(path) = map.get("path").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let attach_info = DuckDBPathInfo::parse_path(Some(path));
+            let explicit_ducklake = map
+                .get("is_ducklake")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if !explicit_ducklake && !attach_info.is_ducklake {
+                continue;
+            }
+
+            let attachment_db = map
+                .get("alias")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| attach_info.database.to_owned());
+            if attachment_db.eq_ignore_ascii_case(database) {
+                return TableFormat::DuckLake;
+            }
+        }
+        TableFormat::Default
     }
 
     pub fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
@@ -4342,6 +4401,23 @@ mod tests {
                 ("role".into(), "role".into()),
                 ("warehouse".into(), "warehouse".into()),
             ]),
+            DuckDB => {
+                let attach = YmlValue::Sequence(
+                    vec![YmlValue::Mapping(
+                        Mapping::from_iter([
+                            ("path".into(), "md:some_db".into()),
+                            ("is_ducklake".into(), true.into()),
+                        ]),
+                        Default::default(),
+                    )],
+                    Default::default(),
+                );
+                Mapping::from_iter([
+                    ("path".into(), "md:my_db".into()),
+                    ("is_ducklake".into(), true.into()),
+                    ("attach".into(), attach),
+                ])
+            }
             Bigquery | Redshift => Mapping::new(),
             _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
         };
@@ -4430,6 +4506,34 @@ mod tests {
     fn test_redshift_quote() {
         let adapter = AdapterImpl::new(engine(Redshift));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
+    }
+
+    #[test]
+    fn test_table_format_primary_motherduck_ducklake() {
+        let adapter = AdapterImpl::new(engine(DuckDB));
+
+        assert_eq!(
+            adapter.table_format_for_database("my_db"),
+            TableFormat::DuckLake
+        );
+        assert_eq!(
+            adapter.table_format_for_database("other"),
+            TableFormat::Default
+        );
+    }
+
+    #[test]
+    fn test_table_format_unaliased_motherduck_attachment() {
+        let adapter = AdapterImpl::new(engine(DuckDB));
+
+        assert_eq!(
+            adapter.table_format_for_database("some_db"),
+            TableFormat::DuckLake
+        );
+        assert_eq!(
+            adapter.table_format_for_database("main"),
+            TableFormat::Default
+        );
     }
 
     // Checks that get_persist_doc_columns generates an explicit empty comment update only when the existing

@@ -9,6 +9,7 @@ use dbt_yaml::UntaggedEnumDeserialize;
 use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
@@ -104,19 +105,20 @@ impl_from_db_config!(DuckDB, DuckDbConfig);
 impl_from_db_config!(Fabric, FabricDbConfig);
 
 impl DbConfig {
-    pub fn get_unique_field(&self) -> Option<&String> {
+    pub fn get_unique_field(&self) -> Option<&str> {
         match self {
-            DbConfig::Snowflake(config) => config.account.as_ref(),
-            DbConfig::Postgres(config) => config.host.as_ref(),
-            DbConfig::Bigquery(config) => config.database.as_ref(),
-            DbConfig::Trino(config) => config.host.as_ref(),
-            DbConfig::Datafusion(config) => config.database.as_ref(),
-            DbConfig::Redshift(config) => config.host.as_ref(),
-            DbConfig::Databricks(config) => config.host.as_ref(),
-            DbConfig::Salesforce(config) => config.client_id.as_ref(),
-            DbConfig::DuckDB(config) => config.path.as_ref(),
-            DbConfig::Spark(config) => config.host.as_ref(),
-            DbConfig::Fabric(config) => config.host.as_ref(),
+            DbConfig::Snowflake(config) => config.account.as_deref(),
+            DbConfig::Postgres(config) => config.host.as_deref(),
+            DbConfig::Bigquery(config) => config.database.as_deref(),
+            DbConfig::Trino(config) => config.host.as_deref(),
+            DbConfig::Datafusion(config) => config.database.as_deref(),
+            DbConfig::Redshift(config) => config.host.as_deref(),
+            DbConfig::Databricks(config) => config.host.as_deref(),
+            DbConfig::Salesforce(config) => config.client_id.as_deref(),
+            // DuckDB `path` is optional — attach-only profiles default to `:memory:`.
+            DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
+            DbConfig::Spark(config) => config.host.as_deref(),
+            DbConfig::Fabric(config) => config.host.as_deref(),
         }
     }
 
@@ -346,25 +348,9 @@ impl DbConfig {
 
         // Otherwise, use adapter-specific defaults
         match self {
-            DbConfig::DuckDB(config) => {
-                // For DuckDB, derive database name from file path
-                if let Some(path) = &config.path {
-                    if path == ":memory:" {
-                        "main".to_string()
-                    } else if let Some(dbname) = duckdb_motherduck_database_name(path) {
-                        dbname
-                    } else {
-                        // Extract file stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop")
-                        std::path::Path::new(path)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| "main".to_string())
-                    }
-                } else {
-                    "main".to_string()
-                }
-            }
+            DbConfig::DuckDB(config) => DuckDBPathInfo::parse_path(config.path.as_deref())
+                .database
+                .to_owned(),
             DbConfig::Databricks(_) => DEFAULT_DATABRICKS_DATABASE.to_string(),
             _ => "".to_string(),
         }
@@ -927,6 +913,12 @@ pub struct DuckDbAttachment {
     /// Whether to attach read-only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_only: Option<bool>,
+    /// Whether this attachment is a DuckLake database.
+    /// Set to true to enable DuckLake-specific query generation (e.g., DROP without CASCADE).
+    /// Not needed when the path uses the `ducklake:` scheme, but required for MotherDuck
+    /// managed DuckLake where the path uses `md:` instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_ducklake: Option<bool>,
 }
 
 /// DuckDB adapter configuration
@@ -962,6 +954,12 @@ pub struct DuckDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub attach: Option<Vec<DuckDbAttachment>>,
+    /// Whether the primary database is a DuckLake database.
+    /// Set to true to enable DuckLake-specific query generation (e.g., DROP without CASCADE).
+    /// Not needed when the path uses the `ducklake:` scheme, but required for MotherDuck
+    /// managed DuckLake where the path uses `md:` instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_ducklake: Option<bool>,
     /// Root path for external materializations (defaults to ".")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_root: Option<String>,
@@ -1349,25 +1347,86 @@ pub struct FabricTargetEnv {
     // TODO: ...
 }
 
-/// Derive a database name from a MotherDuck path (`md:` or `motherduck:` prefix).
-///
-/// Returns `None` if the path is not a MotherDuck path.
-/// `md:my_db` → `Some("my_db")`, `md:` → `Some("my_db")` (default), strips query params.
-fn duckdb_motherduck_database_name(path: &str) -> Option<String> {
-    let lower = path.to_lowercase();
-    let prefix_len = if lower.starts_with("motherduck:") {
-        "motherduck:".len()
-    } else if lower.starts_with("md:") {
-        "md:".len()
-    } else {
-        return None;
-    };
-    let stripped = &path[prefix_len..];
-    let name = stripped.split('?').next().unwrap_or("");
-    if name.is_empty() {
-        Some("my_db".to_owned())
-    } else {
-        Some(name.to_owned())
+/// The location type of a DuckDB database path.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DuckDBLocation<'a> {
+    /// In-memory database (`:memory:` or no path).
+    Memory,
+    /// MotherDuck cloud database (`md:` or `motherduck:` prefix).
+    Motherduck { url: &'a str },
+    /// Local filesystem database file.
+    Filesystem { path: &'a str },
+}
+
+/// Parsed information about a DuckDB connection path.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DuckDBPathInfo<'a> {
+    pub location: DuckDBLocation<'a>,
+    /// The effective database name derived from the path.
+    pub database: &'a str,
+    /// Whether the path uses the `ducklake:` scheme.
+    pub is_ducklake: bool,
+}
+
+impl<'a> DuckDBPathInfo<'a> {
+    /// Parse a DuckDB connection path into its component parts.
+    ///
+    /// Handles a single `ducklake:` prefix, MotherDuck (`md:` / `motherduck:`)
+    /// URLs, `:memory:`, and filesystem paths.
+    pub fn parse_path(path: Option<&'a str>) -> Self {
+        let Some(effective) = path else {
+            return Self {
+                location: DuckDBLocation::Memory,
+                database: "main",
+                is_ducklake: false,
+            };
+        };
+
+        // Strip a single `ducklake:` prefix.
+        let (is_ducklake, effective) = match effective.strip_prefix("ducklake:") {
+            Some(inner) => (true, inner),
+            None => (false, effective),
+        };
+
+        if effective == ":memory:" || effective.is_empty() {
+            return Self {
+                location: DuckDBLocation::Memory,
+                database: "main",
+                is_ducklake,
+            };
+        }
+
+        // Check for MotherDuck prefix.
+        let lower = effective.to_lowercase();
+        let md_prefix_len = if lower.starts_with("motherduck:") {
+            Some("motherduck:".len())
+        } else if lower.starts_with("md:") {
+            Some("md:".len())
+        } else {
+            None
+        };
+
+        if let Some(prefix_len) = md_prefix_len {
+            let stripped = &effective[prefix_len..];
+            let name = stripped.split('?').next().unwrap_or("");
+            let database = if name.is_empty() { "my_db" } else { name };
+            return Self {
+                location: DuckDBLocation::Motherduck { url: effective },
+                database,
+                is_ducklake,
+            };
+        }
+
+        // Filesystem path — derive database name from file stem.
+        let database = std::path::Path::new(effective)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("main");
+        Self {
+            location: DuckDBLocation::Filesystem { path: effective },
+            database,
+            is_ducklake,
+        }
     }
 }
 
@@ -1590,21 +1649,9 @@ impl TryFrom<DbConfig> for TargetContext {
                 __common__: CommonTargetContext {
                     // Derive database name from path if not explicitly set (same logic as get_database())
                     database: config.database.clone().unwrap_or_else(|| {
-                        if let Some(path) = &config.path {
-                            if path == ":memory:" {
-                                "main".to_string()
-                            } else if let Some(dbname) = duckdb_motherduck_database_name(path) {
-                                dbname
-                            } else {
-                                std::path::Path::new(path)
-                                    .file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .map(|s| s.to_string())
-                                    .unwrap_or_else(|| "main".to_string())
-                            }
-                        } else {
-                            "main".to_string()
-                        }
+                        DuckDBPathInfo::parse_path(config.path.as_deref())
+                            .database
+                            .to_owned()
                     }),
                     schema: config.schema.unwrap_or_else(|| "main".to_string()),
                     type_: adapter_type,
@@ -1668,10 +1715,7 @@ mod tests {
         }
         .into();
 
-        assert_eq!(
-            config.get_unique_field().map(String::as_str),
-            Some("kw27752")
-        );
+        assert_eq!(config.get_unique_field(), Some("kw27752"));
         assert_eq!(
             config.get_adapter_unique_id(),
             Some("c27a9a57d35df4a8f81aec929cbdc7cd".to_string())
@@ -1688,6 +1732,26 @@ mod tests {
 
         assert_eq!(config.get_unique_field(), None);
         assert_eq!(config.get_adapter_unique_id(), None);
+    }
+
+    #[test]
+    fn test_duckdb_adapter_unique_id_defaults_to_memory_when_path_missing() {
+        let config: DbConfig = DuckDbConfig {
+            path: None,
+            attach: Some(vec![DuckDbAttachment {
+                path: "md:some_db".to_string(),
+                is_ducklake: Some(true),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        }
+        .into();
+
+        assert_eq!(config.get_unique_field(), Some(":memory:"));
+        assert_eq!(
+            config.get_adapter_unique_id(),
+            Some("f7935d72c5941a25cc019e2fb05ae050".to_string())
+        );
     }
 
     #[test]
@@ -1741,5 +1805,57 @@ mod tests {
             panic!("expected snowflake target context");
         };
         assert_eq!(target.user.as_deref(), Some("user"));
+    }
+
+    #[test]
+    fn test_duckdb_parse_path_variants() {
+        // Memory
+        let info = DuckDBPathInfo::parse_path(None);
+        assert_eq!(info.location, DuckDBLocation::Memory);
+        assert_eq!(info.database, "main");
+        assert!(!info.is_ducklake);
+
+        let info = DuckDBPathInfo::parse_path(Some(":memory:"));
+        assert_eq!(info.location, DuckDBLocation::Memory);
+        assert_eq!(info.database, "main");
+
+        // MotherDuck
+        let info = DuckDBPathInfo::parse_path(Some("md:my_db"));
+        assert!(matches!(info.location, DuckDBLocation::Motherduck { .. }));
+        assert_eq!(info.database, "my_db");
+        assert!(!info.is_ducklake);
+
+        let info = DuckDBPathInfo::parse_path(Some("motherduck:my_db?token=secret"));
+        assert!(matches!(info.location, DuckDBLocation::Motherduck { .. }));
+        assert_eq!(info.database, "my_db");
+
+        // Filesystem
+        let info = DuckDBPathInfo::parse_path(Some("/tmp/jaffle_shop.duckdb"));
+        assert!(matches!(info.location, DuckDBLocation::Filesystem { .. }));
+        assert_eq!(info.database, "jaffle_shop");
+        assert!(!info.is_ducklake);
+
+        // DuckLake with MotherDuck
+        let info = DuckDBPathInfo::parse_path(Some("ducklake:md:my_db"));
+        assert!(matches!(info.location, DuckDBLocation::Motherduck { .. }));
+        assert_eq!(info.database, "my_db");
+        assert!(info.is_ducklake);
+    }
+
+    #[test]
+    fn test_duckdb_config_parses_top_level_is_ducklake() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: md:my_db\n\
+             is_ducklake: true",
+        )
+        .unwrap();
+
+        assert_eq!(config.get_database_or_default(), "my_db");
+
+        let DbConfig::DuckDB(duckdb_config) = config else {
+            panic!("Expected DbConfig::DuckDB");
+        };
+        assert_eq!(duckdb_config.is_ducklake, Some(true));
     }
 }

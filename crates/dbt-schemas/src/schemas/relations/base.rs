@@ -48,6 +48,18 @@ pub enum TableFormat {
     Default,
     /// The iceberg table format
     Iceberg,
+    /// The DuckLake table format (MotherDuck ACID cloud storage)
+    DuckLake,
+}
+
+impl TableFormat {
+    pub fn as_str(&self, _adapter_type: AdapterType) -> &'static str {
+        match self {
+            TableFormat::Default => "default",
+            TableFormat::Iceberg => "iceberg",
+            TableFormat::DuckLake => "ducklake",
+        }
+    }
 }
 
 /// dbt-adapters/src/dbt/adapters/contracts/relation.py
