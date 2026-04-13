@@ -408,11 +408,12 @@ where
 /// attributes and should modify them in place.
 ///
 /// If no such span is found, this is a no-op.
-pub fn find_and_record_span_status_from_attrs<F, A: AnyTelemetryEvent>(mut attrs_updater: F)
+pub fn find_and_record_span_status_from_attrs<F, A: AnyTelemetryEvent>(attrs_updater: F)
 where
-    F: FnMut(&mut A),
+    F: FnOnce(&mut A),
 {
-    with_current_span(|span_ref| {
+    let mut attrs_updater = Some(attrs_updater);
+    with_current_span(move |span_ref| {
         // Find the closest span with the expected TelemetryAttributes type.
         // Scope iterator starts from the current span and goes up to the root.
         for span_ref in span_ref.scope() {
@@ -426,7 +427,9 @@ where
                 .downcast_mut::<A>()
             {
                 // Found the expected attributes, call the updater and return
-                attrs_updater(attrs);
+                attrs_updater
+                    .take()
+                    .expect("attrs_updater should only be called once")(attrs);
 
                 // Record the status of the span from the attrs themselves
                 if let Some(status) = attrs.get_span_status() {

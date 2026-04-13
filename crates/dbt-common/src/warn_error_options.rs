@@ -12,6 +12,7 @@ use strum::EnumString;
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, EnumString,
 )]
 pub enum SupportedLegacyWarnError {
+    LogTestResult,
     NothingToDo,
     NoNodesSelected,
 }
@@ -307,10 +308,38 @@ impl WarnErrorOptions {
             // default to retaining the warning if no matches at all, including "all"
             .unwrap_or(WarnErrorDecision::Retain)
     }
+
+    pub fn decision_for_supported_legacy(
+        &self,
+        legacy: SupportedLegacyWarnError,
+    ) -> WarnErrorDecision {
+        // 0 = no match, 1 = via "all", 2 = by name
+        let specificity = |list: &[WarnErrorOptionValue]| {
+            list.iter().fold(0u8, |best, v| match v {
+                WarnErrorOptionValue::SupportedLegacy(c) if *c == legacy => 2,
+                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => best.max(1),
+                _ => best,
+            })
+        };
+
+        // Most-specific match wins; on ties, verdict ord breaks ties (silence > warn > error)
+        match [
+            (specificity(&self.silence), WarnErrorDecision::Silence),
+            (specificity(&self.warn), WarnErrorDecision::Retain),
+            (specificity(&self.error), WarnErrorDecision::UpgradeToError),
+        ]
+        .into_iter()
+        .max()
+        {
+            Some((s, v)) if s > 0 => v,
+            _ => WarnErrorDecision::Retain,
+        }
+    }
 }
 
 fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
     match legacy {
+        SupportedLegacyWarnError::LogTestResult => false,
         SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
             error_code == ErrorCode::NoNodesSelected
         }
@@ -363,6 +392,44 @@ mod tests {
             options.decision_for_error_code(ErrorCode::IoError),
             WarnErrorDecision::Retain,
             "Specific code match in warn should take precedence over all matches in error"
+        );
+    }
+
+    #[test]
+    fn legacy_decision_match_precedence() {
+        use SupportedLegacyWarnError::LogTestResult;
+
+        let options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::SupportedLegacy(LogTestResult)],
+            ..Default::default()
+        };
+        assert_eq!(
+            options.decision_for_supported_legacy(LogTestResult),
+            WarnErrorDecision::UpgradeToError,
+        );
+
+        let options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::all()],
+            ..Default::default()
+        };
+        assert_eq!(
+            options.decision_for_supported_legacy(LogTestResult),
+            WarnErrorDecision::UpgradeToError,
+        );
+
+        let options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::all()],
+            warn: vec![WarnErrorOptionValue::SupportedLegacy(LogTestResult)],
+            ..Default::default()
+        };
+        assert_eq!(
+            options.decision_for_supported_legacy(LogTestResult),
+            WarnErrorDecision::Retain,
+        );
+
+        assert_eq!(
+            WarnErrorOptions::default().decision_for_supported_legacy(LogTestResult),
+            WarnErrorDecision::Retain,
         );
     }
 
