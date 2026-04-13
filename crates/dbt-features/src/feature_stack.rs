@@ -9,9 +9,14 @@ use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::TracingFeaturesHandle;
 use dbt_dag::schedule::Schedule;
 use dbt_schemas::schemas::PreviousState;
+use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
+use std::borrow::Cow;
 // use dbt_tasks::task_runner::RunTasksOk;
 use std::fmt;
+use std::sync::Arc;
+
+use crate::compilation::CompilationConfig;
 
 pub trait CommandHandler: Sync + Send {
     fn process_eval_args(
@@ -39,6 +44,19 @@ pub struct LinterFeature {
 #[async_trait]
 #[allow(clippy::too_many_arguments)]
 pub trait CliExtensionHooks: Send + Sync {
+    /// Called before CLI compilation argument validation.
+    ///
+    /// Allowing extensions to inspect or reject arguments before any execution begins.
+    fn will_validate_compilation_cli_args(
+        &self,
+        _cli: &Cli,
+        _eval_arg: &mut Cow<EvalArgs>,
+        _dbt_state: &Arc<DbtState>,
+        _config: &CompilationConfig,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
     /// Called early in execution, before any tasks are scheduled or run.
     fn will_execute(&self, _cli: &Cli, _arg: &EvalArgs) -> FsResult<()> {
         Ok(())

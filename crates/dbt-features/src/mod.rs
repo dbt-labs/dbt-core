@@ -5,6 +5,7 @@ pub mod feature_stack;
 pub mod sa;
 
 // All features:
+pub mod compilation;
 pub mod formatter;
 pub mod linter;
 // add more features here...
