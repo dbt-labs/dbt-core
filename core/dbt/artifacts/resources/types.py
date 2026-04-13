@@ -53,9 +53,9 @@ class RunHookType(StrEnum):
 
 
 class FunctionLanguage(StrEnum):
-    Python = "python"
-    Javascript = "javascript"
-    SQL = "sql"
+    python = "python"
+    javascript = "javascript"
+    sql = "sql"
 
 
 class ModelLanguage(StrEnum):

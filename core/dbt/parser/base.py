@@ -231,7 +231,7 @@ class ConfiguredParser(
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
         elif block.path.relative_path.endswith(".js"):
-            language = FunctionLanguage.Javascript
+            language = FunctionLanguage.javascript
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
