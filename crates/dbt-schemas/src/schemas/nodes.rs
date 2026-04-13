@@ -459,6 +459,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().name.clone()
     }
 
+    fn description(&self) -> Option<String> {
+        self.common().description.clone()
+    }
+
     fn alias(&self) -> String {
         self.base().alias.clone()
     }
