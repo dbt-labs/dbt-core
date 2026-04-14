@@ -392,17 +392,23 @@ class GraphRunnableTask(ConfiguredTask):
             )
         )
 
-        return RunResult(
-            status=RunStatus.Error,  # type: ignore
-            timing=[],
-            thread_id="",
-            execution_time=0.0,
-            adapter_response={},
-            message=msg,
-            failures=None,
-            batch_results=None,
-            node=runner.node,
-        )
+        # Delegate to the runner's error_result so subclasses (e.g. FreshnessRunner)
+        # return a properly-typed result (e.g. PartialSourceFreshnessResult) that is
+        # correctly serialised into their artifact (e.g. sources.json).
+        try:
+            return runner.error_result(runner.node, msg, time.time(), [])  # type: ignore[return-value]
+        except Exception:
+            return RunResult(
+                status=RunStatus.Error,  # type: ignore
+                timing=[],
+                thread_id="",
+                execution_time=0.0,
+                adapter_response={},
+                message=msg,
+                failures=None,
+                batch_results=None,
+                node=runner.node,
+            )
 
     def _handle_result(self, result: NodeResult) -> None:
         """Mark the result as completed, insert the `CompileResultNode` into
