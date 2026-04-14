@@ -111,9 +111,15 @@ class TestRunner(CompileRunner):  # type: ignore[type-arg]
             result.node.attached_node if isinstance(result.node, GenericTestNode) else None
         )
 
+        name = self.describe_node_name()
+        if result.adapter_response:
+            adapter_msg = result.adapter_response.get("_message", "")
+            if adapter_msg:
+                name = f"{name} ({adapter_msg})"
+
         fire_event(
             LogTestResult(
-                name=self.describe_node_name(),
+                name=name,
                 status=str(result.status),
                 index=self.node_index,
                 num_models=self.num_nodes,

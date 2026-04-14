@@ -1,7 +1,89 @@
 import agate
 import pytest
 
+from dbt.adapters.postgres import PostgresAdapter
+from dbt.artifacts.schemas.results import RunStatus, TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.nodes import GenericTestNode
+from dbt.events.types import LogTestResult
+from dbt.task.test import TestRunner
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
+
 from dbt.task.test import list_rows_from_table
+
+
+class TestTestRunnerPrintResultLine:
+    @pytest.fixture
+    def log_test_result_catcher(self) -> EventCatcher:
+        catcher = EventCatcher(event_to_catch=LogTestResult)
+        add_callback_to_manager(catcher.catch)
+        return catcher
+
+    @pytest.fixture
+    def test_runner(
+        self,
+        postgres_adapter: PostgresAdapter,
+        table_id_not_null: GenericTestNode,
+        runtime_config: RuntimeConfig,
+    ) -> TestRunner:
+        return TestRunner(
+            config=runtime_config,
+            adapter=postgres_adapter,
+            node=table_id_not_null,
+            node_index=1,
+            num_nodes=3,
+        )
+
+    @pytest.fixture
+    def run_result(self, table_id_not_null: GenericTestNode) -> RunResult:
+        return RunResult(
+            status=TestStatus.Pass,
+            timing=[],
+            thread_id="an_id",
+            execution_time=0.5,
+            adapter_response={"_message": "SELECT (1 rows, 1.2 GB processed)", "code": "SELECT"},
+            message=None,
+            failures=0,
+            batch_results=None,
+            node=table_id_not_null,
+        )
+
+    def test_print_result_line_includes_adapter_response(
+        self,
+        log_test_result_catcher: EventCatcher,
+        test_runner: TestRunner,
+        run_result: RunResult,
+    ) -> None:
+        test_runner.print_result_line(run_result)
+        assert len(log_test_result_catcher.caught_events) == 1
+        name = log_test_result_catcher.caught_events[0].data.name
+        assert "(SELECT (1 rows, 1.2 GB processed))" in name
+
+    def test_print_result_line_empty_adapter_response(
+        self,
+        log_test_result_catcher: EventCatcher,
+        test_runner: TestRunner,
+        run_result: RunResult,
+    ) -> None:
+        run_result.adapter_response = {}
+        test_runner.print_result_line(run_result)
+        assert len(log_test_result_catcher.caught_events) == 1
+        name = log_test_result_catcher.caught_events[0].data.name
+        assert "(" not in name
+
+    def test_print_result_line_adapter_response_missing_message(
+        self,
+        log_test_result_catcher: EventCatcher,
+        test_runner: TestRunner,
+        run_result: RunResult,
+    ) -> None:
+        run_result.adapter_response = {"code": "SELECT"}
+        test_runner.print_result_line(run_result)
+        assert len(log_test_result_catcher.caught_events) == 1
+        name = log_test_result_catcher.caught_events[0].data.name
+        assert "(" not in name
 
 
 class TestListRowsFromTable:
