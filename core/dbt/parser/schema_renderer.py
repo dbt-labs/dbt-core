@@ -62,9 +62,9 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
-        # versions: data_tests, descriptions, and column data_tests/descriptions
-        # keypath looks like ("versions", <idx>, "data_tests", ...) or
-        # ("versions", <idx>, "columns", <idx>, "data_tests", ...)
+        # versions: tests/data_tests, descriptions, and column tests/data_tests/descriptions
+        # keypath looks like ("versions", <idx>, "tests" or "data_tests", ...) or
+        # ("versions", <idx>, "columns", <idx>, "tests" or "data_tests", ...)
         if (
             len(keypath) >= 3
             and keypath[0] == "versions"
