@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from typing import AbstractSet, Dict, List, Optional, Type
+from typing import AbstractSet, Any, Dict, List, Optional, Type
 
 from dbt import deprecations
 from dbt.adapters.base import BaseAdapter
@@ -10,6 +10,7 @@ from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.capability import Capability
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.artifacts.schemas.freshness import (
+    FreshnessNodeResult,
     FreshnessResult,
     FreshnessStatus,
     PartialSourceFreshnessResult,
@@ -34,21 +35,21 @@ from .printer import print_run_result_error
 from .run import RunTask
 
 
-class FreshnessRunner(BaseRunner):
+class FreshnessRunner(BaseRunner[SourceDefinition, FreshnessNodeResult]):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
-        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
+        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse] = {}
 
     def set_metadata_freshness_cache(
-        self, metadata_freshness_cache: Dict[BaseRelation, FreshnessResult]
+        self, metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse]
     ) -> None:
         self._metadata_freshness_cache = metadata_freshness_cache
 
-    def on_skip(self):
+    def on_skip(self) -> FreshnessNodeResult:
         raise DbtRuntimeError("Freshness: nodes cannot be skipped!")
 
     def before_execute(self) -> None:
-        description = "freshness of {0.source_name}.{0.name}".format(self.node)
+        description = f"freshness of {self.node.source_name}.{self.node.name}"
         fire_event(
             LogStartLine(
                 description=description,
@@ -58,13 +59,10 @@ class FreshnessRunner(BaseRunner):
             )
         )
 
-    def after_execute(self, result) -> None:
-        if hasattr(result, "node"):
-            source_name = result.node.source_name
-            table_name = result.node.name
-        else:
-            source_name = result.source_name
-            table_name = result.table_name
+    def after_execute(self, result: FreshnessNodeResult) -> None:
+        # self.node is SourceDefinition so source_name is available directly
+        source_name = self.node.source_name
+        table_name = self.node.name
         level = LogFreshnessResult.status_to_level(str(result.status))
         fire_event(
             LogFreshnessResult(
@@ -79,7 +77,7 @@ class FreshnessRunner(BaseRunner):
             level=level,
         )
 
-    def error_result(self, node, message, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info) -> FreshnessNodeResult:
         return self._build_run_result(
             node=node,
             start_time=start_time,
@@ -88,7 +86,9 @@ class FreshnessRunner(BaseRunner):
             message=message,
         )
 
-    def _build_run_result(self, node, start_time, status, timing_info, message):
+    def _build_run_result(  # type: ignore[override]
+        self, node, start_time, status, timing_info, message
+    ) -> FreshnessNodeResult:
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         return PartialSourceFreshnessResult(
@@ -102,12 +102,14 @@ class FreshnessRunner(BaseRunner):
             failures=None,
         )
 
-    def from_run_result(self, result, start_time, timing_info):
+    def from_run_result(
+        self, result: FreshnessNodeResult, start_time, timing_info
+    ) -> FreshnessNodeResult:
         result.execution_time = time.time() - start_time
         result.timing.extend(timing_info)
         return result
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> FreshnessNodeResult:
         relation = self.adapter.Relation.create_from(self.config, compiled_node)
         # given a Source, calculate its freshness.
         with self.adapter.connection_named(compiled_node.unique_id, compiled_node):
@@ -164,8 +166,9 @@ class FreshnessRunner(BaseRunner):
                 )
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
-        if adapter_response:
-            adapter_response = adapter_response.to_dict(omit_none=True)
+        adapter_response_dict: Dict[str, Any] = (
+            adapter_response.to_dict(omit_none=True) if adapter_response else {}
+        )
 
         return SourceFreshnessResult(
             node=compiled_node,
@@ -174,7 +177,7 @@ class FreshnessRunner(BaseRunner):
             timing=[],
             execution_time=0,
             message=None,
-            adapter_response=adapter_response or {},
+            adapter_response=adapter_response_dict,
             failures=None,
             **freshness,
         )
@@ -205,7 +208,7 @@ class FreshnessTask(RunTask):
                 "custom-output-path-in-source-freshness-deprecation", path=str(self.args.output)
             )
 
-        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
+        self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResponse] = {}
 
     def result_path(self) -> str:
         if self.args.output:
@@ -319,5 +322,5 @@ class FreshnessTask(RunTask):
             )
             return RunStatus.Error
 
-    def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
+    def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResponse]:
         return self._metadata_freshness_cache

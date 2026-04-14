@@ -17,6 +17,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    cast,
 )
 
 from dbt import tracking, utils
@@ -226,7 +227,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
     return relations
 
 
-class ModelRunner(CompileRunner):
+class ModelRunner(CompileRunner[ModelNode]):
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
@@ -266,7 +267,7 @@ class ModelRunner(CompileRunner):
     def before_execute(self) -> None:
         self.print_start_line()
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
@@ -326,7 +327,7 @@ class ModelRunner(CompileRunner):
 
         return self._build_run_model_result(model, context)
 
-    def execute(self, model, manifest):
+    def execute(self, model, manifest) -> RunResult:
         context = generate_runtime_model_context(model, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
@@ -437,7 +438,7 @@ class MicrobatchBatchRunner(ModelRunner):
 
         return run_in_parallel
 
-    def on_skip(self):
+    def on_skip(self) -> RunResult:
         result = RunResult(
             node=self.node,
             status=RunStatus.Skipped,
@@ -452,7 +453,7 @@ class MicrobatchBatchRunner(ModelRunner):
         self.print_result_line(result=result)
         return result
 
-    def error_result(self, node, message, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info) -> RunResult:
         """Necessary to return a result with a batch result
 
         Called by `BaseRunner.safe_run` when an error occurs
@@ -629,7 +630,7 @@ class MicrobatchModelRunner(ModelRunner):
 
     def _has_relation(self, model: ModelNode) -> bool:
         """Check whether the relation for the model exists in the data warehouse"""
-        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation_info = self.adapter.Relation.create_from(self.config, model)  # type: ignore[arg-type]
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
         )
@@ -982,7 +983,11 @@ class RunTask(CompileTask):
                         msg=f"{batch_runner.describe_batch()} is being run sequentially"
                     )
                 )
-                batch_results.append(self.call_runner(batch_runner))
+                # MicrobatchBatchRunner always returns RunResult; cast required
+                # because call_runner() returns NodeResult after being broadened
+                # to accommodate FreshnessRunner. Resolved when NodeT TypeVar is
+                # added to BaseRunner so call_runner can return runner.RunnerResultT.
+                batch_results.append(cast(RunResult, self.call_runner(batch_runner)))
                 relation_exists = batch_runner.relation_exists
         else:
             batch_results.append(

@@ -465,6 +465,32 @@ class TestMultiSnapshotNameMatchesFile:
             assert os.path.exists(compiled), f"Compiled file not found: {compiled}"
 
 
+subdir_snapshot__sql = """
+{% snapshot subdir_snap %}
+    {{ config(target_schema=schema, unique_key='id', strategy='check', check_cols='all') }}
+    select 1 as id, 'alice' as name
+{% endsnapshot %}
+"""
+
+
+class TestSnapshotNodePathIncludesSubdir:
+    """Regression test: node.path for a snapshot in a subdirectory must include
+    the subdirectory (e.g. 'subdir/subdir_snap.sql'), not just the filename.
+    See https://github.com/dbt-labs/dbt-core/issues/12783."""
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {"subdir": {"subdir_snap.sql": subdir_snapshot__sql}}
+
+    def test_node_path_includes_subdir(self, project):
+        manifest = run_dbt(["parse"])
+        node = manifest.nodes["snapshot.test.subdir_snap"]
+        assert node.path == os.path.join(
+            "subdir", "subdir_snap.sql"
+        ), f"Expected node.path to include subdirectory, got: {node.path!r}"
+        assert node.original_file_path == os.path.join("snapshots", "subdir", "subdir_snap.sql")
+
+
 class TestYamlSnapshotPartialParsing(BasicYaml):
     def test_snapshot_partial_parsing(self, project):
         manifest = run_dbt(["parse"])

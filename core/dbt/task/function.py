@@ -17,14 +17,7 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtValidationError
 
 
-class FunctionRunner(CompileRunner):
-
-    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
-        super().__init__(config, adapter, node, node_index, num_nodes)
-
-        # doing this gives us type hints for the node :D
-        assert isinstance(node, FunctionNode)
-        self.node = node
+class FunctionRunner(CompileRunner[FunctionNode]):
 
     def describe_node(self) -> str:
         return f"function {self.get_node_representation()}"

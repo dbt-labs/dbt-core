@@ -2,8 +2,7 @@ from typing import Dict, Iterable, List, Optional, Set, Type
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.resources import Catalog
-from dbt.artifacts.schemas.results import NodeStatus
-from dbt.artifacts.schemas.run import RunResult
+from dbt.artifacts.schemas.results import NodeResult, NodeStatus
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -138,7 +137,7 @@ class BuildTask(RunTask):
         else:
             pool.apply_async(self.call_model_and_unit_tests_runner, args=args, callback=callback)
 
-    def call_model_and_unit_tests_runner(self, node, pool) -> RunResult:
+    def call_model_and_unit_tests_runner(self, node, pool) -> NodeResult:
         assert self.manifest
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
@@ -215,7 +214,7 @@ class BuildTask(RunTask):
         ):
             return MicrobatchModelRunner
 
-        return self.RUNNER_MAP.get(node.resource_type)
+        return self.RUNNER_MAP.get(node.resource_type)  # type: ignore[return-value]
 
     # Special build compile_manifest method to pass add_test_edges to the compiler
     def compile_manifest(self) -> None:

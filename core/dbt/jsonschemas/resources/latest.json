@@ -1591,6 +1591,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -3344,6 +3350,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {
@@ -5318,6 +5330,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -7087,6 +7105,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -7292,8 +7316,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotConfig": {
@@ -8103,6 +8127,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {
@@ -9056,6 +9086,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {
@@ -10178,6 +10214,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {

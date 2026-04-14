@@ -1837,6 +1837,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -3361,6 +3367,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -4288,6 +4300,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -5177,6 +5195,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -5940,6 +5964,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -6620,6 +6650,12 @@
             }
           ]
         },
+        "+snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
           "type": [
             "string",
@@ -6884,8 +6920,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotMetaColumnNames": {
