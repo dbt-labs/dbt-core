@@ -98,6 +98,16 @@ static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
         .expect("CREDENTIALS_IN_COPY_INTO_REGEX invalid")
 });
 
+/// Returns true if all non-null values in a Float64 column have zero fractional parts.
+/// Equivalent to Python adapter's `convert_number_type` implementation.
+fn try_to_int_col(col: &arrow_array::Float64Array) -> bool {
+    col.iter().all(|v| match v {
+        None => true,
+        Some(f) if f.is_nan() || f.is_infinite() => true,
+        Some(f) => f.fract() == 0.0,
+    })
+}
+
 /// Returns a callback that emits a warning when duplicate column names are renamed.
 fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColumn<'_>]) {
     use std::fmt::Write;
@@ -1655,13 +1665,21 @@ impl AdapterImpl {
         if self.mock_state().is_some() {
             unimplemented!("type conversion from table column in MockAdapter")
         }
-        let schema = table.original_record_batch().schema();
+        let batch = table.original_record_batch();
+        let schema = batch.schema();
         let data_type = schema.field(col_idx as usize).data_type();
 
-        let data_type = if data_type.is_null() {
-            &DataType::Int32
-        } else {
-            data_type
+        let data_type = match data_type {
+            dt if dt.is_null() => &DataType::Int32,
+            DataType::Float64 => {
+                let is_int = batch
+                    .column(col_idx as usize)
+                    .as_any()
+                    .downcast_ref::<arrow_array::Float64Array>()
+                    .is_some_and(try_to_int_col);
+                if is_int { &DataType::Int64 } else { data_type }
+            }
+            dt => dt,
         };
 
         match self.inner_adapter() {
@@ -4727,5 +4745,30 @@ mod tests {
             use_legacy_mv,
             "Expected materialized view to use legacy DESCRIBE"
         );
+    }
+
+    #[test]
+    fn test_try_to_int_col() {
+        use arrow_array::Float64Array;
+
+        // whole numbers → true
+        assert!(try_to_int_col(&Float64Array::from(vec![1.0, 2.0, 100.0])));
+        // fractional values → false
+        assert!(!try_to_int_col(&Float64Array::from(vec![1.0, 2.5, 3.0])));
+        // nulls are ignored → true
+        assert!(try_to_int_col(&Float64Array::from(vec![
+            Some(1.0),
+            None,
+            Some(3.0)
+        ])));
+        // NaN/Inf are ignored → true
+        assert!(try_to_int_col(&Float64Array::from(vec![
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            1.0
+        ])));
+        // empty column → true
+        assert!(try_to_int_col(&Float64Array::from(Vec::<f64>::new())));
     }
 }
