@@ -27,6 +27,24 @@ use std::sync::Arc;
 
 pub const ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY: &str = "SNOWFLAKE:field_width";
 
+/// Normalize all column names in a RecordBatch to lowercase.
+///
+/// Snowflake may uppercase column aliases (e.g. `table_catalog as "table_database"`) depending
+/// on account-level settings, even when the alias is double-quoted. Lowercasing the schema up
+/// front lets all downstream `get_column_values` calls use their expected lowercase names without
+/// needing per-call case-insensitive logic.
+fn lowercase_column_names(batch: &RecordBatch) -> RecordBatch {
+    let schema = batch.schema();
+    let fields: Vec<_> = schema
+        .fields()
+        .iter()
+        .map(|f| Arc::new(f.as_ref().clone().with_name(f.name().to_lowercase())))
+        .collect();
+    let new_schema = Arc::new(Schema::new_with_metadata(fields, schema.metadata().clone()));
+    RecordBatch::try_new(new_schema, batch.columns().to_vec())
+        .expect("column name normalization preserves schema compatibility")
+}
+
 /// Helper to differentiate between tables and dynamic tables using the is_dynamic flag.
 /// TODO: When we implement iceberg tables, we might want to pass in the is_iceberg flag here.
 pub fn relation_type_from_table_flags(is_dynamic: &str) -> Result<RelationType, AdapterError> {
@@ -158,6 +176,8 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         if stats_sql_result.num_rows() == 0 {
             return Ok(BTreeMap::new());
         }
+
+        let stats_sql_result = lowercase_column_names(&stats_sql_result);
 
         let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
         let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
@@ -331,6 +351,8 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         if stats_sql_result.num_rows() == 0 {
             return Ok(BTreeMap::new());
         }
+
+        let stats_sql_result = lowercase_column_names(&stats_sql_result);
 
         // Can probably zip these into a table metadata tuple array
         let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
