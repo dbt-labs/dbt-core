@@ -55,8 +55,6 @@ pub struct ProjectSourceConfig {
     pub base_location_subpath: Option<String>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
-    #[serde(rename = "+snowflake_initialization_warehouse")]
-    pub snowflake_initialization_warehouse: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
     #[serde(rename = "+refresh_mode")]
@@ -320,7 +318,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
                 target_lag: config.target_lag,
-                snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
+                snowflake_initialization_warehouse: None,
                 snowflake_warehouse: config.snowflake_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
@@ -421,9 +419,6 @@ impl From<SourceConfig> for ProjectSourceConfig {
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
             target_lag: config.__warehouse_specific_config__.target_lag,
-            snowflake_initialization_warehouse: config
-                .__warehouse_specific_config__
-                .snowflake_initialization_warehouse,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
             refresh_mode: config.__warehouse_specific_config__.refresh_mode,
             initialize: config.__warehouse_specific_config__.initialize,
