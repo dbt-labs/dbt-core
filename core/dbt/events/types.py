@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import List
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
@@ -1637,21 +1638,27 @@ class LogTestResult(DynamicLevel):
         return "Q007"
 
     def message(self) -> str:
+        # Detect adapter response info appended to name, e.g. "(1.0 rows, 513.6 MiB processed)"
+        display_name = self.name
+        adapter_info = ""
+        match = re.search(r"\s+(\(.+processed\))$", self.name)
+        if match:
+            display_name = self.name[: match.start()]
+            adapter_info = " " + match.group(1)
+
         if self.status == "error":
             info = "ERROR"
-            status = red(
-                info,
-            )
+            status = red(f"{info}{adapter_info}")
         elif self.status == "pass":
             info = "PASS"
-            status = green(info)
+            status = green(f"{info}{adapter_info}")
         elif self.status == "warn":
             info = f"WARN {self.num_failures}"
-            status = yellow(info)
+            status = yellow(f"{info}{adapter_info}")
         else:  # self.status == "fail":
             info = f"FAIL {self.num_failures}"
-            status = red(info)
-        msg = f"{info} {self.name}"
+            status = red(f"{info}{adapter_info}")
+        msg = f"{info} {display_name}"
 
         return format_fancy_output_line(
             msg=msg,
