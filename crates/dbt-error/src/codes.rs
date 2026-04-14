@@ -114,6 +114,7 @@ pub enum ErrorCode {
     LicenseError = 1068,
     MangledRef = 1069,
     BaselineIntrospectionSyntaxWarning = 1070,
+    JinjaWarn = 1071,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]

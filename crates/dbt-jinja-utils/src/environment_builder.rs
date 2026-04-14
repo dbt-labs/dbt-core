@@ -2,7 +2,10 @@ use crate::{
     functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
 };
 use dbt_adapter::Adapter;
-use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
+use dbt_common::{
+    ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err,
+    warn_error_options::WarnErrorOptions,
+};
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, UndefinedFunctionType,
     UserDefinedFunctionType, Value,
@@ -46,6 +49,7 @@ pub struct JinjaEnvBuilder {
     root_package: Option<String>,
     undefined_behavior: minijinja::UndefinedBehavior,
     io_args: IoArgs,
+    warn_error_options: WarnErrorOptions,
     function_registry: Arc<FunctionRegistry>,
 }
 
@@ -59,6 +63,7 @@ impl JinjaEnvBuilder {
             root_package: None,
             undefined_behavior: Default::default(),
             io_args: IoArgs::default(),
+            warn_error_options: WarnErrorOptions::default(),
             function_registry: Arc::new(FunctionRegistry::new()),
         }
     }
@@ -98,6 +103,12 @@ impl JinjaEnvBuilder {
     /// Add IoArgs
     pub fn with_io_args(mut self, io_args: IoArgs) -> Self {
         self.io_args = io_args;
+        self
+    }
+
+    /// Add WarnErrorOptions
+    pub fn with_warn_error_options(mut self, warn_error_options: WarnErrorOptions) -> Self {
+        self.warn_error_options = warn_error_options;
         self
     }
 
@@ -390,7 +401,7 @@ impl JinjaEnvBuilder {
         let function_registry = self.register_filter_types();
 
         // Register "base" dbt style functions.
-        register_base_functions(&mut self.env, self.io_args);
+        register_base_functions(&mut self.env, self.io_args, self.warn_error_options);
 
         // Register all configured global values.
         // TODO (Ani) type the globals struct to validate we recieve all the globals we need

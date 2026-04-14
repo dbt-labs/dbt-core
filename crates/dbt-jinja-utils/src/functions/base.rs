@@ -14,6 +14,7 @@ use dbt_common::{
     tracing::emit::{
         emit_debug_event, emit_info_event, emit_warn_log_from_fs_error, emit_warn_log_message,
     },
+    warn_error_options::{WarnErrorDecision, WarnErrorOptions},
 };
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use dbt_telemetry::UserLogMessage;
@@ -84,11 +85,18 @@ fn to_json_string_python_style<T: Serialize>(value: &T) -> Result<String, serde_
 pub use dbt_jinja_vars::{LookupFn, SECRET_PLACEHOLDER, Var};
 
 /// Registers all the functions shared across all contexts
-pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
+pub fn register_base_functions(
+    env: &mut Environment,
+    io_args: IoArgs,
+    warn_error_options: WarnErrorOptions,
+) {
     env.add_global("dbt_version", Value::from(crate::utils::DBT_VERSION));
     env.add_global(
         "exceptions".to_owned(),
-        Value::from_object(Exceptions { io_args }),
+        Value::from_object(Exceptions {
+            io_args,
+            warn_error_options,
+        }),
     );
     // dbt-core templates commonly use Python-ish constants (capitalized).
     // In Jinja2 the canonical values are `none/true/false`, but many dbt projects
@@ -1008,6 +1016,7 @@ fn parse_dict_of_lists(dict: &Value) -> Result<BTreeMap<String, Vec<String>>, Er
 #[derive(Debug)]
 pub struct Exceptions {
     io_args: IoArgs,
+    warn_error_options: WarnErrorOptions,
 }
 
 impl Object for Exceptions {
@@ -1034,12 +1043,31 @@ impl Object for Exceptions {
             "warn" => {
                 let mut args = ArgParser::new(args, None);
                 let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
-
-                emit_warn_log_message(
-                    ErrorCode::DependencyWarning,
-                    warn_string,
-                    self.io_args.status_reporter.as_ref(),
+                let current_span = state.current_span_of_context();
+                let current_file_path = state.current_path().clone();
+                let warning = fs_err!(ErrorCode::JinjaWarn, "{}", warn_string).with_location(
+                    CodeLocationWithFile::new(
+                        current_span.start_line,
+                        current_span.start_col,
+                        current_span.start_offset,
+                        current_file_path,
+                    ),
                 );
+
+                // Emit through the warn path even when warn-error upgrades it because tracing
+                // handles the event level upgrade for dbt-facing outputs.
+                emit_warn_log_from_fs_error(&warning, self.io_args.status_reporter.as_ref());
+
+                if self
+                    .warn_error_options
+                    .decision_for_error_code(warning.code)
+                    == WarnErrorDecision::UpgradeToError
+                {
+                    return Err(Error::new(
+                        ErrorKind::ExitWithStatus,
+                        "warning upgraded to error via warn-error-options",
+                    ));
+                }
 
                 Ok(Value::UNDEFINED)
             }

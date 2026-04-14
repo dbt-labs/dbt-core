@@ -12,6 +12,7 @@ use strum::EnumString;
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, EnumString,
 )]
 pub enum SupportedLegacyWarnError {
+    JinjaLogWarning,
     LogTestResult,
     NothingToDo,
     NoNodesSelected,
@@ -100,7 +101,7 @@ impl WarnErrorOptions {
                     // but since some of them may happen in places where user would expect short-circuiting
                     // of execution and we only currently explicitly checkpoin after the following codes
                     // we would emit the unsupported warning for all other codes for now
-                    WarnErrorOptionValue::FusionCode(c) if *c != ErrorCode::NoNodesSelected as u16
+                    WarnErrorOptionValue::FusionCode(c) if !supported_warn_error_code(*c)
                 )
             })
     }
@@ -140,6 +141,14 @@ impl WarnErrorOptions {
 
         warn_error_options
     }
+}
+
+fn supported_warn_error_code(code: u16) -> bool {
+    [
+        ErrorCode::NoNodesSelected as u16,
+        ErrorCode::JinjaWarn as u16,
+    ]
+    .contains(&code)
 }
 
 pub fn parse_warn_error_options(value: &str) -> Result<WarnErrorOptions, String> {
@@ -339,6 +348,7 @@ impl WarnErrorOptions {
 
 fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
     match legacy {
+        SupportedLegacyWarnError::JinjaLogWarning => error_code == ErrorCode::JinjaWarn,
         SupportedLegacyWarnError::LogTestResult => false,
         SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
             error_code == ErrorCode::NoNodesSelected

@@ -22,7 +22,7 @@ use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
 use crate::{
-    constants::DBT_GENERIC_TESTS_DIR_NAME,
+    constants::DBT_GENERIC_TESTS_DIR_NAME, tracing::event_classifiers::is_exit_with_status_log,
     tracing::formatters::node::format_node_evaluated_start_legacy,
 };
 use crate::{
@@ -401,6 +401,9 @@ impl TelemetryConsumer for TuiLayer {
             .output_flags()
             .contains(TelemetryOutputFlags::OUTPUT_CONSOLE)
             && log_record.severity_number <= self.max_log_verbosity
+            // ExitWithStatus is a pseudo error used only to short-circuit execution, so we
+            // filter it from dbt-facing output
+            && !is_exit_with_status_log(log_record)
     }
 
     fn on_span_start(&self, span: &SpanStartInfo, data_provider: &mut DataProvider<'_>) {

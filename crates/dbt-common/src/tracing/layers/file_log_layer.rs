@@ -15,6 +15,7 @@ use tracing::level_filters::LevelFilter;
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    event_classifiers::is_exit_with_status_log,
     formatters::{
         asset::format_asset_parsed_end,
         constants::SELECTED_NODES_TITLE,
@@ -112,9 +113,12 @@ impl TelemetryConsumer for FileLogLayer {
 
     fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
         log_record
-            .attributes
-            .output_flags()
-            .contains(TelemetryOutputFlags::OUTPUT_LOG_FILE)
+        .attributes
+        .output_flags()
+        .contains(TelemetryOutputFlags::OUTPUT_LOG_FILE)
+            // ExitWithStatus is a pseudo error used only to short-circuit execution, so we
+            // filter it from dbt-facing output
+            && !is_exit_with_status_log(log_record)
     }
 
     fn on_span_start(&self, span: &SpanStartInfo, _: &mut DataProvider<'_>) {

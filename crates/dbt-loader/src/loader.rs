@@ -208,6 +208,7 @@ pub async fn load(
         dbt_state.dbt_profile.db_config.clone(),
         dbt_state.run_started_at,
         &flags,
+        iarg.warn_error_options.clone(),
         arg.io.clone(),
         dbt_state.catalogs.clone(),
     )?;

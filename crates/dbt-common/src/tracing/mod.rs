@@ -5,6 +5,7 @@ pub mod constants;
 pub mod convert;
 pub mod data_provider;
 pub mod emit;
+pub mod event_classifiers;
 pub mod event_info;
 pub mod filter;
 pub mod formatters;

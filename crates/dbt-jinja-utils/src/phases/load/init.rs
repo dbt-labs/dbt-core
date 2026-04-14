@@ -6,7 +6,9 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_adapter::{Adapter, sql_types::SATypeOpsImpl};
 use dbt_adapter_core::AdapterType;
-use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
+use dbt_common::{
+    ErrorCode, FsResult, fs_err, io_args::IoArgs, warn_error_options::WarnErrorOptions,
+};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::dbt_catalogs::DbtCatalogs,
@@ -34,6 +36,7 @@ pub fn initialize_load_jinja_environment(
     db_config: DbConfig,
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
+    warn_error_options: WarnErrorOptions,
     io_args: IoArgs,
     catalogs: Option<Arc<DbtCatalogs>>,
 ) -> FsResult<JinjaEnv> {
@@ -69,6 +72,7 @@ pub fn initialize_load_jinja_environment(
     Ok(JinjaEnvBuilder::new()
         .with_adapter(Arc::new(adapter))
         .with_root_package("dbt".to_string())
+        .with_warn_error_options(warn_error_options)
         .with_io_args(io_args)
         .with_globals(globals)
         .build())

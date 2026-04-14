@@ -119,6 +119,7 @@ pub fn initialize_parse_jinja_environment(
         .with_adapter(Arc::new(adapter))
         .with_root_package(project_name.to_string())
         .with_globals(globals)
+        .with_warn_error_options(invocation_args.warn_error_options.clone())
         .with_io_args(io_args)
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?
         .build();

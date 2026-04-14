@@ -2,6 +2,7 @@ use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_messag
 use dbt_telemetry::ProgressMessage;
 
 use dbt_common::stdfs::canonicalize;
+use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 
 use dbt_yaml::{Span, Spanned};
@@ -67,7 +68,7 @@ pub fn load_profiles(
     // Resolve the profile using dbt-profile's Jinja environment, plus the same base
     // functions as full dbt Jinja (`tojson`, `fromjson`, etc.) so profiles.yml matches dbt-core.
     let mut penv = ProfileEnvironment::new(arg.vars.clone());
-    register_base_functions(&mut penv.env, arg.io.clone());
+    register_base_functions(&mut penv.env, arg.io.clone(), WarnErrorOptions::default());
     let resolved: ResolvedProfile =
         resolve_with_env(&penv, &profile_path, &profile_name, arg.target.as_deref()).map_err(
             |e| match e {
@@ -141,13 +142,18 @@ fn get_profile_with_span(
 #[cfg(test)]
 mod tests {
     use dbt_common::io_args::IoArgs;
+    use dbt_common::warn_error_options::WarnErrorOptions;
     use dbt_jinja_utils::register_base_functions;
     use dbt_profile::ProfileEnvironment;
 
     #[test]
     fn loader_registers_tojson_function_on_profile_env() {
         let mut penv = ProfileEnvironment::new(Default::default());
-        register_base_functions(&mut penv.env, IoArgs::default());
+        register_base_functions(
+            &mut penv.env,
+            IoArgs::default(),
+            WarnErrorOptions::default(),
+        );
         let out = penv
             .env
             .render_str("{{ tojson({'a': 1}) }}", &penv.ctx, &[])

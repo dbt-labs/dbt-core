@@ -153,6 +153,8 @@ pub enum ErrorKind {
     TypeError,
     /// Execution error
     Execution,
+    /// Exit with status without producing an extra dbt error log.
+    ExitWithStatus,
 }
 
 impl ErrorKind {
@@ -203,6 +205,7 @@ impl ErrorKind {
             ErrorKind::DisabledModel => "model is disabled",
             ErrorKind::TypeError => "type error",
             ErrorKind::Execution => "execution error",
+            ErrorKind::ExitWithStatus => "exit with status",
         }
     }
 }

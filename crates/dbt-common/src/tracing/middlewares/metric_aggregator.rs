@@ -8,6 +8,7 @@ use crate::tracing::metrics::{OutcomeCountsKey, OutcomeKind};
 
 use super::super::{
     data_provider::DataProvider,
+    event_classifiers::is_exit_with_status_log,
     layer::TelemetryMiddleware,
     metrics::{InvocationMetricKey, MetricKey},
 };
@@ -199,6 +200,12 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
         log_record: LogRecordInfo,
         data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
+        // ExitWithStatus is a pseudo error used only to short-circuit execution, so we
+        // filter it from dbt-facing output
+        if is_exit_with_status_log(&log_record) {
+            return Some(log_record);
+        }
+
         if log_record.attributes.is::<LogMessage>() {
             match log_record.severity_number {
                 SeverityNumber::Error => {

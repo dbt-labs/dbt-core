@@ -17,6 +17,7 @@ use tracing::level_filters::LevelFilter;
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    event_classifiers::is_exit_with_status_log,
     formatters::{
         deps::{format_package_installed_end, format_package_installed_start, format_package_spec},
         duration::format_timestamp_utc_zulu,
@@ -1238,6 +1239,9 @@ impl TelemetryConsumer for JsonCompatLayer {
             .attributes
             .output_flags()
             .contains(self.filter_flag)
+            // ExitWithStatus is a pseudo error used only to short-circuit execution, so we
+            // filter it from dbt-facing output
+            && !is_exit_with_status_log(log_record)
     }
 
     fn on_span_start(&self, span: &SpanStartInfo, _data_provider: &mut DataProvider<'_>) {

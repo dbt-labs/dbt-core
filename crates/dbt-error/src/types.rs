@@ -214,6 +214,10 @@ impl FsError {
     }
 
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
+        if err.kind() == minijinja::ErrorKind::ExitWithStatus {
+            return *FsError::exit_with_status(1);
+        }
+
         // Check for AdapterError as source regardless of Jinja error kind.
         // Previously this was limited to ErrorKind::Execution, but adapter errors
         // can also surface as ErrorKind::InvalidOperation (e.g. from run_query calls),
