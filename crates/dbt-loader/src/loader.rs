@@ -847,7 +847,7 @@ fn find_files_by_kind_and_extension(
 }
 
 /// Loads the .dbtignore file if it exists in the given path
-fn load_dbtignore(path: &Path) -> FsResult<Option<Gitignore>> {
+pub fn load_dbtignore(path: &Path) -> FsResult<Option<Gitignore>> {
     let dbtignore_path = path.join(".dbtignore");
     if dbtignore_path.exists() {
         let mut builder = GitignoreBuilder::new(path);

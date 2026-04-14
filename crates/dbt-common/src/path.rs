@@ -28,6 +28,11 @@ impl DbtPath {
         self.0.clone()
     }
 
+    /// Resolves this (relative) path against `base`, returning an absolute [`PathBuf`].
+    pub fn to_absolute(&self, base: &Path) -> PathBuf {
+        base.join(self.0.as_path())
+    }
+
     /// See [Path::file_name] for documentation.
     pub fn file_name(&self) -> Option<&OsStr> {
         self.0.file_name()
@@ -363,5 +368,16 @@ mod tests {
         assert!(path_separator_eq("foo\\bar", "foo/bar"));
         assert!(!path_separator_eq("foo/bar", "foo/baz"));
         assert!(!path_separator_eq("foo/bar", "foo/bar/baz"));
+    }
+
+    #[test]
+    fn test_to_absolute() {
+        let relative = DbtPath::from("models/my_model.sql");
+        let base = Path::new("/projects/my_project");
+        let absolute = relative.to_absolute(base);
+        assert_eq!(
+            absolute,
+            PathBuf::from("/projects/my_project/models/my_model.sql")
+        );
     }
 }
