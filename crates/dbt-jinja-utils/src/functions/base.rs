@@ -1217,8 +1217,24 @@ impl Object for Exceptions {
                 let updated_at_data_type = args
                     .get::<String>("updated_at_data_type")
                     .unwrap_or_else(|_| "".to_string());
+
+                let metadata = node_metadata_from_state(state);
+                let snapshot_name = state.lookup("model", &[]).and_then(|m| {
+                    m.get_attr("name")
+                        .ok()
+                        .and_then(|v| v.as_str().map(|s| s.to_string()))
+                });
+
+                let name_part = snapshot_name
+                    .as_deref()
+                    .map(|n| format!("snapshot '{n}'"))
+                    .unwrap_or_else(|| "snapshot table".to_string());
+                let location_hint = metadata
+                    .map(|(_, path)| format!("\n  --> {}", path.display()))
+                    .unwrap_or_default();
+
                 let warning = format!(
-                    "Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'."
+                    "Data type of {name_part} timestamp columns ({snapshot_time_data_type}) does not match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.{location_hint}"
                 );
 
                 emit_warn_log_message(

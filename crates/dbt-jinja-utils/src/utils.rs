@@ -552,7 +552,17 @@ pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
                     unit_test.__common_attr__.original_file_path,
                 ))
             } else {
-                None
+                // Fallback: direct attribute extraction for Object types
+                // (e.g. LazyModelWrapper) where full deserialization fails
+                let unique_id = node
+                    .get_attr("unique_id")
+                    .ok()
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
+                let file_path = node
+                    .get_attr("original_file_path")
+                    .ok()
+                    .and_then(|v| v.as_str().map(PathBuf::from));
+                unique_id.zip(file_path)
             }
         }
         None => None,
