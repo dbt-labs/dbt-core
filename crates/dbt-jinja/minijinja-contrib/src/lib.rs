@@ -20,6 +20,10 @@ use minijinja::{Environment, Value};
 #[cfg(feature = "pycompat")]
 pub mod pycompat;
 
+/// Module for creating dynamic refleciton-based Jinja objects that don't need their own Rust
+/// types.
+pub mod dyn_object;
+
 /// Utility filters.
 pub mod filters;
 
