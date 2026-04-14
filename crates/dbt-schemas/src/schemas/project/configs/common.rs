@@ -387,6 +387,12 @@ pub struct WarehouseSpecificNodeConfig {
 }
 
 impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        None
+    }
+
+    fn set_enabled(&mut self, _value: Option<bool>) {}
+
     #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &WarehouseSpecificNodeConfig) {
         // Exhaustive destructuring ensures all fields are handled

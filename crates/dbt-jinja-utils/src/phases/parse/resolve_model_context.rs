@@ -183,18 +183,14 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + Serialize + 'static>(
             }))
         }),
     );
-    // Register the config function
-    sql_resources
-        .lock()
-        .unwrap()
-        .push(SqlResource::BaseConfig(Box::new(config.clone())));
-
     let package_dependency = if package_name == root_project_name {
         None
     } else {
         Some(package_name.to_string())
     };
-    let is_enabled = config.get_enabled().unwrap_or(true);
+    // Pre-finalization read: used to initialize the Jinja context before rendering starts,
+    // before the root overlay has been applied. The optimistic `true` default is intentional.
+    let is_enabled = config.get_enabled_with_default();
     context.insert(
         "config".to_owned(),
         MinijinjaValue::from_object(ParseConfig {

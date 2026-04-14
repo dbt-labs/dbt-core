@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 use dbt_adapter_core::AdapterType;
 use dbt_common::error::AbstractLocation;
@@ -51,14 +51,19 @@ pub async fn resolve_exposures(
     let mut exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
     let mut disabled_exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let local_project_config = init_project_config(
-        &args.io,
-        &package.dbt_project.exposures,
-        ExposureConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.exposures.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &args.io,
+                &package.dbt_project.exposures,
+                ExposureConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     // Retrieve exposures from yaml
@@ -99,20 +104,8 @@ pub async fn resolve_exposures(
             )?;
 
             // Get combined properties
-            let global_config = local_project_config.get_config_for_fqn(&fqn);
-            let mut project_config = root_project_configs
-                .exposures
-                .get_config_for_fqn(&fqn)
-                .clone();
-            project_config.default_to(global_config);
-
-            let exposure_properties_config = if let Some(properties) = &exposure.config {
-                let mut properties_config: ExposureConfig = properties.clone();
-                properties_config.default_to(&project_config);
-                properties_config
-            } else {
-                project_config
-            };
+            let exposure_properties_config =
+                config_resolver.resolve_with_properties(&fqn, exposure.config.as_ref());
 
             //      depends_on:
             //        - ref('model')
@@ -199,7 +192,7 @@ pub async fn resolve_exposures(
             };
 
             // Check if exposure is enabled, add to appropriate collection
-            if exposure_properties_config.enabled.unwrap_or(true) {
+            if exposure_properties_config.get_enabled_resolved() {
                 exposures.insert(unique_id, Arc::new(dbt_exposure));
             } else {
                 disabled_exposures.insert(unique_id, Arc::new(dbt_exposure));

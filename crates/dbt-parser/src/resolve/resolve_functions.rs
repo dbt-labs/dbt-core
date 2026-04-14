@@ -13,7 +13,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
 use dbt_schemas::schemas::DbtFunctionAttr;
 use dbt_schemas::schemas::common::{Access, DbtQuoting};
-use dbt_schemas::schemas::project::FunctionConfig;
+use dbt_schemas::schemas::project::{DefaultTo, FunctionConfig};
 use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
@@ -26,7 +26,7 @@ use dbt_schemas::{
 };
 use minijinja::MacroSpans;
 
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::utils::{RelationComponents, update_node_relation_components};
 use crate::{
@@ -72,33 +72,33 @@ pub async fn resolve_functions(
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
-    let local_project_config = if package.dbt_project.name == root_project.name {
-        root_project_configs.functions.clone()
-    } else {
-        init_project_config(
-            &arg.io,
-            &package.dbt_project.functions,
-            FunctionConfig {
-                enabled: Some(true),
-                quoting: Some(package_quoting),
-                ..Default::default()
-            },
-            dependency_package_name,
-        )?
-    };
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.functions.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.functions,
+                FunctionConfig {
+                    quoting: Some(package_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
+        },
+    )?;
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_project.name.clone(),
-            root_project_config: root_project_configs.functions.clone(),
+            config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
-            local_project_config: local_project_config.clone(),
             resource_paths: package
                 .dbt_project
                 .function_paths
@@ -131,6 +131,7 @@ pub async fn resolve_functions(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
+        config: model_config,
         rendered_sql,
         macro_spans,
         properties: maybe_properties,
@@ -140,7 +141,6 @@ pub async fn resolve_functions(
     } in function_sql_resources_map.into_iter()
     {
         let function_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
-        let model_config = *sql_file_info.config;
 
         let original_file_path =
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
@@ -225,7 +225,7 @@ pub async fn resolve_functions(
                     .try_into()
                     .expect("DbtQuoting should be set"),
                 quoting_ignore_case: false,
-                enabled: model_config.enabled.unwrap_or(true),
+                enabled: model_config.get_enabled_resolved(),
                 extended_model: false,
                 persist_docs: None,
                 columns: vec![],

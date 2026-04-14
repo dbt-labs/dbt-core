@@ -36,6 +36,10 @@ struct OperationEmptyConfig;
 
 impl dbt_schemas::schemas::project::DefaultTo<OperationEmptyConfig> for OperationEmptyConfig {
     fn default_to(&mut self, _other: &OperationEmptyConfig) {}
+    fn get_enabled(&self) -> Option<bool> {
+        None
+    }
+    fn set_enabled(&mut self, _value: Option<bool>) {}
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]

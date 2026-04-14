@@ -129,6 +129,10 @@ impl DefaultTo<SavedQueryConfig> for SavedQueryConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn default_to(&mut self, parent: &SavedQueryConfig) {
         let SavedQueryConfig {
             cache,

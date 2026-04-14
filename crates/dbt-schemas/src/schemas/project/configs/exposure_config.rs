@@ -77,6 +77,10 @@ impl DefaultTo<ExposureConfig> for ExposureConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn default_to(&mut self, parent: &ExposureConfig) {
         let ExposureConfig {
             meta,

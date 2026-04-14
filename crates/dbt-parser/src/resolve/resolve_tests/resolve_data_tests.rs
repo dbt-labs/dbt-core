@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::DbtProjectConfig;
+use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::renderer::RenderCtx;
@@ -198,29 +198,6 @@ pub async fn resolve_data_tests(
     let package_name = package.dbt_project.name.as_str();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
-    let tests_config = match (
-        package.dbt_project.tests.clone(),
-        package.dbt_project.data_tests.clone(),
-    ) {
-        (Some(_), Some(_)) => {
-            unimplemented!("Merge logic for tests and data tests is unimplemented")
-        }
-        (Some(tests), None) => Some(tests),
-        (None, Some(data_tests)) => Some(data_tests),
-        (None, None) => None,
-    };
-
-    let local_project_config = init_project_config(
-        &arg.io,
-        &tests_config,
-        DataTestConfig {
-            enabled: Some(true),
-            quoting: Some(package_quoting),
-            ..Default::default()
-        },
-        dependency_package_name,
-    )?;
-
     // Create a map of dbt_asset.path.stem to GenericTestAsset for efficient lookup
     let test_path_to_test_asset: HashMap<PathBuf, &GenericTestAsset> = collected_generic_tests
         .iter()
@@ -234,18 +211,44 @@ pub async fn resolve_data_tests(
             .map(|test_asset| test_asset.dbt_asset.clone()),
     );
 
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.tests.clone(),
+        dependency_package_name.is_some(),
+        || {
+            let tests_config = match (
+                package.dbt_project.tests.clone(),
+                package.dbt_project.data_tests.clone(),
+            ) {
+                (Some(_), Some(_)) => {
+                    unimplemented!("Merge logic for tests and data tests is unimplemented")
+                }
+                (Some(tests), None) => Some(tests),
+                (None, Some(data_tests)) => Some(data_tests),
+                (None, None) => None,
+            };
+            init_project_config(
+                &arg.io,
+                &tests_config,
+                DataTestConfig {
+                    quoting: Some(package_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
+        },
+    )?;
+
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_project.name.clone(),
-            root_project_config: root_project_configs.tests.clone(),
+            config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
-            local_project_config,
             // tests can be defined in any yaml config
             resource_paths: package.dbt_project.all_source_paths(),
         }),
@@ -276,6 +279,7 @@ pub async fn resolve_data_tests(
         warn_if: Some("!= 0".to_string()),
         error_if: Some("!= 0".to_string()),
         limit: None,
+        materialized: Some(DbtMaterialization::Test),
         store_failures: arg.store_failures.then_some(true),
         ..Default::default()
     };
@@ -283,6 +287,7 @@ pub async fn resolve_data_tests(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
+        config: test_config_resolved,
         rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
@@ -291,7 +296,9 @@ pub async fn resolve_data_tests(
         ..
     } in test_sql_resources_map.iter()
     {
-        let mut test_config = sql_file_info.config.clone();
+        let mut test_config = test_config_resolved.clone();
+
+        // Appply defaults after full config resolution
         test_config.default_to(&default_dbt_config);
 
         if test_config.schema.is_none() {
@@ -457,8 +464,8 @@ pub async fn resolve_data_tests(
                     .expect("quoting is required")
                     .snowflake_ignore_case
                     .unwrap_or(false),
-                materialized: DbtMaterialization::Test,
-                enabled: test_config.enabled.unwrap_or(true),
+                materialized: test_config.materialized.clone().expect("hardcoded above"),
+                enabled: test_config.get_enabled_resolved(),
                 extended_model: false,
                 persist_docs: None,
                 columns: vec![],
@@ -524,7 +531,7 @@ pub async fn resolve_data_tests(
                 &test_config.__warehouse_specific_config__,
                 adapter_type,
             ),
-            deprecated_config: *test_config.clone(),
+            deprecated_config: test_config.clone(),
             __other__: BTreeMap::new(),
         };
 

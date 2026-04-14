@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::args::ResolveArgs;
-    use crate::dbt_project_config::DbtProjectConfig;
+    use crate::dbt_project_config::{DbtProjectConfig, ProjectConfigResolver};
     use crate::renderer::{RenderCtx, RenderCtxInner, render_unresolved_sql_files};
     use dbt_adapter_core::AdapterType;
     use dbt_common::io_args::{FsCommand, IoArgs};
@@ -106,8 +106,7 @@ mod tests {
                 adapter_type: AdapterType::Postgres,
                 database: "test_db".to_string(),
                 schema: "default_schema".to_string(),
-                local_project_config: package_config,
-                root_project_config: root_config,
+                config_resolver: ProjectConfigResolver::for_dependency(package_config, root_config),
                 resource_paths: vec!["models".to_string()],
                 package_quoting: DbtQuoting {
                     database: Some(true),
@@ -137,7 +136,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(seq_results.len(), 1, "Should have one result");
-        let seq_schema = match &seq_results[0].sql_file_info.config.schema {
+        let seq_schema = match &seq_results[0].config.schema {
             Omissible::Present(Some(s)) => s.clone(),
             _ => panic!("Expected schema to be present in sequential result"),
         };
@@ -174,7 +173,7 @@ mod tests {
         assert!(par_results.len() >= 60, "Should have results for all files");
 
         // Check the first result's schema
-        let par_schema = match &par_results[0].sql_file_info.config.schema {
+        let par_schema = match &par_results[0].config.schema {
             Omissible::Present(Some(s)) => s.clone(),
             _ => panic!("Expected schema to be present in parallel result"),
         };
@@ -194,67 +193,74 @@ mod tests {
         );
     }
 
-    /// Simple unit test to verify config override ordering behavior
+    /// Verify that `resolve_with_configs` applies layers in the correct precedence order:
+    /// project base → properties → inline → root overlay.
     #[test]
-    fn test_config_override_order() {
-        use crate::sql_file_info::SqlFileInfo;
+    fn test_resolve_with_configs_override_order() {
+        use crate::dbt_project_config::{DbtProjectConfig, ProjectConfigResolver};
         use dbt_common::serde_utils::Omissible;
-        use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
-        use dbt_schemas::schemas::common::DbtChecksum;
         use dbt_schemas::schemas::project::ModelConfig;
+        use indexmap::IndexMap;
 
-        // Create two configs - package and root
-        let package_config = ModelConfig {
-            schema: Omissible::Present(Some("package_schema".to_string())),
+        let project_config = ModelConfig {
+            schema: Omissible::Present(Some("project_schema".to_string())),
             ..Default::default()
         };
-
+        let properties_config = ModelConfig {
+            schema: Omissible::Present(Some("properties_schema".to_string())),
+            ..Default::default()
+        };
+        let inline_config = ModelConfig {
+            schema: Omissible::Present(Some("inline_schema".to_string())),
+            ..Default::default()
+        };
         let root_config = ModelConfig {
-            schema: Omissible::Present(Some("root_override_schema".to_string())),
+            schema: Omissible::Present(Some("root_schema".to_string())),
             ..Default::default()
         };
 
-        // Test the correct order: package config first, then root config
-        let resources_correct_order = vec![
-            SqlResource::BaseConfig(Box::new(package_config.clone())),
-            SqlResource::BaseConfig(Box::new(root_config.clone())),
-        ];
+        let local = DbtProjectConfig::<ModelConfig> {
+            config: project_config,
+            children: IndexMap::new(),
+        };
+        let root = DbtProjectConfig::<ModelConfig> {
+            config: root_config,
+            children: IndexMap::new(),
+        };
+        let resolver = ProjectConfigResolver::for_dependency(local, root);
+        let fqn = vec!["pkg".to_string(), "my_model".to_string()];
 
-        let sql_file_info_correct = SqlFileInfo::<ModelConfig>::from_sql_resources(
-            resources_correct_order,
-            DbtChecksum::hash(b"test"),
-            false,
+        // Root overlay has highest precedence
+        let resolved = resolver.resolve_with_configs(
+            &fqn,
+            &fqn,
+            &[Some(&properties_config), Some(&inline_config)],
         );
-
-        // The schema should be from root config (override)
-        match &sql_file_info_correct.config.schema {
-            Omissible::Present(Some(schema)) => {
-                assert_eq!(
-                    schema, "root_override_schema",
-                    "Root config should override package config"
-                );
+        match &resolved.schema {
+            Omissible::Present(Some(s)) => {
+                assert_eq!(s, "root_schema", "Root overlay should win");
             }
             _ => panic!("Expected schema to be present"),
         }
 
-        // Test the wrong order (what was happening with insert(0)): root config first, then package config
-        let resources_wrong_order = vec![
-            SqlResource::BaseConfig(Box::new(root_config)),
-            SqlResource::BaseConfig(Box::new(package_config)),
-        ];
-
-        let sql_file_info_wrong = SqlFileInfo::<ModelConfig>::from_sql_resources(
-            resources_wrong_order,
-            DbtChecksum::hash(b"test"),
-            false,
+        // Without root overlay, inline wins over properties
+        let root_resolver = ProjectConfigResolver::for_root(DbtProjectConfig::<ModelConfig> {
+            config: ModelConfig {
+                schema: Omissible::Present(Some("project_schema".to_string())),
+                ..Default::default()
+            },
+            children: IndexMap::new(),
+        });
+        let resolved_no_root = root_resolver.resolve_with_configs(
+            &fqn,
+            &fqn,
+            &[Some(&properties_config), Some(&inline_config)],
         );
-
-        // With wrong order, the schema would incorrectly be from package config
-        match &sql_file_info_wrong.config.schema {
-            Omissible::Present(Some(schema)) => {
+        match &resolved_no_root.schema {
+            Omissible::Present(Some(s)) => {
                 assert_eq!(
-                    schema, "package_schema",
-                    "With wrong order, package config incorrectly overrides root"
+                    s, "inline_schema",
+                    "Inline config should win over properties"
                 );
             }
             _ => panic!("Expected schema to be present"),

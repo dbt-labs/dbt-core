@@ -1002,6 +1002,10 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn is_incremental(&self) -> bool {
         self.incremental_strategy.is_some()
     }

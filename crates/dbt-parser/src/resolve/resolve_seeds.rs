@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
@@ -76,15 +76,20 @@ pub fn resolve_seeds(
         seed_root_dirs.push("seeds".to_string());
     }
 
-    let local_project_config = init_project_config(
-        io_args,
-        &package.dbt_project.seeds,
-        SeedConfig {
-            enabled: Some(true),
-            quoting: Some(package_quoting),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.seeds.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                io_args,
+                &package.dbt_project.seeds,
+                SeedConfig {
+                    quoting: Some(package_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     // TODO: update this to be relative of the root project
@@ -161,14 +166,8 @@ pub fn resolve_seeds(
             (SeedProperties::empty(seed_name.to_owned()), None)
         };
 
-        let project_config = local_project_config.get_config_for_fqn(&fqn);
-        let mut properties_config = if let Some(properties) = &seed.config {
-            let mut properties_config: SeedConfig = properties.clone();
-            properties_config.default_to(project_config);
-            properties_config
-        } else {
-            project_config.clone()
-        };
+        let mut properties_config =
+            config_resolver.resolve_with_properties(&fqn, seed.config.as_ref());
 
         let static_analysis =
             if let Some(static_analysis) = properties_config.static_analysis.clone() {
@@ -212,14 +211,7 @@ pub fn resolve_seeds(
 
             properties_config.column_types = Some(column_types);
         }
-
-        if package_name != root_project.name {
-            let mut root_config = root_project_configs.seeds.get_config_for_fqn(&fqn).clone();
-            root_config.default_to(&properties_config);
-            properties_config = root_config;
-        }
-
-        let is_enabled = properties_config.get_enabled().unwrap_or(true);
+        let is_enabled = properties_config.get_enabled_resolved();
 
         let columns = process_columns(
             seed.columns.as_ref(),

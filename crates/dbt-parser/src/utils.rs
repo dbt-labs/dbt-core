@@ -521,9 +521,11 @@ pub fn update_node_relation_components(
 pub struct NoOpConfig {}
 
 impl DefaultTo<NoOpConfig> for NoOpConfig {
-    fn default_to(&mut self, _other: &Self) {
-        // no-op
+    fn default_to(&mut self, _other: &Self) {}
+    fn get_enabled(&self) -> Option<bool> {
+        None
     }
+    fn set_enabled(&mut self, _value: Option<bool>) {}
 }
 
 /// Parse the macro sql and return the [SqlResource]s macro wrappers that are

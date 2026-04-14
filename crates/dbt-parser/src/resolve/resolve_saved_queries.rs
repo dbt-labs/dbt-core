@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
@@ -48,14 +48,19 @@ pub async fn resolve_saved_queries(
     }
 
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
-    let local_project_config = init_project_config(
-        &arg.io,
-        &package.dbt_project.saved_queries,
-        SavedQueryConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.saved_queries.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.saved_queries,
+                SavedQueryConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     // Validate saved query names with regex (similar to exposures)
@@ -99,20 +104,8 @@ pub async fn resolve_saved_queries(
             )?;
 
             // Get combined config from project config and saved query config
-            let global_config = local_project_config.get_config_for_fqn(&fqn);
-            let mut project_config = root_project_configs
-                .saved_queries
-                .get_config_for_fqn(&fqn)
-                .clone();
-            project_config.default_to(global_config);
-
-            let saved_query_config = if let Some(config) = &saved_query_props.config {
-                let mut final_config = config.clone();
-                final_config.default_to(&project_config);
-                final_config
-            } else {
-                project_config.clone()
-            };
+            let saved_query_config =
+                config_resolver.resolve_with_properties(&fqn, saved_query_props.config.as_ref());
 
             let props_query_params = &saved_query_props.query_params;
 
@@ -252,7 +245,7 @@ pub async fn resolve_saved_queries(
             };
 
             // Check if saved query is enabled (following exposures pattern)
-            if saved_query_config.enabled.unwrap_or(true) {
+            if saved_query_config.get_enabled_resolved() {
                 saved_queries.insert(unique_id, Arc::new(dbt_saved_query));
             } else {
                 disabled_saved_queries.insert(unique_id, Arc::new(dbt_saved_query));

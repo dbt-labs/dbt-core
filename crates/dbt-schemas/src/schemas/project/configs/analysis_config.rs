@@ -112,4 +112,8 @@ impl DefaultTo<AnalysesConfig> for AnalysesConfig {
     fn get_enabled(&self) -> Option<bool> {
         self.enabled
     }
+
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
 }

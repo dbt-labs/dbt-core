@@ -81,6 +81,10 @@ impl DefaultTo<SemanticModelConfig> for SemanticModelConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn default_to(&mut self, parent: &SemanticModelConfig) {
         let SemanticModelConfig {
             enabled,

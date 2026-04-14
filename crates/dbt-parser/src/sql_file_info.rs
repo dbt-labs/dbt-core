@@ -16,11 +16,9 @@ pub struct SqlFileInfo<T: DefaultTo<T>> {
     pub this: bool,
     /// e.g. metric('a', 'b')
     pub metrics: Vec<(String, Option<String>)>,
-    /// e.g. config( a= 1, b = [1,2], c = 'string')
-    pub config: Box<T>,
     /// Merged config values from explicit SQL `{{ config(...) }}` calls only.
     ///
-    /// This intentionally excludes the initial "base" config pushed into the parse context.
+    /// This intentionally excludes the initial project/properties config.
     /// Used to detect which values were explicitly overridden inline in SQL.
     pub explicit_config: Option<Box<T>>,
     /// e.g. tests
@@ -48,7 +46,6 @@ impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
             refs: Vec::new(),
             this: false,
             metrics: Vec::new(),
-            config: Box::new(T::default()),
             explicit_config: None,
             tests: Vec::new(),
             macros: Vec::new(),
@@ -63,7 +60,11 @@ impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
 }
 
 impl<T: DefaultTo<T>> SqlFileInfo<T> {
-    /// Create a new SqlFileInfo from a list of SqlResources
+    /// Collects rendering artifacts from a list of SqlResources.
+    ///
+    /// `ConfigCall` items (from inline `{{ config(...) }}` calls) are merged into
+    /// `explicit_config`. No project/properties config merging or `finalize()` happens here;
+    /// call `ProjectConfigResolver::resolve_with_configs` after this to obtain the final config.
     pub fn from_sql_resources(
         resources: Vec<SqlResource<T>>,
         checksum: DbtChecksum,
@@ -73,7 +74,6 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
         let mut refs = Vec::new();
         let mut this = false;
         let mut metrics = Vec::new();
-        let mut config = Box::new(T::default());
         let mut explicit_config: Option<Box<T>> = None;
         let mut tests = Vec::new();
         let mut macros = Vec::new();
@@ -89,26 +89,14 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                 SqlResource::This => this = true,
                 SqlResource::Function(function) => functions.push(function),
                 SqlResource::Metric(metric) => metrics.push(metric),
-                SqlResource::BaseConfig(mut resource_config) => {
-                    // The parse context may push multiple base configs:
-                    // 1. Pre-merged config from: dbt_project.yml + schema.yml + version config (always)
-                    // 2. Root project overrides (for dependency packages only)
-                    // Later configs take precedence; earlier ones provide defaults.
-                    resource_config.default_to(&*config);
-                    config = resource_config;
-                }
                 SqlResource::ConfigCall(mut resource_config) => {
-                    // Merge explicit SQL config calls together, excluding the base config.
-                    // This preserves dbt's precedence across multiple `config()` calls
+                    // Merge explicit SQL config calls together, excluding any project/properties
+                    // base. This preserves dbt's precedence across multiple `config()` calls
                     // while avoiding falsely treating inherited/defaulted values as explicit.
-                    let mut explicit_call = resource_config.clone();
                     if let Some(prev) = explicit_config.as_deref() {
-                        explicit_call.default_to(prev);
+                        resource_config.default_to(prev);
                     }
-                    explicit_config = Some(explicit_call);
-
-                    resource_config.default_to(&*config);
-                    config = resource_config;
+                    explicit_config = Some(resource_config);
                 }
                 SqlResource::Test(name, span, _) => tests.push((name, span)),
                 SqlResource::Macro(name, span, func_sign, args, _) => {
@@ -127,7 +115,6 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
             refs,
             this,
             metrics,
-            config,
             explicit_config,
             tests,
             macros,
@@ -150,13 +137,9 @@ mod tests {
 
     #[test]
     fn explicit_config_is_only_from_config_calls_and_last_call_wins() {
-        // Base config only => explicit_config must remain None.
-        let base = Box::new(ModelConfig::default());
-        let info = SqlFileInfo::from_sql_resources(
-            vec![SqlResource::BaseConfig(base)],
-            DbtChecksum::default(),
-            false,
-        );
+        // No config calls => explicit_config must remain None.
+        let info =
+            SqlFileInfo::<ModelConfig>::from_sql_resources(vec![], DbtChecksum::default(), false);
         assert!(info.explicit_config.is_none());
 
         // Multiple config calls => explicit_config should merge, with later calls taking precedence.
@@ -174,7 +157,6 @@ mod tests {
 
         let info = SqlFileInfo::from_sql_resources(
             vec![
-                SqlResource::BaseConfig(Box::new(ModelConfig::default())),
                 SqlResource::ConfigCall(Box::new(call1)),
                 SqlResource::ConfigCall(Box::new(call2)),
             ],

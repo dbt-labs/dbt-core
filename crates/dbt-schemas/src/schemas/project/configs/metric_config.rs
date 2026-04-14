@@ -92,6 +92,10 @@ impl DefaultTo<MetricConfig> for MetricConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn default_to(&mut self, parent: &MetricConfig) {
         let MetricConfig {
             enabled,

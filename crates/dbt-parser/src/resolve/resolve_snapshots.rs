@@ -1,7 +1,8 @@
 use super::resolve_properties::MinimalPropertiesEntry;
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{
-    RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
+    ProjectConfigResolver, RootProjectConfigs, init_project_config,
+    strip_resource_paths_from_ref_path,
 };
 use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, collect_adapter_identifiers_detect_unsafe,
@@ -35,6 +36,7 @@ use dbt_schemas::schemas::common::{
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::nodes::AdapterAttr;
+use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
@@ -83,21 +85,6 @@ pub async fn resolve_snapshots(
         Some(package.dbt_project.name.as_str())
     } else {
         None
-    };
-
-    let local_project_config = if package.dbt_project.name == root_project.name {
-        root_project_configs.snapshots.clone()
-    } else {
-        init_project_config(
-            &arg.io,
-            &package.dbt_project.snapshots,
-            SnapshotConfig {
-                enabled: Some(true),
-                quoting: Some(package_quoting),
-                ..Default::default()
-            },
-            dependency_package_name,
-        )?
     };
 
     let package_name = package.dbt_project.name.to_owned();
@@ -230,18 +217,33 @@ pub async fn resolve_snapshots(
         }
     }
 
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.snapshots.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.snapshots,
+                SnapshotConfig {
+                    quoting: Some(package_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
+        },
+    )?;
+
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_project.name.clone(),
-            root_project_config: root_project_configs.snapshots.clone(),
+            config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
-            local_project_config,
             resource_paths: package
                 .dbt_project
                 .snapshot_paths
@@ -280,6 +282,7 @@ pub async fn resolve_snapshots(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
+        config: snapshot_config_resolved,
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
@@ -305,7 +308,7 @@ pub async fn resolve_snapshots(
                     sql_file_info.checksum.clone()
                 };
 
-            let mut final_config = *sql_file_info.config;
+            let mut final_config = snapshot_config_resolved;
 
             let properties = if let Some(properties) = maybe_properties {
                 properties
@@ -398,7 +401,7 @@ pub async fn resolve_snapshots(
                         nodes: vec![],
                         nodes_with_ref_location: vec![],
                     },
-                    enabled: final_config.enabled.unwrap_or(true),
+                    enabled: final_config.get_enabled_resolved(),
                     extended_model: false,
                     persist_docs: final_config.persist_docs.clone(),
                     materialized: final_config

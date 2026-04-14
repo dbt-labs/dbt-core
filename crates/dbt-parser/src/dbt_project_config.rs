@@ -126,6 +126,116 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
     }
 }
 
+/// Resolves the final config for a node by merging three layers in increasing order of precedence:
+///
+/// 1. **Local project config** — `dbt_project.yml` for this package, path-matched by FQN
+/// 2. **Properties / inline config** — `schema.yml` or inline `{{ config(...) }}` values
+/// 3. **Root overlay** — root project's `dbt_project.yml`, applied only for dependency packages
+///
+/// Merging uses `DefaultTo`: each higher-precedence layer fills in unset fields from the
+/// layers below it. `enabled` intentionally has no default until `finalize()` so that the root
+/// overlay can disable a dependency node regardless of what lower layers set.
+///
+/// For the root package, `root` is `None` and no overlay is applied.
+#[derive(Clone)]
+pub struct ProjectConfigResolver<T: DefaultTo<T>> {
+    local: DbtProjectConfig<T>,
+    root: Option<DbtProjectConfig<T>>,
+}
+
+impl<T: DefaultTo<T>> ProjectConfigResolver<T> {
+    /// Use when the current package is the root project (no root overlay needed).
+    pub fn for_root(config: DbtProjectConfig<T>) -> Self {
+        ProjectConfigResolver {
+            local: config,
+            root: None,
+        }
+    }
+
+    /// Use when the current package is a dependency.
+    pub fn for_dependency(local: DbtProjectConfig<T>, root: DbtProjectConfig<T>) -> Self {
+        ProjectConfigResolver {
+            local,
+            root: Some(root),
+        }
+    }
+
+    /// Builds a resolver from a root config. When `is_dependency` is true, `build_local` is
+    /// called to construct the local package config; the closure is never called for root packages
+    /// because the `root` argument itself serves as the local config (root packages have no
+    /// separate overlay to apply).
+    pub fn build<F>(
+        root: DbtProjectConfig<T>,
+        is_dependency: bool,
+        build_local: F,
+    ) -> FsResult<Self>
+    where
+        F: FnOnce() -> FsResult<DbtProjectConfig<T>>,
+    {
+        if is_dependency {
+            Ok(Self::for_dependency(build_local()?, root))
+        } else {
+            Ok(Self::for_root(root))
+        }
+    }
+
+    /// Applies the root project config overlay for dependency packages.
+    fn apply_root_overlay(&self, config: &mut T, fqn: &[String]) {
+        if let Some(root) = &self.root {
+            let mut root_config = root.get_config_for_fqn(fqn).clone();
+            root_config.default_to(config);
+            *config = root_config;
+        }
+    }
+
+    /// Merges the local project config with additional `configs` layers without applying the root
+    /// overlay or calling `finalize`. Use this when the intermediate result is needed as the
+    /// Jinja render context before inline `{{ config(...) }}` calls are processed.
+    pub fn with_configs(&self, fqn: &[String], configs: &[Option<&T>]) -> T {
+        let mut config = self.local.get_config_for_fqn(fqn).clone();
+        for c in configs.iter().flatten() {
+            let mut c = (*c).clone();
+            c.default_to(&config);
+            config = c;
+        }
+        config
+    }
+
+    /// Fully resolves config by applying all layers and calling `finalize`.
+    ///
+    /// `original_fqn` is used for local project config lookup so that nodes whose paths are
+    /// transformed by fusion (snapshots, generated tests) still resolve against their original
+    /// directory hierarchy. `fqn` is used for root overlay lookup. Pass the same value for both
+    /// when no path transformation occurs (models, seeds, etc.).
+    pub fn resolve_with_configs(
+        &self,
+        original_fqn: &[String],
+        fqn: &[String],
+        configs: &[Option<&T>],
+    ) -> T {
+        let mut config = self.with_configs(original_fqn, configs);
+        self.apply_root_overlay(&mut config, fqn);
+        config.finalize();
+        config
+    }
+
+    /// Convenience wrapper: equivalent to `resolve_with_configs(fqn, fqn, &[properties_config])`.
+    pub fn resolve_with_properties(&self, fqn: &[String], properties_config: Option<&T>) -> T {
+        self.resolve_with_configs(fqn, fqn, &[properties_config])
+    }
+
+    /// Returns true if the root overlay explicitly sets `enabled = false` for this FQN.
+    /// When true, SQL rendering can be skipped entirely: the root overlay has the highest
+    /// precedence for dependency packages, so no inline `{{ config(...) }}` call can re-enable
+    /// the node.
+    pub fn is_disabled_by_root_overlay(&self, fqn: &[String]) -> bool {
+        self.root
+            .as_ref()
+            .map(|root| !root.get_config_for_fqn(fqn).get_enabled_with_default())
+            .unwrap_or(false)
+    }
+}
+
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration.
 ///
 /// The `on_error` closure is called for each `ShouldBe::ButIsnt` variant encountered

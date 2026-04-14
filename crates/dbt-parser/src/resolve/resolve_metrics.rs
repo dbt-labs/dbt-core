@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_error_log_message};
@@ -29,28 +29,6 @@ type ResolveMetricsResult = FsResult<(
     HashMap<String, Arc<DbtMetric>>,
     HashMap<String, Arc<DbtMetric>>,
 )>;
-
-/// Helper to compute the effective config for a given metric
-fn get_effective_metric_config(
-    metric_fqn: &[String],
-    root_project_configs: &RootProjectConfigs,
-    resource_config: &MetricConfig,
-    metric_props: &MetricsProperties,
-) -> MetricConfig {
-    let mut project_config = root_project_configs
-        .metrics
-        .get_config_for_fqn(metric_fqn)
-        .clone();
-    project_config.default_to(resource_config);
-
-    if let Some(config) = &metric_props.config {
-        let mut final_config = config.clone();
-        final_config.default_to(&project_config);
-        final_config
-    } else {
-        project_config
-    }
-}
 
 /// Render Jinja expressions (e.g. `{{ doc("...") }}`) in a metric description.
 ///
@@ -140,14 +118,19 @@ pub fn resolve_nested_model_metrics(
 
     // TODO: what is the difference between 'package_name' and 'dependency_package_name'?
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let local_project_config = init_project_config(
-        &arg.io,
-        &package.dbt_project.metrics,
-        MetricConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.metrics.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.metrics,
+                MetricConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     for (model_name, model_props) in typed_models_properties.iter() {
@@ -201,13 +184,8 @@ pub fn resolve_nested_model_metrics(
                 );
 
                 // Get combined config from project config and metric config
-                let resource_config = local_project_config.get_config_for_fqn(&metric_fqn);
-                let metric_config = get_effective_metric_config(
-                    &metric_fqn,
-                    root_project_configs,
-                    resource_config,
-                    metric_props,
-                );
+                let metric_config = config_resolver
+                    .resolve_with_properties(&metric_fqn, metric_props.config.as_ref());
 
                 let mut type_params: MetricTypeParams = metric_props.clone().into();
                 type_params.metric_aggregation_params =
@@ -298,7 +276,7 @@ pub fn resolve_nested_model_metrics(
                 };
 
                 // Check if metric is enabled (following exposures pattern)
-                if metric_config.enabled.unwrap_or(true) {
+                if metric_config.get_enabled_resolved() {
                     metrics.insert(metric_unique_id, Arc::new(dbt_metric));
                 } else {
                     disabled_metrics.insert(metric_unique_id, Arc::new(dbt_metric));
@@ -329,14 +307,19 @@ pub fn resolve_top_level_metrics(
     }
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let local_project_config = init_project_config(
-        &arg.io,
-        &package.dbt_project.metrics,
-        MetricConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.metrics.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.metrics,
+                MetricConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     for (metric_name, mpe) in minimal_metric_properties.iter() {
@@ -362,13 +345,8 @@ pub fn resolve_top_level_metrics(
         );
 
         // Get combined config from project config and metric config
-        let resource_config = local_project_config.get_config_for_fqn(&metric_fqn);
-        let metric_metric_config = get_effective_metric_config(
-            &metric_fqn,
-            root_project_configs,
-            resource_config,
-            &metric_props,
-        );
+        let metric_metric_config =
+            config_resolver.resolve_with_properties(&metric_fqn, metric_props.config.as_ref());
 
         let metric_name = metric_props.name.clone();
 
@@ -559,7 +537,7 @@ pub fn resolve_top_level_metrics(
         };
 
         // Check if metric is enabled (following exposures pattern)
-        if metric_metric_config.enabled.unwrap_or(true) {
+        if metric_metric_config.get_enabled_resolved() {
             metrics.insert(metric_unique_id, Arc::new(dbt_metric));
         } else {
             disabled_metrics.insert(metric_unique_id, Arc::new(dbt_metric));

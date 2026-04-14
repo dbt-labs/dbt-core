@@ -111,6 +111,12 @@ impl Default for ProjectFunctionConfig {
 }
 
 impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        None
+    }
+
+    fn set_enabled(&mut self, _value: Option<bool>) {}
+
     fn default_to(&mut self, parent: &ProjectFunctionConfig) {
         let ProjectFunctionConfig {
             access,
@@ -212,6 +218,10 @@ pub struct FunctionConfig {
 impl DefaultTo<FunctionConfig> for FunctionConfig {
     fn get_enabled(&self) -> Option<bool> {
         self.enabled
+    }
+
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
     }
 
     fn database(&self) -> Option<String> {

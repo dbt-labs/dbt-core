@@ -1,5 +1,5 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
 use dbt_common::FsResult;
@@ -15,7 +15,7 @@ use dbt_schemas::schemas::manifest::semantic_model::{
     DbtSemanticModel, DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
     SemanticModelDefaults,
 };
-use dbt_schemas::schemas::project::{DefaultTo, ModelConfig, SemanticModelConfig};
+use dbt_schemas::schemas::project::{DefaultTo, SemanticModelConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -30,31 +30,19 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
-/// Helper to compute the effective semantic model config for a given semantic model
-fn get_effective_semantic_model_config(
-    semantic_model_fqn: &[String],
-    root_project_configs: &RootProjectConfigs,
-    resource_config: &SemanticModelConfig,
-    model_props: &ModelProperties,
-) -> SemanticModelConfig {
-    let mut project_config = root_project_configs
-        .semantic_models
-        .get_config_for_fqn(semantic_model_fqn)
-        .clone();
-    project_config.default_to(resource_config);
-
-    if let Some(config) = &model_props.semantic_model {
-        let mut final_config = config.clone();
-        final_config.default_to(&project_config);
-        SemanticModelConfig {
-            enabled: Some(final_config.enabled),
-            group: final_config.group,
-            meta: final_config.config.unwrap_or_default().meta,
-            tags: project_config.tags,
-        }
-    } else {
-        project_config
-    }
+/// Convert `ModelPropertiesSemanticModelConfig` to `SemanticModelConfig` for use with
+/// `resolve_with_properties`. The original type stores `meta` nested inside `config` and
+/// `enabled` as a plain `bool`, so a manual conversion is needed.
+fn semantic_model_properties_config(model_props: &ModelProperties) -> Option<SemanticModelConfig> {
+    model_props
+        .semantic_model
+        .as_ref()
+        .map(|smc| SemanticModelConfig {
+            enabled: Some(smc.enabled),
+            group: smc.group.clone(),
+            meta: smc.config.as_ref().and_then(|c| c.meta.clone()),
+            tags: None,
+        })
 }
 
 #[allow(clippy::too_many_arguments, clippy::expect_fun_call)]
@@ -80,23 +68,19 @@ pub async fn resolve_semantic_models(
     }
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let _local_model_project_config = init_project_config(
-        &args.io,
-        &package.dbt_project.models,
-        ModelConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.semantic_models.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &args.io,
+                &package.dbt_project.semantic_models,
+                SemanticModelConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
-    )?;
-    let local_semantic_model_project_config = init_project_config(
-        &args.io,
-        &package.dbt_project.semantic_models,
-        SemanticModelConfig {
-            enabled: Some(true),
-            ..Default::default()
-        },
-        dependency_package_name,
     )?;
 
     for (model_name, model_props) in typed_models_properties.iter() {
@@ -143,14 +127,9 @@ pub async fn resolve_semantic_models(
         );
 
         // Get combined config from project config and semantic_model config
-        let semantic_model_resource_config =
-            local_semantic_model_project_config.get_config_for_fqn(&semantic_model_fqn);
-        let semantic_model_config = get_effective_semantic_model_config(
-            &semantic_model_fqn,
-            root_project_configs,
-            semantic_model_resource_config,
-            model_props,
-        );
+        let properties_config = semantic_model_properties_config(model_props);
+        let semantic_model_config = config_resolver
+            .resolve_with_properties(&semantic_model_fqn, properties_config.as_ref());
 
         let measures: Vec<SemanticMeasure> = model_props
             .metrics
@@ -287,7 +266,7 @@ pub async fn resolve_semantic_models(
         };
 
         // Check if semantic_model is enabled (following exposures pattern)
-        if semantic_model_config.enabled.unwrap_or(true) {
+        if semantic_model_config.get_enabled_resolved() {
             semantic_models.insert(semantic_model_unique_id, Arc::new(dbt_semantic_model));
         } else {
             disabled_semantic_models.insert(semantic_model_unique_id, Arc::new(dbt_semantic_model));

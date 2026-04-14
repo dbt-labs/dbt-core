@@ -1,4 +1,4 @@
-use crate::args::ResolveArgs;
+use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
@@ -72,14 +72,19 @@ pub fn resolve_unit_tests(
     let mut unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
     let mut disabled_unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
-    let local_project_config = init_project_config(
-        io_args,
-        &package.dbt_project.unit_tests,
-        UnitTestConfig {
-            enabled: Some(true),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.unit_tests.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                io_args,
+                &package.dbt_project.unit_tests,
+                UnitTestConfig {
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
 
     for (unit_test_name, mpe) in unit_test_properties.into_iter() {
@@ -124,21 +129,10 @@ pub fn resolve_unit_tests(
             &package.dbt_project.all_source_paths(),
         );
 
-        let global_config = local_project_config.get_config_for_fqn(&fqn);
-        let mut project_config = root_project_configs
-            .unit_tests
-            .get_config_for_fqn(&fqn)
-            .clone();
-        project_config.default_to(global_config);
-        let properties_config = if let Some(properties) = &unit_test.config {
-            let mut properties_config: UnitTestConfig = properties.clone();
-            properties_config.default_to(&project_config);
-            properties_config
-        } else {
-            project_config
-        };
+        let properties_config =
+            config_resolver.resolve_with_properties(&fqn, unit_test.config.as_ref());
 
-        let enabled = properties_config.get_enabled().unwrap_or(true);
+        let enabled = properties_config.get_enabled_resolved();
 
         // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
 

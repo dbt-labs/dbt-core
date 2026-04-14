@@ -243,8 +243,24 @@ pub trait DefaultTo<T>:
 {
     fn default_to(&mut self, parent: &T);
 
-    fn get_enabled(&self) -> Option<bool> {
-        None
+    fn get_enabled(&self) -> Option<bool>;
+
+    /// Get a bool with default true value if None
+    fn get_enabled_with_default(&self) -> bool {
+        self.get_enabled().unwrap_or(true)
+    }
+
+    /// Get bool, ensuring finalize() was called and the default value was set
+    fn get_enabled_resolved(&self) -> bool {
+        self.get_enabled().expect("Need to call config.finalize()")
+    }
+
+    fn set_enabled(&mut self, _value: Option<bool>);
+
+    /// Called once after full resolution to normalize `enabled` from `None` to `Some(true)`.
+    /// This ensures that state comparisons always see a concrete value rather than `None`.
+    fn finalize(&mut self) {
+        self.set_enabled(Some(self.get_enabled_with_default()));
     }
 
     fn is_incremental(&self) -> bool {

@@ -476,6 +476,10 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn default_to(&mut self, parent: &UnitTestConfig) {
         let UnitTestConfig {
             enabled,

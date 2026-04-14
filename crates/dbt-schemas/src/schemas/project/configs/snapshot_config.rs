@@ -741,6 +741,10 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
         self.enabled
     }
 
+    fn set_enabled(&mut self, value: Option<bool>) {
+        self.enabled = value;
+    }
+
     fn get_pre_hook(&self) -> Option<&Hooks> {
         (*self.pre_hook).as_ref()
     }

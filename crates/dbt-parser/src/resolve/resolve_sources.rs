@@ -1,6 +1,6 @@
 //! Module containing the entrypoint for the resolve phase.
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 
 use dbt_adapter_core::AdapterType;
@@ -68,15 +68,20 @@ pub fn resolve_sources(
     // https://docs.getdbt.com/reference/resource-properties/quoting
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
-    let local_project_config = init_project_config(
-        io_args,
-        &package.dbt_project.sources,
-        SourceConfig {
-            enabled: Some(true),
-            quoting: Some(source_default_quoting),
-            ..Default::default()
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.sources.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                io_args,
+                &package.dbt_project.sources,
+                SourceConfig {
+                    quoting: Some(source_default_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
         },
-        dependency_package_name,
     )?;
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
         // Extract raw (unrendered) database and schema from the YAML before Jinja rendering.
@@ -119,28 +124,14 @@ pub fn resolve_sources(
             &package.dbt_project.all_source_paths(),
         );
 
-        let global_config = local_project_config.get_config_for_fqn(&fqn);
-
-        let mut project_config = root_project_configs
-            .sources
-            .get_config_for_fqn(&fqn)
-            .clone();
-        project_config.default_to(global_config);
-
-        let mut source_properties_config = if let Some(properties) = &source.config {
-            let mut properties_config: SourceConfig = properties.clone();
-            properties_config.default_to(&project_config);
-            properties_config
-        } else {
-            project_config
-        };
+        let mut source_properties_config =
+            config_resolver.resolve_with_properties(&fqn, source.config.as_ref());
 
         let table_config = table.config.clone().unwrap_or_default();
 
         let is_enabled = table_config
             .enabled
-            .or_else(|| source_properties_config.get_enabled())
-            .unwrap_or(true);
+            .unwrap_or_else(|| source_properties_config.get_enabled_resolved());
 
         let normalized_table_name = special_chars.replace_all(&table_name, "__");
         let unique_id = format!(

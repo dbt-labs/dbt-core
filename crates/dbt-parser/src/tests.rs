@@ -187,15 +187,12 @@ mod tests {
             );
             assert_eq!(
                 sql_resources_locked,
-                vec![
-                    SqlResource::BaseConfig(Box::new(init_config)),
-                    SqlResource::Ref((
-                        "my_table".to_string(),
-                        None,
-                        None,
-                        CodeLocation::new(1, 15, 14)
-                    ))
-                ]
+                vec![SqlResource::Ref((
+                    "my_table".to_string(),
+                    None,
+                    None,
+                    CodeLocation::new(1, 15, 14)
+                ))]
             );
         }
     }
@@ -225,14 +222,11 @@ mod tests {
             );
             assert_eq!(
                 sql_resources_locked,
-                vec![
-                    SqlResource::BaseConfig(Box::new(init_config)),
-                    SqlResource::Source((
-                        "my_schema".to_string(),
-                        "my_table".to_string(),
-                        CodeLocation::new(1, 15, 14)
-                    ))
-                ]
+                vec![SqlResource::Source((
+                    "my_schema".to_string(),
+                    "my_table".to_string(),
+                    CodeLocation::new(1, 15, 14)
+                ))]
             );
         }
     }
@@ -260,7 +254,6 @@ mod tests {
             assert_eq!(
                 sql_resources_locked,
                 vec![
-                    SqlResource::BaseConfig(Box::new(init_config)),
                     SqlResource::Metric(("metric".to_string(), None)),
                     SqlResource::Metric((
                         "metric_two".to_string(),
@@ -309,13 +302,7 @@ mod tests {
             };
 
             let sql_resources_locked = sql_resources.lock().unwrap().clone();
-            assert_eq!(
-                sql_resources_locked,
-                vec![
-                    SqlResource::BaseConfig(Box::new(init_config)),
-                    expected_config
-                ]
-            );
+            assert_eq!(sql_resources_locked, vec![expected_config]);
         }
     }
 

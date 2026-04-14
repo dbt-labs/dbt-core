@@ -20,10 +20,6 @@ pub enum SqlResource<T: DefaultTo<T>> {
     Function((String, Option<String>, CodeLocation)),
     /// A metric call (e.g. `{{ metric('a', 'b') }}`)
     Metric((String, Option<String>)),
-    // If all can be made numeric it is ordered numerically, if not it is ordered lexicographically
-    /// A base config layer (package-level or root project override for dependencies).
-    /// Multiple BaseConfig resources may be pushed; later ones take precedence.
-    BaseConfig(Box<T>),
     /// An explicit `{{ config(...) }}` call encountered in the SQL.
     ConfigCall(Box<T>),
     /// A test definition (e.g. `{% test foo() %}`)
@@ -54,7 +50,6 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
             SqlResource::Metric((a, b)) => {
                 write!(f, "Metric({a}, {b:?})")
             }
-            SqlResource::BaseConfig(config) => write!(f, "BaseConfig({config:?})"),
             SqlResource::ConfigCall(config) => write!(f, "ConfigCall({config:?})"),
             SqlResource::Test(name, span, _) => write!(f, "Test({name} {span:#?})"),
             SqlResource::Macro(name, span, _, _, _) => write!(f, "Macro({name} {span:#?})"),

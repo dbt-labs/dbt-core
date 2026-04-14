@@ -1,4 +1,5 @@
 use crate::args::ResolveArgs;
+use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::python_ast::parse_python;
@@ -133,7 +134,6 @@ async fn build_raw_model_project_config(
     .ok();
 
     let default_config = ModelConfig {
-        enabled: Some(true),
         quoting: Some(package_quoting),
         sync: package.dbt_project.sync.clone(),
         ..Default::default()
@@ -443,27 +443,12 @@ pub async fn resolve_models(
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
-    let local_project_config = if package.dbt_project.name == root_project.name {
-        root_project_configs.models.clone()
-    } else {
-        init_project_config(
-            &arg.io,
-            &package.dbt_project.models,
-            ModelConfig {
-                enabled: Some(true),
-                quoting: Some(package_quoting),
-                ..Default::default()
-            },
-            dependency_package_name,
-        )?
-    };
-
     let raw_local_project_config =
         build_raw_model_project_config(arg, env.as_ref(), base_ctx, package, package_quoting)
             .await?;
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
     // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
-    let raw_root_project_models_cfg = if package.dbt_project.name == root_project.name {
+    let raw_root_project_models_cfg = if dependency_package_name.is_none() {
         None
     } else {
         let dbt_project_yml_path = arg.io.in_dir.join("dbt_project.yml");
@@ -487,18 +472,33 @@ pub async fn resolve_models(
         .and_then(|p| p.models)
     };
 
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.models.clone(),
+        dependency_package_name.is_some(),
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.models,
+                ModelConfig {
+                    quoting: Some(package_quoting),
+                    ..Default::default()
+                },
+                dependency_package_name,
+            )
+        },
+    )?;
+
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_project.name.clone(),
-            root_project_config: root_project_configs.models.clone(),
+            config_resolver: config_resolver.clone(),
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
-            local_project_config: local_project_config.clone(),
             resource_paths: package
                 .dbt_project
                 .model_paths
@@ -562,7 +562,7 @@ pub async fn resolve_models(
         base_ctx,
         package_name,
         &package.dbt_project,
-        &local_project_config,
+        &config_resolver,
         python_files,
         &mut models_properties_sans_semantics,
     )?;
@@ -583,6 +583,7 @@ pub async fn resolve_models(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
+        config: model_config_resolved,
         rendered_sql,
         macro_spans,
         properties: maybe_properties,
@@ -592,11 +593,13 @@ pub async fn resolve_models(
     } in model_sql_resources_map.into_iter()
     {
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+
         if ref_name.contains(' ') {
             return Err(err_resource_name_has_spaces(ref_name, &dbt_asset.path));
         }
-        // Is there a better way to handle this if the model doesn't have a config?
-        let mut model_config = *sql_file_info.config;
+
+        let mut model_config = model_config_resolved;
+
         // Capture inline SQL config overrides (from `{{ config(...) }}`) separately.
         // This should include only values explicitly set in the SQL file, not inherited defaults.
         let inline_overrides = if let Some(explicit) = sql_file_info.explicit_config.as_ref() {
@@ -847,7 +850,7 @@ pub async fn resolve_models(
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
-                enabled: model_config.enabled.unwrap_or(true),
+                enabled: model_config.get_enabled_resolved(),
                 extended_model: false,
                 persist_docs: model_config.persist_docs.clone(),
                 columns,
@@ -1156,7 +1159,7 @@ fn process_python_models(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     package_name: &str,
     dbt_project: &DbtProject,
-    local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    config_resolver: &ProjectConfigResolver<ModelConfig>,
     python_files: Vec<dbt_schemas::state::DbtAsset>,
     models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
 ) -> FsResult<Vec<SqlFileRenderResult<ModelConfig, ModelProperties>>> {
@@ -1214,7 +1217,7 @@ fn process_python_models(
             &python_asset,
             package_name,
             dbt_project,
-            local_project_config,
+            config_resolver,
             maybe_properties.as_ref(),
             arg,
         ) {
@@ -1225,15 +1228,21 @@ fn process_python_models(
             }
         };
 
+        let status = if merged_config.get_enabled_resolved() {
+            ModelStatus::Enabled
+        } else {
+            ModelStatus::Disabled
+        };
+
         // Convert to SqlFileRenderResult for uniform downstream processing
         let python_result = SqlFileRenderResult {
             asset: python_asset.clone(),
+            config: merged_config,
             sql_file_info: crate::sql_file_info::SqlFileInfo {
                 sources: python_file_info.sources,
                 refs: python_file_info.refs,
                 this: false,
                 metrics: vec![],
-                config: Box::new(merged_config),
                 explicit_config: None,
                 tests: vec![],
                 macros: vec![],
@@ -1247,7 +1256,7 @@ fn process_python_models(
             rendered_sql: source.clone(),
             macro_spans: Default::default(),
             properties: maybe_properties,
-            status: ModelStatus::Enabled,
+            status,
             patch_path,
             macro_dependencies: Vec::new(),
         };
@@ -1327,7 +1336,7 @@ fn merge_python_config(
     python_asset: &dbt_schemas::state::DbtAsset,
     package_name: &str,
     dbt_project: &DbtProject,
-    local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    config_resolver: &ProjectConfigResolver<ModelConfig>,
     maybe_properties: Option<&ModelProperties>,
     arg: &ResolveArgs,
 ) -> FsResult<ModelConfig> {
@@ -1347,43 +1356,26 @@ fn merge_python_config(
     );
 
     // Config precedence (highest to lowest):
-    // 1. dbt.config() in Python file
-    // 2. config: in schema.yml
-    // 3. dbt_project.yml
-    //
-    // Build up config from lowest to highest priority, matching SQL model behavior
-    // where later configs override earlier ones (see sql_file_info.rs:85-88)
+    // 1. root overlay (dependency packages only)
+    // 2. dbt.config() in Python file
+    // 3. config: in schema.yml
+    // 4. dbt_project.yml
 
-    let project_config = local_project_config.get_config_for_fqn(&fqn);
-
-    // Start with project config (lowest priority)
-    let mut merged_config = project_config.clone();
-
-    // Apply schema.yml config on top (medium priority)
-    // For Python models, we always create a config layer with materialized="table" as default
-    // See https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/parser/base.py#L338
-    // This ensures the default overrides project config but can be overridden by Python file config
-    let mut properties_config = if let Some(properties) = maybe_properties {
-        // Schema.yml exists - use its config if present, otherwise create default
-        properties.config.clone().unwrap_or_default()
-    } else {
-        // No schema.yml - create default config
-        ModelConfig::default()
-    };
-
-    // Set default materialized if not specified
+    // For Python models, we always apply materialized="table" as the default at the properties
+    // layer. See https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/parser/base.py#L338
+    let mut properties_config = maybe_properties
+        .and_then(|p| p.config.clone())
+        .unwrap_or_default();
     if properties_config.materialized.is_none() {
         properties_config.materialized = Some(DbtMaterialization::Table);
     }
 
-    // Merge with project config (properties_config overrides project_config)
-    properties_config.default_to(&merged_config);
-    merged_config = properties_config;
-
-    // Apply Python file config on top (highest priority)
-    let mut python_config = *python_file_info.config.clone();
-    python_config.default_to(&merged_config);
-    merged_config = python_config;
+    let python_config = *python_file_info.config.clone();
+    let mut merged_config = config_resolver.resolve_with_configs(
+        &fqn,
+        &fqn,
+        &[Some(&properties_config), Some(&python_config)],
+    );
 
     // Transfer Python-specific config key tracking from PythonFileInfo to merged config
     // These fields should come from the Python file analysis, not from project/schema configs
