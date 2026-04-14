@@ -1145,6 +1145,9 @@ impl serde::Serialize for NodeProcessed {
         if self.rows_affected.is_some() {
             len += 1;
         }
+        if self.group.is_some() {
+            len += 1;
+        }
         if self.node_outcome_detail.is_some() {
             len += 1;
         }
@@ -1236,6 +1239,9 @@ impl serde::Serialize for NodeProcessed {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("rows_affected", ToString::to_string(&v).as_str())?;
         }
+        if let Some(v) = self.group.as_ref() {
+            struct_ser.serialize_field("group", v)?;
+        }
         if let Some(v) = self.node_outcome_detail.as_ref() {
             match v {
                 node_processed::NodeOutcomeDetail::NodeCacheDetail(v) => {
@@ -1303,6 +1309,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "inSelection",
             "rows_affected",
             "rowsAffected",
+            "group",
             "node_cache_detail",
             "nodeCacheDetail",
             "node_test_detail",
@@ -1338,6 +1345,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             DurationMs,
             InSelection,
             RowsAffected,
+            Group,
             NodeCacheDetail,
             NodeTestDetail,
             NodeFreshnessOutcome,
@@ -1387,6 +1395,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "durationMs" | "duration_ms" => Ok(GeneratedField::DurationMs),
                             "inSelection" | "in_selection" => Ok(GeneratedField::InSelection),
                             "rowsAffected" | "rows_affected" => Ok(GeneratedField::RowsAffected),
+                            "group" => Ok(GeneratedField::Group),
                             "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
@@ -1433,6 +1442,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                 let mut duration_ms__ = None;
                 let mut in_selection__ = None;
                 let mut rows_affected__ = None;
+                let mut group__ = None;
                 let mut node_outcome_detail__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -1582,6 +1592,12 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::Group => {
+                            if group__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("group"));
+                            }
+                            group__ = map_.next_value()?;
+                        }
                         GeneratedField::NodeCacheDetail => {
                             if node_outcome_detail__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
@@ -1639,6 +1655,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                     duration_ms: duration_ms__,
                     in_selection: in_selection__.unwrap_or_default(),
                     rows_affected: rows_affected__,
+                    group: group__,
                     node_outcome_detail: node_outcome_detail__,
                 })
             }

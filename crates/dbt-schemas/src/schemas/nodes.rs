@@ -187,6 +187,9 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn event_time(&self) -> Option<String> {
         None
     }
+    fn get_group(&self) -> Option<String> {
+        None
+    }
     fn is_extended_model(&self) -> bool {
         false
     }
@@ -429,6 +432,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             defined_at_column,
             node_checksum,
             in_selection,
+            self.get_group(),
         )
     }
 }
@@ -552,9 +556,6 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     // Optional Fields
     fn get_access(&self) -> Option<Access> {
-        None
-    }
-    fn get_group(&self) -> Option<String> {
         None
     }
 
@@ -1091,15 +1092,15 @@ impl InternalDbtNode for DbtModel {
         // Microbatch incremental strategy is now supported
         Ok(())
     }
+
+    fn get_group(&self) -> Option<String> {
+        self.__model_attr__.group.clone()
+    }
 }
 
 impl InternalDbtNodeAttributes for DbtModel {
     fn get_access(&self) -> Option<Access> {
         Some(self.__model_attr__.access.clone())
-    }
-
-    fn get_group(&self) -> Option<String> {
-        self.__model_attr__.group.clone()
     }
 
     fn search_name(&self) -> String {
@@ -1125,6 +1126,7 @@ impl InternalDbtNodeAttributes for DbtModel {
             .and_then(|sync| sync.schema_refresh_interval.clone())
     }
 }
+
 /// Helper function to compare materialized fields for seeds, treating None and default Seed materialization as equivalent
 fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization>) -> bool {
     use crate::schemas::common::DbtMaterialization;
@@ -1655,6 +1657,10 @@ impl InternalDbtNode for DbtTest {
     }
     fn introspection(&self) -> IntrospectionKind {
         self.__test_attr__.introspection
+    }
+
+    fn get_group(&self) -> Option<String> {
+        self.__test_attr__.group.clone()
     }
 }
 
@@ -3379,6 +3385,10 @@ impl InternalDbtNode for DbtFunction {
         // Functions don't support introspection in the same way as models
         // This could be a no-op or we could add introspection support later
     }
+
+    fn get_group(&self) -> Option<String> {
+        self.__function_attr__.group.clone()
+    }
 }
 
 impl InternalDbtNodeAttributes for DbtFunction {
@@ -3396,10 +3406,6 @@ impl InternalDbtNodeAttributes for DbtFunction {
 
     fn get_access(&self) -> Option<Access> {
         Some(self.__function_attr__.access.clone())
-    }
-
-    fn get_group(&self) -> Option<String> {
-        self.__function_attr__.group.clone()
     }
 
     fn search_name(&self) -> String {
@@ -4491,6 +4497,8 @@ pub struct DbtTestAttr {
     /// This field stores the original name for selector matching purposes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_name: Option<String>,
+    #[serde(skip)]
+    pub group: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -6006,10 +6014,6 @@ impl InternalDbtNodeAttributes for DbtAnalysis {
 
     fn get_access(&self) -> Option<Access> {
         None // Analysis nodes don't have access controls
-    }
-
-    fn get_group(&self) -> Option<String> {
-        None // Analysis nodes don't have groups
     }
 
     fn search_name(&self) -> String {

@@ -356,4 +356,7 @@ message NodeProcessed {
   // Number of rows affected by this node processing, if available.
   // Only set for successful outcomes where row count is known (e.g., models, seeds).
   optional uint64 rows_affected = 43;
+
+  // Group identifier for model level notifications
+  optional string group = 44;
 }

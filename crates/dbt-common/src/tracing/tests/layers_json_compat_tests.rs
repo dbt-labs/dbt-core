@@ -786,6 +786,7 @@ fn test_node_events() {
             Some(0),
             TEST_NODE_CHECKSUM.to_string(),
             true,
+            None,
         ));
 
         // create NodeEvaluated spans for different phases that follow from NodeProcessed
@@ -1422,6 +1423,7 @@ fn test_freshness_result() {
                 None,
                 TEST_NODE_CHECKSUM.to_string(),
                 true,
+                None,
             );
             node_processed_event.source_name = Some(source_name.to_string());
 

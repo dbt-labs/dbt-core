@@ -137,6 +137,8 @@ pub struct ArrowAttributes<'a> {
     pub duration_ms: Option<u64>,
     // Number of rows affected by this event (e.g. node operation)
     pub rows_affected: Option<u64>,
+    // Group identifier for model notifications
+    pub group: Option<Cow<'a, str>>,
 }
 
 #[inline]
@@ -455,6 +457,8 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         Field::new("duration_ms", DataType::UInt64, true),
         // Number of rows affected by this event
         Field::new("rows_affected", DataType::UInt64, true),
+        // Group identifier for model notifications
+        large_utf8_field("group", true),
     ]);
 
     // Top-level fields for ArrowTelemetryRecord

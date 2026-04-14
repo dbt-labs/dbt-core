@@ -43,6 +43,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::DbtProject;
@@ -189,6 +190,7 @@ pub async fn resolve_data_tests(
     node_resolver: &NodeResolver,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    models: &BTreeMap<String, Arc<DbtModel>>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
@@ -496,26 +498,27 @@ pub async fn resolve_data_tests(
                 metrics: vec![],
                 unrendered_config: Default::default(),
             },
-            __test_attr__: DbtTestAttr {
-                column_name: test_path_to_test_asset
-                    .get(&dbt_asset.path)
-                    .and_then(|test_asset| test_asset.test_metadata_column_name.clone()),
-                attached_node: test_path_to_test_asset
-                    .get(&dbt_asset.path)
-                    .map(|test_asset| {
-                        format!(
-                            "{}.{}.{}",
-                            test_asset.resource_type,
-                            test_asset.dbt_asset.package_name,
-                            test_asset.resource_name
-                        )
-                    }),
-                test_metadata: inferred_test_metadata.clone(),
-                file_key_name: None,
-                introspection: IntrospectionKind::None,
-                original_name: test_path_to_test_asset
-                    .get(&dbt_asset.path)
-                    .and_then(|test_asset| test_asset.original_name.clone()),
+            __test_attr__: {
+                let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
+                let attached_node = test_asset.map(|ta| {
+                    format!(
+                        "{}.{}.{}",
+                        ta.resource_type, ta.dbt_asset.package_name, ta.resource_name
+                    )
+                });
+                let group = attached_node
+                    .as_deref()
+                    .and_then(|id| models.get(id))
+                    .and_then(|m| m.__model_attr__.group.clone());
+                DbtTestAttr {
+                    column_name: test_asset.and_then(|ta| ta.test_metadata_column_name.clone()),
+                    attached_node,
+                    test_metadata: inferred_test_metadata.clone(),
+                    file_key_name: None,
+                    introspection: IntrospectionKind::None,
+                    original_name: test_asset.and_then(|ta| ta.original_name.clone()),
+                    group,
+                }
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &test_config.__warehouse_specific_config__,

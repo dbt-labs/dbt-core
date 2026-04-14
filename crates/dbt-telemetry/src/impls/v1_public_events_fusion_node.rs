@@ -359,6 +359,7 @@ impl NodeProcessed {
     /// * `defined_at_column` - The column number in the file where the test is defined, if applicable.
     /// * `node_checksum` - The checksum of the node's contents
     /// * `in_selection` - Whether the node is in the selection set for execution
+    /// * `group` - Optional group identifier for model notifications
     #[allow(clippy::too_many_arguments)]
     pub fn start(
         unique_id: String,
@@ -375,6 +376,7 @@ impl NodeProcessed {
         defined_at_column: Option<u32>,
         node_checksum: String,
         in_selection: bool,
+        group: Option<String>,
     ) -> Self {
         Self::new(
             unique_id,
@@ -400,6 +402,7 @@ impl NodeProcessed {
             None,        // duration_ms will be calculated during task execution
             in_selection,
             None, // rows_affected
+            group,
             None, // node_outcome_detail
         )
     }

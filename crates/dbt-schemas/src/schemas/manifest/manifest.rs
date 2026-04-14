@@ -641,6 +641,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             file_key_name: test.file_key_name,
                             introspection: IntrospectionKind::None,
                             original_name: None,
+                            group: None,
                         },
                         __adapter_attr__: AdapterAttr::from_config_and_dialect(
                             &test.config.__warehouse_specific_config__,

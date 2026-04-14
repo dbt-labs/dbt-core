@@ -269,6 +269,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             .into(),
             duration_ms: self.duration_ms,
             rows_affected: self.rows_affected,
+            group: self.group.as_deref().map(Cow::Borrowed),
             ..Default::default()
         }
     }
@@ -365,6 +366,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             duration_ms: record.duration_ms,
             in_selection: json_payload.in_selection,
             rows_affected: record.rows_affected,
+            group: record.group.as_deref().map(str::to_string),
         })
     }
 }

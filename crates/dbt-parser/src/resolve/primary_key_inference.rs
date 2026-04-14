@@ -306,6 +306,7 @@ mod tests {
                 file_key_name: None,
                 introspection: IntrospectionKind::None,
                 original_name: None,
+                group: None,
             },
             ..Default::default()
         };
@@ -330,6 +331,7 @@ mod tests {
                 file_key_name: None,
                 introspection: IntrospectionKind::None,
                 original_name: None,
+                group: None,
             },
             ..Default::default()
         };

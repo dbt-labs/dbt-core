@@ -62,6 +62,19 @@ pub trait CliExtensionHooks: Send + Sync {
         Ok(())
     }
 
+    /// Called after the project has been resolved, before task scheduling
+    /// and execution.
+    ///
+    /// This is the earliest point where `ResolverState` (including nodes,
+    /// groups, and other resolved project data) is available.
+    async fn did_resolve_project(
+        &self,
+        _arg: &EvalArgs,
+        _resolved_state: &ResolverState,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
     /// Called after tasks have been scheduled and run, but before manifest
     /// update and further phases.
     ///

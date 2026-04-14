@@ -381,6 +381,9 @@ pub struct NodeProcessed {
     /// Only set for successful outcomes where row count is known (e.g., models, seeds).
     #[prost(uint64, optional, tag = "43")]
     pub rows_affected: ::core::option::Option<u64>,
+    /// Group identifier for model level notifications
+    #[prost(string, optional, tag = "44")]
+    pub group: ::core::option::Option<::prost::alloc::string::String>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
     pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,

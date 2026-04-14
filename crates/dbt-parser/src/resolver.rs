@@ -696,6 +696,18 @@ pub async fn resolve_inner(
     nodes.snapshots.extend(snapshots);
     disabled_nodes.snapshots.extend(disabled_snapshots);
 
+    let (groups, disabled_groups) = resolve_groups(
+        arg,
+        &mut min_properties.groups,
+        package_name,
+        &jinja_env,
+        &base_ctx,
+    )
+    .await?;
+
+    nodes.groups.extend(groups);
+    disabled_nodes.groups.extend(disabled_groups);
+
     // Resolve SQLs and get nodes and rendered SQLs except refs and sources
     let (models, rendering_results, disabled_models) = resolve_models(
         arg,
@@ -848,6 +860,7 @@ pub async fn resolve_inner(
         &node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
+        &nodes.models,
     )
     .await?;
     nodes.tests.extend(data_tests);
@@ -875,18 +888,6 @@ pub async fn resolve_inner(
     if let Some(query_comment) = package.dbt_project.query_comment.as_ref() {
         resolve_query_comment(query_comment, &jinja_env, &base_ctx)?;
     }
-
-    let (groups, disabled_groups) = resolve_groups(
-        arg,
-        &mut min_properties.groups,
-        package_name,
-        &jinja_env,
-        &base_ctx,
-    )
-    .await?;
-
-    nodes.groups.extend(groups);
-    disabled_nodes.groups.extend(disabled_groups);
 
     let collector = RenderResults {
         rendering_results: rendering_results
