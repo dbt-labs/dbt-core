@@ -189,13 +189,38 @@ class SourceLookup(dbtClassMixin):
 
 class FunctionLookup(dbtClassMixin):
     def __init__(self, manifest: "Manifest") -> None:
-        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        # Maps a lookup key (name or alias) to {package_name: [unique_id, ...]}
+        self.storage: Dict[str, Dict[PackageName, List[UniqueID]]] = {}
         self.populate(manifest)
 
     def get_unique_id(
         self, search_name: str, package: Optional[PackageName]
     ) -> Optional[UniqueID]:
-        return find_unique_id_for_package(self.storage, search_name, package)
+        """Return the first matching unique_id for backward compatibility."""
+        ids = self._get_unique_ids(search_name, package)
+        return ids[0] if ids else None
+
+    def get_all_unique_ids(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> List[UniqueID]:
+        """Return all matching unique_ids (supports overloaded functions)."""
+        return self._get_unique_ids(search_name, package)
+
+    def _get_unique_ids(self, search_name: str, package: Optional[PackageName]) -> List[UniqueID]:
+        if search_name not in self.storage:
+            return []
+
+        pkg_dct = self.storage[search_name]
+
+        if package is None:
+            result: List[UniqueID] = []
+            for ids in pkg_dct.values():
+                result.extend(ids)
+            return result
+        elif package in pkg_dct:
+            return list(pkg_dct[package])
+        else:
+            return []
 
     def find(
         self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
@@ -205,11 +230,28 @@ class FunctionLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_function(self, function: FunctionNode) -> None:
-        if function.search_name not in self.storage:
-            self.storage[function.search_name] = {}
+    def find_all(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> List[FunctionNode]:
+        """Return all function nodes matching the search name (supports overloads)."""
+        unique_ids = self.get_all_unique_ids(search_name, package)
+        return [self.perform_lookup(uid, manifest) for uid in unique_ids]
 
-        self.storage[function.search_name][function.package_name] = function.unique_id
+    def add_function(self, function: FunctionNode) -> None:
+        self._add_to_storage(function.search_name, function.package_name, function.unique_id)
+
+        # Also index by alias (identifier) if different from name,
+        # so overloaded functions sharing an alias can be looked up by that alias.
+        if function.identifier != function.search_name:
+            self._add_to_storage(function.identifier, function.package_name, function.unique_id)
+
+    def _add_to_storage(self, key: str, package: PackageName, unique_id: UniqueID) -> None:
+        if key not in self.storage:
+            self.storage[key] = {}
+        if package not in self.storage[key]:
+            self.storage[key][package] = []
+        if unique_id not in self.storage[key][package]:
+            self.storage[key][package].append(unique_id)
 
     def populate(self, manifest: "Manifest") -> None:
         for function in manifest.functions.values():
@@ -1420,6 +1462,9 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._function_lookup = FunctionLookup(self)
         return self._function_lookup
 
+    def rebuild_function_lookup(self) -> None:
+        self._function_lookup = FunctionLookup(self)
+
     @property
     def external_node_unique_ids(self) -> List[str]:
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
@@ -1511,6 +1556,29 @@ class Manifest(MacroMethods, dbtClassMixin):
         if disabled:
             return Disabled(disabled[0])
         return None
+
+    def resolve_all_functions(
+        self,
+        target_function_name: str,
+        target_function_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> List[FunctionNode]:
+        """Resolve all overloads of a function by name or alias.
+
+        Returns all enabled function nodes matching the target name across
+        package candidates. This supports overloaded UDFs where multiple
+        functions share the same database name (alias) but have different
+        argument signatures.
+        """
+        package_candidates = _packages_to_search(
+            current_project, node_package, target_function_package
+        )
+        result: List[FunctionNode] = []
+        for package in package_candidates:
+            functions = self.function_lookup.find_all(target_function_name, package, self)
+            result.extend(f for f in functions if f.config.enabled)
+        return result
 
     def resolve_metric(
         self,

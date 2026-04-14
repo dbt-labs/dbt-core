@@ -1,0 +1,6 @@
+kind: Features
+body: Support overloaded UDFs - multiple functions can share the same database name (alias) with different argument signatures
+time: 2026-04-14T07:39:00.000000-04:00
+custom:
+    Author: aahel
+    Issue: "12250"

@@ -487,6 +487,9 @@ class ManifestLoader:
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
             self.process_model_inferred_primary_keys()
+            # Rebuild the function lookup to pick up aliases set during YAML
+            # patching (e.g. overloaded UDFs sharing the same alias).
+            self.manifest.rebuild_function_lookup()
             self.process_functions(self.root_project.project_name)
             self.check_valid_group_config()
             self.check_valid_access_property()
@@ -2345,27 +2348,40 @@ def _process_functions_for_node(
                 f"Functions should always be 1 or 2 arguments - got {len(function_args)}"
             )
 
-        target_function = manifest.resolve_function(
+        # Resolve all overloads of this function (supports overloaded UDFs).
+        # This ensures dependency edges are created to every overload so they
+        # are all materialized before the referencing node runs.
+        target_functions = manifest.resolve_all_functions(
             target_function_name,
             target_function_package,
             current_project,
             node.package_name,
         )
 
-        if target_function is None or isinstance(target_function, Disabled):
-            node.config.enabled = False
-            invalid_target_fail_unless_test(
-                node=node,
-                target_name=target_function_name,
-                target_kind="function",
-                target_package=target_function_package,
-                disabled=(isinstance(target_function, Disabled)),
-                should_warn_if_disabled=False,
+        if not target_functions:
+            # Fall back to single resolution for disabled-node handling
+            target_function = manifest.resolve_function(
+                target_function_name,
+                target_function_package,
+                current_project,
+                node.package_name,
             )
+
+            if target_function is None or isinstance(target_function, Disabled):
+                node.config.enabled = False
+                invalid_target_fail_unless_test(
+                    node=node,
+                    target_name=target_function_name,
+                    target_kind="function",
+                    target_package=target_function_package,
+                    disabled=(isinstance(target_function, Disabled)),
+                    should_warn_if_disabled=False,
+                )
 
             continue
 
-        node.depends_on.add_node(target_function.unique_id)
+        for target_function in target_functions:
+            node.depends_on.add_node(target_function.unique_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
