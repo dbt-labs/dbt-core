@@ -1,3 +1,4 @@
+use super::resolve_properties::MinimalPropertiesEntry;
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{
     RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
@@ -6,6 +7,7 @@ use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, collect_adapter_identifiers_detect_unsafe,
     render_unresolved_sql_files,
 };
+use crate::resolve::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
@@ -40,15 +42,13 @@ use dbt_schemas::schemas::{
     CommonAttributes, DbtSnapshot, DbtSnapshotAttr, IntrospectionKind, NodeBaseAttributes,
 };
 use dbt_schemas::state::{
-    DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, NodeResolverTracker,
+    DbtAsset, DbtPackage, DbtRuntimeConfig, GenericTestAsset, ModelStatus, NodeResolverTracker,
 };
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-use super::resolve_properties::MinimalPropertiesEntry;
 
 #[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 pub async fn resolve_snapshots(
@@ -66,6 +66,8 @@ pub async fn resolve_snapshots(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
     node_resolver: &mut NodeResolver,
+    collected_generic_tests: &mut Vec<GenericTestAsset>,
+    test_name_truncations: &mut HashMap<String, String>,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSnapshot>>,
@@ -375,7 +377,7 @@ pub async fn resolve_snapshots(
                     unique_id: unique_id.clone(),
                     fqn,
                     description: properties.description.to_owned(),
-                    patch_path,
+                    patch_path: patch_path.clone(),
                     checksum: recalculated_checksum,
                     language: Some("sql".to_string()),
                     tags: final_config
@@ -520,6 +522,18 @@ pub async fn resolve_snapshots(
                         snapshots_with_execute.insert(unique_id.to_owned(), dbt_snapshot);
                     } else {
                         snapshots.insert(unique_id, Arc::new(dbt_snapshot));
+                    }
+
+                    if !arg.skip_creating_generic_tests {
+                        properties.as_testable().persist(
+                            package_name.as_str(),
+                            &root_project.name,
+                            collected_generic_tests,
+                            test_name_truncations,
+                            adapter_type,
+                            &arg.io,
+                            patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                        )?;
                     }
                 }
                 ModelStatus::Disabled => {

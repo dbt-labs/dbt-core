@@ -688,6 +688,8 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &mut node_resolver,
+        &mut collected_generic_tests,
+        test_name_truncations,
         token,
     )
     .await?;
