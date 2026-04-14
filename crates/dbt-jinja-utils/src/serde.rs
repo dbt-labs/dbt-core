@@ -356,6 +356,38 @@ fn value_from_str(
     Ok(value)
 }
 
+/// If `s` looks like a decimal integer or float with YAML 1.1-style underscore
+/// digit separators (e.g. `24_000_000`, `-1_000.5e-2`), strips the underscores
+/// and returns a `Value::Number` with the parsed value.  Returns `None` for
+/// any other input.
+fn normalize_underscore_number(s: &str, span: &dbt_yaml::Span) -> Option<Value> {
+    if !s.contains('_') {
+        return None;
+    }
+
+    let magnitude = s.strip_prefix('-').unwrap_or(s);
+
+    if !magnitude.as_bytes().first().is_some_and(u8::is_ascii_digit) {
+        return None;
+    }
+    if !magnitude
+        .bytes()
+        .all(|b| matches!(b, b'0'..=b'9' | b'_' | b'.' | b'e' | b'E' | b'+' | b'-'))
+    {
+        return None;
+    }
+
+    if magnitude.contains("__") || magnitude.ends_with('_') {
+        return None;
+    }
+
+    let stripped = s.replace('_', "");
+    if let Ok(number) = stripped.parse::<dbt_yaml::Number>() {
+        return Some(Value::Number(number, span.clone()));
+    }
+    None
+}
+
 /// Variant of into_typed_with_jinja which returns a Vec of warnings rather
 /// than firing them.
 fn into_typed_with_jinja_error<T, S>(
@@ -372,6 +404,12 @@ where
 {
     let jinja_renderer = |value: &Value| match value {
         Value::String(s, yaml_span) => {
+            if !RE_HAS_RENDER_CHARS.is_match(s) {
+                if let Some(normalised) = normalize_underscore_number(s, yaml_span) {
+                    return Ok(Some(normalised));
+                }
+            }
+
             let updated_ctx = ctx.with_yaml_span(yaml_span);
             let ctx = if let Some(ctx) = &updated_ctx {
                 ctx
@@ -609,7 +647,6 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
 mod tests {
     use super::*;
     use dbt_common::io_args::IoArgs;
-    use dbt_yaml::Value;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
@@ -637,5 +674,68 @@ mod tests {
             Value::Mapping(_, _) => {} // minimal structural check
             other => panic!("Expected top-level mapping, got: {:?}", other),
         }
+    }
+
+    // Helper: extract the dbt_yaml::Number from a Value::Number, panicking otherwise.
+    fn unwrap_number(v: Value) -> dbt_yaml::Number {
+        match v {
+            Value::Number(n, _) => n,
+            other => panic!("Expected Value::Number, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_normalize_underscore_number_valid_cases() {
+        let span = dbt_yaml::Span::default();
+
+        let result = normalize_underscore_number("24_000_000", &span);
+        assert!(result.is_some(), "24_000_000 should be recognised");
+        assert_eq!(unwrap_number(result.unwrap()).as_u64(), Some(24_000_000));
+
+        let result = normalize_underscore_number("1_500.00", &span);
+        assert!(result.is_some(), "1_500.00 should be recognised");
+        assert_eq!(unwrap_number(result.unwrap()).as_f64(), Some(1500.0));
+
+        let result = normalize_underscore_number("-1_2e3", &span);
+        assert!(result.is_some(), "-1_2e3 should be recognised");
+        assert_eq!(unwrap_number(result.unwrap()).as_f64(), Some(-12e3));
+
+        let result = normalize_underscore_number("1_000.5e-2", &span);
+        assert!(result.is_some(), "1_000.5e-2 should be recognised");
+        assert_eq!(unwrap_number(result.unwrap()).as_f64(), Some(1000.5e-2));
+    }
+
+    #[test]
+    fn test_normalize_underscore_number_invalid_cases() {
+        let span = dbt_yaml::Span::default();
+
+        assert!(
+            normalize_underscore_number("0x1_0", &span).is_none(),
+            "0x1_0 (hex) must be rejected"
+        );
+        assert!(
+            normalize_underscore_number("1__0", &span).is_none(),
+            "1__0 (double underscore) must be rejected"
+        );
+        assert!(
+            normalize_underscore_number("_10", &span).is_none(),
+            "_10 (leading underscore) must be rejected"
+        );
+        assert!(
+            normalize_underscore_number("1_", &span).is_none(),
+            "1_ (trailing underscore) must be rejected"
+        );
+        assert!(
+            normalize_underscore_number("24_000_000px", &span).is_none(),
+            "24_000_000px (non-numeric suffix) must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_normalize_underscore_number_no_underscore_is_noop() {
+        let span = dbt_yaml::Span::default();
+        assert!(normalize_underscore_number("24000000", &span).is_none());
+        assert!(normalize_underscore_number("hello", &span).is_none());
+        assert!(normalize_underscore_number("", &span).is_none());
     }
 }
