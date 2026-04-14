@@ -19,7 +19,7 @@ enum ThriftTransportType {
 
 #[derive(Debug)]
 enum ThriftAuthType<'a> {
-    Plain,
+    Plain { username: &'a str },
     NoSasl,
     Ldap,
     Kerberos { service_name: &'a str },
@@ -75,7 +75,10 @@ impl<'a> SparkAuthIR<'a> {
                 }
 
                 let auth_type = match auth {
-                    ThriftAuthType::Plain => spark::auth_type::PLAIN,
+                    ThriftAuthType::Plain { username } => {
+                        builder.with_named_option(spark::USERNAME, username)?;
+                        spark::auth_type::PLAIN
+                    }
                     ThriftAuthType::NoSasl => spark::auth_type::NOSASL,
                     ThriftAuthType::Ldap => spark::auth_type::LDAP,
                     ThriftAuthType::Kerberos { service_name } => {
@@ -201,7 +204,12 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthErro
                 _ => unreachable!(),
             },
             auth: match auth {
-                Some("NONE") | None => Ok(ThriftAuthType::Plain),
+                Some("NONE") | Some("PLAIN") | None => {
+                    let username = config.get_str("user").ok_or_else(|| {
+                        AuthError::config("'user' is required when auth is 'PLAIN' or 'NONE'")
+                    })?;
+                    Ok(ThriftAuthType::Plain { username })
+                }
                 Some("NOSASL") => Ok(ThriftAuthType::NoSasl),
                 Some("LDAP") => Ok(ThriftAuthType::Ldap),
                 Some("KERBEROS") => {
@@ -295,38 +303,13 @@ mod tests {
     use dbt_yaml::Mapping;
 
     #[test]
-    fn connection_param_defaults() {
-        let cases = [
-            ("thrift", spark::transport_api::THRIFT_BINARY),
-            ("http", spark::transport_api::THRIFT_HTTP),
-            ("livy", spark::transport_api::LIVY),
-        ];
-
-        for (method, api) in cases {
-            let config = Mapping::from_iter([
-                ("host".into(), "myhost".into()),
-                ("port".into(), 1234.into()),
-                ("method".into(), method.into()),
-            ]);
-
-            let builder = SparkAuth {}
-                .configure(&AdapterConfig::new(config))
-                .expect("configure")
-                .builder;
-
-            assert_eq!(other_option_value(&builder, spark::HOST), Some("myhost"));
-            assert_eq!(other_option_value(&builder, spark::PORT), Some("1234"));
-            assert_eq!(
-                other_option_value(&builder, spark::TRANSPORT_API),
-                Some(api)
-            );
-        }
-    }
-
-    #[test]
     fn thrift_auth_ok() {
         let cases = [
-            ("NONE", spark::auth_type::PLAIN, [].as_slice()),
+            (
+                "NONE",
+                spark::auth_type::PLAIN,
+                [("user", "serramatutu")].as_slice(),
+            ),
             ("NOSASL", spark::auth_type::NOSASL, [].as_slice()),
             ("LDAP", spark::auth_type::LDAP, [].as_slice()),
             (

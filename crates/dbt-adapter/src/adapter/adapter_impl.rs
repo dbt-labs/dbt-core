@@ -1410,22 +1410,20 @@ impl AdapterImpl {
                     "dbt_databricks",
                 )
             }
-            Postgres | Snowflake | Bigquery | Sidecar | Redshift | DuckDB | Fabric => {
+            Postgres | Snowflake | Bigquery | Sidecar | Redshift | DuckDB | Fabric | Spark => {
                 execute_macro(
                     state,
                     &[RelationObject::new(relation.to_owned()).as_value()],
                     "get_columns_in_relation",
                 )
             }
-            // TODO(serramatutu): get back to this later
-            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Salesforce | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
         };
 
         match self.adapter_type() {
-            adapter_type @ (Postgres | Redshift | Sidecar | Fabric | DuckDB) => {
+            adapter_type @ (Postgres | Redshift | Sidecar | Fabric | DuckDB | Spark) => {
                 let result = macro_execution_result?;
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
@@ -1526,8 +1524,7 @@ impl AdapterImpl {
                     .collect::<Vec<_>>();
                 Ok(columns)
             }
-            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Salesforce | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
         }
