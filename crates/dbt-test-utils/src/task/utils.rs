@@ -345,6 +345,7 @@ where
     let arg = from_lib(&cli);
     let warn_error_options = parser.warn_error_options(&cli);
     let fail_fast_flag = parser.fail_fast_flag(&cli);
+    let write_index = parser.write_index(&cli);
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
         Some(&project_dir),
@@ -352,6 +353,7 @@ where
         &arg.io,
         warn_error_options.as_ref(),
         "dbt-tests",
+        write_index,
     );
     let (middlewares, consumer_layers, mut shutdown_items, feature_handle) =
         match trace_config.build_layers() {

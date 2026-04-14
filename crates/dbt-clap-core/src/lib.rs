@@ -210,6 +210,10 @@ impl CliParserTrait for CliParser {
     fn warn_error_options(&self, cli: &Self::CliType) -> Option<WarnErrorOptions> {
         Some(cli.common_args.get_cli_warn_error_options())
     }
+
+    fn write_index(&self, cli: &Self::CliType) -> bool {
+        cli.common_args.write_index
+    }
 }
 
 #[derive(Debug, Clone)]

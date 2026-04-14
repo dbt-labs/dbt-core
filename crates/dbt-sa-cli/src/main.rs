@@ -55,6 +55,7 @@ fn main() -> ExitCode {
             &arg.io,
             None,
             "dbt-sa",
+            false, // write_index not supported by dbt-sa
         )) {
             Ok(handle) => handle,
             Err(e) => {

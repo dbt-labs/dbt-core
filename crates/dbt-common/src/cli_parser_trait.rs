@@ -34,4 +34,9 @@ pub trait CliParserTrait {
     fn warn_error_options(&self, _cli: &Self::CliType) -> Option<WarnErrorOptions> {
         None
     }
+
+    /// Whether `--write-index` / `--use-index` was requested.
+    fn write_index(&self, _cli: &Self::CliType) -> bool {
+        false
+    }
 }

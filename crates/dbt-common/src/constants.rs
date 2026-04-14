@@ -51,6 +51,7 @@ pub const DBT_LOG_DIR_NAME: &str = "logs";
 pub const DBT_STATE_DIR_NAME: &str = "state";
 pub const DBT_DEFAULT_LOG_FILE_NAME: &str = "dbt.log";
 pub const DBT_DEFAULT_QUERY_LOG_FILE_NAME: &str = "query_log.sql";
+pub const DBT_DEFAULT_OTEL_PARQUET_FILE_NAME: &str = "otel.parquet";
 pub const DBT_DEFAULT_LOG_FILE_MAX_BYTES: u64 = 10 * 1024 * 1024;
 pub const DBT_DEFAULT_LOG_FILE_BACKUP_COUNT: usize = 5;
 pub const DBT_ROOT_PACKAGE_VAR_PREFIX: &str = "__root__";
