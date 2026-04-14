@@ -1,5 +1,5 @@
 kind: Fixes
-body: Allows rendering of data_tests in versioned models
+body: Skip schema-time rendering of version-level data_tests so they can be rendered later with full context
 time: 2026-04-13T13:42:08.054974+05:30
 custom:
     Author: ash2shukla
