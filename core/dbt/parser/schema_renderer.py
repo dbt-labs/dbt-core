@@ -62,8 +62,27 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
-        # versions
-        if len(keypath) == 5 and keypath[4] == "description":
+        # versions: tests/data_tests, descriptions, and column tests/data_tests/descriptions
+        # keypath looks like ("versions", <idx>, "tests" or "data_tests", ...) or
+        # ("versions", <idx>, "columns", <idx>, "tests" or "data_tests", ...)
+        if (
+            len(keypath) >= 3
+            and keypath[0] == "versions"
+            and keypath[2]
+            in (
+                "tests",
+                "data_tests",
+                "description",
+            )
+        ):
+            return True
+
+        if (
+            len(keypath) >= 5
+            and keypath[0] == "versions"
+            and keypath[2] == "columns"
+            and keypath[4] in ("tests", "data_tests", "description")
+        ):
             return True
 
         if (
