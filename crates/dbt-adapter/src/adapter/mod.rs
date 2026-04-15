@@ -2682,6 +2682,7 @@ impl Adapter {
         &self,
         state: &State,
         relation: &Arc<dyn BaseRelation>,
+        include_transient: bool,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -2691,6 +2692,7 @@ impl Adapter {
                     state,
                     conn.as_mut(),
                     relation,
+                    include_transient,
                     self.cancellation_token.clone(),
                 )
             }
@@ -2874,9 +2876,12 @@ impl Adapter {
                 let iter = ArgsIter::new(name, &["relation"], args);
                 let relation = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation)?;
+                let include_transient = iter
+                    .next_kwarg::<Option<bool>>("include_transient")?
+                    .unwrap_or(false);
                 iter.finish()?;
 
-                self.describe_dynamic_table(state, &relation)
+                self.describe_dynamic_table(state, &relation, include_transient)
             }
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.adapter_type().to_string())),

@@ -42,7 +42,7 @@ use crate::{
 };
 
 use adbc_core::options::OptionValue;
-use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
+use arrow::array::{BooleanArray, RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
@@ -977,6 +977,7 @@ impl AdapterImpl {
         state: &State,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        include_transient: bool,
         token: CancellationToken,
     ) -> Result<Value, minijinja::Error> {
         let adapter_type = self.adapter_type();
@@ -1003,7 +1004,7 @@ impl AdapterImpl {
                     relation.identifier_as_str()?
                 );
 
-                let (_, table) = self.query(&ctx, conn, &show_sql, None, token)?;
+                let (_, table) = self.query(&ctx, conn, &show_sql, None, token.clone())?;
 
                 let new_column_names: Vec<String> = table
                     .column_names()
@@ -1024,6 +1025,49 @@ impl AdapterImpl {
                         "initialization_warehouse".to_string(),
                         "immutable_where".to_string(),
                     ]);
+
+                // SHOW DYNAMIC TABLES does not expose transient status, so we need to run SHOW
+                // TABLES if we need to check transient
+                let table = if include_transient {
+                    let show_tables_sql = format!(
+                        "show tables like '{}' in schema {database}.{schema}",
+                        relation.identifier_as_str()?
+                    );
+                    let (_, tables) = self.query(&ctx, conn, &show_tables_sql, None, token)?;
+                    let new_column_names: Vec<String> = tables
+                        .column_names()
+                        .into_iter()
+                        .map(|name| name.to_ascii_lowercase())
+                        .collect();
+                    let tables = tables.rename(Some(new_column_names), None, false, false)?;
+                    let tables_batch = tables.to_record_batch();
+                    let is_transient = if tables_batch.num_rows() > 0 {
+                        get_column_values::<StringArray>(&tables_batch, "kind")
+                            .ok()
+                            .map(|col| col.value(0).eq_ignore_ascii_case("TRANSIENT"))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+
+                    // Fold the transient column into the SHOW DYNAMIC TABLES result
+                    let record_batch = table.to_record_batch();
+                    let num_rows = record_batch.num_rows();
+                    let transient_col: ArrayRef =
+                        Arc::new(BooleanArray::from(vec![Some(is_transient); num_rows]));
+                    let mut fields: Vec<Arc<Field>> =
+                        record_batch.schema().fields().iter().cloned().collect();
+                    fields.push(Arc::new(Field::new("transient", DataType::Boolean, true)));
+                    let new_schema = Arc::new(Schema::new(fields));
+                    let mut columns = record_batch.columns().to_vec();
+                    columns.push(transient_col);
+                    let new_batch = RecordBatch::try_new(new_schema, columns).map_err(|e| {
+                        minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, e.to_string())
+                    })?;
+                    AgateTable::from_record_batch(Arc::new(new_batch))
+                } else {
+                    table
+                };
 
                 Ok(Value::from(ValueMap::from([(
                     Value::from("dynamic_table"),
