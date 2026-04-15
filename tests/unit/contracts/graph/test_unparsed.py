@@ -668,7 +668,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
             "constraints": [],
             "versions": [
                 {
-                    "v": "2",
+                    "v": 2,
                     "description": "",
                     "columns": [],
                     "config": {},
@@ -1078,7 +1078,7 @@ class TestUnparsedVersion(ContractTestCase):
 
     def get_ok_dict(self):
         return {
-            "v": "2",
+            "v": 2,
             "defined_in": "test_defined_in",
             "description": "A version",
             "config": {},

@@ -501,11 +501,6 @@ class UnparsedVersion(dbtClassMixin):
         return f"v{self.v}"
 
     def __post_init__(self):
-        if isinstance(self.v, int):
-            self.v = str(self.v)
-        elif isinstance(self.v, float) and self.v == int(self.v):
-            self.v = str(int(self.v))
-
         has_include_exclude = False
         self._include_exclude = dbt_common.helper_types.IncludeExclude(include="*")
         self._unparsed_columns = []
