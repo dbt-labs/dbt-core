@@ -19,7 +19,7 @@ use strum::{Display, IntoEnumIterator};
 
 use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, DisplayFormat, EvalArgs, FsCommand, IoArgs, Phases,
-    ShowOptions, SystemArgs, check_selector, check_var,
+    ShowOptions, SystemArgs, check_key_value_cli_arg, check_selector,
 };
 use dbt_common::row_limit::RowLimit;
 
@@ -274,7 +274,7 @@ pub struct CommonArgs {
 
     /// Supply var bindings in yml format e.g. '{key: value}' or as separate key: value pairs
     // has no ENV_VAR
-    #[arg(global = true, long,value_parser = check_var, )]
+    #[arg(global = true, long,value_parser = check_key_value_cli_arg, )]
     pub vars: Option<BTreeMap<String, Value>>,
 
     /// Select nodes to run

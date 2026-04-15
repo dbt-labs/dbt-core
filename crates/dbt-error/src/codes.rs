@@ -122,7 +122,6 @@ pub enum ErrorCode {
     DeprecatedModel = 1085,
     DeprecatedReference = 1072,
     UpcomingReferenceDeprecation = 1073,
-    JinjaLogWarning = 1074,
     SnapshotTimestampWarning = 1075,
     PackageRedirectDeprecation = 1076,
     DepsUnpinned = 1077,

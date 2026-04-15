@@ -29,8 +29,8 @@ use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, Stati
 use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, EvalArgs, InternalPackageMode, IoArgs,
     LocalExecutionBackendKind, OptimizeTestsOptions, Phases, RunCacheMode, ShowOptions, SystemArgs,
-    TimeMachineModeKind, TimeMachineReplayOrdering, check_selector, check_target, check_var,
-    validate_project_name,
+    TimeMachineModeKind, TimeMachineReplayOrdering, check_key_value_cli_arg, check_selector,
+    check_target, validate_project_name,
 };
 use dbt_common::row_limit::RowLimit;
 use dbt_common::warn_error_options::{WarnErrorOptions, parse_warn_error_options};
@@ -1212,7 +1212,7 @@ pub struct RunOperationArgs {
     pub macro_name: String,
 
     /// Supply arguments to the macro. This dictionary will be mapped to the keyword arguments defined in the selected macro. This argument should be a yml string.
-    #[arg(long,value_parser = check_var)]
+    #[arg(long,value_parser = check_key_value_cli_arg)]
     pub args: Option<BTreeMap<String, YValue>>,
 
     // Flattened IO args
@@ -1334,7 +1334,7 @@ pub struct CommonArgs {
 
     /// Supply var bindings in yml format e.g. '{key: value}' or as separate key: value pairs
     // has no ENV_VAR
-    #[arg(global = true, long,value_parser = check_var, )]
+    #[arg(global = true, long,value_parser = check_key_value_cli_arg, )]
     pub vars: Option<BTreeMap<String, YValue>>,
 
     /// Select nodes to run

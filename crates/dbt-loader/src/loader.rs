@@ -7,10 +7,11 @@ use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
 use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
+use dbt_common::io_utils::StatusReporter;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::TracingFeatures;
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_common::warn_error_options::{project_flags_get_value, resolve_warn_error_options};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -31,7 +32,7 @@ use std::collections::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
 use std::{fs, io};
 use tracing::Instrument;
@@ -103,27 +104,36 @@ fn resolve_warn_error_options_from_flags<'a>(
     from_cli: Option<bool>,
     from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
     project_flags: Option<&dbt_yaml::Value>,
-    io: &dbt_common::io_args::IoArgs,
     tracing_features: Option<&dyn TracingFeatures>,
-) -> Cow<'a, InvocationArgs> {
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) -> FsResult<Cow<'a, InvocationArgs>> {
     let (warn_error, warn_error_options) =
         resolve_warn_error_options(from_cli, from_cli_or_env, project_flags);
 
-    let cli_or_env_emitted_deprecation = from_cli_or_env
-        .and_then(dbt_common::warn_error_options::WarnErrorOptions::deprecated_keys_message)
-        .is_some();
-    if let Some(msg) = warn_error_options.deprecated_keys_message()
-        && !cli_or_env_emitted_deprecation
-    {
+    let (warning_messages, error_message) = warn_error_options.validation_messages();
+
+    for message in warning_messages {
         emit_warn_log_message(
-            ErrorCode::WEOIncludeExcludeDeprecation,
-            msg,
-            io.status_reporter.as_ref(),
+            ErrorCode::NotSupportedWarnErrorOption,
+            message,
+            status_reporter,
         );
     }
 
+    if let Some(message) = error_message {
+        emit_error_log_message(ErrorCode::InvalidOptions, &message, status_reporter);
+        return Err(dbt_common::FsError::exit_with_status(1));
+    }
+
+    if let Some(msg) = warn_error_options.deprecated_keys_message() {
+        emit_warn_log_message(
+            ErrorCode::WEOIncludeExcludeDeprecation,
+            msg,
+            status_reporter,
+        );
+    }
     if iarg.warn_error == warn_error && iarg.warn_error_options == warn_error_options {
-        return iarg;
+        return Ok(iarg);
     }
 
     if let Some(tracing_handle) = tracing_features {
@@ -133,7 +143,7 @@ fn resolve_warn_error_options_from_flags<'a>(
     let iarg_mut = iarg.to_mut();
     iarg_mut.warn_error = warn_error;
     iarg_mut.warn_error_options = warn_error_options;
-    iarg
+    Ok(iarg)
 }
 
 fn project_flags_v2_compatible_download(flags: &dbt_yaml::Value) -> Option<bool> {
@@ -201,9 +211,9 @@ pub async fn load(
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
-        &arg.io,
         tracing_features,
-    );
+        arg.io.status_reporter.as_ref(),
+    )?;
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
 
     // Merge use_v2_compatible_package_downloads flags from project and CLI/env
@@ -421,9 +431,9 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
-        &arg.io,
         None,
-    );
+        arg.io.status_reporter.as_ref(),
+    )?;
 
     let env = initialize_load_profile_jinja_environment();
     load_catalogs(arg, &env).await?;

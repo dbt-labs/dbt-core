@@ -1,45 +1,20 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ErrorCode;
 use crate::collections::HashMap;
 use dbt_yaml::{Value, Verbatim};
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumString};
+use strum::{AsRefStr, EnumMessage};
 
-// TODO: these models should live in dbt-schemas crate. It currently lives in dbt-common because
-// EvalArgs is defined here and dbt-common cannot depend on dbt-schemas without creating a cycle.
+mod legacy;
+
+pub use legacy::{
+    NotYetSupportedLegacyWarnError, SupportedLegacyWarnError, WillNotSupportLegacyWarnError,
+};
+
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    EnumString,
-    EnumIter,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsRefStr,
 )]
-pub enum SupportedLegacyWarnError {
-    JinjaLogWarning,
-    LogTestResult,
-    NothingToDo,
-    NoNodesSelected,
-    NodeNotFoundOrDisabled,
-    DeprecatedModel,
-    DeprecatedReference,
-    UpcomingReferenceDeprecation,
-    SnapshotTimestampWarning,
-    PackageRedirectDeprecation,
-    DepsUnpinned,
-    FreshnessConfigProblem,
-    WarnStateTargetEqual,
-    WEOIncludeExcludeDeprecation,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum WarnErrorGroupValue {
     #[serde(rename = "all", alias = "*")]
     All,
@@ -53,6 +28,8 @@ pub enum WarnErrorOptionValue {
     FusionCode(u16),
     LegacyGroup(WarnErrorGroupValue),
     SupportedLegacy(SupportedLegacyWarnError),
+    NotYetSupportedLegacy(NotYetSupportedLegacyWarnError),
+    WillNotSupportLegacy(WillNotSupportLegacyWarnError),
     Unsupported(String),
 }
 
@@ -113,24 +90,178 @@ impl WarnErrorOptions {
         self.extend_error([WarnErrorOptionValue::all()]);
     }
 
-    pub fn has_unsupported_values(&self) -> bool {
-        self.error
+    /// Validates fully resolved warn-error options and returns the user-facing warning/error text.
+    ///
+    /// Branches are intentionally collapsed into one imperative pass so resolution can emit
+    /// stable warning lines and at most one error block after precedence has already been applied:
+    /// - legacy values we will never support contribute one line each next as they have individual messages
+    /// - recognized-but-not-yet-supported values are aggregated into one final warning line.
+    /// - bogus values or unknown Fusion numeric codes become a single error block.
+    pub fn validation_messages(&self) -> (Vec<String>, Option<String>) {
+        let mut invalid_fusion_codes = BTreeSet::new();
+        let mut invalid_raw_values = BTreeSet::new();
+        let mut will_not_support = BTreeMap::new();
+        let mut not_yet_supported = BTreeSet::new();
+
+        for value in self
+            .error
             .iter()
             .chain(self.warn.iter())
             .chain(self.silence.iter())
-            .any(|value| {
-                matches!(
-                    value,
-                    WarnErrorOptionValue::Unsupported(_) | WarnErrorOptionValue::LegacyGroup(_)
-                ) || matches!(
-                    value,
-                    // Here we are super conservative. In reality we would match all error codes,
-                    // but since some of them may happen in places where user would expect short-circuiting
-                    // of execution and we only currently explicitly checkpoin after the following codes
-                    // we would emit the unsupported warning for all other codes for now
-                    WarnErrorOptionValue::FusionCode(c) if !supported_warn_error_code(*c)
+        {
+            match value {
+                // Numeric values are either a supported Fusion code or entirely invalid if the code does not exist.
+                WarnErrorOptionValue::FusionCode(code) => match ErrorCode::try_from(*code) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        invalid_fusion_codes.insert(*code);
+                    }
+                },
+                // List supported groups here
+                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => {}
+                WarnErrorOptionValue::LegacyGroup(group) => {
+                    not_yet_supported.insert(group.as_ref());
+                }
+                WarnErrorOptionValue::SupportedLegacy(_) => {}
+                WarnErrorOptionValue::NotYetSupportedLegacy(legacy) => {
+                    not_yet_supported.insert(legacy.as_ref());
+                }
+                // These legacy values are known and intentionally unsupported, so keep each reason
+                // as its own line and sort by the legacy event name for stable output.
+                WarnErrorOptionValue::WillNotSupportLegacy(legacy) => {
+                    will_not_support.insert(
+                        legacy.as_ref(),
+                        legacy.get_message().expect(
+                            "will-not-support legacy variants must have messages. ensured via test",
+                        ),
+                    );
+                }
+                // Text values that are neither known dbt-core events nor recognized groups are
+                // invalid user input and should hard-error instead of silently proceeding.
+                WarnErrorOptionValue::Unsupported(raw) => {
+                    invalid_raw_values.insert(raw);
+                }
+            }
+        }
+
+        let mut warning_lines = will_not_support
+            .into_iter()
+            .map(|(name, reason)| {
+                format!(
+                    "warn_error_options value `{name}` will not be supported in Fusion: {reason} Please remove from cli argument or config."
                 )
             })
+            .collect::<Vec<_>>();
+
+        const MAX_CODES_IN_MSG: usize = 50;
+
+        if let Some(warn_line) = match not_yet_supported.len() {
+            0 => None,
+            1 => Some(format!(
+                "warn_error_options value `{}` is recognized, but Fusion does not support it yet.",
+                not_yet_supported.iter().next().unwrap()
+            )),
+            len if len <= MAX_CODES_IN_MSG => {
+                let values = not_yet_supported
+                    .into_iter()
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} are recognized, but Fusion does not support them yet."
+                ))
+            }
+            // Too many, show at most MAX_CODES_IN_MSG and N others
+            len => {
+                let values = not_yet_supported
+                    .into_iter()
+                    .take(MAX_CODES_IN_MSG)
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} and {} others are recognized, but Fusion does not support them yet.",
+                    len - MAX_CODES_IN_MSG
+                ))
+            }
+        } {
+            warning_lines.push(warn_line);
+        }
+
+        let mut error_lines = Vec::new();
+
+        // Parsed numbers that are not valid Fusion error codes use a dedicated error message
+        if let Some(error_line) = match invalid_fusion_codes.len() {
+            0 => None,
+            1 => Some(format!(
+                "warn_error_options value `{}` is not a known Fusion error code.",
+                invalid_fusion_codes.iter().next().unwrap()
+            )),
+            len if len <= MAX_CODES_IN_MSG => {
+                let values = invalid_fusion_codes
+                    .into_iter()
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} are not known Fusion error codes."
+                ))
+            }
+            // Too many, show at most MAX_CODES_IN_MSG and N others
+            len => {
+                let values = invalid_fusion_codes
+                    .into_iter()
+                    .take(MAX_CODES_IN_MSG)
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} and {} others are not known Fusion error codes.",
+                    len - MAX_CODES_IN_MSG
+                ))
+            }
+        } {
+            error_lines.push(error_line);
+        }
+
+        // All other unknown values, including large numbers that are out of u16 bounds
+        if let Some(error_line) = match invalid_raw_values.len() {
+            0 => None,
+            1 => Some(format!(
+                "warn_error_options value `{}` is invalid because it is not a known Fusion error code, dbt-core event name, or supported warn-error group.",
+                invalid_raw_values.iter().next().unwrap()
+            )),
+            len if len <= MAX_CODES_IN_MSG => {
+                let values = invalid_raw_values
+                    .into_iter()
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} are invalid because they are not known Fusion error codes, dbt-core event names, or supported warn-error groups."
+                ))
+            }
+            // Too many, show at most MAX_CODES_IN_MSG and N others
+            len => {
+                let values = invalid_raw_values
+                    .into_iter()
+                    .take(MAX_CODES_IN_MSG)
+                    .map(|value| format!("`{value}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!(
+                    "warn_error_options values {values} and {} others are invalid because they are not known Fusion error codes, dbt-core event names, or supported warn-error groups.",
+                    len - MAX_CODES_IN_MSG
+                ))
+            }
+        } {
+            error_lines.push(error_line);
+        }
+
+        (
+            warning_lines,
+            (!error_lines.is_empty()).then(|| error_lines.join("\n")),
+        )
     }
 
     pub fn deprecated_keys_message(&self) -> Option<String> {
@@ -199,16 +330,8 @@ impl WarnErrorOptions {
     }
 }
 
-fn supported_warn_error_code(code: u16) -> bool {
-    [
-        ErrorCode::NoNodesSelected as u16,
-        ErrorCode::JinjaWarn as u16,
-    ]
-    .contains(&code)
-}
-
 pub fn parse_warn_error_options(value: &str) -> Result<WarnErrorOptions, String> {
-    crate::io_args::check_var(value).map(WarnErrorOptions::from_cli_mapping)
+    crate::io_args::check_key_value_cli_arg(value).map(WarnErrorOptions::from_cli_mapping)
 }
 
 pub fn resolve_warn_error_options(
@@ -292,6 +415,14 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
     if let Ok(legacy) = raw.try_into() {
         return Some(WarnErrorOptionValue::SupportedLegacy(legacy));
+    }
+
+    if let Ok(legacy) = raw.try_into() {
+        return Some(WarnErrorOptionValue::WillNotSupportLegacy(legacy));
+    }
+
+    if let Ok(legacy) = raw.try_into() {
+        return Some(WarnErrorOptionValue::NotYetSupportedLegacy(legacy));
     }
 
     Some(WarnErrorOptionValue::Unsupported(raw.to_string()))
@@ -407,9 +538,8 @@ impl WarnErrorOptions {
 
 fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
     match legacy {
-        SupportedLegacyWarnError::JinjaLogWarning => {
-            error_code == ErrorCode::JinjaWarn || error_code == ErrorCode::JinjaLogWarning
-        }
+        SupportedLegacyWarnError::JinjaLogWarning => error_code == ErrorCode::JinjaWarn,
+        // This one is matched against node event, not error code
         SupportedLegacyWarnError::LogTestResult => false,
         SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
             error_code == ErrorCode::NoNodesSelected
@@ -570,8 +700,8 @@ mod tests {
                     WarnErrorOptionValue::FusionCode(1),
                     WarnErrorOptionValue::all()
                 ],
-                warn: vec![WarnErrorOptionValue::Unsupported(
-                    "NoNodesForSelectionCriteria".to_string(),
+                warn: vec![WarnErrorOptionValue::NotYetSupportedLegacy(
+                    NotYetSupportedLegacyWarnError::NoNodesForSelectionCriteria,
                 )],
                 silence: vec![WarnErrorOptionValue::Unsupported("x".to_string())],
                 ..Default::default()
@@ -605,7 +735,7 @@ mod tests {
             (
                 "JinjaLogWarning",
                 SupportedLegacyWarnError::JinjaLogWarning,
-                ErrorCode::JinjaLogWarning,
+                ErrorCode::JinjaWarn,
             ),
             (
                 "SnapshotTimestampWarning",
