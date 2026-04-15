@@ -1,0 +1,6 @@
+kind: Features
+body: Added warning on using an unknown flag in dbt_project.yml
+time: 2026-04-15T18:28:40.846837+05:30
+custom:
+    Author: chinar-amrutkar
+    Issue: "12590"
