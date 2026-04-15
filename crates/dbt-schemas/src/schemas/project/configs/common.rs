@@ -342,6 +342,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub target_lag: Option<String>,
     pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
+    pub immutable_where: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
     pub tmp_relation_type: Option<String>,
@@ -459,6 +460,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             target_lag,
             snowflake_initialization_warehouse,
             snowflake_warehouse,
+            immutable_where,
             refresh_mode,
             initialize,
             tmp_relation_type,
@@ -552,6 +554,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 target_lag,
                 snowflake_initialization_warehouse,
                 snowflake_warehouse,
+                immutable_where,
                 refresh_mode,
                 initialize,
                 tmp_relation_type,
@@ -725,6 +728,7 @@ pub fn same_warehouse_config(
     let target_lag_eq = self_wh.target_lag == other_wh.target_lag;
     let snowflake_initialization_warehouse_eq =
         self_wh.snowflake_initialization_warehouse == other_wh.snowflake_initialization_warehouse;
+    let immutable_where_eq = self_wh.immutable_where == other_wh.immutable_where;
     let refresh_mode_eq = self_wh.refresh_mode == other_wh.refresh_mode;
     let initialize_eq = self_wh.initialize == other_wh.initialize;
     let tmp_relation_type_eq = self_wh.tmp_relation_type == other_wh.tmp_relation_type;
@@ -790,6 +794,7 @@ pub fn same_warehouse_config(
         && base_location_subpath_eq
         && target_lag_eq
         && snowflake_initialization_warehouse_eq
+        && immutable_where_eq
         && refresh_mode_eq
         && initialize_eq
         && tmp_relation_type_eq
@@ -1173,6 +1178,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.snowflake_initialization_warehouse),
                         format!("{:?}", &other_wh.snowflake_initialization_warehouse),
+                    )),
+                ),
+                (
+                    "immutable_where",
+                    immutable_where_eq,
+                    Some((
+                        format!("{:?}", &self_wh.immutable_where),
+                        format!("{:?}", &other_wh.immutable_where),
                     )),
                 ),
                 (

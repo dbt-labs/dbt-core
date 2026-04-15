@@ -319,6 +319,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 base_location_subpath: config.base_location_subpath,
                 target_lag: config.target_lag,
                 snowflake_initialization_warehouse: None,
+                immutable_where: None,
                 snowflake_warehouse: config.snowflake_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,

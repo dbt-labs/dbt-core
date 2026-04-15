@@ -5064,6 +5064,7 @@ impl AdapterAttr {
                         .snowflake_initialization_warehouse
                         .clone(),
                     snowflake_warehouse: config.snowflake_warehouse.clone(),
+                    immutable_where: config.immutable_where.clone(),
                     refresh_mode: config.refresh_mode.clone(),
                     initialize: config.initialize.clone(),
                     tmp_relation_type: config.tmp_relation_type.clone(),
@@ -5157,6 +5158,7 @@ impl AdapterAttr {
                             .snowflake_initialization_warehouse
                             .clone(),
                         snowflake_warehouse: config.snowflake_warehouse.clone(),
+                        immutable_where: config.immutable_where.clone(),
                         refresh_mode: config.refresh_mode.clone(),
                         initialize: config.initialize.clone(),
                         tmp_relation_type: config.tmp_relation_type.clone(),
@@ -5247,6 +5249,7 @@ pub struct SnowflakeAttr {
     pub target_lag: Option<String>,
     pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
+    pub immutable_where: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
     pub tmp_relation_type: Option<String>,

@@ -341,6 +341,8 @@ pub struct SnowflakeDynamicTableConfig {
     pub table_tag: Option<String>,
     /// Specifies the columns to cluster on
     pub cluster_by: Option<String>,
+    /// Specifies an immutability constraint expression
+    pub immutable_where: Option<String>,
 }
 
 impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
@@ -398,6 +400,8 @@ impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
             fields.join(", ")
         });
 
+        let immutable_where = snowflake_config.immutable_where.clone();
+
         Ok(Self {
             table_name,
             schema_name,
@@ -410,6 +414,7 @@ impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
             row_access_policy,
             table_tag,
             cluster_by,
+            immutable_where,
         })
     }
 }
@@ -473,6 +478,23 @@ impl TryFrom<DescribeDynamicTableResults> for SnowflakeDynamicTableConfig {
             get_string_by_name_from_record_batch(&batch, "refresh_mode")?.as_str(),
         )?;
 
+        // Snowflake returns "IMMUTABLE WHERE (expr)" — strip prefix/suffix to get bare expression.
+        let immutable_where = get_string_by_name_from_record_batch(&batch, "immutable_where")
+            .ok()
+            .and_then(|v| {
+                let v = v.trim().to_string();
+                if v.is_empty() {
+                    None
+                } else {
+                    let stripped = v
+                        .strip_prefix("IMMUTABLE WHERE (")
+                        .and_then(|s| s.strip_suffix(')'))
+                        .map(|s| s.to_string())
+                        .unwrap_or(v);
+                    Some(stripped)
+                }
+            });
+
         Ok(Self {
             table_name,
             schema_name,
@@ -488,6 +510,7 @@ impl TryFrom<DescribeDynamicTableResults> for SnowflakeDynamicTableConfig {
             table_tag: None,
             // TODO: This _can_ be queried from Snowflake, but Core doesn't read it at all
             cluster_by: None,
+            immutable_where,
         })
     }
 }
@@ -508,6 +531,7 @@ impl Object for SnowflakeDynamicTableConfig {
             Some("row_access_policy") => Some(Value::from(self.row_access_policy.clone())),
             Some("table_tag") => Some(Value::from(self.table_tag.clone())),
             Some("cluster_by") => Some(Value::from(self.cluster_by.clone())),
+            Some("immutable_where") => Some(Value::from(self.immutable_where.clone())),
             _ => None,
         }
     }
@@ -656,6 +680,53 @@ impl Display for SnowflakeDynamicTableInitializationWarehouseConfigChange {
     }
 }
 
+// Reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/relation_configs/dynamic_table.py
+#[derive(Debug, Clone)]
+pub struct SnowflakeDynamicTableImmutableWhereConfigChange {
+    context: String,
+}
+
+impl RelationChangeSet for SnowflakeDynamicTableImmutableWhereConfigChange {
+    fn requires_full_refresh(&self) -> bool {
+        false
+    }
+
+    // TODO(anna): come back to this!
+    fn changes(&self) -> &std::collections::BTreeMap<String, Arc<dyn ComponentConfig>> {
+        todo!()
+    }
+
+    fn get_change(&self, _component_name: &str) -> Option<&dyn ComponentConfig> {
+        todo!()
+    }
+}
+
+impl Object for SnowflakeDynamicTableImmutableWhereConfigChange {
+    fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&["context"])
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str() {
+            Some("context") => Some(Value::from(self.context.clone())),
+            _ => None,
+        }
+    }
+
+    fn render(self: &Arc<Self>, f: &mut Formatter<'_>) -> std::fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        write!(f, "{}", self.context)
+    }
+}
+
+impl Display for SnowflakeDynamicTableImmutableWhereConfigChange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.context.fmt(f)
+    }
+}
+
 // Reference: https://github.com/dbt-labs/dbt-adapters/blob/61221f455f5960daf80024febfae6d6fb4b46251/dbt-snowflake/src/dbt/adapters/snowflake/relation_configs/dynamic_table.py#L150
 #[derive(Debug, Clone)]
 pub struct SnowflakeDynamicTableRefreshModeConfigChange {
@@ -711,6 +782,7 @@ pub struct SnowflakeDynamicTableConfigChangeset {
     snowflake_warehouse: Option<SnowflakeDynamicTableWarehouseConfigChange>,
     snowflake_initialization_warehouse:
         Option<SnowflakeDynamicTableInitializationWarehouseConfigChange>,
+    immutable_where: Option<SnowflakeDynamicTableImmutableWhereConfigChange>,
     refresh_mode: Option<SnowflakeDynamicTableRefreshModeConfigChange>,
 }
 
@@ -757,6 +829,16 @@ impl SnowflakeDynamicTableConfigChangeset {
             _ => None,
         };
 
+        let immutable_where = match (old.immutable_where, new.immutable_where) {
+            (old_expr, Some(new_expr)) if old_expr.as_deref() != Some(new_expr.as_str()) => {
+                Some(SnowflakeDynamicTableImmutableWhereConfigChange { context: new_expr })
+            }
+            (Some(_), None) => Some(SnowflakeDynamicTableImmutableWhereConfigChange {
+                context: String::new(),
+            }),
+            _ => None,
+        };
+
         let refresh_mode = if new.refresh_mode.refresh_mode != RefreshMode::Auto
             && old.refresh_mode != new.refresh_mode
         {
@@ -771,6 +853,7 @@ impl SnowflakeDynamicTableConfigChangeset {
             target_lag,
             snowflake_warehouse,
             snowflake_initialization_warehouse,
+            immutable_where,
             refresh_mode,
         }
     }
@@ -798,6 +881,11 @@ impl RelationChangeSet for SnowflakeDynamicTableConfigChangeset {
             .as_ref()
             .is_some_and(|warehouse| warehouse.requires_full_refresh());
 
+        let immutable_where_requires_refresh = self
+            .immutable_where
+            .as_ref()
+            .is_some_and(|immutable_where| immutable_where.requires_full_refresh());
+
         let refresh_mode_requires_refresh = self
             .refresh_mode
             .as_ref()
@@ -806,6 +894,7 @@ impl RelationChangeSet for SnowflakeDynamicTableConfigChangeset {
         target_lag_requires_refresh
             || warehouse_requires_refresh
             || initialization_warehouse_requires_refresh
+            || immutable_where_requires_refresh
             || refresh_mode_requires_refresh
     }
 
@@ -818,6 +907,7 @@ impl RelationChangeSet for SnowflakeDynamicTableConfigChangeset {
         self.target_lag.is_some()
             || self.snowflake_warehouse.is_some()
             || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
             || self.refresh_mode.is_some()
     }
 }
@@ -845,6 +935,10 @@ impl Object for SnowflakeDynamicTableConfigChangeset {
                     },
                 )
             }
+            Some("immutable_where") => self
+                .immutable_where
+                .as_ref()
+                .map(|immutable_where_config| Value::from_object(immutable_where_config.clone())),
             Some("refresh_mode") => {
                 // Return None if no change, otherwise return the config as an object
                 self.refresh_mode
@@ -882,6 +976,7 @@ mod tests {
             row_access_policy: None,
             table_tag: None,
             cluster_by: None,
+            immutable_where: None,
         };
 
         let config_2 = SnowflakeDynamicTableConfig {
@@ -902,6 +997,7 @@ mod tests {
             row_access_policy: None,
             table_tag: None,
             cluster_by: None,
+            immutable_where: None,
         };
 
         let config_3 = SnowflakeDynamicTableConfig {
@@ -922,6 +1018,7 @@ mod tests {
             row_access_policy: None,
             table_tag: None,
             cluster_by: None,
+            immutable_where: None,
         };
 
         let config_4 = SnowflakeDynamicTableConfig {
@@ -942,6 +1039,7 @@ mod tests {
             row_access_policy: None,
             table_tag: None,
             cluster_by: None,
+            immutable_where: None,
         };
 
         /* Changeset:
@@ -1038,6 +1136,7 @@ mod tests {
             row_access_policy: None,
             table_tag: None,
             cluster_by: None,
+            immutable_where: None,
         };
 
         // (Some, None): warehouse removed → UNSET (empty context)
@@ -1076,6 +1175,78 @@ mod tests {
         let changeset = SnowflakeDynamicTableConfigChangeset::new(old, new);
         assert!(!changeset.has_changes());
         assert!(changeset.snowflake_initialization_warehouse.is_none());
+    }
+
+    #[test]
+    fn test_compute_immutable_where_changeset() {
+        let base_config = SnowflakeDynamicTableConfig {
+            table_name: "table".into(),
+            schema_name: "schema".into(),
+            database_name: "database".into(),
+            target_lag: TargetLagConfig {
+                target_lag: TargetLag::Downstream,
+            },
+            snowflake_warehouse: "warehouse".into(),
+            snowflake_initialization_warehouse: None,
+            refresh_mode: RefreshModeConfig {
+                refresh_mode: RefreshMode::Auto,
+            },
+            initialize: InitializeConfig {
+                initialize: Initialize::OnCreate,
+            },
+            row_access_policy: None,
+            table_tag: None,
+            cluster_by: None,
+            immutable_where: None,
+        };
+
+        // (None, Some): expression added → SET
+        let old = base_config.clone();
+        let new = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 100".into()),
+            ..base_config.clone()
+        };
+        let changeset = SnowflakeDynamicTableConfigChangeset::new(old, new);
+        assert!(changeset.has_changes());
+        assert!(!changeset.requires_full_refresh());
+        assert_eq!(changeset.immutable_where.unwrap().context, "id < 100");
+
+        // (Some, None): expression removed → UNSET (empty context)
+        let old = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 100".into()),
+            ..base_config.clone()
+        };
+        let new = base_config.clone();
+        let changeset = SnowflakeDynamicTableConfigChangeset::new(old, new);
+        assert!(changeset.has_changes());
+        assert!(!changeset.requires_full_refresh());
+        assert!(changeset.immutable_where.unwrap().context.is_empty());
+
+        // (Some, Some) different value: SET with new expression
+        let old = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 100".into()),
+            ..base_config.clone()
+        };
+        let new = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 50".into()),
+            ..base_config.clone()
+        };
+        let changeset = SnowflakeDynamicTableConfigChangeset::new(old, new);
+        assert!(changeset.has_changes());
+        assert_eq!(changeset.immutable_where.unwrap().context, "id < 50");
+
+        // (Some, Some) same value: no change (case-sensitive)
+        let old = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 100".into()),
+            ..base_config.clone()
+        };
+        let new = SnowflakeDynamicTableConfig {
+            immutable_where: Some("id < 100".into()),
+            ..base_config
+        };
+        let changeset = SnowflakeDynamicTableConfigChangeset::new(old, new);
+        assert!(!changeset.has_changes());
+        assert!(changeset.immutable_where.is_none());
     }
 
     // Minijinja Object trait tests
@@ -1213,6 +1384,7 @@ mod tests {
                 target_lag: target_lag_config.clone(),
                 snowflake_warehouse: "warehouse".to_string(),
                 snowflake_initialization_warehouse: None,
+                immutable_where: None,
                 refresh_mode: refresh_mode_config.clone(),
                 initialize: initialize_config.clone(),
                 row_access_policy: None,
@@ -1424,6 +1596,10 @@ mod tests {
                 context: "new_initialization_warehouse".to_string(),
             };
 
+        let immutable_where_config_change = SnowflakeDynamicTableImmutableWhereConfigChange {
+            context: "id < 5".to_string(),
+        };
+
         let refresh_mode = RefreshMode::Full;
         let refresh_config = RefreshModeConfig {
             refresh_mode: refresh_mode.clone(),
@@ -1438,6 +1614,7 @@ mod tests {
             snowflake_initialization_warehouse: Some(
                 initialization_warehouse_config_change.clone(),
             ),
+            immutable_where: Some(immutable_where_config_change.clone()),
             refresh_mode: Some(refresh_config_change.clone()),
         };
         let config_changeset_value = Value::from_object(config_changeset);
@@ -1489,6 +1666,16 @@ mod tests {
             initialization_warehouse_value.to_string(),
             "new_initialization_warehouse"
         );
+
+        let immutable_where_value = config_changeset_value
+            .get_item(&Value::from("immutable_where"))
+            .unwrap();
+        assert!(!immutable_where_value.is_none());
+        assert_eq!(
+            immutable_where_value,
+            Value::from(Some(Value::from_object(immutable_where_config_change)))
+        );
+        assert_eq!(immutable_where_value.to_string(), "id < 5");
 
         assert!(
             config_changeset_value

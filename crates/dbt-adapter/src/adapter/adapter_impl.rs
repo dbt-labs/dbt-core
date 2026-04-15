@@ -1022,6 +1022,7 @@ impl AdapterImpl {
                         "warehouse".to_string(),
                         "refresh_mode".to_string(),
                         "initialization_warehouse".to_string(),
+                        "immutable_where".to_string(),
                     ]);
 
                 Ok(Value::from(ValueMap::from([(
