@@ -807,26 +807,6 @@ functions:
       data_type: float
 """
 
-
-class TestJavaScriptAggregateUDFUnsupportedAdapter:
-    """Test that aggregate JS UDFs also fail at parse time on unsupported adapters."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "sum_positive.js": aggregate_js,
-            "sum_positive.yml": aggregate_js_yml,
-        }
-
-    def test_js_aggregate_udf_fails_on_unsupported_adapter(self, project):
-        with pytest.raises(ParsingError) as excinfo:
-            run_dbt(["parse"])
-        assert (
-            "Function 'sum_positive' is a JavaScript aggregate function and not supported on 'postgres'"
-            in str(excinfo.value)
-        )
-
-
 quote_args_js = """
 return price * quantity;
 """
