@@ -120,3 +120,62 @@ pub const COLUMNS_WR: &str = "   Writing";
 pub const COLUMN_LINEAGE_WR: &str = "   Writing";
 
 pub const DBT_CDN_URL: &str = "https://public.cdn.getdbt.com/fs";
+
+// ----------------------------------------------------------------------------------------------
+// dbt custom environment variables
+
+/// Prefix for dbt custom environment variables that appear in metadata and structured logs.
+pub const DBT_ENV_CUSTOM_ENV_PREFIX: &str = "DBT_ENV_CUSTOM_ENV_";
+
+/// Collects all `DBT_ENV_CUSTOM_ENV_*` environment variables into a map,
+/// stripping the prefix from keys. Matches dbt-core behavior where
+/// e.g. `DBT_ENV_CUSTOM_ENV_FOO=bar` becomes `{"FOO": "bar"}`.
+pub fn collect_dbt_custom_envs() -> std::collections::BTreeMap<String, String> {
+    std::env::vars()
+        .filter_map(|(k, v)| {
+            k.strip_prefix(DBT_ENV_CUSTOM_ENV_PREFIX)
+                .map(|s| (s.to_string(), v))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_dbt_custom_envs() {
+        const VAR_NAME: &str = "DBT_ENV_CUSTOM_ENV_TEST_KEY";
+        const VAR_VALUE: &str = "test_value";
+
+        // Save any pre-existing value, then set our test var
+        let prev = std::env::var(VAR_NAME).ok();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(VAR_NAME, VAR_VALUE);
+        }
+
+        let envs = collect_dbt_custom_envs();
+
+        // Cleanup before assertions so we don't leak on failure
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            if let Some(v) = &prev {
+                std::env::set_var(VAR_NAME, v);
+            } else {
+                std::env::remove_var(VAR_NAME);
+            }
+        }
+
+        // The prefix should be stripped: key is "TEST_KEY", not the full var name
+        assert_eq!(
+            envs.get("TEST_KEY").map(String::as_str),
+            Some(VAR_VALUE),
+            "Expected collect_dbt_custom_envs to contain TEST_KEY={VAR_VALUE}"
+        );
+        assert!(
+            !envs.contains_key(VAR_NAME),
+            "Full prefixed key should not appear. The prefix should be stripped"
+        );
+    }
+}

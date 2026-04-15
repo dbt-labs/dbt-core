@@ -92,7 +92,7 @@ pub fn build_catalog(
             dbt_version: env!("CARGO_PKG_VERSION").to_string(),
             generated_at: Utc::now(),
             invocation_id: Some(invocation_id.to_string()),
-            env: BTreeMap::new(), // TODO: how do we get env?
+            env: dbt_common::constants::collect_dbt_custom_envs(),
         },
         nodes: resolver_state
             .nodes

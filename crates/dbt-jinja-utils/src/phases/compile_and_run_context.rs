@@ -133,13 +133,11 @@ pub fn build_compile_and_run_base_context(
     // Populate dbt_metadata_envs from OS env vars with prefix DBT_ENV_CUSTOM_ENV_
     // Mirrors dbt-core behavior so packages can safely iterate .items()
     {
-        let mut meta_envs: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
-        const PREFIX: &str = "DBT_ENV_CUSTOM_ENV_";
-        for (k, v) in std::env::vars() {
-            if let Some(suffix) = k.strip_prefix(PREFIX) {
-                meta_envs.insert(suffix.to_string(), MinijinjaValue::from(v));
-            }
-        }
+        let meta_envs: BTreeMap<String, MinijinjaValue> =
+            dbt_common::constants::collect_dbt_custom_envs()
+                .into_iter()
+                .map(|(k, v)| (k, MinijinjaValue::from(v)))
+                .collect();
         ctx.insert(
             "dbt_metadata_envs".to_string(),
             MinijinjaValue::from_object(meta_envs),

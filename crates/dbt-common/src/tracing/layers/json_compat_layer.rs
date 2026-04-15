@@ -168,6 +168,7 @@ struct JsonCompatLayer {
     invocation_id: uuid::Uuid,
     filter_flag: TelemetryOutputFlags,
     command: FsCommand,
+    custom_envs: std::collections::BTreeMap<String, String>,
 }
 
 impl JsonCompatLayer {
@@ -177,6 +178,7 @@ impl JsonCompatLayer {
         command: FsCommand,
     ) -> Self {
         let is_tty = writer.is_terminal();
+        let custom_envs = crate::constants::collect_dbt_custom_envs();
 
         Self {
             writer: Box::new(writer),
@@ -187,6 +189,7 @@ impl JsonCompatLayer {
                 TelemetryOutputFlags::OUTPUT_LOG_FILE
             },
             command,
+            custom_envs,
         }
     }
 
@@ -209,7 +212,11 @@ impl JsonCompatLayer {
             msg,
             level: level.to_lowercase(),
             #[allow(clippy::disallowed_types)]
-            extra: std::collections::HashMap::new(),
+            extra: self
+                .custom_envs
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         }
     }
 
