@@ -762,72 +762,8 @@ class TestFunctionSchemasInOnRunEnd:
         ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"
 
 
-class TestBasicJavaScriptUDF:
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_js,
-            "double_it.yml": double_it_js_yml,
-        }
-
-    def test_basic_parsing(self, project):
-        manifest = run_dbt(["parse"])
-        assert len(manifest.functions) == 1
-        assert "function.test.double_it" in manifest.functions
-        function_node = manifest.functions["function.test.double_it"]
-        assert isinstance(function_node, FunctionNode)
-        assert function_node.description == "Doubles whatever number is passed in"
-        assert function_node.language == "javascript"
-        assert function_node.config.type == FunctionType.Scalar
-        assert function_node.config.volatility is None
-        assert len(function_node.arguments) == 1
-        argument = function_node.arguments[0]
-        assert argument.name == "value"
-        assert argument.data_type == "float"
-        assert function_node.returns == FunctionReturns(data_type="float")
-
-
-class TestJavaScriptUDFConfigFromJinja:
-    """Test that config() in a .js file is parsed correctly."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_deterministic_js,
-            "double_it.yml": double_it_js_yml,
-        }
-
-    def test_volatility_from_jinja_config(self, project):
-        manifest = run_dbt(["parse"])
-        assert len(manifest.functions) == 1
-        function_node = manifest.functions["function.test.double_it"]
-        assert isinstance(function_node, FunctionNode)
-        assert function_node.language == "javascript"
-        assert function_node.config.volatility == FunctionVolatility.Deterministic
-        assert function_node.config.type == FunctionType.Scalar
-
-
-class TestJavaScriptUDFConfigFromYml:
-    """Test that config in the functions property of a yml file is parsed correctly."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_js,
-            "double_it.yml": double_it_non_deterministic_js_yml,
-        }
-
-    def test_volatility_from_yml_config(self, project):
-        manifest = run_dbt(["parse"])
-        assert len(manifest.functions) == 1
-        function_node = manifest.functions["function.test.double_it"]
-        assert isinstance(function_node, FunctionNode)
-        assert function_node.language == "javascript"
-        assert function_node.config.volatility == FunctionVolatility.NonDeterministic
-
-
-class TestJavaScriptUDFConfigLayering:
-    """Test config layering: jinja config in .js, yml config, and switching between them."""
+class TestJavaScriptUDFUnsupportedAdapter:
+    """Test that JS UDFs fail at parse time on unsupported adapters (e.g. postgres)."""
 
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
@@ -836,99 +772,12 @@ class TestJavaScriptUDFConfigLayering:
             "double_it.yml": double_it_js_yml,
         }
 
-    def test_config_layering(self, project):
-        # Start with no volatility set anywhere
-        manifest = run_dbt(["parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.config.volatility is None
-
-        # Set volatility via jinja config in the .js file
-        write_file(double_it_deterministic_js, project.project_root, "functions", "double_it.js")
-        manifest = run_dbt(["parse", "--no-partial-parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.config.volatility == FunctionVolatility.Deterministic
-
-        # Switch to volatility from yml config (remove jinja config from js)
-        write_file(double_it_js, project.project_root, "functions", "double_it.js")
-        write_file(
-            double_it_non_deterministic_js_yml,
-            project.project_root,
-            "functions",
-            "double_it.yml",
+    def test_js_udf_fails_on_unsupported_adapter(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert "Function 'double_it' uses JavaScript, which is not supported on 'postgres'" in str(
+            excinfo.value
         )
-        manifest = run_dbt(["parse", "--no-partial-parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.config.volatility == FunctionVolatility.NonDeterministic
-
-
-class TestJavaScriptUDFProjectConfig:
-    """Test that JS UDFs pick up config from dbt_project.yml."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_js,
-            "double_it.yml": double_it_js_yml,
-        }
-
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {
-            "functions": {"+volatility": "stable"},
-        }
-
-    def test_project_config_applies_to_js(self, project):
-        manifest = run_dbt(["parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.language == "javascript"
-        assert function_node.config.volatility == FunctionVolatility.Stable
-
-    def test_jinja_config_overrides_project_config(self, project):
-        # Jinja config in the .js file should take precedence over project config
-        write_file(double_it_deterministic_js, project.project_root, "functions", "double_it.js")
-        manifest = run_dbt(["parse", "--no-partial-parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.config.volatility == FunctionVolatility.Deterministic
-
-
-class TestJavaScriptUDFWithJinjaCompilation:
-    """Test that jinja templating in .js files compiles correctly."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_js_with_jinja,
-            "double_it.yml": double_it_js_yml,
-        }
-
-    def test_jinja_renders_in_js(self, project):
-        result = run_dbt(["compile"])
-        assert len(result.results) == 1
-        node = result.results[0].node
-        assert isinstance(node, FunctionNode)
-        assert node.language == "javascript"
-        # The compiled code should have the jinja resolved
-        assert "return value * 2;" in node.compiled_code
-        assert "return value * 3;" not in node.compiled_code
-
-
-class TestJavaScriptUDFConfigFromJinjaAndYmlCombined:
-    """Test that when both jinja config and yml config specify the same property,
-    jinja config in the .js file takes precedence."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.js": double_it_deterministic_js,
-            "double_it.yml": double_it_stable_js_yml,
-        }
-
-    def test_jinja_config_takes_precedence_over_yml(self, project):
-        manifest = run_dbt(["parse"])
-        function_node = manifest.functions["function.test.double_it"]
-        assert function_node.language == "javascript"
-        # Jinja config sets deterministic, yml sets stable — jinja should win
-        assert function_node.config.volatility == FunctionVolatility.Deterministic
 
 
 aggregate_js = """
@@ -959,8 +808,8 @@ functions:
 """
 
 
-class TestJavaScriptAggregateUDFParsing:
-    """Test that aggregate JS UDFs are parsed correctly with type=aggregate."""
+class TestJavaScriptAggregateUDFUnsupportedAdapter:
+    """Test that aggregate JS UDFs also fail at parse time on unsupported adapters."""
 
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
@@ -969,15 +818,13 @@ class TestJavaScriptAggregateUDFParsing:
             "sum_positive.yml": aggregate_js_yml,
         }
 
-    def test_aggregate_type_parsed(self, project):
-        manifest = run_dbt(["parse"])
-        assert len(manifest.functions) == 1
-        function_node = manifest.functions["function.test.sum_positive"]
-        assert isinstance(function_node, FunctionNode)
-        assert function_node.language == "javascript"
-        assert function_node.config.type == FunctionType.Aggregate
-        assert len(function_node.arguments) == 1
-        assert function_node.arguments[0].name == "x"
+    def test_js_aggregate_udf_fails_on_unsupported_adapter(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert (
+            "Function 'sum_positive' is a JavaScript aggregate function and not supported on 'postgres'"
+            in str(excinfo.value)
+        )
 
 
 quote_args_js = """
@@ -1012,29 +859,3 @@ functions:
     returns:
       data_type: float
 """
-
-
-class TestJavaScriptUDFQuoteArgsConfig:
-    """Test that the snowflake.quote_args config is parsed correctly."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "compute_total.js": quote_args_js,
-            "compute_total.yml": quote_args_js_yml,
-        }
-
-    def test_quote_args_false(self, project):
-        manifest = run_dbt(["parse"])
-        function_node = manifest.functions["function.test.compute_total"]
-        assert isinstance(function_node, FunctionNode)
-        assert function_node.language == "javascript"
-        assert function_node.config.snowflake.quote_args is False
-
-    def test_quote_args_default_is_true(self, project):
-        write_file(
-            quote_args_default_js_yml, project.project_root, "functions", "compute_total.yml"
-        )
-        manifest = run_dbt(["parse", "--no-partial-parse"])
-        function_node = manifest.functions["function.test.compute_total"]
-        assert function_node.config.snowflake.quote_args is True

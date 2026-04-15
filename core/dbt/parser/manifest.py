@@ -33,7 +33,7 @@ from dbt.artifacts.resources import (
     NodeRelation,
     NodeVersion,
 )
-from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.resources.types import BatchSize, FunctionLanguage, FunctionType
 from dbt.artifacts.schemas.base import Writable
 from dbt.clients.jinja import MacroStack, get_rendered
 from dbt.clients.jinja_static import statically_extract_macro_calls
@@ -95,6 +95,7 @@ from dbt.exceptions import (
     AmbiguousAliasError,
     DuplicateResourceNameError,
     InvalidAccessTypeError,
+    ParsingError,
     TargetNotFoundError,
     scrub_secrets,
 )
@@ -136,6 +137,7 @@ from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_e
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
+from dbt_common.ui import error_tag
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
 from dbt_semantic_interfaces.type_enums import MetricType
 
@@ -1751,8 +1753,34 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
+def _check_function_language_support(manifest: Manifest, config: RuntimeConfig) -> None:
+    """Validate that function languages are supported by the current adapter.
+
+    - JavaScript UDFs are only supported on BigQuery and Snowflake.
+    - JavaScript aggregate UDFs are not supported on Snowflake.
+    """
+    JS_SUPPORTED_ADAPTERS = {"bigquery", "snowflake"}
+    adapter_type = config.credentials.type
+
+    for unique_id, function_node in manifest.functions.items():
+        if function_node.language == FunctionLanguage.javascript:
+            if adapter_type not in JS_SUPPORTED_ADAPTERS:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' uses JavaScript, which is not supported on '{adapter_type}'. "
+                    )
+                )
+            if adapter_type == "snowflake" and function_node.config.type == FunctionType.Aggregate:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' is a JavaScript aggregate function and not supported on '{adapter_type}'. "
+                    )
+                )
+
+
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
+    _check_function_language_support(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
 
 
