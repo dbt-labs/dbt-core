@@ -5964,12 +5964,6 @@
             }
           ]
         },
-        "+snowflake_initialization_warehouse": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+snowflake_warehouse": {
           "type": [
             "string",
