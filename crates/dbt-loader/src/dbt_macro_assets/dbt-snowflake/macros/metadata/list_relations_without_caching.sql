@@ -17,9 +17,6 @@
 
     {%- set paginated_state = namespace(paginated_results=[], watermark=none) -%}
 
-    {# DIVERGENCE: FIXME:this gets removed in core, figure out why #}
-    {%- do run_query('alter session set quoted_identifiers_ignore_case = false;') -%}
-
     {#-
         loop an extra time to catch the breach of max iterations
         Note: while range is 0-based, loop.index starts at 1
@@ -46,9 +43,6 @@
         {%- endif -%}
 
     {%- endfor -%}
-
-    {# DIVERGENCE: FIXME: his gets removed in core, figure out why #}
-    {%- do run_query('alter session unset quoted_identifiers_ignore_case;') -%}
 
     {#- grab the first table in the paginated results to access the `merge` method -#}
     {%- set agate_table = paginated_state.paginated_results[0] -%}
