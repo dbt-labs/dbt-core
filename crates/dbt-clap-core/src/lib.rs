@@ -279,7 +279,10 @@ got {:?}, expected an instance of {}",
         // Some commands operate without project context, while others must be run in a project directory.
         let (in_dir, out_dir) = {
             match &self.command {
-                Command::Core(System(_)) | Command::Core(Man(_)) | Command::Core(Init(_)) => {
+                Command::Core(System(_))
+                | Command::Core(Man(_))
+                | Command::Core(Init(_))
+                | Command::Core(Docs(_)) => {
                     // These commands do not require a project directory
                     (PathBuf::from("."), PathBuf::from("."))
                 }
@@ -317,6 +320,7 @@ got {:?}, expected an instance of {}",
                 Man(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Retry(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Docs(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             },
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
@@ -390,6 +394,7 @@ got {:?}, expected an instance of {}",
                 Man(_args) => unreachable!("Man command does not need a phase"),
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
                 Retry(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
+                Docs(_args) => unreachable!("Docs command does not need a phase"),
             },
             Command::Extension(ext_cmd) => ext_cmd.stage(),
         }
@@ -1262,6 +1267,32 @@ impl ManArgs {
                 .collect(),
         )
     }
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DocsArgs {
+    // Flattened Common args
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    #[command(subcommand)]
+    pub subcommand: Option<DocsSubcommand>,
+}
+
+impl DocsArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args.to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum DocsSubcommand {
+    /// Generate docs catalog (deprecated: use `dbt compile --write-catalog` instead)
+    Generate,
+    /// Serve docs (deprecated: no longer supported in Fusion)
+    Serve,
+    #[command(external_subcommand)]
+    Other(Vec<String>),
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]

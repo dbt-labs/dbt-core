@@ -213,6 +213,7 @@ pub enum ErrorCode {
     DeprecatedOption = 1702,
     DeprecatedStaticAnalysisValue = 1703,
     NotSupportedWarnErrorOption = 1704,
+    DocsGenerateWarning = 1705,
 
     // --------------------------------------------------------------------------------------------
     // Local execution

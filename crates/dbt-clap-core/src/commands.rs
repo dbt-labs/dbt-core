@@ -7,9 +7,9 @@ use dbt_common::io_args::{EvalArgs, FsCommand, Phases, StaticAnalysisKind, Syste
 use strum_macros::Display;
 
 use crate::{
-    BuildArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, DebugArgs, DepsArgs, InitArgs,
-    ListArgs, ManArgs, ParseArgs, RetryArgs, RunArgs, RunOperationArgs, SeedArgs, ShowArgs,
-    SnapshotArgs, SourceArgs, SystemMgmtArgs, TestArgs,
+    BuildArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, DebugArgs, DepsArgs, DocsArgs,
+    InitArgs, ListArgs, ManArgs, ParseArgs, RetryArgs, RunArgs, RunOperationArgs, SeedArgs,
+    ShowArgs, SnapshotArgs, SourceArgs, SystemMgmtArgs, TestArgs,
 };
 
 #[derive(clap::Subcommand, Debug, Clone, Display)]
@@ -54,6 +54,8 @@ pub enum CoreCommand {
     Debug(DebugArgs),
     /// Retry failed nodes from the previous run
     Retry(RetryArgs),
+    /// Generate and serve documentation (deprecated in Fusion - use `dbt compile --write-catalog`)
+    Docs(DocsArgs),
 }
 
 impl CoreCommand {
@@ -80,6 +82,7 @@ impl CoreCommand {
             Man(..) => FsCommand::Man,
             Debug(..) => FsCommand::Debug,
             Retry(..) => FsCommand::Retry,
+            Docs(..) => FsCommand::Docs,
         }
     }
 
@@ -110,6 +113,7 @@ impl CoreCommand {
             Man(args) => &args.common_args,
             Debug(args) => &args.common_args,
             Retry(args) => &args.common_args,
+            Docs(args) => &args.common_args,
         }
     }
 
@@ -136,6 +140,7 @@ impl CoreCommand {
             Man(_) => None,
             Debug(_) => None,
             Retry(retry_args) => retry_args.static_analysis,
+            Docs(_) => None,
         }
     }
 }
