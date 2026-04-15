@@ -38,7 +38,9 @@ use crate::schemas::{
     properties::{
         FunctionArgument, FunctionReturnType, ModelConstraint, ModelFreshness, UnitTestOverrides,
     },
-    ref_and_source::{DbtRef, DbtSourceWrapper},
+    ref_and_source::{
+        DbtRef, DbtSourceWrapper, deserialize_dbt_function_refs, serialize_dbt_function_refs,
+    },
     serde::StringOrInteger,
 };
 use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize};
@@ -4303,7 +4305,11 @@ pub struct NodeBaseAttributes {
     pub refs: Vec<DbtRef>,
     #[serde(default)]
     pub sources: Vec<DbtSourceWrapper>,
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "serialize_dbt_function_refs",
+        deserialize_with = "deserialize_dbt_function_refs"
+    )]
     pub functions: Vec<DbtRef>,
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,

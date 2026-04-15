@@ -53,7 +53,9 @@ use crate::schemas::{
         metrics_properties::{AggregationType, MetricType},
         model_properties::ModelPropertiesTimeSpine,
     },
-    ref_and_source::{DbtRef, DbtSourceWrapper},
+    ref_and_source::{
+        DbtRef, DbtSourceWrapper, deserialize_dbt_function_refs, serialize_dbt_function_refs,
+    },
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
     serde::{StringOrArrayOfStrings, StringOrInteger},
 };
@@ -149,7 +151,11 @@ pub struct ManifestNodeBaseAttributes {
     pub refs: Vec<DbtRef>,
     #[serde(default)]
     pub sources: Vec<DbtSourceWrapper>,
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "serialize_dbt_function_refs",
+        deserialize_with = "deserialize_dbt_function_refs"
+    )]
     pub functions: Vec<DbtRef>,
 
     // Code
