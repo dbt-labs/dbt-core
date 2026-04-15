@@ -1030,7 +1030,7 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
 }
 
 // returns (packages_install_path, internal_packages_install_path)
-fn get_packages_install_path(
+pub(crate) fn get_packages_install_path(
     in_dir: &Path,
     arg_packages_install_path: &Option<PathBuf>,
     arg_internal_packages_install_path: &Option<PathBuf>,
