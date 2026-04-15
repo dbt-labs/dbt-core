@@ -566,7 +566,7 @@ impl DatabricksApiClient {
                 "Running" | "Queued" => {}
                 _ => {
                     emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::UnexpectedApiResponse,
                         format!("Unknown command status: {}", response.status),
                         None,
                     );

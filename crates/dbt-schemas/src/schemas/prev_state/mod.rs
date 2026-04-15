@@ -289,6 +289,19 @@ impl PreviousState {
         target_path: Option<PathBuf>,
         on_failure: OnManifestLoadFailure,
     ) -> FsResult<Self> {
+        if let Some(ref target) = target_path {
+            if state_path == target.as_path() {
+                emit_warn_log_message(
+                    ErrorCode::WarnStateTargetEqual,
+                    format!(
+                        "The state and target directories are the same: '{}'. This could lead to missing changes due to overwritten state.",
+                        state_path.display()
+                    ),
+                    None,
+                );
+            }
+        }
+
         // Try to load manifest.json, but make it optional
         let manifest_path = state_path.join(DBT_MANIFEST_JSON);
         let nodes = match typed_struct_from_json_file::<DbtManifest>(&manifest_path) {

@@ -4,18 +4,39 @@ use crate::ErrorCode;
 use crate::collections::HashMap;
 use dbt_yaml::{Value, Verbatim};
 use serde::{Deserialize, Serialize};
-use strum::EnumString;
+use strum::{EnumIter, EnumString};
 
 // TODO: these models should live in dbt-schemas crate. It currently lives in dbt-common because
 // EvalArgs is defined here and dbt-common cannot depend on dbt-schemas without creating a cycle.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, EnumString,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    EnumString,
+    EnumIter,
 )]
 pub enum SupportedLegacyWarnError {
     JinjaLogWarning,
     LogTestResult,
     NothingToDo,
     NoNodesSelected,
+    NodeNotFoundOrDisabled,
+    DeprecatedModel,
+    DeprecatedReference,
+    UpcomingReferenceDeprecation,
+    SnapshotTimestampWarning,
+    PackageRedirectDeprecation,
+    DepsUnpinned,
+    FreshnessConfigProblem,
+    WarnStateTargetEqual,
+    WEOIncludeExcludeDeprecation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -51,6 +72,12 @@ pub struct WarnErrorOptions {
     pub silence: Vec<WarnErrorOptionValue>,
     #[serde(default, skip_serializing)]
     pub __ignored__: Verbatim<HashMap<String, Value>>,
+    /// True if the deprecated `include` key was used instead of `error`.
+    #[serde(skip)]
+    pub used_deprecated_include: bool,
+    /// True if the deprecated `exclude` key was used instead of `silence`.
+    #[serde(skip)]
+    pub used_deprecated_exclude: bool,
 }
 
 /// Decisions order in their precedence order, from lowest to highest:
@@ -106,6 +133,27 @@ impl WarnErrorOptions {
             })
     }
 
+    pub fn deprecated_keys_message(&self) -> Option<String> {
+        if !self.used_deprecated_include && !self.used_deprecated_exclude {
+            return None;
+        }
+
+        let include_msg = if self.used_deprecated_include {
+            "use 'error' instead of 'include'. "
+        } else {
+            ""
+        };
+        let exclude_msg = if self.used_deprecated_exclude {
+            "use 'warn' instead of 'exclude'. "
+        } else {
+            ""
+        };
+
+        Some(format!(
+            "Found deprecated keys in warn_error_options: {include_msg}{exclude_msg}"
+        ))
+    }
+
     fn extend_error(&mut self, values: impl IntoIterator<Item = WarnErrorOptionValue>) {
         extend_unique(&mut self.error, values);
     }
@@ -126,13 +174,21 @@ impl WarnErrorOptions {
 
         for (key, value) in pairs {
             match key.to_ascii_lowercase().as_str() {
-                "include" | "error" => {
+                "include" => {
+                    warn_error_options.used_deprecated_include = true;
+                    warn_error_options.extend_error(parse_warn_error_option_values(value));
+                }
+                "error" => {
                     warn_error_options.extend_error(parse_warn_error_option_values(value));
                 }
                 "warn" => {
                     warn_error_options.extend_warn(parse_warn_error_option_values(value));
                 }
-                "exclude" | "silence" => {
+                "exclude" => {
+                    warn_error_options.used_deprecated_exclude = true;
+                    warn_error_options.extend_silence(parse_warn_error_option_values(value));
+                }
+                "silence" => {
                     warn_error_options.extend_silence(parse_warn_error_option_values(value));
                 }
                 _ => {}
@@ -243,10 +299,13 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
 impl WarnErrorOptions {
     pub fn decision_for_error_code(&self, error_code: ErrorCode) -> WarnErrorDecision {
-        if error_code == ErrorCode::NotSupportedWarnErrorOption {
-            // This is a special case for when we encounter an error code that we know is not supported by the current options.
-            // In this case we want to emit the warning about unsupported code, but we don't want to apply any silencing or upgrading logic to it.
-            // Otherwise we may exit so early even manifest is not available, which breaks tests & possibly
+        if error_code == ErrorCode::NotSupportedWarnErrorOption
+            || error_code == ErrorCode::WEOIncludeExcludeDeprecation
+        {
+            // These are warnings ABOUT the warn-error configuration itself.
+            // They must not be affected by the configuration they're warning about,
+            // otherwise `{include: all}` would promote the "use 'error' instead of 'include'" deprecation
+            // to an error, causing an early exit before the manifest is even available.
             // some downstream assumption
             return WarnErrorDecision::Retain;
         }
@@ -348,10 +407,38 @@ impl WarnErrorOptions {
 
 fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
     match legacy {
-        SupportedLegacyWarnError::JinjaLogWarning => error_code == ErrorCode::JinjaWarn,
+        SupportedLegacyWarnError::JinjaLogWarning => {
+            error_code == ErrorCode::JinjaWarn || error_code == ErrorCode::JinjaLogWarning
+        }
         SupportedLegacyWarnError::LogTestResult => false,
         SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
             error_code == ErrorCode::NoNodesSelected
+        }
+        SupportedLegacyWarnError::NodeNotFoundOrDisabled => {
+            error_code == ErrorCode::NodeNotFoundOrDisabled
+        }
+        SupportedLegacyWarnError::DeprecatedModel => error_code == ErrorCode::DeprecatedModel,
+        SupportedLegacyWarnError::DeprecatedReference => {
+            error_code == ErrorCode::DeprecatedReference
+        }
+        SupportedLegacyWarnError::UpcomingReferenceDeprecation => {
+            error_code == ErrorCode::UpcomingReferenceDeprecation
+        }
+        SupportedLegacyWarnError::SnapshotTimestampWarning => {
+            error_code == ErrorCode::SnapshotTimestampWarning
+        }
+        SupportedLegacyWarnError::PackageRedirectDeprecation => {
+            error_code == ErrorCode::PackageRedirectDeprecation
+        }
+        SupportedLegacyWarnError::DepsUnpinned => error_code == ErrorCode::DepsUnpinned,
+        SupportedLegacyWarnError::FreshnessConfigProblem => {
+            error_code == ErrorCode::FreshnessConfigProblem
+        }
+        SupportedLegacyWarnError::WarnStateTargetEqual => {
+            error_code == ErrorCode::WarnStateTargetEqual
+        }
+        SupportedLegacyWarnError::WEOIncludeExcludeDeprecation => {
+            error_code == ErrorCode::WEOIncludeExcludeDeprecation
         }
     }
 }
@@ -460,6 +547,8 @@ mod tests {
                 ],
                 warn: vec![],
                 silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
+                used_deprecated_include: true,
+                used_deprecated_exclude: true,
                 ..Default::default()
             }
         );
@@ -488,6 +577,121 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn new_legacy_names_parse_and_resolve() {
+        let cases: &[(&str, SupportedLegacyWarnError, ErrorCode)] = &[
+            (
+                "NodeNotFoundOrDisabled",
+                SupportedLegacyWarnError::NodeNotFoundOrDisabled,
+                ErrorCode::NodeNotFoundOrDisabled,
+            ),
+            (
+                "DeprecatedModel",
+                SupportedLegacyWarnError::DeprecatedModel,
+                ErrorCode::DeprecatedModel,
+            ),
+            (
+                "DeprecatedReference",
+                SupportedLegacyWarnError::DeprecatedReference,
+                ErrorCode::DeprecatedReference,
+            ),
+            (
+                "UpcomingReferenceDeprecation",
+                SupportedLegacyWarnError::UpcomingReferenceDeprecation,
+                ErrorCode::UpcomingReferenceDeprecation,
+            ),
+            (
+                "JinjaLogWarning",
+                SupportedLegacyWarnError::JinjaLogWarning,
+                ErrorCode::JinjaLogWarning,
+            ),
+            (
+                "SnapshotTimestampWarning",
+                SupportedLegacyWarnError::SnapshotTimestampWarning,
+                ErrorCode::SnapshotTimestampWarning,
+            ),
+            (
+                "PackageRedirectDeprecation",
+                SupportedLegacyWarnError::PackageRedirectDeprecation,
+                ErrorCode::PackageRedirectDeprecation,
+            ),
+            (
+                "DepsUnpinned",
+                SupportedLegacyWarnError::DepsUnpinned,
+                ErrorCode::DepsUnpinned,
+            ),
+            (
+                "FreshnessConfigProblem",
+                SupportedLegacyWarnError::FreshnessConfigProblem,
+                ErrorCode::FreshnessConfigProblem,
+            ),
+            (
+                "WarnStateTargetEqual",
+                SupportedLegacyWarnError::WarnStateTargetEqual,
+                ErrorCode::WarnStateTargetEqual,
+            ),
+            // WEOIncludeExcludeDeprecation is exempted from upgrade (like NotSupportedWarnErrorOption)
+            // so it's tested separately below
+        ];
+
+        for (name, expected_legacy, expected_code) in cases {
+            // Verify parsing: the name should parse as SupportedLegacy, not Unsupported
+            let parsed = parse_warn_error_options(&format!("{{error: [{name}]}}")).unwrap();
+            assert_eq!(
+                parsed.error,
+                vec![WarnErrorOptionValue::SupportedLegacy(*expected_legacy)],
+                "{name} should parse as SupportedLegacy",
+            );
+
+            // Verify the legacy name maps to the expected ErrorCode
+            assert!(
+                matches_legacy_error_code(*expected_legacy, *expected_code),
+                "{name} should match {expected_code:?}",
+            );
+
+            // Verify decision_for_error_code upgrades when in error list
+            assert_eq!(
+                parsed.decision_for_error_code(*expected_code),
+                WarnErrorDecision::UpgradeToError,
+                "{name} in error list should upgrade {expected_code:?}",
+            );
+        }
+
+        assert!(matches_legacy_error_code(
+            SupportedLegacyWarnError::JinjaLogWarning,
+            ErrorCode::JinjaWarn,
+        ));
+
+        // WEOIncludeExcludeDeprecation is always retained (never upgraded) to avoid
+        // bootstrapping issues where {include: all} would promote the deprecation warning itself
+        assert!(matches_legacy_error_code(
+            SupportedLegacyWarnError::WEOIncludeExcludeDeprecation,
+            ErrorCode::WEOIncludeExcludeDeprecation,
+        ));
+        let parsed = parse_warn_error_options("{error: [WEOIncludeExcludeDeprecation]}").unwrap();
+        assert_eq!(
+            parsed.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
+            WarnErrorDecision::Retain,
+            "WEOIncludeExcludeDeprecation should always be retained",
+        );
+    }
+
+    #[test]
+    fn all_supported_legacy_names_parse_correctly() {
+        use strum::IntoEnumIterator;
+        for variant in SupportedLegacyWarnError::iter() {
+            let name = format!("{variant:?}");
+            let parsed = parse_warn_error_options(&format!("{{error: [{name}]}}")).unwrap();
+            assert!(
+                parsed
+                    .error
+                    .iter()
+                    .all(|v| !matches!(v, WarnErrorOptionValue::Unsupported(_))),
+                "{name} should not parse as Unsupported",
+            );
+        }
     }
 
     #[test]

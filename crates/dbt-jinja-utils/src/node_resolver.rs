@@ -9,7 +9,7 @@ use chrono::{NaiveDate, Utc};
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsResult, err, fs_err,
+    CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err,
     io_args::IoArgs,
     tracing::emit::{
         emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,
@@ -30,6 +30,22 @@ use dbt_schemas::{
 use minijinja::{Value as MinijinjaValue, value::function_object::FunctionObject};
 
 type RefRecord = (String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>);
+
+fn downgraded_node_dependency_warning(
+    error: &FsError,
+    location: CodeLocationWithFile,
+) -> Option<(FsError, bool)> {
+    let has_disabled_dependency = match error.code {
+        ErrorCode::DisabledDependency => true,
+        ErrorCode::DependencyNotFound => false,
+        _ => return None,
+    };
+
+    Some((
+        FsError::new(ErrorCode::NodeNotFoundOrDisabled, error.to_string()).with_location(location),
+        has_disabled_dependency,
+    ))
+}
 
 /// A wrapper around refs and sources with methods to get and insert refs and sources.
 ///
@@ -513,7 +529,7 @@ impl NodeResolverTracker for NodeResolver {
                     )
                 } else {
                     err!(
-                        ErrorCode::InvalidConfig,
+                        ErrorCode::DependencyNotFound,
                         "Ref '{}' not found in project. Searched for '{}'",
                         ref_name,
                         search_ref_names.join(", ")
@@ -573,7 +589,7 @@ impl NodeResolverTracker for NodeResolver {
             }
         } else {
             err!(
-                ErrorCode::InvalidConfig,
+                ErrorCode::DependencyNotFound,
                 "Source '{}' not found in project. Searched for '{}'",
                 source_table_name,
                 table_name
@@ -878,15 +894,11 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && (e.code == ErrorCode::DisabledDependency
-                            || e.code == ErrorCode::InvalidConfig)
+                        && let Some((warning, disabled_dependency)) =
+                            downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        // Only set has_disabled_dependency for disabled deps (not missing deps)
-                        if e.code == ErrorCode::DisabledDependency {
-                            has_disabled_dependency = true;
-                        }
-                        let err_with_loc = e.with_location(location);
-                        emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
+                        has_disabled_dependency |= disabled_dependency;
+                        emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
@@ -922,15 +934,11 @@ pub fn resolve_dependencies(
                 Err(e) => {
                     // For tests and exposures, warn on missing or disabled dependencies instead of erroring
                     if (is_test || is_exposure)
-                        && (e.code == ErrorCode::DisabledDependency
-                            || e.code == ErrorCode::InvalidConfig)
+                        && let Some((warning, disabled_dependency)) =
+                            downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        // Only set has_disabled_dependency for disabled deps (not missing deps)
-                        if e.code == ErrorCode::DisabledDependency {
-                            has_disabled_dependency = true;
-                        }
-                        let err_with_loc = e.with_location(location);
-                        emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
+                        has_disabled_dependency |= disabled_dependency;
+                        emit_warn_log_from_fs_error(&warning, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
@@ -1167,11 +1175,7 @@ pub fn check_for_model_deprecations(io: &IoArgs, nodes: &Nodes) {
                  This model should be disabled or removed.",
                 info.name, version_str, info.deprecation_date
             );
-            emit_warn_log_message(
-                ErrorCode::DependencyWarning,
-                msg,
-                io.status_reporter.as_ref(),
-            );
+            emit_warn_log_message(ErrorCode::DeprecatedModel, msg, io.status_reporter.as_ref());
         }
     }
 
@@ -1210,7 +1214,7 @@ pub fn check_for_model_deprecations(io: &IoArgs, nodes: &Nodes) {
                         }
                     }
                     emit_warn_log_message(
-                        ErrorCode::DependencyWarning,
+                        ErrorCode::DeprecatedReference,
                         msg,
                         io.status_reporter.as_ref(),
                     );
@@ -1238,7 +1242,7 @@ pub fn check_for_model_deprecations(io: &IoArgs, nodes: &Nodes) {
                         }
                     }
                     emit_warn_log_message(
-                        ErrorCode::DependencyWarning,
+                        ErrorCode::UpcomingReferenceDeprecation,
                         msg,
                         io.status_reporter.as_ref(),
                     );
@@ -1309,6 +1313,49 @@ mod tests {
 
     fn make_io() -> IoArgs {
         IoArgs::default()
+    }
+
+    #[test]
+    fn downgraded_warning_maps_disabled_dependency() {
+        let warning = downgraded_node_dependency_warning(
+            &FsError::new(
+                ErrorCode::DisabledDependency,
+                "Attempted to use disabled ref 'x'",
+            ),
+            CodeLocationWithFile::default(),
+        )
+        .expect("disabled dependency should be downgraded");
+
+        assert_eq!(warning.0.code, ErrorCode::NodeNotFoundOrDisabled);
+        assert!(warning.1);
+    }
+
+    #[test]
+    fn downgraded_warning_maps_missing_ref_dependency() {
+        let warning = downgraded_node_dependency_warning(
+            &FsError::new(
+                ErrorCode::DependencyNotFound,
+                "Ref 'missing_model' not found in project. Searched for 'missing_model'",
+            ),
+            CodeLocationWithFile::default(),
+        )
+        .expect("missing ref should be downgraded");
+
+        assert_eq!(warning.0.code, ErrorCode::NodeNotFoundOrDisabled);
+        assert!(!warning.1);
+    }
+
+    #[test]
+    fn downgraded_warning_does_not_map_ambiguous_ref_errors() {
+        let warning = downgraded_node_dependency_warning(
+            &FsError::new(
+                ErrorCode::InvalidConfig,
+                "Found ambiguous ref('x') pointing to multiple nodes: ['a', 'b']",
+            ),
+            CodeLocationWithFile::default(),
+        );
+
+        assert!(warning.is_none());
     }
 
     #[test]

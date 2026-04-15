@@ -10,6 +10,7 @@ use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::TracingFeatures;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_common::warn_error_options::resolve_warn_error_options;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -102,10 +103,24 @@ fn resolve_warn_error_options_from_flags<'a>(
     from_cli: Option<bool>,
     from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
     project_flags: Option<&dbt_yaml::Value>,
+    io: &dbt_common::io_args::IoArgs,
     tracing_features: Option<&dyn TracingFeatures>,
 ) -> Cow<'a, InvocationArgs> {
     let (warn_error, warn_error_options) =
         resolve_warn_error_options(from_cli, from_cli_or_env, project_flags);
+
+    let cli_or_env_emitted_deprecation = from_cli_or_env
+        .and_then(dbt_common::warn_error_options::WarnErrorOptions::deprecated_keys_message)
+        .is_some();
+    if let Some(msg) = warn_error_options.deprecated_keys_message()
+        && !cli_or_env_emitted_deprecation
+    {
+        emit_warn_log_message(
+            ErrorCode::WEOIncludeExcludeDeprecation,
+            msg,
+            io.status_reporter.as_ref(),
+        );
+    }
 
     if iarg.warn_error == warn_error && iarg.warn_error_options == warn_error_options {
         return iarg;
@@ -170,6 +185,7 @@ pub async fn load(
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
+        &arg.io,
         tracing_features,
     );
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
@@ -382,6 +398,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
         simplified_dbt_project.flags.as_ref(),
+        &arg.io,
         None,
     );
 

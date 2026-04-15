@@ -11,6 +11,7 @@ use sha1::Digest;
 
 use dbt_common::{
     ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs, tokiofs,
+    tracing::emit::emit_warn_log_message,
 };
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
@@ -93,6 +94,7 @@ pub fn handle_git_like_package(
     revisions: &[String],
     subdirectory: &Option<String>,
     warn_unpinned: bool,
+    io_args: Option<&IoArgs>,
     packages_install_path: Option<&Path>,
 ) -> FsResult<(tempfile::TempDir, PathBuf, String)> {
     let tmp_dir = packages_install_path
@@ -112,13 +114,23 @@ pub fn handle_git_like_package(
         subdirectory,
         false,
     )?;
-    if ["HEAD", "main", "master"].contains(&revision.as_str()) && warn_unpinned {
-        println!(
-            "\nWARNING: The package {} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead.",
-            sanitize_git_url(repo_url)
+    if is_unpinned_git_revision(&revision, warn_unpinned) {
+        emit_warn_log_message(
+            ErrorCode::DepsUnpinned,
+            format!(
+                "The package {} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead.",
+                sanitize_git_url(repo_url)
+            ),
+            io_args.and_then(|io| io.status_reporter.as_ref()),
         );
     }
     Ok((tmp_dir, checkout_path, commit_sha))
+}
+
+fn is_unpinned_git_revision(revision: &str, warn_unpinned: bool) -> bool {
+    // Match dbt-core's DepsUnpinned semantics exactly: only HEAD, main, and
+    // master are treated as "unpinned" revisions for this legacy event.
+    warn_unpinned && ["HEAD", "main", "master"].contains(&revision)
 }
 
 pub fn read_and_validate_dbt_project(
@@ -213,6 +225,19 @@ pub fn sanitize_git_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_unpinned_git_revision_recognizes_default_branch_revisions() {
+        for revision in ["HEAD", "main", "master"] {
+            assert!(is_unpinned_git_revision(revision, true));
+        }
+    }
+
+    #[test]
+    fn is_unpinned_git_revision_rejects_pinned_or_opted_out_revisions() {
+        assert!(!is_unpinned_git_revision("abc123", true));
+        assert!(!is_unpinned_git_revision("main", false));
+    }
 
     #[test]
     fn test_sanitize_git_url_basic_credentials() {

@@ -223,7 +223,7 @@ async fn install_package(
                         && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
             {
                 emit_warn_log_message(
-                    ErrorCode::DependencyWarning,
+                    ErrorCode::PackageUpdateAvailable,
                     format!(
                         "Updated version available for {}@{}: {}",
                         pinned_package.name, pinned_package.version, pinned_package.version_latest,
@@ -285,6 +285,7 @@ async fn install_package(
                 &git_unpinned_package.revisions,
                 &git_unpinned_package.subdirectory,
                 git_unpinned_package.warn_unpinned.unwrap_or_default(),
+                Some(io_args),
                 Some(packages_install_path),
             )?;
 
@@ -344,6 +345,7 @@ async fn install_package(
                 &private_unpinned_package.revisions,
                 &private_unpinned_package.subdirectory,
                 private_unpinned_package.warn_unpinned.unwrap_or_default(),
+                Some(io_args),
                 Some(packages_install_path),
             )?;
             let dbt_project = read_and_validate_dbt_project(

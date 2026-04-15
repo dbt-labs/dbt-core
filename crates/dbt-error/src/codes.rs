@@ -116,6 +116,27 @@ pub enum ErrorCode {
     BaselineIntrospectionSyntaxWarning = 1070,
     JinjaWarn = 1071,
 
+    // Warn-error-options: dedicated codes for dbt-core legacy event names.
+    // Each maps 1:1 to a dbt-core event so that `--warn-error-options {error: [EventName]}`
+    // can target individual warning types without affecting unrelated warnings.
+    DeprecatedModel = 1085,
+    DeprecatedReference = 1072,
+    UpcomingReferenceDeprecation = 1073,
+    JinjaLogWarning = 1074,
+    SnapshotTimestampWarning = 1075,
+    PackageRedirectDeprecation = 1076,
+    DepsUnpinned = 1077,
+    FreshnessConfigProblem = 1078,
+    FreshnessMetadataWarning = 1079,
+    IncompatiblePackageVersion = 1080,
+    SeedColumnMismatch = 1081,
+    CacheInvalidationWarning = 1082,
+    UnexpectedApiResponse = 1083,
+    WarnStateTargetEqual = 1084,
+    WEOIncludeExcludeDeprecation = 1086,
+    NodeNotFoundOrDisabled = 1087,
+    PackageUpdateAvailable = 1088,
+
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
     InvalidFlag = 1100,

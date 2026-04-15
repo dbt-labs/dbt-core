@@ -282,7 +282,7 @@ impl HubClient {
                 PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible
             ) {
                 emit_warn_log_message(
-                    ErrorCode::DependencyWarning,
+                    ErrorCode::IncompatiblePackageVersion,
                     format!(
                         "Package '{package_name}' may not be compatible with your dbt version: {}. Check Package Hub (https://hub.getdbt.com) for compatible versions or contact the package maintainer.",
                         compatibility_status
@@ -349,7 +349,7 @@ impl HubClient {
         if let Some(redirect_namespace) = &hub_package.redirectnamespace {
             if let Some(redirect_name) = &hub_package.redirectname {
                 emit_warn_log_message(
-                    ErrorCode::DependencyWarning,
+                    ErrorCode::PackageRedirectDeprecation,
                     format!(
                         "Package '{}' has been moved to '{}/{}'. Please update your package reference.",
                         hub_package.name, redirect_namespace, redirect_name
@@ -358,7 +358,7 @@ impl HubClient {
                 );
             } else {
                 emit_warn_log_message(
-                    ErrorCode::DependencyWarning,
+                    ErrorCode::PackageRedirectDeprecation,
                     format!(
                         "Package '{}' has been moved to namespace '{}'. Please update your package reference.",
                         hub_package.name, redirect_namespace
@@ -368,7 +368,7 @@ impl HubClient {
             }
         } else if let Some(redirect_name) = &hub_package.redirectname {
             emit_warn_log_message(
-                ErrorCode::DependencyWarning,
+                ErrorCode::PackageRedirectDeprecation,
                 format!(
                     "Package '{}' has been renamed to '{}'. Please update your package reference.",
                     hub_package.name, redirect_name

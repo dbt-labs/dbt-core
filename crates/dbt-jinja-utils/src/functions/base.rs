@@ -1266,7 +1266,7 @@ impl Object for Exceptions {
                 );
 
                 emit_warn_log_message(
-                    ErrorCode::InvalidConfig,
+                    ErrorCode::SnapshotTimestampWarning,
                     warning,
                     self.io_args.status_reporter.as_ref(),
                 );
