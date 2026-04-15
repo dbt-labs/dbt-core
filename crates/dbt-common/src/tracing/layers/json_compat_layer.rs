@@ -8,7 +8,7 @@ use dbt_telemetry::{
     LogMessage, LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed,
     NodeSkipReason, NodeType, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput,
     ShowResult, SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags, TestOutcome,
-    UserLogMessage, get_freshness_detail, get_test_outcome,
+    UserLogMessage, get_freshness_detail, get_test_outcome, has_node_warning,
 };
 
 use serde_json::json;
@@ -895,6 +895,7 @@ impl JsonCompatLayer {
             node_skip_reason,
             test_outcome,
             freshness_outcome,
+            has_node_warning(node.into()),
             false,
         );
 

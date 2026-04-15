@@ -1,10 +1,10 @@
 use dbt_telemetry::{
-    HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome,
-    NodeProcessed, NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome,
-    node_processed::NodeOutcomeDetail,
+    HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeEvent,
+    NodeOutcome, NodeProcessed, NodeSkipReason, SeverityNumber, SourceFreshnessOutcome,
+    SpanEndInfo, has_node_warning, node_processed::NodeOutcomeDetail,
 };
 
-use crate::tracing::metrics::{OutcomeCountsKey, OutcomeKind};
+use crate::tracing::metrics::{NodeSubOutcome, OutcomeCountsKey, OutcomeKind};
 
 use super::super::{
     data_provider::DataProvider,
@@ -44,7 +44,7 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             let mut canceled = 0u64;
             let mut no_op = 0u64;
 
-            for ((outcome, skip_reason, test_outcome), count) in data_provider
+            for ((outcome, skip_reason, sub_outcome), count) in data_provider
                 .get_all_metrics()
                 .iter()
                 .filter_map(|(key, count)| match key {
@@ -56,9 +56,17 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             {
                 match outcome {
                     OutcomeKind::Node(outcome) => match outcome {
-                        NodeOutcome::Success => match test_outcome {
-                            Some(TestOutcome::Failed) => error += count,
-                            Some(TestOutcome::Warned) => warning += count,
+                        NodeOutcome::Success => match sub_outcome {
+                            // TODO: FreshnessWarned/FreshnessFailed are intentionally left as
+                            // success here. Source freshness outcomes use NodeOutcome::Success
+                            // for all three results (pass/warn/fail), so freshness failures
+                            // are currently undercounted in error/warn totals. Fixing this
+                            // is out of scope for this PR — check with product/DX or wait
+                            // for a user-reported issue before addressing.
+                            Some(NodeSubOutcome::TestFailed) => error += count,
+                            Some(NodeSubOutcome::TestWarned | NodeSubOutcome::NodeWarned) => {
+                                warning += count
+                            }
                             _ => success += count,
                         },
                         NodeOutcome::Error => error += count,
@@ -167,14 +175,30 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
         if let Some(attrs) = span.attributes.downcast_ref::<NodeProcessed>()
             && attrs.in_selection
         {
+            let sub_outcome: Option<NodeSubOutcome> =
+                if let Some(NodeOutcomeDetail::NodeTestDetail(ted)) = &attrs.node_outcome_detail {
+                    NodeSubOutcome::from_test_outcome(ted.test_outcome())
+                } else if let Some(NodeOutcomeDetail::NodeFreshnessOutcome(fd)) =
+                    &attrs.node_outcome_detail
+                {
+                    match fd.node_freshness_outcome() {
+                        SourceFreshnessOutcome::OutcomeWarned => {
+                            Some(NodeSubOutcome::FreshnessWarned)
+                        }
+                        SourceFreshnessOutcome::OutcomeFailed => {
+                            Some(NodeSubOutcome::FreshnessFailed)
+                        }
+                        _ => None,
+                    }
+                } else if has_node_warning(NodeEvent::Processed(attrs)) {
+                    Some(NodeSubOutcome::NodeWarned)
+                } else {
+                    None
+                };
             let key = OutcomeCountsKey::new(
                 OutcomeKind::Node(attrs.node_outcome()),
                 attrs.node_skip_reason(),
-                if let Some(NodeOutcomeDetail::NodeTestDetail(ted)) = &attrs.node_outcome_detail {
-                    Some(ted.test_outcome())
-                } else {
-                    None
-                },
+                sub_outcome,
             );
             data_provider.increment_metric(MetricKey::OutcomeCounts(key), 1);
         }

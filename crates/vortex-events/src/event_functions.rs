@@ -205,6 +205,7 @@ pub fn run_model_event(
     let mut skipped_reason = "".to_string();
     match stat.status {
         NodeStatus::Succeeded
+        | NodeStatus::SucceededWithWarning
         | NodeStatus::TestWarned
         | NodeStatus::TestPassed
         | NodeStatus::Errored => {}

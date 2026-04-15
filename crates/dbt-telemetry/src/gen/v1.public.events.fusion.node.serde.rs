@@ -518,6 +518,9 @@ impl serde::Serialize for NodeEvaluated {
                 node_evaluated::NodeOutcomeDetail::NodeSkipUpstreamDetail(v) => {
                     struct_ser.serialize_field("node_skip_upstream_detail", v)?;
                 }
+                node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail(v) => {
+                    struct_ser.serialize_field("node_evaluation_detail", v)?;
+                }
             }
         }
         struct_ser.end()
@@ -572,6 +575,8 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             "nodeFreshnessOutcome",
             "node_skip_upstream_detail",
             "nodeSkipUpstreamDetail",
+            "node_evaluation_detail",
+            "nodeEvaluationDetail",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -600,6 +605,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             NodeTestDetail,
             NodeFreshnessOutcome,
             NodeSkipUpstreamDetail,
+            NodeEvaluationDetail,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -646,6 +652,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
                             "nodeSkipUpstreamDetail" | "node_skip_upstream_detail" => Ok(GeneratedField::NodeSkipUpstreamDetail),
+                            "nodeEvaluationDetail" | "node_evaluation_detail" => Ok(GeneratedField::NodeEvaluationDetail),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -842,6 +849,13 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                             node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_evaluated::NodeOutcomeDetail::NodeSkipUpstreamDetail)
 ;
                         }
+                        GeneratedField::NodeEvaluationDetail => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeEvaluationDetail"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail)
+;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -873,6 +887,104 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             }
         }
         deserializer.deserialize_struct("v1.public.events.fusion.node.NodeEvaluated", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for NodeEvaluationDetail {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.node_warning_outcome != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.NodeEvaluationDetail", len)?;
+        if self.node_warning_outcome != 0 {
+            let v = NodeWarningOutcome::try_from(self.node_warning_outcome)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.node_warning_outcome)))?;
+            struct_ser.serialize_field("node_warning_outcome", &v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for NodeEvaluationDetail {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "node_warning_outcome",
+            "nodeWarningOutcome",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NodeWarningOutcome,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "nodeWarningOutcome" | "node_warning_outcome" => Ok(GeneratedField::NodeWarningOutcome),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NodeEvaluationDetail;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.node.NodeEvaluationDetail")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<NodeEvaluationDetail, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut node_warning_outcome__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NodeWarningOutcome => {
+                            if node_warning_outcome__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeWarningOutcome"));
+                            }
+                            node_warning_outcome__ = Some(map_.next_value::<NodeWarningOutcome>()? as i32);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(NodeEvaluationDetail {
+                    node_warning_outcome: node_warning_outcome__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.node.NodeEvaluationDetail", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for NodeMaterialization {
@@ -1256,6 +1368,9 @@ impl serde::Serialize for NodeProcessed {
                 node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail(v) => {
                     struct_ser.serialize_field("node_skip_upstream_detail", v)?;
                 }
+                node_processed::NodeOutcomeDetail::NodeEvaluationDetail(v) => {
+                    struct_ser.serialize_field("node_evaluation_detail", v)?;
+                }
             }
         }
         struct_ser.end()
@@ -1318,6 +1433,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "nodeFreshnessOutcome",
             "node_skip_upstream_detail",
             "nodeSkipUpstreamDetail",
+            "node_evaluation_detail",
+            "nodeEvaluationDetail",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -1350,6 +1467,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             NodeTestDetail,
             NodeFreshnessOutcome,
             NodeSkipUpstreamDetail,
+            NodeEvaluationDetail,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -1400,6 +1518,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
                             "nodeSkipUpstreamDetail" | "node_skip_upstream_detail" => Ok(GeneratedField::NodeSkipUpstreamDetail),
+                            "nodeEvaluationDetail" | "node_evaluation_detail" => Ok(GeneratedField::NodeEvaluationDetail),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -1624,6 +1743,13 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                                 return Err(serde::de::Error::duplicate_field("nodeSkipUpstreamDetail"));
                             }
                             node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail)
+;
+                        }
+                        GeneratedField::NodeEvaluationDetail => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeEvaluationDetail"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeEvaluationDetail)
 ;
                         }
                         GeneratedField::__SkipField__ => {
@@ -1948,6 +2074,80 @@ impl<'de> serde::Deserialize<'de> for NodeType {
                     "NODE_TYPE_SAVED_QUERY" => Ok(NodeType::SavedQuery),
                     "NODE_TYPE_SEMANTIC_MODEL" => Ok(NodeType::SemanticModel),
                     "NODE_TYPE_FUNCTION" => Ok(NodeType::Function),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for NodeWarningOutcome {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "NODE_WARNING_OUTCOME_UNSPECIFIED",
+            Self::NoWarnings => "NODE_WARNING_OUTCOME_NO_WARNINGS",
+            Self::WithWarnings => "NODE_WARNING_OUTCOME_WITH_WARNINGS",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for NodeWarningOutcome {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "NODE_WARNING_OUTCOME_UNSPECIFIED",
+            "NODE_WARNING_OUTCOME_NO_WARNINGS",
+            "NODE_WARNING_OUTCOME_WITH_WARNINGS",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NodeWarningOutcome;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "NODE_WARNING_OUTCOME_UNSPECIFIED" => Ok(NodeWarningOutcome::Unspecified),
+                    "NODE_WARNING_OUTCOME_NO_WARNINGS" => Ok(NodeWarningOutcome::NoWarnings),
+                    "NODE_WARNING_OUTCOME_WITH_WARNINGS" => Ok(NodeWarningOutcome::WithWarnings),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

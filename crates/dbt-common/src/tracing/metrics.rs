@@ -38,16 +38,45 @@ pub enum OutcomeKind {
     Hook(HookOutcome),
 }
 
+/// A sub-outcome discriminator for [`OutcomeCountsKey`] that refines how a
+/// node's primary outcome is bucketed in aggregation. Only variants that
+/// change routing are included; plain success maps to `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OutcomeCountsKey(OutcomeKind, NodeSkipReason, Option<TestOutcome>);
+pub enum NodeSubOutcome {
+    /// Test or unit-test node warned (failures between warn/error thresholds).
+    TestWarned,
+    /// Test or unit-test node failed (failures above error threshold).
+    TestFailed,
+    /// Source freshness exceeded warning threshold (`OutcomeWarned` + `NodeOutcome::Success`).
+    FreshnessWarned,
+    /// Source freshness exceeded error threshold (`OutcomeFailed` + `NodeOutcome::Success`).
+    FreshnessFailed,
+    /// Non-test, non-freshness node completed with warnings (`NodeWarningOutcome::WithWarnings`).
+    NodeWarned,
+}
+
+impl NodeSubOutcome {
+    /// Maps a [`TestOutcome`] to its corresponding sub-outcome.
+    /// Returns `None` for `Passed` (routes to the plain success bucket).
+    pub fn from_test_outcome(t: TestOutcome) -> Option<Self> {
+        match t {
+            TestOutcome::Passed => None,
+            TestOutcome::Warned => Some(Self::TestWarned),
+            TestOutcome::Failed => Some(Self::TestFailed),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OutcomeCountsKey(OutcomeKind, NodeSkipReason, Option<NodeSubOutcome>);
 
 impl OutcomeCountsKey {
     pub fn new(
         outcome: OutcomeKind,
         skip_reason: NodeSkipReason,
-        test_outcome: Option<TestOutcome>,
+        sub_outcome: Option<NodeSubOutcome>,
     ) -> Self {
-        Self(outcome, skip_reason, test_outcome)
+        Self(outcome, skip_reason, sub_outcome)
     }
 
     pub fn outcome(&self) -> OutcomeKind {
@@ -58,11 +87,11 @@ impl OutcomeCountsKey {
         self.1
     }
 
-    pub fn test_outcome(&self) -> Option<TestOutcome> {
+    pub fn sub_outcome(&self) -> Option<NodeSubOutcome> {
         self.2
     }
 
-    pub fn into_parts(self) -> (OutcomeKind, NodeSkipReason, Option<TestOutcome>) {
+    pub fn into_parts(self) -> (OutcomeKind, NodeSkipReason, Option<NodeSubOutcome>) {
         (self.0, self.1, self.2)
     }
 }

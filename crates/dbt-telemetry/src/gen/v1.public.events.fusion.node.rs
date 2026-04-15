@@ -118,6 +118,34 @@ impl ::prost::Name for NodeSkipUpstreamDetail {
         "/v1.public.events.fusion.node.NodeSkipUpstreamDetail".into()
     }
 }
+/// Non-test node specific outcome details for a successful evaluation.
+/// node_warning_outcome is always set (non-UNSPECIFIED) for new records; UNSPECIFIED only
+/// appears in records written before this field existed (backward compat).
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NodeEvaluationDetail {
+    #[prost(enumeration = "NodeWarningOutcome", tag = "1")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "::fake::Fake::fake::<NodeWarningOutcome>(&::fake::Faker) as i32")
+    )]
+    pub node_warning_outcome: i32,
+}
+impl crate::StaticName for NodeEvaluationDetail {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeEvaluationDetail";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeEvaluationDetail";
+}
+impl ::prost::Name for NodeEvaluationDetail {
+    const NAME: &'static str = "NodeEvaluationDetail";
+    const PACKAGE: &'static str = "v1.public.events.fusion.node";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.node.NodeEvaluationDetail".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.node.NodeEvaluationDetail".into()
+    }
+}
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(crate::macros::ProtoNew)]
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -221,7 +249,7 @@ pub struct NodeEvaluated {
     #[prost(uint64, optional, tag = "41")]
     pub rows_affected: ::core::option::Option<u64>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
-    #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
+    #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_evaluated::NodeOutcomeDetail>,
 }
 /// Nested message and enum types in `NodeEvaluated`.
@@ -248,6 +276,10 @@ pub mod node_evaluated {
         /// Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
         #[prost(message, tag = "33")]
         NodeSkipUpstreamDetail(super::NodeSkipUpstreamDetail),
+        /// Non-test node specific outcome details.
+        /// Present for non test / unit test / source node types when node_outcome == NODE_OUTCOME_SUCCESS.
+        #[prost(message, tag = "34")]
+        NodeEvaluationDetail(super::NodeEvaluationDetail),
     }
 }
 impl crate::StaticName for NodeEvaluated {
@@ -385,7 +417,7 @@ pub struct NodeProcessed {
     #[prost(string, optional, tag = "44")]
     pub group: ::core::option::Option<::prost::alloc::string::String>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
-    #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
+    #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,
 }
 /// Nested message and enum types in `NodeProcessed`.
@@ -412,6 +444,10 @@ pub mod node_processed {
         /// Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
         #[prost(message, tag = "33")]
         NodeSkipUpstreamDetail(super::NodeSkipUpstreamDetail),
+        /// Non-test node specific outcome details.
+        /// Present for non test / unit test / source node types when node_outcome == NODE_OUTCOME_SUCCESS.
+        #[prost(message, tag = "34")]
+        NodeEvaluationDetail(super::NodeEvaluationDetail),
     }
 }
 impl crate::StaticName for NodeProcessed {
@@ -823,6 +859,39 @@ impl SourceFreshnessOutcome {
             "SOURCE_FRESHNESS_OUTCOME_OUTCOME_PASSED" => Some(Self::OutcomePassed),
             "SOURCE_FRESHNESS_OUTCOME_OUTCOME_WARNED" => Some(Self::OutcomeWarned),
             "SOURCE_FRESHNESS_OUTCOME_OUTCOME_FAILED" => Some(Self::OutcomeFailed),
+            _ => None,
+        }
+    }
+}
+/// Second-level outcome indicating whether a successfully-completed non-test node produced warnings.
+/// Analogous to TestOutcome for test nodes. Warnings are already emitted individually as LogMessages;
+/// this field exists only to signal the presence of warnings at the outcome level.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum NodeWarningOutcome {
+    Unspecified = 0,
+    NoWarnings = 1,
+    WithWarnings = 2,
+}
+impl NodeWarningOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "NODE_WARNING_OUTCOME_UNSPECIFIED",
+            Self::NoWarnings => "NODE_WARNING_OUTCOME_NO_WARNINGS",
+            Self::WithWarnings => "NODE_WARNING_OUTCOME_WITH_WARNINGS",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "NODE_WARNING_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "NODE_WARNING_OUTCOME_NO_WARNINGS" => Some(Self::NoWarnings),
+            "NODE_WARNING_OUTCOME_WITH_WARNINGS" => Some(Self::WithWarnings),
             _ => None,
         }
     }

@@ -168,6 +168,7 @@ impl From<NodeStatus> for LogEvent {
     fn from(value: NodeStatus) -> Self {
         match value {
             NodeStatus::Succeeded => LogEvent::NodeSuccess,
+            NodeStatus::SucceededWithWarning => LogEvent::NodeSuccess,
             NodeStatus::TestPassed => LogEvent::TestPass,
             NodeStatus::Errored => LogEvent::Failed,
             NodeStatus::TestWarned => LogEvent::TestWarn,

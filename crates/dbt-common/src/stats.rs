@@ -1,6 +1,5 @@
 use chrono::{DateTime, Local};
 use dbt_telemetry::NodeOutcome;
-use std::fmt;
 use std::time::{Duration, SystemTime};
 use strum_macros::EnumString;
 
@@ -11,6 +10,9 @@ use strum_macros::EnumString;
 pub enum NodeStatus {
     // the following states can be reported on the makefile
     Succeeded,
+    /// Node built successfully in the warehouse but produced warnings (e.g.
+    /// duplicate columns). `node_warning_outcome` on the span signals their presence.
+    SucceededWithWarning,
     Errored,
     TestWarned,
     TestPassed,
@@ -43,6 +45,7 @@ impl NodeStatus {
             NodeStatus::ReusedNoChanges(msg) => msg.clone(),
             NodeStatus::ReusedStillFresh(msg, _, _) => msg.clone(),
             NodeStatus::ReusedStillFreshNoChanges(msg) => msg.clone(),
+            NodeStatus::SucceededWithWarning => "Warn".to_string(),
             NodeStatus::NoOp => "Skipped".to_string(),
         }
     }
@@ -50,9 +53,10 @@ impl NodeStatus {
 impl From<NodeStatus> for NodeOutcome {
     fn from(status: NodeStatus) -> Self {
         match status {
-            NodeStatus::Succeeded | NodeStatus::TestWarned | NodeStatus::TestPassed => {
-                NodeOutcome::Success
-            }
+            NodeStatus::Succeeded
+            | NodeStatus::SucceededWithWarning
+            | NodeStatus::TestWarned
+            | NodeStatus::TestPassed => NodeOutcome::Success,
             NodeStatus::Errored => NodeOutcome::Error,
             NodeStatus::SkippedUpstreamFailed => NodeOutcome::Skipped,
             NodeStatus::ReusedNoChanges(_) => NodeOutcome::Skipped,
@@ -60,21 +64,6 @@ impl From<NodeStatus> for NodeOutcome {
             NodeStatus::ReusedStillFreshNoChanges(_) => NodeOutcome::Skipped,
             NodeStatus::NoOp => NodeOutcome::Skipped,
         }
-    }
-}
-
-impl fmt::Display for NodeStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let status_str = match self {
-            NodeStatus::Succeeded | NodeStatus::TestWarned | NodeStatus::TestPassed => "success",
-            NodeStatus::Errored => "error",
-            NodeStatus::SkippedUpstreamFailed => "skipped",
-            NodeStatus::ReusedNoChanges(_)
-            | NodeStatus::ReusedStillFresh(_, _, _)
-            | NodeStatus::ReusedStillFreshNoChanges(_) => "reused",
-            NodeStatus::NoOp => "noop",
-        };
-        write!(f, "{status_str}")
     }
 }
 
@@ -131,6 +120,8 @@ impl Stat {
                 Some(_) => "Failed".to_string(),
                 None => "Succeeded".to_string(),
             }
+        } else if self.status == NodeStatus::SucceededWithWarning {
+            "Warn".to_string()
         } else {
             format!("{:?}", self.status)
         }
@@ -159,6 +150,7 @@ impl Stat {
                 }
             }
             NodeStatus::Succeeded => "success".to_string(),
+            NodeStatus::SucceededWithWarning => "warn".to_string(),
             NodeStatus::TestWarned => "warn".to_string(),
             NodeStatus::TestPassed => "pass".to_string(),
             NodeStatus::Errored => "error".to_string(),
@@ -241,6 +233,7 @@ mod tests {
     #[test]
     fn test_default_messages_for_all_statuses() {
         assert_eq!(NodeStatus::Succeeded.default_message(), "Succeeded");
+        assert_eq!(NodeStatus::SucceededWithWarning.default_message(), "Warn");
         assert_eq!(NodeStatus::Errored.default_message(), "Error");
         assert_eq!(NodeStatus::TestWarned.default_message(), "Warn");
         assert_eq!(NodeStatus::TestPassed.default_message(), "Pass");
@@ -253,5 +246,19 @@ mod tests {
             NodeStatus::ReusedNoChanges("Model reused".to_string()).default_message(),
             "Model reused"
         );
+    }
+
+    #[test]
+    fn test_succeeded_with_warning_stat_strings() {
+        let stat = Stat::new(
+            "model.my_project.dup_col".to_string(),
+            SystemTime::now(),
+            None,
+            NodeStatus::SucceededWithWarning,
+            None,
+            1,
+        );
+        assert_eq!(stat.status_string(), "Warn");
+        assert_eq!(stat.result_status_string(), "warn");
     }
 }

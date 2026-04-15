@@ -16,6 +16,7 @@ use super::{
     },
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
+    middlewares::node_warn_outcome::TelemetryNodeWarnOutcome,
     middlewares::warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     rotating_file_writer::RotatingFileWriter,
     shutdown::TelemetryShutdownItem,
@@ -541,10 +542,16 @@ impl FsTraceConfig {
 
         Ok(FsTraceLayers {
             middleware_layers: vec![
-                // Order important! First downgrade markdown errors, then handle parsing errors, then aggregate metrics
+                // Order matters:
+                // 1. Downgrade markdown errors first
+                // 2. Filter parsing errors
+                // 3. Apply warn-error-options (may silence or upgrade warns to errors)
+                // 4. Mark node spans with WithWarnings for remaining Warn logs
+                // 5. Aggregate metrics last (sees final severity after all transforms)
                 Box::new(TelemetryMarkdownLogFilter),
                 Box::new(TelemetryParsingErrorFilter::new(self.show_all_deprecations)),
                 Box::new(warn_error_options_middleware),
+                Box::new(TelemetryNodeWarnOutcome),
                 Box::new(TelemetryMetricAggregator),
             ],
             consumer_layers,

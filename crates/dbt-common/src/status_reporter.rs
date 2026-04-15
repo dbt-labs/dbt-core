@@ -18,7 +18,10 @@ pub fn report_completed(
     if !matches!(node_status, &NodeStatus::NoOp) {
         let log_event: LogEvent = node_status.clone().into();
 
-        let desc = if matches!(node_status, NodeStatus::Succeeded) {
+        let desc = if matches!(
+            node_status,
+            NodeStatus::Succeeded | NodeStatus::SucceededWithWarning
+        ) {
             with_cache.then_some("New changes detected".to_string())
         } else if matches!(node_status, NodeStatus::TestWarned | NodeStatus::Errored)
             && let Some(location) = defined_at

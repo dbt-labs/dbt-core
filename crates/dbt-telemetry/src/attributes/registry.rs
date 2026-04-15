@@ -410,6 +410,7 @@ mod tests {
                     "v1.public.events.fusion.invocation.InvocationMetrics",
                     // node
                     "v1.public.events.fusion.node.NodeCacheDetail",
+                    "v1.public.events.fusion.node.NodeEvaluationDetail",
                     "v1.public.events.fusion.node.NodeSkipUpstreamDetail",
                     "v1.public.events.fusion.node.SourceFreshnessDetail",
                     "v1.public.events.fusion.node.TestEvaluationDetail",

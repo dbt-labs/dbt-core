@@ -169,6 +169,22 @@ message NodeSkipUpstreamDetail {
   string upstream_unique_id = 1;
 }
 
+// Second-level outcome indicating whether a successfully-completed non-test node produced warnings.
+// Analogous to TestOutcome for test nodes. Warnings are already emitted individually as LogMessages;
+// this field exists only to signal the presence of warnings at the outcome level.
+enum NodeWarningOutcome {
+  NODE_WARNING_OUTCOME_UNSPECIFIED = 0;
+  NODE_WARNING_OUTCOME_NO_WARNINGS = 1;
+  NODE_WARNING_OUTCOME_WITH_WARNINGS = 2;
+}
+
+// Non-test node specific outcome details for a successful evaluation.
+// node_warning_outcome is always set (non-UNSPECIFIED) for new records; UNSPECIFIED only
+// appears in records written before this field existed (backward compat).
+message NodeEvaluationDetail {
+  NodeWarningOutcome node_warning_outcome = 1;
+}
+
 message NodeEvaluated {
   // unique_id is the globally unique identifier for this node.
   string unique_id = 1;
@@ -246,6 +262,10 @@ message NodeEvaluated {
     // Upstream node that caused this node to be skipped.
     // Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
     NodeSkipUpstreamDetail node_skip_upstream_detail = 33;
+
+    // Non-test node specific outcome details.
+    // Present for non test / unit test / source node types when node_outcome == NODE_OUTCOME_SUCCESS.
+    NodeEvaluationDetail node_evaluation_detail = 34;
   }
 
   // Optional legacy dbt core event code (e.g. "Q018") if this event has a strict mapping to a dbt core event.
@@ -339,6 +359,10 @@ message NodeProcessed {
     // Upstream node that caused this node to be skipped.
     // Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
     NodeSkipUpstreamDetail node_skip_upstream_detail = 33;
+
+    // Non-test node specific outcome details.
+    // Present for non test / unit test / source node types when node_outcome == NODE_OUTCOME_SUCCESS.
+    NodeEvaluationDetail node_evaluation_detail = 34;
   }
 
   // Legacy dbt core event code. Always set to Q024 for start, Q025 for end.

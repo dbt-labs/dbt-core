@@ -1,8 +1,9 @@
 use crate::proto::v1::public::events::fusion::{
     node::{
-        NodeCacheDetail, NodeEvaluated, NodeMaterialization, NodeOutcome, NodeProcessed,
-        NodeSkipReason, NodeSkipUpstreamDetail, NodeType, SourceFreshnessDetail,
-        SourceFreshnessOutcome, TestEvaluationDetail, TestOutcome, node_evaluated, node_processed,
+        NodeCacheDetail, NodeEvaluated, NodeEvaluationDetail, NodeMaterialization, NodeOutcome,
+        NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType, NodeWarningOutcome,
+        SourceFreshnessDetail, SourceFreshnessOutcome, TestEvaluationDetail, TestOutcome,
+        node_evaluated, node_processed,
     },
     phase::ExecutionPhase,
 };
@@ -175,6 +176,7 @@ pub enum AnyNodeOutcomeDetail<'a> {
     NodeTestDetail(&'a TestEvaluationDetail),
     NodeFreshnessOutcome(&'a SourceFreshnessDetail),
     NodeSkipUpstreamDetail(&'a NodeSkipUpstreamDetail),
+    NodeEvaluationDetail(&'a NodeEvaluationDetail),
 }
 
 impl<'a> From<&'a node_processed::NodeOutcomeDetail> for AnyNodeOutcomeDetail<'a> {
@@ -191,6 +193,9 @@ impl<'a> From<&'a node_processed::NodeOutcomeDetail> for AnyNodeOutcomeDetail<'a
             }
             node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail(skip_detail) => {
                 AnyNodeOutcomeDetail::NodeSkipUpstreamDetail(skip_detail)
+            }
+            node_processed::NodeOutcomeDetail::NodeEvaluationDetail(eval_detail) => {
+                AnyNodeOutcomeDetail::NodeEvaluationDetail(eval_detail)
             }
         }
     }
@@ -210,6 +215,9 @@ impl<'a> From<&'a node_evaluated::NodeOutcomeDetail> for AnyNodeOutcomeDetail<'a
             }
             node_evaluated::NodeOutcomeDetail::NodeSkipUpstreamDetail(skip_detail) => {
                 AnyNodeOutcomeDetail::NodeSkipUpstreamDetail(skip_detail)
+            }
+            node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail(eval_detail) => {
+                AnyNodeOutcomeDetail::NodeEvaluationDetail(eval_detail)
             }
         }
     }
@@ -255,6 +263,38 @@ pub fn get_freshness_detail(node: NodeEvent<'_>) -> Option<&'_ SourceFreshnessDe
     })
 }
 
+/// Returns true if the node completed with warnings.
+pub fn has_node_warning(node: NodeEvent<'_>) -> bool {
+    let Some(AnyNodeOutcomeDetail::NodeEvaluationDetail(d)) = get_node_outcome_detail(node) else {
+        return false;
+    };
+    d.node_warning_outcome() == NodeWarningOutcome::WithWarnings
+}
+
+/// Marks the `NodeEvaluated` span as having produced warnings during successful execution.
+///
+/// This is called automatically by `TelemetryNodeWarnOutcome` middleware whenever a
+/// `Warn`-severity log record passes through the pipeline.
+pub fn set_node_warning_outcome_warned(ev: &mut NodeEvaluated) {
+    ev.node_outcome_detail = Some(node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail(
+        NodeEvaluationDetail {
+            node_warning_outcome: NodeWarningOutcome::WithWarnings as i32,
+        },
+    ));
+}
+
+/// Marks the `NodeEvaluated` span as having completed with no warnings.
+///
+/// Should be called for every successful non-test node that did not emit any warn logs,
+/// so consumers can distinguish a clean success from old records that predate this field.
+pub fn set_node_warning_outcome_no_warnings(ev: &mut NodeEvaluated) {
+    ev.node_outcome_detail = Some(node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail(
+        NodeEvaluationDetail {
+            node_warning_outcome: NodeWarningOutcome::NoWarnings as i32,
+        },
+    ));
+}
+
 impl From<node_evaluated::NodeOutcomeDetail> for node_processed::NodeOutcomeDetail {
     fn from(detail: node_evaluated::NodeOutcomeDetail) -> Self {
         match detail {
@@ -267,9 +307,11 @@ impl From<node_evaluated::NodeOutcomeDetail> for node_processed::NodeOutcomeDeta
             node_evaluated::NodeOutcomeDetail::NodeFreshnessOutcome(d) => {
                 node_processed::NodeOutcomeDetail::NodeFreshnessOutcome(d)
             }
-
             node_evaluated::NodeOutcomeDetail::NodeSkipUpstreamDetail(d) => {
                 node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail(d)
+            }
+            node_evaluated::NodeOutcomeDetail::NodeEvaluationDetail(d) => {
+                node_processed::NodeOutcomeDetail::NodeEvaluationDetail(d)
             }
         }
     }

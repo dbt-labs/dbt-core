@@ -2,7 +2,7 @@ use dbt_telemetry::{
     AnyNodeOutcomeDetail, CompiledCode, CompiledCodeInline, ExecutionPhase, NodeEvaluated,
     NodeEvent, NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
     SourceFreshnessOutcome, TestOutcome, get_cache_detail, get_freshness_detail,
-    get_node_outcome_detail, get_test_outcome,
+    get_node_outcome_detail, get_test_outcome, has_node_warning,
 };
 
 use crate::io_args::FsCommand;
@@ -163,6 +163,7 @@ pub fn format_node_outcome_as_status(
     skip_reason: Option<NodeSkipReason>,
     test_outcome: Option<TestOutcome>,
     freshness_outcome: Option<SourceFreshnessOutcome>,
+    has_warn: bool,
     colorize: bool,
 ) -> String {
     let (status, color) = match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
@@ -178,6 +179,8 @@ pub fn format_node_outcome_as_status(
             TestOutcome::Warned => ("warn", &YELLOW),
             TestOutcome::Failed => ("fail", &RED),
         },
+        // Non test/freshness nodes that succeeded with warnings
+        (NodeOutcome::Success, _, None, None) if has_warn => ("warn", &YELLOW),
         // Non test/freshness nodes. Success means "success"
         (NodeOutcome::Success, _, None, None) => ("success", &GREEN),
         (NodeOutcome::Error, _, _, _) => ("error", &RED),
@@ -210,6 +213,7 @@ pub fn format_node_action(
     skip_reason: Option<NodeSkipReason>,
     test_outcome: Option<TestOutcome>,
     freshness_outcome: Option<SourceFreshnessOutcome>,
+    has_warn: bool,
     colorize: bool,
 ) -> String {
     let (action, color) = match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
@@ -225,7 +229,9 @@ pub fn format_node_action(
             TestOutcome::Warned => ("Warned", &YELLOW),
             TestOutcome::Failed => ("Failed", &RED),
         },
-        // Non test/freshness nodes. Success means "success"
+        // Non test/freshness nodes that succeeded with warnings
+        (NodeOutcome::Success, _, None, None) if has_warn => ("Warned", &YELLOW),
+        // Non test/freshness nodes. Success means "Succeeded"
         (NodeOutcome::Success, _, None, None) => ("Succeeded", &GREEN),
         (NodeOutcome::Error, _, _, _) => ("Failed", &RED),
         (NodeOutcome::Skipped, s_reason, _, _) => match s_reason {
@@ -347,6 +353,7 @@ pub fn format_node_processed_end(
         node.node_skip_reason.map(|_| node.node_skip_reason()),
         get_test_outcome(node.into()),
         None, // freshness_outcome - not applicable for non-freshness nodes
+        has_node_warning(node.into()),
         colorize,
     );
 
@@ -461,6 +468,7 @@ pub fn format_node_evaluated_end(
         node.node_skip_reason.map(|_| node.node_skip_reason()),
         get_test_outcome(node.into()),
         None, // freshness_outcome - NodeEvaluated doesn't have freshness details
+        has_node_warning(node.into()),
         colorize,
     );
 
@@ -526,8 +534,9 @@ pub fn format_skipped_test_group(
     let action_formatted = format_node_action(
         NodeOutcome::Skipped,
         Some(NodeSkipReason::Upstream),
-        None, // test_outcome
-        None, // freshness_outcome
+        None,  // test_outcome
+        None,  // freshness_outcome
+        false, // has_warn - skipped nodes never have warn detail
         colorize,
     );
 
@@ -611,6 +620,7 @@ pub fn format_freshness_result(
         node.node_skip_reason.map(|_| node.node_skip_reason()),
         None, // test_outcome
         freshness_outcome,
+        false, // has_warn - freshness nodes use freshness_outcome instead
         colorize,
     );
 
