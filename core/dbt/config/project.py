@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
@@ -43,6 +43,7 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import SemverError
 from dbt_common.helper_types import NoValue
 from dbt_common.semver import VersionSpecifier, versions_compatible
+from dbt_common.ui import warning_tag
 
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
@@ -916,6 +917,16 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
             project_flags = profile_project_flags
 
         if project_flags is not None:
+            # Warn on unknown flags so users catch typos.
+            # Buffered because the event logger isn't set up yet when flags are read.
+            known_flag_names = {f.name for f in fields(ProjectFlags)}
+            unknown_flags = set(project_flags.keys()) - known_flag_names
+            if unknown_flags:
+                msg = warning_tag(
+                    f"Unknown flags in dbt_project.yml: {', '.join(sorted(unknown_flags))}. These flags will be ignored."
+                )
+                deprecations.buffer_warning(msg)
+
             # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
             # for warn_error_options
             warn_error_options = project_flags.get("warn_error_options", {})

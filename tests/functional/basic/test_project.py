@@ -6,7 +6,12 @@ import yaml
 
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError, ProjectContractError
-from dbt.tests.util import run_dbt, update_config_file, write_config_file
+from dbt.tests.util import (
+    run_dbt,
+    run_dbt_and_capture,
+    update_config_file,
+    write_config_file,
+)
 
 simple_model_sql = """
 select true as my_column
@@ -167,3 +172,21 @@ class TestArchiveNotAllowed:
         assert result.exception is not None
         assert isinstance(result.exception, ProjectContractError)
         assert "Additional properties are not allowed" in str(result.exception)
+
+
+class TestInvalidFlagsWarning:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "random_unknown_flag": True,
+            }
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"simple_model.sql": simple_model_sql, "simple_model.yml": simple_model_yml}
+
+    def test_unknown_flags_warning(self, project):
+        _, log = run_dbt_and_capture(["parse"])
+        assert "Unknown flags in dbt_project.yml: random_unknown_flag" in log
