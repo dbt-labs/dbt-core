@@ -647,7 +647,9 @@ class ModelNode(ModelResource, CompiledNode):
     def same_ref_representation(self, old) -> bool:
         return (
             # Changing the latest_version may break downstream unpinned refs
-            self.latest_version == old.latest_version
+            # Use str() to normalize comparison since NodeVersion (Union[str, float])
+            # may deserialize differently depending on Union member order
+            str(self.latest_version) == str(old.latest_version)
             # Changes to access or deprecation_date may lead to ref-related parsing errors
             and self.access == old.access
             and self.deprecation_date == old.deprecation_date
