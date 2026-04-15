@@ -1,5 +1,10 @@
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::schemas::{dbt_catalogs::DbtCatalogs, validate_catalogs};
+use dbt_schemas::schemas::{
+    dbt_catalogs::DbtCatalogs,
+    dbt_catalogs_v2::{is_v2_catalogs, validate_catalogs_v2},
+    validate_catalogs,
+};
 use dbt_yaml as yml;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -40,7 +45,18 @@ pub fn do_load_catalogs(text_yml: yml::Value, path: &Path) -> FsResult<DbtCatalo
     };
 
     let catalogs = DbtCatalogs { repr, span };
-    let view = catalogs.view()?;
-    validate_catalogs(&view, path)?;
+    // TODO: remove v1 code before GA
+    if is_v2_catalogs(catalogs.mapping()) {
+        emit_warn_log_message(
+            ErrorCode::NotYetSupportedOption,
+            "catalogs.yml version 2 is under development, not officially supported yet, and its spec is liable to change",
+            None,
+        );
+        let view = catalogs.view_v2()?;
+        validate_catalogs_v2(&view, path)?;
+    } else {
+        let view = catalogs.view()?;
+        validate_catalogs(&view, path)?;
+    }
     Ok(catalogs)
 }

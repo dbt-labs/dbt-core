@@ -11,6 +11,7 @@ pub mod schemas {
     pub mod common;
     pub mod data_tests;
     pub mod dbt_catalogs;
+    pub mod dbt_catalogs_v2;
     pub mod dbt_column;
     pub mod serialization_utils;
 
