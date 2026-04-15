@@ -1212,20 +1212,12 @@ pub fn check_var(vars: &str) -> Result<BTreeMap<String, Value>, String> {
     // Strip outer quotes if present
     let vars = vars.trim().trim_matches('\'');
 
-    // Check if the input is already wrapped in curly braces
-    let yaml_str = if vars.trim().starts_with('{') {
-        vars.to_string()
-    } else {
-        // Handle single key-value pair separated by a colon
-        if vars.trim().matches(':').count() != 1 {
-            return Err(format!(
-                "Invalid key-value pair: '{vars}'. Expected format: 'key: value'."
-            ));
-        }
-        vars.to_string()
-    };
+    // Try parsing as YAML first. Both brace-wrapped flow style ({ key: value, ... })
+    // and bare block style (key1: value1\nkey2: value2) are valid YAML mappings.
+    // We rely on the YAML parser itself to reject non-mapping inputs (bare strings,
+    // lists, malformed syntax).
+    let yaml_str = vars.to_string();
 
-    // Try parsing as YAML first
     match dbt_yaml::from_str::<BTreeMap<String, Value>>(&yaml_str) {
         Ok(btree) => {
             // Disallow the '{key:value}' format for flow-style YAML syntax
@@ -1334,15 +1326,47 @@ mod tests {
     #[test]
     fn test_check_var_invalid() {
         let invalid_vars = vec![
-            "key",                    // Missing colon
-            "key:value",              // Missing space after colon
-            "key: value:with:colons", // Value with colons
-            "{key:value}",            // Flow-style YAML syntax without space after colon
+            "key",         // Missing colon — YAML returns scalar string, not dict
+            "key:value",   // No space after colon — YAML returns scalar string, not dict
+            "{key:value}", // Flow-style without space — key-contains-colon guard catches it
         ];
 
         for var in invalid_vars {
             assert!(check_var(var).is_err(), "Should have failed: {var}");
         }
+    }
+
+    #[test]
+    fn test_check_var_block_yaml_multikey() {
+        // The primary bug fix for issue #402: multi-key block YAML without surrounding braces
+        let result = check_var("key1: value1\nkey2: value2").unwrap();
+        let expected = BTreeMap::from([
+            ("key1".to_string(), dbt_yaml::from_str("value1").unwrap()),
+            ("key2".to_string(), dbt_yaml::from_str("value2").unwrap()),
+        ]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_check_var_block_yaml_three_keys() {
+        let result = check_var("a: 1\nb: 2\nc: 3").unwrap();
+        assert_eq!(result.len(), 3);
+        assert!(result.contains_key("a"));
+        assert!(result.contains_key("b"));
+        assert!(result.contains_key("c"));
+    }
+
+    #[test]
+    fn test_check_var_value_with_colons() {
+        // Values containing colons are valid YAML (and valid in dbt-core / PyYAML).
+        // The colon-count pre-check that was removed in the fix for issue #402
+        // incorrectly rejected these.
+        let result = check_var("key: value:with:colons").unwrap();
+        let expected = BTreeMap::from([(
+            "key".to_string(),
+            dbt_yaml::from_str("value:with:colons").unwrap(),
+        )]);
+        assert_eq!(result, expected);
     }
 
     #[test]
