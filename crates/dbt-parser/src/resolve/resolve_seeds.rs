@@ -94,6 +94,8 @@ pub fn resolve_seeds(
 
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
+    // Track seed names seen so far (name → relative path) to detect duplicates across subdirs
+    let mut seen_seed_names: HashMap<String, std::path::PathBuf> = HashMap::new();
     for seed_file in package.seed_files.iter() {
         // Validate that path extension is one of csv, parquet, or json
         let path = seed_file.path.clone();
@@ -135,6 +137,29 @@ pub fn resolve_seeds(
         if seed_name.contains(' ') {
             return Err(err_resource_name_has_spaces(seed_name, &path));
         }
+
+        // Detect two seeds with the same name in different subdirectories
+        let original_file_path_for_name_check =
+            stdfs::diff_paths(seed_file.base_path.join(&path), &io_args.in_dir)?;
+        if let Some(existing_path) = seen_seed_names.get(seed_name) {
+            let err_msg = format!(
+                "dbt found two seeds with the name \"{}\".\n  Since these resources have the same name, dbt will be unable to find the correct resource when ref(\"{}\") is used.\n  To fix this, change the name of one of these resources:\n  - seed.{}.{} ({})\n  - seed.{}.{} ({})",
+                seed_name,
+                seed_name,
+                package_name,
+                seed_name,
+                existing_path.display(),
+                package_name,
+                seed_name,
+                original_file_path_for_name_check.display(),
+            );
+            duplicate_errors.push(
+                *fs_err!(code => ErrorCode::InvalidConfig, loc => original_file_path_for_name_check.clone(), "{}", err_msg),
+            );
+            continue;
+        }
+        seen_seed_names.insert(seed_name.to_string(), original_file_path_for_name_check);
+
         let unique_id = format!("seed.{package_name}.{seed_name}");
 
         let fqn = get_node_fqn(
