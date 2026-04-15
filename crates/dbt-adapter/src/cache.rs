@@ -128,18 +128,17 @@ impl RelationCache {
 
     /// Inserts a schema and its relations into the cache
     pub fn insert_schema(&self, schema: CatalogAndSchema, relations: RelationVec) {
+        let schema_key = schema.to_string();
         let cached_relations: DashMap<_, _> = relations
             .iter()
             .map(|r| {
-                (
-                    Self::get_relation_cache_key_from_relation(r.as_ref() as &dyn BaseRelation),
-                    RelationCacheEntry::new(r.clone(), None),
-                )
+                let key = Self::normalize_relation_key(&schema_key, r.as_ref());
+                (key, RelationCacheEntry::new(r.clone(), None))
             })
             .collect();
 
         self.schemas_and_relations.insert(
-            schema.to_string(),
+            schema_key,
             SchemaEntry {
                 relations: cached_relations,
                 is_complete: true,
@@ -233,6 +232,28 @@ impl RelationCache {
     /// Helper: Generates a schema cache key from a [BaseRelation]
     fn get_schema_cache_key_from_relation(relation: &dyn BaseRelation) -> String {
         CatalogAndSchema::from(relation).to_string()
+    }
+
+    /// Helper: Generates a normalized relation key by substituting the relation's own schema
+    /// prefix with the provided `schema_key`.
+    ///
+    /// This is needed when the warehouse normalizes identifier casing (e.g. Databricks stores
+    /// all schema names in lowercase in `information_schema`). The caller holds the
+    /// user-specified `schema_key` (which may be uppercase), while the relation returned by
+    /// the warehouse carries the warehouse-normalized (lowercase) schema. Replacing the prefix
+    /// ensures that later lookups via the caller's `CatalogAndSchema` key find the relation.
+    fn normalize_relation_key(schema_key: &str, relation: &dyn BaseRelation) -> String {
+        let relation_schema_key = Self::get_schema_cache_key_from_relation(relation);
+        let relation_fqn = Self::get_relation_cache_key_from_relation(relation);
+        if relation_fqn.starts_with(&relation_schema_key) {
+            format!(
+                "{}{}",
+                schema_key,
+                &relation_fqn[relation_schema_key.len()..]
+            )
+        } else {
+            relation_fqn
+        }
     }
 }
 
@@ -536,5 +557,71 @@ mod tests {
             }
         }
         // Test survived all concurrent operations without panicking or corrupting
+    }
+
+    /// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/943
+    ///
+    /// When schema name contains uppercase letters on Databricks, the second `dbtf seed`
+    /// run fails with TABLE_OR_VIEW_ALREADY_EXISTS.
+    ///
+    /// Root cause: `insert_schema` stores relations under the outer schema key derived
+    /// from the caller's (user-specified, uppercase) `CatalogAndSchema`, but the inner
+    /// relation keys come from `semantic_fqn()` of the warehouse-returned relations
+    /// (which have lowercase schema, as Databricks normalises names to lowercase).
+    /// The outer key matches on the next lookup (so `is_complete = true`), but the
+    /// inner key doesn't — `get_relation_value_from_cache` therefore returns
+    /// `none_value()` ("table doesn't exist"), causing the seed materializer to attempt
+    /// CREATE TABLE on an already-existing table.
+    #[test]
+    fn test_databricks_uppercase_schema_seed_second_run_repro() {
+        use crate::metadata::CatalogAndSchema;
+        use crate::relation::do_create_relation;
+
+        let cache = RelationCache::default();
+
+        // The user specifies schema "NOTLIKETHIS" (uppercase) in their dbt project.
+        let user_relation: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Databricks,
+            "my_catalog".to_string(),
+            "NOTLIKETHIS".to_string(),
+            Some("my_seed".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // Databricks returns schema names in lowercase from information_schema.tables.
+        let db_relation: Arc<dyn BaseRelation> = do_create_relation(
+            AdapterType::Databricks,
+            "my_catalog".to_string(),
+            "notlikethis".to_string(),
+            Some("my_seed".to_string()),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap()
+        .into();
+
+        // Simulates `update_relation_cache`: insert_schema is called with the
+        // CatalogAndSchema derived from the user relation (uppercase schema key)
+        // but with the warehouse-returned relation (lowercase schema in semantic_fqn).
+        let schema = CatalogAndSchema::from(user_relation.as_ref());
+        cache.insert_schema(schema, vec![db_relation]);
+
+        // The schema is marked as complete (is_complete = true), so the cache believes
+        // it has full knowledge of this schema.
+        assert!(cache.contains_full_schema_for_relation(user_relation.as_ref()));
+
+        // The relation must be findable via the user-specified (uppercase) relation.
+        // Without the fix this assertion fails: the inner relation key ("NOTLIKETHIS")
+        // doesn't match the DB-returned key ("notlikethis"), so get_relation returns
+        // None while contains_full_schema says the schema is complete — causing
+        // get_relation_value_from_cache to return none_value() instead of the relation.
+        assert!(
+            cache.contains_relation(user_relation.as_ref()),
+            "issue #943: uppercase schema 'NOTLIKETHIS' should find the relation that \
+             Databricks returned with lowercase schema 'notlikethis'"
+        );
     }
 }

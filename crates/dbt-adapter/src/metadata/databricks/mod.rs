@@ -73,8 +73,15 @@ SELECT
 FROM `system`.`information_schema`.`tables`
 WHERE table_catalog = '{}'
     AND table_schema = '{}'",
-                            &db_schema.resolved_catalog,
-                            &db_schema.resolved_schema);
+                            // Databricks Unity Catalog stores all identifier names
+                            // (catalog, schema, table) in lowercase in information_schema,
+                            // regardless of how they were created. A case-sensitive WHERE
+                            // clause with an uppercase name returns no rows, causing the cache
+                            // to treat the schema as empty and re-create existing tables.
+                            // Lowercasing here is safe because Databricks identifiers are
+                            // case-insensitive by definition.
+                            &db_schema.resolved_catalog.to_lowercase(),
+                            &db_schema.resolved_schema.to_lowercase());
 
     let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
