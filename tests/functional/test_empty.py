@@ -68,9 +68,9 @@ unit_tests:
 """
 
 
-raw_seed_csv = """id,name,country
-1,Alice,US
-2,Bob,UK
+raw_seed_csv = """id,name,price,is_active,created_at
+1,Alice,1.23,true,2024-01-01 00:00:00
+2,Bob,99.99,false,2024-06-15 12:30:00
 """
 
 model_reference_seed_sql = """
@@ -85,15 +85,15 @@ unit_tests:
       - input: ref('raw_seed')
         format: csv
         rows: |
-          id,name,country
-          1,Alice,US
-          2,Bob,UK
+          id,name,price,is_active,created_at
+          1,Alice,1.23,true,2024-01-01 00:00:00
+          2,Bob,99.99,false,2024-06-15 12:30:00
     expect:
       format: csv
       rows: |
-        id,name,country
-        1,Alice,US
-        2,Bob,UK
+        id,name,price,is_active,created_at
+        1,Alice,1.23,true,2024-01-01 00:00:00
+        2,Bob,99.99,false,2024-06-15 12:30:00
 """
 
 
@@ -115,17 +115,22 @@ class TestEmptyFlagSeed:
         assert result[0] == expected_row_count
 
     def test_seed_empty_creates_table_with_zero_rows(self, project):
-        # seed with --empty should create a table with correct schema but 0 rows
         run_dbt(["seed", "--empty"])
         self.assert_row_count(project, "raw_seed", 0)
 
+    def test_seed_empty_preserves_column_types(self, project):
+        # seed with --empty, then full seed into the same table
+        # if --empty created wrong column types, the full seed will fail
+        run_dbt(["seed", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+        run_dbt(["seed", "--full-refresh"])
+        self.assert_row_count(project, "raw_seed", 2)
+
     def test_seed_without_empty_loads_all_rows(self, project):
-        # seed without --empty should load all rows normally
         run_dbt(["seed"])
         self.assert_row_count(project, "raw_seed", 2)
 
     def test_build_empty_with_seed(self, project):
-        # build with --empty should create seed with 0 rows and run model + unit test
         results = run_dbt(["build", "--empty"])
         self.assert_row_count(project, "raw_seed", 0)
         assert len(results) == 3  # seed + model + unit test
