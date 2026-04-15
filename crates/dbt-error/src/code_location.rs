@@ -127,6 +127,23 @@ impl CodeLocationWithFile {
         prev_macro_end + (location.to_owned() - prev_expanded_end)
     }
 
+    pub fn is_in_macro_span(&self, macro_spans: &[preprocessor_location::MacroSpan]) -> bool {
+        let location = self.to_owned().into();
+
+        let mut prev_macro_end = CodeLocation::new(1, 1, 0);
+        let mut prev_expanded_end = CodeLocation::new(1, 1, 0);
+        for macro_span in macro_spans {
+            if macro_span.expanded_span.contains(&location) {
+                return true;
+            } else if location < macro_span.expanded_span.start {
+                return false;
+            }
+            prev_macro_end.clone_from(&macro_span.macro_span.stop);
+            prev_expanded_end.clone_from(&macro_span.expanded_span.stop);
+        }
+        false
+    }
+
     pub fn get_source_location_with_file(
         &self,
         macro_spans: &[preprocessor_location::MacroSpan],
