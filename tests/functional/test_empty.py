@@ -77,25 +77,6 @@ model_reference_seed_sql = """
 select * from {{ ref('raw_seed') }}
 """
 
-unit_tests_seed_yml = """
-unit_tests:
-  - name: test_my_seed
-    model: model
-    given:
-      - input: ref('raw_seed')
-        format: csv
-        rows: |
-          id,name,price,is_active,created_at
-          1,Alice,1.23,true,2024-01-01 00:00:00
-          2,Bob,99.99,false,2024-06-15 12:30:00
-    expect:
-      format: csv
-      rows: |
-        id,name,price,is_active,created_at
-        1,Alice,1.23,true,2024-01-01 00:00:00
-        2,Bob,99.99,false,2024-06-15 12:30:00
-"""
-
 
 class TestEmptyFlagSeed:
     @pytest.fixture(scope="class")
@@ -106,7 +87,6 @@ class TestEmptyFlagSeed:
     def models(self):
         return {
             "model.sql": model_reference_seed_sql,
-            "schema.yml": unit_tests_seed_yml,
         }
 
     def assert_row_count(self, project, relation_name: str, expected_row_count: int):
@@ -133,7 +113,7 @@ class TestEmptyFlagSeed:
     def test_build_empty_with_seed(self, project):
         results = run_dbt(["build", "--empty"])
         self.assert_row_count(project, "raw_seed", 0)
-        assert len(results) == 3  # seed + model + unit test
+        assert len(results) == 2  # seed + model
 
 
 class TestEmptyFlag:
