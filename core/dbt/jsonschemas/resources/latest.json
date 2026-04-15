@@ -1215,6 +1215,12 @@
             }
           ]
         },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -2987,6 +2993,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "include_full_name_in_path": {
@@ -4795,6 +4807,12 @@
           ]
         },
         "http_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "immutable_where": {
           "type": [
             "string",
             "null"
@@ -6709,6 +6727,12 @@
             }
           ]
         },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -7706,6 +7730,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "include_full_name_in_path": {
@@ -8728,6 +8758,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "include_full_name_in_path": {
@@ -9889,6 +9925,12 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "include_full_name_in_path": {
