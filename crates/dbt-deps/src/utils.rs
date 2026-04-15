@@ -71,12 +71,22 @@ pub fn get_local_package_full_path(in_dir: &Path, local_package: &LocalPackage) 
     }
 }
 
-pub fn fusion_sha1_hash_packages(packages: &[DbtPackageEntry]) -> String {
+pub fn fusion_sha1_hash_packages(
+    packages: &[DbtPackageEntry],
+    _use_v2_compatible_package_downloads: bool,
+) -> String {
     let mut package_strs = packages
         .iter()
         .map(|p| serde_json::to_string(p).unwrap())
         .collect::<Vec<String>>();
     package_strs.sort();
+    // TODO: uncomment in next PR (chayac)
+    // Add flag for installing v2-compatible downloads from Package Hub to hash
+    // so changing the flag will trigger a fresh deps install
+    // package_strs.push(format!(
+    //     "use_v2_compatible_package_downloads: {}",
+    //     use_v2_compatible_package_downloads
+    // ));
     format!(
         "{:x}",
         sha1::Sha1::digest(package_strs.join("\n").as_bytes())

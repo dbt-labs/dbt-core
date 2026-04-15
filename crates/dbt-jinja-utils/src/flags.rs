@@ -137,6 +137,7 @@ impl Flags {
             "log_path",
             "invocation_command",
             "empty",
+            "use_v2_compatible_package_downloads",
         ];
         FLAG_ATTR
             .iter()
@@ -192,6 +193,8 @@ impl Flags {
             "FULL_REFRESH",
             "STRICT_MODE",
             "STATE_MODIFIED_COMPARE_VARS",
+            // v2 downloads
+            "USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS",
         ];
 
         self.flags
@@ -281,6 +284,10 @@ impl Flags {
         self.flags.insert(
             "STORE_FAILURES".to_string(),
             Value::from(invocation_args.store_failures),
+        );
+        self.flags.insert(
+            "USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS".to_string(),
+            Value::from(invocation_args.use_v2_compatible_package_downloads),
         );
         self.flags.insert(
             "FAVOR_STATE".to_string(),

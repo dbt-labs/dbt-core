@@ -371,6 +371,10 @@ pub struct CommonArgs {
     /// Show produced artifacts [default: 'progress']
     #[clap(long, num_args(0..), help = "Show produced artifacts [default: 'progress']")]
     pub show: Vec<ShowOptions>,
+
+    /// When installing packages from Package Hub, use v2-compatible downloads if available
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", hide = false, value_parser = BoolishValueParser::new())]
+    pub use_v2_compatible_package_downloads: bool,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -560,6 +564,9 @@ impl InitArgs {
                 host: arg.io.host,
                 port: arg.io.port,
                 db_root: arg.io.db_root.clone(),
+                use_v2_compatible_package_downloads: self
+                    .common_args
+                    .use_v2_compatible_package_downloads,
             },
             send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
             ..Default::default()
@@ -654,6 +661,7 @@ impl CommonArgs {
                 host: arg.io.host,
                 port: arg.io.port,
                 db_root: arg.io.db_root.clone(),
+                use_v2_compatible_package_downloads: arg.io.use_v2_compatible_package_downloads,
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -754,6 +762,9 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             host: "localhost".to_string(),
             port: 8000,
             db_root: cli.common_args().db_root,
+            use_v2_compatible_package_downloads: cli
+                .common_args()
+                .use_v2_compatible_package_downloads,
         },
         from_main: true,
 
@@ -794,6 +805,9 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             host: "localhost".to_string(),
             port: 8000,
             db_root: cli.common_args().db_root,
+            use_v2_compatible_package_downloads: cli
+                .common_args()
+                .use_v2_compatible_package_downloads,
         },
         from_main: false,
         target: cli.common_args().target,

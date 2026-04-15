@@ -12,7 +12,7 @@ use dbt_common::path::DbtPath;
 use dbt_common::tracing::TracingFeatures;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
-use dbt_common::warn_error_options::resolve_warn_error_options;
+use dbt_common::warn_error_options::{project_flags_get_value, resolve_warn_error_options};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
@@ -136,6 +136,22 @@ fn resolve_warn_error_options_from_flags<'a>(
     iarg
 }
 
+fn project_flags_v2_compatible_download(flags: &dbt_yaml::Value) -> Option<bool> {
+    project_flags_get_value(flags, "use_v2_compatible_package_downloads")
+        .and_then(dbt_yaml::Value::as_bool)
+}
+
+pub fn resolve_use_v2_compatible_package_download_options(
+    from_cli: bool,
+    project_flags: Option<&dbt_yaml::Value>,
+) -> bool {
+    from_cli || {
+        project_flags
+            .and_then(project_flags_v2_compatible_download)
+            .unwrap_or_default()
+    }
+}
+
 #[tracing::instrument(
     skip_all,
     fields(
@@ -189,6 +205,12 @@ pub async fn load(
         tracing_features,
     );
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
+
+    // Merge use_v2_compatible_package_downloads flags from project and CLI/env
+    let use_v2_compatible_package_downloads = resolve_use_v2_compatible_package_download_options(
+        arg.io.use_v2_compatible_package_downloads,
+        simplified_dbt_project.flags.as_ref(),
+    );
 
     if iarg.num_threads != final_threads {
         iarg.to_mut().num_threads = final_threads;
@@ -290,6 +312,7 @@ pub async fn load(
         arg.skip_private_deps,
         iarg.replay.as_ref(),
         token,
+        use_v2_compatible_package_downloads,
     )
     .await?;
 
@@ -457,6 +480,7 @@ pub async fn load_simplified_project_and_profiles(
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
 
     let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false, None)?;
+
     let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (

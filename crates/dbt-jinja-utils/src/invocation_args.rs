@@ -78,6 +78,9 @@ pub struct InvocationArgs {
 
     /// Replay mode (when running against a recording)
     pub replay: Option<ReplayMode>,
+
+    /// Use v2 compatible package downloads when installing from Package Hub
+    pub use_v2_compatible_package_downloads: bool,
 }
 
 impl Default for InvocationArgs {
@@ -115,6 +118,7 @@ impl Default for InvocationArgs {
             favor_state: false,
             empty: false,
             replay: None,
+            use_v2_compatible_package_downloads: false,
         }
     }
 }
@@ -191,6 +195,7 @@ impl InvocationArgs {
             favor_state: arg.favor_state,
             empty: arg.empty,
             replay: arg.replay.clone(),
+            use_v2_compatible_package_downloads: arg.io.use_v2_compatible_package_downloads,
         }
     }
 
@@ -274,6 +279,10 @@ impl InvocationArgs {
         dict.insert("FAVOR_STATE".to_string(), Value::from(self.favor_state));
         dict.insert("EMPTY".to_string(), Value::from(self.empty));
         dict.insert("REPLAY".to_string(), Value::from(self.replay.is_some()));
+        dict.insert(
+            "USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS".to_string(),
+            Value::from(self.use_v2_compatible_package_downloads),
+        );
 
         // !!HACK!!: Inject a lower case version of the upper-case keys, for use
         // in `invocation_args_dict` -- we do this because this method is

@@ -1776,6 +1776,10 @@ pub struct CommonArgs {
         default_value_t
     )]
     pub internal_package_mode: InternalPackageMode,
+
+    /// When installing packages from Package Hub, use v2-compatible downloads if available
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = false, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new())]
+    pub use_v2_compatible_package_downloads: bool,
 }
 
 fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOptions> {
@@ -1872,6 +1876,7 @@ impl CommonArgs {
                 beta_use_query_cache: self.beta_use_query_cache,
                 host: self.host.clone(),
                 port: self.port,
+                use_v2_compatible_package_downloads: self.use_v2_compatible_package_downloads,
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -2162,6 +2167,9 @@ impl InitArgs {
                 beta_use_query_cache: self.common_args.beta_use_query_cache,
                 host: self.common_args.host.clone(),
                 port: self.common_args.port,
+                use_v2_compatible_package_downloads: self
+                    .common_args
+                    .use_v2_compatible_package_downloads,
             },
             task_cache_url: "noop".to_string(),
             favor_state: self.common_args.favor_state,
@@ -2213,6 +2221,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             beta_use_query_cache: common_args.beta_use_query_cache,
             host: common_args.host,
             port: common_args.port,
+            use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: true,
 
@@ -2255,6 +2264,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             beta_use_query_cache: common_args.beta_use_query_cache,
             host: common_args.host,
             port: common_args.port,
+            use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
         },
         from_main: false,
         target: common_args.target,

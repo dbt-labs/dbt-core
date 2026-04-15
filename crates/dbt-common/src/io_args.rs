@@ -151,6 +151,9 @@ pub struct IoArgs {
     // Flags influencing error/warning behavior
     pub show_all_deprecations: bool,
 
+    // Flag for deps to use Fusion-compatible downloads from Package Hub
+    pub use_v2_compatible_package_downloads: bool,
+
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
     pub send_anonymous_usage_stats: bool,

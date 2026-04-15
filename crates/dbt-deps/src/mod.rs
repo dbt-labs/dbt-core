@@ -45,6 +45,7 @@ pub async fn get_or_install_packages(
     skip_private_deps: bool,
     replay_mode: Option<&ReplayMode>,
     token: &CancellationToken,
+    use_v2_compatible_package_downloads: bool,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     // In Time Machine replay mode, skip all package fetching/installation
     // We should only load the existing package-lock.yml from disk
@@ -102,6 +103,7 @@ pub async fn get_or_install_packages(
                 dbt_packages,
                 env,
                 &vars,
+                use_v2_compatible_package_downloads,
             )?
         {
             emit_info_progress_message(
@@ -127,6 +129,7 @@ pub async fn get_or_install_packages(
                 version_check,
                 skip_private_deps,
                 token,
+                use_v2_compatible_package_downloads,
             )
             .instrument(fetch_span.clone())
             .await;
@@ -204,6 +207,7 @@ pub async fn get_or_install_packages(
             &dbt_packages_lock,
             packages_install_path,
             skip_private_deps,
+            use_v2_compatible_package_downloads,
         )
         .instrument(install_span.clone())
         .await
@@ -251,6 +255,7 @@ pub async fn get_or_install_packages(
                 &dbt_packages_lock,
                 packages_install_path,
                 skip_private_deps,
+                use_v2_compatible_package_downloads,
             )
             .instrument(install_span.clone())
             .await

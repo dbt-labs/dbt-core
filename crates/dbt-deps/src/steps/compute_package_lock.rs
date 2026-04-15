@@ -30,8 +30,10 @@ pub async fn compute_package_lock(
     version_check: bool,
     skip_private_deps: bool,
     token: &CancellationToken,
+    use_v2_compatible_package_downloads: bool,
 ) -> FsResult<DbtPackagesLock> {
-    let sha1_hash = fusion_sha1_hash_packages(&dbt_packages.packages);
+    let sha1_hash =
+        fusion_sha1_hash_packages(&dbt_packages.packages, use_v2_compatible_package_downloads);
     // First step, is to flatten into a single list of packages
     let mut dbt_packages_lock = DbtPackagesLock::default();
     let mut package_listing =

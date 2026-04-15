@@ -240,7 +240,7 @@ fn project_flags_warn_error_options(flags: &Value) -> Option<WarnErrorOptions> {
     project_flags_get_value(flags, "warn_error_options").map(WarnErrorOptions::from_yaml_value)
 }
 
-fn project_flags_get_value<'a>(flags: &'a Value, key: &str) -> Option<&'a Value> {
+pub fn project_flags_get_value<'a>(flags: &'a Value, key: &str) -> Option<&'a Value> {
     let Value::Mapping(mapping, _) = flags else {
         return None;
     };

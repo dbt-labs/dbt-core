@@ -25,9 +25,11 @@ pub fn try_load_valid_dbt_packages_lock(
     dbt_packages: &DbtPackages,
     jinja_env: &JinjaEnv,
     vars: &BTreeMap<String, dbt_yaml::Value>,
+    use_v2_compatible_package_downloads: bool,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
-    let sha1_hash = fusion_sha1_hash_packages(&dbt_packages.packages);
+    let sha1_hash =
+        fusion_sha1_hash_packages(&dbt_packages.packages, use_v2_compatible_package_downloads);
     if packages_lock_path.exists() {
         let yml_str = try_read_yml_to_str(&packages_lock_path)?;
         let rendered_yml: DbtPackagesLock =

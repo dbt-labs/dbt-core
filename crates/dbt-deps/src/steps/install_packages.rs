@@ -86,7 +86,7 @@ fn create_package_installed_span(
     create_info_span(attrs)
 }
 
-#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
 pub async fn install_packages(
     io_args: &IoArgs,
     vars: &BTreeMap<String, dbt_yaml::Value>,
@@ -95,6 +95,7 @@ pub async fn install_packages(
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
     skip_private_deps: bool,
+    _use_v2_compatible_package_downloads: bool,
 ) -> FsResult<()> {
     // Cleanup package-lock.yml
     let package_lock_str = dbt_yaml::to_string(&dbt_packages_lock).unwrap();
