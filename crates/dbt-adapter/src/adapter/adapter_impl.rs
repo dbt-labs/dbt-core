@@ -1024,6 +1024,7 @@ impl AdapterImpl {
                         "refresh_mode".to_string(),
                         "initialization_warehouse".to_string(),
                         "immutable_where".to_string(),
+                        "cluster_by".to_string(),
                     ]);
 
                 // SHOW DYNAMIC TABLES does not expose transient status, so we need to run SHOW

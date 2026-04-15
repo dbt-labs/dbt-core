@@ -20,11 +20,8 @@
         {%- if snowflake_initialization_warehouse and snowflake_initialization_warehouse.context -%}{{- log('Applying UPDATE INITIALIZATION_WAREHOUSE to: ' ~ existing_relation) -}}{%- endif -%}
         {%- set immutable_where = configuration_changes.immutable_where -%}
         {%- if immutable_where and immutable_where.context -%}{{- log('Applying UPDATE IMMUTABLE WHERE to: ' ~ existing_relation) -}}{%- endif -%}
-        {# DIVERGENCE BEGIN: support for cluster_by not yet implemented #}
-        {# TODO(anna): Uncomment this once cluster_by is supported.
         {%- set cluster_by = configuration_changes.cluster_by -%}
         {%- if cluster_by and cluster_by.context -%}{{- log('Applying UPDATE CLUSTER BY to: ' ~ existing_relation) -}}{%- endif -%}
-        #}
 
         {#- Determine what SET changes we have -#}
         {%- set has_set_changes = target_lag or snowflake_warehouse or (snowflake_initialization_warehouse and snowflake_initialization_warehouse.context) -%}
@@ -58,22 +55,17 @@
         {%- set has_prior_statements = has_set_changes or (snowflake_initialization_warehouse and not snowflake_initialization_warehouse.context) or immutable_where -%}
 
         {#- Handle CLUSTER BY changes (add/modify) -#}
-        {# TODO(anna): Uncomment once cluster by is supported
         {% if cluster_by and cluster_by.context %}
         {% if has_prior_statements %};{% endif %}
         alter dynamic table {{ existing_relation }} cluster by ({{ cluster_by.context }})
         {% endif %}
-        #}
 
         {#- Handle DROP CLUSTERING KEY when cluster_by is removed -#}
-        {# TODO(anna): Uncomment once cluster by is supported
         {% if cluster_by and not cluster_by.context %}
         {%- if cluster_by -%}{{- log('Applying DROP CLUSTERING KEY to: ' ~ existing_relation) -}}{%- endif -%}
         {% if has_prior_statements %};{% endif %}
         alter dynamic table {{ existing_relation }} drop clustering key
         {% endif %}
-        #}
-        {# DIVERGENCE END #}
 
     {%- endif -%}
 
