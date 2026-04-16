@@ -1,4 +1,5 @@
 import threading
+from dataclasses import replace
 from typing import Any, Dict
 
 from dbt.adapters.exceptions import MissingMaterializationError
@@ -83,16 +84,53 @@ class FunctionRunner(CompileRunner[FunctionNode]):
     def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
-        context = generate_runtime_function_context(compiled_node, self.config, manifest)
 
+        # Execute the root function
+        context = generate_runtime_function_context(compiled_node, self.config, manifest)
         MacroGenerator(materialization_macro, context=context)()
 
-        return self.build_result(compiled_node, context)
+        # Execute each override with the same database name but different
+        # arguments/returns/body.  If any override fails, the node is marked
+        # PARTIAL_SUCCESS (root succeeded, override didn't) and downstream
+        # nodes are skipped.
+        override_failure = None
+        for override in compiled_node.overrides:
+            override_node = replace(
+                compiled_node,
+                arguments=override.arguments,
+                returns=override.returns or compiled_node.returns,
+                compiled_code=override.body or "",
+            )
+            override_ctx = generate_runtime_function_context(override_node, self.config, manifest)
+            try:
+                MacroGenerator(materialization_macro, context=override_ctx)()
+            except Exception as e:
+                override_failure = e
+                break
+
+        result = self.build_result(compiled_node, context)
+        if override_failure is not None:
+            result.status = RunStatus.PartialSuccess
+            result.message = f"PARTIAL SUCCESS ({override_failure})"
+        return result
 
     def after_execute(self, result: RunResult) -> None:
         self.print_result_line(result)
 
-    # def compile() defined on CompileRunner
+    def compile(self, manifest: Manifest):
+        compiled = super().compile(manifest)
+        # Compile override bodies through Jinja using the root node's context.
+        # Without this, override bodies containing Jinja would be passed raw
+        # to the database.
+        if compiled.overrides:
+            from dbt.clients import jinja
+            from dbt.context.providers import generate_runtime_model_context
+
+            ctx = generate_runtime_model_context(compiled, self.config, manifest)
+            for override in compiled.overrides:
+                if override.body:
+                    override.body = jinja.get_rendered(override.body, ctx, compiled)
+        return compiled
 
     def print_result_line(self, result: RunResult) -> None:
         node = result.node

@@ -42,7 +42,7 @@ from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
 from dbt.artifacts.resources import Function as FunctionResource
-from dbt.artifacts.resources import FunctionArgument, FunctionReturns
+from dbt.artifacts.resources import FunctionArgument, FunctionOverride, FunctionReturns
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -1865,6 +1865,7 @@ class ParsedFunctionPatchRequired:
 @dataclass
 class ParsedFunctionPatch(ParsedNodePatch, ParsedFunctionPatchRequired):
     arguments: List[FunctionArgument] = field(default_factory=list)
+    overrides: List[FunctionOverride] = field(default_factory=list)
 
 
 @dataclass

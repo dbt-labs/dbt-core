@@ -3581,6 +3581,15 @@
           "items": {
             "$ref": "#/definitions/DataTests"
           }
+        },
+        "overrides": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionOverride"
+          }
         }
       },
       "additionalProperties": false
@@ -10480,6 +10489,43 @@
         "min",
         "max"
       ]
+    },
+    "FunctionOverride": {
+      "type": "object",
+      "required": [
+        "defined_in"
+      ],
+      "properties": {
+        "defined_in": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionArgument"
+          }
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

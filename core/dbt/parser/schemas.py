@@ -1328,9 +1328,69 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         node.arguments = patch.arguments
         node.returns = patch.returns
 
+        # Process overrides: absorb override SQL files into the root node
+        if patch.overrides:
+            self._absorb_overrides(node, patch.overrides)
+
+    def _absorb_overrides(self, root_node: "FunctionNode", overrides: list) -> None:
+        """Look up override SQL files, store their code on the root node,
+        and remove them from the manifest so they don't appear as separate
+        DAG nodes."""
+        from dbt.artifacts.resources import FunctionOverride
+
+        absorbed: list[FunctionOverride] = []
+        for override in overrides:
+            override_name = override.defined_in
+            # Find the override node in the manifest by name
+            override_unique_id = f"function.{root_node.package_name}.{override_name}"
+            override_node = self.manifest.functions.get(override_unique_id)
+
+            if override_node is None:
+                raise ParsingError(
+                    f"Function override '{override_name}' (defined_in) not found. "
+                    f"Expected a SQL file at functions/{override_name}.sql"
+                )
+
+            absorbed.append(
+                FunctionOverride(
+                    defined_in=override.defined_in,
+                    arguments=override.arguments,
+                    returns=override.returns,
+                    description=override.description,
+                    body=override_node.raw_code,
+                )
+            )
+
+            # Track the override→root relationship for partial parsing
+            self.manifest.function_override_owners[override_node.file_id] = root_node.unique_id
+
+            # Clear the source file's function list so partial parsing knows
+            # this file no longer owns a standalone function node.
+            override_file = self.manifest.files.get(override_node.file_id)
+            if override_file is not None and hasattr(override_file, "functions"):
+                override_file.functions = []
+
+            # Remove the override node from the manifest — it's now part of the root
+            del self.manifest.functions[override_unique_id]
+
+        root_node.overrides = absorbed
+
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
+
+        # Convert unparsed overrides to FunctionOverride objects (without body yet)
+        from dbt.artifacts.resources import FunctionOverride
+
+        overrides = [
+            FunctionOverride(
+                defined_in=o.defined_in,
+                arguments=o.arguments,
+                returns=o.returns,
+                description=o.description,
+            )
+            for o in target.overrides
+        ]
 
         return ParsedFunctionPatch(
             name=target.name,
@@ -1350,6 +1410,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
+            overrides=overrides,
         )
 
 
