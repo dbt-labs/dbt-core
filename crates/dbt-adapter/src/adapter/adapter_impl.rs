@@ -4004,7 +4004,7 @@ fn builtin_incremental_strategies() -> Vec<DbtIncrementalStrategy> {
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
-pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = LazyLock::new(|| {
+pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 3]> = LazyLock::new(|| {
     [
         BehaviorFlag::new(
             "require_batched_execution_for_custom_microbatch_strategy",
@@ -4014,6 +4014,15 @@ pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = Laz
             None,
         ),
         BehaviorFlag::new("enable_truthy_nulls_equals_macro", false, None, None, None),
+        BehaviorFlag::new(
+            "use_catalogs_v2",
+            false,
+            None,
+            Some(
+                "Enable experimental catalogs.yml v2 schema validation. This syntax is under development and may change.",
+            ),
+            Some("https://github.com/dbt-labs/dbt-core/discussions/12723"),
+        ),
     ]
 });
 

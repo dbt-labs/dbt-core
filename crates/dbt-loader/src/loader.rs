@@ -204,7 +204,7 @@ pub async fn load(
 
     // initialize loader into a crate accessible static location
     let env = initialize_load_profile_jinja_environment();
-    load_catalogs(arg, &env).await?;
+    load_catalogs(arg, &env, simplified_dbt_project.flags.as_ref()).await?;
 
     let mut iarg = resolve_warn_error_options_from_flags(
         iarg,
@@ -436,7 +436,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
     )?;
 
     let env = initialize_load_profile_jinja_environment();
-    load_catalogs(arg, &env).await?;
+    load_catalogs(arg, &env, simplified_dbt_project.flags.as_ref()).await?;
 
     // Create minimal DbtState - no packages, no vars
     let dbt_state = DbtState {
@@ -454,7 +454,11 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
     Ok(dbt_state)
 }
 
-pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {
+pub async fn load_catalogs(
+    arg: &LoadArgs,
+    env: &JinjaEnv,
+    project_flags: Option<&dbt_yaml::Value>,
+) -> FsResult<()> {
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
             "env_var".to_owned(),
@@ -472,7 +476,12 @@ pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {
                 .map_err(|e| yaml_to_fs_error(e, Some(&catalogs_yml_path)))?;
             let text: dbt_yaml::Value =
                 into_typed_with_jinja(&arg.io, raw_text_yml, true, env, &ctx, &[], None, true)?;
-            load_catalogs::load_catalogs(text, &catalogs_yml_path)
+            load_catalogs::load_catalogs(
+                text,
+                &catalogs_yml_path,
+                project_flags,
+                arg.io.status_reporter.as_ref(),
+            )
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(fs_err!(

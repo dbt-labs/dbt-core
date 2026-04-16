@@ -3,8 +3,6 @@
 //! Canonical v2 YAML shape (strict keys):
 //!
 //! ```yaml
-//! version: 2
-//!
 //! catalogs:
 //!   # type: snowflake_managed
 //!   # supported platforms: snowflake
@@ -104,8 +102,8 @@ impl StrExt for str {
 // - YAML has already been loaded and parsed by the caller.
 // - We still have access to the raw top-level mapping.
 // Postconditions:
-// - The loader can decide whether the mapping is catalogs v2.
-// - The loader can rebuild a borrowed v2 view over that same mapping.
+// - The loader can rebuild a borrowed v2 view over the same mapping after the
+//   caller selects the v2 path.
 
 impl DbtCatalogs {
     /// Phase 1 -> 3 handoff from the loaded raw YAML document into the borrowed
@@ -120,17 +118,9 @@ impl DbtCatalogs {
     }
 }
 
-/// Lightweight loader dispatch check for the `version: 2` catalogs format.
-/// Full v2 validation happens later in the shape and semantic passes.
-pub fn is_v2_catalogs(map: &yml::Mapping) -> bool {
-    map.get(yml::Value::from("version"))
-        .map(is_version_2_value)
-        .unwrap_or(false)
-}
-
 // ===== Phase 2: Shape Validation =====
 // Preconditions:
-// - Phase 1 has identified the document as catalogs v2.
+// - The caller has selected the catalogs v2 path.
 // - Validation still works directly on raw YAML mappings and values.
 // Postconditions:
 // - The document matches the strict v2 YAML shape.
@@ -245,29 +235,6 @@ fn key_err(key: &str, err_span: Option<&yml::Span>) -> Box<dbt_common::FsError> 
     )
 }
 
-fn is_version_2_value(v: &yml::Value) -> bool {
-    match v {
-        yml::Value::Number(n, _) => n.as_i64() == Some(2),
-        yml::Value::String(s, _) => s.trim() == "2",
-        _ => false,
-    }
-}
-
-fn parse_version_2(map: &yml::Mapping, span: &yml::Span) -> FsResult<()> {
-    let Some(v) = map.get(yml::Value::from("version")) else {
-        return Err(key_err("version", Some(span)));
-    };
-
-    if !is_version_2_value(v) {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => Some(v.span().clone()),
-            "v2 catalogs.yml requires 'version: 2'"
-        );
-    }
-    Ok(())
-}
-
 fn require_mapping<'a>(value: &'a yml::Value, ctx: &str) -> FsResult<&'a yml::Mapping> {
     value.as_mapping().ok_or_else(|| {
         fs_err!(
@@ -298,8 +265,7 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
         );
     }
 
-    check_unknown_keys(map, &["version", "catalogs"], "top-level catalogs.yml(v2)")?;
-    parse_version_2(map, span)?;
+    check_unknown_keys(map, &["catalogs"], "top-level catalogs.yml(v2)")?;
 
     let catalogs = get_seq(map, "catalogs")?.ok_or_else(|| key_err("catalogs", Some(span)))?;
     let mut seen_catalog_names = HashSet::new();
@@ -984,7 +950,6 @@ mod tests {
     #[test]
     fn unity_multiplatform_v2_valid() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: linked_catalog
     type: unity
@@ -1004,7 +969,6 @@ catalogs:
     #[test]
     fn snowflake_managed_v2_valid() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: sf_native
     type: snowflake_managed
@@ -1024,7 +988,6 @@ catalogs:
     #[test]
     fn glue_v2_valid() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: glue_cat
     type: glue
@@ -1041,7 +1004,6 @@ catalogs:
     #[test]
     fn hive_metastore_v2_valid() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: hive
     type: hive_metastore
@@ -1056,7 +1018,6 @@ catalogs:
     #[test]
     fn biglake_metastore_v2_valid() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: cat1
     type: biglake_metastore
@@ -1073,7 +1034,6 @@ catalogs:
     #[test]
     fn v2_rejects_legacy_iceberg_catalogs_key() {
         let yaml = r#"
-version: 2
 iceberg_catalogs:
   - name: linked_catalog
     type: unity
@@ -1092,7 +1052,6 @@ iceberg_catalogs:
     #[test]
     fn unity_rejects_bigquery_block_in_config() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: linked_catalog
     type: unity
@@ -1116,7 +1075,6 @@ catalogs:
     #[test]
     fn snowflake_managed_rejects_bigquery_platform_block() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: my_catalog
     type: snowflake_managed
@@ -1138,7 +1096,6 @@ catalogs:
     #[test]
     fn snowflake_managed_rejects_unity_only_snowflake_fields() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: sf_native
     type: snowflake_managed
@@ -1160,7 +1117,6 @@ catalogs:
     #[test]
     fn snowflake_managed_rejects_catalog_base_location_subpath() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: sf_native
     type: snowflake_managed
@@ -1182,7 +1138,6 @@ catalogs:
     #[test]
     fn glue_rejects_snowflake_managed_only_snowflake_fields() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: glue_cat
     type: glue
@@ -1204,7 +1159,6 @@ catalogs:
     #[test]
     fn unity_rejects_snowflake_managed_only_snowflake_fields() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: linked_catalog
     type: unity
@@ -1226,7 +1180,6 @@ catalogs:
     #[test]
     fn legacy_rest_type_is_rejected() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: old_rest
     type: iceberg_rest
@@ -1249,7 +1202,6 @@ catalogs:
     #[test]
     fn unity_databricks_requires_delta_even_with_use_uniform() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: linked_catalog
     type: unity
@@ -1271,7 +1223,6 @@ catalogs:
     #[test]
     fn top_level_platform_specific_keys_are_rejected() {
         let yaml = r#"
-version: 2
 catalogs:
   - name: linked_catalog
     type: unity
