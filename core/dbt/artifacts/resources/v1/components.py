@@ -20,6 +20,7 @@ from dbt_semantic_interfaces.type_enums import (
     TimeGranularity,
 )
 
+# TODO: Keep only Union[int, float, str] once we drop support for python 3.13
 if TYPE_CHECKING:
     # to ensure mypy doesn't complain about variable type assignment
     NodeVersion = Union[int, float, str]
