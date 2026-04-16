@@ -1,7 +1,10 @@
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Union
+from importlib.metadata import version as pkg_version
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+from packaging.version import Version
 
 from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
 from dbt.artifacts.resources.types import NodeType, TimePeriod
@@ -17,7 +20,13 @@ from dbt_semantic_interfaces.type_enums import (
     TimeGranularity,
 )
 
-NodeVersion = Union[int, float, str]
+if TYPE_CHECKING:
+    # to ensure mypy doesn't complain about variable type assignment
+    NodeVersion = Union[int, float, str]
+elif Version(pkg_version("mashumaro")) < Version("3.17"):
+    NodeVersion = Union[str, float]
+else:
+    NodeVersion = Union[int, float, str]
 
 
 def _backcompat_doc_blocks(doc_blocks: Any) -> List[str]:
