@@ -1402,7 +1402,7 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.config.meta = meta
         macro.config.docs = docs
 
-        if getattr(get_flags(), "validate_macro_args", False):
+        if getattr(get_flags(), "validate_macro_args", True):
             self._check_patch_arguments(macro, patch)
             macro.arguments = patch.arguments if patch.arguments else macro.arguments
         else:
