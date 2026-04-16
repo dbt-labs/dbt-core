@@ -1,0 +1,4 @@
+kind: Feature
+change_type: user
+issue_num: 12023
+onesentence: Add docs config (show, node_color) support for sources in dbt docs
