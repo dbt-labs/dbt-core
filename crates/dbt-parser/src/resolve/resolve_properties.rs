@@ -1,4 +1,5 @@
 use crate::args::ResolveArgs;
+use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::try_read_yml_to_str;
@@ -8,6 +9,7 @@ use dbt_common::{ErrorCode, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::schemas::project::SemanticModelConfig;
 use dbt_schemas::schemas::properties::{
     AnalysesProperties, DbtPropertiesFileValues, MacrosProperties, MinimalSchemaValue,
     MinimalTableValue, MinimalUnitTestValue,
@@ -15,7 +17,7 @@ use dbt_schemas::schemas::properties::{
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
 use dbt_telemetry::AssetParsed;
-use dbt_yaml::{ShouldBe, Span, Verbatim};
+use dbt_yaml::{Span, Verbatim};
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -595,6 +597,7 @@ pub fn resolve_minimal_properties(
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_package_name: &str,
+    root_project_configs: &RootProjectConfigs,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
@@ -603,6 +606,20 @@ pub fn resolve_minimal_properties(
         semantic_layer_spec_is_legacy: false,
         ..Default::default()
     };
+
+    let is_dependency = package.dbt_project.name != root_package_name;
+    let semantic_model_config_resolver = ProjectConfigResolver::build(
+        root_project_configs.semantic_models.clone(),
+        is_dependency,
+        || {
+            init_project_config(
+                &arg.io,
+                &package.dbt_project.semantic_models,
+                SemanticModelConfig::default(),
+                Some(package.dbt_project.name.as_str()),
+            )
+        },
+    )?;
 
     for dbt_asset in package.dbt_properties.iter().dedup() {
         token.check_cancellation()?;
@@ -651,20 +668,12 @@ pub fn resolve_minimal_properties(
                     if !minimal_resolved_properties.semantic_layer_spec_is_legacy
                         && let Some(_semantic_models) = properties_file_values.semantic_models
                     {
-                        let has_enabled_package_semantic_models =
-                            if let Some(semantic_models) = &package.dbt_project.semantic_models {
-                                if let Some(props) = semantic_models
-                                    .__additional_properties__
-                                    .get(&package.dbt_project.name)
-                                    && let ShouldBe::AndIs(props) = props
-                                {
-                                    props.enabled.unwrap_or(true)
-                                } else {
-                                    true
-                                }
-                            } else {
-                                true
-                            };
+                        // Check whether the root project has explicitly disabled this package's
+                        // semantic models. If so, suppress the legacy warning and skip them.
+                        let has_enabled_package_semantic_models = !semantic_model_config_resolver
+                            .is_disabled_by_root_overlay(std::slice::from_ref(
+                                &package.dbt_project.name,
+                            ));
 
                         if has_enabled_package_semantic_models {
                             // Top level semantic models are not allowed anymore

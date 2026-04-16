@@ -557,6 +557,7 @@ pub async fn resolve_inner(
         arg,
         package,
         root_package_name,
+        root_project_configs,
         &jinja_env,
         &base_ctx,
         token,
