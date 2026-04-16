@@ -22,6 +22,7 @@ mod tests {
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::state::DbtRuntimeConfig;
     use dbt_test_primitives::assert_contains;
+    use minijinja::ArgSpec;
     use minijinja::constants::TARGET_PACKAGE_NAME;
     use minijinja::machinery::Span;
     use minijinja::{AutoEscape, Error};
@@ -612,6 +613,16 @@ mod tests {
                     end_col: 26,
                     end_offset: 186
                 },
+                vec![
+                    ArgSpec {
+                        name: "model".to_string(),
+                        is_optional: false
+                    },
+                    ArgSpec {
+                        name: "column_name".to_string(),
+                        is_optional: false
+                    },
+                ],
                 Span {
                     start_line: 2,
                     start_col: 21,
@@ -677,6 +688,10 @@ mod tests {
                         end_col: 26,
                         end_offset: 190
                     },
+                    vec![ArgSpec {
+                        name: "model".to_string(),
+                        is_optional: false
+                    }],
                     Span {
                         start_line: 6,
                         start_col: 21,

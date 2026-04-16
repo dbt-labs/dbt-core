@@ -98,7 +98,7 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                     }
                     explicit_config = Some(resource_config);
                 }
-                SqlResource::Test(name, span, _) => tests.push((name, span)),
+                SqlResource::Test(name, span, _, _) => tests.push((name, span)),
                 SqlResource::Macro(name, span, func_sign, args, _) => {
                     macros.push((name, span, func_sign, args))
                 }

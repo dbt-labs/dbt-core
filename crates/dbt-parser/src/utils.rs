@@ -599,6 +599,7 @@ fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
                     sql_resources.push(SqlResource::Test(
                         macro_name.to_string(),
                         span,
+                        args,
                         macro_node.name_span,
                     ));
                 }

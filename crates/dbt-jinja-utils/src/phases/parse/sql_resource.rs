@@ -23,7 +23,7 @@ pub enum SqlResource<T: DefaultTo<T>> {
     /// An explicit `{{ config(...) }}` call encountered in the SQL.
     ConfigCall(Box<T>),
     /// A test definition (e.g. `{% test foo() %}`)
-    Test(String, Span, Span), // name, span, macro_name_span
+    Test(String, Span, Vec<ArgSpec>, Span), // name, span, args, macro_name_span
     /// A macro definition (e.g. `{% macro my_macro(a, b) %}`)
     Macro(String, Span, Option<String>, Vec<ArgSpec>, Span), // name, span, funcsign, args, macro_name_span
     /// A docs definition (e.g. `{% docs my_docs %}`)
@@ -51,7 +51,7 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
                 write!(f, "Metric({a}, {b:?})")
             }
             SqlResource::ConfigCall(config) => write!(f, "ConfigCall({config:?})"),
-            SqlResource::Test(name, span, _) => write!(f, "Test({name} {span:#?})"),
+            SqlResource::Test(name, span, _, _) => write!(f, "Test({name} {span:#?})"),
             SqlResource::Macro(name, span, _, _, _) => write!(f, "Macro({name} {span:#?})"),
             SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),
             SqlResource::Materialization(name, adapter, span, _) => {

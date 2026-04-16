@@ -133,7 +133,7 @@ pub fn resolve_macros(
 
             for resource in resources {
                 match resource {
-                    SqlResource::Test(name, span, macro_name_span) => {
+                    SqlResource::Test(name, span, args, macro_name_span) => {
                         let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
@@ -153,7 +153,7 @@ pub fn resolve_macros(
                             docs: None,
                             patch_path: None,
                             funcsign: None,
-                            args: vec![],
+                            args: args.clone(),
                             arguments: vec![],
                             macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
