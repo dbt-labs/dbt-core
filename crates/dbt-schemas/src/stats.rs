@@ -1,5 +1,4 @@
 use std::fmt;
-use std::sync::Arc;
 
 use crate::schemas::Nodes;
 use dbt_common::stats::Stat;
@@ -8,7 +7,7 @@ use humantime::format_duration;
 #[derive(Debug, Clone, Default)]
 pub struct Stats {
     pub stats: Vec<Stat>,
-    pub nodes: Option<Arc<Nodes>>,
+    pub nodes: Option<Nodes>,
 }
 
 impl fmt::Display for Stats {
