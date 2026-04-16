@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     import agate
 
 
+def _inline_has_jinja(sql: str) -> bool:
+    return "{{" in sql or "{%" in sql
+
+
 class RunOperationTask(ConfiguredTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
@@ -49,25 +53,28 @@ class RunOperationTask(ConfiguredTask):
         return res
 
     def _run_inline_unsafe(self):
-        from dbt.parser.manifest import process_node
-        from dbt.parser.sql import SqlBlockParser
-
         adapter = get_adapter(self.config)
 
-        block_parser = SqlBlockParser(
-            project=self.config, manifest=self.manifest, root_project=self.config
-        )
-        sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
-        process_node(self.config, self.manifest, sql_node)
+        if _inline_has_jinja(self.args.inline):
+            from dbt.parser.manifest import process_node
+            from dbt.parser.sql import SqlBlockParser
 
-        # Compile the node to resolve Jinja (ref, source, var, etc.)
-        compiled_node = self.compiler.compile_node(
-            sql_node, self.manifest, extra_context=None, write=False
-        )
+            block_parser = SqlBlockParser(
+                project=self.config, manifest=self.manifest, root_project=self.config
+            )
+            sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
+            process_node(self.config, self.manifest, sql_node)
+
+            compiled_node = self.compiler.compile_node(
+                sql_node, self.manifest, extra_context=None, write=False
+            )
+            sql = compiled_node.compiled_code
+        else:
+            sql = self.args.inline
 
         with adapter.connection_named("inline_query"):
             adapter.clear_transaction()
-            adapter.execute(compiled_node.compiled_code, auto_begin=True, fetch=False)
+            adapter.execute(sql, auto_begin=True, fetch=False)
 
     def _is_inline(self):
         return bool(getattr(self.args, "inline", None))
@@ -84,11 +91,20 @@ class RunOperationTask(ConfiguredTask):
             raise dbt_common.exceptions.DbtRuntimeError(
                 "Cannot specify both a macro name and --inline for run-operation"
             )
+        if inline and self.args.args:
+            raise dbt_common.exceptions.DbtRuntimeError(
+                "--args cannot be used with --inline; pass arguments directly in the SQL"
+            )
 
         timing: List[TimingInfo] = []
 
+        # Skip manifest graph compilation for Jinja-free inline SQL — the
+        # manifest is not needed to execute plain SQL directly.
+        needs_manifest = not inline or _inline_has_jinja(self.args.inline)
+
         with collect_timing_info("compile", timing.append):
-            self.compile_manifest()
+            if needs_manifest:
+                self.compile_manifest()
 
         start = timing[0].started_at
 

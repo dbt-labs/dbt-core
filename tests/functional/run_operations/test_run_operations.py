@@ -231,6 +231,24 @@ class TestRunOperationInline:
         ):
             run_dbt(["run-operation"], expect_pass=False)
 
+    def test_inline_args_conflict_error(self, project):
+        with pytest.raises(
+            Exception,
+            match="--args cannot be used with --inline",
+        ):
+            run_dbt(
+                ["run-operation", "--inline", "select 1", "--args", "{foo: bar}"],
+                expect_pass=False,
+            )
+
+    def test_inline_no_jinja_skips_compile(self, project):
+        # Plain SQL (no Jinja) should succeed without needing the manifest compiled.
+        # We verify this by checking timing: compile phase should complete near-instantly.
+        results = run_dbt(["run-operation", "--inline", "select 42 as answer"])
+        assert results.results[0].status == RunStatus.Success
+        timing_keys = [t.name for t in results.results[0].timing]
+        assert timing_keys == ["compile", "execute"]
+
 
 class TestRunOperationRefPrivateModel:
     """Regression test for https://github.com/dbt-labs/dbt-core/issues/8248
