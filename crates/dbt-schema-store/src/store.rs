@@ -25,7 +25,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, RwLock},
     time::{Duration, SystemTime},
 };
 
@@ -402,11 +402,11 @@ pub enum StoreFormat {
 }
 
 /// Primary filesystem-backed implementation of [`SchemaStoreTrait`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SchemaStore {
     selected: BiMap<CanonicalFqn, UniqueId>,
     frontier: BiMap<CanonicalFqn, UniqueId>,
-    deferred: OnceLock<BiMap<CanonicalFqn, UniqueId>>,
+    deferred: RwLock<BiMap<CanonicalFqn, UniqueId>>,
     external: SccHashSet<CanonicalFqn>,
     local: BiMap<CanonicalFqn, UniqueId>,
     state: SchemaStoreState,
@@ -456,7 +456,7 @@ impl SchemaStore {
         let store = Self {
             selected: selected.into_iter().collect(),
             frontier: frontier.into_iter().collect(),
-            deferred: OnceLock::new(),
+            deferred: RwLock::new(BiMap::new()),
             external: SccHashSet::new(),
             local: local.into_iter().collect(),
             state,
@@ -485,8 +485,9 @@ impl SchemaStore {
             Some(LookupEntry::Frontier(cfqn.clone()))
         } else if self
             .deferred
-            .get()
-            .and_then(|d| d.get_by_left(cfqn))
+            .read()
+            .expect("deferred lock poisoned")
+            .get_by_left(cfqn)
             .is_some()
         {
             Some(LookupEntry::Deferred(cfqn.clone()))
@@ -507,8 +508,9 @@ impl SchemaStore {
             Some(LookupEntry::Frontier(cfqn.clone()))
         } else if self
             .deferred
-            .get()
-            .and_then(|d| d.get_by_right(unique_id))
+            .read()
+            .expect("deferred lock poisoned")
+            .get_by_right(unique_id)
             .is_some()
         {
             debug_assert!(
@@ -522,16 +524,20 @@ impl SchemaStore {
     }
 
     /// Registers deferred nodes whose schemas must be sourced from remote storage.
+    ///
+    /// Merges `deferred` into the existing set so that successive defer phases
+    /// can expand the deferred entries instead of being limited to a single write.
     pub fn set_deferred(&self, deferred: HashMap<CanonicalFqn, UniqueId>) -> bool {
-        let canonical_fqns = deferred.keys().cloned().collect::<Vec<_>>();
-        if self.deferred.set(deferred.into_iter().collect()).is_ok() {
-            canonical_fqns.into_iter().for_each(|cfqn| {
+        let mut guard = self.deferred.write().expect("deferred lock poisoned");
+        let mut changed = false;
+        for (cfqn, uid) in deferred {
+            if !guard.contains_left(&cfqn) {
+                guard.insert(cfqn.clone(), uid);
                 self.state.try_register_entry(&LookupEntry::Deferred(cfqn));
-            });
-            true
-        } else {
-            false
+                changed = true;
+            }
         }
+        changed
     }
 
     /// Evicts stale entries from the schema store cache.
@@ -580,10 +586,8 @@ impl SchemaStore {
         for (cfqn, _) in self.frontier.iter() {
             f(cfqn);
         }
-        if let Some(deferred) = self.deferred.get() {
-            for (cfqn, _) in deferred.iter() {
-                f(cfqn);
-            }
+        for (cfqn, _) in self.deferred.read().expect("deferred lock poisoned").iter() {
+            f(cfqn);
         }
         self.external.iter_sync(|cfqn| {
             f(cfqn);
