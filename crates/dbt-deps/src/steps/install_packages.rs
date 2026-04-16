@@ -95,7 +95,7 @@ pub async fn install_packages(
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
     skip_private_deps: bool,
-    _use_v2_compatible_package_downloads: bool,
+    use_v2_compatible_package_downloads: bool,
 ) -> FsResult<()> {
     // Cleanup package-lock.yml
     let package_lock_str = dbt_yaml::to_string(&dbt_packages_lock).unwrap();
@@ -164,6 +164,7 @@ pub async fn install_packages(
             package,
             &mut fusion_compat_suggestions,
             &pspan,
+            use_v2_compatible_package_downloads,
         )
         .instrument(pspan.clone())
         .await
@@ -213,6 +214,7 @@ async fn install_package(
     package: &UnpinnedPackage,
     fusion_compat_suggestions: &mut Vec<(String, String, String)>,
     pspan: &Span,
+    use_v2_compatible_package_downloads: bool,
 ) -> FsResult<()> {
     match package {
         UnpinnedPackage::Hub(hub_unpinned_package) => {
@@ -262,7 +264,23 @@ async fn install_package(
                 ));
             }
 
-            let tarball_url = metadata.downloads.tarball.clone();
+            // try to substitute fusion compatible version if requested
+            let tarball_url = if use_v2_compatible_package_downloads
+                && let Some(fusion_compatibility) = &metadata.fusion_compatibility
+                && let Some(hub_fusion_compatible_download) =
+                    &fusion_compatibility.fusion_compatible_download
+                && let Some(fusion_compatible_download_url) =
+                    &hub_fusion_compatible_download.tarball
+            {
+                emit_info_log_message(format!(
+                    "Installing the v2-compatible download from Package Hub for {}@{}",
+                    pinned_package.name, pinned_package.version,
+                ));
+                fusion_compatible_download_url.clone()
+            } else {
+                metadata.downloads.tarball.clone()
+            };
+
             let project_name = metadata.name.clone();
             let final_path = packages_install_path.join(&project_name);
 
