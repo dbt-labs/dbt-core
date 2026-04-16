@@ -190,3 +190,26 @@ class TestInvalidFlagsWarning:
     def test_unknown_flags_warning(self, project):
         _, log = run_dbt_and_capture(["parse"])
         assert "Unknown flags in dbt_project.yml: random_unknown_flag" in log
+
+
+class TestInvalidFlagsError:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"simple_model.sql": simple_model_sql, "simple_model.yml": simple_model_yml}
+
+    def test_unknown_flags_error(self, project):
+        update_config_file(
+            {
+                "flags": {
+                    "random_unknown_flag": True,
+                    "require_no_unknown_flags": True,
+                }
+            },
+            "dbt_project.yml",
+        )
+
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.exception is not None
+        assert isinstance(result.exception, DbtProjectError)
+        assert "Unknown flags in dbt_project.yml: random_unknown_flag" in str(result.exception)
