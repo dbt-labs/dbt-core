@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict
 
 import pytest
 
@@ -86,8 +86,6 @@ class TestSpacesInSourceNameHappyPath:
         }
 
     def test_no_warnings_when_no_spaces_in_source_name(self, project) -> None:
-        config_patch = {"flags": {"require_source_and_semantic_model_names_without_spaces": False}}
-        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         runner = dbtRunner(callbacks=[event_catcher.catch])
         runner.invoke(["parse"])
@@ -104,8 +102,6 @@ class TestSpacesInSourceNameWarning:
         }
 
     def test_warning_when_spaces_in_source_name(self, project) -> None:
-        config_patch = {"flags": {"require_source_and_semantic_model_names_without_spaces": False}}
-        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         deprecations.reset_deprecations()
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         total_catcher = EventCatcher(ResourceNamesWithSpacesDeprecation)
@@ -123,20 +119,23 @@ class TestSpacesInSourceNameError:
     """Error when source name has spaces and flag is True."""
 
     @pytest.fixture(scope="class")
+    def project_config_update(self) -> Dict[str, Any]:
+        return {"flags": {"require_source_and_semantic_model_names_without_spaces": True}}
+
+    @pytest.fixture(scope="class")
     def models(self) -> Dict[str, str]:
         return {
             "schema.yml": source_with_space_in_name_schema_yml,
         }
 
     def test_error_when_spaces_in_source_name_and_flag_true(self, project) -> None:
-        config_patch = {"flags": {"require_source_and_semantic_model_names_without_spaces": True}}
-        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         runner = dbtRunner(callbacks=[event_catcher.catch])
         result = runner.invoke(["parse"])
         assert not result.success
         assert "Resource names cannot contain spaces" in str(result.exception)
         assert "raw source" in str(result.exception)
+        assert len(event_catcher.caught_events) == 0
 
 
 class TestSpacesInSemanticModelNameWarning:
@@ -150,8 +149,6 @@ class TestSpacesInSemanticModelNameWarning:
         }
 
     def test_warning_when_spaces_in_semantic_model_name(self, project) -> None:
-        config_patch = {"flags": {"require_source_and_semantic_model_names_without_spaces": False}}
-        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         deprecations.reset_deprecations()
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         total_catcher = EventCatcher(ResourceNamesWithSpacesDeprecation)
@@ -169,6 +166,10 @@ class TestSpacesInSemanticModelNameError:
     """Error when semantic model name has spaces and flag is True."""
 
     @pytest.fixture(scope="class")
+    def project_config_update(self) -> Dict[str, Any]:
+        return {"flags": {"require_source_and_semantic_model_names_without_spaces": True}}
+
+    @pytest.fixture(scope="class")
     def models(self) -> Dict[str, str]:
         return {
             "people.sql": people_model_sql,
@@ -176,14 +177,13 @@ class TestSpacesInSemanticModelNameError:
         }
 
     def test_error_when_spaces_in_semantic_model_name_and_flag_true(self, project) -> None:
-        config_patch = {"flags": {"require_source_and_semantic_model_names_without_spaces": True}}
-        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         runner = dbtRunner(callbacks=[event_catcher.catch])
         result = runner.invoke(["parse"])
         assert not result.success
         assert "Resource names cannot contain spaces" in str(result.exception)
         assert "semantic people" in str(result.exception)
+        assert len(event_catcher.caught_events) == 0
 
 
 class TestMultipleSourcesWithSpacesDebug:
