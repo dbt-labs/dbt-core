@@ -175,7 +175,7 @@ check-sdist = [
 [envs.ci]
 dependencies = [
     # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
     "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
     "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
