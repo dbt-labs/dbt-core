@@ -1,16 +1,13 @@
-from pathlib import Path
-
 from click import get_current_context
-from click.core import ParameterSource
-
 from dbt.artifacts.schemas.results import NodeStatus
+from pathlib import Path
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
-from dbt.config import RuntimeConfig
 from dbt.config.catalogs import load_catalogs
 from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
+from click.core import ParameterSource
 from dbt.graph import GraphQueue
 from dbt.parser.manifest import parse_manifest
 from dbt.task.base import ConfiguredTask
@@ -18,12 +15,13 @@ from dbt.task.build import BuildTask
 from dbt.task.clone import CloneTask
 from dbt.task.compile import CompileTask
 from dbt.task.docs.generate import GenerateTask
+from dbt.config import RuntimeConfig
 from dbt.task.run import RunTask
-from dbt.task.run_operation import RunOperationTask
 from dbt.task.seed import SeedTask
 from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 from dbt_common.exceptions import DbtRuntimeError
+from dbt.task.run_operation import RunOperationTask
 
 RETRYABLE_STATUSES = {
     NodeStatus.Error,
@@ -73,7 +71,6 @@ CMD_DICT = {
 
 class RetryTask(ConfiguredTask):
     def __init__(self, args: Flags, config: RuntimeConfig) -> None:
-        # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(
             Path(config.project_root) / Path(state_path) / RUN_RESULTS_FILE_NAME
@@ -85,12 +82,11 @@ class RetryTask(ConfiguredTask):
         self.previous_args = self.previous_results.args
         self.previous_command_name = self.previous_args.get("which")
 
-        # Reslove flags and config
         if args.warn_error:
             RETRYABLE_STATUSES.add(NodeStatus.Warn)
 
         cli_command = CMD_DICT.get(self.previous_command_name)  # type: ignore
-        # Remove these args when their default values are present, otherwise they'll raise an exception
+
         args_to_remove = {
             "show": lambda x: True,
             "resource_types": lambda x: x == [],
@@ -99,10 +95,13 @@ class RetryTask(ConfiguredTask):
         for k, v in args_to_remove.items():
             if k in self.previous_args and v(self.previous_args[k]):
                 del self.previous_args[k]
+
         previous_args = {
             k: v for k, v in self.previous_args.items() if k not in IGNORE_PARENT_FLAGS
         }
+
         click_context = get_current_context()
+
         current_args = {
             k: v
             for k, v in args.__dict__.items()
@@ -112,19 +111,23 @@ class RetryTask(ConfiguredTask):
                 and k in ALLOW_CLI_OVERRIDE_FLAGS
             )
         }
+
         combined_args = {**previous_args, **current_args}
+
         retry_flags = Flags.from_dict(cli_command, combined_args)  # type: ignore
         set_flags(retry_flags)
         retry_config = RuntimeConfig.from_args(args=retry_flags)
 
-        # Parse manifest using resolved config/flags
         manifest = parse_manifest(retry_config, False, True, retry_flags.write_json, [])  # type: ignore
+
         catalogs = load_catalogs(
             str(retry_config.project_root),
             retry_config.project_name,
             retry_config.cli_vars,
         )
+
         super().__init__(args, retry_config, manifest, catalogs=catalogs)
+
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
     def run(self):
@@ -132,19 +135,12 @@ class RetryTask(ConfiguredTask):
             result.unique_id
             for result in self.previous_results.results
             if result.status in RETRYABLE_STATUSES
-            # Avoid retrying operation nodes unless we are retrying the run-operation command
             and not (
                 self.previous_command_name != "run-operation"
                 and result.unique_id.startswith("operation.")
             )
         }
 
-        # We need this so that re-running of a microbatch model will only rerun
-        # batches that previously failed. Note _explicitly_ do no pass the
-        # batch info if there were _no_ successful batches previously. This is
-        # because passing the batch info _forces_ the microbatch process into
-        # _incremental_ model, and it may be that we need to be in full refresh
-        # mode which is only handled if previous_batch_results _isn't_ passed for a node
         batch_map = {
             result.unique_id: result.batch_results
             for result in self.previous_results.results
@@ -157,18 +153,41 @@ class RetryTask(ConfiguredTask):
             )
         }
 
-        # Tasks without get_graph_queue (e.g. run-operation) and no failed nodes to retry.
         if not unique_ids and not hasattr(self.task_class, "get_graph_queue"):
-            # Return early with the previous results as the past invocation was successful
             return self.previous_results
 
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
-                new_graph = self.graph.get_subset_graph(unique_ids)
+                # Resolve old unique_ids against current graph nodes
+                current_nodes = self.graph.nodes()
+                resolved_ids = set()
+
+                for uid in unique_ids:
+                    if uid in current_nodes:
+                        resolved_ids.add(uid)
+
+                    elif uid.startswith("test."):
+                        logical_prefix = ".".join(uid.split(".")[:-1])
+                        matches = [
+                            n for n in current_nodes
+                            if n.startswith("test.")
+                            and ".".join(n.split(".")[:-1]) == logical_prefix
+                        ]
+
+                        if len(matches) == 1:
+                            resolved_ids.add(matches[0])
+                        elif len(matches) > 1:
+                            resolved_ids.update(matches)
+
+                    else:
+                        resolved_ids.add(uid)
+
+                new_graph = self.graph.get_subset_graph(resolved_ids)
+
                 return GraphQueue(
                     new_graph.graph,
                     self.manifest,
-                    unique_ids,
+                    resolved_ids,
                 )
 
         task = TaskWrapper(
@@ -185,8 +204,7 @@ class RetryTask(ConfiguredTask):
                 or self.previous_results.metadata.generated_at
             )
 
-        return_value = task.run()
-        return return_value
+        return task.run()
 
     def interpret_results(self, *args, **kwargs):
         return self.task_class.interpret_results(*args, **kwargs)
