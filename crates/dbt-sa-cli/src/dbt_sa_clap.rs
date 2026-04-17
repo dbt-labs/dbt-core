@@ -3,11 +3,10 @@ use console::Style;
 use dbt_common::cli_parser_trait::CliParserTrait;
 use dbt_common::collections::HashSet;
 use dbt_common::constants::{DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME};
+use dbt_common::io_args::LogFormat;
 use dbt_common::io_utils::determine_project_dir;
-use dbt_common::logging::LogFormat;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_yaml::Value;
-use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::sync::LazyLock;
@@ -17,6 +16,7 @@ use std::{
 };
 use strum::{Display, IntoEnumIterator};
 
+use dbt_common::io_args::LogLevel;
 use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, DisplayFormat, EvalArgs, FsCommand, IoArgs, Phases,
     ShowOptions, SystemArgs, check_key_value_cli_arg, check_selector,
@@ -340,11 +340,11 @@ pub struct CommonArgs {
     pub log_format_file: Option<LogFormat>,
 
     /// Set minimum severity for console/log file; use --log-level-file to set log file severity separately.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL")]
-    pub log_level: Option<LevelFilter>,
+    #[arg(global = true, long, env = "DBT_LOG_LEVEL", ignore_case = true)]
+    pub log_level: Option<LogLevel>,
     /// Set minimum log file severity, overriding the default and --log-level setting.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE")]
-    pub log_level_file: Option<LevelFilter>,
+    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE", ignore_case = true)]
+    pub log_level_file: Option<LogLevel>,
     /// Configure the max file size in bytes for a single dbt.log file, before rolling over. 0 means no limit.
     #[arg(global = true, long, default_value_t = DBT_DEFAULT_LOG_FILE_MAX_BYTES, env = "DBT_LOG_FILE_MAX_BYTES", hide = true)]
     pub log_file_max_bytes: u64,
@@ -690,13 +690,13 @@ impl CommonArgs {
             log_format_file: self.log_format_file,
             log_format: self.log_format,
             log_level_file: match (self.debug, self.log_level_file) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => self.log_level_file,
             },
             log_level: match (self.debug, self.log_level) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => self.log_level,
             },
             log_path: self.log_path.clone(),
@@ -739,13 +739,13 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             status_reporter: None,
             log_format: cli.common_args().log_format,
             log_level: match (cli.common_args().debug, cli.common_args().log_level) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => cli.common_args().log_level,
             },
             log_level_file: match (cli.common_args().debug, cli.common_args().log_level_file) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => cli.common_args().log_level_file,
             },
             log_file_max_bytes: cli.common_args().log_file_max_bytes,

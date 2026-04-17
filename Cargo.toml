@@ -518,7 +518,6 @@ thiserror = "2"
 
 # logging
 env_logger = "0.10" # To be removed
-log = { version = "0.4.27", features = ["kv_serde"] }
 
 # tracing (observability)
 tracing = "0.1.41"

@@ -30,9 +30,8 @@ use crate::{
         DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML,
         DBT_TARGET_DIR_NAME,
     },
-    io_args::{FsCommand, IoArgs, ShowOptions},
+    io_args::{FsCommand, IoArgs, LogFormat, ShowOptions},
     io_utils::determine_project_dir,
-    logging::LogFormat,
     tracing::middlewares::parse_error_filter::TelemetryParsingErrorFilter,
     warn_error_options::WarnErrorOptions,
 };

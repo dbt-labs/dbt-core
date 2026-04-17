@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, env};
 
 use dbt_common::io_args::EvalArgs;
+use dbt_common::io_args::LogLevel;
 use dbt_common::io_args::ReplayMode;
 use dbt_common::warn_error_options::WarnErrorOptions;
 use itertools::Itertools;
-use log::LevelFilter;
 use minijinja::Value;
 
 /// Invocation args is the dictionary of arguments passed into the jinja environment.
@@ -126,7 +126,7 @@ impl Default for InvocationArgs {
 impl InvocationArgs {
     /// Create an InvocationArgs from an EvalArgs.
     pub fn from_eval_args(arg: &EvalArgs) -> Self {
-        let log_level = arg.log_level.unwrap_or(LevelFilter::Info);
+        let log_level = arg.log_level.unwrap_or(LogLevel::Info);
 
         let log_level_file = arg.log_level_file.unwrap_or(log_level);
 

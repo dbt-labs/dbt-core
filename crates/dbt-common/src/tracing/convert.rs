@@ -1,24 +1,25 @@
 use dbt_telemetry::SeverityNumber;
+use tracing::Level;
 
-pub fn log_level_filter_to_tracing(
-    level_filter: &log::LevelFilter,
-) -> tracing::level_filters::LevelFilter {
+use crate::io_args::LogLevel;
+
+pub fn log_level_filter_to_tracing(level_filter: &LogLevel) -> tracing::level_filters::LevelFilter {
     match *level_filter {
-        log::LevelFilter::Off => tracing::level_filters::LevelFilter::OFF,
-        log::LevelFilter::Error => tracing::level_filters::LevelFilter::ERROR,
-        log::LevelFilter::Warn => tracing::level_filters::LevelFilter::WARN,
-        log::LevelFilter::Info => tracing::level_filters::LevelFilter::INFO,
-        log::LevelFilter::Debug => tracing::level_filters::LevelFilter::DEBUG,
-        log::LevelFilter::Trace => tracing::level_filters::LevelFilter::TRACE,
+        LogLevel::Off => tracing::level_filters::LevelFilter::OFF,
+        LogLevel::Error => tracing::level_filters::LevelFilter::ERROR,
+        LogLevel::Warn => tracing::level_filters::LevelFilter::WARN,
+        LogLevel::Info => tracing::level_filters::LevelFilter::INFO,
+        LogLevel::Debug => tracing::level_filters::LevelFilter::DEBUG,
+        LogLevel::Trace => tracing::level_filters::LevelFilter::TRACE,
     }
 }
 
-pub fn log_level_to_severity(level: &log::Level) -> (SeverityNumber, &'static str) {
+pub fn log_level_to_severity(level: &Level) -> (SeverityNumber, &'static str) {
     match *level {
-        log::Level::Error => (SeverityNumber::Error, "ERROR"),
-        log::Level::Warn => (SeverityNumber::Warn, "WARN"),
-        log::Level::Info => (SeverityNumber::Info, "INFO"),
-        log::Level::Debug => (SeverityNumber::Debug, "DEBUG"),
-        log::Level::Trace => (SeverityNumber::Trace, "TRACE"),
+        Level::ERROR => (SeverityNumber::Error, "ERROR"),
+        Level::WARN => (SeverityNumber::Warn, "WARN"),
+        Level::INFO => (SeverityNumber::Info, "INFO"),
+        Level::DEBUG => (SeverityNumber::Debug, "DEBUG"),
+        Level::TRACE => (SeverityNumber::Trace, "TRACE"),
     }
 }

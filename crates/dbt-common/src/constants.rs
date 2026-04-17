@@ -80,7 +80,6 @@ pub const PANIC: &str = "panic:";
 // ----------------------------------------------------------------------------------------------
 // actions in order of appearance
 
-pub const ANALYZING: &str = " Analyzing";
 pub const LOADING: &str = "   Loading";
 pub const FETCHING: &str = "  Fetching";
 pub const INSTALLING: &str = "Installing";
@@ -90,7 +89,6 @@ pub const PARSING: &str = "   Parsing";
 pub const SCHEDULING: &str = "Scheduling";
 //
 pub const RENDERING: &str = " Rendering";
-pub const HYDRATING: &str = "  Hydrating";
 pub const RUNNING: &str = "   Running";
 pub const COMPARING: &str = "   Comparing";
 pub const CLONING: &str = "   Cloning";
@@ -104,7 +102,6 @@ pub const RENDERED: &str = "  Rendered";
 
 // debug command
 pub const VALIDATING: &str = "Validating";
-pub const DEBUGGED: &str = "  Debugged";
 
 // other
 pub const NOOP: &str = "noop";

@@ -60,7 +60,6 @@ normalize-path = { version = "0.2.1" }
 
 dbt-tui-progress = { workspace = true }
 indicatif = { workspace = true }
-log = { workspace = true }
 rust-embed = { workspace = true }
 
 # Tracing

@@ -1,7 +1,7 @@
 use std::{
     io::{self, Write},
     sync::{
-        Arc, OnceLock,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -26,8 +26,7 @@ use crate::{
     tracing::formatters::node::format_node_evaluated_start_legacy,
 };
 use crate::{
-    io_args::{FsCommand, ShowOptions},
-    logging::LogFormat,
+    io_args::{FsCommand, LogFormat, ShowOptions},
     tracing::{
         data_provider::DataProvider,
         formatters::{
@@ -61,37 +60,6 @@ use crate::{
         private_events::print_event::{StderrMessage, StdoutMessage},
     },
 };
-
-// -------------------------------------------------------------------------------------------------
-// TEMPORARY: Global suspension hook for legacy log-based output.
-// This exists only until the show_progress! macro is fully migrated to tracing.
-// Once all legacy log-based progress messages are removed, delete this entire section.
-// -------------------------------------------------------------------------------------------------
-
-/// Type alias for the hook function that suspends progress bars.
-type SuspendHook = Box<dyn Fn(&mut dyn FnMut()) + Send + Sync>;
-
-/// Global hook for suspending progress bars during log emission.
-/// TEMPORARY: See module-level comment above.
-static PROGRESS_BAR_SUSPEND_HOOK: OnceLock<SuspendHook> = OnceLock::new();
-
-/// Register a callback that will be invoked to suspend progress bars during log emission.
-/// Called by TuiLayer when it creates a ProgressController in interactive mode.
-/// TEMPORARY: See module-level comment above.
-fn register_progress_bar_suspend_hook(hook: impl Fn(&mut dyn FnMut()) + Send + Sync + 'static) {
-    let _ = PROGRESS_BAR_SUSPEND_HOOK.set(Box::new(hook));
-}
-
-/// Suspend progress bars while executing the provided closure.
-/// If no hook is registered, the closure is executed immediately.
-/// TEMPORARY: See module-level comment above.
-pub fn with_suspended_progress_bars<F: FnMut()>(mut f: F) {
-    if let Some(hook) = PROGRESS_BAR_SUSPEND_HOOK.get() {
-        hook(&mut f);
-    } else {
-        f()
-    }
-}
 
 /// Build TUI layer that handles all terminal user interface on stdout and stderr, including progress bars
 pub fn build_tui_layer(
@@ -310,16 +278,7 @@ impl TuiLayer {
         let progress = if is_interactive {
             let mut ctrl = ProgressController::new();
             ctrl.start_ticker();
-            let progress = Arc::new(ctrl);
-
-            // TEMPORARY: Register global hook for legacy show_progress! macro.
-            // Remove this once all show_progress! calls are migrated to tracing.
-            let progress_for_hook = Arc::clone(&progress);
-            register_progress_bar_suspend_hook(move |f| {
-                progress_for_hook.with_suspended(f);
-            });
-
-            Some(progress)
+            Some(Arc::new(ctrl))
         } else {
             None
         };
@@ -854,8 +813,6 @@ impl TuiLayer {
                 // For render, keep legacy filtering: hide seed/unit test and generic YAML tests.
                 // Singular SQL tests should still emit render lines.
                 // TODO: This legacy path should be phase-based only and not command-dependent.
-                // Keep command handling here only to preserve legacy text output during migration
-                // until show_progress! macro is fully eliminated.
                 && ((phase == ExecutionPhase::Render
                     && !(node_type == NodeType::Seed
                         || is_yaml_defined_generic_test))

@@ -20,7 +20,6 @@ use dbt_common::{
     constants::{DBT_MANIFEST_JSON, INSTALLING, VALIDATING},
     fs_err,
     io_args::{Phases, ShowOptions, SystemArgs},
-    logging::init_logger,
     pretty_string::GREEN,
     stdfs,
     tracing::{emit::emit_info_event, span_info::record_span_status},
@@ -55,8 +54,6 @@ pub async fn execute_fs(
     // Resolve EvalArgs from SystemArgs and Cli. This will create out folders,
     // for commands that need it and canonicalize the paths. May error on invalid paths.
     let eval_arg = cli.to_eval_args(system_arg)?;
-
-    init_logger((&eval_arg.io).into()).expect("Failed to initialize logger");
 
     // Create the Invocation span as a new root
     let invocation_span = create_root_info_span(create_invocation_attributes("dbt-sa", &eval_arg));

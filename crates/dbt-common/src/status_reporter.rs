@@ -2,7 +2,26 @@ use std::sync::Arc;
 
 use error::CodeLocationWithFile;
 
-use crate::{io_utils::StatusReporter, logging::LogEvent, stats::NodeStatus};
+use crate::{
+    constants::{FAILED, PASSED, REUSED, SKIPPED, SUCCEEDED, WARNED},
+    io_utils::StatusReporter,
+    stats::NodeStatus,
+};
+
+fn status_action(node_status: &NodeStatus) -> &'static str {
+    match node_status {
+        NodeStatus::Succeeded => SUCCEEDED,
+        NodeStatus::SucceededWithWarning => SUCCEEDED,
+        NodeStatus::TestPassed => PASSED,
+        NodeStatus::TestWarned => WARNED,
+        NodeStatus::Errored => FAILED,
+        NodeStatus::SkippedUpstreamFailed => SKIPPED,
+        NodeStatus::ReusedNoChanges(_)
+        | NodeStatus::ReusedStillFresh(_, _, _)
+        | NodeStatus::ReusedStillFreshNoChanges(_) => REUSED,
+        NodeStatus::NoOp => "",
+    }
+}
 
 pub fn report_completed(
     node_status: &NodeStatus,
@@ -15,22 +34,22 @@ pub fn report_completed(
         return;
     };
 
-    if !matches!(node_status, &NodeStatus::NoOp) {
-        let log_event: LogEvent = node_status.clone().into();
-
-        let desc = if matches!(
-            node_status,
-            NodeStatus::Succeeded | NodeStatus::SucceededWithWarning
-        ) {
-            with_cache.then_some("New changes detected".to_string())
-        } else if matches!(node_status, NodeStatus::TestWarned | NodeStatus::Errored)
-            && let Some(location) = defined_at
-        {
-            Some(location.to_string())
-        } else {
-            node_status.get_message()
-        };
-
-        status_reporter.show_progress(log_event.action().as_str(), display_path, desc.as_deref());
+    if matches!(node_status, &NodeStatus::NoOp) {
+        return;
     }
+
+    let desc = if matches!(
+        node_status,
+        NodeStatus::Succeeded | NodeStatus::SucceededWithWarning
+    ) {
+        with_cache.then_some("New changes detected".to_string())
+    } else if matches!(node_status, NodeStatus::TestWarned | NodeStatus::Errored)
+        && let Some(location) = defined_at
+    {
+        Some(location.to_string())
+    } else {
+        node_status.get_message()
+    };
+
+    status_reporter.show_progress(status_action(node_status), display_path, desc.as_deref());
 }

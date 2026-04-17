@@ -17,8 +17,6 @@ use std::{
 use strum::EnumIter;
 use strum_macros::Display;
 
-use log::LevelFilter;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LocalExecutionBackendKind {
     #[default]
@@ -58,13 +56,57 @@ impl Display for InternalPackageMode {
 use crate::{
     constants::{DBT_GENERIC_TESTS_DIR_NAME, DBT_SNAPSHOTS_DIR_NAME},
     io_utils::StatusReporter,
-    logging::LogFormat,
     node_selector::{
         IndirectSelection, SelectExpression, SelectionCriteria, conjoin_expression,
         parse_model_specifiers,
     },
     tracing::invocation::with_invocation_mut,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ValueEnum, Serialize, Copy, Default)]
+pub enum LogFormat {
+    Text,
+    Json,
+    #[default]
+    Default,
+    Otel,
+}
+
+impl Display for LogFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Text => write!(f, "text"),
+            Self::Json => write!(f, "json"),
+            Self::Default => write!(f, "default"),
+            Self::Otel => write!(f, "otel"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ValueEnum, Serialize, Copy, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    #[default]
+    Info,
+    Debug,
+    Trace,
+}
+
+impl Display for LogLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Off => write!(f, "OFF"),
+            Self::Error => write!(f, "ERROR"),
+            Self::Warn => write!(f, "WARN"),
+            Self::Info => write!(f, "INFO"),
+            Self::Debug => write!(f, "DEBUG"),
+            Self::Trace => write!(f, "TRACE"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FsCommand {
@@ -145,8 +187,8 @@ pub struct IoArgs {
     pub otel_parquet_file_name: Option<String>,
     pub export_to_otlp: bool,
     pub log_format: LogFormat,
-    pub log_level: Option<LevelFilter>,
-    pub log_level_file: Option<LevelFilter>,
+    pub log_level: Option<LogLevel>,
+    pub log_level_file: Option<LogLevel>,
     pub log_file_max_bytes: u64,
     pub debug: bool,
 
@@ -380,9 +422,9 @@ pub struct EvalArgs {
     /// Set logging format
     pub log_format: LogFormat,
     /// Set minimum log file severity, overriding the default and --log-level setting.
-    pub log_level_file: Option<LevelFilter>,
+    pub log_level_file: Option<LogLevel>,
     /// Set minimum severity for console/log file
-    pub log_level: Option<LevelFilter>,
+    pub log_level: Option<LogLevel>,
     /// Set 'log-path' for the current run, overriding 'DBT_LOG_PATH'.
     pub log_path: Option<PathBuf>,
     /// The output directory for all produced assets

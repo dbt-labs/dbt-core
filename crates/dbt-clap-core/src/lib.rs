@@ -4,7 +4,6 @@ use dbt_common::collections::HashSet;
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_yaml::Value as YValue;
-use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
 use std::any::Any;
@@ -28,14 +27,13 @@ use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, EvalArgs, InternalPackageMode, IoArgs,
-    LocalExecutionBackendKind, OptimizeTestsOptions, Phases, RunCacheMode, ShowOptions, SystemArgs,
-    TimeMachineModeKind, TimeMachineReplayOrdering, check_key_value_cli_arg, check_selector,
-    check_target, validate_project_name,
+    LocalExecutionBackendKind, LogFormat, LogLevel, OptimizeTestsOptions, Phases, RunCacheMode,
+    ShowOptions, SystemArgs, TimeMachineModeKind, TimeMachineReplayOrdering,
+    check_key_value_cli_arg, check_selector, check_target, validate_project_name,
 };
 use dbt_common::row_limit::RowLimit;
 use dbt_common::warn_error_options::{WarnErrorOptions, parse_warn_error_options};
 
-use dbt_common::logging::LogFormat;
 use dbt_common::node_selector::{
     IndirectSelection, MethodName, SelectionCriteria, parse_model_specifiers,
 };
@@ -1565,11 +1563,11 @@ pub struct CommonArgs {
     pub log_format_file: Option<LogFormat>,
 
     /// Set minimum severity for console/log file; use --log-level-file to set log file severity separately.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL")]
-    pub log_level: Option<LevelFilter>,
+    #[arg(global = true, long, env = "DBT_LOG_LEVEL", ignore_case = true)]
+    pub log_level: Option<LogLevel>,
     /// Set minimum log file severity, overriding the default and --log-level setting.
-    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE")]
-    pub log_level_file: Option<LevelFilter>,
+    #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE", ignore_case = true)]
+    pub log_level_file: Option<LogLevel>,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_MACRO_DEBUGGING", value_parser = BoolishValueParser::new(),hide = true)]
     pub macro_debugging: bool,
@@ -1978,13 +1976,13 @@ impl CommonArgs {
             log_format_file: self.log_format_file,
             log_format: self.log_format,
             log_level_file: match (self.debug, self.log_level_file) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => self.log_level_file,
             },
             log_level: match (self.debug, self.log_level) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => self.log_level,
             },
             log_path: self.log_path.clone(),
@@ -2230,13 +2228,13 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             status_reporter: None,
             log_format: common_args.log_format,
             log_level: match (common_args.debug, common_args.log_level) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => common_args.log_level,
             },
             log_level_file: match (common_args.debug, common_args.log_level_file) {
-                (true, Some(LevelFilter::Trace)) => Some(LevelFilter::Trace),
-                (true, _) => Some(LevelFilter::Debug),
+                (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
+                (true, _) => Some(LogLevel::Debug),
                 (false, _) => common_args.log_level_file,
             },
             log_file_max_bytes: common_args.log_file_max_bytes,

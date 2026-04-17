@@ -38,7 +38,6 @@ dashmap = { workspace = true }
 dbt-yaml = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
-log = { workspace = true }
 md5 = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
