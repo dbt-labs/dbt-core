@@ -55,7 +55,7 @@ dependencies = [
     "dbt-extractor>=0.5.0,<=0.6",
     "dbt-semantic-interfaces @ git+https://github.com/dbt-labs/dbt-semantic-interfaces.git@fb574612772e7a34921f5d364433ee3620aa0fc4",
     # Minor versions for these are expected to be backwards-compatible
-    "dbt-common>=1.37.3,<2.0",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@c66e91a3d7d953c5ae46ce324e137a92a0d49fd7",
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",

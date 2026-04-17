@@ -1,7 +1,4 @@
-from importlib.metadata import version as pkg_version
-
 import pytest
-from packaging.version import Version
 
 from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.tests.util import get_manifest, run_dbt
@@ -396,11 +393,6 @@ class TestInvalidEnabledConfig:
             "my_model.sql": my_model,
         }
 
-    # see: https://github.com/Fatal1ty/mashumaro/releases/tag/v3.15
-    @pytest.mark.skipif(
-        Version(pkg_version("mashumaro")) >= Version("3.15"),
-        reason="mashumaro 3.15+ coerces boolean values so no error is raised",
-    )
     def test_invalid_config(self, project):
         with pytest.raises(SchemaConfigError) as exc:
             run_dbt(["parse"])

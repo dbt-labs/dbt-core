@@ -1,7 +1,4 @@
-from importlib.metadata import version as pkg_version
-
 import pytest
-from packaging.version import Version
 
 from dbt.artifacts.resources import ExposureConfig
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
@@ -142,11 +139,6 @@ class TestInvalidConfig:
             "schema.yml": invalid_config_exposure_yml,
         }
 
-    # see: https://github.com/Fatal1ty/mashumaro/releases/tag/v3.15
-    @pytest.mark.skipif(
-        Version(pkg_version("mashumaro")) >= Version("3.15"),
-        reason="mashumaro 3.15+ coerces boolean values so no error is raised",
-    )
     def test_exposure_config_yaml_level(self, project):
         with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])

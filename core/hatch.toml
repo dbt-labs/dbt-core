@@ -43,7 +43,7 @@ dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
     "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@c66e91a3d7d953c5ae46ce324e137a92a0d49fd7",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
     # Code quality
     "pre-commit~=3.7.0",
@@ -177,7 +177,7 @@ dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
     "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@c66e91a3d7d953c5ae46ce324e137a92a0d49fd7",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
