@@ -273,6 +273,8 @@ class DebugTask(BaseTask):
                 summary_message = MULTIPLE_PROFILE_MESSAGE.format(
                     "\n".join(" - {}".format(o) for o in profiles)
                 )
+        else:
+            summary_message = f"profile path <{self.profile_path}> not found\n"
         return profiles, summary_message
 
     def _read_adapter_version(self, module) -> str:
