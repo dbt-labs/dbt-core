@@ -41,10 +41,10 @@ include = [
 python = "3.11"
 dependencies = [
     # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
     "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
     # Code quality
     "pre-commit~=3.7.0",
     "black>=24.3,<25.0",
@@ -176,9 +176,9 @@ check-sdist = [
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
     "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
     "pytest>=7.0,<8.0",
