@@ -430,17 +430,6 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
 impl WarnErrorOptions {
     pub fn decision_for_error_code(&self, error_code: ErrorCode) -> WarnErrorDecision {
-        if error_code == ErrorCode::NotSupportedWarnErrorOption
-            || error_code == ErrorCode::WEOIncludeExcludeDeprecation
-        {
-            // These are warnings ABOUT the warn-error configuration itself.
-            // They must not be affected by the configuration they're warning about,
-            // otherwise `{include: all}` would promote the "use 'error' instead of 'include'" deprecation
-            // to an error, causing an early exit before the manifest is even available.
-            // some downstream assumption
-            return WarnErrorDecision::Retain;
-        }
-
         // dbt-core precedence logic is as follows:
         // 1. named event > Deprecations > "all" / "*"
         // 2. silence > warn > error
@@ -800,8 +789,7 @@ mod tests {
                 SupportedLegacyWarnError::NoNodesForSelectionCriteria,
                 ErrorCode::NoNodesForSelectionCriteria,
             ),
-            // WEOIncludeExcludeDeprecation is exempted from upgrade (like NotSupportedWarnErrorOption)
-            // so it's tested separately below
+            // Tested separately below.
         ];
 
         for (name, expected_legacy, expected_code) in cases {
@@ -832,8 +820,6 @@ mod tests {
             ErrorCode::JinjaWarn,
         ));
 
-        // WEOIncludeExcludeDeprecation is always retained (never upgraded) to avoid
-        // bootstrapping issues where {include: all} would promote the deprecation warning itself
         assert!(matches_legacy_error_code(
             SupportedLegacyWarnError::WEOIncludeExcludeDeprecation,
             ErrorCode::WEOIncludeExcludeDeprecation,
@@ -841,8 +827,8 @@ mod tests {
         let parsed = parse_warn_error_options("{error: [WEOIncludeExcludeDeprecation]}").unwrap();
         assert_eq!(
             parsed.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
-            WarnErrorDecision::Retain,
-            "WEOIncludeExcludeDeprecation should always be retained",
+            WarnErrorDecision::UpgradeToError,
+            "WEOIncludeExcludeDeprecation in error list should upgrade",
         );
     }
 
