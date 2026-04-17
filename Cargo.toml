@@ -363,6 +363,7 @@ http = { version = "1.2.0", default-features = false }
 reqwest-middleware = { version = "0.4.2" }
 reqwest-retry = { version = "0.7.0" }
 reqwest-sse = { version = "0.1.0" }
+rmcp = { version = "1.4", features = ["server", "macros", "transport-io"] }
 token-source = "1.0.0"
 ureq = { version = "3.0.11", default-features = false, features = [
   "gzip",
