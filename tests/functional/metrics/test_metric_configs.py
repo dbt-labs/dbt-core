@@ -1,4 +1,7 @@
+from importlib.metadata import version as pkg_version
+
 import pytest
+from packaging.version import Version
 
 from dbt.artifacts.resources import MetricConfig
 from dbt.exceptions import CompilationError, ParsingError
@@ -169,6 +172,11 @@ class TestInvalidMetric(MetricConfigTests):
             "schema.yml": invalid_config_metric_yml,
         }
 
+    # see: https://github.com/Fatal1ty/mashumaro/releases/tag/v3.15
+    @pytest.mark.skipif(
+        Version(pkg_version("mashumaro")) >= Version("3.15"),
+        reason="mashumaro 3.15+ coerces boolean values so no error is raised",
+    )
     def test_invalid_config_metric(self, project):
         with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])

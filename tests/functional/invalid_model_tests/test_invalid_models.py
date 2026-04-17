@@ -1,4 +1,7 @@
+from importlib.metadata import version as pkg_version
+
 import pytest
+from packaging.version import Version
 
 from dbt.exceptions import CompilationError, ParsingError
 from dbt.tests.util import run_dbt
@@ -125,6 +128,11 @@ class TestMalformedEnabledParam(InvalidModelBase):
             "models__view_bad_enabled_value.sql": models__view_bad_enabled_value,
         }
 
+    # see: https://github.com/Fatal1ty/mashumaro/releases/tag/v3.15
+    @pytest.mark.skipif(
+        Version(pkg_version("mashumaro")) >= Version("3.15"),
+        reason="mashumaro 3.15+ coerces boolean values so no error is raised",
+    )
     def test_view_disabled(self, project):
         with pytest.raises(ParsingError) as exc:
             run_dbt(["seed"])
