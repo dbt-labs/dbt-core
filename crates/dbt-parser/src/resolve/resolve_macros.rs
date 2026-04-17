@@ -511,7 +511,7 @@ pub fn apply_macro_patches(
         } else {
             // Emit a warning when YAML references a macro that doesn't exist
             emit_warn_log_message(
-                ErrorCode::SchemaError,
+                ErrorCode::MacroNotFoundForPatch,
                 format!(
                     "Found patch for macro \"{}\" which was not found",
                     macro_name

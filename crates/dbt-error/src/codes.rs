@@ -135,6 +135,10 @@ pub enum ErrorCode {
     WEOIncludeExcludeDeprecation = 1086,
     NodeNotFoundOrDisabled = 1087,
     PackageUpdateAvailable = 1088,
+    NoNodeForYamlKey = 1089,
+    MacroNotFoundForPatch = 1090,
+    InvalidConcurrentBatchesConfig = 1091,
+    NoNodesForSelectionCriteria = 1092,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]

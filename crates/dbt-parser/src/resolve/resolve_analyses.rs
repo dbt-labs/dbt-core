@@ -302,7 +302,7 @@ pub async fn resolve_analyses(
     for (analysis_name, mpe) in analysis_properties.iter() {
         if !mpe.schema_value.is_null() {
             let err = fs_err!(
-                code => ErrorCode::InvalidConfig,
+                code => ErrorCode::NoNodeForYamlKey,
                 loc => mpe.relative_path.clone(),
                 "Unused schema.yml entry for analysis '{}'",
                 analysis_name,

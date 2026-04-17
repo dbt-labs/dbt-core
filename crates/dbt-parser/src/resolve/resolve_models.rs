@@ -1029,7 +1029,7 @@ pub async fn resolve_models(
         if !mpe.schema_value.is_null() {
             // Validate that the model is not latest and flattened
             let err = fs_err!(
-                code =>ErrorCode::InvalidConfig,
+                code =>ErrorCode::NoNodeForYamlKey,
                 loc => mpe.relative_path.clone(),
                 "Unused schema.yml entry for model '{}'",
                 model_name,

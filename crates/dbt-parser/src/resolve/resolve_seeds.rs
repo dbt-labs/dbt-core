@@ -10,7 +10,7 @@ use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
-use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -384,6 +384,19 @@ pub fn resolve_seeds(
             _ => {}
         }
     }
+
+    for (seed_name, mpe) in seed_properties.iter() {
+        if !mpe.schema_value.is_null() {
+            let err = fs_err!(
+                code => ErrorCode::NoNodeForYamlKey,
+                loc => mpe.relative_path.clone(),
+                "Unused schema.yml entry for seed '{}'",
+                seed_name,
+            );
+            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+        }
+    }
+
     trigger_duplicate_errors(io_args, &mut duplicate_errors)?;
     Ok((seeds, disabled_seeds))
 }

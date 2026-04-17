@@ -286,7 +286,7 @@ pub async fn resolve(
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
 
-    match nodes.warn_on_microbatch() {
+    match nodes.warn_on_microbatch(adapter_type) {
         Ok(_) => {}
         Err(e) => {
             emit_warn_log_from_fs_error(e.as_ref(), arg.io.status_reporter.as_ref());

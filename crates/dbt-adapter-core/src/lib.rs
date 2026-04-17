@@ -103,3 +103,10 @@ pub fn adapter_type_supports_static_analysis(adapter_type: AdapterType) -> bool 
             | AdapterType::DuckDB
     )
 }
+
+/// Returns whether the adapter supports concurrent execution of microbatch models.
+///
+/// This mirrors dbt-core's adapter capability for `Capability.MicrobatchConcurrency`.
+pub fn adapter_type_supports_microbatch_concurrency(adapter_type: AdapterType) -> bool {
+    matches!(adapter_type, AdapterType::Snowflake)
+}

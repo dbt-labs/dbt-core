@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use chrono::Utc;
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
@@ -260,8 +260,8 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
 
     // Incremental strategy validation
-    fn warn_on_microbatch(&self) -> FsResult<()> {
-        Ok(())
+    fn warn_on_microbatch(&self, _adapter_type: AdapterType) -> usize {
+        0
     }
 
     /// Returns the relative path from in_dir of the unrendered sql file for the current node.
@@ -1090,9 +1090,16 @@ impl InternalDbtNode for DbtModel {
         self.__model_attr__.introspection
     }
 
-    fn warn_on_microbatch(&self) -> FsResult<()> {
-        // Microbatch incremental strategy is now supported
-        Ok(())
+    fn warn_on_microbatch(&self, adapter_type: AdapterType) -> usize {
+        let uses_microbatch =
+            self.__model_attr__.incremental_strategy == Some(DbtIncrementalStrategy::Microbatch);
+        let forces_concurrent_batches = self.deprecated_config.concurrent_batches == Some(true);
+
+        usize::from(
+            uses_microbatch
+                && forces_concurrent_batches
+                && !adapter_type_supports_microbatch_concurrency(adapter_type),
+        )
     }
 
     fn get_group(&self) -> Option<String> {
@@ -4137,10 +4144,26 @@ impl Nodes {
         Ok(())
     }
 
-    pub fn warn_on_microbatch(&self) -> FsResult<()> {
-        for (_, node) in self.iter() {
-            node.warn_on_microbatch()?;
+    pub fn warn_on_microbatch(&self, adapter_type: AdapterType) -> FsResult<()> {
+        let models_forcing_concurrent_batches: usize = self
+            .iter()
+            .map(|(_, node)| node.warn_on_microbatch(adapter_type))
+            .sum();
+
+        if models_forcing_concurrent_batches > 0 {
+            let maybe_plural_count_of_models = if models_forcing_concurrent_batches == 1 {
+                "1 microbatch model".to_string()
+            } else {
+                format!("{models_forcing_concurrent_batches} microbatch models")
+            };
+
+            return err!(
+                ErrorCode::InvalidConcurrentBatchesConfig,
+                "Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but the {} adapter does not support running batches concurrently. Batches will be run sequentially.",
+                adapter_type
+            );
         }
+
         Ok(())
     }
 }

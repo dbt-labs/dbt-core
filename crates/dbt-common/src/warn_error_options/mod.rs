@@ -544,8 +544,21 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::NothingToDo | SupportedLegacyWarnError::NoNodesSelected => {
             error_code == ErrorCode::NoNodesSelected
         }
+        SupportedLegacyWarnError::NoNodesForSelectionCriteria => {
+            error_code == ErrorCode::NoNodesForSelectionCriteria
+        }
         SupportedLegacyWarnError::NodeNotFoundOrDisabled => {
             error_code == ErrorCode::NodeNotFoundOrDisabled
+        }
+        SupportedLegacyWarnError::NoNodeForYamlKey => error_code == ErrorCode::NoNodeForYamlKey,
+        SupportedLegacyWarnError::MacroNotFoundForPatch => {
+            error_code == ErrorCode::MacroNotFoundForPatch
+        }
+        SupportedLegacyWarnError::InvalidConcurrentBatchesConfig => {
+            error_code == ErrorCode::InvalidConcurrentBatchesConfig
+        }
+        SupportedLegacyWarnError::InvalidMacroAnnotation => {
+            error_code == ErrorCode::ValidateMacroArgs
         }
         SupportedLegacyWarnError::DeprecatedModel => error_code == ErrorCode::DeprecatedModel,
         SupportedLegacyWarnError::DeprecatedReference => {
@@ -700,8 +713,8 @@ mod tests {
                     WarnErrorOptionValue::FusionCode(1),
                     WarnErrorOptionValue::all()
                 ],
-                warn: vec![WarnErrorOptionValue::NotYetSupportedLegacy(
-                    NotYetSupportedLegacyWarnError::NoNodesForSelectionCriteria,
+                warn: vec![WarnErrorOptionValue::SupportedLegacy(
+                    SupportedLegacyWarnError::NoNodesForSelectionCriteria,
                 )],
                 silence: vec![WarnErrorOptionValue::Unsupported("x".to_string())],
                 ..Default::default()
@@ -716,6 +729,26 @@ mod tests {
                 "NodeNotFoundOrDisabled",
                 SupportedLegacyWarnError::NodeNotFoundOrDisabled,
                 ErrorCode::NodeNotFoundOrDisabled,
+            ),
+            (
+                "NoNodeForYamlKey",
+                SupportedLegacyWarnError::NoNodeForYamlKey,
+                ErrorCode::NoNodeForYamlKey,
+            ),
+            (
+                "MacroNotFoundForPatch",
+                SupportedLegacyWarnError::MacroNotFoundForPatch,
+                ErrorCode::MacroNotFoundForPatch,
+            ),
+            (
+                "InvalidConcurrentBatchesConfig",
+                SupportedLegacyWarnError::InvalidConcurrentBatchesConfig,
+                ErrorCode::InvalidConcurrentBatchesConfig,
+            ),
+            (
+                "InvalidMacroAnnotation",
+                SupportedLegacyWarnError::InvalidMacroAnnotation,
+                ErrorCode::ValidateMacroArgs,
             ),
             (
                 "DeprecatedModel",
@@ -761,6 +794,11 @@ mod tests {
                 "WarnStateTargetEqual",
                 SupportedLegacyWarnError::WarnStateTargetEqual,
                 ErrorCode::WarnStateTargetEqual,
+            ),
+            (
+                "NoNodesForSelectionCriteria",
+                SupportedLegacyWarnError::NoNodesForSelectionCriteria,
+                ErrorCode::NoNodesForSelectionCriteria,
             ),
             // WEOIncludeExcludeDeprecation is exempted from upgrade (like NotSupportedWarnErrorOption)
             // so it's tested separately below
