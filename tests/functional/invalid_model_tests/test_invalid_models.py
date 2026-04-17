@@ -99,10 +99,11 @@ models__referencing_disabled_source = """
 select * from {{ source('test_source', 'test_table') }}
 """
 
-
 #
 # Tests
 #
+
+
 class InvalidModelBase(object):
     @pytest.fixture(scope="class")
     def seeds(self):
