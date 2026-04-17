@@ -244,7 +244,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
     @property
     def resolve_limit(self) -> Optional[int]:
-        return 0 if getattr(get_flags(), "EMPTY", False) else None
+        return 0 if getattr(self.config.args, "EMPTY", False) else None
 
     def _resolve_event_time_field_name(self, target: ManifestNode) -> str:
         """Get the event time field name with proper quoting based on configuration."""
