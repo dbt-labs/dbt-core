@@ -131,6 +131,9 @@ pub struct GenericTestAsset {
     /// When test names exceed 63 characters, dbt truncates to `<first 30 chars>_<md5 hash>`.
     /// This field stores the original name for selector matching purposes.
     pub original_name: Option<String>,
+    /// Pre-computed unique_id hash suffix (last 10 hex chars of md5(fqn_name + metadata_repr)).
+    /// Computed in persist_generic_data_tests using full kwargs, matching dbt-core/Mantle's algorithm.
+    pub unique_id_hash: Option<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

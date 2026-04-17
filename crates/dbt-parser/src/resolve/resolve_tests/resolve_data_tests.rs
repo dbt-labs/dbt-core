@@ -72,6 +72,37 @@ use std::path::PathBuf;
 use std::str::FromStr as _;
 use std::sync::Arc;
 
+/// Computes the unique_id for a generic test node.
+///
+/// Follows dbt-core's convention:
+///   hash_string = fqn_name + repr(get_hashable_md(test_metadata))
+///   unique_id   = "test.<package>.<fqn_name>.<last-10-of-md5(hash_string)>"
+///
+/// The fqn_name must be the full (non-truncated) name per dbt-core's design:
+///   `short_name` (truncated) → compiled file path and alias only
+///   `full_name`              → unique_id and FQN
+/// See `synthesize_generic_test_names` in dbt-core's generic_test_builders.py.
+fn compute_generic_test_unique_id(package_name: &str, test_asset: &GenericTestAsset) -> String {
+    // Use the full (non-truncated) name for unique_id, matching dbt-core/Mantle behavior.
+    // When truncation occurs, test_name holds the short form and original_name holds the full form.
+    let fqn_name = test_asset
+        .original_name
+        .as_deref()
+        .unwrap_or(&test_asset.test_name);
+    // Prefer the pre-computed hash from persist_generic_data_tests (uses full kwargs),
+    // falling back to a local computation with partial metadata.
+    let test_hash = if let Some(hash) = &test_asset.unique_id_hash {
+        hash.clone()
+    } else {
+        const HASH_LENGTH: usize = 10;
+        let metadata_repr = build_test_metadata_repr(test_asset);
+        let hash_string = format!("{}{}", fqn_name, metadata_repr);
+        let hash_hex = format!("{:x}", md5::compute(&hash_string));
+        hash_hex[hash_hex.len() - HASH_LENGTH..].to_string()
+    };
+    format!("test.{}.{}.{}", package_name, fqn_name, test_hash)
+}
+
 /// Build a Python-like repr of the test metadata for hashing.
 /// This matches Mantle's `repr(get_hashable_md(test_metadata))` where:
 /// - test_metadata = {"namespace": ..., "name": ..., "kwargs": {...}}
@@ -305,22 +336,31 @@ pub async fn resolve_data_tests(
             test_config.schema = Some(DEFAULT_TEST_SCHEMA.to_string());
         }
 
-        // Use the custom test name from GenericTestAsset if available, otherwise use the filename
-        let test_name = if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
-            test_asset.test_name.clone()
-        } else {
-            let name = dbt_asset
-                .path
-                .file_stem()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
-            if name.contains(' ') {
-                return Err(err_resource_name_has_spaces(&name, &dbt_asset.path));
-            }
-            name
-        };
+        // Use the custom test name from GenericTestAsset if available, otherwise use the filename.
+        // test_name is the truncated form (for file paths); fqn_name is the full form
+        // (for unique_id, name field, and FQN), matching dbt-core/Mantle behavior.
+        let (test_name, fqn_name) =
+            if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
+                let short = test_asset.test_name.clone();
+                let full = test_asset
+                    .original_name
+                    .as_ref()
+                    .unwrap_or(&test_asset.test_name)
+                    .clone();
+                (short, full)
+            } else {
+                let name = dbt_asset
+                    .path
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                if name.contains(' ') {
+                    return Err(err_resource_name_has_spaces(&name, &dbt_asset.path));
+                }
+                (name.clone(), name)
+            };
 
         let properties = if let Some(properties) = maybe_properties {
             properties
@@ -333,24 +373,19 @@ pub async fn resolve_data_tests(
         // of the hash to the unique_id.
         // See the `create_test_node` function in
         // https://github.com/dbt-labs/dbt-core/blob/3de3b827bfffdc43845780f484d4d53011f20a37/core/dbt/parser/schema_generic_tests.py#L132
-        const HASH_LENGTH: usize = 10;
-        let hash_string = if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
-            // Generic test - hash name + metadata repr (matching Mantle's algorithm)
-            // Mantle does: hash_string = "".join([name, repr(get_hashable_md(test_metadata))])
-            // where test_metadata = {"namespace": ..., "name": ..., "kwargs": {...}}
-            let metadata_repr = build_test_metadata_repr(test_asset);
-            format!("{}{}", test_name, metadata_repr)
+        let unique_id = if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
+            // Generic test: unique_id uses the full (non-truncated) name + metadata hash.
+            compute_generic_test_unique_id(package_name, test_asset)
         } else {
-            // Singular test - just hash the test name
-            test_name.clone()
+            // Singular test: hash just the test name.
+            const HASH_LENGTH: usize = 10;
+            let hash_hex = format!("{:x}", md5::compute(test_name.as_str()));
+            let test_hash = &hash_hex[hash_hex.len() - HASH_LENGTH..];
+            format!("test.{package_name}.{test_name}.{test_hash}")
         };
-        let hash_hex = format!("{:x}", md5::compute(&hash_string));
-        let test_hash = hash_hex[hash_hex.len() - HASH_LENGTH..].to_string();
-
-        let unique_id = format!("test.{package_name}.{test_name}.{test_hash}");
 
         jinja_type_checking_event_listener_factory
-            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
+            .update_unique_id(&format!("{package_name}.{fqn_name}"), &unique_id);
         let macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
 
@@ -363,7 +398,7 @@ pub async fn resolve_data_tests(
         let fqn = get_node_fqn(
             package_name,
             path_for_fqn,
-            vec![test_name.to_owned()],
+            vec![fqn_name.clone()],
             &package.dbt_project.all_source_paths(),
         );
 
@@ -417,7 +452,7 @@ pub async fn resolve_data_tests(
             defined_at,
             manifest_original_file_path: manifest_original_file_path.clone(),
             __common_attr__: CommonAttributes {
-                name: test_name.to_owned(),
+                name: fqn_name.clone(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
                 name_span: dbt_common::Span::default(),
@@ -538,7 +573,19 @@ pub async fn resolve_data_tests(
         let components = RelationComponents {
             database: test_config.database.clone(),
             schema: test_config.schema.clone(),
-            alias: test_config.alias.clone(),
+            // When test name was truncated (test_name != fqn_name), use the short form
+            // for the alias (table name) per dbt-core convention. dbt-core uses:
+            //   short_name → compiled file path and alias only
+            //   full_name  → unique_id and FQN
+            // Without an explicit alias override, fall back to this short form so the
+            // generated CREATE TABLE SQL matches the recorded (and expected) table name.
+            alias: test_config.alias.clone().or_else(|| {
+                if test_name != fqn_name {
+                    Some(test_name.clone())
+                } else {
+                    None
+                }
+            }),
             store_failures: test_config.store_failures,
         };
 
@@ -623,6 +670,7 @@ mod tests {
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
             original_name: None,
+            unique_id_hash: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -633,6 +681,55 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .unwrap(),
             "id"
+        );
+    }
+
+    #[test]
+    fn test_unique_id_uses_full_name_when_truncated() {
+        // When a generic test name is truncated (>=64 chars), the unique_id must use
+        // the full (non-truncated) name to match dbt-core/Mantle behavior.
+        // dbt-core's synthesize_generic_test_names returns two names:
+        //   short_name → compiled file path and alias only
+        //   full_name  → unique_id and FQN
+        // Fusion stores the full name in GenericTestAsset.original_name when truncation occurs.
+        let truncated_name = "not_null_my_model_with_a_very_l_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4";
+        let full_name =
+            "not_null_my_model_with_a_very_long_column_name_that_exceeds_sixty_four_characters";
+        assert!(
+            full_name.len() >= 64,
+            "test setup: full_name must be >=64 chars"
+        );
+        let asset = GenericTestAsset {
+            dbt_asset: DbtAsset {
+                base_path: PathBuf::new(),
+                original_path: PathBuf::from("models/schema.yml"),
+                path: PathBuf::from(format!("generic_tests/{truncated_name}.sql")),
+                package_name: "my_project".to_string(),
+            },
+            resource_name: "my_model".to_string(),
+            resource_type: "model".to_string(),
+            test_name: truncated_name.to_string(),
+            defined_at: Default::default(),
+            test_metadata_name: Some("not_null".to_string()),
+            test_metadata_namespace: None,
+            test_metadata_column_name: Some(
+                "very_long_column_name_that_exceeds_sixty_four_characters".to_string(),
+            ),
+            test_metadata_combination_of_columns: None,
+            test_metadata_model: Some("ref('my_model')".to_string()),
+            original_name: Some(full_name.to_string()),
+            unique_id_hash: None,
+        };
+
+        let unique_id = compute_generic_test_unique_id("my_project", &asset);
+
+        assert!(
+            unique_id.contains(full_name),
+            "unique_id must use the full (non-truncated) name; got: {unique_id}"
+        );
+        assert!(
+            !unique_id.starts_with(&format!("test.my_project.{truncated_name}.")),
+            "unique_id must not use the truncated name; got: {unique_id}"
         );
     }
 
@@ -657,6 +754,7 @@ mod tests {
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
             test_metadata_model: None,
             original_name: None,
+            unique_id_hash: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

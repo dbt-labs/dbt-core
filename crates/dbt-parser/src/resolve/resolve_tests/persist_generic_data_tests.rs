@@ -165,8 +165,15 @@ fn persist_inner(
     );
 
     // Generate unique_id hash from UNCLEANED kwargs to match mantle's behavior.
-    let test_hash =
-        generate_test_unique_id_hash(&full_name, &test_macro_name, namespace.as_ref(), &kwargs);
+    // Use the original (non-truncated) name for the hash input, since dbt-core/Mantle
+    // compute the hash from the full name, not the truncated form.
+    let fqn_name_for_hash = test_name_truncations.get(&full_name).unwrap_or(&full_name);
+    let test_hash = generate_test_unique_id_hash(
+        fqn_name_for_hash,
+        &test_macro_name,
+        namespace.as_ref(),
+        &kwargs,
+    );
     let unique_id = format!("{}.{}", full_name, test_hash);
 
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
@@ -225,11 +232,12 @@ fn persist_inner(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         });
-    // Extract model kwarg and wrap with {{ }} for Jinja expression
+    // Extract model kwarg for test_metadata; the value from get_test_details already
+    // includes {{ }} Jinja delimiters (e.g. "{{ get_where_subquery(ref('...')) }}").
     let test_metadata_model = kwargs
         .get("model")
         .and_then(|v| v.as_str())
-        .map(|s| format!("{{{{ {} }}}}", s));
+        .map(|s| s.to_string());
 
     // If the test name was truncated, get the original name from the truncations map
     let original_name = test_name_truncations.get(&full_name).cloned();
@@ -246,6 +254,7 @@ fn persist_inner(
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
         original_name,
+        unique_id_hash: Some(test_hash),
     })
 }
 
@@ -297,7 +306,7 @@ fn get_test_details(
 
     kwargs.insert(
         "model".to_string(),
-        Value::String(format!("get_where_subquery({model_string})")),
+        Value::String(format!("{{{{ get_where_subquery({model_string}) }}}}")),
     );
     if let Some(col) = column_name {
         kwargs.insert("column_name".to_string(), Value::String(col.to_string()));
@@ -771,7 +780,7 @@ fn build_hashable_metadata_repr(
         Some(ns) => {
             let _ = write!(out, ", 'namespace': '{}'", ns);
         }
-        None => out.push_str(", 'namespace': None"),
+        None => out.push_str(", 'namespace': 'None'"),
     }
 
     out.push('}');
@@ -810,7 +819,13 @@ fn write_value_to_hashable_repr(out: &mut String, value: &Value) {
             out.push(']');
         }
         Value::String(s) => {
-            let _ = write!(out, "'{}'", s);
+            // Match Python's repr(): use double quotes when the string contains single quotes,
+            // otherwise use single quotes.
+            if s.contains('\'') {
+                let _ = write!(out, "\"{}\"", s);
+            } else {
+                let _ = write!(out, "'{}'", s);
+            }
         }
         Value::Number(n) => {
             let _ = write!(out, "{}", n);
@@ -1037,6 +1052,9 @@ fn generate_test_macro(
                     || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
                 {
                     s.to_string() // Don't add quotes if it's already a ref, source, or jinja var
+                } else if s.starts_with("{{") && s.ends_with("}}") {
+                    // Strip Jinja delimiters: {{ expr }} → expr (used directly inside macro args)
+                    s[2..s.len() - 2].trim().to_string()
                 } else {
                     let escaped = s
                         .replace('\\', "\\\\") // Escape backslashes
@@ -1925,6 +1943,19 @@ mod tests {
             !test_name_no_vars.contains("id"),
             "Test name should not contain the 'id' column name after truncation"
         );
+        // Verify the truncations map records the full original name, which is the name
+        // that dbt-core/Mantle use for unique_id construction.
+        let original_name = test_name_truncations
+            .get(&test_name_no_vars)
+            .expect("truncated name should be recorded in test_name_truncations");
+        assert!(
+            original_name.len() >= 64,
+            "Original name should be the untruncated form (>=64 chars), got: {original_name}"
+        );
+        assert!(
+            original_name.contains("id"),
+            "Original name should contain 'id' which was truncated away, got: {original_name}"
+        );
     }
 
     #[test]
@@ -2563,7 +2594,7 @@ mod tests {
         let kwargs = BTreeMap::new();
         let repr = build_hashable_metadata_repr("unique", None, &kwargs);
 
-        assert!(repr.contains("'namespace': None"));
+        assert!(repr.contains("'namespace': 'None'"));
     }
 
     #[test]
@@ -2759,7 +2790,7 @@ mod tests {
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(
-            model, "get_where_subquery(ref('turmoenster', v='1_1'))",
+            model, "{{ get_where_subquery(ref('turmoenster', v='1_1')) }}",
             "Version should be emitted as a quoted string to avoid Jinja interpreting 1_1 as numeric 11"
         );
         assert!(

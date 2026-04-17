@@ -269,7 +269,15 @@ pub fn build_run_node_context<S: Serialize>(
         sql_header,
     );
 
-    let model_name = common_attr.name.clone();
+    // Use alias for the run file path (target/run/<alias>.sql) rather than name.
+    // For most nodes, alias == name. For generic tests with long names, the name is the
+    // full (human-readable) form while alias is the truncated form. Using alias avoids
+    // ENAMETOOLONG (OS error 36) on Linux when the test name exceeds 255 chars.
+    let model_name = if base_attr.alias.is_empty() {
+        common_attr.name.clone()
+    } else {
+        base_attr.alias.clone()
+    };
     // Add write function
     context.insert(
         "write".to_owned(),
