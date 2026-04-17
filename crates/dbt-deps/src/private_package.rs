@@ -17,13 +17,18 @@ pub struct ProviderDetail {
 }
 
 impl ProviderDetail {
-    fn resolved_url(&self, repo: &str) -> String {
+    fn resolved_url(&self, private_def: &PrivateDefinition) -> String {
         if self.is_azure_devops() {
             let git_url = ADOGitURL::new(self.url.clone());
-            git_url.resolve(&self.token, repo)
+            if self.is_ado() && !private_def.groups.is_empty() {
+                let project = private_def.groups.join("/");
+                git_url.resolve_with_project(&self.token, &project, &private_def.repo_name)
+            } else {
+                git_url.resolve(&self.token, &private_def.repo_name)
+            }
         } else {
             let git_url = GitURL::new(self.url.clone());
-            git_url.resolve(&self.token, repo)
+            git_url.resolve(&self.token, &private_def.repo_name)
         }
     }
 
@@ -247,6 +252,13 @@ impl ADOGitURL {
     pub fn resolve(&self, token: &str, repo: &str) -> String {
         self.url.replace("{token}", token).replace("{repo}", repo)
     }
+
+    pub fn resolve_with_project(&self, token: &str, project: &str, repo: &str) -> String {
+        self.url
+            .replace("{token}", token)
+            .replace("{project}", project)
+            .replace("{repo}", repo)
+    }
 }
 
 /// Retrieves Git provider configuration from environment variable
@@ -283,7 +295,7 @@ pub fn get_resolved_url(
                 true,
                 provider.provider.as_deref(),
             );
-            return Ok(provider.resolved_url(&private_def.repo_name));
+            return Ok(provider.resolved_url(&private_def));
         }
     }
 
