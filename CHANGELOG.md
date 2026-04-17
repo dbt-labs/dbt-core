@@ -12,6 +12,75 @@ Released April 14, 2026
 
 ### Features
 
+- [dbt-fusion] Implementing v2 catalogs.yml front end for all supported platforms and catalogs. ([#6342](https://github.com/dbt-labs/dbt-fusion/issues/6342), [#6374](https://github.com/dbt-labs/dbt-fusion/issues/6374), [#6374](https://github.com/dbt-labs/dbt-fusion/issues/6374), [#6337](https://github.com/dbt-labs/dbt-fusion/issues/6337), [#6336](https://github.com/dbt-labs/dbt-fusion/issues/6336))
+- [dbt-fusion] [Snowflake] Add support for dynamic table immutable_where config 
+- [dbt-fusion] Add support for custom dbt env vars with DBT_ENV_CUSTOM_ENV_ prefix ([#35](https://github.com/dbt-labs/dbt-fusion/issues/35))
+- [dbt-fusion] Nodes that complete successfully but emit warnings are now reported as `warn` in run results and status counts, matching dbt-core behavior. Previously these nodes were counted as successes. ([#1402](https://github.com/dbt-labs/dbt-fusion/issues/1402))
+- [dbt-fusion] Enable fusion to select relative paths starting with a dot. ([#1191](https://github.com/dbt-labs/dbt-fusion/issues/1191))
+- [dbt-index] Introduce hydrate command and --auto-hydrate flag to allow remote schema hydration
+- [dbt-fusion] LSP respect .dbtignore
+- [dbt-index] Prettier tree view for lineage
+- [dbt-fusion] Add experimental support for using v2-compatible downloads from Package Hub when installing packages with dbt deps
+- [dbt-fusion] Warn when users run `dbt docs generate`, directing them to use `dbt compile --write-catalog` instead
+
+### Fixes
+
+- [dbt-fusion] Allow transient dynamic tables to be created
+- [dbt-fusion] Support ALTER for cluster by in dynamic tables
+- [dbt-fusion] Raise error when two seeds share the same name, matching dbt Core behavior ([#622](https://github.com/dbt-labs/dbt-fusion/issues/622))
+- [dbt-fusion] Seed now emits a clear error with --full-refresh suggestion when CSV column names change and the table already exists, instead of a confusing SQL error ([#862](https://github.com/dbt-labs/dbt-fusion/issues/862))
+- [dbt-fusion] Added support for `user` in Spark's `PLAIN` auth
+- [dbt-fusion] Fix BigQuery seeds with persist_docs.relation=true failing when seed has no description ([#1383](https://github.com/dbt-labs/dbt-fusion/issues/1383))
+- [dbt-fusion] Capture/run data tests on snapshot models ([#1234](https://github.com/dbt-labs/dbt-fusion/issues/1234))
+- [dbt-fusion] Include snapshot name and file path in dbt1005 timestamp mismatch warning ([#1570](https://github.com/dbt-labs/dbt-fusion/issues/1570))
+- [dbt-fusion] Validate warn_error_options against known dbt-core event names, error on bogus values, and surface targeted warnings for legacy names Fusion will not support or does not support yet.
+- [dbt-fusion] Fix SLT display bug where string elements inside VARIANT arrays were shown without JSON quotes (e.g. STRTOK_TO_ARRAY results now display as ["hello", "world"] instead of [hello, world])
+- [dbt-fusion] Enable parsing of numbers with underscore delimiters. ([#1027](https://github.com/dbt-labs/dbt-fusion/issues/1027))
+- [dbt-fusion] Fix deferred semantic manifest so saved query export destinations follow deferred state for saved query exports ([#1572](https://github.com/dbt-labs/dbt-fusion/issues/1572))
+- [dbt-fusion] Add warn-error support for Jinja warnings raised by exceptions.warn(), including legacy JinjaLogWarning mapping and short-circuiting when upgraded to errors.
+- [dbt-fusion] Fix `dbt seed` failing on second run when the profile schema contains uppercase letters on Databricks ([#943](https://github.com/dbt-labs/dbt-fusion/issues/943))
+- [dbt-fusion] fixes issue #1583 ([#1583](https://github.com/dbt-labs/dbt-fusion/issues/1583))
+- [dbt-fusion] Check the current schema for functions before deferring and cache function metadata separately from relations.
+- [dbt-fusion] Fix --vars flag to accept multi-key YAML (newline-separated block style) by removing the colon-count pre-check in check_var. This enables dbt ls --vars "$(cat vars.yml)" to work correctly when vars.yml contains multiple key-value pairs. ([#402](https://github.com/dbt-labs/dbt-fusion/issues/402))
+- [dbt-fusion] Support dbt-core warning codes in warn_error_options by adding dedicated codes and legacy-name mappings for deprecations, Jinja warnings, missing and disabled node dependencies, package redirect and git dependency warnings, freshness warnings, and state-target path warnings. This also fixes missing-vs-disabled dependency handling, emits the include/exclude deprecation for project flags, aligns DepsUnpinned with dbt-core semantics, and moves package update notices to a Fusion-specific code. ([#8](https://github.com/dbt-labs/dbt-fusion/issues/8))
+- [dbt-fusion] Remove profile loading logic from dbt deps ([#679](https://github.com/dbt-labs/dbt-fusion/issues/679))
+- [dbt-fusion] lower case column names in snowflake catalog query record batch ([#1584](https://github.com/dbt-labs/dbt-fusion/issues/1584))
+- [dbt-fusion] Fix reading and writing nodes.model.functions in manifest.json ([#1579](https://github.com/dbt-labs/dbt-fusion/issues/1579))
+- [dbt-fusion] LSP: Fixed renaming of an alias in a group by
+- [dbt-fusion] `run_results.json` is now produced on compilation/early failures. Previously missing `run_results.json` would break `dbt retry`. ([#1545](https://github.com/dbt-labs/dbt-fusion/issues/1545))
+- [dbt-fusion] Fix false validate_macro_args warnings for generic test macros: {% test %} blocks now carry their argument list so documented args (e.g. model, column_name) are correctly recognised instead of triggering spurious dbt1506 warnings
+- [dbt-fusion] Fix disabling legacy spec semantic nodes in dependency packages
+
+### Under the Hood
+
+- [dbt-fusion] remove `quoted_identifiers_ignore_case` (parity w/ core adapter)
+- [dbt-fusion] Add group info to otel for model notifications
+- [dbt-fusion] Refactor config hierarchy resolution in resolver
+- [dbt-fusion] Add `DynJinjaObject` to create objects at runtime without new Rust types
+- [dbt-fusion] Add config matrix test
+- [internal] Remove json parser helper from duckdb macros
+- [dbt-fusion] LSP: Excluded symbols from expanded macros
+- [dbt-fusion] Use v2-compatible downloads flag when dbt deps installs packages and updates lock file
+- [dbt-fusion] Swap version: 2 for behavior flag in catalogs.yml
+
+### Contributors
+- [@HannanNaeem](https://github.com/HannanNaeem) ([#35](https://github.com/dbt-labs/dbt-fusion/issues/35), [#1402](https://github.com/dbt-labs/dbt-fusion/issues/1402), [#1545](https://github.com/dbt-labs/dbt-fusion/issues/1545))
+- [@aiguofer](https://github.com/aiguofer)
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt)
+- [@chayac](https://github.com/chayac)
+- [@dataders](https://github.com/dataders) ([#1570](https://github.com/dbt-labs/dbt-fusion/issues/1570))
+- [@j-clemons](https://github.com/j-clemons)
+- [@lottaquestions](https://github.com/lottaquestions) ([#1191](https://github.com/dbt-labs/dbt-fusion/issues/1191), [#1027](https://github.com/dbt-labs/dbt-fusion/issues/1027), [#402](https://github.com/dbt-labs/dbt-fusion/issues/402), [#679](https://github.com/dbt-labs/dbt-fusion/issues/679))
+- [@mach-kernel](https://github.com/mach-kernel) ([#1234](https://github.com/dbt-labs/dbt-fusion/issues/1234), [#8](https://github.com/dbt-labs/dbt-fusion/issues/8))
+- [@mengdilin-dev](https://github.com/mengdilin-dev) ([#1583](https://github.com/dbt-labs/dbt-fusion/issues/1583))
+- [@peter-bertuglia](https://github.com/peter-bertuglia)
+- [@serramatutu](https://github.com/serramatutu)
+
+
+
+
+### Features
+
 - [dbt-fusion] add VSCE setting for default lineage depth ([#1164](https://github.com/dbt-labs/dbt-fusion/issues/1164))
 - [dbt-fusion] Support sql_header in data tests
 - [dbt-index] dbt-index: daily beta releases published to prod CDN (public.cdn.getdbt.com)
