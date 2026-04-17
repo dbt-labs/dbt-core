@@ -15,6 +15,9 @@ from dbt_common.context import get_invocation_context
 
 _PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
 _RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
+_VALIDATOR_CACHE: Dict[int, Any] = {}
+_MODEL_CONFIG_SCHEMA: Optional[Dict[str, Any]] = None
+_MODEL_CONFIG_VALIDATOR: Optional[Any] = None
 
 _JSONSCHEMA_SUPPORTED_ADAPTERS = {
     "bigquery",
@@ -104,7 +107,18 @@ def _additional_properties_violation_keys(error: ValidationError) -> List[str]:
 def _validate_with_schema(
     schema: Dict[str, Any], json: Dict[str, Any]
 ) -> Iterator[ValidationError]:
-    validator = CustomDraft7Validator(schema)
+    """Validate json against schema, caching the compiled validator per schema object.
+
+    project_schema() and resources_schema() both return cached module-level dicts,
+    so id(schema) is stable across calls. This avoids rebuilding the validator on
+    every parse — which caused quadratic/exponential hangs when many generic tests
+    with deprecated top-level arguments triggered repeated anyOf validation.
+    See: https://github.com/dbt-labs/dbt-core/issues/12832
+    """
+    schema_id = id(schema)
+    if schema_id not in _VALIDATOR_CACHE:
+        _VALIDATOR_CACHE[schema_id] = CustomDraft7Validator(schema)
+    validator = _VALIDATOR_CACHE[schema_id]
     return validator.iter_errors(json)
 
 
@@ -294,25 +308,36 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             )
 
 
+def _model_config_schema() -> Dict[str, Any]:
+    """Build and cache the ModelConfig schema (extracted from resources schema).
+
+    This avoids rebuilding the schema dict on every call to validate_model_config,
+    which would prevent validator caching from working since a new dict has a new id().
+    """
+    global _MODEL_CONFIG_SCHEMA
+    if _MODEL_CONFIG_SCHEMA is None:
+        resources_jsonschema = resources_schema()
+        nested_definition_name = "ModelConfig"
+        _MODEL_CONFIG_SCHEMA = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": nested_definition_name,
+            **resources_jsonschema["definitions"][nested_definition_name],
+            "definitions": {
+                k: v
+                for k, v in resources_jsonschema["definitions"].items()
+                if k != nested_definition_name
+            },
+        }
+    return _MODEL_CONFIG_SCHEMA
+
+
 def validate_model_config(
     config: Dict[str, Any], file_path: str, is_python_model: bool = False
 ) -> None:
     if not _can_run_validations():
         return
 
-    resources_jsonschema = resources_schema()
-    nested_definition_name = "ModelConfig"
-
-    model_config_schema = {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": nested_definition_name,
-        **resources_jsonschema["definitions"][nested_definition_name],
-        "definitions": {
-            k: v
-            for k, v in resources_jsonschema["definitions"].items()
-            if k != nested_definition_name
-        },
-    }
+    model_config_schema = _model_config_schema()
 
     errors = _validate_with_schema(model_config_schema, config)
     for error in errors:
