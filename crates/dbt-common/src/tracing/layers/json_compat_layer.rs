@@ -294,7 +294,7 @@ impl JsonCompatLayer {
             }
 
             format!(
-                "running dbt-fusion with argumets {}",
+                "running dbt-fusion with arguments {}",
                 serde_json::to_string(eval_args).unwrap_or_default()
             )
         } else {
