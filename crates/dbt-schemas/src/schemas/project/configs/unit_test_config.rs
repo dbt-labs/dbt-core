@@ -59,6 +59,8 @@ pub struct ProjectUnitTestConfig {
     pub refresh_mode: Option<String>,
     #[serde(rename = "+initialize")]
     pub initialize: Option<String>,
+    #[serde(rename = "+scheduler")]
+    pub scheduler: Option<String>,
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
@@ -298,6 +300,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 snowflake_warehouse: config.snowflake_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
+                scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
                 table_tag: config.table_tag,
@@ -394,6 +397,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
             refresh_mode: config.__warehouse_specific_config__.refresh_mode,
             initialize: config.__warehouse_specific_config__.initialize,
+            scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
             table_tag: config.__warehouse_specific_config__.table_tag,

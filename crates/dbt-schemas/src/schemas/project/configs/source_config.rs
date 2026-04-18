@@ -323,6 +323,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 snowflake_warehouse: config.snowflake_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
+                scheduler: None,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
                 table_tag: config.table_tag,

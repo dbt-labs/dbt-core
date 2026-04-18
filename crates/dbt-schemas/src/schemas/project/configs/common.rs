@@ -345,6 +345,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub immutable_where: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
+    pub scheduler: Option<String>,
     pub tmp_relation_type: Option<String>,
     pub query_tag: Option<QueryTag>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -463,6 +464,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             immutable_where,
             refresh_mode,
             initialize,
+            scheduler,
             tmp_relation_type,
             query_tag,
             automatic_clustering,
@@ -557,6 +559,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 immutable_where,
                 refresh_mode,
                 initialize,
+                scheduler,
                 tmp_relation_type,
                 query_tag,
                 automatic_clustering,
@@ -731,6 +734,7 @@ pub fn same_warehouse_config(
     let immutable_where_eq = self_wh.immutable_where == other_wh.immutable_where;
     let refresh_mode_eq = self_wh.refresh_mode == other_wh.refresh_mode;
     let initialize_eq = self_wh.initialize == other_wh.initialize;
+    let scheduler_eq = self_wh.scheduler == other_wh.scheduler;
     let tmp_relation_type_eq = self_wh.tmp_relation_type == other_wh.tmp_relation_type;
     let query_tag_eq = self_wh.query_tag == other_wh.query_tag;
     let automatic_clustering_eq = self_wh.automatic_clustering == other_wh.automatic_clustering;
@@ -797,6 +801,7 @@ pub fn same_warehouse_config(
         && immutable_where_eq
         && refresh_mode_eq
         && initialize_eq
+        && scheduler_eq
         && tmp_relation_type_eq
         && query_tag_eq
         && automatic_clustering_eq
@@ -1202,6 +1207,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.initialize),
                         format!("{:?}", &other_wh.initialize),
+                    )),
+                ),
+                (
+                    "scheduler",
+                    scheduler_eq,
+                    Some((
+                        format!("{:?}", &self_wh.scheduler),
+                        format!("{:?}", &other_wh.scheduler),
                     )),
                 ),
                 (

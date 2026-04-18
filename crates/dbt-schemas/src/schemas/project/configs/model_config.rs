@@ -209,6 +209,8 @@ pub struct ProjectModelConfig {
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     #[serde(rename = "+initialize")]
     pub initialize: Option<String>,
+    #[serde(rename = "+scheduler")]
+    pub scheduler: Option<String>,
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
@@ -612,6 +614,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 immutable_where: config.immutable_where,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
+                scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
                 table_tag: config.table_tag,
@@ -764,6 +767,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             immutable_where: config.__warehouse_specific_config__.immutable_where,
             refresh_mode: config.__warehouse_specific_config__.refresh_mode,
             initialize: config.__warehouse_specific_config__.initialize,
+            scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
             table_tag: config.__warehouse_specific_config__.table_tag,

@@ -1006,20 +1006,15 @@ impl AdapterImpl {
 
                 let (_, table) = self.query(&ctx, conn, &show_sql, None, token.clone())?;
 
-                let new_column_names: Vec<String> = table
-                    .column_names()
-                    .into_iter()
-                    .map(|name| name.to_ascii_lowercase())
-                    .collect();
-
                 let table = table
-                    .rename(Some(new_column_names), None, false, false)?
+                    .rename(Some(table.column_names()), None, false, false)?
                     .select(&[
                         "name".to_string(),
                         "schema_name".to_string(),
                         "database_name".to_string(),
                         "text".to_string(),
                         "target_lag".to_string(),
+                        "scheduler".to_string(),
                         "warehouse".to_string(),
                         "refresh_mode".to_string(),
                         "initialization_warehouse".to_string(),
@@ -1035,12 +1030,7 @@ impl AdapterImpl {
                         relation.identifier_as_str()?
                     );
                     let (_, tables) = self.query(&ctx, conn, &show_tables_sql, None, token)?;
-                    let new_column_names: Vec<String> = tables
-                        .column_names()
-                        .into_iter()
-                        .map(|name| name.to_ascii_lowercase())
-                        .collect();
-                    let tables = tables.rename(Some(new_column_names), None, false, false)?;
+                    let tables = tables.rename(Some(tables.column_names()), None, false, false)?;
                     let tables_batch = tables.to_record_batch();
                     let is_transient = if tables_batch.num_rows() > 0 {
                         get_column_values::<StringArray>(&tables_batch, "kind")

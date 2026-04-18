@@ -15,6 +15,13 @@
         {{ dynamic_table_execute_build_sql(build_sql, existing_relation, target_relation) }}
     {% endif %}
 
+    {%- set dynamic_table = target_relation.from_config(config.model) -%}
+    {%- if dynamic_table.scheduler | string | upper == 'DISABLE' -%}
+        {% call statement(name="refresh") %}
+            {{ snowflake__refresh_dynamic_table(target_relation) }}
+        {% endcall %}
+    {%- endif -%}
+
     {{ run_hooks(post_hooks) }}
 
     {% do unset_query_tag(query_tag) %}
