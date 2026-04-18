@@ -49,6 +49,7 @@ members = [
   "crates/dbt-env",
   "crates/dbt-test-utils",
   "crates/dbt-tui-progress",
+  "crates/dbt-metricflow",
   "crates/dbt-sample",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
@@ -208,6 +209,7 @@ dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
 dbt-loader = { path = "crates/dbt-loader" }
+dbt-metricflow = { path = "crates/dbt-metricflow" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
