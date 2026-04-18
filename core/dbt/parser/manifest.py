@@ -1350,6 +1350,10 @@ class ManifestLoader:
             if exposure.created_at < self.started_at:
                 continue
             _process_sources_for_exposure(self.manifest, current_project, exposure)
+        for function in self.manifest.functions.values():
+            if function.created_at < self.started_at:
+                continue
+            _process_sources_for_node(self.manifest, current_project, function)
 
     # Loops through all nodes, for each element in
     # 'unit_test' array finds the node and updates the
