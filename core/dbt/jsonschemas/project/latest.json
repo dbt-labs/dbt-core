@@ -1782,6 +1782,12 @@
             }
           ]
         },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -3318,6 +3324,12 @@
             }
           ]
         },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -4270,6 +4282,12 @@
             }
           ]
         },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -5156,6 +5174,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+schema": {
@@ -6627,6 +6651,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+secure": {

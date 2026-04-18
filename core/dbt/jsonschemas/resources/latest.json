@@ -1539,6 +1539,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -3314,6 +3320,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -5291,6 +5303,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -7081,6 +7099,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -8101,6 +8125,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -9069,6 +9099,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema_origin": {
@@ -10214,6 +10250,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "secure": {
