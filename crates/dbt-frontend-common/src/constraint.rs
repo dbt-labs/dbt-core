@@ -8,7 +8,7 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct ConstraintMap {
     pub types: LinkedHashMap<String, DataType>,
-    pub integers: LinkedHashMap<String, u8>,
+    pub integers: LinkedHashMap<String, u32>,
 }
 
 impl Default for ConstraintMap {
@@ -63,7 +63,7 @@ pub fn populate_constraint_map(
                 }
             }
             (_, Value::Int(value)) => {
-                let value: u8 = value.try_into().map_err(|_err| {
+                let value: u32 = value.try_into().map_err(|_err| {
                     format!(
                         "Processing of [{key}] => [{expression}] produced result out of range: {value:?}"
                     )
