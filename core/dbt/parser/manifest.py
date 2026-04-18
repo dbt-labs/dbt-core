@@ -1335,7 +1335,7 @@ class ManifestLoader:
             )
             _process_docs_for_saved_query(ctx, saved_query)
 
-    # Loops through all nodes and exposures, for each element in
+    # Loops through all nodes, exposures, and functions, for each element in
     # 'sources' array finds the source node and updates the
     # 'depends_on.nodes' array with the unique id
     def process_sources(self, current_project: str):
