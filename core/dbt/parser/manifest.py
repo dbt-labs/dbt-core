@@ -690,11 +690,7 @@ class ManifestLoader:
 
         Controlled by the `REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES` flag.
         """
-        error_on_invalid = getattr(
-            self.root_project.args,
-            "REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES",
-            False,
-        )
+        error_on_invalid = get_flags().require_source_and_semantic_model_names_without_spaces
         level = EventLevel.ERROR if error_on_invalid else EventLevel.WARN
 
         improper_names: dict[str, str] = {}  # unique_id -> original_file_path
