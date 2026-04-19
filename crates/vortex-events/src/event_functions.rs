@@ -185,8 +185,12 @@ pub fn run_model_event(
 ) {
     let unique_id = node.unique_id();
     if !run_stats.contains_key(&unique_id) {
-        // This got called for a seed, which didn't have stats.
-        // There might be a better way of doing this...
+        // Seeds are expected to not have stats. Any other node type missing
+        // stats indicates a bug (see PR #9146 regression).
+        debug_assert!(
+            node.resource_type().as_static_ref() == "seed",
+            "run_stats missing for non-seed node {unique_id} — telemetry will be skipped"
+        );
         return;
     }
     let stat = run_stats.get(&unique_id).unwrap();
