@@ -83,6 +83,12 @@ pub struct ProjectModelConfig {
     pub base_location_root: Option<String>,
     #[serde(rename = "+base_location_subpath")]
     pub base_location_subpath: Option<String>,
+    #[serde(
+        default,
+        rename = "+iceberg_version",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub iceberg_version: Option<u64>,
     #[serde(rename = "+batch_size")]
     pub batch_size: Option<DbtBatchSize>,
     #[serde(rename = "+begin")]
@@ -623,6 +629,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 copy_grants: config.copy_grants,
                 secure: config.secure,
                 transient: config.transient,
+                iceberg_version: config.iceberg_version,
 
                 partition_by: config.partition_by,
                 cluster_by: config.cluster_by,
@@ -759,6 +766,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
+            iceberg_version: config.__warehouse_specific_config__.iceberg_version,
             target_lag: config.__warehouse_specific_config__.target_lag,
             snowflake_initialization_warehouse: config
                 .__warehouse_specific_config__

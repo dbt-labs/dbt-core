@@ -356,6 +356,8 @@ pub struct WarehouseSpecificNodeConfig {
     pub secure: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub transient: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub iceberg_version: Option<u64>,
 
     // Redshift
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -471,6 +473,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             copy_grants,
             secure,
             transient,
+            iceberg_version,
 
             // Redshift
             auto_refresh,
@@ -566,6 +569,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 copy_grants,
                 secure,
                 transient,
+                iceberg_version,
                 // Redshift
                 auto_refresh,
                 backup,
@@ -741,6 +745,7 @@ pub fn same_warehouse_config(
     let copy_grants_eq = self_wh.copy_grants == other_wh.copy_grants;
     let secure_eq = self_wh.secure == other_wh.secure;
     let transient_eq = self_wh.transient == other_wh.transient;
+    let iceberg_version_eq = self_wh.iceberg_version == other_wh.iceberg_version;
     let auto_refresh_eq = self_wh.auto_refresh == other_wh.auto_refresh;
     let backup_eq = self_wh.backup == other_wh.backup;
     let bind_eq = self_wh.bind == other_wh.bind;
@@ -808,6 +813,7 @@ pub fn same_warehouse_config(
         && copy_grants_eq
         && secure_eq
         && transient_eq
+        && iceberg_version_eq
         && auto_refresh_eq
         && backup_eq
         && bind_eq
@@ -1263,6 +1269,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.transient),
                         format!("{:?}", &other_wh.transient),
+                    )),
+                ),
+                (
+                    "iceberg_version",
+                    iceberg_version_eq,
+                    Some((
+                        format!("{:?}", &self_wh.iceberg_version),
+                        format!("{:?}", &other_wh.iceberg_version),
                     )),
                 ),
                 (

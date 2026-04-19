@@ -309,6 +309,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 copy_grants: config.copy_grants,
                 secure: config.secure,
                 transient: config.transient,
+                iceberg_version: None,
 
                 partition_by: config.partition_by,
                 cluster_by: config.cluster_by,
