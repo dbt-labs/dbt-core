@@ -41,10 +41,10 @@ include = [
 python = "3.11"
 dependencies = [
     # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@c66e91a3d7d953c5ae46ce324e137a92a0d49fd7",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@ash2shukla/fix/py-3-14-compat",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-postgres",
     # Code quality
     "pre-commit~=3.7.0",
     "black>=24.3,<25.0",
@@ -175,10 +175,10 @@ check-sdist = [
 [envs.ci]
 dependencies = [
     # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@c66e91a3d7d953c5ae46ce324e137a92a0d49fd7",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@8b7b6e44ea0303ca129aa96e7e96cd4708b17d07#subdirectory=dbt-postgres",
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@ash2shukla/fix/py-3-14-compat",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
     "pytest>=7.0,<8.0",
