@@ -926,6 +926,14 @@ fn resolve_metric(
             expr: p
                 .get("expr")
                 .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                // Fallback: some manifest formats store the measure expr at
+                // type_params.expr rather than metric_aggregation_params.expr.
+                .or_else(|| {
+                    tp.get("expr")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                })
                 .unwrap_or("")
                 .to_string(),
             agg_time_dimension: p
@@ -1743,10 +1751,24 @@ fn resolve_time_dimension_ref(
     dialect: Dialect,
     primary_model_name: &str,
 ) -> String {
-    // metric_time is special: it refers to the agg_time_dimension of the primary model.
+    // Strip an optional entity prefix: `user_account_activity__date_day` → `date_day`.
+    // Also extract the entity name for scoped matching (mirrors resolve_dimension_ref).
+    let (entity_prefix, dim_name) = match name.split_once("__") {
+        Some((e, d)) => (Some(e), d),
+        None => (None, name),
+    };
+
     let check_model = |alias: &str, model: &ResolvedModel| -> Option<String> {
+        // If an entity prefix was supplied, require the model to own that entity.
+        if let Some(entity) = entity_prefix {
+            if !model.entities.iter().any(|e| e.name == entity) {
+                return None;
+            }
+        }
         for dim in &model.dimensions {
-            if dim.dimension_type == "time" && (name == "metric_time" || dim.name == name) {
+            if dim.dimension_type == "time"
+                && (name == "metric_time" || dim.name == dim_name || dim.name == name)
+            {
                 return Some(render_date_trunc(
                     granularity,
                     &format!("{}.{}", alias, dim.expr),
@@ -2784,6 +2806,7 @@ fn compile_simple_metric_cte(
     // Add joins for dimensions from other models.
     add_dimension_joins(
         spec,
+        &metric.metric_filters,
         &ap.semantic_model,
         primary_alias,
         model_aliases,
@@ -3399,6 +3422,7 @@ fn compile_cumulative_metric_cte(
         );
         add_dimension_joins(
             spec,
+            &metric.metric_filters,
             &ap.semantic_model,
             primary_alias,
             model_aliases,
@@ -3469,6 +3493,7 @@ fn compile_cumulative_metric_cte(
     // Use "f" as the primary alias for joins in the source CTE.
     add_dimension_joins(
         spec,
+        &metric.metric_filters,
         &ap.semantic_model,
         "f",
         model_aliases,
@@ -3724,8 +3749,14 @@ fn compile_conversion_metric_cte(
 }
 
 /// Add JOIN clauses for dimensions from other models.
+///
+/// Scans both the `group_by` specs and any filter strings (metric-level or
+/// user-supplied) for entity-prefixed `Dimension('entity__name')` references,
+/// then emits one LEFT JOIN per referenced model that is not already joined.
+#[allow(clippy::too_many_arguments)]
 fn add_dimension_joins(
     spec: &SemanticQuerySpec,
+    metric_filters: &[String],
     primary_model_name: &str,
     primary_alias: &str,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
@@ -3736,36 +3767,77 @@ fn add_dimension_joins(
     let mut joined: HashSet<String> = HashSet::new();
     joined.insert(primary_model_name.to_string());
 
+    // Collect every entity name that requires a join, from both group-by and
+    // filters (metric-level + user-supplied).
+    let mut needed_entities: Vec<String> = Vec::new();
+
     for gb in &spec.group_by {
         if let GroupBySpec::Dimension {
             entity: Some(entity_name),
             ..
         } = gb
         {
-            for (model_name, (alias, model)) in model_aliases {
-                if joined.contains(model_name) {
-                    continue;
+            if !needed_entities.contains(entity_name) {
+                needed_entities.push(entity_name.clone());
+            }
+        }
+    }
+
+    // Extract entity prefixes from `Dimension('entity__dim')` in all filters.
+    for filter in metric_filters.iter().chain(spec.where_filters.iter()) {
+        let mut cursor = 0usize;
+        while let Some(pos) = filter[cursor..].find("Dimension(") {
+            let abs = cursor + pos;
+            // Skip if this is actually "TimeDimension(" — check preceding char.
+            let preceded_by_alpha = abs > 0 && filter.as_bytes()[abs - 1].is_ascii_alphabetic();
+            if preceded_by_alpha {
+                cursor = abs + 10;
+                continue;
+            }
+            let inner_start = abs + 10;
+            if let Some(paren_end) = filter[inner_start..].find(')') {
+                let dim_ref = filter[inner_start..inner_start + paren_end]
+                    .trim()
+                    .trim_matches('\'')
+                    .trim_matches('"');
+                if let Some((entity_name, _)) = dim_ref.split_once("__") {
+                    let entity_name = entity_name.to_string();
+                    if !needed_entities.contains(&entity_name) {
+                        needed_entities.push(entity_name);
+                    }
                 }
-                let has_entity = model.entities.iter().any(|e| e.name == *entity_name);
-                if has_entity {
-                    if let Some(path) = find_join_path(join_edges, primary_model_name, model_name) {
-                        if let Some(edge) = path.last() {
-                            let left_alias = if edge.from_model == primary_model_name {
-                                primary_alias
-                            } else {
-                                model_aliases
-                                    .get(&edge.from_model)
-                                    .map(|(a, _)| a.as_str())
-                                    .unwrap_or(primary_alias)
-                            };
-                            let join_relation = render_full_relation(model, dialect);
-                            let _ = write!(
-                                sql,
-                                " LEFT JOIN {join_relation} AS {alias} ON {left_alias}.{} = {alias}.{}",
-                                edge.from_expr, edge.to_expr,
-                            );
-                            joined.insert(model_name.clone());
-                        }
+                cursor = inner_start + paren_end + 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Emit one LEFT JOIN per needed entity, skipping already-joined models.
+    for entity_name in &needed_entities {
+        for (model_name, (alias, model)) in model_aliases {
+            if joined.contains(model_name) {
+                continue;
+            }
+            let has_entity = model.entities.iter().any(|e| e.name == *entity_name);
+            if has_entity {
+                if let Some(path) = find_join_path(join_edges, primary_model_name, model_name) {
+                    if let Some(edge) = path.last() {
+                        let left_alias = if edge.from_model == primary_model_name {
+                            primary_alias
+                        } else {
+                            model_aliases
+                                .get(&edge.from_model)
+                                .map(|(a, _)| a.as_str())
+                                .unwrap_or(primary_alias)
+                        };
+                        let join_relation = render_full_relation(model, dialect);
+                        let _ = write!(
+                            sql,
+                            " LEFT JOIN {join_relation} AS {alias} ON {left_alias}.{} = {alias}.{}",
+                            edge.from_expr, edge.to_expr,
+                        );
+                        joined.insert(model_name.clone());
                     }
                 }
             }
@@ -3940,6 +4012,55 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_time_dimension_ref_with_entity_prefix() {
+        // TimeDimension('user_account_activity__date_day', 'day') should resolve
+        // to `alias.date_day` via entity prefix stripping, not fall back to the
+        // raw string `user_account_activity__date_day` as a column name.
+        let model = ResolvedModel {
+            name: "fct_activities".into(),
+            relation_name: "\"db\".\"main\".\"fct_activities\"".into(),
+            alias: "fct_activities".into(),
+            schema_name: "main".into(),
+            database: "db".into(),
+            primary_entity: None,
+            entities: vec![EntityDef {
+                name: "user_account_activity".into(),
+                entity_type: "primary".into(),
+                expr: "activity_id".into(),
+            }],
+            dimensions: vec![DimensionDef {
+                name: "date_day".into(),
+                dimension_type: "time".into(),
+                expr: "date_day".into(),
+                time_granularity: Some("day".into()),
+            }],
+        };
+
+        let mut aliases: HashMap<String, (String, &ResolvedModel)> = HashMap::new();
+        aliases.insert("fct_activities".into(), ("f".into(), &model));
+
+        // Entity-prefixed form: must resolve to f.date_day, not the raw name.
+        let resolved = resolve_time_dimension_ref(
+            "user_account_activity__date_day",
+            "day",
+            &aliases,
+            Dialect::Snowflake,
+            "fct_activities",
+        );
+        assert_eq!(resolved, "DATE_TRUNC('day', f.date_day)");
+
+        // Plain form (no entity prefix) should still work.
+        let resolved_plain = resolve_time_dimension_ref(
+            "date_day",
+            "day",
+            &aliases,
+            Dialect::Snowflake,
+            "fct_activities",
+        );
+        assert_eq!(resolved_plain, "DATE_TRUNC('day', f.date_day)");
+    }
+
+    #[test]
     fn test_resolve_where_filter() {
         // Build a simple model alias map.
         let model = ResolvedModel {
@@ -3996,5 +4117,331 @@ mod tests {
         assert!(find_join_path(&edges, "order_items", "orders").is_some());
         // PK→FK direction (was broken before bidirectional edges)
         assert!(find_join_path(&edges, "orders", "order_items").is_some());
+    }
+
+    // ── Helpers for compile() integration tests ──────────────────────────────
+
+    /// Minimal MetricStore backed by in-memory vecs — no database required.
+    struct MockStore {
+        metrics: Vec<RawMetricRow>,
+        models: Vec<RawModelRow>,
+        entities: Vec<(String, Vec<RawEntityRow>)>, // (unique_id, rows)
+        dimensions: Vec<(String, Vec<RawDimensionRow>)>, // (unique_id, rows)
+        join_graph: Vec<RawJoinGraphRow>,
+    }
+
+    impl MockStore {
+        fn new() -> Self {
+            Self {
+                metrics: vec![],
+                models: vec![],
+                entities: vec![],
+                dimensions: vec![],
+                join_graph: vec![],
+            }
+        }
+    }
+
+    impl MetricStore for MockStore {
+        fn lookup_metric(&mut self, name: &str) -> Result<Option<RawMetricRow>, MetricFlowError> {
+            Ok(self.metrics.iter().find(|m| m.name == name).cloned())
+        }
+        fn list_metric_names(&mut self) -> Result<Vec<String>, MetricFlowError> {
+            Ok(self.metrics.iter().map(|m| m.name.clone()).collect())
+        }
+        fn lookup_semantic_model(
+            &mut self,
+            name: &str,
+        ) -> Result<Option<RawModelRow>, MetricFlowError> {
+            Ok(self.models.iter().find(|m| m.name == name).cloned())
+        }
+        fn lookup_model_entities(
+            &mut self,
+            unique_id: &str,
+        ) -> Result<Vec<RawEntityRow>, MetricFlowError> {
+            Ok(self
+                .entities
+                .iter()
+                .find(|(id, _)| id == unique_id)
+                .map(|(_, rows)| rows.clone())
+                .unwrap_or_default())
+        }
+        fn lookup_model_dimensions(
+            &mut self,
+            unique_id: &str,
+        ) -> Result<Vec<RawDimensionRow>, MetricFlowError> {
+            Ok(self
+                .dimensions
+                .iter()
+                .find(|(id, _)| id == unique_id)
+                .map(|(_, rows)| rows.clone())
+                .unwrap_or_default())
+        }
+        fn lookup_all_join_graph_entities(
+            &mut self,
+        ) -> Result<Vec<RawJoinGraphRow>, MetricFlowError> {
+            Ok(self.join_graph.clone())
+        }
+        fn find_model_for_entity(
+            &mut self,
+            entity_name: &str,
+            primary_or_unique_only: bool,
+        ) -> Result<Option<String>, MetricFlowError> {
+            Ok(self
+                .join_graph
+                .iter()
+                .find(|r| {
+                    r.entity_name == entity_name
+                        && (!primary_or_unique_only
+                            || r.entity_type == "primary"
+                            || r.entity_type == "unique")
+                })
+                .map(|r| r.model_name.clone()))
+        }
+        fn check_entity_in_model(
+            &mut self,
+            model_name: &str,
+            entity_name: &str,
+        ) -> Result<bool, MetricFlowError> {
+            Ok(self
+                .join_graph
+                .iter()
+                .any(|r| r.model_name == model_name && r.entity_name == entity_name))
+        }
+        fn lookup_time_spine(&mut self) -> Result<Option<RawTimeSpineRow>, MetricFlowError> {
+            Ok(None)
+        }
+    }
+
+    // ── Bug fix: measure expr fallback to type_params.expr ───────────────────
+
+    /// Regression: some manifest formats store the measure column at
+    /// `type_params.expr` rather than `type_params.metric_aggregation_params.expr`.
+    /// The compiler must fall back to `type_params.expr` so it generates
+    /// `COUNT(DISTINCT alias.col)` instead of `COUNT(DISTINCT alias.)`.
+    #[test]
+    fn test_measure_expr_fallback_to_type_params_expr() {
+        let mut store = MockStore::new();
+
+        // type_params with expr at the top level (not inside metric_aggregation_params).
+        let type_params = r#"{
+            "expr": "customer_user_id",
+            "metric_aggregation_params": {
+                "semantic_model": "fct_users",
+                "agg": "count_distinct",
+                "agg_time_dimension": "created_at"
+            }
+        }"#;
+
+        store.metrics.push(RawMetricRow {
+            name: "active_users".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: type_params.into(),
+            metric_filter: String::new(),
+        });
+        store.models.push(RawModelRow {
+            name: "fct_users".into(),
+            node_relation: r#""db"."main"."fct_users""#.into(),
+            primary_entity: "user".into(),
+            unique_id: "semantic_model.fct_users".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_users".into(),
+            vec![RawEntityRow {
+                name: "user".into(),
+                entity_type: "primary".into(),
+                expr: "user_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_users".into(),
+            vec![RawDimensionRow {
+                name: "created_at".into(),
+                dimension_type: "time".into(),
+                expr: "created_at".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+        store.join_graph.push(RawJoinGraphRow {
+            model_name: "fct_users".into(),
+            entity_name: "user".into(),
+            entity_type: "primary".into(),
+            expr: "user_id".into(),
+        });
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["active_users".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+        // Must contain the column name, not a bare `f.` with nothing after it.
+        assert!(
+            sql.contains("COUNT(DISTINCT f.customer_user_id)"),
+            "expected COUNT(DISTINCT f.customer_user_id) but got:\n{sql}"
+        );
+        assert!(
+            !sql.contains("COUNT(DISTINCT f.)"),
+            "bare `f.` with no column name should not appear:\n{sql}"
+        );
+    }
+
+    // ── Bug fix: joins generated for dimensions in metric filters ────────────
+
+    /// Regression: `add_dimension_joins` previously only generated JOINs for
+    /// models referenced in `group_by`. A model referenced only in a metric
+    /// filter (`Dimension('entity__col')`) was assigned an alias in the SQL but
+    /// never joined, producing invalid SQL like `WHERE f3.col = X` with no
+    /// corresponding `LEFT JOIN`.
+    ///
+    /// This must use a **derived** metric so the compiler takes the CTE path
+    /// and calls `add_dimension_joins` — the function that was actually fixed.
+    /// Simple metrics take `compile_simple_metrics`, which already had its own
+    /// filter-scanning join logic and would not expose the bug.
+    #[test]
+    fn test_join_generated_for_filter_dimension_in_derived_metric() {
+        let mut store = MockStore::new();
+
+        // Base simple metric whose metric_filter references `user__is_internal`
+        // — a dimension on a separate model not in group_by.
+        let base_filter = r#"{"where_filters": [
+            {"where_sql_template": "{{ Dimension('user__is_internal') }} = False"}
+        ]}"#;
+        let base_type_params = r#"{
+            "expr": "order_id",
+            "metric_aggregation_params": {
+                "semantic_model": "fct_orders",
+                "agg": "count_distinct",
+                "agg_time_dimension": "order_date"
+            }
+        }"#;
+        store.metrics.push(RawMetricRow {
+            name: "order_count".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: base_type_params.into(),
+            metric_filter: base_filter.into(),
+        });
+
+        // Derived metric wrapping the simple one — forces the CTE code path.
+        let derived_type_params = r#"{
+            "expr": "order_count",
+            "metrics": [{"name": "order_count"}]
+        }"#;
+        store.metrics.push(RawMetricRow {
+            name: "order_count_derived".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: derived_type_params.into(),
+            metric_filter: String::new(),
+        });
+
+        // Primary model: fct_orders
+        store.models.push(RawModelRow {
+            name: "fct_orders".into(),
+            node_relation: r#""db"."main"."fct_orders""#.into(),
+            primary_entity: "order".into(),
+            unique_id: "semantic_model.fct_orders".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_orders".into(),
+            vec![
+                RawEntityRow {
+                    name: "order".into(),
+                    entity_type: "primary".into(),
+                    expr: "order_id".into(),
+                },
+                RawEntityRow {
+                    name: "user".into(),
+                    entity_type: "foreign".into(),
+                    expr: "user_id".into(),
+                },
+            ],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_orders".into(),
+            vec![RawDimensionRow {
+                name: "order_date".into(),
+                dimension_type: "time".into(),
+                expr: "order_date".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        // Secondary model: dim_users (holds is_internal)
+        store.models.push(RawModelRow {
+            name: "dim_users".into(),
+            node_relation: r#""db"."main"."dim_users""#.into(),
+            primary_entity: "user".into(),
+            unique_id: "semantic_model.dim_users".into(),
+        });
+        store.entities.push((
+            "semantic_model.dim_users".into(),
+            vec![RawEntityRow {
+                name: "user".into(),
+                entity_type: "primary".into(),
+                expr: "user_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.dim_users".into(),
+            vec![RawDimensionRow {
+                name: "is_internal".into(),
+                dimension_type: "categorical".into(),
+                expr: "is_internal".into(),
+                time_granularity: String::new(),
+            }],
+        ));
+
+        // Join graph: fct_orders → dim_users via user_id
+        store.join_graph.extend([
+            RawJoinGraphRow {
+                model_name: "fct_orders".into(),
+                entity_name: "order".into(),
+                entity_type: "primary".into(),
+                expr: "order_id".into(),
+            },
+            RawJoinGraphRow {
+                model_name: "fct_orders".into(),
+                entity_name: "user".into(),
+                entity_type: "foreign".into(),
+                expr: "user_id".into(),
+            },
+            RawJoinGraphRow {
+                model_name: "dim_users".into(),
+                entity_name: "user".into(),
+                entity_type: "primary".into(),
+                expr: "user_id".into(),
+            },
+        ]);
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["order_count_derived".into()],
+            // No group_by referencing the user model — the join must come from
+            // the metric filter dimension alone.
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+        // dim_users must be joined so the alias used in the WHERE clause is valid.
+        assert!(
+            sql.contains("LEFT JOIN"),
+            "expected a LEFT JOIN for the filter dimension:\n{sql}"
+        );
+        assert!(
+            sql.contains("dim_users"),
+            "dim_users must appear in a JOIN clause:\n{sql}"
+        );
+        assert!(
+            sql.contains("is_internal"),
+            "is_internal column must appear in WHERE:\n{sql}"
+        );
     }
 }
