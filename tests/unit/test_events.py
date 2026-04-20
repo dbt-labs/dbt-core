@@ -314,6 +314,9 @@ sample_values = [
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
     core_types.InvalidMacroAnnotation(msg="", macro_file_path="", macro_unique_id=""),
+    core_types.FunctionParameterColumnConflict(
+        function_name="", param_name="", column_name="", model_name=""
+    ),
     core_types.PackageNodeDependsOnRootProjectNode(
         node_name="", node_package="", root_project_unique_id=""
     ),

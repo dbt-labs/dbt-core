@@ -1294,6 +1294,19 @@ class InvalidMacroAnnotation(WarnLevel):
         return warning_tag(self.msg)
 
 
+class FunctionParameterColumnConflict(WarnLevel):
+    def code(self) -> str:
+        return "I078"
+
+    def message(self) -> str:
+        return warning_tag(
+            f"SQL function '{self.function_name}' has a parameter '{self.param_name}' "
+            f"that conflicts with column '{self.column_name}' in '{self.model_name}'. "
+            f"The database will silently use the column value instead of the parameter argument. "
+            f"Rename the parameter or qualify it as '{self.function_name}.{self.param_name}'."
+        )
+
+
 class PackageNodeDependsOnRootProjectNode(WarnLevel):
     def code(self) -> str:
         return "I077"

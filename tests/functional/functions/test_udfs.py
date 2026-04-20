@@ -5,9 +5,12 @@ import pytest
 
 from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
+from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.nodes import FunctionNode
+from dbt.events.types import FunctionParameterColumnConflict
 from dbt.exceptions import ParsingError
 from dbt.tests.util import run_dbt, write_file
+from dbt_common.events.event_catcher import EventCatcher
 
 double_it_sql = """
 SELECT value * 2
@@ -703,3 +706,68 @@ class TestFunctionSchemasInOnRunEnd:
         assert (
             expected_fn_schema in schemas
         ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"
+
+
+orders_model_sql = """
+SELECT 1 as customer_id, 100.00 as amount
+UNION ALL SELECT 2, 200.00
+"""
+
+get_order_total_sql = """
+SELECT sum(amount) FROM {{ ref('orders_model') }} WHERE customer_id = cust_id
+"""
+
+get_order_total_yml = """
+functions:
+  - name: get_order_total
+    arguments:
+      - name: cust_id
+        data_type: integer
+    returns:
+      data_type: numeric
+"""
+
+get_order_total_shadowed_sql = """
+SELECT sum(amount) FROM {{ ref('orders_model') }} WHERE customer_id = customer_id
+"""
+
+get_order_total_shadowed_yml = """
+functions:
+  - name: get_order_total_shadowed
+    arguments:
+      - name: customer_id
+        data_type: integer
+    returns:
+      data_type: numeric
+"""
+
+
+class TestParameterColumnShadowingWarning:
+    """Warn when a SQL function parameter name matches a column in a referenced model.
+
+    PostgreSQL silently resolves the parameter to the column, producing wrong results.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {"orders_model.sql": orders_model_sql}
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "get_order_total.sql": get_order_total_sql,
+            "get_order_total.yml": get_order_total_yml,
+            "get_order_total_shadowed.sql": get_order_total_shadowed_sql,
+            "get_order_total_shadowed.yml": get_order_total_shadowed_yml,
+        }
+
+    def test_warns_on_parameter_column_conflict(self, project):
+        catcher = EventCatcher(FunctionParameterColumnConflict)
+        runner = dbtRunner(callbacks=[catcher.catch])
+        runner.invoke(["build"])
+
+        # clean function: no conflict, no warning
+        # shadowed function: customer_id param matches column, warning fires
+        assert len(catcher.caught_events) == 1
+        assert "customer_id" in catcher.caught_events[0].info.msg
+        assert "get_order_total_shadowed" in catcher.caught_events[0].info.msg
