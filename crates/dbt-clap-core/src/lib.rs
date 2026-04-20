@@ -797,6 +797,7 @@ impl ShowArgs {
                 ClapResourceType::Seed,
                 ClapResourceType::Source,
                 ClapResourceType::Analysis,
+                ClapResourceType::Test,
             ];
         }
         eval_args.limit = self.limit.into();
