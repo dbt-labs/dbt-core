@@ -536,6 +536,8 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::NoNodesForSelectionCriteria => {
             error_code == ErrorCode::NoNodesForSelectionCriteria
         }
+        SupportedLegacyWarnError::RunResultWarning
+        | SupportedLegacyWarnError::RunResultWarningMessage => false,
         SupportedLegacyWarnError::NodeNotFoundOrDisabled => {
             error_code == ErrorCode::NodeNotFoundOrDisabled
         }
