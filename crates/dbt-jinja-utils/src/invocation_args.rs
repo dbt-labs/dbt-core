@@ -157,7 +157,7 @@ impl InvocationArgs {
             // unrestricted multi-threading
             num_threads: arg.num_threads,
             invocation_id: arg.io.invocation_id,
-            warn_error: arg.warn_error,
+            warn_error: arg.warn_error.unwrap_or_default(),
             warn_error_options: arg.warn_error_options.clone(),
             version_check: arg.version_check,
             introspect: arg.introspect,

@@ -7,7 +7,7 @@ use dbt_yaml::Value as YValue;
 use serde::{Deserialize, Serialize};
 
 use std::any::Any;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::sync::LazyLock;
 use std::{
@@ -19,7 +19,11 @@ use strum::IntoEnumIterator;
 use strum_macros::Display;
 use uuid::Uuid;
 
-use clap::{ArgAction, Parser, ValueEnum, arg, builder::BoolishValueParser, command};
+use clap::{
+    ArgAction, Parser, ValueEnum, arg,
+    builder::{BoolishValueParser, TypedValueParser},
+    command,
+};
 use dbt_common::constants::{
     DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
 };
@@ -1851,6 +1855,20 @@ fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOption
 }
 
 impl CommonArgs {
+    pub fn get_warn_error(&self) -> Option<bool> {
+        if self.warn_error {
+            Some(true)
+        } else if self.no_warn_error {
+            Some(false)
+        } else {
+            std::env::var_os("DBT_WARN_ERROR").and_then(|value| {
+                BoolishValueParser::new()
+                    .parse_ref(&clap::Command::new("dbt-fusion"), None, OsStr::new(&value))
+                    .ok()
+            })
+        }
+    }
+
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let select_option = self.select.clone().map(|selectors| {
             let mut expr = parse_model_specifiers(&selectors).unwrap();
@@ -1956,7 +1974,7 @@ impl CommonArgs {
             resource_types: vec![],
             exclude_resource_types: vec![],
             //flags
-            warn_error: self.warn_error,
+            warn_error: self.get_warn_error(),
             warn_error_options: self.warn_error_options.clone().unwrap_or_default(),
             version_check: if self.no_version_check {
                 false

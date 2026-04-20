@@ -460,7 +460,7 @@ pub struct EvalArgs {
     pub connection: bool,
     pub macro_name: String,
     pub macro_args: BTreeMap<String, Value>,
-    pub warn_error: bool,
+    pub warn_error: Option<bool>,
     pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
     pub introspect: bool,
@@ -617,7 +617,7 @@ impl EvalArgsBuilder {
         warn_error: bool,
         warn_error_options: WarnErrorOptions,
     ) -> Self {
-        self.args.warn_error = warn_error;
+        self.args.warn_error = Some(warn_error);
         self.args.warn_error_options = warn_error_options;
         self
     }
