@@ -57,6 +57,8 @@ pub fn format_qualifier_alias(qualifier: &str, alias: &str, colorize: bool) -> S
             "{}...",
             &qualifier[..MAX_QUALIFIER_DISPLAY_LEN.saturating_sub(4)]
         )
+    } else if qualifier.is_empty() {
+        String::new()
     } else {
         format!("{qualifier}.")
     };
@@ -325,6 +327,23 @@ pub fn format_node_processed_end(
     // Special handling for unit tests: display test schema suffix
     if node_type == NodeType::UnitTest {
         qualifier = format!("{}{}", qualifier, UNIT_TEST_SCHEMA_SUFFIX);
+    }
+
+    // For data tests, only show the schema qualifier when store_failures is enabled.
+    // Without store_failures, dbt-core shows just the test name (no schema prefix).
+    if node_type == NodeType::Test {
+        let store_failures = get_node_outcome_detail(node.into())
+            .and_then(|detail| {
+                if let AnyNodeOutcomeDetail::NodeTestDetail(test_detail) = detail {
+                    test_detail.store_failures
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(false);
+        if !store_failures {
+            qualifier = String::new();
+        }
     }
 
     // Determine description based on outcome

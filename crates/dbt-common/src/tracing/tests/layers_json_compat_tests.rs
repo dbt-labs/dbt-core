@@ -931,7 +931,7 @@ fn test_node_events() {
             "name": "LogTestResult",
             "level": "info",
             "extra": {},
-            "msg": format!("   Skipped [-------] test  {}.{} ({} - {}:1:0)", TEST_SCHEMA, TEST_ALIAS, test_custom_mat.clone(), TEST_REL_PATH)
+            "msg": format!("   Skipped [-------] test  {} ({} - {}:1:0)", TEST_ALIAS, test_custom_mat.clone(), TEST_REL_PATH)
         },
         "data": {
             "node_info": expected_node_info("skipped", true),
