@@ -72,7 +72,7 @@ fn apply_extra_normalizers(content: String, normalizers: &[OutputNormalizer]) ->
         .fold(content, |acc, normalizer| normalizer(acc))
 }
 
-pub(super) fn diff_goldie<P: Fn(String) -> String>(
+pub fn diff_goldie<P: Fn(String) -> String>(
     goldie_type: &str,
     postprocessed_actual: String,
     normalize_slashes_in_actual: bool,

@@ -158,7 +158,7 @@ impl TaskSeq {
     pub async fn execute_in_with_env(
         &self,
         project_env: &ProjectEnv,
-        set_env: &[(&'static str, &'static str)],
+        set_env: &[(&str, &str)],
     ) -> TestResult<()> {
         // Try initializing tracing. It will succeed only once per process, because it
         // sets global subscriber. We initialize with a special reloadable data layer
@@ -210,7 +210,7 @@ async fn run_test_tasks(
     tasks: &[Box<dyn Task + '_>],
     project_env: &ProjectEnv,
     test_env: &TestEnv,
-    set_env: &[(&'static str, &'static str)],
+    set_env: &[(&str, &str)],
 ) -> TestResult<()> {
     use crate::test_env_guard::TestEnvGuard;
 

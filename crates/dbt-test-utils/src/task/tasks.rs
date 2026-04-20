@@ -806,7 +806,7 @@ impl ExecuteAndCompareTelemetry {
             "version",
         ];
         if deterministic_sort {
-            keys.extend(["span_id", "event_id"]);
+            keys.extend(["span_id", "event_id", "parent_span_id"]);
         }
         keys
     }

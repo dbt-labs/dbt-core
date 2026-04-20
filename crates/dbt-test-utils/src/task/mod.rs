@@ -5,6 +5,7 @@ mod check_publication;
 mod dbt;
 pub mod dir_manifest;
 mod env;
+pub mod file_golden;
 mod io;
 mod log_capture;
 mod manifest_capture;
@@ -106,6 +107,9 @@ pub use tasks::{CompareStdoutStderr, ExecuteAndCompare, ExecuteAndCompareTelemet
 
 // Dir manifest utilities
 pub use dir_manifest::{CompareDirManifest, assert_golden_manifest, compute_dir_manifest};
+
+// File golden comparison
+pub use file_golden::CompareFileGolden;
 
 use async_trait::async_trait;
 
