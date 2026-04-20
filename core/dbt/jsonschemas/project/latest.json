@@ -1782,6 +1782,12 @@
             }
           ]
         },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -2832,6 +2838,23 @@
             "null"
           ]
         },
+        "+iceberg_version": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+immutable_where": {
           "type": [
             "string",
@@ -3316,6 +3339,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+schema": {
@@ -4270,6 +4299,12 @@
             }
           ]
         },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -5156,6 +5191,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+schema": {
@@ -6627,6 +6668,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+secure": {
