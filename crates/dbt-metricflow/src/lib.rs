@@ -1799,9 +1799,13 @@ fn resolve_time_dimension_ref(
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn render_date_trunc(granularity: &str, expr: &str, dialect: Dialect) -> String {
+    // Cast to DATE so the result type is consistent regardless of whether the
+    // source column is a DATE or TIMESTAMP.  Without this, joining two CTEs
+    // that GROUP BY the same logical month can silently fail when one truncates
+    // a DATE (→ DATE) and the other truncates a TIMESTAMP (→ TIMESTAMP).
     match dialect {
-        Dialect::DuckDB => format!("DATE_TRUNC('{granularity}', {expr})"),
-        Dialect::Snowflake => format!("DATE_TRUNC('{granularity}', {expr})"),
+        Dialect::DuckDB => format!("DATE_TRUNC('{granularity}', {expr})::DATE"),
+        Dialect::Snowflake => format!("DATE_TRUNC('{granularity}', {expr})::DATE"),
     }
 }
 
@@ -1897,13 +1901,26 @@ fn replace_word(text: &str, find: &str, replace: &str) -> String {
     result
 }
 
+/// Returns `true` if `expr` is a compound expression — one that cannot be
+/// trivially qualified by prepending a table alias — because it contains
+/// operators, function calls, or SQL keywords (e.g. a CASE expression).
+///
+/// Pure literals (`*`, numeric constants, string literals) return `false`
+/// because they contain no column references and are never ambiguous.
+fn is_complex_measure_expr(expr: &str) -> bool {
+    let trimmed = expr.trim();
+    if trimmed == "*" || trimmed.parse::<f64>().is_ok() || trimmed.starts_with('\'') {
+        return false;
+    }
+    trimmed.contains('(') || trimmed.contains(' ')
+}
+
 fn qualify_measure_expr(alias: &str, expr: &str) -> String {
     let trimmed = expr.trim();
     if trimmed == "*"
         || trimmed.parse::<f64>().is_ok()
         || trimmed.starts_with('\'')
-        || trimmed.contains('(')
-        || trimmed.contains(' ')
+        || is_complex_measure_expr(trimmed)
     {
         trimmed.to_string()
     } else {
@@ -2116,13 +2133,24 @@ pub fn compile(
     // Validate the query spec against the resolved models.
     validate_spec(spec, &all_metrics, &model_alias_map)?;
 
-    // Check if we can compile everything into a single query (all simple metrics
-    // from a small set of models) or need CTEs.
+    // Check if we can compile everything into a single query or need CTEs.
+    //
+    // The single-query path is only semantically correct when all metrics share
+    // the same semantic model (base table).  Mixing models in one FROM/JOIN
+    // introduces fanout and leaks one metric's filters into the other.
+    // When models differ, each metric must compile to its own CTE and the
+    // results are stitched together with FULL OUTER JOIN.
     let all_simple = top_level
         .iter()
         .all(|m| m.metric_type == MetricType::Simple);
+    let all_same_model = top_level
+        .iter()
+        .filter_map(|m| m.agg_params.as_ref().map(|ap| ap.semantic_model.as_str()))
+        .collect::<HashSet<_>>()
+        .len()
+        <= 1;
 
-    if all_simple && !top_level.is_empty() {
+    if all_simple && all_same_model && !top_level.is_empty() {
         compile_simple_metrics(
             spec,
             &top_level,
@@ -2446,7 +2474,13 @@ fn compile_simple_metrics(
                 .get(&ap.semantic_model)
                 .map(|(a, _)| a.as_str())
                 .unwrap_or("t");
-            let col_expr = qualify_measure_expr(model_alias, &ap.expr);
+            let col_expr =
+                if ap.semantic_model != primary_model_name && is_complex_measure_expr(&ap.expr) {
+                    // Expression is pre-computed in the derived-table JOIN; reference it by name.
+                    format!("{model_alias}.__mf_{}_expr", metric.name)
+                } else {
+                    qualify_measure_expr(model_alias, &ap.expr)
+                };
             let agg_expr = render_agg(&ap.agg, &col_expr, dialect);
             select_parts.push(format!("  {agg_expr} AS {}", metric.name));
         }
@@ -2458,6 +2492,22 @@ fn compile_simple_metrics(
     // FROM clause.
     let from_relation = render_full_relation(primary_model, dialect);
     let _ = writeln!(sql, "FROM {from_relation} AS {primary_alias}");
+
+    // For secondary models whose measure expression is complex (e.g. a CASE expression),
+    // we wrap the JOIN target in a derived table that pre-computes the expression as a
+    // named column.  This makes all column references unambiguous by construction —
+    // inside the subquery only one table is in scope, so no alias qualification is needed.
+    let mut complex_exprs_by_model: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for metric in metrics.iter() {
+        if let Some(ref ap) = metric.agg_params {
+            if ap.semantic_model != primary_model_name && is_complex_measure_expr(&ap.expr) {
+                complex_exprs_by_model
+                    .entry(ap.semantic_model.clone())
+                    .or_default()
+                    .push((metric.name.clone(), ap.expr.clone()));
+            }
+        }
+    }
 
     // JOIN clauses — emit one LEFT JOIN per edge in the resolved join sequence.
     for edge in &join_sequence {
@@ -2474,11 +2524,27 @@ fn compile_simple_metrics(
                 .unwrap_or(primary_alias.as_str())
         };
         let join_relation = render_full_relation(join_model, dialect);
-        let _ = writeln!(
-            sql,
-            "LEFT JOIN {join_relation} AS {join_alias} ON {left_alias}.{} = {join_alias}.{}",
-            edge.from_expr, edge.to_expr,
-        );
+        if let Some(complex_exprs) = complex_exprs_by_model.get(&edge.to_model) {
+            // Derived-table JOIN: pre-compute complex measure exprs so that bare column
+            // references inside them are resolved against the secondary table only.
+            let derived_cols: Vec<String> = complex_exprs
+                .iter()
+                .map(|(name, expr)| format!("  {expr} AS __mf_{name}_expr"))
+                .collect();
+            let _ = writeln!(
+                sql,
+                "LEFT JOIN (\n  SELECT *,\n{}\n  FROM {join_relation}\n) AS {join_alias} ON {left_alias}.{} = {join_alias}.{}",
+                derived_cols.join(",\n"),
+                edge.from_expr,
+                edge.to_expr,
+            );
+        } else {
+            let _ = writeln!(
+                sql,
+                "LEFT JOIN {join_relation} AS {join_alias} ON {left_alias}.{} = {join_alias}.{}",
+                edge.from_expr, edge.to_expr,
+            );
+        }
     }
 
     // CROSS JOIN for models that have no entity-based join path.
@@ -3989,11 +4055,11 @@ mod tests {
     fn test_render_date_trunc() {
         assert_eq!(
             render_date_trunc("day", "o.order_date", Dialect::DuckDB),
-            "DATE_TRUNC('day', o.order_date)"
+            "DATE_TRUNC('day', o.order_date)::DATE"
         );
         assert_eq!(
             render_date_trunc("week", "o.order_date", Dialect::Snowflake),
-            "DATE_TRUNC('week', o.order_date)"
+            "DATE_TRUNC('week', o.order_date)::DATE"
         );
     }
 
@@ -4047,7 +4113,7 @@ mod tests {
             Dialect::Snowflake,
             "fct_activities",
         );
-        assert_eq!(resolved, "DATE_TRUNC('day', f.date_day)");
+        assert_eq!(resolved, "DATE_TRUNC('day', f.date_day)::DATE");
 
         // Plain form (no entity prefix) should still work.
         let resolved_plain = resolve_time_dimension_ref(
@@ -4057,7 +4123,7 @@ mod tests {
             Dialect::Snowflake,
             "fct_activities",
         );
-        assert_eq!(resolved_plain, "DATE_TRUNC('day', f.date_day)");
+        assert_eq!(resolved_plain, "DATE_TRUNC('day', f.date_day)::DATE");
     }
 
     #[test]
@@ -4442,6 +4508,328 @@ mod tests {
         assert!(
             sql.contains("is_internal"),
             "is_internal column must appear in WHERE:\n{sql}"
+        );
+    }
+
+    // ── Bug fix: ambiguous column in multi-metric simple join ─────────────────
+
+    /// Regression: when two simple metrics come from different models, the
+    /// secondary metric's measure `expr` is passed to `qualify_measure_expr`.
+    /// That function qualifies simple identifiers (e.g. `user_id` → `f1.user_id`)
+    /// but bails out on any expr that contains spaces or parentheses, returning
+    /// it verbatim.  For the `account_signups` metric the expr is
+    /// `case when account_id is not null then 1 else 0 end`.
+    ///
+    /// When the two models are joined, both the primary model and the secondary
+    /// model's join key are named `account_id`, making the bare reference
+    /// ambiguous.  Snowflake rejects the query with:
+    ///   "SQL compilation error: ambiguous column name 'ACCOUNT_ID'"
+    ///
+    /// The fix must qualify every bare column reference inside complex exprs
+    /// with the secondary model's alias (e.g. `a.account_id`).
+    #[test]
+    fn test_multi_metric_simple_join_qualifies_complex_measure_expr() {
+        let mut store = MockStore::new();
+
+        // Metric 1: count_distinct of user_id, on fct_user_activities.
+        let user_count_params = r#"{
+            "expr": "user_id",
+            "metric_aggregation_params": {
+                "semantic_model": "fct_user_activities",
+                "agg": "count_distinct",
+                "agg_time_dimension": "date_day"
+            }
+        }"#;
+        store.metrics.push(RawMetricRow {
+            name: "user_count".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: user_count_params.into(),
+            metric_filter: String::new(),
+        });
+
+        // Metric 2: sum of a CASE expression, on account_signups.
+        // The CASE expr references `account_id` which is also the join key on
+        // the primary model side — making it ambiguous without a table alias.
+        let signup_count_params = r#"{
+            "expr": "case when account_id is not null then 1 else 0 end",
+            "metric_aggregation_params": {
+                "semantic_model": "account_signups",
+                "agg": "sum",
+                "agg_time_dimension": "created_at"
+            }
+        }"#;
+        store.metrics.push(RawMetricRow {
+            name: "signup_count".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: signup_count_params.into(),
+            metric_filter: String::new(),
+        });
+
+        // Primary model: fct_user_activities
+        store.models.push(RawModelRow {
+            name: "fct_user_activities".into(),
+            node_relation: r#""db"."main"."fct_user_activities""#.into(),
+            primary_entity: "activity".into(),
+            unique_id: "semantic_model.fct_user_activities".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_user_activities".into(),
+            vec![
+                RawEntityRow {
+                    name: "activity".into(),
+                    entity_type: "primary".into(),
+                    expr: "activity_id".into(),
+                },
+                RawEntityRow {
+                    // FK linking to account_signups.
+                    name: "account".into(),
+                    entity_type: "foreign".into(),
+                    expr: "account_id".into(),
+                },
+            ],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_user_activities".into(),
+            vec![RawDimensionRow {
+                name: "date_day".into(),
+                dimension_type: "time".into(),
+                expr: "date_day".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        // Secondary model: account_signups
+        store.models.push(RawModelRow {
+            name: "account_signups".into(),
+            node_relation: r#""db"."main"."account_signups""#.into(),
+            primary_entity: "account".into(),
+            unique_id: "semantic_model.account_signups".into(),
+        });
+        store.entities.push((
+            "semantic_model.account_signups".into(),
+            vec![RawEntityRow {
+                name: "account".into(),
+                entity_type: "primary".into(),
+                expr: "account_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.account_signups".into(),
+            vec![RawDimensionRow {
+                name: "created_at".into(),
+                dimension_type: "time".into(),
+                expr: "created_at".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        // Join graph: fct_user_activities (FK) → account_signups (PK) via account_id.
+        store.join_graph.extend([
+            RawJoinGraphRow {
+                model_name: "fct_user_activities".into(),
+                entity_name: "account".into(),
+                entity_type: "foreign".into(),
+                expr: "account_id".into(),
+            },
+            RawJoinGraphRow {
+                model_name: "account_signups".into(),
+                entity_name: "account".into(),
+                entity_type: "primary".into(),
+                expr: "account_id".into(),
+            },
+        ]);
+
+        // Because the two metrics come from different semantic models, the router
+        // sends this to compile_complex_metrics (CTE path).  Each metric gets its
+        // own CTE with its own FROM clause, so column references inside either
+        // metric's expression are unambiguous by construction — only one table is
+        // in scope per CTE.  No JOIN between the two base tables occurs.
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["user_count".into(), "signup_count".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+
+        // CTE path: each metric in its own subquery scope.
+        assert!(sql.contains("WITH"), "expected CTE-based query:\n{sql}");
+        // signup_count CTE evaluates the CASE with only account_signups in scope —
+        // account_id is unambiguous without any table qualifier.
+        assert!(
+            sql.contains("case when account_id is not null"),
+            "signup_count CTE must contain the CASE expression:\n{sql}"
+        );
+        // The two base tables must not be joined together.
+        assert!(
+            !sql.contains("LEFT JOIN"),
+            "metrics from different models must not be combined via LEFT JOIN:\n{sql}"
+        );
+    }
+
+    // ── Bug fix: derived-table wrapping of complex secondary measure exprs ────
+    //
+    // compile_simple_metrics wraps the JOIN for any secondary model whose metric
+    // expression is "complex" (contains spaces or parens — e.g. a CASE expression)
+    // inside a derived table that pre-computes the expr as a named column.
+    // This makes all column references unambiguous by construction.
+    //
+    // The compile() router now sends multi-model simple metrics to the CTE path,
+    // so this test calls compile_simple_metrics directly to exercise the mechanism.
+    #[test]
+    fn test_compile_simple_metrics_wraps_complex_secondary_expr_in_derived_table() {
+        let primary = ResolvedModel {
+            name: "fct_user_activities".into(),
+            relation_name: "fct_user_activities".into(),
+            alias: "fct_user_activities".into(),
+            schema_name: "main".into(),
+            database: "db".into(),
+            primary_entity: Some("activity".into()),
+            entities: vec![
+                EntityDef {
+                    name: "activity".into(),
+                    entity_type: "primary".into(),
+                    expr: "activity_id".into(),
+                },
+                EntityDef {
+                    name: "account".into(),
+                    entity_type: "foreign".into(),
+                    expr: "account_id".into(),
+                },
+            ],
+            dimensions: vec![DimensionDef {
+                name: "date_day".into(),
+                dimension_type: "time".into(),
+                expr: "date_day".into(),
+                time_granularity: Some("day".into()),
+            }],
+        };
+
+        let secondary = ResolvedModel {
+            name: "account_signups".into(),
+            relation_name: "account_signups".into(),
+            alias: "account_signups".into(),
+            schema_name: "main".into(),
+            database: "db".into(),
+            primary_entity: Some("account".into()),
+            entities: vec![EntityDef {
+                name: "account".into(),
+                entity_type: "primary".into(),
+                expr: "account_id".into(),
+            }],
+            dimensions: vec![DimensionDef {
+                name: "created_at".into(),
+                dimension_type: "time".into(),
+                expr: "created_at".into(),
+                time_granularity: Some("day".into()),
+            }],
+        };
+
+        let user_count = ResolvedMetric {
+            name: "user_count".into(),
+            metric_type: MetricType::Simple,
+            description: String::new(),
+            agg_params: Some(AggParams {
+                semantic_model: "fct_user_activities".into(),
+                agg: "count_distinct".into(),
+                expr: "user_id".into(),
+                agg_time_dimension: Some("date_day".into()),
+                non_additive_dimension: None,
+            }),
+            metric_filters: vec![],
+            derived_expr: None,
+            input_metrics: vec![],
+            numerator: None,
+            denominator: None,
+            cumulative_params: None,
+            conversion_params: None,
+            join_to_timespine: false,
+            fill_nulls_with: None,
+        };
+
+        let signup_count = ResolvedMetric {
+            name: "signup_count".into(),
+            metric_type: MetricType::Simple,
+            description: String::new(),
+            agg_params: Some(AggParams {
+                semantic_model: "account_signups".into(),
+                agg: "sum".into(),
+                // Complex expr: contains spaces — qualify_measure_expr returns verbatim,
+                // but compile_simple_metrics must wrap it in a derived table JOIN.
+                expr: "case when account_id is not null then 1 else 0 end".into(),
+                agg_time_dimension: Some("created_at".into()),
+                non_additive_dimension: None,
+            }),
+            metric_filters: vec![],
+            derived_expr: None,
+            input_metrics: vec![],
+            numerator: None,
+            denominator: None,
+            cumulative_params: None,
+            conversion_params: None,
+            join_to_timespine: false,
+            fill_nulls_with: None,
+        };
+
+        // account_signups (i=0) → alias "a"; fct_user_activities (i=1) → alias "f1"
+        let model_aliases: HashMap<String, (String, &ResolvedModel)> = [
+            ("account_signups".to_string(), ("a".to_string(), &secondary)),
+            (
+                "fct_user_activities".to_string(),
+                ("f1".to_string(), &primary),
+            ),
+        ]
+        .into();
+
+        let join_edges = vec![JoinEdge {
+            from_model: "fct_user_activities".into(),
+            to_model: "account_signups".into(),
+            from_expr: "account_id".into(),
+            to_expr: "account_id".into(),
+            entity_name: "account".into(),
+        }];
+
+        let all_metrics: HashMap<String, ResolvedMetric> = [
+            ("user_count".to_string(), user_count.clone()),
+            ("signup_count".to_string(), signup_count.clone()),
+        ]
+        .into();
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["user_count".into(), "signup_count".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+        };
+
+        let sql = compile_simple_metrics(
+            &spec,
+            &[&user_count, &signup_count],
+            &all_metrics,
+            &model_aliases,
+            &join_edges,
+            Dialect::DuckDB,
+        )
+        .unwrap();
+
+        // Complex expr must be pre-computed inside the derived table.
+        assert!(
+            sql.contains("SUM(a.__mf_signup_count_expr)"),
+            "outer SELECT must reference the pre-computed derived column:\n{sql}"
+        );
+        assert!(
+            sql.contains("__mf_signup_count_expr"),
+            "derived table must define the named column:\n{sql}"
+        );
+        assert!(
+            !sql.contains("SUM(case when"),
+            "CASE expression must not appear directly in the outer aggregation:\n{sql}"
         );
     }
 }
