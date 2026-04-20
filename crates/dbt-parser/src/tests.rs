@@ -163,6 +163,86 @@ mod tests {
         assert_eq!(cfg.description.as_deref(), Some("prefix 3"));
     }
 
+    #[test]
+    fn test_freshness_dict_literal_renders_as_typed() {
+        use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod};
+
+        // Body contains a dict literal, so inner `{`/`}` are present. The
+        // outer `{{ ... }}` is still a single expression and must deserialize
+        // into FreshnessRules rather than collapsing to the string
+        // "{'count': 38, 'period': 'day'}".
+        let yaml = r#"
+        error_after: "{{ {'count': 38, 'period': 'day'} }}"
+        warn_after:
+          count: 10
+          period: hour
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        let error = freshness
+            .error_after
+            .expect("error_after should deserialize as FreshnessRules");
+        assert_eq!(error.count, Some(38));
+        assert_eq!(error.period, Some(FreshnessPeriod::day));
+
+        let warn = freshness
+            .warn_after
+            .expect("warn_after should deserialize as FreshnessRules");
+        assert_eq!(warn.count, Some(10));
+        assert_eq!(warn.period, Some(FreshnessPeriod::hour));
+    }
+
+    #[test]
+    fn test_freshness_dict_literal_ternary_renders_as_null() {
+        use dbt_schemas::schemas::common::FreshnessDefinition;
+
+        // Ternary where the `none` branch is taken. The dict literal on the
+        // other branch injects inner `{`/`}` into the expression body, but
+        // the rendered result must still be YAML null — not the string "None".
+        let yaml = r#"
+        error_after: "{{ none if true else {'count': 1, 'period': 'day'} }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        assert!(
+            freshness.error_after.is_none(),
+            "expected error_after to deserialize as null, got {:?}",
+            freshness.error_after
+        );
+    }
+
     #[tokio::test]
     async fn test_render_sql_with_ref_macro() {
         let (env, sql_resources, init_config) = setup_test_env();

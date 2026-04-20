@@ -623,24 +623,32 @@ fn perform_typecheck<F>(
 static RE_HAS_RENDER_CHARS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\{\{|\{\%|\{\#|%\}|#\}|\}\})").expect("valid regex"));
 
-static RE_SIMPLE_EXPR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*\{\{\s*[^{}]+\s*\}\}\s*$").expect("valid regex"));
-
-/// Check if the input is a single Jinja expression without whitespace control
+/// Check if the input is a single Jinja expression without whitespace control.
+///
+/// Bare `{` / `}` in the body are allowed so that dict and set literals
+/// (`{{ {'a': 1} }}`, `{{ {1, 2, 3} }}`) take the typed evaluation path rather
+/// than being coerced to their Display form. Nested Jinja delimiters (`{{`,
+/// `}}`, `{%`, `%}`, `{#`, `#}`) inside the body still disqualify the input,
+/// which keeps multi-expression and statement-bearing templates on the string
+/// rendering path.
 pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
-    // The regex matches:
-    //   ^\s*      -> optional whitespace at the beginning
-    //   \{\{      -> the literal '{{'
-    //   \s*       -> optional whitespace
-    //   [^{}]+   -> one or more characters that are not '{', '}', or '-'
-    //   \s*       -> optional whitespace
-    //   \}\}      -> the literal '}}'
-    //   \s*$      -> optional whitespace at the end
-    !input.starts_with("{{-")
-        && !input.ends_with("-}}")
-        && input.starts_with("{{")
-        && input.ends_with("}}")
-        && { RE_SIMPLE_EXPR.is_match(input) }
+    if input.starts_with("{{-") || input.ends_with("-}}") {
+        return false;
+    }
+    if !input.starts_with("{{") || !input.ends_with("}}") || input.len() < 4 {
+        return false;
+    }
+    let body = &input[2..input.len() - 2];
+    let bytes = body.as_bytes();
+    for i in 0..bytes.len().saturating_sub(1) {
+        if matches!(
+            &bytes[i..i + 2],
+            b"{{" | b"}}" | b"{%" | b"%}" | b"{#" | b"#}"
+        ) {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -650,11 +658,55 @@ mod tests {
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
+        // Plain single expressions.
         assert!(check_single_expression_without_whitepsace_control(
             "{{ config(enabled=true) }}"
         ));
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ foo }}"
+        ));
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ [1, 2, 3] }}"
+        ));
+
+        // Expressions whose body contains a dict/set literal: the outer
+        // `{{ ... }}` is still a single expression and must be routed through
+        // the typed path so the literal survives as a mapping/set rather than
+        // being coerced to its Display form.
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ {'a': 1} }}"
+        ));
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ {'count': 38, 'period': 'day'} if cond else none }}"
+        ));
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ foo({'a': 1}) }}"
+        ));
+        assert!(check_single_expression_without_whitepsace_control(
+            "{{ {1, 2, 3} }}"
+        ));
+
+        // Whitespace control must stay excluded.
         assert!(!check_single_expression_without_whitepsace_control(
             "{{- config(enabled=true) -}}"
+        ));
+
+        // Multiple sibling expressions must stay on the string path.
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{{ a }}{{ b }}"
+        ));
+
+        // Statement + expression must stay on the string path.
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{% set x = 1 %}{{ x }}"
+        ));
+
+        // Surrounding literal text must stay on the string path.
+        assert!(!check_single_expression_without_whitepsace_control(
+            "prefix {{ foo }}"
+        ));
+        assert!(!check_single_expression_without_whitepsace_control(
+            "{{ foo }} suffix"
         ));
     }
 
