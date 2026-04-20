@@ -243,6 +243,7 @@ impl AdapterImpl {
         Ok(())
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L655
     pub fn cache_added(
         &self,
         _state: &State,
@@ -255,6 +256,7 @@ impl AdapterImpl {
         Ok(none_value())
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L666
     pub fn cache_dropped(
         &self,
         _state: &State,
@@ -267,6 +269,7 @@ impl AdapterImpl {
         Ok(none_value())
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L678
     pub fn cache_renamed(
         &self,
         _state: &State,
@@ -351,6 +354,10 @@ impl AdapterImpl {
         TableFormat::Default
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1749
+    /// PostgresAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-postgres/src/dbt/adapters/postgres/impl.py#L175
+    /// RedshiftAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-redshift/src/dbt/adapters/redshift/impl.py#L490
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L502
     pub fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
         use DbtIncrementalStrategy::*;
 
@@ -370,7 +377,7 @@ impl AdapterImpl {
 
     /// Redact credentials expressions from DDL statements
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/66f513b960c62ee21c4c399264a41a56853f3d82/dbt/adapters/databricks/impl.py#L717
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L833
     pub fn redact_credentials(&self, sql: &str) -> AdapterResult<String> {
         if self.adapter_type() != Databricks {
             return Err(AdapterError::new(
@@ -403,6 +410,7 @@ impl AdapterImpl {
         Ok(redacted_sql)
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L505
     pub fn get_partitions_metadata(
         &self,
         _state: &State,
@@ -522,6 +530,7 @@ impl AdapterImpl {
         Ok((response, table))
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L453
     #[allow(clippy::too_many_arguments)]
     pub fn execute(
         &self,
@@ -644,6 +653,8 @@ impl AdapterImpl {
         )
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L55
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L573
     #[allow(clippy::too_many_arguments)]
     pub fn add_query(
         &self,
@@ -679,7 +690,6 @@ impl AdapterImpl {
             ),
             Impl(Bigquery, _) => {
                 // Bigquery does not support add_query
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L476-L477
                 Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,
                     "bigquery.add_query",
@@ -707,6 +717,9 @@ impl AdapterImpl {
     ///
     /// Executes Python code in the warehouse's Python runtime.
     /// Default implementation raises Internal error.
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1727
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L417
     pub fn submit_python_job(
         &self,
         ctx: &QueryCtx,
@@ -800,10 +813,15 @@ impl AdapterImpl {
         }
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L214
     pub fn quote(&self, identifier: &str) -> String {
         Self::quote_identifier_for_adapter_type(self.adapter_type(), identifier)
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L217
+    /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L1154
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L299
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L205
     pub fn list_schemas(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
         if self.mock_state().is_some() {
             return Ok(vec![]);
@@ -836,6 +854,7 @@ impl AdapterImpl {
         Ok(schemas)
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L166
     pub fn create_schema(
         &self,
         state: &State,
@@ -846,6 +865,7 @@ impl AdapterImpl {
         Ok(none_value())
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L177
     pub fn drop_schema(
         &self,
         state: &State,
@@ -859,6 +879,7 @@ impl AdapterImpl {
         Ok(none_value())
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L894
     pub fn valid_snapshot_target(
         &self,
         _state: &State,
@@ -867,6 +888,7 @@ impl AdapterImpl {
         unimplemented!("valid_snapshot_target")
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1769
     pub fn get_incremental_strategy_macro(
         &self,
         state: &State,
@@ -898,6 +920,7 @@ impl AdapterImpl {
         }))
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1047
     #[allow(clippy::too_many_arguments)]
     pub fn get_relation(
         &self,
@@ -963,6 +986,10 @@ impl AdapterImpl {
     /// Get a catalog relation, which in Core is a serialized type.
     /// In Fusion, we treat it as a Jinja accessible flat container of values
     /// needed for Iceberg ddl generation.
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L350
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1384
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L539
     pub fn build_catalog_relation(&self, model: &Value) -> AdapterResult<CatalogRelation> {
         CatalogRelation::from_model_config_and_catalogs(
             &self.adapter_type(),
@@ -972,6 +999,8 @@ impl AdapterImpl {
     }
 
     /// Get all relevant metadata about a dynamic table
+    ///
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L559
     pub fn describe_dynamic_table(
         &self,
         state: &State,
@@ -1079,6 +1108,7 @@ impl AdapterImpl {
         }
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L145
     pub fn drop_relation(
         &self,
         state: &State,
@@ -1103,6 +1133,7 @@ impl AdapterImpl {
         }
     }
 
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L222
     pub fn check_schema_exists(
         &self,
         state: &State,
@@ -1220,6 +1251,8 @@ impl AdapterImpl {
 
     /// Determine if the current Databricks connection points to a classic
     /// cluster (as opposed to a SQL warehouse).
+    ///
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L961
     pub fn is_cluster(&self) -> AdapterResult<bool> {
         if self.adapter_type() != Databricks {
             return Err(AdapterError::new(
@@ -1228,7 +1261,6 @@ impl AdapterImpl {
             ));
         }
 
-        // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/utils.py#L94
         let http_path = self
             .engine()
             .get_config()
@@ -1314,6 +1346,8 @@ impl AdapterImpl {
     }
 
     /// Rename relation
+    ///
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L155
     pub fn rename_relation(
         &self,
         state: &State,
@@ -1336,6 +1370,8 @@ impl AdapterImpl {
     }
 
     /// Returns the columns that exist in the source_relations but not in the target_relations
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L862
     pub fn get_missing_columns(
         &self,
         state: &State,
@@ -1373,6 +1409,13 @@ impl AdapterImpl {
     }
 
     /// Get columns in relation
+    ///
+    /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
+    /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L1217
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L330
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L216
+    /// SparkAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-spark/src/dbt/adapters/spark/impl.py#L318
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L454
     pub fn get_columns_in_relation(
         &self,
         state: &State,
@@ -1474,7 +1517,6 @@ impl AdapterImpl {
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
             Snowflake => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L191-L198
                 let result = match macro_execution_result {
                     Ok(result) => result,
                     Err(err) => {
@@ -1490,7 +1532,6 @@ impl AdapterImpl {
                 Ok(Column::vec_from_jinja_value(Snowflake, result)?)
             }
             Bigquery => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255
                 // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
                 // from Column::vec_from_jinja_value for BigQuery
                 // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
@@ -1615,7 +1656,8 @@ impl AdapterImpl {
 
     /// Truncate relation
     ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L745
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L257
     pub fn truncate_relation(
         &self,
         state: &State,
@@ -1625,8 +1667,6 @@ impl AdapterImpl {
             Replay(_, replay) => replay.replay_truncate_relation(state, relation),
             Impl(Bigquery, _) => {
                 // BigQuery does not support truncate_relation
-                //
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L173-L174
                 Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,
                     "bigquery.truncate_relation",
@@ -1647,6 +1687,8 @@ impl AdapterImpl {
     }
 
     /// Quote as configured
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1103
     pub fn quote_as_configured(
         &self,
         _state: &State,
@@ -1661,6 +1703,10 @@ impl AdapterImpl {
     }
 
     /// Quote seed column, default to true if not provided
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1124
+    /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L452
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L381
     pub fn quote_seed_column(
         &self,
         state: &State,
@@ -1682,7 +1728,6 @@ impl AdapterImpl {
                 | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio | Oracle,
                 _,
             ) => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
                 if quote_config.unwrap_or(true) {
                     Ok(self.quote(column))
                 } else {
@@ -1692,6 +1737,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1231
     pub fn convert_type(
         &self,
         state: &State,
@@ -1731,6 +1777,8 @@ impl AdapterImpl {
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L951
     pub fn expand_target_column_types(
         &self,
         state: &State,
@@ -1867,6 +1915,8 @@ impl AdapterImpl {
     }
 
     /// render_raw_columns_constraints
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1848
     pub fn render_raw_columns_constraints(
         &self,
         columns_map: IndexMap<String, DbtColumn>,
@@ -1875,7 +1925,6 @@ impl AdapterImpl {
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
             | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
             | Oracle => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
                 for (_, column) in columns_map {
                     let col_name = if column.quote.unwrap_or(false) {
@@ -1899,7 +1948,6 @@ impl AdapterImpl {
                 Ok(result)
             }
             adapter_type @ Bigquery => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L924
                 let mut rendered_constraints: BTreeMap<String, String> = BTreeMap::new();
                 for (_, column) in columns_map.iter() {
                     for constraint in &column.constraints {
@@ -1935,9 +1983,9 @@ impl AdapterImpl {
         }
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1816
     pub fn render_column_constraint(&self, constraint: Constraint) -> Option<String> {
         // TODO: revisit to support warn_supported, warn_unenforced
-        // https://github.com/dbt-labs/dbt-adapters/blob/5379513bad9c75661b990a5ed5f32ac9c62a0758/dbt-adapters/src/dbt/adapters/base/impl.py#L1825
         let constraint_support = self.get_constraint_support(constraint.type_);
         if constraint_support == ConstraintSupport::NotSupported {
             return None;
@@ -2104,6 +2152,7 @@ impl AdapterImpl {
         Ok(result)
     }
 
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L859
     pub fn get_persist_doc_columns(
         &self,
         _state: &State,
@@ -2138,7 +2187,10 @@ impl AdapterImpl {
     /// Ideally, the SQL to show grants should also be filtering:
     /// filter OUT any grants TO the current user/role (e.g. OWNERSHIP).
     /// If that's not possible in SQL, it can be done in this method instead.
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L733-L734
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L833
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L400
+    /// DatabricksAdapter https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-spark/src/dbt/adapters/spark/impl.py#L500
     pub fn standardize_grants_dict(
         &self,
         grants_table: Arc<AgateTable>,
@@ -2163,7 +2215,6 @@ impl AdapterImpl {
                 Ok(result)
             }
             Snowflake => {
-                // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L329-L330
                 let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee_name")?;
                 let granted_to_cols =
                     get_column_values::<StringArray>(&record_batch, "granted_to")?;
@@ -2187,7 +2238,6 @@ impl AdapterImpl {
                 Ok(result)
             }
             Databricks => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-spark/src/dbt/adapters/spark/impl.py#L500
                 let grantee_cols = get_column_values::<StringArray>(&record_batch, "Principal")?;
                 let privilege_cols = get_column_values::<StringArray>(&record_batch, "ActionType")?;
                 let object_type_cols =
@@ -2229,6 +2279,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L323
     pub fn nest_column_data_types(
         &self,
         _state: &State,
@@ -2254,6 +2305,7 @@ impl AdapterImpl {
         Ok(Value::from_object(result))
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1187
     pub fn get_bq_table(
         &self,
         _state: &State,
@@ -2262,6 +2314,7 @@ impl AdapterImpl {
         unimplemented!("get_bq_table")
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1219
     #[allow(clippy::too_many_arguments)]
     pub fn grant_access_to(
         &self,
@@ -2341,6 +2394,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1241
     pub fn get_dataset_location(
         &self,
         state: &State,
@@ -2383,6 +2437,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L730
     #[allow(clippy::too_many_arguments)]
     pub fn update_table_description(
         &self,
@@ -2431,6 +2486,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L930
     #[allow(clippy::too_many_arguments)]
     pub fn load_dataframe(
         &self,
@@ -2515,6 +2571,8 @@ impl AdapterImpl {
     /// columns to the source relation it is supposed to work well for this use case due to
     /// limitation:
     /// https://cloud.google.com/bigquery/docs/managing-table-schemas#add_a_nested_column_to_a_record_column
+    ///
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L742
     pub fn alter_table_add_columns(
         &self,
         state: &State,
@@ -2627,6 +2685,7 @@ impl AdapterImpl {
         Ok(columns)
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L486
     pub fn get_column_schema_from_query(
         &self,
         state: &State,
@@ -2677,6 +2736,8 @@ impl AdapterImpl {
     }
 
     /// Get columns in select sql
+    ///
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
     pub fn get_columns_in_select_sql(
         &self,
         _conn: &'_ mut dyn Connection,
@@ -2686,6 +2747,8 @@ impl AdapterImpl {
     }
 
     /// Used by redshift and postgres to check if the database string is consistent with what's in the project `config`
+    ///
+    /// PostgresAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-postgres/src/dbt/adapters/postgres/impl.py#L118
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
@@ -2753,7 +2816,7 @@ impl AdapterImpl {
     /// partitioning spec. This method returns True if the given config spec is
     /// identical to that of the existing table.
     ///
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
     pub fn is_replaceable(
         &self,
         conn: &'_ mut dyn Connection,
@@ -2819,10 +2882,12 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L956
     pub fn upload_file(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("upload_file")
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L670
     pub fn parse_partition_by(&self, partition_by: Value) -> AdapterResult<Value> {
         match self.adapter_type() {
             Bigquery => {
@@ -2834,7 +2899,6 @@ impl AdapterImpl {
                 }
 
                 // Lowercase all string values to match dbt-core behavior
-                // Reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L82-L97
                 let normalized = if let Ok(partition_by_map) =
                     minijinja_value_to_typed_struct::<IndexMap<String, Value>>(
                         raw_partition_by.clone(),
@@ -2880,6 +2944,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1139
     pub fn get_table_options(
         &self,
         state: &State,
@@ -2903,6 +2968,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1178
     pub fn get_view_options(
         &self,
         state: &State,
@@ -2926,6 +2992,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1111
     pub fn get_common_options(
         &self,
         state: &State,
@@ -2954,6 +3021,8 @@ impl AdapterImpl {
     }
 
     /// Add time ingestion partition column to columns list
+    ///
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L342
     pub fn add_time_ingestion_partition_column(
         &self,
         columns: Value,
@@ -2992,6 +3061,7 @@ impl AdapterImpl {
         }
     }
 
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L973
     pub fn list_relations(
         &self,
         query_ctx: &QueryCtx,
@@ -3108,7 +3178,7 @@ impl AdapterImpl {
         ))
     }
 
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L349
     pub fn compare_dbr_version(
         &self,
         state: &State,
@@ -3238,7 +3308,7 @@ impl AdapterImpl {
         }
     }
 
-    // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L208-L209
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L307
     pub fn compute_external_path(
         &self,
         config: ModelConfig,
@@ -3297,10 +3367,7 @@ impl AdapterImpl {
         }
     }
 
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L187-L188
-    ///
-    /// squashes featureset of DatabricksAdapter iceberg_table_properties
-    /// https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/impl.py#L229C9-L229C41
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L298
     pub fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
@@ -3377,7 +3444,7 @@ impl AdapterImpl {
         }
     }
 
-    /// https://github.com/databricks/dbt-databricks/blob/8cda62ee19d01e0670e3156e652841e3ffd3ed41/dbt/adapters/databricks/impl.py#L253
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L274
     pub fn is_uniform(
         &self,
         state: &State,
@@ -3458,8 +3525,9 @@ impl AdapterImpl {
     /// Returns the file_format from config, or adapter-specific default.
     /// Databricks default: "delta". Used by clone materialization.
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
     /// DatabricksConfig has file_format: str = "delta"
+    ///
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L994
     pub fn resolve_file_format(&self, config: ModelConfig) -> AdapterResult<String> {
         match self.adapter_type() {
             Databricks => {
@@ -3476,7 +3544,8 @@ impl AdapterImpl {
     }
 
     /// Given a relation, fetch its configurations from the remote data warehouse
-    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
+    ///
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L931
     pub fn get_relation_config(
         &self,
         state: &State,
@@ -3513,7 +3582,8 @@ impl AdapterImpl {
     }
 
     /// Given a model, parse and build its configurations
-    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
+    ///
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L944
     pub fn get_config_from_model(&self, model: &InternalDbtNodeWrapper) -> AdapterResult<Value> {
         use crate::relation::databricks::config::relation_types;
 
@@ -3543,7 +3613,7 @@ impl AdapterImpl {
     /// Returns [enriched_columns, typed_constraints] for use with get_column_and_constraints_sql
     /// and relation.enrich().
     ///
-    /// Reference: https://github.com/databricks/dbt-databricks/blob/25caa2a14ed0535f08f6fd92e29b39df1f453e4d/dbt/adapters/databricks/impl.py
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L899
     pub fn parse_columns_and_constraints(
         &self,
         _state: &State,
@@ -3640,6 +3710,7 @@ impl AdapterImpl {
         ]))
     }
 
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L463
     pub fn get_relations_without_caching(
         &self,
         _state: &State,
@@ -3648,6 +3719,7 @@ impl AdapterImpl {
         unimplemented!("get_relations_without_caching")
     }
 
+    /// PostgresAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-postgres/src/dbt/adapters/postgres/impl.py#L128
     pub fn parse_index(
         &self,
         _state: &State,
@@ -3656,6 +3728,7 @@ impl AdapterImpl {
         unimplemented!("parse_index")
     }
 
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L990
     pub fn get_column_tags_from_model(
         &self,
         model: &dyn InternalDbtNodeAttributes,
@@ -3673,9 +3746,9 @@ impl AdapterImpl {
             .from_local_config(model);
         Ok(tags.as_jinja())
     }
-
-    /// https://github.com/databricks/dbt-databricks/blob/4d82bd225df81296165b540d34ad5be43b45e44a/dbt/adapters/databricks/impl.py#L831
     /// TODO: implement if necessary, currently its noop
+    ///
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L966
     pub fn clean_sql(&self, sql: &str) -> AdapterResult<String> {
         debug_assert!(
             self.adapter_type() == Databricks,
@@ -3689,11 +3762,11 @@ impl AdapterImpl {
         unimplemented!("only available with Postgres and Redshift adapters")
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L415
-    ///
     /// This uses the BigQuery SDK's copy_table API instead of SQL to properly handle partitioned
     /// tables.
     /// Reference: https://cloud.google.com/python/docs/reference/bigquery/latest/google.cloud.bigquery.client.Client.html#google_cloud_bigquery_client_Client_copy_table
+    ///
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L510
     pub fn copy_table(
         &self,
         state: &State,
@@ -3773,7 +3846,7 @@ impl AdapterImpl {
         }
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
     pub fn describe_relation(
         &self,
         conn: &'_ mut dyn Connection,
@@ -3831,8 +3904,8 @@ impl AdapterImpl {
     ///
     /// Merged (it was not clear if we need to keep the legacy code in
     /// a separate method so we decided not to)
-    /// https://github.com/dbt-labs/dbt-adapters/blob/5882b1df1f8f9ddcd0f4f5fcd09001b1948432e9/dbt-adapters/src/dbt/adapters/base/impl.py#L850
-    /// https://github.com/dbt-labs/dbt-adapters/blob/5882b1df1f8f9ddcd0f4f5fcd09001b1948432e9/dbt-adapters/src/dbt/adapters/base/impl.py#L883
+    ///
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L927
     pub fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
@@ -3896,7 +3969,7 @@ impl AdapterImpl {
         }
     }
 
-    // https://github.com/dbt-labs/dbt-adapters/blob/4dc395b42dae78e895adf9c66ad6811534e879a6/dbt-athena/src/dbt/adapters/athena/impl.py#L445
+    /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L445
     pub fn generate_unique_temporary_table_suffix(
         &self,
         suffix_initial: Option<String>,
@@ -3911,7 +3984,7 @@ impl AdapterImpl {
     /// which behavior should be used for deleted records in a
     /// snapshot. The default is to ignore them.
     ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/4467d4a65503659ede940d8d8d97f16fad9c72cb/dbt-adapters/src/dbt/adapters/base/impl.py#L1903
+    /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1977
     pub fn get_hard_deletes_behavior(
         &self,
         config: BTreeMap<String, Value>,
