@@ -25,6 +25,7 @@ use dbt_schemas::schemas::telemetry::NodeType;
 use minijinja::State;
 use minijinja::constants::CURRENT_PATH;
 use minijinja::constants::CURRENT_SPAN;
+use minijinja::constants::TARGET_PACKAGE_NAME;
 use minijinja::listener::RenderingEventListener;
 use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
@@ -327,6 +328,11 @@ pub fn build_run_node_context<S: Serialize>(
     context.insert(
         "builtins".to_owned(),
         MinijinjaValue::from_object(base_builtins),
+    );
+
+    context.insert(
+        TARGET_PACKAGE_NAME.to_owned(),
+        MinijinjaValue::from(&common_attr.package_name),
     );
 
     let relative_path = PathBuf::from(DBT_COMPILED_DIR_NAME).join(&common_attr.path);

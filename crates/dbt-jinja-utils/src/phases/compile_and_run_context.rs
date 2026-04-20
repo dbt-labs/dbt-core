@@ -17,6 +17,7 @@ use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::constants::MACRO_DISPATCH_ORDER;
+use minijinja::constants::TARGET_PACKAGE_NAME;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
@@ -170,6 +171,10 @@ pub fn build_compile_and_run_base_context(
         MinijinjaValue::from_function(result_store.load_result()),
     );
 
+    ctx.insert(
+        TARGET_PACKAGE_NAME.to_owned(),
+        MinijinjaValue::from(package_name),
+    );
     ctx.insert("node".to_owned(), MinijinjaValue::NONE);
     ctx.insert("connection_name".to_owned(), MinijinjaValue::from(""));
     for key in namespace_keys {
