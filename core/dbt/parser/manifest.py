@@ -159,8 +159,16 @@ def extended_msgpack_encoder(obj):
     return obj
 
 
+def _coerce_int_map_keys(obj):
+    if isinstance(obj, dict):
+        return {str(k) if isinstance(k, int) else k: _coerce_int_map_keys(v) for k, v in obj.items()}
+    return obj
+
+
 def extended_mashumuro_decoder(data):
-    return msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False)
+    return _coerce_int_map_keys(
+        msgpack.unpackb(data, ext_hook=extended_msgpack_decoder, raw=False, strict_map_key=False)
+    )
 
 
 def extended_msgpack_decoder(code, data):
@@ -992,6 +1000,12 @@ class ManifestLoader:
             fire_event(
                 UnableToPartialParse(reason="saved manifest not found. Starting full parse.")
             )
+            fire_event(
+                    UnableToPartialParse(
+                        reason=f"saved manifest could not be loaded: {exc}. "
+                        "If you have integer keys in a `meta` config, wrap them in quotes."
+                    )
+                )
             reparse_reason = ReparseReason.file_not_found
 
         # this event is only fired if a full reparse is needed
