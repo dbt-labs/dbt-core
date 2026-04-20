@@ -115,9 +115,11 @@ pub fn resolve_macros(
             base_path,
             package_name,
         } = dbt_asset;
-        if macro_file.extension() == Some(OsStr::new("jinja"))
-            || macro_file.extension() == Some(OsStr::new("sql"))
-        {
+        let ext = macro_file
+            .extension()
+            .and_then(OsStr::to_str)
+            .map(str::to_ascii_lowercase);
+        if ext.as_deref() == Some("jinja") || ext.as_deref() == Some("sql") {
             let macro_file_path = base_path.join(macro_file);
             let macro_sql = read_file_content(macro_file, &macro_file_path, embedded_contents)?;
             let relative_macro_file_path = diff_paths(&macro_file_path, &io.in_dir)?;
@@ -727,5 +729,62 @@ mod tests {
         assert!(!is_valid_macro_arg_type("dict[str]")); // missing second type arg
         assert!(!is_valid_macro_arg_type("map[str, int]")); // unsupported container
         assert!(!is_valid_macro_arg_type("list[str")); // missing closing bracket
+    }
+
+    #[test]
+    // Regression test: the extension guard in resolve_macros used a case-sensitive OsStr
+    // comparison, so files named SNAPSHOT.SQL (uppercase) were silently skipped. The
+    // {% snapshot %} block was never parsed, no snapshot.* macro entry was produced, and
+    // resolve_snapshots therefore never registered the snapshot node — causing dbt1048
+    // "Ref not found" on any model that ref()s it.
+    fn test_resolve_macros_uppercase_sql_extension() -> FsResult<()> {
+        let tmp = tempdir().unwrap();
+        let base_path = tmp.path().to_path_buf();
+        fs::create_dir_all(base_path.join("snapshots")).unwrap();
+
+        let snapshot_sql = r#"
+{% snapshot snapshot_actual %}
+{{
+    config(
+        schema='snapshots',
+        unique_key='id',
+        strategy='timestamp',
+        updated_at='updated_at',
+    )
+}}
+select 1 as id, current_timestamp as updated_at
+{% endsnapshot %}
+"#;
+
+        // Write the snapshot file with an UPPERCASE .SQL extension — the triggering condition.
+        let asset_path = PathBuf::from("snapshots/SNAPSHOT.SQL");
+        fs::write(base_path.join(&asset_path), snapshot_sql).unwrap();
+
+        let io_args = IoArgs {
+            in_dir: base_path.clone(),
+            ..Default::default()
+        };
+
+        let asset = DbtAsset {
+            base_path,
+            original_path: asset_path.clone(),
+            path: asset_path,
+            package_name: "test_pkg".to_string(),
+        };
+
+        let result = resolve_macros(&io_args, &[&asset], None)?;
+
+        // parse_macro_statements prefixes snapshot block names with "snapshot_", so
+        // {% snapshot snapshot_actual %} becomes macro uid "snapshot.pkg.snapshot_snapshot_actual".
+        // resolve_snapshots then strips that prefix to recover "snapshot_actual" as the node name.
+        assert!(
+            result.contains_key("snapshot.test_pkg.snapshot_snapshot_actual"),
+            "snapshot defined in SNAPSHOT.SQL (uppercase extension) was not registered — \
+             the extension guard in resolve_macros is case-sensitive and skipped the file. \
+             Got keys: {:?}",
+            result.keys().collect::<Vec<_>>()
+        );
+
+        Ok(())
     }
 }
