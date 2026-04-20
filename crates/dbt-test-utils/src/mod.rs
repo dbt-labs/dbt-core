@@ -7,6 +7,17 @@ pub mod profiles;
 pub mod task;
 pub mod test_env_guard;
 
+#[cfg(test)]
+pub(crate) mod env_test_lock {
+    use std::sync::{LazyLock, Mutex};
+
+    /// Process-wide lock shared by every test in this crate that mutates
+    /// `HOME`/env vars. `cargo test` runs lib tests as threads in one
+    /// process and Rust's env setters are not thread-safe, so tests in
+    /// different modules must serialize through this lock to avoid races.
+    pub(crate) static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+}
+
 pub use dbt_cloud_config_guard::DbtCloudConfigGuard;
 pub use test_env_guard::TestEnvGuard;
 
