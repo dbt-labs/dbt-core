@@ -1,6 +1,6 @@
 use crate::AdapterEngine;
 use crate::adapter::adapter_impl::AdapterImpl;
-use crate::connection;
+use crate::connection::AdapterConnectionFactory;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{
@@ -170,17 +170,10 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             .map(|relation| relation.semantic_fqn())
             .collect::<Vec<_>>();
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = Box::new(move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        });
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            Some(MAX_CONNECTIONS),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -211,13 +204,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(table_names), token)
     }
 
@@ -252,17 +239,10 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            Some(MAX_CONNECTIONS),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -303,13 +283,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }

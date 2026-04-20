@@ -1,5 +1,5 @@
 use crate::adapter::adapter_impl::AdapterImpl;
-use crate::connection;
+use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
@@ -91,15 +91,11 @@ where table_schema ilike '{}'",
 
 pub(crate) struct RedshiftListRelationsSchemasStrategy {
     adapter: AdapterImpl,
-    max_connections: usize,
 }
 
 impl RedshiftListRelationsSchemasStrategy {
-    pub(crate) fn new(adapter: AdapterImpl, max_connections: usize) -> Self {
-        Self {
-            adapter,
-            max_connections,
-        }
+    pub(crate) fn new(adapter: AdapterImpl) -> Self {
+        Self { adapter }
     }
 }
 
@@ -113,17 +109,10 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
     ) -> AsyncAdapterResult<'static, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = Box::new(move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        });
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -234,13 +223,7 @@ AND table_name = '{identifier}'"
             acc.insert(relation.semantic_fqn(), schema);
             Ok(())
         };
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            self.max_connections,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
@@ -299,15 +282,11 @@ const TABLES_WITH_OID: [&str; 10] = [
 
 pub(crate) struct RedshiftFreshnessStrategy {
     adapter: AdapterImpl,
-    max_connections: usize,
 }
 
 impl RedshiftFreshnessStrategy {
-    pub(crate) fn new(adapter: AdapterImpl, max_connections: usize) -> Self {
-        Self {
-            adapter,
-            max_connections,
-        }
+    pub(crate) fn new(adapter: AdapterImpl) -> Self {
+        Self { adapter }
     }
 }
 
@@ -327,17 +306,10 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
             };
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -408,13 +380,7 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            self.max_connections,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
     }
@@ -925,8 +891,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         relations: &[Arc<dyn BaseRelation>], // TODO: change to an Arc<Vec<..>>
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
-        let strategy =
-            RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        let strategy = RedshiftListRelationsSchemasStrategy::new(self.adapter.clone());
         let relations = Arc::new(relations.to_vec());
         strategy.run(relations, unique_id, phase, token)
     }
@@ -936,8 +901,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         patterns: &[RelationPattern],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        let strategy =
-            RedshiftListRelationsSchemasStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        let strategy = RedshiftListRelationsSchemasStrategy::new(self.adapter.clone());
         let patterns = Arc::new(patterns.to_vec());
         strategy.run_by_patterns(patterns, token)
     }
@@ -955,7 +919,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone(), MAX_CONNECTIONS);
+        let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone());
         strategy.run(relations, token)
     }
 
@@ -965,17 +929,10 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -995,13 +952,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }

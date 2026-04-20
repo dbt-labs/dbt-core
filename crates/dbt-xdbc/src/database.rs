@@ -352,10 +352,25 @@ impl InnerAdbcDatabase {
                     return Err(e);
                 }
             }
-            let conn = if conn_opts.is_empty() {
+            // TODO(backpressure): re-enable once re-entrancy is handled.
+            // The semaphore can deadlock when a node holding a permit triggers
+            // a MapReduce metadata operation that also needs a permit.
+            // if let Some(semaphore) = &semaphore {
+            //     semaphore.unguarded_acquire();
+            // }
+            let conn_res = if conn_opts.is_empty() {
                 managed_database.new_connection()
             } else {
                 managed_database.new_connection_with_opts(conn_opts)
+            };
+            let conn = match conn_res {
+                Ok(conn) => Ok(conn),
+                Err(e) => {
+                    // if let Some(semaphore) = &semaphore {
+                    //     semaphore.unguarded_release();
+                    // }
+                    Err(e)
+                }
             }?;
             Ok(AdbcConnection(self.backend, conn, semaphore))
         };

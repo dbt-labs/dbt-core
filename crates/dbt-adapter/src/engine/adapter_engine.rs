@@ -111,6 +111,14 @@ pub trait AdapterEngine: Send + Sync {
 
     // -- Methods with default implementations ---------------------------------
 
+    /// The `threads` configuration value from the dbt profile.
+    ///
+    /// Used to derive connection concurrency limits in metadata adapters.
+    /// Returns `None` when the setting is not available (mock, sidecar, etc.).
+    fn threads(&self) -> Option<usize> {
+        None
+    }
+
     /// Whether this is a mock engine
     fn is_mock(&self) -> bool {
         false

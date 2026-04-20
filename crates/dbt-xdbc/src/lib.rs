@@ -101,10 +101,20 @@ pub const MSSQLSERVER_DRIVER_VERSION: &str = "1.3.1";
 pub use install::pre_install_all_drivers;
 pub use install::pre_install_driver;
 
-/// A function that creates a new connection to the database.
-type NewConnectionF<Error> = Box<dyn Fn() -> Result<Box<dyn Connection>, Error> + Send + Sync>;
-/// A function that recycles a connection after a worker does not need one anymore.
-type RecycleConnectionF = Box<dyn Fn(Box<dyn Connection>) + Send + Sync>;
+/// Encapsulates connection creation, recycling, and concurrency limits.
+pub trait ConnectionFactory: Send + Sync {
+    type Error;
+
+    /// Create or recycle a connection. `node_id` identifies the node
+    /// requesting the connection (used by some adapters for recycling affinity).
+    fn new_connection(&self, node_id: Option<&str>) -> Result<Box<dyn Connection>, Self::Error>;
+
+    /// Return a connection for potential reuse.
+    fn recycle_connection(&self, conn: Box<dyn Connection>);
+
+    /// Maximum number of concurrent connections this factory allows.
+    fn connection_limit(&self) -> u32;
+}
 
 /// A function that maps a key to a computed value using a [Connection].
 type MapF<Key, Value> = Box<dyn Fn(&'_ mut dyn Connection, &Key) -> Value + Send + Sync>;
@@ -120,15 +130,14 @@ where
     Acc: Sized + Default + Send + 'static,
     Error: Send,
 {
-    /// Function to create a new connection.
-    new_connection_f: NewConnectionF<Cancellable<Error>>,
+    /// Connection factory for creating, recycling, and limiting connections.
+    connection_factory: Box<dyn ConnectionFactory<Error = Cancellable<Error>>>,
+    /// Node ID forwarded to the connection factory on each new_connection call.
+    node_id: Option<String>,
     /// Function to map a key to a computed value using a [Connection].
     map_f: MapF<Key, Value>,
     /// Function to reduce a computed value into the accumulator.
     reduce_f: ReduceF<Acc, Key, Value, Cancellable<Error>>,
-
-    /// Function to recycle a connection after a worker is done with it.
-    recycle_connection_f: Option<RecycleConnectionF>,
 
     /// The next key to be processed by any of the workers.
     key_counter: AtomicUsize,
@@ -151,7 +160,9 @@ where
     fn new_connection(&self) -> Result<Box<dyn Connection>, Cancellable<E>> {
         let _span = span!("MapReduceInner::new_connection");
         let start = std::time::Instant::now();
-        let res = (self.new_connection_f)();
+        let res = self
+            .connection_factory
+            .new_connection(self.node_id.as_deref());
         if res.is_ok() {
             let elapsed = start.elapsed();
             self.conn_count.fetch_add(1, Ordering::SeqCst);
@@ -162,9 +173,7 @@ where
     }
 
     fn recycle_connection(&self, conn: Box<dyn Connection>) {
-        if let Some(recycle_connection_f) = &self.recycle_connection_f {
-            (recycle_connection_f)(conn)
-        }
+        self.connection_factory.recycle_connection(conn);
     }
 
     fn map(&self, conn: &'_ mut dyn Connection, key: &K) -> V {
@@ -194,35 +203,8 @@ where
 /// Run parallel Key-to-Value tasks in parallel with a bounded number of
 /// connections and reduce the results into an accumulator.
 ///
-/// Example:
-///
-/// ```rust
-/// type Acc = HashMap<String, AdapterResult<Schema>>;
-/// # let adapter = self.clone(); // clone needed to move it into lambda
-/// let new_connection_f = Box::new(move || adapter.new_connection());
-/// # let adapter = self.clone();
-/// let map_f =
-///     move |conn: &'_ mut dyn Connection, table_name: &String| -> AdapterResult<Schema> {
-///         let sql = format!("SHOW COLUMNS IN TABLE {};", &table_name);
-///         let (_, table) = adapter.execute(conn, &sql, None, None, None)?;
-///         let batch = table.to_record_batch();
-///         let schema = build_schema_from(batch)?;
-///         Ok(schema)
-///     };
-/// let reduce_f = |acc: &mut Acc, table_name: String, schema: AdapterResult<Schema>| {
-///     acc.insert(table_name, schema);
-/// };
-/// let map_reduce = MapReduce::new(
-///     Box::new(new_connection_f),
-///     Box::new(map_f),
-///     Box::new(reduce_f),
-///     MAX_CONNECTIONS,
-/// );
-/// let table_names = relations
-///     .iter()
-///     .map(|relation| relation.render_self_as_str());
-/// map_reduce.run(table_names).await
-/// ```
+/// Connection creation, recycling, and concurrency limits are managed by a
+/// [`ConnectionFactory`] implementation passed at construction time.
 pub struct MapReduce<Key, Value, Acc, Error>
 where
     Key: Sized + Clone + Send + Sync + 'static,
@@ -231,7 +213,7 @@ where
     Error: Send + 'static,
 {
     inner: Arc<MapReduceInner<Key, Value, Acc, Error>>,
-    max_connections: usize,
+    max_connections: u32,
 }
 
 impl<K, V, Acc, E> MapReduce<K, V, Acc, E>
@@ -242,17 +224,17 @@ where
     E: Send + 'static,
 {
     pub fn new(
-        new_connection_f: NewConnectionF<Cancellable<E>>,
+        connection_factory: Box<dyn ConnectionFactory<Error = Cancellable<E>>>,
         map_f: MapF<K, V>,
         reduce_f: ReduceF<Acc, K, V, Cancellable<E>>,
-        max_connections: usize,
-        recycle_connection_f: Option<RecycleConnectionF>,
+        node_id: Option<String>,
     ) -> Self {
+        let max_connections = connection_factory.connection_limit().max(2);
         let inner = MapReduceInner {
-            new_connection_f,
+            connection_factory,
+            node_id,
             map_f,
             reduce_f,
-            recycle_connection_f,
             key_counter: AtomicUsize::new(0),
             total_task_time_us: AtomicU64::new(0),
             task_count: AtomicU64::new(0),
@@ -261,7 +243,7 @@ where
         };
         Self {
             inner: Arc::new(inner),
-            max_connections: max_connections.max(2),
+            max_connections,
         }
     }
 
@@ -372,7 +354,7 @@ where
         let mut recv_buffer = Vec::new();
         let (tx, mut rx) = mpsc::unbounded_channel::<(K, V)>();
 
-        let max_conns = keys.len().min(self.max_connections);
+        let max_conns = keys.len().min(self.max_connections as usize);
         let mut conn_futures = FuturesUnordered::new();
         let mut workers = FuturesUnordered::new();
 

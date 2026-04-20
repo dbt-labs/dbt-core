@@ -1,9 +1,9 @@
 use crate::AdapterEngine;
 use crate::adapter::adapter_impl::*;
-use crate::connection;
+use crate::connection::AdapterConnectionFactory;
 use crate::metadata::{
-    CatalogAndSchema, MAX_CONNECTIONS, MetadataAdapter, MetadataFreshness, RelationSchemaPair,
-    RelationVec, create_schemas_if_not_exists,
+    CatalogAndSchema, MetadataAdapter, MetadataFreshness, RelationSchemaPair, RelationVec,
+    create_schemas_if_not_exists,
 };
 use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::GenericRelation;
@@ -205,19 +205,10 @@ impl MetadataAdapter for FabricMetadataAdapter {
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let new_conn_f = Box::new({
-            let adapter = self.adapter.clone();
-            move || {
-                if let Some(conn) = connection::recycle_connection(None) {
-                    Ok(conn)
-                } else {
-                    adapter
-                        .engine()
-                        .new_connection(None, None)
-                        .map_err(Cancellable::Error)
-                }
-            }
-        });
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -255,13 +246,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
             acc.insert(relation.semantic_fqn(), schema);
             Ok(())
         };
-        let map_reduce = MapReduce::new(
-            Box::new(new_conn_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
@@ -291,13 +276,10 @@ impl MetadataAdapter for FabricMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            adapter
-                .engine()
-                .new_connection(None, None)
-                .map_err(Cancellable::Error)
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -321,13 +303,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
             }
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 }

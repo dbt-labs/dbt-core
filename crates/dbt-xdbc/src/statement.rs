@@ -2,8 +2,7 @@
 //!
 //!
 
-use core::fmt;
-use std::sync::Arc;
+use std::fmt;
 
 use crate::driver_manager::ManagedStatement as ManagedAdbcStatement;
 use adbc_core::{
@@ -14,9 +13,9 @@ use adbc_core::{
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 
+use crate::Backend;
 #[cfg(feature = "odbc")]
 use crate::odbc::ManagedOdbcStatement;
-use crate::{Backend, semaphore::Semaphore};
 
 /// XDBC Statement.
 ///
@@ -146,19 +145,7 @@ impl fmt::Debug for dyn Statement {
 
 /// ADBC Statement.
 #[allow(dead_code)]
-pub(crate) struct AdbcStatement(
-    pub(crate) Backend,
-    pub(crate) ManagedAdbcStatement,
-    pub(crate) Option<Arc<Semaphore>>,
-);
-
-impl Drop for AdbcStatement {
-    fn drop(&mut self) {
-        if let Some(semaphore) = &self.2 {
-            semaphore.unguarded_release();
-        }
-    }
-}
+pub(crate) struct AdbcStatement(pub(crate) Backend, pub(crate) ManagedAdbcStatement);
 
 impl Statement for AdbcStatement {
     fn bind(&mut self, batch: RecordBatch) -> Result<()> {

@@ -59,6 +59,7 @@ pub trait AdapterFactory: Send + Sync {
         query_comment: Option<QueryComment>,
         token: CancellationToken,
         cloud_config: Option<&ResolvedCloudConfig>,
+        threads: Option<usize>,
     ) -> FsResult<Arc<Adapter>>;
 
     /// Return the statement splitter used by this factory.

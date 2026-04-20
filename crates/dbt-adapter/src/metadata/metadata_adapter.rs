@@ -24,9 +24,6 @@ use dbt_telemetry::NodeType;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
-/// Maximum number of connections
-pub const MAX_CONNECTIONS: usize = 48;
-
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 
 /// Adapter that supports metadata query.

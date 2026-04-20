@@ -209,6 +209,7 @@ impl Adapter {
             None,
             relation_cache,
             BTreeMap::new(),
+            None,
         );
 
         Box::new(ParseAdapterState::new(

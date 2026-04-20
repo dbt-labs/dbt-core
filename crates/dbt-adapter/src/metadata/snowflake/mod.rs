@@ -1,5 +1,5 @@
 use crate::adapter::adapter_impl::*;
-use crate::connection;
+use crate::connection::AdapterConnectionFactory;
 use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -417,17 +417,10 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             })
             .collect::<Vec<_>>();
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -499,13 +492,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(queries), token)
     }
 
@@ -524,17 +511,10 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             .map(|relation| relation.semantic_fqn())
             .collect::<Vec<_>>();
 
-        let adapter = self.adapter.clone(); // clone needed to move it into lambda
-        let new_connection_f = Box::new(move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        });
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -561,13 +541,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             acc.insert(table_name, schema);
             Ok(())
         };
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(table_names), token)
     }
 
@@ -621,17 +595,10 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 )
             });
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         // map_f runs the queries, reduce_f decodes the result set and builds the schemas
         let adapter = self.adapter.clone();
@@ -657,13 +624,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             acc.append(&mut schemas_from_batch);
             Ok(())
         };
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = queries.collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
     }
@@ -693,17 +654,10 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
 
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -760,13 +714,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             Ok(())
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
     }
@@ -778,17 +726,10 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let adapter = self.adapter.clone();
-        let new_connection_f = move || {
-            if let Some(conn) = connection::recycle_connection(None) {
-                Ok(conn)
-            } else {
-                adapter
-                    .engine()
-                    .new_connection(None, None)
-                    .map_err(Cancellable::Error)
-            }
-        };
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -823,13 +764,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             }
         };
 
-        let map_reduce = MapReduce::new(
-            Box::new(new_connection_f),
-            Box::new(map_f),
-            Box::new(reduce_f),
-            MAX_CONNECTIONS,
-            Some(Box::new(connection::sort_for_recycling)),
-        );
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 

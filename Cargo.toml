@@ -420,6 +420,7 @@ async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 async-trait = "0.1.83"
 crossbeam-queue = "0.3.12"
 crossbeam-skiplist = "0.1.3"
+crossbeam-utils = "0.8"
 futures = "0.3.31"
 futures-core = "0.3"
 futures-lite = "2.0"

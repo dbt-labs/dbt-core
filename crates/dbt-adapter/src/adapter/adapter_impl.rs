@@ -4571,6 +4571,7 @@ mod tests {
             None,
             Arc::new(RelationCache::default()),
             BTreeMap::new(),
+            None,
         ))
     }
 

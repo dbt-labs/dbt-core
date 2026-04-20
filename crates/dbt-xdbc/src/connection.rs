@@ -391,14 +391,19 @@ impl fmt::Debug for AdbcConnection {
     }
 }
 
+impl Drop for AdbcConnection {
+    fn drop(&mut self) {
+        // TODO(backpressure): re-enable once re-entrancy is handled.
+        // if let Some(semaphore) = &self.2 {
+        //     semaphore.unguarded_release();
+        // }
+    }
+}
+
 impl Connection for AdbcConnection {
     fn new_statement(&mut self) -> Result<Box<dyn Statement>> {
         let managed_adbc_stmt = self.1.new_statement()?;
-        let semaphore = self.2.clone();
-        if let Some(semaphore) = &semaphore {
-            semaphore.unguarded_acquire();
-        }
-        let adbc_stmt = AdbcStatement(self.0, managed_adbc_stmt, semaphore);
+        let adbc_stmt = AdbcStatement(self.0, managed_adbc_stmt);
         Ok(Box::new(adbc_stmt))
     }
 

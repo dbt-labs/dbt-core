@@ -478,7 +478,7 @@ impl ManagedDatabase {
                 // initialization, so we can allow multiple connections to be initialized in
                 // parallel.
                 // TODO(INC-5645): Add Snowflake back once we implement connection backpressure and pooling
-                Backend::Spark => {
+                Backend::Snowflake | Backend::Spark => {
                     let database = {
                         let _span = span!("RwLock::read");
                         self.inner.database.read()

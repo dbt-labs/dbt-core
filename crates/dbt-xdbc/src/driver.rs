@@ -2,13 +2,13 @@
 //!
 //!
 
+use crate::Database;
 use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
 use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
-use crate::install::{self, DriverTriplet};
+use crate::install::{self, DriverTriplet, build_http_agent};
 use crate::semaphore::Semaphore;
-use crate::{Database, install::build_http_agent};
 use adbc_core::{
     Driver as _, LOAD_FLAG_ALLOW_RELATIVE_PATHS, LOAD_FLAG_DEFAULT, LOAD_FLAG_SEARCH_ENV,
     LOAD_FLAG_SEARCH_SYSTEM, LOAD_FLAG_SEARCH_USER,

@@ -87,6 +87,8 @@ pub struct XdbcEngine {
     behavior: Arc<Behavior>,
     /// Controls connection/execution behaviour.
     mode: EngineMode,
+    /// The `threads` configuration value from the dbt profile.
+    threads: Option<usize>,
 }
 
 impl XdbcEngine {
@@ -103,23 +105,10 @@ impl XdbcEngine {
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         mode: EngineMode,
+        threads: Option<usize>,
     ) -> Self {
         let permits = if mode.has_real_connections() {
-            let threads = config
-                .get("threads")
-                .and_then(|t| {
-                    let u = t.as_u64();
-                    debug_assert!(u.is_some(), "threads must be an integer if specified");
-                    u
-                })
-                .map(|t| t as u32)
-                .unwrap_or(0u32);
-            if matches!(adapter_type, AdapterType::Redshift | AdapterType::Bigquery) && threads > 0
-            {
-                threads
-            } else {
-                u32::MAX
-            }
+            threads.map(|t| (t as u32).max(1)).unwrap_or(u32::MAX)
         } else {
             u32::MAX
         };
@@ -139,6 +128,7 @@ impl XdbcEngine {
             behavior_flag_overrides,
             behavior,
             mode,
+            threads,
         }
     }
 
@@ -154,6 +144,7 @@ impl XdbcEngine {
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
+        threads: Option<usize>,
     ) -> Self {
         Self::build(
             adapter_type,
@@ -167,6 +158,7 @@ impl XdbcEngine {
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Live,
+            threads,
         )
     }
 
@@ -197,6 +189,7 @@ impl XdbcEngine {
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Mock,
+            None,
         )
     }
 
@@ -214,6 +207,7 @@ impl XdbcEngine {
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         recordings_path: PathBuf,
+        threads: Option<usize>,
     ) -> Self {
         crate::record_and_replay::reset_counters(&recordings_path);
         Self::build(
@@ -228,6 +222,7 @@ impl XdbcEngine {
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Record(recordings_path),
+            threads,
         )
     }
 
@@ -259,6 +254,7 @@ impl XdbcEngine {
             relation_cache,
             behavior_flag_overrides,
             EngineMode::Replay(recordings_path),
+            None,
         )
     }
 
@@ -310,7 +306,7 @@ impl XdbcEngine {
 
         // This will load the "flock" driver if load_strategy is Remote.
         let mut driver = driver::Builder::new(backend, load_strategy)
-            .with_semaphore(self.semaphore.clone())
+            .with_semaphore(Arc::clone(&self.semaphore))
             .try_load()
             .map_err(adbc_error_to_adapter_error)?;
 
@@ -403,6 +399,10 @@ impl AdapterEngine for XdbcEngine {
 
     fn backend(&self) -> Backend {
         self.auth.backend()
+    }
+
+    fn threads(&self) -> Option<usize> {
+        self.threads
     }
 
     fn is_mock(&self) -> bool {
