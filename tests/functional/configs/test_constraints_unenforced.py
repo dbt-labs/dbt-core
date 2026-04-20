@@ -1,6 +1,10 @@
 import pytest
 
-from dbt.tests.util import get_manifest, run_dbt
+from dbt.cli.main import dbtRunner
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, update_config_file
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.types import Note
 
 my_model_sql = """
 select 1 as id, 'blue' as color
@@ -40,6 +44,16 @@ models:
   - name: my_model
     constraints:
       - type: primary_key
+        columns: [id]
+"""
+
+schema_invalid_constraint_type_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: primary_key
+        columns: [id]
+      - type: not_a_real_type
         columns: [id]
 """
 

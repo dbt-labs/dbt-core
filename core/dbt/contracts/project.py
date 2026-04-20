@@ -370,6 +370,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_ref_searches_node_package_before_root: bool = False
     require_valid_schema_from_generate_schema_name: bool = False
     require_sql_header_in_test_configs: bool = False
+    require_valid_unenforced_constraint: bool = False
     support_custom_ref_kwargs: bool = False
 
     @property
@@ -391,6 +392,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
             "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
             "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
+            "require_valid_unenforced_constraint": self.require_valid_unenforced_constraint,
             "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
         }
 
