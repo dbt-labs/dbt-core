@@ -77,7 +77,9 @@ Released April 14, 2026
 - [@serramatutu](https://github.com/serramatutu)
 
 
+||||||| parent of 307430a1c8 (fix: restore changie versionFormat so version headings appear in CHANGELOG)
 
+Released April 14, 2026
 
 ### Features
 
