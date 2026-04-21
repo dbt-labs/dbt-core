@@ -173,7 +173,6 @@ check-sdist = [
 
 # CI environment - isolated environment with test dependencies
 [envs.ci]
-detached=true
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
