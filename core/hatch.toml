@@ -38,7 +38,6 @@ include = [
 [envs.default]
 # Python 3.10-3.11 required locally due to flake8==4.0.1 compatibility
 # CI uses [envs.ci] which doesn't set python, allowing matrix testing
-python = "3.11"
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
