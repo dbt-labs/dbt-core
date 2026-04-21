@@ -42,7 +42,7 @@ class PartialSourceFreshnessResult(NodeResult):
         return False
 
 
-FreshnessNodeResult = Union[PartialSourceFreshnessResult, SourceFreshnessResult]
+FreshnessNodeResult = Union[SourceFreshnessResult, PartialSourceFreshnessResult]
 
 
 @dataclass
