@@ -55,6 +55,12 @@ pub struct FsError {
     cause: Option<WrappedError>,
     backtrace: Backtrace,
 
+    // Jinja call stack frames (innermost first) captured from a minijinja::Error.
+    // This is only used by the LSP layer.
+    // TODO: should this become the new basis for `context`?
+    // TODO: Should we make these Spans instead to store end locations?
+    pub jinja_frames: Vec<super::CodeLocationWithFile>,
+
     // Chain of errors, to allow returning multiple errors in a single
     // [FsResult]:
     next: Option<Box<FsError>>,
@@ -141,6 +147,7 @@ impl FsError {
             context: context.into(),
             cause: None,
             backtrace: Backtrace::capture(),
+            jinja_frames: vec![],
             next: None,
         }
     }
@@ -152,6 +159,7 @@ impl FsError {
             context: context.into(),
             cause: None,
             backtrace: Backtrace::force_capture(),
+            jinja_frames: vec![],
             next: None,
         }
     }
@@ -167,6 +175,7 @@ impl FsError {
             context: context.into(),
             cause: None,
             backtrace,
+            jinja_frames: vec![],
             next: None,
         }
     }
@@ -206,6 +215,7 @@ impl FsError {
                     context,
                     cause,
                     backtrace: err.backtrace,
+                    jinja_frames: vec![],
                     next: None,
                 }
             })
@@ -217,6 +227,19 @@ impl FsError {
         if err.kind() == minijinja::ErrorKind::ExitWithStatus {
             return *FsError::exit_with_status(1);
         }
+
+        let jinja_frames: Vec<super::CodeLocationWithFile> = err
+            .stack()
+            .iter()
+            .map(|frame| {
+                super::CodeLocationWithFile::new_with_arc(
+                    frame.span.start_line,
+                    frame.span.start_col,
+                    frame.span.start_offset,
+                    Arc::new(PathBuf::from(&frame.filename)),
+                )
+            })
+            .collect();
 
         // Check for AdapterError as source regardless of Jinja error kind.
         // Previously this was limited to ErrorKind::Execution, but adapter errors
@@ -240,7 +263,9 @@ impl FsError {
                     }
                 }
             }
-            return fs_err.with_location(MiniJinjaErrorWrapper(err));
+            let mut result = fs_err.with_location(MiniJinjaErrorWrapper(err));
+            result.jinja_frames = jinja_frames;
+            return result;
         }
         let err_code = match err.kind() {
             minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxError,
@@ -248,7 +273,10 @@ impl FsError {
             minijinja::ErrorKind::Execution => ErrorCode::ExecutionError,
             _ => ErrorCode::JinjaError,
         };
-        FsError::new(err_code, format!("{context} {err}")).with_location(MiniJinjaErrorWrapper(err))
+        let mut result = FsError::new(err_code, format!("{context} {err}"))
+            .with_location(MiniJinjaErrorWrapper(err));
+        result.jinja_frames = jinja_frames;
+        result
     }
 
     /// True if this error contains a backtrace.
@@ -549,6 +577,7 @@ impl FsError {
             context: String::new(),
             cause: Some(WrappedError::ExitCode(status)),
             backtrace: Backtrace::capture(),
+            jinja_frames: vec![],
             next: None,
         };
         Box::new(err)

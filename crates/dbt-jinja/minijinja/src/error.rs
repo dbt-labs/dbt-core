@@ -334,6 +334,11 @@ impl Error {
         self.repr.stack.is_empty()
     }
 
+    /// Returns all stack frames, innermost first.
+    pub fn stack(&self) -> &[ErrorStackItem] {
+        self.repr.stack.as_slice()
+    }
+
     /// Returns the line number where the error occurred.
     pub fn span(&self) -> Option<Span> {
         self.repr.stack.last().map(|x| x.span)
