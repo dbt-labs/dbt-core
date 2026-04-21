@@ -56,6 +56,7 @@ jobs:
       matrix:
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
+      HATCH_PYTHON: "3.10"
       # turns warnings into errors
       RUSTFLAGS: "-D warnings"
       # points tests to the log file

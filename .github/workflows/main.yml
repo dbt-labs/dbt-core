@@ -84,6 +84,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Check out the repository
@@ -168,6 +170,7 @@ jobs:
         os: ["ubuntu-latest"]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -258,6 +261,7 @@ jobs:
         # already includes split group and runs mac + windows
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
