@@ -1,8 +1,9 @@
 import threading
-from typing import Optional, Type
+from typing import Optional, Type, TypeVar
 
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ManifestSQLNode
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
@@ -18,15 +19,17 @@ from dbt_common.exceptions import CompilationError
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtInternalError
 
+CompilableNodeT = TypeVar("CompilableNodeT", bound=ManifestSQLNode)
 
-class CompileRunner(BaseRunner):
+
+class CompileRunner(BaseRunner[CompilableNodeT, RunResult]):
     def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         pass
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         return RunResult(
             node=compiled_node,
             status=RunStatus.Success,

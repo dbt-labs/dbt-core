@@ -7,6 +7,7 @@ import click
 from click.exceptions import BadOptionUsage
 from click.exceptions import Exit as ClickExit
 from click.exceptions import NoSuchOption, UsageError
+from dotenv import find_dotenv, load_dotenv
 
 from dbt.adapters.factory import register_adapter
 from dbt.artifacts.schemas.catalog import CatalogArtifact
@@ -18,6 +19,12 @@ from dbt.cli.requires import setup_manifest
 from dbt.contracts.graph.manifest import Manifest
 from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
+
+# Load .env from current working directory before Click processes any parameters.
+# override=False ensures shell env vars take precedence over .env values.
+# usecwd=True is required so find_dotenv searches from the user's cwd rather than
+# walking up from this source file's directory.
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
 
 @dataclass
@@ -52,6 +59,7 @@ class dbtRunner:
 
     def invoke(self, args: List[str], **kwargs) -> dbtRunnerResult:
         try:
+            load_dotenv(find_dotenv(usecwd=True), override=False)
             dbt_ctx = cli.make_context(cli.name, args.copy())
             dbt_ctx.obj = {
                 "manifest": self.manifest,
@@ -195,7 +203,6 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -206,6 +213,7 @@ def build(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -274,6 +282,7 @@ def docs_generate(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -334,7 +343,6 @@ def docs_serve(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def compile(ctx, **kwargs):
@@ -346,6 +354,7 @@ def compile(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -396,6 +405,7 @@ def show(ctx, **kwargs):
             ctx.obj["flags"],
             ctx.obj["runtime_config"],
             ctx.obj["manifest"],
+            catalogs=ctx.obj.get("catalogs"),
         )
 
     results = task.run()
@@ -521,6 +531,7 @@ def list(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -547,7 +558,6 @@ cli.add_command(ls, "ls")
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
@@ -578,7 +588,6 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):
@@ -589,6 +598,7 @@ def run(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -655,6 +665,7 @@ def clone(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -687,6 +698,7 @@ def run_operation(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -698,6 +710,7 @@ def run_operation(ctx, **kwargs):
 @cli.command("seed")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.full_refresh
 @p.profiles_dir
@@ -713,7 +726,6 @@ def run_operation(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def seed(ctx, **kwargs):
@@ -724,6 +736,7 @@ def seed(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
     results = task.run()
     success = task.interpret_results(results)
@@ -748,7 +761,6 @@ def seed(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def snapshot(ctx, **kwargs):
@@ -759,6 +771,7 @@ def snapshot(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -802,6 +815,7 @@ def freshness(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()
@@ -835,7 +849,6 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @requires.preflight
 @requires.profile
 @requires.project
-@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def test(ctx, **kwargs):
@@ -846,6 +859,7 @@ def test(ctx, **kwargs):
         ctx.obj["flags"],
         ctx.obj["runtime_config"],
         ctx.obj["manifest"],
+        catalogs=ctx.obj.get("catalogs"),
     )
 
     results = task.run()

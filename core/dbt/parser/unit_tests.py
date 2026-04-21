@@ -244,13 +244,13 @@ class UnitTestManifestLoader:
                 package = ref.get("package")
                 version = ref.get("version")
                 # TODO: disabled lookup, versioned lookup, public models
-                original_input_node = self.manifest.ref_lookup.find(
+                original_input_node = self.manifest.ref_lookup.find(  # type: ignore[assignment]
                     name, package, version, self.manifest
                 )
             elif statically_parsed["sources"]:
                 source = list(statically_parsed["sources"])[0]
                 input_source_name, input_name = source
-                original_input_node = self.manifest.source_lookup.find(
+                original_input_node = self.manifest.source_lookup.find(  # type: ignore[assignment]
                     f"{input_source_name}.{input_name}",
                     None,
                     self.manifest,
@@ -554,7 +554,7 @@ def find_tested_model_node(
     model_name = model_name_split[0]
     model_version = model_name_split[1] if len(model_name_split) == 2 else None
 
-    tested_node = manifest.ref_lookup.find(model_name, current_project, model_version, manifest)
+    tested_node = manifest.ref_lookup.find(model_name, current_project, model_version, manifest)  # type: ignore[assignment]
     if not tested_node:
         disabled_node = manifest.disabled_lookup.find(
             model_name, current_project, model_version, [NodeType.Model]
@@ -562,7 +562,7 @@ def find_tested_model_node(
         if disabled_node:
             tested_node = disabled_node[0]
 
-    return tested_node
+    return tested_node  # type: ignore[return-value]
 
 
 # This is called by the ManifestLoader after other processing has been done,

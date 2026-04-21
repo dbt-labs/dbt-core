@@ -163,3 +163,15 @@ exposures:
     owner:
       email: something@example.com
 """
+
+simple_exposure_no_tags_yml = """
+version: 2
+
+exposures:
+  - name: simple_exposure
+    type: dashboard
+    depends_on:
+      - ref('model')
+    owner:
+      email: something@example.com
+"""

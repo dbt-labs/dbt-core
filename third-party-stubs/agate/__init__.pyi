@@ -67,6 +67,13 @@ class Table:
     ) -> "Table": ...
     @classmethod
     def merge(cls, tables: Iterable["Table"]) -> "Table": ...
+    def limit(
+        self,
+        start_or_stop: Optional[int] = None,
+        stop: Optional[int] = None,
+        step: Optional[int] = None,
+    ) -> "Table": ...
+    def order_by(self, key: Any, reverse: bool = False) -> "Table": ...
     def rename(
         self,
         column_names: Optional[Iterable[str]] = None,

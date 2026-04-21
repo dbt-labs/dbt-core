@@ -164,7 +164,9 @@ def yaml_from_file(
         # When loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
-        for source in contents.get("sources", []):
+        for source in contents.get("sources") or []:
+            if source.get("tables") is None:
+                source["tables"] = []
             for table in source.get("tables", []):
                 if "loaded_at_field" in table or (
                     "config" in table
@@ -902,9 +904,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
         if patch.yaml_key == "functions":
-            node = self.manifest.functions.get(unique_id)
+            node = self.manifest.functions.get(unique_id)  # type: ignore[arg-type]
         else:
-            node = self.manifest.nodes.get(unique_id)
+            node = self.manifest.nodes.get(unique_id)  # type: ignore[arg-type]
 
         if node:
             # patches can't be overwritten

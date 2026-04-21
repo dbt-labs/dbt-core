@@ -17,14 +17,16 @@ from typing import (
     Set,
     Tuple,
     Type,
+    cast,
 )
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.capability import Capability
+from dbt.adapters.catalogs import DbtCatalogIntegrationNotFoundError
 from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.artifacts.resources import Hook
+from dbt.artifacts.resources import Catalog, Hook
 from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
 from dbt.artifacts.schemas.results import (
     NodeStatus,
@@ -39,7 +41,13 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
+from dbt.contracts.graph.nodes import (
+    BatchContext,
+    HookNode,
+    ModelConfig,
+    ModelNode,
+    ResultNode,
+)
 from dbt.events.types import (
     GenericExceptionOnRun,
     LogBatchResult,
@@ -132,6 +140,17 @@ def _get_adapter_info(adapter, run_model_result) -> Dict[str, Any]:
     return asdict(adapter.get_adapter_run_info(run_model_result.node.config)) if adapter else {}
 
 
+def _get_catalog_type(model_node_config: ModelConfig, adapter: BaseAdapter) -> Optional[str]:
+    catalog_name = model_node_config._extra.get("catalog_name")
+    if catalog_name is None:
+        return None
+
+    try:
+        return adapter.get_catalog_integration(catalog_name).catalog_type
+    except DbtCatalogIntegrationNotFoundError:
+        return None
+
+
 def track_model_run(index, num_nodes, run_model_result, adapter=None):
     if tracking.active_user is None:
         raise DbtInternalError("cannot track model run with no active user")
@@ -143,11 +162,13 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
         contract_enforced = node.contract.enforced
         versioned = True if node.version else False
         incremental_strategy = node.config.incremental_strategy
+        model_config = node.config
     else:
         access = None
         contract_enforced = False
         versioned = False
         incremental_strategy = None
+        model_config = None
 
     tracking.track_model_run(
         {
@@ -169,6 +190,7 @@ def track_model_run(index, num_nodes, run_model_result, adapter=None):
             "access": access,
             "versioned": versioned,
             "adapter_info": _get_adapter_info(adapter, run_model_result),
+            "catalog_type": model_config and _get_catalog_type(model_config, adapter),
         }
     )
 
@@ -205,7 +227,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
     return relations
 
 
-class ModelRunner(CompileRunner):
+class ModelRunner(CompileRunner[ModelNode]):
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
@@ -245,7 +267,7 @@ class ModelRunner(CompileRunner):
     def before_execute(self) -> None:
         self.print_start_line()
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         track_model_run(self.node_index, self.num_nodes, result, adapter=self.adapter)
         self.print_result_line(result)
 
@@ -305,7 +327,7 @@ class ModelRunner(CompileRunner):
 
         return self._build_run_model_result(model, context)
 
-    def execute(self, model, manifest):
+    def execute(self, model, manifest) -> RunResult:
         context = generate_runtime_model_context(model, self.config, manifest)
 
         materialization_macro = manifest.find_materialization_macro_by_name(
@@ -416,7 +438,7 @@ class MicrobatchBatchRunner(ModelRunner):
 
         return run_in_parallel
 
-    def on_skip(self):
+    def on_skip(self) -> RunResult:
         result = RunResult(
             node=self.node,
             status=RunStatus.Skipped,
@@ -431,7 +453,7 @@ class MicrobatchBatchRunner(ModelRunner):
         self.print_result_line(result=result)
         return result
 
-    def error_result(self, node, message, start_time, timing_info):
+    def error_result(self, node, message, start_time, timing_info) -> RunResult:
         """Necessary to return a result with a batch result
 
         Called by `BaseRunner.safe_run` when an error occurs
@@ -608,7 +630,7 @@ class MicrobatchModelRunner(ModelRunner):
 
     def _has_relation(self, model: ModelNode) -> bool:
         """Check whether the relation for the model exists in the data warehouse"""
-        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation_info = self.adapter.Relation.create_from(self.config, model)  # type: ignore[arg-type]
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
         )
@@ -839,8 +861,9 @@ class RunTask(CompileTask):
         config: RuntimeConfig,
         manifest: Manifest,
         batch_map: Optional[Dict[str, BatchResults]] = None,
+        catalogs: Optional[List[Catalog]] = None,
     ) -> None:
-        super().__init__(args, config, manifest)
+        super().__init__(args, config, manifest, catalogs=catalogs)
         self.batch_map = batch_map
         self.original_invocation_started_at: Optional[datetime] = None
 
@@ -960,7 +983,11 @@ class RunTask(CompileTask):
                         msg=f"{batch_runner.describe_batch()} is being run sequentially"
                     )
                 )
-                batch_results.append(self.call_runner(batch_runner))
+                # MicrobatchBatchRunner always returns RunResult; cast required
+                # because call_runner() returns NodeResult after being broadened
+                # to accommodate FreshnessRunner. Resolved when NodeT TypeVar is
+                # added to BaseRunner so call_runner can return runner.RunnerResultT.
+                batch_results.append(cast(RunResult, self.call_runner(batch_runner)))
                 relation_exists = batch_runner.relation_exists
         else:
             batch_results.append(
