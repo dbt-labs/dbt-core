@@ -46,6 +46,8 @@ jobs:
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      HATCH_PYTHON: "3.10"
 
     steps:
       - name: Check out the repository
