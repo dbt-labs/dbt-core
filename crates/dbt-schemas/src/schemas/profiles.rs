@@ -1062,34 +1062,6 @@ pub struct SparkDbConfig {
     // - token
 }
 
-// https://docs.getdbt.com/docs/core/connect-data-platform/fabric-setup#microsoft-entra-id-authentication
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema)]
-#[serde(rename_all = "PascalCase")]
-pub enum FabricAuth {
-    #[default]
-    #[serde(alias = "ServicePrincipal")]
-    ActiveDirectoryServicePrincipal,
-    // TODO: other auth methods
-
-    // ActiveDirectoryPassword,
-
-    // #[serde(rename = "environment")]
-    // Environment,
-
-    // #[serde(rename = "CLI")]
-    // AzureCLI,
-
-    // /// Tries the following in order:
-    // /// 1. Environment
-    // /// 2. Managed Identity (not supported)
-    // /// 3. Visual Studio (Windows only)
-    // /// 4. VSCode
-    // /// 5. Azure CLI
-    // /// 6. Azure PowerShell module
-    // #[serde(rename = "auto")]
-    // Auto,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
@@ -1129,7 +1101,7 @@ pub struct FabricDbConfig {
     pub access_token_expires_on: Option<String>, // default = 0 | Added for access token expiration for oAuth and integration tests scenarios.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "auth")]
-    pub authentication: Option<FabricAuth>, // default = "ActiveDirectoryServicePrincipal"
+    pub authentication: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypt: Option<bool>, // default = True  | default value in MS ODBC Driver 18 as well
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1336,7 +1308,7 @@ pub struct SparkTargetEnv {
 #[derive(Serialize, DbtSchema)]
 pub struct FabricTargetEnv {
     pub __common__: CommonTargetContext,
-    pub authentication: FabricAuth,
+    pub authentication: String,
     // TODO: ...
 }
 
