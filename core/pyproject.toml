@@ -54,7 +54,7 @@ dependencies = [
     "dbt-extractor>=0.5.0,<=0.6",
     "dbt-semantic-interfaces>=0.10.2,<0.11",
     # Minor versions for these are expected to be backwards-compatible
-    "dbt-common>=1.37.3,<2.0",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@ash2shukla/fix/add-top-evel-fire-or-defer",
     "dbt-adapters>=1.22.8,<2.0",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",
@@ -84,3 +84,6 @@ path = "dbt/__version__.py"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true

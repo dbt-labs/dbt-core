@@ -59,6 +59,7 @@ def load_project(
     validate: bool = False,
     require_vars: bool = True,
 ) -> Project:
+
     if cli_vars is None:
         cli_vars = {}
 

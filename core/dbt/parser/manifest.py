@@ -800,6 +800,7 @@ class ManifestLoader:
         parser_files,
         parser_types: List[Type[Parser]],
     ) -> None:
+
         project_loader_info = self._perf_info._project_index[project.project_name]
         start_timer = time.perf_counter()
         total_parsed_path_count = 0

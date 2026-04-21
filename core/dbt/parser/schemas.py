@@ -179,9 +179,7 @@ def yaml_from_file(
         return contents
     except DbtValidationError as e:
         raise YamlLoadError(
-            project_name=source_file.project_name,
-            path=source_file.path.relative_path,
-            exc=e,
+            project_name=source_file.project_name, path=source_file.path.relative_path, exc=e
         )
 
 
@@ -378,11 +376,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
 
 Parsed = TypeVar(
-    "Parsed",
-    UnpatchedSourceDefinition,
-    ParsedNodePatch,
-    ParsedMacroPatch,
-    ParsedSingularTestPatch,
+    "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
 )
 NodeTarget = TypeVar(
     "NodeTarget",
@@ -457,6 +451,7 @@ class YamlReader(metaclass=ABCMeta):
 
         # for each dict in the data (which is a list of dicts)
         for entry in data:
+
             # check that entry is a dict and that all dict values
             # are strings
             if coerce_dict_str(entry) is None:
@@ -489,10 +484,7 @@ class YamlReader(metaclass=ABCMeta):
             if unrendered_config:
                 schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
 
-            for (
-                version,
-                unrendered_version_config,
-            ) in unrendered_version_configs.items():
+            for version, unrendered_version_config in unrendered_version_configs.items():
                 schema_file.add_unrendered_config(
                     unrendered_version_config, self.key, entry["name"], version
                 )
@@ -1449,9 +1441,7 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
         warn_or_error_with_deferral(
             InvalidMacroAnnotation(
-                msg=msg,
-                macro_unique_id=macro.unique_id,
-                macro_file_path=macro.original_file_path,
+                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
             ),
             event_group_type=EventGroupType.PARSE,
         )

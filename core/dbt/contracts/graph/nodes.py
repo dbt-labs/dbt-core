@@ -888,6 +888,7 @@ class ModelNode(ModelResource, CompiledNode):
             or enforced_column_constraint_removed
             or materialization_changed
         ):
+
             breaking_changes = []
             if contract_enforced_disabled:
                 breaking_changes.append(
@@ -1388,6 +1389,7 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
+
         # preserve legacy behaviour -- use potentially rendered database
         if get_flags().state_modified_compare_more_unrendered_values is False:
             same_database = self.database == other.database
@@ -1658,6 +1660,7 @@ class Group(GroupResource, BaseNode):
 
 @dataclass
 class FunctionNode(CompiledNode, FunctionResource):
+
     @property
     def is_relational(self) -> bool:
         return True

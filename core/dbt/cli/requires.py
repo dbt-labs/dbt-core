@@ -142,9 +142,7 @@ def setup_record_replay():
             "DBT_ENGINE_RECORDER_FILE_PATH"
         ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(
-            RecorderMode.REPLAY,
-            types=rec_types,
-            previous_recording_path=previous_recording_path,
+            RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
         )
     elif rec_mode == RecorderMode.DIFF:
         previous_recording_path = os.environ.get(
@@ -153,9 +151,7 @@ def setup_record_replay():
         # ensure types match the previous recording
         types = get_record_types_from_dict(previous_recording_path)
         recorder = Recorder(
-            RecorderMode.DIFF,
-            types=types,
-            previous_recording_path=previous_recording_path,
+            RecorderMode.DIFF, types=types, previous_recording_path=previous_recording_path
         )
     elif rec_mode == RecorderMode.RECORD:
         recorder = Recorder(RecorderMode.RECORD, types=rec_types)
@@ -177,8 +173,7 @@ def tear_down_record_replay():
 
 def postflight(func):
     """The decorator that handles all exception handling for the click commands.
-    This decorator must be used before any other decorators that may throw an exception.
-    """
+    This decorator must be used before any other decorators that may throw an exception."""
 
     def wrapper(*args, **kwargs):
         ctx = args[0]
@@ -206,9 +201,7 @@ def postflight(func):
             try:
                 if get_flags().upload_to_artifacts_ingest_api:
                     upload_artifacts(
-                        get_flags().project_dir,
-                        get_flags().target_path,
-                        ctx.command.name,
+                        get_flags().project_dir, get_flags().target_path, ctx.command.name
                     )
 
             except Exception as e:
