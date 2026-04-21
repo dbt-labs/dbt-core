@@ -228,7 +228,7 @@ impl From<DbtSeed> for ManifestSeed {
                 compiled_code: None,
                 checksum: seed.__common_attr__.checksum,
                 language: seed.__common_attr__.language,
-                unrendered_config: Default::default(),
+                unrendered_config: seed.__base_attr__.unrendered_config,
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
                 extra_ctes: Default::default(),
