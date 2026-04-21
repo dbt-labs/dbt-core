@@ -3,7 +3,7 @@ use crate::dbt_types::RelationType;
 use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
 
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, quote_char};
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
 use dbt_schema_store::CanonicalFqn;
@@ -129,9 +129,6 @@ pub trait BaseRelationProperties {
     fn include_policy(&self) -> Policy;
 
     fn quote_policy(&self) -> Policy;
-
-    /// quoting character to be used when rendering the relation
-    fn quote_character(&self) -> char;
 
     fn get_database(&self) -> FsResult<String>;
 
@@ -419,6 +416,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                 self.quote_policy(),
             )?
             .as_value())
+    }
+
+    /// quoting character to be used when rendering the relation
+    fn quote_character(&self) -> char {
+        quote_char(self.adapter_type())
     }
 
     /// Quote a relation component (database, schema, or identifier)
@@ -944,10 +946,6 @@ mod tests {
 
         fn quote_policy(&self) -> Policy {
             self.quote_policy
-        }
-
-        fn quote_character(&self) -> char {
-            '"'
         }
 
         fn get_database(&self) -> FsResult<String> {

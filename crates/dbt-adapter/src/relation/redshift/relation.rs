@@ -78,10 +78,6 @@ impl BaseRelationProperties for RedshiftRelation {
         self.quote_policy
     }
 
-    fn quote_character(&self) -> char {
-        '"'
-    }
-
     fn get_database(&self) -> FsResult<String> {
         self.path.database.clone().ok_or_else(|| {
             fs_err!(

@@ -39,10 +39,6 @@ impl BaseRelationProperties for EmptyRelation {
         unimplemented!("quote policy is unavailable for EmptyRelation")
     }
 
-    fn quote_character(&self) -> char {
-        unimplemented!("quote character is unavailable for EmptyRelation")
-    }
-
     fn get_database(&self) -> FsResult<String> {
         Ok(String::new())
     }

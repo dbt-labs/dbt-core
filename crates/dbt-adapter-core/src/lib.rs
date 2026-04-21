@@ -50,6 +50,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
     use AdapterType::*;
     match adapter_type {
         Snowflake => '"',
+        // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation.py#L30
         Bigquery => '`',
         Databricks | Spark => '`',
         Redshift => '"',

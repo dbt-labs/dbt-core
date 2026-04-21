@@ -64,10 +64,6 @@ impl BaseRelationProperties for InformationSchema {
         unimplemented!("InformationSchema");
     }
 
-    fn quote_character(&self) -> char {
-        unimplemented!("InformationSchema");
-    }
-
     fn get_database(&self) -> FsResult<String> {
         Ok(self.database.clone().unwrap_or_default())
     }

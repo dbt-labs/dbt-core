@@ -83,11 +83,6 @@ impl BaseRelationProperties for BigqueryRelation {
         self.quote_policy
     }
 
-    /// See [reference](https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation.py#L30)
-    fn quote_character(&self) -> char {
-        '`'
-    }
-
     fn get_database(&self) -> FsResult<String> {
         self.path.database.clone().ok_or_else(|| {
             fs_err!(

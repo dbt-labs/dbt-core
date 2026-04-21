@@ -398,10 +398,6 @@ impl BaseRelationProperties for MockBaseRelation {
         self.quote_policy
     }
 
-    fn quote_character(&self) -> char {
-        '"'
-    }
-
     fn get_database(&self) -> FsResult<String> {
         Ok(self.database.clone())
     }
