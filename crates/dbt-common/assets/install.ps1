@@ -3,7 +3,9 @@ param(
     [switch]$Update,
     [string]$Version,
     [string]$Target,
-    [string]$To = "$env:USERPROFILE\.local\bin"
+    [string]$To = "$env:USERPROFILE\.local\bin",
+    [ValidateSet('dbt', 'dbt-lsp', 'all')]
+    [string]$Package = 'dbt'
 )
 
 <#
@@ -11,7 +13,7 @@ param(
 Install the dbt CLI Binary for Windows.
 
 .DESCRIPTION
-This script installs the dbt CLI Binary. It allows specifying the version, target platform, and installation location.
+This script installs the dbt CLI Binary and/or dbt-lsp. It allows specifying the version, target platform, and installation location.
 
 .PARAMETER Update
 Updates to latest or specified version.
@@ -25,11 +27,20 @@ Install the release compiled for the specified target OS.
 .PARAMETER To
 Location to install the binary. Default is $env:USERPROFILE\.local\bin.
 
+.PARAMETER Package
+Package to install: 'dbt', 'dbt-lsp', or 'all'. Default is 'dbt'.
+
 .EXAMPLE
 .\install.ps1 -Update
 
 .EXAMPLE
 .\install.ps1 -Version "1.2.3" -Target "Windows" -To "C:\MyFolder"
+
+.EXAMPLE
+.\install.ps1 -Package "dbt-lsp" -Version "1.2.3"
+
+.EXAMPLE
+.\install.ps1 -Package "all" -Update
 #>
 
 # Define constants
@@ -179,18 +190,44 @@ function Test-VersionExists {
         [Parameter(Mandatory=$true)]
         [string]$Version,
         [Parameter(Mandatory=$true)]
-        [string]$Target
+        [string]$Target,
+        [Parameter()]
+        [string]$PackageName = 'dbt'
     )
 
-    $url = "https://$script:HOSTNAME/fs/cli/fs-v$Version-$Target.zip"
+    $url = Get-PackageUrl -Version $Version -Target $Target -PackageName $PackageName
     try {
         Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
         return $true
     } catch {
         if ($_.Exception.Response.StatusCode -eq 404) {
-            Write-ErrorAndExit "Version $Version does not exist" -AdditionalInfo "URL checked: $url"
+            Write-ErrorAndExit "Version $Version does not exist for $PackageName" -AdditionalInfo "URL checked: $url"
         } else {
             Write-ErrorAndExit 'Failed to check version availability' -AdditionalInfo "Error: $($_.Exception.Message)`nURL: $url"
+        }
+    }
+}
+
+function Get-PackageUrl {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Version,
+        [Parameter(Mandatory=$true)]
+        [string]$Target,
+        [Parameter(Mandatory=$true)]
+        [string]$PackageName
+    )
+
+    switch ($PackageName) {
+        'dbt' {
+            return "https://$script:HOSTNAME/fs/cli/fs-v$Version-$Target.zip"
+        }
+        'dbt-lsp' {
+            return "https://$script:HOSTNAME/fs/lsp/fs-lsp-v$Version-$Target.zip"
+        }
+        default {
+            Write-ErrorAndExit "Invalid package name: $PackageName"
         }
     }
 }
@@ -362,12 +399,19 @@ function Compare-Versions {
         [string]$TargetVersion,
 
         [Parameter()]
-        [bool]$IsLatest = $false
+        [bool]$IsLatest = $false,
+
+        [Parameter()]
+        [string]$PackageName = 'dbt',
+
+        [Parameter()]
+        [string]$BinaryPath = ''
     )
 
     if ($CurrentVersion -eq $TargetVersion) {
         $message = if ($IsLatest) { 'Latest' } else { 'Version' }
-        Write-ErrorAndExit "$message version $TargetVersion is already installed at $dest\dbt.exe"
+        $location = if ($BinaryPath) { " at $BinaryPath" } else { '' }
+        Write-ErrorAndExit "$message $PackageName version $TargetVersion is already installed$location"
     }
     return $true
 }
@@ -504,7 +548,7 @@ function Show-AsciiArt {
 #endregion
 
 #region Main Installation Functions
-function Install-Dbt {
+function Install-Package {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
@@ -526,15 +570,20 @@ function Install-Dbt {
         })]
         [string]$Destination,
 
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('dbt', 'dbt-lsp')]
+        [string]$PackageName,
+
         [switch]$Update
     )
 
     $td = New-TrackedTempDir
+    $binaryName = "$PackageName.exe"
 
     try {
-        $url = "https://$script:HOSTNAME/fs/cli/fs-v" + $Version + "-" + $Target + ".zip"
+        $url = Get-PackageUrl -Version $Version -Target $Target -PackageName $PackageName
 
-        Write-Log ('Installing dbt to: ' + ($Destination -replace "\\\\", "\"))
+        Write-Log ("Installing $PackageName to: " + ($Destination -replace "\\\\", "\"))
         Write-Log ('Downloading: ' + $url)
 
         try {
@@ -568,19 +617,19 @@ function Install-Dbt {
             New-Item -Path $Destination -ItemType Directory -Force | Out-Null
         }
 
-        $destFilePath = Join-Path -Path $Destination -ChildPath 'dbt.exe'
+        $destFilePath = Join-Path -Path $Destination -ChildPath $binaryName
 
         if (Test-Path $destFilePath) {
             if (-not $Update) {
-                Write-ErrorAndExit "dbt already exists in $($Destination -replace '\\', ''). Use the -Update flag to reinstall"
+                Write-ErrorAndExit "$PackageName already exists in $($Destination -replace '\\', ''). Use the -Update flag to reinstall"
             }
 
             # Get the parent process that launched us
             try {
                 $parentProcess = Get-Process -Id (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId -ErrorAction SilentlyContinue
 
-                if ($parentProcess -and $parentProcess.ProcessName.StartsWith('dbt')) {
-                    # Wait for parent dbt process to exit
+                if ($parentProcess -and $parentProcess.ProcessName.StartsWith($PackageName)) {
+                    # Wait for parent process to exit
                     $parentProcess.WaitForExit()
                 }
 
@@ -588,7 +637,7 @@ function Install-Dbt {
                 Move-Item -Path $sourceFile -Destination $destFilePath -Force
             }
             catch {
-                Write-ErrorAndExit 'Failed to update dbt' -AdditionalInfo $_.Exception.Message
+                Write-ErrorAndExit "Failed to update $PackageName" -AdditionalInfo $_.Exception.Message
             }
         }
         else {
@@ -597,17 +646,100 @@ function Install-Dbt {
                 Copy-Item -Path $sourceFile -Destination $destFilePath -Force
             }
             catch {
-                Write-ErrorAndExit 'Failed to install dbt' -AdditionalInfo $_.Exception.Message
+                Write-ErrorAndExit "Failed to install $PackageName" -AdditionalInfo $_.Exception.Message
             }
         }
 
         $script:PathUpdated = Update-InstallPath -Path $Destination
 
-        Write-Log ('Successfully installed dbt v' + $Version + ' to ' + ($destFilePath -replace "\\\\", "\"))
+        Write-Log ("Successfully installed $PackageName v" + $Version + ' to ' + ($destFilePath -replace "\\\\", "\"))
     }
     finally {
         Remove-TempDirs
     }
+}
+
+# Wrapper for backward compatibility
+function Install-Dbt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Version,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidatePattern('^[a-z0-9_]+-[a-z]+-[a-z0-9]+-[a-z]+$')]
+        [string]$Target,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({
+            if(-not (Test-Path -Path $_ -IsValid)) {
+                throw "Path '$_' contains invalid characters"
+            }
+            return $true
+        })]
+        [string]$Destination,
+
+        [switch]$Update
+    )
+
+    Install-Package -Version $Version -Target $Target -Destination $Destination -PackageName 'dbt' -Update:$Update
+}
+
+function Install-SelectedPackages {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$PackageSelection,
+        [Parameter(Mandatory=$true)]
+        [string]$Version,
+        [Parameter(Mandatory=$true)]
+        [string]$Target,
+        [Parameter(Mandatory=$true)]
+        [string]$Destination,
+        [switch]$Update
+    )
+
+    $packagesToInstall = @()
+    
+    switch ($PackageSelection) {
+        'all' {
+            $packagesToInstall = @('dbt', 'dbt-lsp')
+        }
+        default {
+            $packagesToInstall = @($PackageSelection)
+        }
+    }
+
+    $installedPackages = @()
+
+    foreach ($pkg in $packagesToInstall) {
+        $binaryName = "$pkg.exe"
+        $binaryPath = Join-Path -Path $Destination -ChildPath $binaryName
+        $currentPkgVersion = Get-InstalledVersion -BinaryPath $binaryPath
+
+        # Check if package is already installed with same version
+        if ($currentPkgVersion -eq $Version) {
+            Write-Log "$pkg version $Version is already installed"
+            continue
+        }
+
+        # Check if package exists and we're not updating
+        if ((Test-Path $binaryPath) -and (-not $Update)) {
+            Write-ErrorAndExit "$pkg already exists in $Destination, use the -Update flag to reinstall"
+        }
+
+        # Install the package
+        Install-Package -Version $Version -Target $Target -Destination $Destination -PackageName $pkg -Update:$Update
+        $installedPackages += @{
+            Name = $pkg
+            PreviousVersion = $currentPkgVersion
+        }
+    }
+
+    return $installedPackages
 }
 
 function main {
@@ -627,9 +759,6 @@ function main {
     # Check for Visual C++ Redistributable
     Test-VCRedist
 
-    # Check for current installed version
-    $currentVersion = Get-InstalledVersion -BinaryPath (Join-Path -Path $To -ChildPath 'dbt.exe')
-
     # Clean version format
     if (-not [string]::IsNullOrEmpty($Version)) {
         $Version = $Version -replace '^v', ''
@@ -641,46 +770,42 @@ function main {
     # Determine target version
     $version = Get-TargetVersion -SpecificVersion $Version -VersionInfo $versionInfo
 
-    # Check if dbt is already installed
-    $dbtPath = Join-Path -Path $To -ChildPath 'dbt.exe'
-    if (Test-Path $dbtPath) {
-        if (-not $Update) {
-            Write-ErrorAndExit "dbt already exists in $To, use the -Update flag to reinstall"
-        }
-        # Compare versions and exit if no update needed
-        if ($currentVersion -eq $version) {
-            Write-Log "dbt version $version is already installed"
-            return
-        }
-    }
-
     # Determine target architecture
     $script:target = Get-Architecture
 
     # Set installation destination
     $script:dest = Set-InstallationDestination
 
-    # Install dbt
-    Install-Dbt -Version $version -Target $target -Destination $dest -Update:$Update
+    # Install selected packages
+    $installedPackages = Install-SelectedPackages -PackageSelection $Package -Version $version -Target $target -Destination $dest -Update:$Update
 
     # Update PATH
     Update-InstallPath -Path $dest
 
-    # Update alias
-    Set-DbtAlias -InstallPath $dest
+    # Only set alias and show ASCII art for dbt
+    if ($Package -eq 'dbt' -or $Package -eq 'all') {
+        $dbtPath = Join-Path -Path $dest -ChildPath 'dbt.exe'
+        if (Test-Path $dbtPath) {
+            Set-DbtAlias -InstallPath $dest
+            Show-AsciiArt -Version $version
+        }
+    }
 
-    # Display ASCII art
-    Show-AsciiArt -Version $version
-
-    if ($Update -and $currentVersion) {
-        Write-GrayLog "Successfully updated dbt from $currentVersion to $Version"
+    # Show update messages for each installed package
+    foreach ($pkg in $installedPackages) {
+        if ($Update -and $pkg.PreviousVersion) {
+            Write-GrayLog "Successfully updated $($pkg.Name) from $($pkg.PreviousVersion) to $version"
+        }
     }
 
     # Show appropriate final messages
     if ($script:PathUpdated) {
         Write-Log 'Note: You may need to restart your terminal to use dbt from any directory'
     }
-    Write-Log "Run 'dbt --help' to get started"
+    
+    if ($Package -eq 'dbt' -or $Package -eq 'all') {
+        Write-Log "Run 'dbt --help' to get started"
+    }
 
     # Clean up
     Remove-TempDirs
