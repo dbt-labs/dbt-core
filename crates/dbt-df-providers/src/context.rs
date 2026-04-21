@@ -38,6 +38,23 @@ pub fn get_default_session_config() -> Result<SessionConfig> {
     Ok(session_config)
 }
 
+/// Builds a [`SessionContext`] using the baseline config, optionally overriding
+/// the execution timezone (sourced by dbt from the active profile's
+/// `execution_timezone` setting). This is the one-call helper used by dbt-main
+/// / dbt-lsp when they construct a `SessionComputeBackend` to inject into
+/// `dbt-tasks::build_compiler_env`.
+pub fn init_session_context_with_time_zone(
+    execution_time_zone: Option<&str>,
+    store: Arc<dyn SchemaStoreTrait>,
+    data_store: Arc<dyn DataStoreTrait>,
+) -> Result<SessionContext> {
+    let mut config = get_default_session_config()?;
+    if let Some(tz) = execution_time_zone {
+        config.options_mut().execution.time_zone = tz.to_string();
+    }
+    init_session_context_from_config(config, store, data_store)
+}
+
 /// Builds a [`SessionContext`] from an explicit [`SessionConfig`], wiring the
 /// schema store into the catalog list.
 pub fn init_session_context_from_config(

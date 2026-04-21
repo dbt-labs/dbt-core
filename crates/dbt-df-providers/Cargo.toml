@@ -18,6 +18,7 @@ dbt-frontend-common = { workspace = true }
 dbt-ident = { workspace = true }
 dbt-schema-store = { workspace = true }
 
+arrow = { workspace = true, features = ["json"] }
 arrow-schema = { workspace = true }
 async-trait = { workspace = true }
 datafusion = { workspace = true, features = ["parquet"] }
@@ -26,6 +27,7 @@ datafusion-common = { workspace = true }
 datafusion-expr = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 futures = { workspace = true }
+parquet = { workspace = true }
 scc = { workspace = true }
 tempfile = { workspace = true }
 
