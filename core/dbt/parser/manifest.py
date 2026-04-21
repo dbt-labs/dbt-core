@@ -683,6 +683,64 @@ class ManifestLoader:
                     f"Resource names cannot contain spaces:\n{formatted_resources_with_spaces}\nPlease rename the invalid model(s) so that their name(s) do not contain any spaces."
                 )
 
+        self._check_for_spaces_in_source_and_semantic_model_names(flags)
+
+    def _check_for_spaces_in_source_and_semantic_model_names(self, flags):
+        """Validates that source and semantic model names do not contain spaces.
+
+        Controlled by the `REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES` flag.
+        """
+        error_on_invalid = get_flags().require_source_and_semantic_model_names_without_spaces
+        level = EventLevel.ERROR if error_on_invalid else EventLevel.WARN
+
+        improper_names: dict[str, str] = {}  # unique_id -> original_file_path
+
+        # Check source names (source_name is the source-level name).
+        # Deduplicate by source_name since multiple tables share the same source_name.
+        seen_source_names: set[str] = set()
+        for source in self.manifest.sources.values():
+            if " " in source.source_name and source.source_name not in seen_source_names:
+                seen_source_names.add(source.source_name)
+                source_id = f"source.{source.package_name}.{source.source_name}"
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=source_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[source_id] = source.original_file_path
+
+        # Check semantic model names.
+        for semantic_model in self.manifest.semantic_models.values():
+            if " " in semantic_model.name:
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=semantic_model.unique_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[semantic_model.unique_id] = semantic_model.original_file_path
+
+        if improper_names:
+            if level == EventLevel.WARN:
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=len(improper_names),
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:
+                formatted = "\n".join(
+                    f"  * '{uid}' ({path})" for uid, path in improper_names.items()
+                )
+                raise DbtValidationError(
+                    f"Resource names cannot contain spaces:\n{formatted}\n"
+                    "Please rename the invalid resource(s) so that their name(s) do not contain any spaces."
+                )
+
     def check_for_microbatch_deprecations(self) -> None:
         if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
             has_microbatch_model = False
