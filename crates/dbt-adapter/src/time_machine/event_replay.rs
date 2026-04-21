@@ -18,7 +18,7 @@
 //! write operations create ordering constraints (barriers) while read operations
 //! within a segment can be matched in any order.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
@@ -216,11 +216,11 @@ pub struct Recording {
     /// Recording metadata
     pub header: RecordingHeader,
     /// Adapter call events indexed by node_id, sorted by seq
-    adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>>,
+    adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>>,
     /// Metadata call events indexed by caller_id, sorted by seq
-    metadata_events_by_caller: HashMap<String, Vec<MetadataCallEvent>>,
+    metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>>,
     /// SAO skip events indexed by node_id
-    sao_events: HashMap<String, SaoEvent>,
+    sao_events: BTreeMap<String, SaoEvent>,
     /// Run-remote-adhoc events in order
     run_remote_adhoc_events: Vec<RunRemoteAdhocEvent>,
     /// Cache invalidation events in order
@@ -287,9 +287,10 @@ impl Recording {
         };
 
         // Index events by node_id/caller_id
-        let mut adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>> = HashMap::new();
-        let mut metadata_events_by_caller: HashMap<String, Vec<MetadataCallEvent>> = HashMap::new();
-        let mut sao_events: HashMap<String, SaoEvent> = HashMap::new();
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
+        let mut metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>> =
+            BTreeMap::new();
+        let mut sao_events: BTreeMap<String, SaoEvent> = BTreeMap::new();
         let mut run_remote_adhoc_events: Vec<RunRemoteAdhocEvent> = Vec::new();
         let mut cache_invalidation_events: Vec<CacheInvalidationEvent> = Vec::new();
 
@@ -1070,7 +1071,7 @@ mod tests {
 
     /// Helper to create a test Recording from events
     fn make_recording(events: Vec<AdapterCallEvent>) -> Recording {
-        let mut adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>> = HashMap::new();
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
         for event in events {
             adapter_events_by_node
                 .entry(event.node_id.clone())
@@ -1092,8 +1093,8 @@ mod tests {
                 metadata: serde_json::Map::new(),
             },
             adapter_events_by_node,
-            metadata_events_by_caller: HashMap::new(),
-            sao_events: HashMap::new(),
+            metadata_events_by_caller: BTreeMap::new(),
+            sao_events: BTreeMap::new(),
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
@@ -1615,7 +1616,7 @@ mod tests {
             ),
         ];
 
-        let mut adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>> = HashMap::new();
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
         for event in events {
             adapter_events_by_node
                 .entry(event.node_id.clone())
@@ -1634,8 +1635,8 @@ mod tests {
                 invocation_command: None,
             },
             adapter_events_by_node,
-            metadata_events_by_caller: HashMap::new(),
-            sao_events: HashMap::new(),
+            metadata_events_by_caller: BTreeMap::new(),
+            sao_events: BTreeMap::new(),
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
@@ -1801,7 +1802,7 @@ mod tests {
         adapter_events: Vec<AdapterCallEvent>,
         sao_events: Vec<SaoEvent>,
     ) -> Recording {
-        let mut adapter_events_by_node: HashMap<String, Vec<AdapterCallEvent>> = HashMap::new();
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
         for event in adapter_events {
             adapter_events_by_node
                 .entry(event.node_id.clone())
@@ -1812,7 +1813,7 @@ mod tests {
             events.sort_by_key(|e| e.seq);
         }
 
-        let mut sao_events_map: HashMap<String, SaoEvent> = HashMap::new();
+        let mut sao_events_map: BTreeMap<String, SaoEvent> = BTreeMap::new();
         for event in sao_events {
             sao_events_map.insert(event.node_id.clone(), event);
         }
@@ -1828,7 +1829,7 @@ mod tests {
                 metadata: serde_json::Map::new(),
             },
             adapter_events_by_node,
-            metadata_events_by_caller: HashMap::new(),
+            metadata_events_by_caller: BTreeMap::new(),
             sao_events: sao_events_map,
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
