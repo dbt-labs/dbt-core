@@ -109,8 +109,9 @@ from dbt_common.contracts.constraints import (
     ModelLevelConstraint,
 )
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventGroupType
 from dbt_common.events.contextvars import set_log_contextvars
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import warn_or_error_with_deferral
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -718,13 +719,14 @@ class ModelNode(ModelResource, CompiledNode):
             breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
 
         if self.version is None:
-            warn_or_error(
+            warn_or_error_with_deferral(
                 UnversionedBreakingChange(
                     breaking_changes=[breaking_change],
                     model_name=self.name,
                     model_file_path=self.original_file_path,
                 ),
                 node=self,
+                event_group_type=EventGroupType.PARSE,
             )
             return False
         else:
@@ -886,7 +888,6 @@ class ModelNode(ModelResource, CompiledNode):
             or enforced_column_constraint_removed
             or materialization_changed
         ):
-
             breaking_changes = []
             if contract_enforced_disabled:
                 breaking_changes.append(
@@ -935,7 +936,7 @@ class ModelNode(ModelResource, CompiledNode):
                 )
 
             if self.version is None:
-                warn_or_error(
+                warn_or_error_with_deferral(
                     UnversionedBreakingChange(
                         contract_enforced_disabled=contract_enforced_disabled,
                         columns_removed=columns_removed,
@@ -947,6 +948,7 @@ class ModelNode(ModelResource, CompiledNode):
                         model_file_path=self.original_file_path,
                     ),
                     node=self,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
                 raise (
@@ -988,27 +990,32 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         if self.checksum.name == "path":
             msg: str
             if other.checksum.name != "path":
-                warn_or_error(
-                    SeedIncreased(package_name=self.package_name, name=self.name), node=self
+                warn_or_error_with_deferral(
+                    SeedIncreased(package_name=self.package_name, name=self.name),
+                    node=self,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif result:
-                warn_or_error(
+                warn_or_error_with_deferral(
                     SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
                     node=self,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif not result:
-                warn_or_error(
+                warn_or_error_with_deferral(
                     SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
                     node=self,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
-                warn_or_error(
+                warn_or_error_with_deferral(
                     SeedExceedsLimitChecksumChanged(
                         package_name=self.package_name,
                         name=self.name,
                         checksum_name=other.checksum.name,
                     ),
                     node=self,
+                    event_group_type=EventGroupType.PARSE,
                 )
 
         return result
@@ -1381,7 +1388,6 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
-
         # preserve legacy behaviour -- use potentially rendered database
         if get_flags().state_modified_compare_more_unrendered_values is False:
             same_database = self.database == other.database
@@ -1652,7 +1658,6 @@ class Group(GroupResource, BaseNode):
 
 @dataclass
 class FunctionNode(CompiledNode, FunctionResource):
-
     @property
     def is_relational(self) -> bool:
         return True

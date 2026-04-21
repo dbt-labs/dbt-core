@@ -43,7 +43,6 @@ class Quoting(dbtClassMixin, Mergeable):
 
 @dataclass
 class Package(dbtClassMixin):
-
     # Exclude {'name': None} from to_dict result to avoid changing sha1_hash result
     # when user has not changed their 'packages' configuration.
     def __post_serialize__(self, data, context: Optional[Dict]):
@@ -373,6 +372,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     support_custom_ref_kwargs: bool = False
     require_corrected_analysis_fqns: bool = False
     require_source_and_semantic_model_names_without_spaces: bool = False
+    allow_events_deferral: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -396,6 +396,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
             "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
             "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
+            "allow_events_deferral": self.allow_events_deferral,
         }
 
 

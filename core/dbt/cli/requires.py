@@ -42,9 +42,9 @@ from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
 from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.base_types import EventLevel
+from dbt_common.events.base_types import EventGroupType, EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
-from dbt_common.events.functions import LOG_VERSION, fire_event
+from dbt_common.events.functions import LOG_VERSION, fire_deferred_events, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
@@ -100,6 +100,7 @@ def preflight(func):
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         setup_event_logger(flags=flags, callbacks=callbacks)
+        get_event_manager().allow_deferral = flags.allow_events_deferral
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
@@ -141,7 +142,9 @@ def setup_record_replay():
             "DBT_ENGINE_RECORDER_FILE_PATH"
         ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(
-            RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
+            RecorderMode.REPLAY,
+            types=rec_types,
+            previous_recording_path=previous_recording_path,
         )
     elif rec_mode == RecorderMode.DIFF:
         previous_recording_path = os.environ.get(
@@ -150,7 +153,9 @@ def setup_record_replay():
         # ensure types match the previous recording
         types = get_record_types_from_dict(previous_recording_path)
         recorder = Recorder(
-            RecorderMode.DIFF, types=types, previous_recording_path=previous_recording_path
+            RecorderMode.DIFF,
+            types=types,
+            previous_recording_path=previous_recording_path,
         )
     elif rec_mode == RecorderMode.RECORD:
         recorder = Recorder(RecorderMode.RECORD, types=rec_types)
@@ -172,7 +177,8 @@ def tear_down_record_replay():
 
 def postflight(func):
     """The decorator that handles all exception handling for the click commands.
-    This decorator must be used before any other decorators that may throw an exception."""
+    This decorator must be used before any other decorators that may throw an exception.
+    """
 
     def wrapper(*args, **kwargs):
         ctx = args[0]
@@ -200,7 +206,9 @@ def postflight(func):
             try:
                 if get_flags().upload_to_artifacts_ingest_api:
                     upload_artifacts(
-                        get_flags().project_dir, get_flags().target_path, ctx.command.name
+                        get_flags().project_dir,
+                        get_flags().target_path,
+                        ctx.command.name,
                     )
 
             except Exception as e:
@@ -432,3 +440,5 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.connections.set_query_header(query_header_context)
         for integration in active_integrations:
             adapter.add_catalog_integration(integration)
+
+    fire_deferred_events(event_group_type=EventGroupType.PARSE)

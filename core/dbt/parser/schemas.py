@@ -89,7 +89,8 @@ from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events import EventLevel
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_event, warn_or_error_with_deferral
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
@@ -178,7 +179,9 @@ def yaml_from_file(
         return contents
     except DbtValidationError as e:
         raise YamlLoadError(
-            project_name=source_file.project_name, path=source_file.path.relative_path, exc=e
+            project_name=source_file.project_name,
+            path=source_file.path.relative_path,
+            exc=e,
         )
 
 
@@ -375,7 +378,11 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
 
 Parsed = TypeVar(
-    "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
+    "Parsed",
+    UnpatchedSourceDefinition,
+    ParsedNodePatch,
+    ParsedMacroPatch,
+    ParsedSingularTestPatch,
 )
 NodeTarget = TypeVar(
     "NodeTarget",
@@ -450,7 +457,6 @@ class YamlReader(metaclass=ABCMeta):
 
         # for each dict in the data (which is a list of dicts)
         for entry in data:
-
             # check that entry is a dict and that all dict values
             # are strings
             if coerce_dict_str(entry) is None:
@@ -483,7 +489,10 @@ class YamlReader(metaclass=ABCMeta):
             if unrendered_config:
                 schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
 
-            for version, unrendered_version_config in unrendered_version_configs.items():
+            for (
+                version,
+                unrendered_version_config,
+            ) in unrendered_version_configs.items():
                 schema_file.add_unrendered_config(
                     unrendered_version_config, self.key, entry["name"], version
                 )
@@ -843,14 +852,15 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_or_error(
+                    warn_or_error_with_deferral(
                         WrongResourceSchemaFile(
                             patch_name=patch.name,
                             resource_type=resource_type,
                             plural_resource_type=resource_type.pluralize(),
                             yaml_key=patch.yaml_key,
                             file_path=patch.original_file_path,
-                        )
+                        ),
+                        event_group_type=EventGroupType.PARSE,
                     )
                     return
         elif patch.yaml_key == "functions":
@@ -894,12 +904,13 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
                     self.patch_node_properties(node, patch)
             else:
-                warn_or_error(
+                warn_or_error_with_deferral(
                     NoNodeForYamlKey(
                         patch_name=patch.name,
                         yaml_key=patch.yaml_key,
                         file_path=source_file.path.original_file_path,
-                    )
+                    ),
+                    event_group_type=EventGroupType.PARSE,
                 )
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
@@ -937,12 +948,13 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         if not isinstance(node, ModelNode):
             for attr in ["latest_version", "access", "version", "constraints"]:
                 if getattr(patch, attr):
-                    warn_or_error(
+                    warn_or_error_with_deferral(
                         ValidationWarning(
                             field_name=attr,
                             resource_type=node.resource_type.value,
                             node_name=patch.name,
-                        )
+                        ),
+                        event_group_type=EventGroupType.PARSE,
                     )
 
 
@@ -964,14 +976,15 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
     def parse_patch(self, block: TargetBlock[UnparsedModelUpdate], refs: ParserRef) -> None:
         target = block.target
         if NodeType.Model.pluralize() != target.yaml_key:
-            warn_or_error(
+            warn_or_error_with_deferral(
                 WrongResourceSchemaFile(
                     patch_name=target.name,
                     resource_type=NodeType.Model,
                     plural_resource_type=NodeType.Model.pluralize(),
                     yaml_key=target.yaml_key,
                     file_path=target.original_file_path,
-                )
+                ),
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1033,12 +1046,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     add_node_nofile_fn = self.manifest.add_node_nofile
 
                 if versioned_model_node is None:
-                    warn_or_error(
+                    warn_or_error_with_deferral(
                         NoNodeForYamlKey(
                             patch_name=versioned_model_name,
                             yaml_key=target.yaml_key,
                             file_path=source_file.path.original_file_path,
-                        )
+                        ),
+                        event_group_type=EventGroupType.PARSE,
                     )
                     continue
 
@@ -1236,9 +1250,10 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         # if any constraint has `warn_unsupported` as True then send the warning
         if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
-            warn_or_error(
+            warn_or_error_with_deferral(
                 UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
                 node=model_node,
+                event_group_type=EventGroupType.PARSE,
             )
 
         errors = []
@@ -1291,12 +1306,13 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
             block.name, block.target.package_name
         )
         if not unique_id:
-            warn_or_error(
+            warn_or_error_with_deferral(
                 NoNodeForYamlKey(
                     patch_name=patch.name,
                     yaml_key=patch.yaml_key,
                     file_path=source_file.path.original_file_path,
-                )
+                ),
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1378,7 +1394,10 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            warn_or_error(MacroNotFoundForPatch(patch_name=patch.name))
+            warn_or_error_with_deferral(
+                MacroNotFoundForPatch(patch_name=patch.name),
+                event_group_type=EventGroupType.PARSE,
+            )
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")
@@ -1428,10 +1447,13 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
                 self._fire_macro_arg_warning(msg, macro)
 
     def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
-        warn_or_error(
+        warn_or_error_with_deferral(
             InvalidMacroAnnotation(
-                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
-            )
+                msg=msg,
+                macro_unique_id=macro.unique_id,
+                macro_file_path=macro.original_file_path,
+            ),
+            event_group_type=EventGroupType.PARSE,
         )
 
 

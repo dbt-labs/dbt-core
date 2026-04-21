@@ -30,7 +30,8 @@ from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.common import ParserRef
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_event, warn_or_error_with_deferral
 from dbt_common.exceptions import DbtInternalError
 
 
@@ -97,7 +98,6 @@ class SourcePatcher:
         unpatched: UnpatchedSourceDefinition,
         patch: Optional[SourcePatch],
     ) -> UnpatchedSourceDefinition:
-
         # This skips patching if no patch exists because of the
         # performance overhead of converting to and from dicts
         if patch is None:
@@ -307,9 +307,10 @@ class SourcePatcher:
             # there should be no freshness precedence
             precedence_configs.pop("freshness", None)
 
-        precedence_loaded_at_field, precedence_loaded_at_query = (
-            self.calculate_loaded_at_field_query_from_raw_target(target)
-        )
+        (
+            precedence_loaded_at_field,
+            precedence_loaded_at_query,
+        ) = self.calculate_loaded_at_field_query_from_raw_target(target)
         precedence_configs["loaded_at_field"] = precedence_loaded_at_field
         precedence_configs["loaded_at_query"] = precedence_loaded_at_query
 
@@ -354,7 +355,10 @@ class SourcePatcher:
 
         if unused_tables:
             unused_tables_formatted = self.get_unused_msg(unused_tables)
-            warn_or_error(UnusedTables(unused_tables=unused_tables_formatted))
+            warn_or_error_with_deferral(
+                UnusedTables(unused_tables=unused_tables_formatted),
+                event_group_type=EventGroupType.PARSE,
+            )
 
         self.manifest.source_patches = {}
 
@@ -495,12 +499,13 @@ class SourcePatcher:
         config_tags_valid: List[str] = []
         for tag in config_tags:
             if not isinstance(tag, str):
-                warn_or_error(
+                warn_or_error_with_deferral(
                     ValidationWarning(
                         field_name=f"`config.tags`: {tags}",
                         resource_type=NodeType.Source.value,
                         node_name=source_name,
-                    )
+                    ),
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
                 config_tags_valid.append(tag)
