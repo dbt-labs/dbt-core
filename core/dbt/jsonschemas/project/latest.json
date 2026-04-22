@@ -1007,6 +1007,13 @@
         "unknown"
       ]
     },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
+      ]
+    },
     "OnSchemaChange": {
       "type": "string",
       "enum": [
@@ -3135,6 +3142,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"

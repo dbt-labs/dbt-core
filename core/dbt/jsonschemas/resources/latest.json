@@ -5154,6 +5154,16 @@
             }
           ]
         },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "on_schema_change": {
           "anyOf": [
             {
@@ -5973,6 +5983,13 @@
         "continue",
         "fail",
         "unknown"
+      ]
+    },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
       ]
     },
     "OnSchemaChange": {
