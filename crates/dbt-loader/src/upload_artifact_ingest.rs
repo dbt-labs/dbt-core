@@ -26,6 +26,7 @@ struct UploadConfig {
     account_id: String,
     cloud_token: String,
     environment_id: String,
+    job_id: Option<u64>,
 }
 
 impl UploadConfig {
@@ -200,11 +201,27 @@ fn resolve_upload_config(
         "Skipping artifact ingest upload: no dbt Cloud environment ID configured",
     )?;
 
+    let job_id = dbt_cloud_config
+        .as_ref()
+        .and_then(|c| c.job_id.as_deref())
+        .and_then(|id| match id.parse::<u64>() {
+            Ok(v) => Some(v),
+            Err(_) => {
+                emit_skip_warning(
+                    io,
+                    ErrorCode::InvalidConfig,
+                    format!("DBT_CLOUD_JOB_ID '{}' is not a valid integer, ignoring", id),
+                );
+                None
+            }
+        });
+
     Some(UploadConfig {
         tenant_hostname,
         account_id,
         cloud_token,
         environment_id,
+        job_id,
     })
 }
 
@@ -273,7 +290,15 @@ async fn create_ingest_request(
     config: &UploadConfig,
     io: &IoArgs,
 ) -> Option<IngestCreateResult> {
-    let create_response = match client.post(config.ingest_url()).send().await {
+    let mut body = serde_json::Map::new();
+    if let Some(job_id) = config.job_id {
+        body.insert(
+            "job_id".to_string(),
+            serde_json::Value::Number(job_id.into()),
+        );
+    }
+
+    let create_response = match client.post(config.ingest_url()).json(&body).send().await {
         Ok(response) => response,
         Err(err) => {
             emit_upload_failure_warning(
@@ -583,6 +608,7 @@ mod tests {
             account_identifier: None,
             environment_id: Some("216".to_string()),
             defer_env_id: None,
+            job_id: None,
         })
     }
 
@@ -818,6 +844,36 @@ mod tests {
         let io = IoArgs::default();
         let config = resolve_upload_config(&None, &io);
         assert!(config.is_none());
+    }
+
+    #[test]
+    fn test_resolve_upload_config_with_job_id() {
+        let io = IoArgs::default();
+        let cloud_config = Some(ResolvedCloudConfig {
+            job_id: Some("42".to_string()),
+            ..sample_upload_cloud_config().unwrap()
+        });
+        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        assert_eq!(config.job_id, Some(42u64));
+    }
+
+    #[test]
+    fn test_resolve_upload_config_ignores_invalid_job_id() {
+        let io = IoArgs::default();
+        let cloud_config = Some(ResolvedCloudConfig {
+            job_id: Some("not_a_number".to_string()),
+            ..sample_upload_cloud_config().unwrap()
+        });
+        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        assert_eq!(config.job_id, None);
+    }
+
+    #[test]
+    fn test_resolve_upload_config_without_job_id() {
+        let io = IoArgs::default();
+        let cloud_config = sample_upload_cloud_config();
+        let config = resolve_upload_config(&cloud_config, &io).unwrap();
+        assert_eq!(config.job_id, None);
     }
 
     #[test]

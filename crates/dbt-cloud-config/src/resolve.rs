@@ -99,12 +99,15 @@ fn resolve_cloud_config_with_env_reader(
             .or_else(|| dbt_cloud_yml.and_then(|c| c.context.defer_env_id.clone()))
     });
 
+    let job_id = env_reader("DBT_CLOUD_JOB_ID");
+
     let resolved = ResolvedCloudConfig {
         credentials,
         project_id,
         account_identifier,
         environment_id,
         defer_env_id,
+        job_id,
     };
 
     // Exhaustive match ensures new fields aren't forgotten.
@@ -114,6 +117,7 @@ fn resolve_cloud_config_with_env_reader(
         account_identifier: None,
         environment_id: None,
         defer_env_id: None,
+        job_id: None,
     } = &resolved
     {
         None
