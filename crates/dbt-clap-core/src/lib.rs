@@ -1439,10 +1439,10 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_SHOW_ALL_DEPRECATIONS",hide = true, value_parser = BoolishValueParser::new())]
     pub show_all_deprecations: bool,
 
-    /// Debug flag
-    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
+    /// Display debug logging during dbt execution. Useful for debugging and making bug reports.
+    #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new())]
     pub debug: bool,
-    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_DEBUG", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_debug: bool,
 
     /// Introspect flag
