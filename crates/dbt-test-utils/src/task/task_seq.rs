@@ -1,4 +1,3 @@
-use crate::DbtCloudConfigGuard;
 use crate::task::TestError;
 use crate::task::env::TracingReloadHandle;
 
@@ -216,8 +215,19 @@ async fn run_test_tasks(
 
     // Create environment guard to isolate tests from external environment variables
     let _env_guard = TestEnvGuard::default();
-    // Create cloud config guard to isolate tests from dbt_cloud.yml file
-    let _cloud_guard = DbtCloudConfigGuard::new();
+
+    // Isolate tests from the developer's `~/.dbt/dbt_cloud.yml` by pointing
+    // the cloud-config loader at a non-existent per-process directory. The
+    // loader's NotFound branch returns `Ok(None)`, so any lookup sees "no
+    // dbt_cloud.yml". Nextest runs each test in its own process, so no
+    // restore is needed.
+    unsafe {
+        #[allow(clippy::disallowed_methods)]
+        std::env::set_var(
+            dbt_cloud_config::TEST_CLOUD_CONFIG_DIR_ENV,
+            std::env::temp_dir().join(format!("dbt-test-no-cloud-config-{}", std::process::id())),
+        );
+    }
 
     // Set provided environment variables (may be empty)
     for (key, value) in set_env {

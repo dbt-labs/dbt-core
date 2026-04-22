@@ -17,6 +17,7 @@ base64 = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
 dbt-cli-lib = { workspace = true }
+dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
