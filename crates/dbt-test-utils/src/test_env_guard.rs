@@ -275,8 +275,6 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn test_env_guard_basic_functionality() {
-        let _lock = crate::env_test_lock::ENV_LOCK.lock().unwrap();
-
         // Set a test variable before creating the guard
         unsafe {
             #[allow(clippy::disallowed_methods)]

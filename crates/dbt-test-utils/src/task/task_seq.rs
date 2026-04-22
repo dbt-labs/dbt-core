@@ -216,8 +216,7 @@ async fn run_test_tasks(
 
     // Create environment guard to isolate tests from external environment variables
     let _env_guard = TestEnvGuard::default();
-    // Isolate tests in a temporary home directory so they keep access to
-    // profiles.yml without picking up the developer's local dbt_cloud.yml.
+    // Create cloud config guard to isolate tests from dbt_cloud.yml file
     let _cloud_guard = DbtCloudConfigGuard::new();
 
     // Set provided environment variables (may be empty)
