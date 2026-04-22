@@ -3502,6 +3502,16 @@ impl AdapterImpl {
                     ));
                 }
 
+                // v2: use_uniform from catalog spec is authoritative
+                if load_catalogs::fetch_use_catalogs_v2() {
+                    return Ok(catalog_relation
+                        .adapter_properties
+                        .get("use_uniform")
+                        .and_then(|v| v.parse::<bool>().ok())
+                        .unwrap_or(false));
+                }
+
+                // v1: use_managed_iceberg behavior flag drives the decision
                 let use_managed_iceberg = self
                     .behavior_object()
                     .get_value(&Value::from("use_managed_iceberg"))

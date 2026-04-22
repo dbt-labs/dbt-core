@@ -81,6 +81,8 @@ mod databricks {
             .load_all_macros()
             .with_stub_functions()
             .with_behavior_flag("use_materialization_v2", false)
+            .with_behavior_flag("use_catalogs_v2", false)
+            .with_behavior_flag("use_managed_iceberg", false)
             .build()
             .expect("harness should build");
 

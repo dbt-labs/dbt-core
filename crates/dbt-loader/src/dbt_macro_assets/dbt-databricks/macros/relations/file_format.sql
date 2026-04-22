@@ -12,11 +12,24 @@
     {%- set file_format = adapter.resolve_file_format(config) -%}
   {% endif %}
   
-  {#-- Use managed Iceberg if behavior flag is enabled and table_format is iceberg --#}
-  {% if adapter.behavior.use_managed_iceberg and table_format == 'iceberg' %}
-    using iceberg
+  {#-- v2: managed iceberg is default; use_uniform=true opts into delta+tblprops --#}
+  {#-- v1: use_managed_iceberg behavior flag drives the iceberg DDL form       --#}
+  {% if adapter.behavior.use_catalogs_v2.no_warn %}
+    {% if table_format == 'iceberg' %}
+      {% if catalog_relation is not none and catalog_relation.use_uniform %}
+        using delta
+      {% else %}
+        using iceberg
+      {% endif %}
+    {% else %}
+      using {{ file_format }}
+    {% endif %}
   {% else %}
-    using {{ file_format }}
+    {% if adapter.behavior.use_managed_iceberg and table_format == 'iceberg' %}
+      using iceberg
+    {% else %}
+      using {{ file_format }}
+    {% endif %}
   {% endif %}
 {%- endmacro -%}
 

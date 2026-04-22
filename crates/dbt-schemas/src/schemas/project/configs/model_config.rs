@@ -89,6 +89,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub iceberg_version: Option<u64>,
+    #[serde(
+        default,
+        rename = "+change_tracking",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub change_tracking: Option<bool>,
     #[serde(rename = "+batch_size")]
     pub batch_size: Option<DbtBatchSize>,
     #[serde(rename = "+begin")]
@@ -217,6 +223,12 @@ pub struct ProjectModelConfig {
     pub initialize: Option<String>,
     #[serde(rename = "+scheduler")]
     pub scheduler: Option<String>,
+    #[serde(
+        default,
+        rename = "+data_retention_time_in_days",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub data_retention_time_in_days: Option<u64>,
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
@@ -233,6 +245,12 @@ pub struct ProjectModelConfig {
     pub location: Option<String>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
+    #[serde(
+        default,
+        rename = "+use_uniform",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub use_uniform: Option<bool>,
     #[serde(rename = "+lookback")]
     pub lookback: Option<i32>,
     #[serde(rename = "+matched_condition")]
@@ -241,6 +259,12 @@ pub struct ProjectModelConfig {
     pub materialized: Option<DbtMaterialization>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
+    #[serde(
+        default,
+        rename = "+max_data_extension_time_in_days",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub max_data_extension_time_in_days: Option<u64>,
     #[serde(rename = "+jar_file_uri")]
     pub jar_file_uri: Option<String>,
     #[serde(rename = "+timeout")]
@@ -263,6 +287,8 @@ pub struct ProjectModelConfig {
     pub enable_list_inference: Option<bool>,
     #[serde(rename = "+intermediate_format")]
     pub intermediate_format: Option<String>,
+    #[serde(rename = "+storage_uri")]
+    pub storage_uri: Option<String>,
     #[serde(rename = "+merge_exclude_columns")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
@@ -334,6 +360,8 @@ pub struct ProjectModelConfig {
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
     pub row_access_policy: Option<String>,
+    #[serde(rename = "+storage_serialization_policy")]
+    pub storage_serialization_policy: Option<String>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+refresh_mode")]
@@ -388,6 +416,8 @@ pub struct ProjectModelConfig {
     pub tags: Omissible<StringOrArrayOfStrings>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
+    #[serde(rename = "+target_file_size")]
+    pub target_file_size: Option<String>,
     #[serde(rename = "+tblproperties")]
     pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tmp_relation_type")]
@@ -618,6 +648,11 @@ impl From<ProjectModelConfig> for ModelConfig {
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
+                change_tracking: config.change_tracking,
+                data_retention_time_in_days: config.data_retention_time_in_days,
+                max_data_extension_time_in_days: config.max_data_extension_time_in_days,
+                storage_serialization_policy: config.storage_serialization_policy,
+                target_file_size: config.target_file_size,
                 target_lag: config.target_lag,
                 snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
                 snowflake_warehouse: config.snowflake_warehouse,
@@ -657,10 +692,12 @@ impl From<ProjectModelConfig> for ModelConfig {
                 notebook_template_id: config.notebook_template_id,
                 enable_list_inference: config.enable_list_inference,
                 intermediate_format: config.intermediate_format,
+                storage_uri: config.storage_uri,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
                 location_root: config.location_root,
+                use_uniform: config.use_uniform,
                 tblproperties: config.tblproperties,
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
@@ -772,6 +809,10 @@ impl From<ModelConfig> for ProjectModelConfig {
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
             iceberg_version: config.__warehouse_specific_config__.iceberg_version,
+            change_tracking: config.__warehouse_specific_config__.change_tracking,
+            data_retention_time_in_days: config
+                .__warehouse_specific_config__
+                .data_retention_time_in_days,
             target_lag: config.__warehouse_specific_config__.target_lag,
             snowflake_initialization_warehouse: config
                 .__warehouse_specific_config__
@@ -793,6 +834,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             notebook_template_id: config.__warehouse_specific_config__.notebook_template_id,
             enable_list_inference: config.__warehouse_specific_config__.enable_list_inference,
             intermediate_format: config.__warehouse_specific_config__.intermediate_format,
+            storage_uri: config.__warehouse_specific_config__.storage_uri,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,
@@ -818,8 +860,12 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .__warehouse_specific_config__
                 .refresh_interval_minutes,
             max_staleness: config.__warehouse_specific_config__.max_staleness,
+            max_data_extension_time_in_days: config
+                .__warehouse_specific_config__
+                .max_data_extension_time_in_days,
             file_format: config.__warehouse_specific_config__.file_format,
             location_root: config.__warehouse_specific_config__.location_root,
+            use_uniform: config.__warehouse_specific_config__.use_uniform,
             tblproperties: config.__warehouse_specific_config__.tblproperties,
             include_full_name_in_path: config
                 .__warehouse_specific_config__
@@ -850,6 +896,10 @@ impl From<ModelConfig> for ProjectModelConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            storage_serialization_policy: config
+                .__warehouse_specific_config__
+                .storage_serialization_policy,
+            target_file_size: config.__warehouse_specific_config__.target_file_size,
             as_columnstore: config.__warehouse_specific_config__.as_columnstore,
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,

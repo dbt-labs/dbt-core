@@ -9,6 +9,12 @@
             {%- set catalog_relation = none -%}
         {%- endif -%}
         {%- if catalog_relation is not none
+            and catalog_relation|attr('catalog_database')-%}
+            {#- NOTE: should also guard on `adapter.behavior.use_catalogs_v2.no_warn`, but this
+                macro runs with the ParseAdapter, which always returns empty Behavior (no flags).
+                `catalog_database` is v2-only by construction, so its presence implies v2. -#}
+            {{ return(catalog_relation.catalog_database) }}
+        {%- elif catalog_relation is not none
             and catalog_relation|attr('catalog_linked_database')-%}
             {{ return(catalog_relation.catalog_linked_database) }}
         {%- else -%}

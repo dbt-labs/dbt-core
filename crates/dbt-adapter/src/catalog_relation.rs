@@ -1,6 +1,7 @@
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 
 use dbt_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
 use minijinja::{
@@ -13,6 +14,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::load_catalogs;
+
+mod catalog_relation_v2;
 
 const BIGQUERY_INFO_SCHEMA: &str = "INFO_SCHEMA";
 const BIGQUERY_DEFAULT_TABLE_FORMAT: &str = "default";
@@ -53,6 +57,24 @@ const ALLOWED_TABLE_FORMATS_SNOWFLAKE: [&str; 2] = [DEFAULT_TABLE_FORMAT, ICEBER
 const ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE: &str = "DEFAULT|ICEBERG";
 
 const SNOWFLAKE_ATTR: &str = "snowflake_attr";
+const ADAPTER_PROP_CATALOG_DATABASE: &str = "catalog_database";
+const ADAPTER_PROP_CATALOG_LINKED_DATABASE_TYPE: &str = "catalog_linked_database_type";
+
+#[derive(Debug, Clone, Copy)]
+enum LinkedCatalogProvider {
+    Glue,
+    Unity,
+}
+
+impl LinkedCatalogProvider {
+    fn is_glue(self) -> bool {
+        matches!(self, Self::Glue)
+    }
+
+    fn is_unity(self) -> bool {
+        matches!(self, Self::Unity)
+    }
+}
 
 #[derive(Debug, serde::Serialize)]
 pub struct CatalogRelation {
@@ -86,11 +108,37 @@ pub struct CatalogRelation {
 }
 
 impl CatalogRelation {
+    fn linked_catalog_provider(&self) -> Option<LinkedCatalogProvider> {
+        let catalog_name = self.catalog_name.as_deref()?;
+        let catalogs = load_catalogs::fetch_catalogs()?;
+        let view = catalogs.view_v2().ok()?;
+        let catalog = view
+            .catalogs
+            .iter()
+            .find(|catalog| catalog.name == catalog_name)?;
+
+        match catalog.catalog_type {
+            V2CatalogType::Glue => Some(LinkedCatalogProvider::Glue),
+            V2CatalogType::Unity => Some(LinkedCatalogProvider::Unity),
+            _ => None,
+        }
+    }
+
     pub fn from_model_config_and_catalogs(
         adapter_type: &AdapterType,
         model: &Value,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> AdapterResult<Self> {
+        if load_catalogs::fetch_use_catalogs_v2()
+            && let Some(catalogs) = catalogs.as_ref()
+        {
+            return catalog_relation_v2::from_model_config_and_catalogs_v2(
+                adapter_type,
+                model,
+                catalogs.clone(),
+            );
+        }
+
         match adapter_type {
             AdapterType::Databricks => {
                 Self::from_model_config_and_catalogs_databricks(model, catalogs)
@@ -1376,7 +1424,6 @@ impl Object for CatalogRelation {
             "catalog_name" => Self::map_opt_str(self.catalog_name.clone()),
             "integration_name" => Self::map_opt_str(self.integration_name.clone()),
 
-            // required for any catalog relation
             "catalog_type" => Self::map_str_val(self.catalog_type.as_str()),
             "table_format" => Self::map_str_val(self.table_format.as_str()),
 
@@ -1410,12 +1457,22 @@ impl Object for CatalogRelation {
             "catalog_linked_database" => {
                 Self::map_properties_str(&self.adapter_properties, "catalog_linked_database")
             }
-            "catalog_linked_database_type" => {
-                Self::map_properties_str(&self.adapter_properties, "catalog_linked_database_type")
-            }
+            "catalog_linked_database_type" => Self::map_properties_str(
+                &self.adapter_properties,
+                ADAPTER_PROP_CATALOG_LINKED_DATABASE_TYPE,
+            ),
             "target_file_size" => {
                 Self::map_properties_str(&self.adapter_properties, "target_file_size")
             }
+
+            // v2-only REST surface
+            "catalog_database" => {
+                Self::map_properties_str(&self.adapter_properties, ADAPTER_PROP_CATALOG_DATABASE)
+            }
+            "linked_catalog_provider" => self
+                .linked_catalog_provider()
+                .map(Value::from_object)
+                .unwrap_or_else(|| Value::from(())),
 
             // === Snowflake
             "is_transient" => self.gate_by_adapter(vec![AdapterType::Snowflake], || {
@@ -1432,6 +1489,9 @@ impl Object for CatalogRelation {
                 }),
             "location" => self.gate_by_adapter(vec![AdapterType::Databricks], || {
                 Self::map_opt_str(self.external_volume.clone())
+            }),
+            "use_uniform" => self.gate_by_adapter(vec![AdapterType::Databricks], || {
+                Self::map_properties_bool(&self.adapter_properties, "use_uniform")
             }),
 
             // === Bigquery
@@ -1452,6 +1512,16 @@ impl Object for CatalogRelation {
             self.catalog_type,
             self.table_format
         )
+    }
+}
+
+impl Object for LinkedCatalogProvider {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        Some(match key.as_str()? {
+            "is_glue" => Value::from(self.is_glue()),
+            "is_unity" => Value::from(self.is_unity()),
+            _ => Value::from(()),
+        })
     }
 }
 

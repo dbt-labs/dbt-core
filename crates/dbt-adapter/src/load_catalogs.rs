@@ -12,12 +12,21 @@ use std::sync::{Arc, RwLock};
 const CATALOGS_V2_DISCUSSION_URL: &str = "https://github.com/dbt-labs/dbt-core/discussions/12723";
 
 static CATALOGS: RwLock<Option<Arc<DbtCatalogs>>> = RwLock::new(None);
+static USE_CATALOGS_V2: RwLock<bool> = RwLock::new(false);
 
 /// Reader: returns a read guard to loaded catalogs.yml if present
 pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
     match CATALOGS.read() {
         Ok(g) => g.as_ref().cloned(),
         Err(p) => p.into_inner().as_ref().cloned(),
+    }
+}
+
+/// Reader: returns whether the use_catalogs_v2 behavior flag was set at load time.
+pub fn fetch_use_catalogs_v2() -> bool {
+    match USE_CATALOGS_V2.read() {
+        Ok(g) => *g,
+        Err(p) => *p.into_inner(),
     }
 }
 
@@ -63,6 +72,10 @@ pub fn do_load_catalogs(
         .and_then(yml::Value::as_bool)
         .unwrap_or(false)
     {
+        *match USE_CATALOGS_V2.write() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        } = true;
         emit_warn_log_message(
             ErrorCode::NotYetSupportedOption,
             format!(

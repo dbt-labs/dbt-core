@@ -299,6 +299,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub notebook_template_id: Option<u64>,
     pub intermediate_format: Option<String>,
     pub enable_list_inference: Option<bool>,
+    pub storage_uri: Option<String>,
 
     // Used by both Databricks and Bigquery
     pub file_format: Option<String>,
@@ -306,6 +307,8 @@ pub struct WarehouseSpecificNodeConfig {
     // Databricks
     pub catalog_name: Option<String>,
     pub location_root: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub use_uniform: Option<bool>,
     pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -339,6 +342,14 @@ pub struct WarehouseSpecificNodeConfig {
     pub external_volume: Option<String>,
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub change_tracking: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub data_retention_time_in_days: Option<u64>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub max_data_extension_time_in_days: Option<u64>,
+    pub storage_serialization_policy: Option<String>,
+    pub target_file_size: Option<String>,
     pub target_lag: Option<String>,
     pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
@@ -427,11 +438,13 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             notebook_template_id,
             enable_list_inference,
             intermediate_format,
+            storage_uri,
 
             // Databricks
             file_format,
             catalog_name,
             location_root,
+            use_uniform,
             tblproperties,
             include_full_name_in_path,
             liquid_clustered_by,
@@ -460,6 +473,11 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             external_volume,
             base_location_root,
             base_location_subpath,
+            change_tracking,
+            data_retention_time_in_days,
+            max_data_extension_time_in_days,
+            storage_serialization_policy,
+            target_file_size,
             target_lag,
             snowflake_initialization_warehouse,
             snowflake_warehouse,
@@ -522,6 +540,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 file_format,
                 catalog_name,
                 location_root,
+                use_uniform,
                 tblproperties,
                 include_full_name_in_path,
                 liquid_clustered_by,
@@ -549,6 +568,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 notebook_template_id,
                 enable_list_inference,
                 intermediate_format,
+                storage_uri,
                 // Snowflake
                 table_tag,
                 row_access_policy,
@@ -556,6 +576,11 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 external_volume,
                 base_location_root,
                 base_location_subpath,
+                change_tracking,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                storage_serialization_policy,
+                target_file_size,
                 target_lag,
                 snowflake_initialization_warehouse,
                 snowflake_warehouse,

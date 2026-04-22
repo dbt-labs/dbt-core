@@ -248,14 +248,19 @@
     {# DIVERGENCE BEGIN: there is supposed to be a relation.catalog based arm here. This is a core hack that does not work in Fusion. #}
     {%- if catalog_relation is not none -%}
         {#-- Direct catalog_relation object provided --#}
-        {%- if catalog_relation|attr('catalog_linked_database') -%}
+        {%- if adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database') -%}
+            {{ return(true) }}
+        {%- elif catalog_relation|attr('catalog_linked_database') -%}
             {{ return(true) }}
         {%- else -%}
             {{ return(false) }}
         {%- endif -%}
     {%- elif relation and relation.config -%}
         {%- set catalog_relation = adapter.build_catalog_relation(relation) -%}
-        {%- if catalog_relation is not none and catalog_relation|attr('catalog_linked_database') -%}
+        {%- if catalog_relation is not none and (
+            (adapter.behavior.use_catalogs_v2.no_warn and catalog_relation|attr('catalog_database'))
+            or catalog_relation|attr('catalog_linked_database')
+        ) -%}
             {{ return(true) }}
         {%- else -%}
             {{ return(false) }}
@@ -334,21 +339,6 @@ select
 where 1 = 0
 {% endif %}
 {% endmacro %}
-
-
-{# DIVERGENCE #}
--- funcsign: () -> bool
-{% macro is_glue_catalog_linked_database() -%}
-  {#- Check if the current model is using a Glue catalog-linked database -#}
-  {% if config and config.model %}
-    {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
-    {% if catalog_relation and (catalog_relation|attr('catalog_linked_database_type') | lower == 'glue') %}
-      {{ return(true) }}
-    {% endif %}
-  {% endif %}
-  {{ return(false) }}
-{%- endmacro %}
-
 
 {# DIVERGENCE #}
 -- funcsign: (relation) -> relation

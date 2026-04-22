@@ -4,11 +4,11 @@
 //!
 //! ```yaml
 //! catalogs:
-//!   # type: snowflake_managed
+//!   # type: horizon
 //!   # supported platforms: snowflake
 //!   # a snowflake config block is required
 //!   - name: sf_managed
-//!     type: snowflake_managed
+//!     type: horizon
 //!     table_format: iceberg
 //!     config:
 //!       snowflake:
@@ -156,6 +156,27 @@ fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Mapping
             )),
         },
         None => Ok(None),
+    }
+}
+
+fn validate_optional_bool(m: &yml::Mapping, k: &str) -> FsResult<()> {
+    match m.get(yml::Value::from(k)) {
+        Some(v) => match v {
+            yml::Value::Bool(_, _) => Ok(()),
+            yml::Value::String(s, _)
+                if s.trim().eq_ignore_ascii_case("true")
+                    || s.trim().eq_ignore_ascii_case("false") =>
+            {
+                Ok(())
+            }
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span().clone()),
+                "Key '{}' must be a boolean",
+                k
+            )),
+        },
+        None => Ok(()),
     }
 }
 
@@ -337,8 +358,9 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum V2CatalogType {
-    SnowflakeManaged,
+    Horizon,
     Glue,
+    IcebergRest,
     HiveMetastore,
     Unity,
     BiglakeMetastore,
@@ -346,10 +368,12 @@ pub enum V2CatalogType {
 
 impl V2CatalogType {
     fn parse(raw: &str, span: &yml::Span) -> FsResult<Self> {
-        if raw.eq_ignore_ascii_case("snowflake_managed") {
-            Ok(Self::SnowflakeManaged)
+        if raw.eq_ignore_ascii_case("horizon") {
+            Ok(Self::Horizon)
         } else if raw.eq_ignore_ascii_case("glue") {
             Ok(Self::Glue)
+        } else if raw.eq_ignore_ascii_case("iceberg_rest") {
+            Ok(Self::IcebergRest)
         } else if raw.eq_ignore_ascii_case("hive_metastore") {
             Ok(Self::HiveMetastore)
         } else if raw.eq_ignore_ascii_case("unity") {
@@ -360,7 +384,7 @@ impl V2CatalogType {
             err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => Some(span.clone()),
-                "type '{}' invalid. choose one of (snowflake_managed|glue|unity|hive_metastore|biglake_metastore)",
+                "type '{}' invalid. choose one of (horizon|glue|iceberg_rest|unity|hive_metastore|biglake_metastore)",
                 raw
             )
         }
@@ -368,8 +392,9 @@ impl V2CatalogType {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::SnowflakeManaged => "snowflake_managed",
+            Self::Horizon => "horizon",
             Self::Glue => "glue",
+            Self::IcebergRest => "iceberg_rest",
             Self::HiveMetastore => "hive_metastore",
             Self::Unity => "unity",
             Self::BiglakeMetastore => "biglake_metastore",
@@ -529,8 +554,9 @@ const BIGLAKE_BIGQUERY_KEYS: &[&str] = &["external_volume", "file_format", "base
 
 fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     let catalog_platforms = match catalog.catalog_type {
-        V2CatalogType::SnowflakeManaged => &["snowflake"][..],
+        V2CatalogType::Horizon => &["snowflake"][..],
         V2CatalogType::Glue => &["snowflake"],
+        V2CatalogType::IcebergRest => &["snowflake"],
         V2CatalogType::Unity => &["snowflake", "databricks"],
         V2CatalogType::HiveMetastore => &["databricks"],
         V2CatalogType::BiglakeMetastore => &["bigquery"],
@@ -565,13 +591,13 @@ fn validate_u32_range(map: &yml::Mapping, field: &str, max: u32) -> FsResult<()>
     Ok(())
 }
 
-fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
+fn parse_horizon_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     validate_platform_support(catalog)?;
     if catalog.table_format != V2TableFormat::Iceberg {
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("table_format").cloned(),
-            "Catalog '{}' type 'snowflake_managed' requires table_format='iceberg'",
+            "Catalog '{}' type 'horizon' requires table_format='iceberg'",
             catalog.name
         );
     }
@@ -579,7 +605,7 @@ fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' type 'snowflake_managed' requires config.snowflake",
+            "Catalog '{}' type 'horizon' requires config.snowflake",
             catalog.name
         );
     };
@@ -587,21 +613,21 @@ fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => field_span(snowflake, "base_location_subpath").cloned(),
-            "Catalog '{}' snowflake_managed/snowflake base_location_subpath is model-config only and may not be specified in catalogs.yml",
+            "Catalog '{}' horizon/snowflake base_location_subpath is model-config only and may not be specified in catalogs.yml",
             catalog.name
         );
     }
     check_unknown_keys(
         snowflake,
         SNOWFLAKE_MANAGED_SNOWFLAKE_KEYS,
-        "catalogs[].config.snowflake (snowflake_managed)",
+        "catalogs[].config.snowflake (horizon)",
     )?;
 
     let Some(external_volume) = get_str(snowflake, "external_volume")? else {
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' snowflake_managed/snowflake config requires 'external_volume'",
+            "Catalog '{}' horizon/snowflake config requires 'external_volume'",
             catalog.name
         );
     };
@@ -609,7 +635,7 @@ fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => field_span(snowflake, "external_volume").cloned(),
-            "Catalog '{}' snowflake_managed/snowflake 'external_volume' must be non-empty",
+            "Catalog '{}' horizon/snowflake 'external_volume' must be non-empty",
             catalog.name
         );
     }
@@ -619,7 +645,7 @@ fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => field_span(snowflake, "base_location_root").cloned(),
-            "Catalog '{}' snowflake_managed/snowflake base_location_root cannot be blank",
+            "Catalog '{}' horizon/snowflake base_location_root cannot be blank",
             catalog.name
         );
     }
@@ -635,7 +661,62 @@ fn parse_snowflake_managed_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
     }
     validate_u32_range(snowflake, "data_retention_time_in_days", 90)?;
     validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+    validate_optional_bool(snowflake, "change_tracking")?;
 
+    Ok(())
+}
+
+fn parse_iceberg_rest_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
+    validate_platform_support(catalog)?;
+    if catalog.table_format != V2TableFormat::Iceberg {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("table_format").cloned(),
+            "Catalog '{}' type 'iceberg_rest' requires table_format='iceberg'",
+            catalog.name
+        );
+    }
+    let Some(snowflake) = catalog.config_block("snowflake") else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' type 'iceberg_rest' requires config.snowflake",
+            catalog.name
+        );
+    };
+    check_unknown_keys(
+        snowflake,
+        GLUE_SNOWFLAKE_KEYS,
+        "catalogs[].config.snowflake (iceberg_rest)",
+    )?;
+    let Some(catalog_database) = get_str(snowflake, "catalog_database")? else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' iceberg_rest/snowflake config requires 'catalog_database'",
+            catalog.name
+        );
+    };
+    if catalog_database.is_empty_or_whitespace() {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(snowflake, "catalog_database").cloned(),
+            "Catalog '{}' iceberg_rest/snowflake 'catalog_database' must be non-empty",
+            catalog.name
+        );
+    }
+    if let Some(target_file_size) = get_str(snowflake, "target_file_size")?
+        && !is_valid_target_file_size(target_file_size)
+    {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(snowflake, "target_file_size").cloned(),
+            "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
+            target_file_size
+        );
+    }
+    validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+    validate_optional_bool(snowflake, "auto_refresh")?;
     Ok(())
 }
 
@@ -691,6 +772,7 @@ fn parse_glue_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         );
     }
     validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+    validate_optional_bool(snowflake, "auto_refresh")?;
 
     Ok(())
 }
@@ -751,6 +833,7 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
             );
         }
         validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+        validate_optional_bool(snowflake, "auto_refresh")?;
     }
 
     if let Some(databricks) = catalog.config_block("databricks") {
@@ -788,6 +871,7 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
                 type_name
             );
         }
+        validate_optional_bool(databricks, "use_uniform")?;
     }
 
     Ok(())
@@ -920,8 +1004,9 @@ fn parse_biglake_metastore_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
 pub fn validate_catalogs_v2(spec: &DbtCatalogsV2View<'_>, _path: &Path) -> FsResult<()> {
     for catalog in &spec.catalogs {
         let () = match catalog.catalog_type {
-            V2CatalogType::SnowflakeManaged => parse_snowflake_managed_catalog(catalog)?,
+            V2CatalogType::Horizon => parse_horizon_catalog(catalog)?,
             V2CatalogType::Glue => parse_glue_catalog(catalog)?,
+            V2CatalogType::IcebergRest => parse_iceberg_rest_catalog(catalog)?,
             V2CatalogType::Unity => parse_linked_catalog(catalog, "unity")?,
             V2CatalogType::HiveMetastore => parse_hive_metastore_catalog(catalog)?,
             V2CatalogType::BiglakeMetastore => parse_biglake_metastore_catalog(catalog)?,
@@ -967,11 +1052,11 @@ catalogs:
     }
 
     #[test]
-    fn snowflake_managed_v2_valid() {
+    fn horizon_v2_valid() {
         let yaml = r#"
 catalogs:
   - name: sf_native
-    type: snowflake_managed
+    type: horizon
     table_format: iceberg
     config:
       snowflake:
@@ -982,7 +1067,7 @@ catalogs:
         max_data_extension_time_in_days: 14
         change_tracking: false
 "#;
-        parse_and_validate(yaml).expect("v2 snowflake_managed should validate");
+        parse_and_validate(yaml).expect("v2 horizon should validate");
     }
 
     #[test]
@@ -999,6 +1084,44 @@ catalogs:
         target_file_size: AUTO
 "#;
         parse_and_validate(yaml).expect("v2 glue should validate");
+    }
+
+    #[test]
+    fn iceberg_rest_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: rest_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "MY_REST_CLD"
+        auto_refresh: true
+        max_data_extension_time_in_days: 1
+        target_file_size: AUTO
+"#;
+        parse_and_validate(yaml).expect("v2 iceberg_rest should validate");
+    }
+
+    #[test]
+    fn iceberg_rest_rejects_databricks_block() {
+        let yaml = r#"
+catalogs:
+  - name: rest_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "MY_REST_CLD"
+      databricks:
+        file_format: delta
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("does not support databricks on the iceberg_rest"),
+            "unexpected error: {res:?}"
+        );
     }
 
     #[test]
@@ -1073,11 +1196,11 @@ catalogs:
     }
 
     #[test]
-    fn snowflake_managed_rejects_bigquery_platform_block() {
+    fn horizon_rejects_bigquery_platform_block() {
         let yaml = r#"
 catalogs:
   - name: my_catalog
-    type: snowflake_managed
+    type: horizon
     table_format: iceberg
     config:
       bigquery:
@@ -1088,17 +1211,17 @@ catalogs:
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("does not support bigquery on the snowflake_managed"),
+            msg.contains("does not support bigquery on the horizon"),
             "unexpected error: {msg}"
         );
     }
 
     #[test]
-    fn snowflake_managed_rejects_unity_only_snowflake_fields() {
+    fn horizon_rejects_unity_only_snowflake_fields() {
         let yaml = r#"
 catalogs:
   - name: sf_native
-    type: snowflake_managed
+    type: horizon
     table_format: iceberg
     config:
       snowflake:
@@ -1115,11 +1238,11 @@ catalogs:
     }
 
     #[test]
-    fn snowflake_managed_rejects_catalog_base_location_subpath() {
+    fn horizon_rejects_catalog_base_location_subpath() {
         let yaml = r#"
 catalogs:
   - name: sf_native
-    type: snowflake_managed
+    type: horizon
     table_format: iceberg
     config:
       snowflake:
@@ -1136,7 +1259,7 @@ catalogs:
     }
 
     #[test]
-    fn glue_rejects_snowflake_managed_only_snowflake_fields() {
+    fn glue_rejects_horizon_only_snowflake_fields() {
         let yaml = r#"
 catalogs:
   - name: glue_cat
@@ -1157,7 +1280,7 @@ catalogs:
     }
 
     #[test]
-    fn unity_rejects_snowflake_managed_only_snowflake_fields() {
+    fn unity_rejects_horizon_only_snowflake_fields() {
         let yaml = r#"
 catalogs:
   - name: linked_catalog
@@ -1173,28 +1296,6 @@ catalogs:
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
             msg.contains("Unknown key 'external_volume'"),
-            "unexpected error: {msg}"
-        );
-    }
-
-    #[test]
-    fn legacy_rest_type_is_rejected() {
-        let yaml = r#"
-catalogs:
-  - name: old_rest
-    type: iceberg_rest
-    table_format: iceberg
-    config:
-      snowflake:
-        catalog_database: "MY_DB"
-"#;
-        let res = parse_and_validate(yaml);
-        let msg = format!("{res:?}");
-        assert!(res.is_err(), "expected error but got Ok");
-        assert!(
-            msg.contains(
-                "choose one of (snowflake_managed|glue|unity|hive_metastore|biglake_metastore)"
-            ),
             "unexpected error: {msg}"
         );
     }
