@@ -122,7 +122,7 @@ fn _render_ident_in_quotes(
 pub const fn quote_char(backend: Backend) -> char {
     use Backend::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC | Spark => '`',
+        BigQuery | Databricks | DatabricksODBC | Spark | Athena => '`',
         Snowflake => '"',
         ClickHouse | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => '"',
         // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
@@ -135,7 +135,7 @@ pub const fn quote_char(backend: Backend) -> char {
 pub const fn canonical_quote(backend: Backend) -> QuotingStyle {
     use Backend::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC | Spark => QuotingStyle::Backtick,
+        BigQuery | Databricks | DatabricksODBC | Spark | Athena => QuotingStyle::Backtick,
         ClickHouse | Snowflake | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => {
             QuotingStyle::Double
         }
@@ -159,7 +159,8 @@ pub fn is_valid_ident_char(c: char, backend: Backend) -> bool {
             c != '.' && c != quote_char(backend) && !c.is_whitespace() && c != '/' && c != ';'
         }
         // TODO: check these fallbacks against documentation of these dialects
-        Postgres
+        Athena
+        | Postgres
         | Databricks
         | DatabricksODBC
         | Spark

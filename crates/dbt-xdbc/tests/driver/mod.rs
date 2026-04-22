@@ -15,7 +15,7 @@ mod tests {
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
     use dbt_xdbc::{
-        Backend, Connection, Database, Driver, Statement, bigquery, connection,
+        Backend, Connection, Database, Driver, Statement, athena, bigquery, connection,
         database::{self, LogLevel},
         databricks, driver, redshift, salesforce, snowflake,
     };
@@ -146,6 +146,22 @@ mod tests {
                     .with_named_option(AUTH_MECHANISM, auth_mechanism_options::TOKEN)?
                     .with_username(DEFAULT_TOKEN_UID)
                     .with_password(token);
+                Ok(builder)
+            }
+            Backend::Athena => {
+                let mut builder = database::Builder::new(backend);
+                let region = env::var("ATHENA_REGION").unwrap();
+                let catalog = env::var("ATHENA_CATALOG").unwrap();
+                let schema = env::var("ATHENA_SCHEMA").unwrap();
+                let s3_staging_dir = env::var("ATHENA_S3_STAGING_DIR").unwrap();
+                builder
+                    .with_named_option(athena::REGION, region)?
+                    .with_named_option(athena::CATALOG, catalog)?
+                    .with_named_option(athena::SCHEMA, schema)?
+                    .with_named_option(athena::S3_STAGING_DIR, s3_staging_dir)?;
+                if let Ok(work_group) = env::var("ATHENA_WORK_GROUP") {
+                    builder.with_named_option(athena::WORK_GROUP, work_group)?;
+                }
                 Ok(builder)
             }
             Backend::Spark => todo!("Spark is WIP"),

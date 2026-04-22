@@ -252,6 +252,11 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
         Postgres | Salesforce | DuckDB => Microsecond,
         SQLServer => Microsecond,
         ClickHouse => Second,
+        // Athena (Presto/Trino-based) uses millisecond precision for timestamps.
+        // https://docs.aws.amazon.com/athena/latest/ug/data-types.html
+        // The adbc_driver_athena is being updated to emit Timestamp_ms to match;
+        // see https://github.com/dbt-labs/athena/issues/6
+        Athena => Millisecond,
         Generic { .. } => Microsecond, // a reasonable default
     }
 }
@@ -758,7 +763,9 @@ impl SqlType {
             (_, Struct(Some(fields))) => {
                 match backend {
                     Snowflake => write!(out, "OBJECT(")?,
-                    BigQuery | Databricks | DatabricksODBC | Spark => write!(out, "STRUCT<")?,
+                    BigQuery | Databricks | DatabricksODBC | Spark | Athena => {
+                        write!(out, "STRUCT<")?
+                    }
                     Postgres | Salesforce | DuckDB | ClickHouse => write!(out, "(")?,
                     // Redshift doesn't support object/struct types
                     Redshift | RedshiftODBC => write!(out, "(")?,
@@ -797,7 +804,9 @@ impl SqlType {
                 }
                 match backend {
                     Snowflake => write!(out, ")"),
-                    BigQuery | Databricks | DatabricksODBC | Spark => write!(out, ">"),
+                    BigQuery | Databricks | DatabricksODBC | Spark | Athena => {
+                        write!(out, ">")
+                    }
                     Postgres | Salesforce | DuckDB | ClickHouse => write!(out, ")"),
                     Redshift | RedshiftODBC => write!(out, ")"),
                     SQLServer => unimplemented!("SQL Server does't have a struct type"),
@@ -1171,6 +1180,12 @@ impl SqlType {
             }
             // }}}
 
+            // Athena {{{
+            // Athena (Presto/Trino-based) DECIMAL without precision/scale defaults to DECIMAL(38, 0)
+            // https://docs.aws.amazon.com/athena/latest/ug/data-types.html
+            (Athena, Numeric(None) | BigNumeric(None)) => DataType::Decimal128(38, 0),
+            // }}}
+
             // Redshift {{{
             (Redshift | RedshiftODBC, Numeric(None) | BigNumeric(None)) => {
                 // The default precision, if not specified, is 18. The maximum precision is 38.
@@ -1301,6 +1316,9 @@ impl SqlType {
                     // `Time64` has adjustable precision:
                     // https://clickhouse.com/docs/sql-reference/data-types/time64
                     (ClickHouse, None) => TimeUnit::Second,
+                    // Athena (Presto/Trino-based) TIME has millisecond precision
+                    // https://docs.aws.amazon.com/athena/latest/ug/data-types.html
+                    (Athena, None) => TimeUnit::Millisecond,
                     (Generic { .. }, None) => {
                         // we pick microseconds as a reasonable default
                         TimeUnit::Microsecond
@@ -1452,6 +1470,8 @@ impl SqlType {
                     ClickHouse => MonthDayNano,
                     Salesforce => MonthDayNano, // Salesforce seems to follow PostgreSQL
                     SQLServer => MonthDayNano, // SQL Server doesn't appear to have an INTERVAL type
+                    // Athena (Presto/Trino-based) uses MonthDayNano as a reasonable default
+                    Athena => MonthDayNano,
                     Generic { .. } => MonthDayNano, // Reasonable default
                 };
                 DataType::Interval(interval_unit)
@@ -1595,6 +1615,9 @@ const CLICKHOUSE_KEYS: [&str; 2] = ["CLICKHOUSE:type", "type_text"];
 const SPARK_KEYS: [&str; 2] = ["SPARK:type", "type_text"];
 const SQLSERVER_KEYS: [&str; 2] = ["SQLSERVER:type", "type_text"];
 const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
+// The "ATHENA:type" key is emitted by adbc_driver_athena in Arrow field metadata
+// (see https://github.com/dbt-labs/athena/issues/6).
+const ATHENA_KEYS: [&str; 1] = ["ATHENA:type"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     match backend {
@@ -1608,6 +1631,7 @@ fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
         Backend::DuckDB => &DUCKDB_KEYS,
         Backend::SQLServer => &SQLSERVER_KEYS, // TODO
         Backend::ClickHouse => &CLICKHOUSE_KEYS,
+        Backend::Athena => &ATHENA_KEYS,
         Backend::Generic { .. } => &GENERIC_KEYS,
     }
 }

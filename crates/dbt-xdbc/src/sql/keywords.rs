@@ -17,6 +17,7 @@ pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
         | DatabricksODBC
         | Postgres
         | Spark
+        | Athena
         | Salesforce
         | SQLServer
         | ClickHouse

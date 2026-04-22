@@ -370,6 +370,7 @@ fn backends() -> Vec<Backend> {
         Databricks,
         DatabricksODBC,
         RedshiftODBC,
+        Athena,
         Generic {
             library_name: "generic",
             entrypoint: None,
@@ -1083,7 +1084,9 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 ClickHouse => todo!("ClickHouse tests not implemented yet"),
                 Spark => todo!("Spark tests not implemented yet"),
                 SQLServer => todo!("SQL Server tests not implemented yet"),
-                Generic { .. } => generic,
+                // Athena (Presto/Trino-based) renders the same as generic for all types in
+                // this matrix; Athena-specific Arrow mappings are tested separately below.
+                Athena | Generic { .. } => generic,
             };
             (line, t, s)
         })
@@ -1183,4 +1186,80 @@ fn test_struct_on_databricks() {
         assert_eq!(fields[1].name(), "age");
         assert_eq!(fields[2].name(), "active");
     }
+}
+
+// Athena-specific type behavior tests
+// Athena is Presto/Trino-based; see https://docs.aws.amazon.com/athena/latest/ug/data-types.html
+
+#[test]
+fn test_athena_timestamp_uses_millisecond_precision() {
+    use arrow_schema::TimeUnit;
+    // default_time_unit for Athena should be Millisecond
+    assert_eq!(default_time_unit(Athena), TimeUnit::Millisecond);
+
+    // TIMESTAMP without precision → arrow Timestamp(Millisecond, None)
+    let t = Timestamp {
+        precision: None,
+        time_zone_spec: TimeZoneSpec::Without,
+    };
+    let arrow = t.pick_best_arrow_type(Athena);
+    assert_eq!(
+        arrow,
+        DataType::Timestamp(TimeUnit::Millisecond, None),
+        "Athena TIMESTAMP should map to Timestamp(Millisecond, None)"
+    );
+}
+
+#[test]
+fn test_athena_time_uses_millisecond_precision() {
+    use arrow_schema::TimeUnit;
+    // TIME without precision → Time32(Millisecond)
+    let t = Time {
+        precision: None,
+        time_zone_spec: TimeZoneSpec::Without,
+    };
+    let arrow = t.pick_best_arrow_type(Athena);
+    assert_eq!(
+        arrow,
+        DataType::Time32(TimeUnit::Millisecond),
+        "Athena TIME should map to Time32(Millisecond)"
+    );
+}
+
+#[test]
+fn test_athena_decimal_defaults_to_38_0() {
+    // DECIMAL / NUMERIC without precision/scale → Decimal128(38, 0)
+    let arrow_numeric = Numeric(None).pick_best_arrow_type(Athena);
+    assert_eq!(
+        arrow_numeric,
+        DataType::Decimal128(38, 0),
+        "Athena NUMERIC without precision/scale should default to DECIMAL(38, 0)"
+    );
+
+    let arrow_bignumeric = BigNumeric(None).pick_best_arrow_type(Athena);
+    assert_eq!(
+        arrow_bignumeric,
+        DataType::Decimal128(38, 0),
+        "Athena BIGNUMERIC without precision/scale should default to DECIMAL(38, 0)"
+    );
+}
+
+#[test]
+fn test_athena_struct_rendering() {
+    // Athena uses STRUCT<...> with backtick-quoted names (Presto-based).
+    // Note: Athena uses VARCHAR (not STRING) and no colon separator, unlike Databricks.
+    let s = "STRUCT<`name` VARCHAR, `age` INT>";
+    let t = Struct(Some(vec![
+        StructField::new(
+            Ident::unquoted(canonical_quote(Athena), "name"),
+            SqlType::varchar(None),
+            true,
+        ),
+        StructField::new(
+            Ident::unquoted(canonical_quote(Athena), "age"),
+            Integer,
+            true,
+        ),
+    ]));
+    assert_roundtrip(line!(), &t, s, Athena);
 }

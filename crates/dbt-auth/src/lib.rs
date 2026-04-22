@@ -8,6 +8,7 @@ use dbt_xdbc::{Backend, database};
 mod config;
 
 // Database-specific auth implementations
+mod athena;
 mod bigquery;
 mod clickhouse;
 mod databricks;
@@ -75,6 +76,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::DuckDB => Box::new(duckdb::DuckDbAuth {}),
         Backend::SQLServer => Box::new(sqlserver::SQLServerAuth {}),
         Backend::ClickHouse => Box::new(clickhouse::ClickHouseAuth {}),
+        Backend::Athena => Box::new(athena::AthenaAuth {}),
         Backend::Generic { .. } => unimplemented!("generic backend authentication"),
     }
 }

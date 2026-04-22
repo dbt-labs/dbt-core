@@ -313,7 +313,8 @@ pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'stat
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
-        Backend::ClickHouse
+        Backend::Athena
+        | Backend::ClickHouse
         | Backend::DatabricksODBC
         | Backend::RedshiftODBC
         | Backend::Generic { .. } => {

@@ -63,6 +63,7 @@ pub mod duration;
 pub mod install;
 
 // Constants for different backends
+pub mod athena;
 pub mod bigquery;
 pub mod databricks;
 pub mod redshift;

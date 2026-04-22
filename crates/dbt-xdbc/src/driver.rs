@@ -71,6 +71,8 @@ pub enum Backend {
     DuckDB,
     /// Microsoft SQL Server implementation (ADBC).
     SQLServer,
+    /// Athena driver implementation (ADBC).
+    Athena,
     /// ClickHouse driver implementation (ADBC).
     ClickHouse,
     /// Databricks driver implementation (ODBC).
@@ -107,6 +109,7 @@ impl fmt::Display for Backend {
             Backend::Salesforce => write!(f, "Salesforce"),
             Backend::Spark => write!(f, "Spark"),
             Backend::SQLServer => write!(f, "SQL Server"),
+            Backend::Athena => write!(f, "Athena"),
             Backend::ClickHouse => write!(f, "ClickHouse"),
             Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
         }
@@ -126,6 +129,7 @@ impl Backend {
             Backend::DuckDB => Some("duckdb"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
+            Backend::Athena => Some("adbc_driver_athena"),
             Backend::ClickHouse => Some("adbc_clickhouse"),
             Backend::Generic { library_name, .. } => Some(library_name),
         }
@@ -154,6 +158,7 @@ impl Backend {
             | Backend::Spark
             | Backend::DuckDB
             | Backend::SQLServer
+            | Backend::Athena
             | Backend::ClickHouse
             | Backend::Generic { .. } => FFIProtocol::Adbc,
             Backend::DatabricksODBC | Backend::RedshiftODBC => FFIProtocol::Odbc,
@@ -429,7 +434,7 @@ impl AdbcDriver {
                 ));
             }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
-            (CdnCache | SystemThenCdnCache | Remote, ClickHouse) => System(None),
+            (CdnCache | SystemThenCdnCache | Remote, Athena | ClickHouse) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
             (CdnCache | SystemThenCdnCache | Remote, Generic { library_name, .. }) => {
                 System(Some(library_name.to_string()))
