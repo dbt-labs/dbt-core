@@ -43,7 +43,6 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import SemverError
 from dbt_common.helper_types import NoValue
 from dbt_common.semver import VersionSpecifier, versions_compatible
-from dbt_common.ui import warning_tag
 
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
@@ -922,16 +921,13 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
             known_flag_names = {f.name for f in fields(ProjectFlags)}
             unknown_flags = set(project_flags.keys()) - known_flag_names
             if unknown_flags:
-                flag_names = ", ".join(sorted(unknown_flags))
+                flag_names = list(sorted(unknown_flags))
                 if project_flags.get("require_no_unknown_flags", False):
                     raise DbtProjectError(
-                        f"Unknown flags in dbt_project.yml: {flag_names}. "
+                        f"Unknown flags in dbt_project.yml: {', '.join(flag_names)}. "
                         "Please remove or correct these flags."
                     )
-                msg = warning_tag(
-                    f"Unknown flags in dbt_project.yml: {flag_names}. These flags will be ignored."
-                )
-                deprecations.buffer_warning(msg)
+                deprecations.buffer("unknown-flags-deprecation", flag_names=flag_names)
 
             # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
             # for warn_error_options

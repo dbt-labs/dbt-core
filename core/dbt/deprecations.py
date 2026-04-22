@@ -7,7 +7,6 @@ import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtInternalError
@@ -252,6 +251,11 @@ class GenerateSchemaNameNullValueDeprecation(DBTDeprecation):
     _event = "GenerateSchemaNameNullValueDeprecation"
 
 
+class UnknownFlagsDeprecation(DBTDeprecation):
+    _name = "unknown-flags-deprecation"
+    _event = "UnknownFlagsDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -278,15 +282,6 @@ def warn(name: str, *args, **kwargs) -> None:
 def buffer(name: str, *args, **kwargs):
     def show_callback():
         deprecations[name].show(*args, **kwargs)
-
-    buffered_deprecations.append(show_callback)
-
-
-def buffer_warning(msg: str):
-    """Buffer a warning to be fired after the event logger is set up."""
-
-    def show_callback():
-        fire_event(Note(msg=msg), level=EventLevel.WARN)
 
     buffered_deprecations.append(show_callback)
 
@@ -351,6 +346,7 @@ deprecations_list: List[DBTDeprecation] = [
     TimeDimensionsRequireGranularityDeprecation(),
     GenericSemanticLayerDeprecation(),
     GenerateSchemaNameNullValueDeprecation(),
+    UnknownFlagsDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
