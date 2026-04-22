@@ -472,6 +472,23 @@ pub fn emit_error_log_message(
     );
 }
 
+/// Emit a package-scoped (coming from a dependency) error log message.
+#[track_caller]
+pub fn emit_error_log_message_package_scoped(
+    code: ErrorCode,
+    message: impl AsRef<str>,
+    package_name: &str,
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_error(&fs_err!(code, "{}", message.as_ref()));
+    };
+
+    let mut log_message = LogMessage::new_from_level_and_code(code as u32, tracing::Level::ERROR);
+    log_message.package_name = Some(package_name.to_string());
+    emit_error_event(log_message, Some(message.as_ref()));
+}
+
 /// Emit a log message event at ERROR level based on the given FsError.
 ///
 /// This will also report the error to the provided status reporter, if any.
