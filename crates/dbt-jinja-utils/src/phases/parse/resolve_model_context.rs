@@ -89,18 +89,20 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + Serialize + 'static>(
     let mut context = BTreeMap::new();
     let sql_resources_clone = sql_resources.clone();
     let this_relation = ResolveThisFunction {
-        relation: dbt_adapter::relation::do_create_relation(
-            adapter_type,
-            database.to_string(),
-            schema.to_string(),
-            Some(model_name.to_string()),
-            None,
-            package_quoting
-                .try_into()
-                .expect("Failed to convert quoting to resolved quoting"),
-        )
-        .unwrap()
-        .as_value(),
+        relation: dbt_adapter::relation::RelationObject::new(Arc::from(
+            dbt_adapter::relation::do_create_relation(
+                adapter_type,
+                database.to_string(),
+                schema.to_string(),
+                Some(model_name.to_string()),
+                None,
+                package_quoting
+                    .try_into()
+                    .expect("Failed to convert quoting to resolved quoting"),
+            )
+            .unwrap(),
+        ))
+        .into_value(),
         sql_resources: sql_resources_clone,
     };
 
@@ -440,18 +442,20 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
             location,
         )));
 
-        let relation = dbt_adapter::relation::do_create_relation(
-            self.adapter_type,
-            self.database.clone(),
-            self.schema.clone(),
-            Some(model_name),
-            None,
-            self.package_quoting
-                .try_into()
-                .expect("Failed to convert quoting to resolved quoting"),
-        )
-        .unwrap()
-        .as_value();
+        let relation = dbt_adapter::relation::RelationObject::new(Arc::from(
+            dbt_adapter::relation::do_create_relation(
+                self.adapter_type,
+                self.database.clone(),
+                self.schema.clone(),
+                Some(model_name),
+                None,
+                self.package_quoting
+                    .try_into()
+                    .expect("Failed to convert quoting to resolved quoting"),
+            )
+            .unwrap(),
+        ))
+        .into_value();
         // At resolve time, fqn do not have to be accurate
         Ok(relation)
     }
@@ -499,18 +503,20 @@ impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
                 )));
 
             // At resolve time, fqn do not have to be accurate
-            Ok(dbt_adapter::relation::do_create_relation(
-                self.adapter_type,
-                self.database.clone(),
-                self.schema.clone(),
-                Some(table_name),
-                Some(RelationType::External),
-                self.package_quoting
-                    .try_into()
-                    .expect("Failed to convert quoting to resolved quoting"),
-            )
-            .unwrap()
-            .as_value())
+            Ok(dbt_adapter::relation::RelationObject::new(Arc::from(
+                dbt_adapter::relation::do_create_relation(
+                    self.adapter_type,
+                    self.database.clone(),
+                    self.schema.clone(),
+                    Some(table_name),
+                    Some(RelationType::External),
+                    self.package_quoting
+                        .try_into()
+                        .expect("Failed to convert quoting to resolved quoting"),
+                )
+                .unwrap(),
+            ))
+            .into_value())
         } else {
             Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,

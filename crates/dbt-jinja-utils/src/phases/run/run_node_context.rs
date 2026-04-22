@@ -53,16 +53,18 @@ fn extend_with_model_context<S: Serialize>(
     sql_header: Option<MinijinjaValue>,
 ) {
     // Create a relation for 'this' using config values
-    let this_relation = dbt_adapter::relation::do_create_relation(
-        adapter_type,
-        base_attr.database.clone(),
-        base_attr.schema.clone(),
-        Some(base_attr.alias.clone()),
-        None,
-        base_attr.quoting,
-    )
-    .unwrap()
-    .as_value();
+    let this_relation = dbt_adapter::relation::RelationObject::new(Arc::from(
+        dbt_adapter::relation::do_create_relation(
+            adapter_type,
+            base_attr.database.clone(),
+            base_attr.schema.clone(),
+            Some(base_attr.alias.clone()),
+            None,
+            base_attr.quoting,
+        )
+        .unwrap(),
+    ))
+    .into_value();
 
     base_context.insert("this".to_owned(), this_relation);
     base_context.insert(

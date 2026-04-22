@@ -1244,7 +1244,7 @@ impl Adapter {
                         let can_use_cache =
                             !needs_information || cached_entry.relation().has_information();
                         if can_use_cache {
-                            return Ok(cached_entry.relation().as_value());
+                            return Ok(RelationObject::new(cached_entry.relation()).into_value());
                         }
                     } else {
                         return Ok(cache_result);
@@ -1271,7 +1271,7 @@ impl Adapter {
                             .engine()
                             .relation_cache()
                             .insert_relation(Arc::clone(&relation), None);
-                        Ok(relation.as_value())
+                        Ok(RelationObject::new(relation).into_value())
                     }
                     None => Ok(none_value()),
                 }
@@ -4184,7 +4184,7 @@ impl Object for Adapter {
 impl Adapter {
     fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
         if let Some(cached_entry) = self.engine().relation_cache().get_relation(temp_relation) {
-            Some(cached_entry.relation().as_value())
+            Some(RelationObject::new(cached_entry.relation()).into_value())
         }
         // If we have captured the entire schema previously, we can check for non-existence
         // In these cases, return early with a None value

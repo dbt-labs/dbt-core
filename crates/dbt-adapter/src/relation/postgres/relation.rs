@@ -2,7 +2,7 @@ use crate::information_schema::InformationSchema;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use dbt_adapter_core::AdapterType;
-use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
@@ -10,8 +10,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::arg_utils::{ArgParser, check_num_args};
-use minijinja::{State, Value};
+use minijinja::Value;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -178,7 +177,7 @@ impl BaseRelation for PostgresRelation {
         Arc::new(self.clone())
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("PostgreSQL relation creation from Jinja values")
     }
 
@@ -186,44 +185,41 @@ impl BaseRelation for PostgresRelation {
         // no-op
     }
 
-    fn database(&self) -> Value {
-        Value::from(self.path.database.clone())
+    fn database(&self) -> Option<&str> {
+        self.path.database.as_deref()
     }
 
-    fn schema(&self) -> Value {
-        Value::from(self.path.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        self.path.schema.as_deref()
     }
 
-    fn identifier(&self) -> Value {
-        Value::from(self.path.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        self.path.identifier.as_deref()
     }
 
     fn relation_type(&self) -> Option<RelationType> {
         self.relation_type
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
     fn adapter_type(&self) -> AdapterType {
         AdapterType::Postgres
     }
 
-    fn include_inner(&self, include_policy: Policy) -> Result<Value, minijinja::Error> {
+    fn include_inner(
+        &self,
+        include_policy: Policy,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let relation = PostgresRelation::try_new_with_policy(
             self.path.clone(),
             self.relation_type,
             include_policy,
             self.quote_policy,
         )?;
-        Ok(relation.as_value())
+        Ok(Arc::new(relation))
     }
 
-    fn relation_max_name_length(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        let args = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &args, 0, 0)?;
-        Ok(Value::from(MAX_CHARACTERS_IN_IDENTIFIER))
+    fn relation_max_name_length(&self) -> Result<u32, minijinja::Error> {
+        Ok(MAX_CHARACTERS_IN_IDENTIFIER as u32)
     }
 
     fn normalize_component(&self, component: &str) -> String {
@@ -255,10 +251,10 @@ impl BaseRelation for PostgresRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let result =
             InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
-        Ok(RelationObject::new(Arc::new(result)).into_value())
+        Ok(Arc::new(result))
     }
 }
 
@@ -281,10 +277,7 @@ mod tests {
             .unwrap();
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(
-            relation.inner().render_self().unwrap().as_str().unwrap(),
-            "\"d\".\"s\".\"i\""
-        );
+        assert_eq!(relation.inner().render_self_as_str(), "\"d\".\"s\".\"i\"");
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
     }
 }

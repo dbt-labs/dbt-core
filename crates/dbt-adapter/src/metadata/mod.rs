@@ -19,7 +19,7 @@ use dbt_schemas::schemas::{
     common::ResolvedQuoting,
     relations::base::{BaseRelation, BaseRelationProperties},
 };
-use minijinja::{State, Value};
+use minijinja::State;
 
 pub(crate) mod bigquery;
 pub mod databricks;
@@ -428,8 +428,8 @@ impl BaseRelation for MockBaseRelation {
         Arc::new(self.clone())
     }
 
-    fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(Value::from("test"))
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        unimplemented!()
     }
 
     fn is_delta(&self) -> bool {
@@ -440,24 +440,20 @@ impl BaseRelation for MockBaseRelation {
         self.is_delta = is_delta;
     }
 
-    fn database(&self) -> Value {
-        Value::from(self.database.clone())
+    fn database(&self) -> Option<&str> {
+        Some(&self.database)
     }
 
-    fn schema(&self) -> Value {
-        Value::from(self.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        Some(&self.schema)
     }
 
-    fn identifier(&self) -> Value {
-        Value::from(self.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        Some(&self.identifier)
     }
 
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type
-    }
-
-    fn as_value(&self) -> Value {
-        Value::from("test")
     }
 
     fn normalize_component(&self, component: &str) -> String {
@@ -479,12 +475,15 @@ impl BaseRelation for MockBaseRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("information schema query generation in metadata adapter")
     }
 
-    fn include_inner(&self, _policy: ResolvedQuoting) -> Result<Value, minijinja::Error> {
-        Ok(Value::from("test"))
+    fn include_inner(
+        &self,
+        _policy: ResolvedQuoting,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        Ok(Arc::new(self.clone()))
     }
 
     fn semantic_fqn(&self) -> String {

@@ -343,16 +343,7 @@ impl DatabricksMetadataAdapter {
             }
             RelationType::StreamingTable => {}
             RelationType::Table => {
-                let is_hive_metastore =
-                    base_relation.is_hive_metastore().try_into().map_err(|_| {
-                        AdapterError::new(
-                            AdapterErrorKind::Configuration,
-                            format!(
-                                "Unable to decode is_hive_metastore config for {}",
-                                base_relation.render_self_as_str()
-                            ),
-                        )
-                    })?;
+                let is_hive_metastore = base_relation.is_hive_metastore();
                 if is_hive_metastore {
                     return Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,

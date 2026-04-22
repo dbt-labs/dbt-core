@@ -13,7 +13,7 @@ use dbt_schemas::schemas::relations::base::{
 use arrow::array::RecordBatch;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use minijinja::{State, Value};
+use minijinja::Value;
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -337,35 +337,31 @@ impl BaseRelation for GenericRelation {
         Arc::new(self.clone())
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("{} relation creation from Jinja values", self.adapter_type)
     }
 
-    fn database(&self) -> Value {
-        Value::from(self.path.database.clone())
+    fn database(&self) -> Option<&str> {
+        self.path.database.as_deref()
     }
 
-    fn schema(&self) -> Value {
-        Value::from(self.path.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        self.path.schema.as_deref()
     }
 
-    fn identifier(&self) -> Value {
-        Value::from(self.path.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        self.path.identifier.as_deref()
     }
 
     fn relation_type(&self) -> Option<RelationType> {
         self.relation_type
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
+    fn include_inner(&self, policy: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let mut relation = Self::new_with_policy(
             self.adapter_type,
             self.path.clone(),
@@ -381,11 +377,11 @@ impl BaseRelation for GenericRelation {
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
 
-        Ok(relation.as_value())
+        Ok(Arc::new(relation))
     }
 
-    fn is_hive_metastore(&self) -> Value {
-        let is_hive_metastore = match self.adapter_type {
+    fn is_hive_metastore(&self) -> bool {
+        match self.adapter_type {
             AdapterType::Databricks | AdapterType::Spark => {
                 // Match Python dbt-databricks semantics:
                 // def is_hive_metastore(database: Optional[str], temporary: Optional[bool] = False) -> bool:
@@ -399,8 +395,7 @@ impl BaseRelation for GenericRelation {
                     && !self.temporary
             }
             _ => false,
-        };
-        Value::from(is_hive_metastore)
+        }
     }
 
     fn is_temporary(&self) -> bool {
@@ -427,13 +422,6 @@ impl BaseRelation for GenericRelation {
 
     fn normalize_component(&self, component: &str) -> String {
         component.to_lowercase()
-    }
-
-    /// Mirrors Python `DatabricksRelation.render()` → `super().render().lower()`.
-    /// Case-insensitive adapters (Databricks, DuckDB, etc.) lowercase the
-    /// rendered string for consistency.
-    fn render_self_as_str(&self) -> String {
-        self.base_render_self_as_str().to_ascii_lowercase()
     }
 
     fn create_relation(
@@ -472,10 +460,10 @@ impl BaseRelation for GenericRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let result =
             InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
-        Ok(RelationObject::new(Arc::new(result)).into_value())
+        Ok(Arc::new(result))
     }
 }
 
@@ -502,10 +490,7 @@ mod tests {
             .unwrap();
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(
-            relation.inner().render_self().unwrap().as_str().unwrap(),
-            "`d`.`s`.`i`"
-        );
+        assert_eq!(relation.inner().render_self_as_str(), "`d`.`s`.`i`");
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
     }
 
@@ -527,10 +512,7 @@ mod tests {
             .unwrap();
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(
-            relation.inner().render_self().unwrap().as_str().unwrap(),
-            "`s`.`i`"
-        );
+        assert_eq!(relation.inner().render_self_as_str(), "`s`.`i`");
     }
 
     #[test]
@@ -556,7 +538,7 @@ mod tests {
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();
         assert_eq!(
-            relation.inner().render_self().unwrap().as_str().unwrap(),
+            relation.inner().render_self_as_str(),
             "`dbt`.`dbt_staging`.`stg_pinterest_campaign_int`"
         );
     }

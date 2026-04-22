@@ -76,7 +76,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_table where created_at >= to_timestamp_tz('2024-07-01T00:00:00') and created_at < to_timestamp_tz('2024-07-08T18:00:00'))"
@@ -113,7 +113,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_table where cast(created_at as timestamp) >= '2024-07-01T00:00:00' and cast(created_at as timestamp) < '2024-07-08T18:00:00')"
@@ -151,7 +151,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
@@ -193,7 +193,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
@@ -231,7 +231,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            relation.render_self().unwrap().as_str().unwrap(),
+            relation.render_self_as_str(),
             "\"stocks_dev\".\"main\".\"files\""
         );
     }

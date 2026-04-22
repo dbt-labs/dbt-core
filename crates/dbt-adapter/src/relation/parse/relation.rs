@@ -1,5 +1,4 @@
-use crate::funcs::{empty_string_value, none_value};
-use crate::relation::RelationObject;
+use crate::funcs::none_value;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
@@ -7,7 +6,7 @@ use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy};
-use minijinja::{State, Value};
+use minijinja::Value;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -32,11 +31,19 @@ impl BaseRelationProperties for EmptyRelation {
     }
 
     fn include_policy(&self) -> Policy {
-        unimplemented!("include policy is unavailable for EmptyRelation")
+        Policy {
+            database: false,
+            schema: false,
+            identifier: false,
+        }
     }
 
     fn quote_policy(&self) -> Policy {
-        unimplemented!("quote policy is unavailable for EmptyRelation")
+        Policy {
+            database: false,
+            schema: false,
+            identifier: false,
+        }
     }
 
     fn get_database(&self) -> FsResult<String> {
@@ -70,7 +77,7 @@ impl BaseRelation for EmptyRelation {
         Arc::new(self.clone())
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("relation creation from Jinja values")
     }
 
@@ -81,67 +88,75 @@ impl BaseRelation for EmptyRelation {
         );
     }
 
-    fn database(&self) -> Value {
-        empty_string_value()
+    fn database(&self) -> Option<&str> {
+        None
     }
 
-    fn schema(&self) -> Value {
-        empty_string_value()
+    fn schema(&self) -> Option<&str> {
+        Some("")
     }
 
-    fn identifier(&self) -> Value {
-        empty_string_value()
+    fn identifier(&self) -> Option<&str> {
+        Some("")
     }
 
     fn relation_type(&self) -> Option<RelationType> {
         None
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type
     }
 
-    fn include(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(self.as_value())
+    fn include_inner(&self, _args: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        Ok(Arc::new(self.clone()))
     }
 
-    fn include_inner(&self, _args: Policy) -> Result<Value, minijinja::Error> {
-        Ok(self.as_value())
+    fn render_self_as_str(&self) -> String {
+        String::new()
     }
 
-    fn render_self(&self) -> Result<Value, minijinja::Error> {
+    fn needs_to_drop(
+        &self,
+        _old_relation: Option<Arc<dyn BaseRelation>>,
+    ) -> Result<bool, minijinja::Error> {
+        Ok(true)
+    }
+
+    fn incorporate(
+        &self,
+        _path: Option<Value>,
+        _relation_type: Option<RelationType>,
+        _location: Option<String>,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        Ok(Arc::new(self.clone()))
+    }
+
+    fn get_ddl_prefix_for_create(
+        &self,
+        _model_config: Value,
+        _temporary: bool,
+    ) -> Result<String, minijinja::Error> {
+        Ok(String::new())
+    }
+
+    fn get_ddl_prefix_for_alter(&self) -> Result<String, minijinja::Error> {
+        Ok(String::new())
+    }
+
+    fn get_iceberg_ddl_options(&self, _config: Value) -> Result<String, minijinja::Error> {
+        Ok(String::new())
+    }
+
+    fn dynamic_table_config_changeset(
+        &self,
+        _relation_results: &Value,
+        _relation_config: &Value,
+    ) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
-    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(Value::from(true))
-    }
-
-    fn incorporate(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(self.as_value())
-    }
-
-    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(empty_string_value())
-    }
-
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
-        Ok(empty_string_value())
-    }
-
-    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(none_value())
-    }
-
-    fn dynamic_table_config_changeset(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
-        Ok(none_value())
-    }
-
-    fn from_config(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn from_config(&self, _config: &Value) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
@@ -164,7 +179,7 @@ impl BaseRelation for EmptyRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
-        Ok(none_value())
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        Ok(Arc::new(self.clone()))
     }
 }

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
@@ -136,10 +137,10 @@ mod databricks {
             .materialization_context("my_mv", "SELECT 1")
             .relation_type(RelationType::MaterializedView)
             .config(Value::from_dyn_object(mv_config()))
-            .with("relation", relation.as_value())
+            .with("relation", RelationObject::new(relation).into_value())
             .with("changes", changes)
             .with("sql_val", Value::from("SELECT 1"))
-            .with("existing", existing.as_value())
+            .with("existing", RelationObject::new(existing).into_value())
             .build();
         ctx.insert(
             "model".to_string(),

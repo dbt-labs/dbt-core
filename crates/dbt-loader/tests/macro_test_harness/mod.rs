@@ -46,7 +46,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use dbt_adapter::Adapter;
-use dbt_adapter::relation::create_relation;
+use dbt_adapter::relation::{RelationObject, create_relation};
 use dbt_adapter::sql_types::SATypeOpsImpl;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
@@ -400,7 +400,7 @@ impl MaterializationContextBuilder {
             ),
             ("execute".to_string(), Value::from(true)),
             ("config".to_string(), self.config),
-            ("this".to_string(), this.as_value()),
+            ("this".to_string(), RelationObject::new(this).into_value()),
         ]);
 
         ctx.extend(self.extras);

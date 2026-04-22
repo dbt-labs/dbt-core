@@ -112,16 +112,18 @@ where
             let ref_name = model.common().name.clone();
             // for repl, we use the just create a relation on spot using model passed in.
             if ref_name == REPL_MODEL_NAME {
-                dbt_adapter::relation::do_create_relation(
-                    adapter_type,
-                    model.base().database.clone(),
-                    model.base().schema.clone(),
-                    Some(model.base().alias.clone()),
-                    None,
-                    model.base().quoting,
-                )
-                .unwrap()
-                .as_value()
+                dbt_adapter::relation::RelationObject::new(Arc::from(
+                    dbt_adapter::relation::do_create_relation(
+                        adapter_type,
+                        model.base().database.clone(),
+                        model.base().schema.clone(),
+                        Some(model.base().alias.clone()),
+                        None,
+                        model.base().quoting,
+                    )
+                    .unwrap(),
+                ))
+                .into_value()
             } else {
                 let (_, this_relation, _, deferred_relation) = node_resolver
                     .lookup_ref(
@@ -142,16 +144,18 @@ where
                 }
             }
         }
-        _ => dbt_adapter::relation::do_create_relation(
-            adapter_type,
-            model.base().database.clone(),
-            model.base().schema.clone(),
-            Some(model.base().alias.clone()),
-            None,
-            model.base().quoting,
-        )
-        .unwrap()
-        .as_value(),
+        _ => dbt_adapter::relation::RelationObject::new(Arc::from(
+            dbt_adapter::relation::do_create_relation(
+                adapter_type,
+                model.base().database.clone(),
+                model.base().schema.clone(),
+                Some(model.base().alias.clone()),
+                None,
+                model.base().quoting,
+            )
+            .unwrap(),
+        ))
+        .into_value(),
     };
     ctx.insert("this".to_owned(), this_relation);
     ctx.insert(

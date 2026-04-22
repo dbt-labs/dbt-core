@@ -15,8 +15,8 @@ use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, ResolvedQuoti
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
+use minijinja::Value;
 use minijinja::arg_utils::ArgsIter;
-use minijinja::{State, Value};
 use serde::Deserialize;
 
 use std::any::Any;
@@ -191,7 +191,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     /// Creates a new Snowflake relation from a state and a list of values
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("Snowflake relation creation from Jinja values")
     }
 
@@ -200,23 +200,23 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     /// Returns the database name
-    fn database(&self) -> Value {
-        Value::from(self.path.database.clone())
+    fn database(&self) -> Option<&str> {
+        self.path.database.as_deref()
     }
 
     /// Returns the schema name
-    fn schema(&self) -> Value {
-        Value::from(self.path.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        self.path.schema.as_deref()
     }
 
     /// Returns the identifier name
-    fn identifier(&self) -> Value {
-        Value::from(self.path.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        self.path.identifier.as_deref()
     }
 
     /// Helper: is this relation renamable?
     fn can_be_renamed(&self) -> bool {
-        !self.is_iceberg_format().is_true()
+        !self.is_iceberg_format()
             && matches!(
                 self.relation_type(),
                 Some(RelationType::Table) | Some(RelationType::View)
@@ -232,28 +232,18 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/816d190c9e31391a48cee979bd049aeb34c89ad3/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L81
-    fn from_config(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
-        let config_value = iter.next_arg::<&Value>()?;
-        iter.finish()?;
-
+    fn from_config(&self, config: &Value) -> Result<Value, minijinja::Error> {
         Ok(Value::from_object(node_value_to_snowflake_dynamic_table(
-            config_value,
+            config,
         )?))
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/292d17301eff3c8a972fcd57f7deb3aac4c8a3cb/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L92
-    fn dynamic_table_config_changeset(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        let iter = ArgsIter::new(
-            current_function_name!(),
-            &["relation_results", "relation_config"],
-            args,
-        );
-
-        let relation_results_value = iter.next_arg::<&Value>()?;
-        let relation_config_value = iter.next_arg::<&Value>()?;
-        iter.finish()?;
-
+    fn dynamic_table_config_changeset(
+        &self,
+        relation_results_value: &Value,
+        relation_config_value: &Value,
+    ) -> Result<Value, minijinja::Error> {
         let relation_results = DescribeDynamicTableResults::try_from(relation_results_value)
             .map_err(|e| {
                 minijinja::Error::new(
@@ -289,22 +279,16 @@ impl BaseRelation for SnowflakeRelation {
         self.relation_type
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
     fn adapter_type(&self) -> AdapterType {
         AdapterType::Snowflake
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L223
-    fn needs_to_drop(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        let iter = ArgsIter::new(current_function_name!(), &["old_relation"], args);
-        let value = iter.next_arg::<Value>()?;
-        iter.finish()?;
-
-        if let Some(old_relation) = value.downcast_object_ref::<RelationObject>() {
-            let old_relation = old_relation.inner();
+    fn needs_to_drop(
+        &self,
+        old_relation: Option<Arc<dyn BaseRelation>>,
+    ) -> Result<bool, minijinja::Error> {
+        if let Some(old_relation) = old_relation {
             // core does only checks this for table conversions since dynamic tables
             // are expected to be rebuilt cross-catalog using full refresh mode
             if old_relation.is_table() {
@@ -314,25 +298,18 @@ impl BaseRelation for SnowflakeRelation {
                     .downcast_ref::<SnowflakeRelation>()
                     .unwrap()
                     .table_format;
-                if self.table_format == old_relation_table_format {
-                    Ok(Value::from(false))
-                } else {
-                    Ok(Value::from(true))
-                }
+                Ok(self.table_format != old_relation_table_format)
             } else {
                 // An existing view must be dropped for model to build into a table.
-                Ok(Value::from(true))
+                Ok(true)
             }
         } else {
-            Ok(Value::from(false))
+            Ok(false)
         }
     }
 
-    fn is_iceberg_format(&self) -> Value {
-        match self.table_format {
-            TableFormat::Iceberg => Value::from(true),
-            _ => Value::from(false),
-        }
+    fn is_iceberg_format(&self) -> bool {
+        matches!(self.table_format, TableFormat::Iceberg)
     }
     /// Returns the appropriate DDL prefix for creating a table
     ///
@@ -342,19 +319,13 @@ impl BaseRelation for SnowflakeRelation {
     ///
     /// # Returns
     /// One of: "temporary", "iceberg", "transient", or "" (empty string)
-    fn get_ddl_prefix_for_create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        // Temporary tables take precedence over other options
-        let iter = ArgsIter::new(
-            current_function_name!(),
-            &["model_config", "temporary"],
-            args,
-        );
-        let config = iter.next_arg::<Value>()?;
-        let temporary = iter.next_arg::<bool>()?;
-        iter.finish()?;
-
+    fn get_ddl_prefix_for_create(
+        &self,
+        config: Value,
+        temporary: bool,
+    ) -> Result<String, minijinja::Error> {
         if temporary {
-            return Ok(Value::from("temporary"));
+            return Ok("temporary".to_string());
         }
 
         // Extract legacy Iceberg configuration values found in a model config.
@@ -379,7 +350,7 @@ impl BaseRelation for SnowflakeRelation {
                     self.path.identifier.as_deref().unwrap_or("")
                 );
             }
-            return Ok(Value::from("iceberg"));
+            return Ok("iceberg".to_string());
         }
 
         let is_transient = config
@@ -387,28 +358,26 @@ impl BaseRelation for SnowflakeRelation {
             .map(|v| v.is_true() || v.is_undefined())
             .unwrap_or(true);
 
-        let ddl_prefix = if is_transient {
-            "transient"
+        Ok(if is_transient {
+            "transient".to_string()
         } else {
-            Default::default()
-        };
-        Ok(Value::from(ddl_prefix))
+            String::new()
+        })
     }
 
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<String, minijinja::Error> {
         if self.table_format == TableFormat::Iceberg {
-            Ok(Value::from("iceberg"))
+            Ok("iceberg".to_string())
         } else {
-            Ok(Value::from(""))
+            Ok(String::new())
         }
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L206
-    fn get_iceberg_ddl_options(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
-        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
-        let runtime_model_config: Value = iter.next_arg::<Value>()?;
-        iter.finish()?;
-
+    fn get_iceberg_ddl_options(
+        &self,
+        runtime_model_config: Value,
+    ) -> Result<String, minijinja::Error> {
         // If the base_location_root config is supplied, overwrite the default value ("_dbt/")
         let mut base_location = runtime_model_config
             .get_attr("base_location_root")?
@@ -449,14 +418,14 @@ impl BaseRelation for SnowflakeRelation {
             .collect::<Vec<String>>()
             .join("\n");
 
-        Ok(Value::from(result))
+        Ok(result)
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
+    fn include_inner(&self, policy: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let mut relation = self.clone();
         relation.include_policy = policy;
 
-        Ok(relation.as_value())
+        Ok(Arc::new(relation))
     }
 
     fn normalize_component(&self, component: &str) -> String {
@@ -485,10 +454,10 @@ impl BaseRelation for SnowflakeRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         let result =
             InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
-        Ok(RelationObject::new(Arc::new(result)).into_value())
+        Ok(Arc::new(result))
     }
 }
 
@@ -550,10 +519,7 @@ mod tests {
             .unwrap();
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();
-        assert_eq!(
-            relation.inner().render_self().unwrap().as_str().unwrap(),
-            r#""d"."s"."i""#
-        );
+        assert_eq!(relation.inner().render_self_as_str(), r#""d"."s"."i""#);
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
     }
 }

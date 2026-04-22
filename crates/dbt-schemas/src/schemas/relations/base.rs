@@ -4,11 +4,10 @@ use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
 
 use dbt_adapter_core::{AdapterType, quote_char};
+use dbt_common::FsResult;
 use dbt_common::constants::DBT_CTE_PREFIX;
-use dbt_common::{FsResult, current_function_name};
 use dbt_schema_store::CanonicalFqn;
-use minijinja::arg_utils::{ArgParser, ArgsIter};
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::{Deserialize, Serialize};
@@ -161,25 +160,24 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn as_any(&self) -> &dyn Any;
 
     /// A helper for situation where only a [&dyn BaseRelation] is available
-    /// but an Arc<dyn BaseRelation> is needed.
     fn to_owned(&self) -> Arc<dyn BaseRelation>;
 
     /// Create a new relation from the given state and arguments
-    fn create_from(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
     /// Get the database name
-    fn database(&self) -> Value;
+    fn database(&self) -> Option<&str>;
 
     /// Database as string or error
     fn database_as_str(&self) -> Result<String, MinijinjaError> {
-        Ok(self.database().as_str().unwrap_or_default().to_string())
+        Ok(self.database().unwrap_or_default().to_string())
     }
 
     /// Get the database name as a string literal
     /// the same as how a database provider resolves and stores a database component for a relation
     /// given how it's quoted
     fn database_as_resolved_str(&self) -> Result<String, MinijinjaError> {
-        match self.database().as_str() {
+        match self.database() {
             Some(val) => {
                 if !self.quote_policy().database {
                     Ok(self.normalize_component(val))
@@ -195,7 +193,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     fn database_as_quoted_str(&self) -> Result<String, MinijinjaError> {
-        match self.database().as_str() {
+        match self.database() {
             Some(val) => Ok(self.quoted(val)),
             None => jinja_err!(
                 MinijinjaErrorKind::InvalidOperation,
@@ -205,11 +203,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// Get the schema name
-    fn schema(&self) -> Value;
+    fn schema(&self) -> Option<&str>;
 
     /// Schema as string or error
     fn schema_as_str(&self) -> Result<String, MinijinjaError> {
-        match self.schema().as_str() {
+        match self.schema() {
             Some(val) => Ok(val.to_string()),
             None => jinja_err!(
                 MinijinjaErrorKind::InvalidOperation,
@@ -219,7 +217,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     fn schema_as_quoted_str(&self) -> Result<String, MinijinjaError> {
-        match self.schema().as_str() {
+        match self.schema() {
             Some(val) => Ok(self.quoted(val)),
             None => jinja_err!(
                 MinijinjaErrorKind::InvalidOperation,
@@ -232,7 +230,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// the same as how a database provider resolves and stores a schema component for a relation
     /// given how it's quoted
     fn schema_as_resolved_str(&self) -> Result<String, MinijinjaError> {
-        match self.schema().as_str() {
+        match self.schema() {
             Some(val) => {
                 if !self.quote_policy().schema {
                     Ok(self.normalize_component(val))
@@ -248,11 +246,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// Get the identifier
-    fn identifier(&self) -> Value;
+    fn identifier(&self) -> Option<&str>;
 
     /// Identifiers as string or error
     fn identifier_as_str(&self) -> Result<String, MinijinjaError> {
-        match self.identifier().as_str() {
+        match self.identifier() {
             Some(val) => Ok(val.to_string()),
             None => jinja_err!(
                 MinijinjaErrorKind::InvalidOperation,
@@ -265,7 +263,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// the same as how a database provider resolves and stores an identifier component for a relation
     /// given how it's quoted
     fn identifier_as_resolved_str(&self) -> Result<String, MinijinjaError> {
-        match self.identifier().as_str() {
+        match self.identifier() {
             Some(val) => {
                 if !self.quote_policy().identifier {
                     Ok(self.normalize_component(val))
@@ -280,19 +278,19 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         }
     }
 
-    fn location(&self) -> Value {
-        Value::NONE
+    fn location(&self) -> Option<&str> {
+        None
     }
 
     fn location_as_str(&self) -> Result<Option<String>, MinijinjaError> {
-        Ok(self.location().to_str().map(|s| s.to_string()))
+        Ok(self.location().map(|s| s.to_string()))
     }
 
     fn location_as_resolved_str(&self) -> Result<Option<String>, MinijinjaError> {
-        match self.location().to_str() {
+        match self.location() {
             Some(val) => {
                 if !self.quote_policy().database {
-                    Ok(Some(self.normalize_component(val.as_ref())))
+                    Ok(Some(self.normalize_component(val)))
                 } else {
                     Ok(Some(val.to_string()))
                 }
@@ -304,11 +302,6 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// Return the relation type if available, defaulting to None.
     fn relation_type(&self) -> Option<RelationType> {
         None
-    }
-
-    /// Return the relation type as a Value
-    fn relation_type_as_value(&self) -> Value {
-        Value::from_serialize(self.relation_type())
     }
 
     /// Get adapter type
@@ -375,47 +368,38 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         )
     }
 
-    /// Returns this relation as an object Value
-    fn as_value(&self) -> Value;
-
     /// Get a metadata field from the relation
     /// If key is "metadata", returns a map with type information
     /// Otherwise simulate the behavior of a python dataclass
-    fn get(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let key: String = args.get("key").unwrap();
-        let default: Option<Value> = args.get("default").ok();
-
+    fn get(&self, key: &str, default: Option<Value>) -> Result<Value, MinijinjaError> {
         if key == "metadata" {
             let mut map = BTreeMap::new();
             map.insert("type", Value::from(std::any::type_name::<Self>()));
             Ok(Value::from(map))
         } else {
-            match key.as_str() {
-                "database" => Ok(self.database()),
-                "schema" => Ok(self.schema()),
-                "identifier" => Ok(self.identifier()),
+            match key {
+                "database" => Ok(Value::from(self.database())),
+                "schema" => Ok(Value::from(self.schema())),
+                "identifier" => Ok(Value::from(self.identifier())),
                 _ => Ok(default.unwrap_or(Value::UNDEFINED)),
             }
         }
     }
 
     /// Replace path
-    fn replace_path(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let database: Option<String> = args.consume_optional_only_from_kwargs("database");
-        let schema: Option<String> = args.consume_optional_only_from_kwargs("schema");
-        let identifier: Option<String> = args.consume_optional_only_from_kwargs("identifier");
-
-        Ok(self
-            .create_relation(
-                Some(database.unwrap_or_else(|| self.database().as_str().unwrap().to_string())),
-                Some(schema.unwrap_or_else(|| self.schema().as_str().unwrap().to_string())),
-                Some(identifier.unwrap_or_else(|| self.identifier().as_str().unwrap().to_string())),
-                self.relation_type(),
-                self.quote_policy(),
-            )?
-            .as_value())
+    fn replace_path(
+        &self,
+        database: Option<String>,
+        schema: Option<String>,
+        identifier: Option<String>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        self.create_relation(
+            Some(database.unwrap_or_else(|| self.database().unwrap().to_string())),
+            Some(schema.unwrap_or_else(|| self.schema().unwrap().to_string())),
+            Some(identifier.unwrap_or_else(|| self.identifier().unwrap().to_string())),
+            self.relation_type(),
+            self.quote_policy(),
+        )
     }
 
     /// quoting character to be used when rendering the relation
@@ -478,14 +462,14 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// For example, they'll be upper case in Snowflake https://docs.snowflake.com/en/sql-reference/identifiers-syntax#unquoted-identifiers
     fn normalize_component(&self, component: &str) -> String;
 
-    /// Base rendering logic shared by all adapters.
-    ///
-    /// Adapter-specific overrides of [`render_self_as_str`] can call this
-    /// to get the default rendering and then post-process it (e.g. Databricks
-    /// lowercases the result to match Python `DatabricksRelation.render()`).
-    fn base_render_self_as_str(&self) -> String {
+    /// Render this relation as a string.
+    fn render_self_as_str(&self) -> String {
         if let Some(RelationType::Ephemeral) = self.relation_type() {
-            return format!("{}{}", DBT_CTE_PREFIX, self.identifier());
+            return format!(
+                "{}{}",
+                DBT_CTE_PREFIX,
+                self.identifier().unwrap_or_default()
+            );
         }
 
         let include_policy = self.include_policy();
@@ -501,43 +485,35 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         };
 
         if include_policy.database
-            && let Some(database) = self.database().as_str()
+            && let Some(database) = self.database()
             && !database.is_empty()
         {
             parts.push(quote_part(database, quote_policy.database));
         }
 
         if include_policy.schema
-            && let Some(schema) = self.schema().as_str()
+            && let Some(schema) = self.schema()
         {
             parts.push(quote_part(schema, quote_policy.schema));
         }
 
         if include_policy.identifier
-            && let Some(identifier) = self.identifier().as_str()
+            && let Some(identifier) = self.identifier()
         {
             parts.push(quote_part(identifier, quote_policy.identifier));
         }
 
-        parts.join(".")
-    }
+        let rendered = parts.join(".");
 
-    /// Render this relation as a string.
-    ///
-    /// The default delegates to [`base_render_self_as_str`].  Adapters that
-    /// need post-processing (e.g. lowercasing) should override this method
-    /// and call `base_render_self_as_str()` internally.
-    fn render_self_as_str(&self) -> String {
-        self.base_render_self_as_str()
-    }
-
-    /// Render this relation
-    fn render_self(&self) -> Result<Value, MinijinjaError> {
-        Ok(Value::from(self.render_self_as_str()))
+        if matches!(self.adapter_type(), AdapterType::Databricks) {
+            rendered.to_ascii_lowercase()
+        } else {
+            rendered
+        }
     }
 
     /// Render this relation with a run filter.
-    fn render_with_run_filter_as_str(
+    fn render_with_run_filter(
         &self,
         run_filter: &RunFilter,
         event_time: &Option<String>,
@@ -609,95 +585,63 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         format!("(select * from {rendered} where {filter})")
     }
 
-    /// Render this relation with a run filter
-    fn render_with_run_filter(
-        &self,
-        run_filter: &RunFilter,
-        event_time: &Option<String>,
-    ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from(
-            self.render_with_run_filter_as_str(run_filter, event_time),
-        ))
-    }
-
     /// Relation without any identifier
-    fn without_identifier(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        let database = match self.database().as_str() {
+    fn without_identifier(&self) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        let database = match self.database() {
             None | Some("") => None,
             Some(v) => Some(v.to_string()),
         };
 
-        let schema = match self.schema().as_str() {
+        let schema = match self.schema() {
             None | Some("") => None,
             Some(v) => Some(v.to_string()),
         };
 
-        let result = self
-            .create_relation(
-                database,
-                schema,
-                None,
-                self.relation_type(),
-                self.quote_policy(),
-            )?
-            .as_value();
-
-        Ok(result)
+        self.create_relation(
+            database,
+            schema,
+            None,
+            self.relation_type(),
+            self.quote_policy(),
+        )
     }
 
     /// Include a relation component (database, schema, or identifier)
-    fn include(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-
+    fn include(
+        &self,
+        database: Option<bool>,
+        schema: Option<bool>,
+        identifier: Option<bool>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         let defaults = self.include_policy();
-        let database: bool = args
-            .consume_optional_only_from_kwargs::<bool>("database")
-            .unwrap_or(defaults.database);
-        let schema: bool = args
-            .consume_optional_only_from_kwargs("schema")
-            .unwrap_or(defaults.schema);
-        let identifier: bool = args
-            .consume_optional_only_from_kwargs("identifier")
-            .unwrap_or(defaults.identifier);
-
         let include_policy = Policy {
-            database,
-            schema,
-            identifier,
+            database: database.unwrap_or(defaults.database),
+            schema: schema.unwrap_or(defaults.schema),
+            identifier: identifier.unwrap_or(defaults.identifier),
         };
         self.include_inner(include_policy)
     }
 
-    fn quote(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn quote(
+        &self,
+        database: Option<bool>,
+        schema: Option<bool>,
+        identifier: Option<bool>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         let defaults = self.include_policy();
-        let iter = ArgsIter::new(
-            current_function_name!(),
-            &["database", "schema", "identifier"],
-            args,
-        );
-        let database = iter
-            .next_kwarg::<Option<bool>>("database")?
-            .unwrap_or(defaults.database);
-        let schema = iter
-            .next_kwarg::<Option<bool>>("schema")?
-            .unwrap_or(defaults.schema);
-        let identifier = iter
-            .next_kwarg::<Option<bool>>("identifier")?
-            .unwrap_or(defaults.identifier);
-
         let quote_policy = Policy {
-            database,
-            schema,
-            identifier,
+            database: database.unwrap_or(defaults.database),
+            schema: schema.unwrap_or(defaults.schema),
+            identifier: identifier.unwrap_or(defaults.identifier),
         };
         self.quote_inner(quote_policy)
     }
 
     /// Implement this to support `include`
     /// Replace the `include_policy` field with the input policy, and return that an update relation value
-    fn include_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError>;
+    fn include_inner(&self, _policy: Policy) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
-    fn quote_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError> {
+    fn quote_inner(&self, _policy: Policy) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
             "Not implemented",
@@ -705,11 +649,12 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// Incorporate
-    fn incorporate(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let path: Option<Value> = args.consume_optional_only_from_kwargs("path");
-        let relation_type: Option<Value> = args.consume_optional_only_from_kwargs("type");
-
+    fn incorporate(
+        &self,
+        path: Option<Value>,
+        relation_type: Option<RelationType>,
+        location: Option<String>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         let (database, schema, identifier) = match path {
             Some(val) => match val.as_object() {
                 Some(obj) => {
@@ -769,13 +714,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             ),
         };
 
-        let relation_type = match relation_type {
-            Some(val) => match val.as_str() {
-                Some(type_str) => Some(RelationType::from(type_str)),
-                None => self.relation_type(),
-            },
-            None => self.relation_type(),
-        };
+        let relation_type = relation_type.or_else(|| self.relation_type());
 
         self.create_relation(
             database,
@@ -784,13 +723,16 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             relation_type,
             self.quote_policy(),
         )?
-        .post_incorporate(args)
+        .post_incorporate(location)
     }
 
     /// Hook for adapter-specific incorporate behavior.
     /// Default implementation just delegates to create_relation.
-    fn post_incorporate(&self, _args: ArgParser) -> Result<Value, MinijinjaError> {
-        Ok(self.as_value())
+    fn post_incorporate(
+        &self,
+        _location: Option<String>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        Ok(self.to_owned())
     }
 
     /// Create a new relation with the specified components and policies.
@@ -812,22 +754,24 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/0775dd27929337ea529cad868dd1722812b8e0fb/dbt-adapters/src/dbt/adapters/base/relation.py#L234
-    fn information_schema(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let iter = ArgsIter::new(current_function_name!(), &["view_name"], args);
-        let view_name = iter.next_kwarg_aliased::<Option<&str>>("view_name", &["identifier"])?;
-        iter.finish()?;
-
-        self.information_schema_inner(self.database_as_str().ok(), view_name)
+    fn information_schema(
+        &self,
+        view_name: Option<String>,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        self.information_schema_inner(self.database_as_str().ok(), view_name.as_deref())
     }
 
     fn information_schema_inner(
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError>;
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
     /// needs_to_drop
-    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn needs_to_drop(
+        &self,
+        _old_relation: Option<Arc<dyn BaseRelation>>,
+    ) -> Result<bool, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "Only available for snowflake"
@@ -835,12 +779,16 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// is_iceberg_format
-    fn is_iceberg_format(&self) -> Value {
-        unimplemented!("Available only for snowflake")
+    fn is_iceberg_format(&self) -> bool {
+        false
     }
 
     /// get_ddl_prefix_for_create
-    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_create(
+        &self,
+        _model_config: Value,
+        _temporary: bool,
+    ) -> Result<String, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "Only available for snowflake"
@@ -848,7 +796,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// get_ddl_prefix_for_alter
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<String, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "Only available for snowflake"
@@ -856,7 +804,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// get_iceberg_ddl_options
-    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_iceberg_ddl_options(&self, _config: Value) -> Result<String, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "Only available for snowflake"
@@ -864,7 +812,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// dynamic_table_config_changeset
-    fn dynamic_table_config_changeset(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn dynamic_table_config_changeset(
+        &self,
+        _relation_results: &Value,
+        _relation_config: &Value,
+    ) -> Result<Value, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "Only available for snowflake"
@@ -873,7 +825,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// from_config
     #[allow(clippy::wrong_self_convention)]
-    fn from_config(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn from_config(&self, _config: &Value) -> Result<Value, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
             "from_config: Only available for Snowflake and Redshift"
@@ -881,12 +833,12 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// Get max name length
-    fn relation_max_name_length(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn relation_max_name_length(&self) -> Result<u32, MinijinjaError> {
         unimplemented!("Available only for postgres and redshift")
     }
 
-    fn is_hive_metastore(&self) -> Value {
-        unimplemented!("Available only for databricks")
+    fn is_hive_metastore(&self) -> bool {
+        false
     }
 
     /// Whether the relation is a temporary view (session-scoped).
@@ -895,7 +847,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// materialized_view_config_changeset
-    fn materialized_view_config_changeset(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn materialized_view_config_changeset(
+        &self,
+        _relation_results: &Value,
+        _relation_config: &Value,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("Available only for BigQuery and Redshift")
     }
 }
@@ -905,7 +861,6 @@ mod tests {
     use crate::filter::Sample;
     use chrono::{DateTime, NaiveDate, Utc};
     use dbt_frontend_common::ident::Identifier;
-    use minijinja::value::Kwargs;
 
     use super::*;
     use std::collections::BTreeMap;
@@ -978,20 +933,20 @@ mod tests {
             Arc::new(self.clone())
         }
 
-        fn database(&self) -> Value {
-            Value::from(self.database.clone())
+        fn database(&self) -> Option<&str> {
+            Some(&self.database)
         }
 
-        fn schema(&self) -> Value {
-            Value::from(self.schema.clone())
+        fn schema(&self) -> Option<&str> {
+            Some(&self.schema)
         }
 
-        fn identifier(&self) -> Value {
-            Value::from(self.identifier.clone())
+        fn identifier(&self) -> Option<&str> {
+            Some(&self.identifier)
         }
 
-        fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-            Ok(Value::from("test"))
+        fn create_from(&self) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+            unimplemented!()
         }
 
         fn adapter_type(&self) -> AdapterType {
@@ -1007,20 +962,8 @@ mod tests {
             self.is_delta = is_delta;
         }
 
-        fn as_value(&self) -> Value {
-            Value::from("test")
-        }
-
-        fn without_identifier(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
-            Ok(Value::from("test"))
-        }
-
-        fn include(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
-            Ok(Value::from("test"))
-        }
-
-        fn include_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError> {
-            Ok(Value::from("test"))
+        fn include_inner(&self, _policy: Policy) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+            unimplemented!()
         }
 
         fn normalize_component(&self, component: &str) -> String {
@@ -1042,7 +985,7 @@ mod tests {
             &self,
             _database: Option<String>,
             _view_name: Option<&str>,
-        ) -> Result<Value, MinijinjaError> {
+        ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
             unimplemented!("InformationSchema")
         }
     }
@@ -1056,10 +999,7 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("database"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation.get("database", None).unwrap();
         assert_eq!(result, Value::from("test_db"));
     }
 
@@ -1072,10 +1012,7 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("schema"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation.get("schema", None).unwrap();
         assert_eq!(result, Value::from("test_schema"));
     }
 
@@ -1088,10 +1025,7 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("identifier"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation.get("identifier", None).unwrap();
         assert_eq!(result, Value::from("test_table"));
     }
 
@@ -1104,10 +1038,7 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("metadata"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation.get("metadata", None).unwrap();
         let mut expected = BTreeMap::new();
         expected.insert(
             "type",
@@ -1125,11 +1056,9 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("nonexistent"));
-        map.insert("default", Value::from("default_value"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation
+            .get("nonexistent", Some(Value::from("default_value")))
+            .unwrap();
         assert_eq!(result, Value::from("default_value"));
     }
 
@@ -1142,10 +1071,7 @@ mod tests {
             "test_table".to_string(),
             Policy::enabled(),
         );
-        let mut map = BTreeMap::new();
-        map.insert("key", Value::from("nonexistent"));
-        let args = vec![Value::from(Kwargs::from_iter(map))];
-        let result = relation.get(&args).unwrap();
+        let result = relation.get("nonexistent", None).unwrap();
         assert_eq!(result, Value::UNDEFINED);
     }
 
@@ -1215,7 +1141,7 @@ mod tests {
         };
         let event_time = None;
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
 
         assert_eq!(result, "(select * from my_db.my_schema.my_table limit 0)");
     }
@@ -1235,7 +1161,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(result, "my_db.my_schema.my_table");
     }
 
@@ -1268,7 +1194,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
@@ -1300,7 +1226,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00')"
@@ -1332,7 +1258,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from my_db.my_schema.my_table where created_at < '2024-07-08T18:00:00')"
@@ -1359,7 +1285,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(result, "my_db.my_schema.my_table");
     }
 
@@ -1388,7 +1314,7 @@ mod tests {
         };
         let event_time = None;
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(result, "my_db.my_schema.my_table");
     }
 
@@ -1421,7 +1347,7 @@ mod tests {
         };
         let event_time = Some("created_at".to_string());
 
-        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
             "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use dbt_adapter::funcs::none_value;
+use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
 use dbt_schemas::dbt_types::RelationType;
@@ -148,9 +149,9 @@ mod databricks {
             "my_incr",
             Some(RelationType::View),
         );
-        harness
-            .mock()
-            .on("get_relation", move |_| Ok(existing.as_value()));
+        harness.mock().on("get_relation", move |_| {
+            Ok(RelationObject::new(Arc::clone(&existing)).into_value())
+        });
 
         let ctx = incremental_ctx(&harness);
         render_incremental(&harness, ADAPTER, ctx)
@@ -173,9 +174,9 @@ mod databricks {
             "my_incr",
             Some(RelationType::Table),
         );
-        harness
-            .mock()
-            .on("get_relation", move |_| Ok(existing.as_value()));
+        harness.mock().on("get_relation", move |_| {
+            Ok(RelationObject::new(Arc::clone(&existing)).into_value())
+        });
         harness
             .mock()
             .on("get_relation_config", |_| Ok(Value::UNDEFINED));

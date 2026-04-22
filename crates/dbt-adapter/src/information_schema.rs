@@ -1,4 +1,4 @@
-use crate::{AdapterType, relation::RelationObject};
+use crate::AdapterType;
 
 use dbt_common::FsResult;
 use dbt_frontend_common::ident::Identifier;
@@ -7,7 +7,6 @@ use dbt_schemas::{
     dbt_types::RelationType,
     schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy},
 };
-use minijinja::{State, Value};
 
 use std::{any::Any, sync::Arc};
 
@@ -94,7 +93,7 @@ impl BaseRelation for InformationSchema {
         Arc::new(self.clone())
     }
 
-    fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("information schema relation creation from Jinja values")
     }
 
@@ -106,36 +105,32 @@ impl BaseRelation for InformationSchema {
         self.is_delta = is_delta;
     }
 
-    fn database(&self) -> Value {
-        Value::from(self.database.clone())
+    fn database(&self) -> Option<&str> {
+        self.database.as_deref()
     }
 
-    fn schema(&self) -> Value {
-        Value::from(self.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        Some(&self.schema)
     }
 
-    fn identifier(&self) -> Value {
-        Value::from(self.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        self.identifier.as_deref()
     }
 
-    fn location(&self) -> Value {
-        Value::from(self.location.clone())
+    fn location(&self) -> Option<&str> {
+        self.location.as_deref()
     }
 
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
-    fn include_inner(&self, _args: Policy) -> Result<Value, minijinja::Error> {
+    fn include_inner(&self, _args: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("InformationSchema")
     }
 
-    fn render_self(&self) -> Result<Value, minijinja::Error> {
-        let rendered: String = match (&self.database, &self.location, &self.identifier) {
+    fn render_self_as_str(&self) -> String {
+        match (&self.database, &self.location, &self.identifier) {
             // With database and location
             (Some(database), Some(location), Some(identifier)) => {
                 let region = format!("`region-{location}`");
@@ -157,11 +152,10 @@ impl BaseRelation for InformationSchema {
             (None, Some(_), None) => self.schema.to_string(),
             (None, None, Some(identifier)) => format!("{}.{}", &self.schema, identifier),
             (None, None, None) => self.schema.to_string(),
-        };
-        Ok(Value::from(rendered))
+        }
     }
 
-    fn is_hive_metastore(&self) -> Value {
+    fn is_hive_metastore(&self) -> bool {
         unimplemented!("InformationSchema")
     }
 
@@ -184,7 +178,7 @@ impl BaseRelation for InformationSchema {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("InformationSchema")
     }
 }

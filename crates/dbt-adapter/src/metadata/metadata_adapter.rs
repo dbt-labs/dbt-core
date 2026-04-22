@@ -1,7 +1,7 @@
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
-use crate::relation::{create_relation, do_create_relation};
+use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
     args_freshness, args_list_relations_in_parallel, args_list_relations_schemas,
@@ -345,7 +345,7 @@ pub fn create_schemas_if_not_exists(
             adapter.quoting()
         )?;
         let res =
-        match execute_macro(state, &[mock_relation.as_value()], "create_schema") {
+        match execute_macro(state, &[RelationObject::new(Arc::from(mock_relation)).into_value()], "create_schema") {
             Ok(_) => Ok(()),
             Err(e) => {
                 if metadata_adapter.is_permission_error(&e) {

@@ -87,15 +87,15 @@ impl ParseAdapterState {
         schema: &str,
         identifier: &str,
     ) -> Result<(), minijinja::Error> {
-        let relation = do_create_relation(
+        let relation = RelationObject::new(Arc::from(do_create_relation(
             self.adapter_type,
             database.to_string(),
             schema.to_string(),
             Some(identifier.to_string()),
             None,
             self.engine.quoting(),
-        )?
-        .as_value();
+        )?))
+        .into_value();
 
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {

@@ -1126,7 +1126,7 @@ impl AdapterImpl {
                         "relation has no type",
                     ));
                 }
-                let args = vec![RelationObject::new(Arc::clone(relation)).as_value()];
+                let args = vec![RelationObject::new(Arc::clone(relation)).into_value()];
                 execute_macro(state, &args, "drop_relation")?;
                 Ok(none_value())
             }
@@ -1160,7 +1160,10 @@ impl AdapterImpl {
         let (package_name, macro_name) = self.check_schema_exists_macro(state, &[])?;
         let batch = execute_macro_wrapper_with_package(
             state,
-            &[information_schema.as_value(), Value::from(schema)],
+            &[
+                RelationObject::new(Arc::new(information_schema)).into_value(),
+                Value::from(schema),
+            ],
             &macro_name,
             &package_name,
         )?;
@@ -1359,8 +1362,8 @@ impl AdapterImpl {
             Impl(_, _engine) => {
                 // Execute the macro with the relation objects
                 let args = vec![
-                    RelationObject::new(Arc::clone(from_relation)).as_value(),
-                    RelationObject::new(Arc::clone(to_relation)).as_value(),
+                    RelationObject::new(Arc::clone(from_relation)).into_value(),
+                    RelationObject::new(Arc::clone(to_relation)).into_value(),
                 ];
 
                 let _empty_retval = execute_macro(state, &args, "rename_relation")?;
@@ -1465,14 +1468,14 @@ impl AdapterImpl {
                 //
                 // Note: is_hive_metastore() returns false for Unity Catalog temporary tables (matching Python semantics).
                 // The `temporary` field only tracks UC temporary tables, not HMS temporary views.
-                let use_legacy = relation.is_hive_metastore().is_true()
+                let use_legacy = relation.is_hive_metastore()
                     || relation.is_materialized_view()
                     || relation.is_streaming_table();
 
                 if !use_legacy {
                     let json_result = execute_macro_with_package(
                         state,
-                        &[RelationObject::new(relation.to_owned()).as_value()],
+                        &[RelationObject::new(relation.to_owned()).into_value()],
                         "get_columns_comments_as_json",
                         "dbt_databricks",
                     );
@@ -1494,7 +1497,7 @@ impl AdapterImpl {
 
                 execute_macro_with_package(
                     state,
-                    &[RelationObject::new(relation.to_owned()).as_value()],
+                    &[RelationObject::new(relation.to_owned()).into_value()],
                     "get_columns_comments",
                     "dbt_databricks",
                 )
@@ -1502,7 +1505,7 @@ impl AdapterImpl {
             Postgres | Snowflake | Bigquery | Sidecar | Redshift | DuckDB | Fabric | Spark => {
                 execute_macro(
                     state,
-                    &[RelationObject::new(relation.to_owned()).as_value()],
+                    &[RelationObject::new(relation.to_owned()).into_value()],
                     "get_columns_in_relation",
                 )
             }
@@ -1679,7 +1682,7 @@ impl AdapterImpl {
                 _,
             ) => {
                 // downcast relation
-                let relation = RelationObject::new(Arc::clone(relation)).as_value();
+                let relation = RelationObject::new(Arc::clone(relation)).into_value();
                 execute_macro(state, &[relation], "truncate_relation")?;
                 Ok(none_value())
             }
@@ -1832,7 +1835,7 @@ impl AdapterImpl {
                         execute_macro(
                             state,
                             args!(
-                                relation => RelationObject::new(to_relation_cloned).as_value(),
+                                relation => RelationObject::new(to_relation_cloned).into_value(),
                                 column_name => column_name,
                                 new_column_type => Value::from(new_type),
                             ),
@@ -4770,13 +4773,13 @@ mod tests {
             false, // NOT temporary
         );
         assert!(
-            hive_table.is_hive_metastore().is_true(),
+            hive_table.is_hive_metastore(),
             "Expected is_hive_metastore() to return true for non-temporary table in hive_metastore"
         );
         assert!(!hive_table.is_temporary(), "Expected non-temporary table");
         // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
         // use_legacy = true || false || false = true
-        let use_legacy_hive_table = hive_table.is_hive_metastore().is_true()
+        let use_legacy_hive_table = hive_table.is_hive_metastore()
             || hive_table.is_materialized_view()
             || hive_table.is_streaming_table();
         assert!(
@@ -4800,13 +4803,13 @@ mod tests {
             true, // IS temporary (UC temporary table)
         );
         assert!(
-            !uc_temp_table.is_hive_metastore().is_true(),
+            !uc_temp_table.is_hive_metastore(),
             "Expected is_hive_metastore() to return FALSE for UC temporary table (matching Python semantics)"
         );
         assert!(uc_temp_table.is_temporary(), "Expected temporary table");
         // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
         // use_legacy = false || false || false = false
-        let use_legacy_uc_temp = uc_temp_table.is_hive_metastore().is_true()
+        let use_legacy_uc_temp = uc_temp_table.is_hive_metastore()
             || uc_temp_table.is_materialized_view()
             || uc_temp_table.is_streaming_table();
         assert!(
@@ -4828,12 +4831,12 @@ mod tests {
             false,
         );
         assert!(
-            !unity_table.is_hive_metastore().is_true(),
+            !unity_table.is_hive_metastore(),
             "Expected Unity Catalog table (not Hive Metastore)"
         );
         // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
         // use_legacy = false || false || false = false
-        let use_legacy_unity = unity_table.is_hive_metastore().is_true()
+        let use_legacy_unity = unity_table.is_hive_metastore()
             || unity_table.is_materialized_view()
             || unity_table.is_streaming_table();
         assert!(
@@ -4857,9 +4860,8 @@ mod tests {
         assert!(mv.is_materialized_view(), "Expected materialized view");
         // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
         // use_legacy = false || true || false = true
-        let use_legacy_mv = mv.is_hive_metastore().is_true()
-            || mv.is_materialized_view()
-            || mv.is_streaming_table();
+        let use_legacy_mv =
+            mv.is_hive_metastore() || mv.is_materialized_view() || mv.is_streaming_table();
         assert!(
             use_legacy_mv,
             "Expected materialized view to use legacy DESCRIBE"

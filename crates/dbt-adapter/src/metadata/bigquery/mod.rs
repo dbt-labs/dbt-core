@@ -504,7 +504,7 @@ fn make_map_f(
         // Query to get last modified times from BigQuery's __TABLES__ metadata table
         let table_list = relations
             .iter()
-            .map(|relation| format!("'{}'", relation.identifier()))
+            .map(|relation| format!("'{}'", relation.identifier().unwrap_or_default()))
             .collect::<Vec<_>>()
             .join(", ");
 

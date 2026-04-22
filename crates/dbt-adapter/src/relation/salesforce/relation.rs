@@ -9,7 +9,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::{State, Value};
+use minijinja::Value;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -134,7 +134,7 @@ impl BaseRelation for SalesforceRelation {
     }
 
     /// Creates a new Salesforce relation from a state and a list of values
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
+    fn create_from(&self) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("Salesforce relation creation from Jinja values")
     }
 
@@ -143,18 +143,18 @@ impl BaseRelation for SalesforceRelation {
     }
 
     /// Returns the database name
-    fn database(&self) -> Value {
-        Value::from(self.path.database.clone())
+    fn database(&self) -> Option<&str> {
+        self.path.database.as_deref()
     }
 
     /// Returns the schema name
-    fn schema(&self) -> Value {
-        Value::from(self.path.schema.clone())
+    fn schema(&self) -> Option<&str> {
+        self.path.schema.as_deref()
     }
 
     /// Returns the identifier name
-    fn identifier(&self) -> Value {
-        Value::from(self.path.identifier.clone())
+    fn identifier(&self) -> Option<&str> {
+        self.path.identifier.as_deref()
     }
 
     /// Returns the relation type
@@ -162,33 +162,35 @@ impl BaseRelation for SalesforceRelation {
         self.relation_type
     }
 
-    fn as_value(&self) -> Value {
-        RelationObject::new(Arc::new(self.clone())).into_value()
-    }
-
     fn adapter_type(&self) -> AdapterType {
         AdapterType::Salesforce
     }
 
-    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn needs_to_drop(
+        &self,
+        _old_relation: Option<Arc<dyn BaseRelation>>,
+    ) -> Result<bool, minijinja::Error> {
         unimplemented!("Salesforce needs_to_drop logic")
     }
 
-    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn get_ddl_prefix_for_create(
+        &self,
+        _model_config: Value,
+        _temporary: bool,
+    ) -> Result<String, minijinja::Error> {
         unimplemented!("Salesforce DDL prefix for create")
     }
 
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<String, minijinja::Error> {
         unimplemented!("Salesforce DDL prefix for alter")
     }
 
-    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn get_iceberg_ddl_options(&self, _config: Value) -> Result<String, minijinja::Error> {
         unimplemented!("Salesforce does not support Iceberg DDL options")
     }
 
-    fn include_inner(&self, _policy: Policy) -> Result<Value, minijinja::Error> {
-        let relation = self.clone();
-        Ok(relation.as_value())
+    fn include_inner(&self, _policy: Policy) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        Ok(Arc::new(self.clone()))
     }
 
     fn normalize_component(&self, component: &str) -> String {
@@ -215,7 +217,7 @@ impl BaseRelation for SalesforceRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("Salesforce information schema inner")
     }
 }
