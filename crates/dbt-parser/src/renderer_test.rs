@@ -74,6 +74,7 @@ mod tests {
                 ..Default::default()
             },
             num_threads: Some(1), // Will test both sequential (1) and parallel (>1)
+            no_parallel: false,
             command: FsCommand::Test,
             vars: BTreeMap::new(),
             from_main: false,

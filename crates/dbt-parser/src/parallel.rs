@@ -10,6 +10,17 @@ pub fn effective_parallelism(num_threads: Option<usize>) -> usize {
         .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()))
 }
 
+/// Like [`effective_parallelism`] but collapses to 1 when the caller requested
+/// sequential execution via `--no-parallel` (e.g. for deterministic
+/// golden-file output).
+pub fn effective_parallelism_with(num_threads: Option<usize>, no_parallel: bool) -> usize {
+    if no_parallel {
+        1
+    } else {
+        effective_parallelism(num_threads)
+    }
+}
+
 /// Execute items sequentially or in parallel via `tokio::spawn`.
 ///
 /// When `parallel` is `true`, each item is spawned as a tokio task with tracing span

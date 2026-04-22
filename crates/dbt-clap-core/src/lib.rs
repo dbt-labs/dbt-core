@@ -1400,9 +1400,11 @@ pub struct CommonArgs {
     #[arg(global = true, long)]
     pub threads: Option<usize>,
 
-    /// Overrides threads.
-    #[arg(global = true, long = "single-threaded", action = ArgAction::SetTrue, env = "DBT_SINGLE_THREADED", value_parser = BoolishValueParser::new())]
-    pub single_threaded: bool,
+    /// Force sequential task execution and sequential parser rendering. Does
+    /// not affect the adapter connection pool — use `--threads` for that.
+    /// Hidden because it is primarily a test/debug knob.
+    #[arg(global = true, long = "no-parallel", action = ArgAction::SetTrue, env = "DBT_NO_PARALLEL", value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_parallel: bool,
 
     /// Execution backend to use
     #[arg(
@@ -1944,15 +1946,11 @@ impl CommonArgs {
                 Some(10)
             },
             from_main: false,
-            // note: we use
-            // - 0 for free threading,
-            // - 1 for single threading and
-            // - > 1 for fixed number of threads
-            num_threads: if self.single_threaded {
-                Some(1)
-            } else {
-                self.threads
-            },
+            // `threads` controls connection backpressure and rendering
+            // parallelism. Sequential task execution is requested via the
+            // separate `no_parallel` flag below.
+            num_threads: self.threads,
+            no_parallel: self.no_parallel,
             select: select_option,
             exclude: exclude_option,
             indirect_selection: self.indirect_selection,
@@ -2275,6 +2273,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
 
         target: common_args.target,
         num_threads: common_args.threads,
+        no_parallel: common_args.no_parallel,
     }
 }
 
@@ -2317,5 +2316,6 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         from_main: false,
         target: common_args.target,
         num_threads: common_args.threads,
+        no_parallel: common_args.no_parallel,
     }
 }

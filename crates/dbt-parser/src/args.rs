@@ -30,6 +30,8 @@ pub struct ResolveArgs {
     pub exclude: Option<SelectExpression>,
     /// Number of tHreads to use
     pub num_threads: Option<usize>,
+    /// Force sequential rendering/resolution, independent of `num_threads`.
+    pub no_parallel: bool,
     /// replay mode
     pub replay: Option<dbt_common::io_args::ReplayMode>,
     /// Sample config
@@ -56,6 +58,7 @@ impl ResolveArgs {
             select: arg.select.clone(),
             exclude: arg.exclude.clone(),
             num_threads: arg.num_threads,
+            no_parallel: arg.no_parallel,
             indirect_selection: arg.indirect_selection,
             replay: arg.replay.clone(),
             sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,

@@ -304,9 +304,11 @@ pub struct CommonArgs {
     #[arg(global = true, long)]
     pub threads: Option<usize>,
 
-    /// Overrides threads.
-    #[arg(global = true, long = "single-threaded", action = ArgAction::SetTrue, env = "DBT_SINGLE_THREADED", value_parser = BoolishValueParser::new())]
-    pub single_threaded: bool,
+    /// Force sequential task execution and sequential parser rendering. Does
+    /// not affect the adapter connection pool — use `--threads` for that.
+    /// Hidden because it is primarily a test/debug knob.
+    #[arg(global = true, long = "no-parallel", action = ArgAction::SetTrue, env = "DBT_NO_PARALLEL", value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_parallel: bool,
 
     /// Write JSON artifacts to disk [env: DBT_WRITE_JSON=]. Use --no-write-json to suppress writing JSON artifacts.
     #[arg(global = true, long,  default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new())]
@@ -672,11 +674,8 @@ impl CommonArgs {
             format: DEFAULT_FORMAT,
             limit: Some(10),
             debug: self.debug,
-            num_threads: if self.single_threaded {
-                Some(1)
-            } else {
-                self.threads
-            },
+            num_threads: self.threads,
+            no_parallel: self.no_parallel,
             select: self
                 .select
                 .clone()
@@ -770,6 +769,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
 
         target: cli.common_args().target,
         num_threads: cli.common_args().threads,
+        no_parallel: cli.common_args().no_parallel,
     }
 }
 
@@ -812,5 +812,6 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         from_main: false,
         target: cli.common_args().target,
         num_threads: cli.common_args().threads,
+        no_parallel: cli.common_args().no_parallel,
     }
 }

@@ -364,6 +364,10 @@ pub struct SystemArgs {
     pub io: IoArgs,
     pub from_main: bool,
     pub num_threads: Option<usize>,
+    /// Request sequential task execution, decoupled from `num_threads`.
+    /// Drives the binary entrypoint's single-worker tokio runtime and the
+    /// task-scheduler's sequential visitor.
+    pub no_parallel: bool,
     pub target: Option<String>,
 }
 
@@ -399,8 +403,13 @@ pub struct EvalArgs {
     pub limit: Option<usize>,
     /// called as bin or as library
     pub from_main: bool,
-    /// The number of threads to use
+    /// The number of threads to use. Drives the adapter connection backpressure
+    /// high-water-mark and parser rendering parallelism. Not used to force
+    /// sequential task execution — use `no_parallel` for that.
     pub num_threads: Option<usize>,
+    /// Force sequential task execution and sequential parser rendering without
+    /// constraining the connection pool. Set by `--no-parallel`.
+    pub no_parallel: bool,
     /// yaml selector
     pub selector: Option<String>,
     /// Select nodes to operate on

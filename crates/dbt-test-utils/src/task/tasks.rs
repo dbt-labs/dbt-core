@@ -338,7 +338,10 @@ impl ExecuteAndCompare {
         func: Arc<CommandFn>,
         use_recording: bool,
     ) -> Self {
-        cmd_vec.push("--threads=1".to_string());
+        // `--no-parallel` forces sequential task execution for
+        // deterministic golden output without throttling the connection pool
+        // via `--threads`, which now controls adapter connection backpressure.
+        cmd_vec.push("--no-parallel".to_string());
         if !cmd_vec.iter().any(|s| *s == "--log-format") {
             cmd_vec.push("--log-format=text".to_string());
         }
@@ -476,11 +479,11 @@ impl ExecuteAndCompareTelemetry {
         );
         Self::assert_flag_absent(
             &cmd_vec,
-            "--threads",
-            "ExecuteAndCompareTelemetry forces --threads=1",
+            "--no-parallel",
+            "ExecuteAndCompareTelemetry forces --no-parallel",
         );
 
-        cmd_vec.push("--threads=1".to_string());
+        cmd_vec.push("--no-parallel".to_string());
         cmd_vec.push(format!("--otel-file-name={}", Self::OTEL_JSONL_FILE_NAME));
         cmd_vec.push(format!(
             "--otel-parquet-file-name={}",

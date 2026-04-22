@@ -74,37 +74,25 @@ fn main() -> ExitCode {
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio
 
-    let tokio_rt = match arg.num_threads {
-        Some(1) => {
-            // Simiulate single-threaded runtime
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .thread_stack_size(FS_DEFAULT_STACK_SIZE)
-                .worker_threads(1)
-                .max_blocking_threads(1)
-                .build()
-                .expect("failed to initialize 'single-threaded' tokio runtime")
-        }
-        // Uncomment this if you want to limit the number of threads in multi-threaded runtime
-        // Some(num_threads) if num_threads > 1 => {
-        //     // Multi-threaded runtime: limit to num_threads
-        //     tokio::runtime::Builder::new_multi_thread()
-        //         .enable_all()
-        //         .worker_threads(num_threads)
-        //         .max_blocking_threads(FS_DEFAULT_MAX_BLOCKING_THREADS)
-        //         .thread_stack_size(FS_DEFAULT_STACK_SIZE)
-        //         .build()
-        //         .expect("failed to initialize multi-threaded tokio runtime")
-        // }
-        _ => {
-            // Multi-threaded runtime: use default (max parallelism)
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .max_blocking_threads(FS_DEFAULT_MAX_BLOCKING_THREADS)
-                .thread_stack_size(FS_DEFAULT_STACK_SIZE)
-                .build()
-                .expect("failed to initialize default multi-threaded tokio runtime")
-        }
+    // Only `--no-parallel` pins the tokio runtime to a single worker.
+    // `--threads` is exclusively the adapter connection-backpressure knob
+    // and does not affect the runtime.
+    let tokio_rt = if arg.no_parallel {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(FS_DEFAULT_STACK_SIZE)
+            .worker_threads(1)
+            .max_blocking_threads(1)
+            .build()
+            .expect("failed to initialize 'single-worker' tokio runtime")
+    } else {
+        // Multi-threaded runtime: use default (max parallelism)
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .max_blocking_threads(FS_DEFAULT_MAX_BLOCKING_THREADS)
+            .thread_stack_size(FS_DEFAULT_STACK_SIZE)
+            .build()
+            .expect("failed to initialize default multi-threaded tokio runtime")
     };
 
     // If execution panics, exit with a status 2 (but not if RUST_BACKTRACE is
