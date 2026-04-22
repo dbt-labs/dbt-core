@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, path::PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Deserializer};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::OmissibleGrantConfig;
@@ -1268,7 +1268,7 @@ impl From<DbtOperation> for ManifestOperation {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestFunction {
     pub __common_attr__: ManifestMaterializableCommonAttributes,
@@ -1285,6 +1285,52 @@ pub struct ManifestFunction {
     pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+struct ManifestFunctionCompat {
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
+
+    pub __base_attr__: ManifestNodeBaseAttributes,
+
+    pub config: FunctionConfig,
+    pub access: Option<Access>,
+    pub group: Option<String>,
+    pub language: Option<String>,
+    pub on_configuration_change: Option<String>,
+    pub returns: Option<crate::schemas::properties::FunctionReturnType>,
+    pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl<'de> Deserialize<'de> for ManifestFunction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let function = ManifestFunctionCompat::deserialize(deserializer)?;
+        let access = function
+            .access
+            .clone()
+            .or_else(|| function.config.access.clone())
+            .unwrap_or(Access::Private);
+
+        Ok(Self {
+            __common_attr__: function.__common_attr__,
+            __base_attr__: function.__base_attr__,
+            config: function.config,
+            access,
+            group: function.group,
+            language: function.language,
+            on_configuration_change: function.on_configuration_change,
+            returns: function.returns,
+            arguments: function.arguments,
+            __other__: function.__other__,
+        })
+    }
 }
 
 impl From<DbtFunction> for ManifestFunction {
