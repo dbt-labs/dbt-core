@@ -1328,68 +1328,83 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         node.arguments = patch.arguments
         node.returns = patch.returns
 
-        # Process overrides: absorb override SQL files into the root node
-        if patch.overrides:
-            self._absorb_overrides(node, patch.overrides)
+        # Process overloads: absorb overload SQL files into the root node
+        if patch.overloads:
+            self._absorb_overloads(node, patch.overloads)
 
-    def _absorb_overrides(self, root_node: "FunctionNode", overrides: list) -> None:
-        """Look up override SQL files, store their code on the root node,
+    def _absorb_overloads(self, root_node: "FunctionNode", overloads: list) -> None:
+        """Look up overload SQL files, store their code on the root node,
         and remove them from the manifest so they don't appear as separate
         DAG nodes."""
-        from dbt.artifacts.resources import FunctionOverride
+        from dbt.artifacts.resources import FunctionOverload
 
-        absorbed: list[FunctionOverride] = []
-        for override in overrides:
-            override_name = override.defined_in
-            # Find the override node in the manifest by name
-            override_unique_id = f"function.{root_node.package_name}.{override_name}"
-            override_node = self.manifest.functions.get(override_unique_id)
+        absorbed: list[FunctionOverload] = []
+        for overload in overloads:
+            overload_name = overload.defined_in
+            # Find the overload node in the manifest by name
+            overload_unique_id = f"function.{root_node.package_name}.{overload_name}"
+            overload_node = self.manifest.functions.get(overload_unique_id)
 
-            if override_node is None:
+            if overload_node is None:
+                # Check if this overload was already claimed by another root function
+                claimed_by = next(
+                    (
+                        root_uid
+                        for fid, root_uid in self.manifest.function_overload_owners.items()
+                        if fid.endswith(f"/{overload_name}.sql")
+                    ),
+                    None,
+                )
+                if claimed_by:
+                    raise ParsingError(
+                        f"Function overload '{overload_name}' (defined_in) is already "
+                        f"used by '{claimed_by}'. Each overload file can only belong "
+                        f"to one root function."
+                    )
                 raise ParsingError(
-                    f"Function override '{override_name}' (defined_in) not found. "
-                    f"Expected a SQL file at functions/{override_name}.sql"
+                    f"Function overload '{overload_name}' (defined_in) not found. "
+                    f"Expected a SQL file at functions/{overload_name}.sql"
                 )
 
             absorbed.append(
-                FunctionOverride(
-                    defined_in=override.defined_in,
-                    arguments=override.arguments,
-                    returns=override.returns,
-                    description=override.description,
-                    body=override_node.raw_code,
+                FunctionOverload(
+                    defined_in=overload.defined_in,
+                    arguments=overload.arguments,
+                    returns=overload.returns,
+                    description=overload.description,
+                    body=overload_node.raw_code,
                 )
             )
 
-            # Track the override→root relationship for partial parsing
-            self.manifest.function_override_owners[override_node.file_id] = root_node.unique_id
+            # Track the overload→root relationship for partial parsing
+            self.manifest.function_overload_owners[overload_node.file_id] = root_node.unique_id
 
             # Clear the source file's function list so partial parsing knows
             # this file no longer owns a standalone function node.
-            override_file = self.manifest.files.get(override_node.file_id)
-            if override_file is not None and hasattr(override_file, "functions"):
-                override_file.functions = []
+            overload_file = self.manifest.files.get(overload_node.file_id)
+            if overload_file is not None and hasattr(overload_file, "functions"):
+                overload_file.functions = []
 
-            # Remove the override node from the manifest — it's now part of the root
-            del self.manifest.functions[override_unique_id]
+            # Remove the overload node from the manifest — it's now part of the root
+            del self.manifest.functions[overload_unique_id]
 
-        root_node.overrides = absorbed
+        root_node.overloads = absorbed
 
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
 
-        # Convert unparsed overrides to FunctionOverride objects (without body yet)
-        from dbt.artifacts.resources import FunctionOverride
+        # Convert unparsed overloads to FunctionOverload objects (without body yet)
+        from dbt.artifacts.resources import FunctionOverload
 
-        overrides = [
-            FunctionOverride(
+        overloads = [
+            FunctionOverload(
                 defined_in=o.defined_in,
                 arguments=o.arguments,
                 returns=o.returns,
                 description=o.description,
             )
-            for o in target.overrides
+            for o in target.overloads
         ]
 
         return ParsedFunctionPatch(
@@ -1410,7 +1425,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
-            overrides=overrides,
+            overloads=overloads,
         )
 
 

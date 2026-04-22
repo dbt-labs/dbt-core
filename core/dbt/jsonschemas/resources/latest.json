@@ -3582,13 +3582,13 @@
             "$ref": "#/definitions/DataTests"
           }
         },
-        "overrides": {
+        "overloads": {
           "type": [
             "array",
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/FunctionOverride"
+            "$ref": "#/definitions/FunctionOverload"
           }
         }
       },
@@ -10490,7 +10490,7 @@
         "max"
       ]
     },
-    "FunctionOverride": {
+    "FunctionOverload": {
       "type": "object",
       "required": [
         "defined_in"

@@ -89,29 +89,29 @@ class FunctionRunner(CompileRunner[FunctionNode]):
         context = generate_runtime_function_context(compiled_node, self.config, manifest)
         MacroGenerator(materialization_macro, context=context)()
 
-        # Execute each override with the same database name but different
-        # arguments/returns/body.  If any override fails, the node is marked
-        # PARTIAL_SUCCESS (root succeeded, override didn't) and downstream
+        # Execute each overload with the same database name but different
+        # arguments/returns/body.  If any overload fails, the node is marked
+        # PARTIAL_SUCCESS (root succeeded, overload didn't) and downstream
         # nodes are skipped.
-        override_failure = None
-        for override in compiled_node.overrides:
-            override_node = replace(
+        overload_failure = None
+        for overload in compiled_node.overloads:
+            overload_node = replace(
                 compiled_node,
-                arguments=override.arguments,
-                returns=override.returns or compiled_node.returns,
-                compiled_code=override.body or "",
+                arguments=overload.arguments,
+                returns=overload.returns or compiled_node.returns,
+                compiled_code=overload.body or "",
             )
-            override_ctx = generate_runtime_function_context(override_node, self.config, manifest)
+            overload_ctx = generate_runtime_function_context(overload_node, self.config, manifest)
             try:
-                MacroGenerator(materialization_macro, context=override_ctx)()
+                MacroGenerator(materialization_macro, context=overload_ctx)()
             except Exception as e:
-                override_failure = e
+                overload_failure = e
                 break
 
         result = self.build_result(compiled_node, context)
-        if override_failure is not None:
+        if overload_failure is not None:
             result.status = RunStatus.PartialSuccess
-            result.message = f"PARTIAL SUCCESS ({override_failure})"
+            result.message = f"PARTIAL SUCCESS ({overload_failure})"
         return result
 
     def after_execute(self, result: RunResult) -> None:
@@ -119,17 +119,17 @@ class FunctionRunner(CompileRunner[FunctionNode]):
 
     def compile(self, manifest: Manifest):
         compiled = super().compile(manifest)
-        # Compile override bodies through Jinja using the root node's context.
-        # Without this, override bodies containing Jinja would be passed raw
+        # Compile overload bodies through Jinja using the root node's context.
+        # Without this, overload bodies containing Jinja would be passed raw
         # to the database.
-        if compiled.overrides:
+        if compiled.overloads:
             from dbt.clients import jinja
             from dbt.context.providers import generate_runtime_model_context
 
             ctx = generate_runtime_model_context(compiled, self.config, manifest)
-            for override in compiled.overrides:
-                if override.body:
-                    override.body = jinja.get_rendered(override.body, ctx, compiled)
+            for overload in compiled.overloads:
+                if overload.body:
+                    overload.body = jinja.get_rendered(overload.body, ctx, compiled)
         return compiled
 
     def print_result_line(self, result: RunResult) -> None:

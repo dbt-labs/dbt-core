@@ -913,7 +913,7 @@ class UnparsedFunctionReturns(dbtClassMixin):
 
 
 @dataclass
-class UnparsedFunctionOverride(dbtClassMixin):
+class UnparsedFunctionOverload(dbtClassMixin):
     """An overload definition within a function's YAML entry."""
 
     defined_in: str
@@ -926,7 +926,7 @@ class UnparsedFunctionOverride(dbtClassMixin):
 class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
-    overrides: List[UnparsedFunctionOverride] = field(default_factory=list)
+    overloads: List[UnparsedFunctionOverload] = field(default_factory=list)
 
 
 #

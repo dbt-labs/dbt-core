@@ -425,25 +425,25 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
 
-        # Check if this file was absorbed as a function override.
+        # Check if this file was absorbed as a function overload.
         # If so, invalidate and re-parse the root function instead.
         if (
             not old_source_file.functions
-            and old_source_file.file_id in self.saved_manifest.function_override_owners
+            and old_source_file.file_id in self.saved_manifest.function_overload_owners
         ):
-            self._invalidate_override_owner(old_source_file, new_source_file)
+            self._invalidate_overload_owner(old_source_file, new_source_file)
             return
 
         self.delete_function_node(old_source_file)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
-    def _invalidate_override_owner(
+    def _invalidate_overload_owner(
         self, old_source_file: SourceFile, new_source_file: SourceFile
     ) -> None:
-        """When an override SQL file changes, invalidate its root function
-        so that the root gets re-parsed and re-absorbs the updated override body."""
-        root_unique_id = self.saved_manifest.function_override_owners[old_source_file.file_id]
+        """When an overload SQL file changes, invalidate its root function
+        so that the root gets re-parsed and re-absorbs the updated overload body."""
+        root_unique_id = self.saved_manifest.function_overload_owners[old_source_file.file_id]
 
         # Find the root function's source file and schedule it for re-parsing
         if root_unique_id in self.saved_manifest.functions:
@@ -457,7 +457,7 @@ class PartialParsing:
                         self.saved_files[root_file_id] = deepcopy(self.new_files[root_file_id])
                     self.add_to_pp_files(root_source_file)
 
-        # Update the override file in saved files (content changed)
+        # Update the overload file in saved files (content changed)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -701,10 +701,10 @@ class PartialParsing:
         # duplicate when it's re-added
         source_file.functions.remove(function_unique_id)
 
-        # If this root function had overrides, re-schedule their SQL files for
-        # parsing so the override nodes get re-created before YAML absorption.
-        if hasattr(function_node, "overrides") and function_node.overrides:
-            self._reschedule_override_files(function_unique_id)
+        # If this root function had overloads, re-schedule their SQL files for
+        # parsing so the overload nodes get re-created before YAML absorption.
+        if hasattr(function_node, "overloads") and function_node.overloads:
+            self._reschedule_overload_files(function_unique_id)
 
         # If this function had a schema patch, schedule that schema element to be reapplied.
         patch_path = function_node.patch_path
@@ -727,22 +727,22 @@ class PartialParsing:
         if source_file.file_id in self.saved_manifest.files:
             self.saved_manifest.files.pop(source_file.file_id)
 
-    def _reschedule_override_files(self, root_unique_id: str) -> None:
-        """When a root function with overrides is invalidated, re-schedule its
-        override SQL files for parsing so the nodes exist for re-absorption."""
-        override_file_ids = [
+    def _reschedule_overload_files(self, root_unique_id: str) -> None:
+        """When a root function with overloads is invalidated, re-schedule its
+        overload SQL files for parsing so the nodes exist for re-absorption."""
+        overload_file_ids = [
             fid
-            for fid, root_uid in self.saved_manifest.function_override_owners.items()
+            for fid, root_uid in self.saved_manifest.function_overload_owners.items()
             if root_uid == root_unique_id
         ]
-        for file_id in override_file_ids:
+        for file_id in overload_file_ids:
             if file_id in self.saved_files:
                 # Use new file content if available, otherwise re-use saved
                 if file_id in self.new_files:
                     self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                 self.add_to_pp_files(self.saved_files[file_id])
             # Remove the stale mapping — it will be re-created during absorption
-            del self.saved_manifest.function_override_owners[file_id]
+            del self.saved_manifest.function_overload_owners[file_id]
 
     # Schema files -----------------------
     # Changed schema files

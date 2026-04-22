@@ -65,11 +65,11 @@ class DeferFunction(HasRelationMetadata):
 
 
 @dataclass
-class FunctionOverride(dbtClassMixin):
+class FunctionOverload(dbtClassMixin):
     """An overload of a function with different argument signatures.
 
-    Each override references a separate SQL file (via defined_in) that
-    contains the function body for this overload. All overrides share the
+    Each overload references a separate SQL file (via defined_in) that
+    contains the function body for this overload. All overloads share the
     same database function name but have different argument types.
     """
 
@@ -77,7 +77,7 @@ class FunctionOverride(dbtClassMixin):
     arguments: List[FunctionArgument] = field(default_factory=list)
     returns: Optional[FunctionReturns] = None
     description: Optional[str] = None
-    # Populated during patch processing from the override's SQL file
+    # Populated during patch processing from the overload's SQL file
     body: Optional[str] = None
 
 
@@ -86,7 +86,7 @@ class Function(CompiledResource, FunctionMandatory):
     resource_type: Literal[NodeType.Function]
     config: FunctionConfig
     arguments: List[FunctionArgument] = field(default_factory=list)
-    overrides: List[FunctionOverride] = field(default_factory=list)
+    overloads: List[FunctionOverload] = field(default_factory=list)
     defer_function: Optional[DeferFunction] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
