@@ -683,6 +683,13 @@ pub enum OnConfigurationChange {
     Unknown,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OnError {
+    SkipChildren,
+    Continue,
+}
+
 impl From<StringOrArrayOfStrings> for DbtUniqueKey {
     fn from(value: StringOrArrayOfStrings) -> Self {
         match value {

@@ -13,7 +13,7 @@ use dbt_yaml::Verbatim;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtUniqueKey;
-use crate::schemas::common::{DocsConfig, HardDeletes, OnConfigurationChange};
+use crate::schemas::common::{DocsConfig, HardDeletes, OnConfigurationChange, OnError};
 use crate::schemas::common::{HookConfig, Hooks, OnSchemaChange};
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
@@ -792,6 +792,7 @@ pub struct ManifestModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
+    pub on_error: Option<OnError>,
     #[serde(rename = "grants", alias = "+grants")]
     pub grants: OmissibleGrantConfig,
     pub packages: Option<StringOrArrayOfStrings>,
@@ -969,6 +970,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             unique_key: config.unique_key,
             on_schema_change: config.on_schema_change,
             on_configuration_change: config.on_configuration_change,
+            on_error: config.on_error,
             grants: config.grants,
             packages: config.packages,
             python_version: config.python_version,
@@ -1038,6 +1040,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             unique_key: config.unique_key,
             on_schema_change: config.on_schema_change,
             on_configuration_change: config.on_configuration_change,
+            on_error: config.on_error,
             grants: config.grants,
             packages: config.packages,
             python_version: config.python_version,

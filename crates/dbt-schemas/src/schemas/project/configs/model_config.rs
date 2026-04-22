@@ -26,7 +26,7 @@ use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::SyncConfig;
 use crate::schemas::common::{Access, DbtQuoting, Schedule};
-use crate::schemas::common::{DocsConfig, OnConfigurationChange};
+use crate::schemas::common::{DocsConfig, OnConfigurationChange, OnError};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::default_column_types;
@@ -287,6 +287,8 @@ pub struct ProjectModelConfig {
     pub target_alias: Option<String>,
     #[serde(rename = "+on_configuration_change")]
     pub on_configuration_change: Option<OnConfigurationChange>,
+    #[serde(rename = "+on_error")]
+    pub on_error: Option<OnError>,
     #[serde(rename = "+on_schema_change")]
     pub on_schema_change: Option<OnSchemaChange>,
     #[serde(rename = "+packages")]
@@ -495,6 +497,7 @@ pub struct ModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
+    pub on_error: Option<OnError>,
     pub grants: OmissibleGrantConfig,
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,
@@ -589,6 +592,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             merge_update_columns: config.merge_update_columns,
             meta: (*config.meta).clone(),
             on_configuration_change: config.on_configuration_change,
+            on_error: config.on_error,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
             python_version: config.python_version,
@@ -743,6 +747,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             on_configuration_change: config.on_configuration_change,
+            on_error: config.on_error,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
             python_version: config.python_version,
@@ -897,6 +902,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             unique_key,
             on_schema_change,
             on_configuration_change,
+            on_error,
             grants,
             packages,
             python_version,
@@ -978,6 +984,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 unique_key,
                 on_schema_change,
                 on_configuration_change,
+                on_error,
                 python_version,
                 use_anonymous_sproc,
                 secrets,
@@ -1113,6 +1120,7 @@ impl ModelConfig {
             &self.on_configuration_change,
             &other.on_configuration_change,
         ); // Custom comparison for on_configuration_change
+        let on_error_eq = self.on_error == other.on_error;
         let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
         let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
         let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
@@ -1152,6 +1160,7 @@ impl ModelConfig {
             && unique_key_eq
             && on_schema_change_eq_result
             && on_configuration_change_eq_result
+            && on_error_eq
             && grants_eq_result
             && packages_eq
             && imports_eq
@@ -1287,6 +1296,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.on_configuration_change),
                             format!("{:?}", &other.on_configuration_change),
+                        )),
+                    ),
+                    (
+                        "on_error",
+                        on_error_eq,
+                        Some((
+                            format!("{:?}", &self.on_error),
+                            format!("{:?}", &other.on_error),
                         )),
                     ),
                     (
