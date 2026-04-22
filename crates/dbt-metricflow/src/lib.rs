@@ -586,10 +586,12 @@ fn validate_spec(
     let group_by_names: Vec<String> = spec
         .group_by
         .iter()
-        .map(|gb| match gb {
-            GroupBySpec::TimeDimension { name, .. } => name.clone(),
-            GroupBySpec::Dimension { name, .. } => name.clone(),
-            GroupBySpec::Entity { name } => name.clone(),
+        .flat_map(|gb| match gb {
+            GroupBySpec::TimeDimension { name, granularity } => {
+                vec![name.clone(), format!("{name}__{granularity}")]
+            }
+            GroupBySpec::Dimension { name, .. } => vec![name.clone()],
+            GroupBySpec::Entity { name } => vec![name.clone()],
         })
         .collect();
 
@@ -1825,6 +1827,30 @@ fn render_interval(count: i64, granularity: &str, dialect: Dialect) -> String {
     }
 }
 
+/// Resolve an order-by name to the canonical SQL output column name.
+///
+/// A granularity-qualified time dimension reference like `metric_time__month` is
+/// valid when the matching `TimeDimension` is in the group-by, but the SELECT
+/// column is aliased as the base name (`metric_time`).  Strip the qualifier so
+/// the emitted `ORDER BY` references an identifier that actually exists.
+fn resolve_order_by_col(name: &str, group_by: &[GroupBySpec]) -> String {
+    group_by
+        .iter()
+        .find_map(|gb| {
+            if let GroupBySpec::TimeDimension {
+                name: td_name,
+                granularity,
+            } = gb
+            {
+                if name == format!("{td_name}__{granularity}") {
+                    return Some(td_name.clone());
+                }
+            }
+            None
+        })
+        .unwrap_or_else(|| name.to_string())
+}
+
 fn render_agg(agg: &str, expr: &str, dialect: Dialect) -> String {
     match agg {
         "sum" => format!("SUM({expr})"),
@@ -2674,10 +2700,11 @@ fn compile_simple_metrics(
             .order_by
             .iter()
             .map(|o| {
+                let col = resolve_order_by_col(&o.name, &spec.group_by);
                 if o.descending {
-                    format!("{} DESC", o.name)
+                    format!("{col} DESC")
                 } else {
-                    format!("{} ASC", o.name)
+                    format!("{col} ASC")
                 }
             })
             .collect();
@@ -2740,7 +2767,15 @@ fn compile_complex_metrics(
 
         match metric.metric_type {
             MetricType::Simple => {
-                compile_simple_metric_cte(metric, spec, model_aliases, join_edges, dialect, ctes)?;
+                compile_simple_metric_cte(
+                    metric,
+                    spec,
+                    all_metrics,
+                    model_aliases,
+                    join_edges,
+                    dialect,
+                    ctes,
+                )?;
             }
             MetricType::Derived => {
                 compile_derived_metric_cte(
@@ -2798,6 +2833,7 @@ fn compile_complex_metrics(
 fn compile_simple_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
+    all_metrics: &HashMap<String, ResolvedMetric>,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
     dialect: Dialect,
@@ -2945,6 +2981,25 @@ fn compile_simple_metric_cte(
         );
     }
 
+    // Metric filter CTEs: if any metric_filter references {{ Metric(...) }}, emit the
+    // corresponding __mf_* CTE before this one and JOIN it into the CTE body so that
+    // the WHERE reference resolves correctly.
+    let mf_refs = extract_metric_filter_refs(&metric.metric_filters);
+    if !mf_refs.is_empty() {
+        let mf_joins = compile_metric_filter_ctes(
+            &mf_refs,
+            all_metrics,
+            model_aliases,
+            &ap.semantic_model,
+            primary_alias,
+            dialect,
+            ctes,
+        );
+        for join in &mf_joins {
+            let _ = write!(cte_sql, " {join}");
+        }
+    }
+
     // WHERE: metric-level filters + user-supplied spec.where_filters.
     let mut where_parts: Vec<String> = Vec::new();
     for filter in &metric.metric_filters {
@@ -2994,6 +3049,7 @@ fn compile_derived_metric_cte(
                     compile_simple_metric_cte(
                         input_metric,
                         spec,
+                        all_metrics,
                         model_aliases,
                         join_edges,
                         dialect,
@@ -3028,6 +3084,7 @@ fn compile_derived_metric_cte(
                         compile_simple_metric_cte(
                             input_metric,
                             spec,
+                            all_metrics,
                             model_aliases,
                             join_edges,
                             dialect,
@@ -3244,6 +3301,7 @@ fn compile_ratio_metric_cte(
                 compile_simple_metric_cte(
                     num_metric,
                     spec,
+                    all_metrics,
                     model_aliases,
                     join_edges,
                     dialect,
@@ -3270,6 +3328,7 @@ fn compile_ratio_metric_cte(
                 compile_simple_metric_cte(
                     den_metric,
                     spec,
+                    all_metrics,
                     model_aliases,
                     join_edges,
                     dialect,
@@ -4009,10 +4068,11 @@ fn build_final_sql(
             .order_by
             .iter()
             .map(|o| {
+                let col = resolve_order_by_col(&o.name, &spec.group_by);
                 if o.descending {
-                    format!("{} DESC", o.name)
+                    format!("{col} DESC")
                 } else {
-                    format!("{} ASC", o.name)
+                    format!("{col} ASC")
                 }
             })
             .collect();
@@ -4830,6 +4890,271 @@ mod tests {
         assert!(
             !sql.contains("SUM(case when"),
             "CASE expression must not appear directly in the outer aggregation:\n{sql}"
+        );
+    }
+
+    // ── Bug: {{ Metric(...) }} filter inside a simple metric used by a derived metric ──
+    //
+    // When a simple metric's `filter` references `{{ Metric('x', group_by=['e']) }}`,
+    // `resolve_where_filter` converts it to `__mf_x.e__x` — a reference to a CTE
+    // that must be defined and joined before the WHERE clause is evaluated.
+    //
+    // `compile_simple_metric_cte` (used by the CTE/derived path) previously never
+    // called `compile_metric_filter_ctes`, so the `__mf_*` CTE was never emitted and
+    // the identifier was left dangling, producing a Snowflake/DuckDB error like:
+    //   "unresolved identifier '__mf_opportunity_delta_average_arr'"
+    //
+    // This test mirrors the `arr_churn` case:
+    //   arr_churn (derived)
+    //     └─ gross_churn (simple, filter: {{ Metric('delta_arr', ['opportunity']) }} < 0)
+    //   delta_arr (simple, the filter metric)
+    //
+    // The compiled SQL must:
+    //   1. Define a `__mf_delta_arr` CTE before the `gross_churn` CTE.
+    //   2. Add a `LEFT JOIN __mf_delta_arr` inside the `gross_churn` CTE body.
+    //   3. NOT leave `__mf_delta_arr` as a bare unjoined identifier in WHERE.
+    #[test]
+    fn test_metric_filter_cte_emitted_inside_derived_metric_cte() {
+        let mut store = MockStore::new();
+
+        // The filter metric: delta_arr — simple SUM on fct_opportunities.
+        store.metrics.push(RawMetricRow {
+            name: "delta_arr".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "delta_arr",
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_opportunities",
+                    "agg": "sum",
+                    "agg_time_dimension": "close_date"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        // The filtered simple metric: gross_churn — SUM of delta_arr, but only
+        // where the per-opportunity delta_arr metric is negative.
+        store.metrics.push(RawMetricRow {
+            name: "gross_churn".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "delta_arr",
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_opportunities",
+                    "agg": "sum",
+                    "agg_time_dimension": "close_date"
+                }
+            }"#
+            .into(),
+            // This is the filter that triggers the bug: {{ Metric(...) }} reference.
+            metric_filter: r#"{"where_filters": [
+                {"where_sql_template": "{{ Metric('delta_arr', group_by=['opportunity']) }} < 0"}
+            ]}"#
+            .into(),
+        });
+
+        // The derived metric: arr_churn — forces compilation through compile_complex_metrics.
+        store.metrics.push(RawMetricRow {
+            name: "arr_churn".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "gross_churn",
+                "metrics": [{"name": "gross_churn"}]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        // Single semantic model: fct_opportunities with entity `opportunity`.
+        store.models.push(RawModelRow {
+            name: "fct_opportunities".into(),
+            node_relation: r#""db"."main"."fct_opportunities""#.into(),
+            primary_entity: "opportunity".into(),
+            unique_id: "semantic_model.fct_opportunities".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_opportunities".into(),
+            vec![RawEntityRow {
+                name: "opportunity".into(),
+                entity_type: "primary".into(),
+                expr: "opportunity_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_opportunities".into(),
+            vec![RawDimensionRow {
+                name: "close_date".into(),
+                dimension_type: "time".into(),
+                expr: "close_date".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+        store.join_graph.push(RawJoinGraphRow {
+            model_name: "fct_opportunities".into(),
+            entity_name: "opportunity".into(),
+            entity_type: "primary".into(),
+            expr: "opportunity_id".into(),
+        });
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["arr_churn".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: Some(5),
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+
+        // The __mf_delta_arr CTE must be defined somewhere in the WITH block.
+        assert!(
+            sql.contains("__mf_delta_arr"),
+            "__mf_delta_arr CTE must be emitted:\n{sql}"
+        );
+        // It must be defined as a CTE entry, not just referenced.
+        assert!(
+            sql.contains("__mf_delta_arr AS ("),
+            "__mf_delta_arr must appear as a CTE definition:\n{sql}"
+        );
+        // The gross_churn CTE body must JOIN the filter CTE so the WHERE reference resolves.
+        assert!(
+            sql.contains("LEFT JOIN __mf_delta_arr"),
+            "gross_churn CTE must LEFT JOIN __mf_delta_arr:\n{sql}"
+        );
+    }
+
+    // ── Bug: granularity-qualified order-by is rejected even when the group-by matches ──
+    //
+    // `--group-by metric_time__month` stores the time dimension as
+    // `GroupBySpec::TimeDimension { name: "metric_time", granularity: "month" }`.
+    // The validation builds `group_by_names` from the `name` field only, so it
+    // contains `"metric_time"` but not `"metric_time__month"`.  When the user then
+    // passes `--order-by metric_time__month` (the same token they typed for group-by),
+    // validation fails with "unknown order-by: metric_time__month".
+    //
+    // Fix (Option A): expand `group_by_names` to also include `{name}__{granularity}`
+    // for every TimeDimension group-by, so both the base name and the qualified form
+    // are accepted.
+
+    /// Builds a minimal one-metric MockStore over a single model with a time dimension.
+    /// Reused by both order-by tests below to avoid duplication.
+    fn order_by_store() -> MockStore {
+        let mut store = MockStore::new();
+        store.metrics.push(RawMetricRow {
+            name: "signups".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "1",
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_signups",
+                    "agg": "sum",
+                    "agg_time_dimension": "created_at"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+        store.models.push(RawModelRow {
+            name: "fct_signups".into(),
+            node_relation: r#""db"."main"."fct_signups""#.into(),
+            primary_entity: "signup".into(),
+            unique_id: "semantic_model.fct_signups".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_signups".into(),
+            vec![RawEntityRow {
+                name: "signup".into(),
+                entity_type: "primary".into(),
+                expr: "signup_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_signups".into(),
+            vec![RawDimensionRow {
+                name: "created_at".into(),
+                dimension_type: "time".into(),
+                expr: "created_at".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+        store.join_graph.push(RawJoinGraphRow {
+            model_name: "fct_signups".into(),
+            entity_name: "signup".into(),
+            entity_type: "primary".into(),
+            expr: "signup_id".into(),
+        });
+        store
+    }
+
+    /// Positive: `--order-by metric_time__month` must be accepted when the query
+    /// already groups by `metric_time__month`.  The compiled SQL must contain an
+    /// ORDER BY clause referencing the canonical column name `metric_time`.
+    #[test]
+    fn test_order_by_granularity_qualified_name_accepted() {
+        let mut store = order_by_store();
+        let spec = SemanticQuerySpec {
+            metrics: vec!["signups".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "month".into(),
+            }],
+            where_filters: vec![],
+            order_by: vec![OrderBySpec {
+                name: "metric_time__month".into(),
+                descending: false,
+            }],
+            limit: Some(5),
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).expect(
+            "order-by metric_time__month should be valid when group-by is metric_time__month",
+        );
+
+        // Must use the canonical column name, not the granularity-qualified form.
+        assert!(
+            sql.contains("ORDER BY metric_time ASC"),
+            "SQL must contain ORDER BY metric_time ASC (not metric_time__month):\n{sql}"
+        );
+        assert!(
+            !sql.contains("metric_time__month"),
+            "granularity qualifier must not appear in emitted SQL:\n{sql}"
+        );
+    }
+
+    /// Negative: `--order-by metric_time__day` must still be rejected when the query
+    /// groups by `metric_time__month` — the granularities don't match, so the day
+    /// column does not exist in the output.
+    #[test]
+    fn test_order_by_mismatched_granularity_rejected() {
+        let mut store = order_by_store();
+        let spec = SemanticQuerySpec {
+            metrics: vec!["signups".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "month".into(),
+            }],
+            where_filters: vec![],
+            order_by: vec![OrderBySpec {
+                name: "metric_time__day".into(),
+                descending: false,
+            }],
+            limit: Some(5),
+        };
+
+        let result = compile(&mut store, &spec, Dialect::DuckDB);
+        assert!(
+            result.is_err(),
+            "order-by metric_time__day should be rejected when group-by is metric_time__month"
+        );
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("unknown order-by"),
+            "error should mention 'unknown order-by':\n{err}"
         );
     }
 }
