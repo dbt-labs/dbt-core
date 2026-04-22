@@ -42,8 +42,8 @@ pub mod schemas {
         DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
         DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
         DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
-        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
-        TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
+        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, NodePathKind, Nodes,
+        TestMetadata, TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
         serialize_none_as_empty_string,
     };
 

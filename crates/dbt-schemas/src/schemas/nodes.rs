@@ -6,6 +6,7 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 
 use chrono::Utc;
 use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
+use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
@@ -175,6 +176,36 @@ impl InternalDbtNodeWrapper {
     }
 }
 
+/// The kind of path to resolve for a node.
+///
+/// Each variant corresponds to a well-known location a node can have on disk:
+///
+/// - [`Definition`](Self::Definition) — the original source file.
+/// - [`Compiled`](Self::Compiled) — the compiled SQL under `target/compiled/`.
+/// - [`Executable`](Self::Executable) — the run-ready SQL under `target/run/`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodePathKind {
+    /// The original source file (sql for most nodes, yml for tests & yml-defined snapshots).
+    Definition,
+    /// The compiled SQL path (`target/compiled/…`).
+    Compiled,
+    /// The executable / run SQL path (`target/run/…`).
+    Executable,
+}
+
+/// Most call-sites that surface a node path already know their [`ExecutionPhase`].
+/// This conversion lets them pass the phase directly and get the right path kind
+/// without hard-coding the mapping at every call-site.
+impl From<ExecutionPhase> for NodePathKind {
+    fn from(phase: ExecutionPhase) -> Self {
+        match phase {
+            ExecutionPhase::Analyze => Self::Compiled,
+            ExecutionPhase::Run => Self::Executable,
+            _ => Self::Definition,
+        }
+    }
+}
+
 pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn common(&self) -> &CommonAttributes;
     fn base(&self) -> &NodeBaseAttributes;
@@ -264,20 +295,60 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         0
     }
 
-    /// Returns the relative path from in_dir of the unrendered sql file for the current node.
+    /// Returns the path for the current node corresponding to `path_kind`, relative to `in_dir`.
     ///
-    /// - For most node types this is the path where the node is defined in the project.
-    /// - For snapshots this is the relative path to the generated snapshot file in the target directory
-    /// - For generic tests this is also the path to generated sql file
-    fn get_node_relative_path(&self, in_dir: &Path, out_dir: &Path) -> std::borrow::Cow<'_, Path> {
-        // For snapshots, use path (generated file) for display since it's unique per snapshot
+    /// Callers that have an [`ExecutionPhase`] can convert it via `.into()`.
+    ///
+    /// For models the path changes depending on the requested kind:
+    ///
+    ///   - `Compiled`   - `target/compiled/{path}` (compiled SQL)
+    ///   - `Executable` - `target/run/{name}.sql` (flat — matches write_file() in run_node_context.rs)
+    ///   - `Definition` - original source path
+    ///
+    /// For all other node types the definition path is always returned.
+    fn get_node_path(
+        &self,
+        path_kind: NodePathKind,
+        in_dir: &Path,
+        out_dir: &Path,
+    ) -> std::borrow::Cow<'_, Path> {
+        if path_kind != NodePathKind::Definition && self.resource_type() == NodeType::Model {
+            let out_dir_relative =
+                || pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
+            match path_kind {
+                NodePathKind::Compiled => out_dir_relative()
+                    .join(DBT_COMPILED_DIR_NAME)
+                    .join(&self.common().path)
+                    .into(),
+                NodePathKind::Executable => out_dir_relative()
+                    .join(DBT_RUN_DIR_NAME)
+                    .join(format!("{}.sql", self.common().name))
+                    .into(),
+                NodePathKind::Definition => unreachable!(),
+            }
+        } else {
+            self.get_node_definition_path(in_dir, out_dir)
+        }
+    }
+
+    /// Returns the definition path for the current node, relative to `in_dir`.
+    ///
+    /// This is where the node is defined in the project — independent of execution phase.
+    ///
+    /// - For snapshots this is the relative path to the generated snapshot file in the target directory.
+    /// - For generic tests this is also the path to the generated sql file.
+    fn get_node_definition_path(
+        &self,
+        in_dir: &Path,
+        out_dir: &Path,
+    ) -> std::borrow::Cow<'_, Path> {
+        // For snapshots, use path (generated file) since it's unique per snapshot.
         // For other types, use original_file_path - as of today this field already incorporates
         // the correct path for generic tests.
         // TODO: the original_file_path should be fixed and the logic moved here
         if self.resource_type() == NodeType::Snapshot {
             let out_dir_relative =
                 pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
-
             out_dir_relative.join(&self.common().path).into()
         } else {
             self.common().original_file_path.as_path().into()
@@ -308,12 +379,12 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         };
 
         // This is a quirk of historical reporting. For generic tests we report the yml source with line:col location,
-        // but for all other node types we follow the logic described in `get_node_relative_path`.
+        // but for all other node types we follow the logic described in `get_node_definition_path`.
         // TODO: streamline and ensure the path's reported via events align with what LSP is being sent
         let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
             || {
                 (
-                    self.get_node_relative_path(in_dir, out_dir)
+                    self.get_node_path(NodePathKind::Definition, in_dir, out_dir)
                         .display()
                         .to_string(),
                     None,
@@ -390,12 +461,12 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         };
 
         // This is a quirk of historical reporting. For generic tests we report the yml source with line:col location,
-        // but for all other node types we follow the logic described in `get_node_relative_path`.
+        // but for all other node types we follow the logic described in `get_node_definition_path`.
         // TODO: streamline and ensure the path's reported via events align with what LSP is being sent
         let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
             || {
                 (
-                    self.get_node_relative_path(in_dir, out_dir)
+                    self.get_node_path(NodePathKind::Definition, in_dir, out_dir)
                         .display()
                         .to_string(),
                     None,
