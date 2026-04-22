@@ -1,7 +1,7 @@
 #![allow(unused_qualifications)]
 
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
-use crate::schemas::serde::{QueryTag, StringOrInteger, StringOrMap};
+use crate::schemas::serde::{DuckDbExtension, QueryTag, StringOrInteger, StringOrMap};
 
 use dbt_adapter_core::AdapterType;
 use dbt_yaml::DbtSchema;
@@ -928,10 +928,10 @@ pub struct DuckDbConfig {
     /// Schema name (defaults to "main")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
-    /// Extensions to load (e.g., ["httpfs", "parquet"])
+    /// Extensions to load (e.g., ["httpfs", "parquet"] or [{name: "duckpgq", repo: "community"}])
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub extensions: Option<Vec<String>>,
+    pub extensions: Option<Vec<DuckDbExtension>>,
     /// DuckDB configuration settings (e.g., {"memory_limit": "4GB"})
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
@@ -1822,5 +1822,67 @@ mod tests {
             panic!("Expected DbConfig::DuckDB");
         };
         assert_eq!(duckdb_config.is_ducklake, Some(true));
+    }
+
+    #[test]
+    fn test_duckdb_extensions_as_strings() {
+        // Test that extensions can be simple strings (existing behavior)
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: db.duckdb\n\
+             extensions:\n\
+               - httpfs\n\
+               - parquet",
+        )
+        .unwrap();
+
+        let DbConfig::DuckDB(duckdb_config) = config else {
+            panic!("Expected DbConfig::DuckDB");
+        };
+        assert!(duckdb_config.extensions.is_some());
+        let extensions = duckdb_config.extensions.unwrap();
+        assert_eq!(extensions.len(), 2);
+    }
+
+    #[test]
+    fn test_duckdb_extensions_as_objects() {
+        // Test that extensions can be objects with name and repo (issue #1530)
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: db.duckdb\n\
+             extensions:\n\
+               - name: duckpgq\n\
+                 repo: community",
+        )
+        .unwrap();
+
+        let DbConfig::DuckDB(duckdb_config) = config else {
+            panic!("Expected DbConfig::DuckDB");
+        };
+        assert!(duckdb_config.extensions.is_some());
+        let extensions = duckdb_config.extensions.unwrap();
+        assert_eq!(extensions.len(), 1);
+    }
+
+    #[test]
+    fn test_duckdb_extensions_mixed() {
+        // Test that extensions can mix strings and objects
+        let yaml_str = r#"
+type: duckdb
+path: db.duckdb
+extensions:
+  - httpfs
+  - name: duckpgq
+    repo: community
+  - parquet
+"#;
+        let config: DbConfig = dbt_yaml::from_str(yaml_str).unwrap();
+
+        let DbConfig::DuckDB(duckdb_config) = config else {
+            panic!("Expected DbConfig::DuckDB");
+        };
+        assert!(duckdb_config.extensions.is_some());
+        let extensions = duckdb_config.extensions.unwrap();
+        assert_eq!(extensions.len(), 3);
     }
 }

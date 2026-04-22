@@ -449,6 +449,23 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
     }
 }
 
+/// DuckDB extension definition — can be a simple string (name) or an object with name and optional repo
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, PartialEq, DbtSchema)]
+#[serde(untagged)]
+pub enum DuckDbExtension {
+    String(String),
+    Object(DuckDbExtensionObject),
+}
+
+/// DuckDB extension object with name and optional repo metadata
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, DbtSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct DuckDbExtensionObject {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
+}
+
 /// Wrapper that serializes `StringOrArrayOfStrings` as an array without allocation.
 struct AsArray<'a>(&'a StringOrArrayOfStrings);
 
