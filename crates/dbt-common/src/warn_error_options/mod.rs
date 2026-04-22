@@ -15,18 +15,24 @@ pub use legacy::{
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsRefStr,
 )]
-pub enum WarnErrorGroupValue {
+pub enum LegacyWarnErrorGroupValue {
     #[serde(rename = "all", alias = "*")]
     All,
     #[serde(rename = "Deprecations")]
     Deprecations,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum FusionWarnErrorGroupValue {
+    StaticAnalysis,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WarnErrorOptionValue {
     FusionCode(u16),
-    LegacyGroup(WarnErrorGroupValue),
+    LegacyGroup(LegacyWarnErrorGroupValue),
+    FusionGroup(FusionWarnErrorGroupValue),
     SupportedLegacy(SupportedLegacyWarnError),
     NotYetSupportedLegacy(NotYetSupportedLegacyWarnError),
     WillNotSupportLegacy(WillNotSupportLegacyWarnError),
@@ -35,7 +41,7 @@ pub enum WarnErrorOptionValue {
 
 impl WarnErrorOptionValue {
     pub fn all() -> Self {
-        Self::LegacyGroup(WarnErrorGroupValue::All)
+        Self::LegacyGroup(LegacyWarnErrorGroupValue::All)
     }
 }
 
@@ -118,7 +124,8 @@ impl WarnErrorOptions {
                     }
                 },
                 // List supported groups here
-                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => {}
+                WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => {}
+                WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis) => {}
                 WarnErrorOptionValue::LegacyGroup(group) => {
                     not_yet_supported.insert(group.as_ref());
                 }
@@ -409,7 +416,13 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
     if raw.eq_ignore_ascii_case("Deprecations") {
         return Some(WarnErrorOptionValue::LegacyGroup(
-            WarnErrorGroupValue::Deprecations,
+            LegacyWarnErrorGroupValue::Deprecations,
+        ));
+    }
+
+    if raw == "StaticAnalysis" {
+        return Some(WarnErrorOptionValue::FusionGroup(
+            FusionWarnErrorGroupValue::StaticAnalysis,
         ));
     }
 
@@ -438,14 +451,19 @@ impl WarnErrorOptions {
         enum MatchType {
             NotMatched,
             All, // least specific match, matches all error codes
-            Deprecation,
+            Group,
             NamedEvent,
         }
 
         let matches = |value: &WarnErrorOptionValue| match value {
-            WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => MatchType::All,
-            WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::Deprecations) => {
-                MatchType::Deprecation
+            WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => MatchType::All,
+            WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::Deprecations) => {
+                MatchType::Group
+            }
+            WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis)
+                if error_code.is_frontend() =>
+            {
+                MatchType::Group
             }
             WarnErrorOptionValue::FusionCode(code) if *code == error_code as u16 => {
                 MatchType::NamedEvent
@@ -505,7 +523,7 @@ impl WarnErrorOptions {
         let specificity = |list: &[WarnErrorOptionValue]| {
             list.iter().fold(0u8, |best, v| match v {
                 WarnErrorOptionValue::SupportedLegacy(c) if *c == legacy => 2,
-                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All) => best.max(1),
+                WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => best.max(1),
                 _ => best,
             })
         };
@@ -592,7 +610,7 @@ mod tests {
                 WarnErrorOptionValue::FusionCode(ErrorCode::Generic as u16),
                 WarnErrorOptionValue::FusionCode(ErrorCode::NoNodesSelected as u16),
                 WarnErrorOptionValue::FusionCode(ErrorCode::IoError as u16),
-                WarnErrorOptionValue::LegacyGroup(WarnErrorGroupValue::All),
+                WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All),
             ],
             warn: vec![
                 // This one in silence, so silence should win
