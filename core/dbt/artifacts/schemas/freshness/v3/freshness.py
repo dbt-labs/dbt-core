@@ -92,7 +92,7 @@ class FreshnessErrorEnum(StrEnum):
 @dataclass
 class SourceFreshnessRuntimeError(dbtClassMixin):
     unique_id: str
-    error: Optional[Union[str, int]]
+    error: Optional[Union[int, str]]
     status: FreshnessErrorEnum
 
 
