@@ -1114,8 +1114,13 @@ impl TuiLayer {
             self.write_suspended(|| {
                 let mut stdout = io::stdout().lock();
 
-                // Emit header once before first list item
-                if !self.list_header_emitted.swap(true, Ordering::Relaxed) {
+                // Only emit the decorative header when show_options is non-empty (i.e. not quiet).
+                // In quiet mode show_options is cleared, so the header is suppressed while list
+                // item content (the result payload) continues to be printed — matching dbt-core's
+                // PrintEvent behaviour where only decorative chrome is stripped.
+                if !self.show_options.is_empty()
+                    && !self.list_header_emitted.swap(true, Ordering::Relaxed)
+                {
                     let header =
                         format_delimiter(SELECTED_NODES_TITLE, self.max_term_line_width, true);
                     stdout
@@ -1123,7 +1128,7 @@ impl TuiLayer {
                         .expect("failed to write header to stdout");
                 }
 
-                // Print list item content
+                // Print list item content (always — result payload survives quiet)
                 stdout
                     .write_all(format!("{}\n", list_item.content).as_bytes())
                     .expect("failed to write to stdout");
@@ -1145,12 +1150,19 @@ impl TuiLayer {
         self.write_suspended(|| {
             let mut stdout = io::stdout().lock();
 
-            // Apply blue coloring to title
-            let colored_title = BLUE.apply_to(&show_result.title);
-
-            stdout
-                .write_all(format!("\n{}\n{}\n", colored_title, show_result.content).as_bytes())
-                .expect("failed to write show result to stdout");
+            if self.show_options.is_empty() {
+                // Quiet mode: suppress decorative title, emit raw content only.
+                // Mirrors dbt-core's ShowNode quiet=True behaviour where the
+                // "Previewing node 'X':" header is dropped but the data is kept.
+                stdout
+                    .write_all(format!("{}\n", show_result.content).as_bytes())
+                    .expect("failed to write show result to stdout");
+            } else {
+                let colored_title = BLUE.apply_to(&show_result.title);
+                stdout
+                    .write_all(format!("\n{}\n{}\n", colored_title, show_result.content).as_bytes())
+                    .expect("failed to write show result to stdout");
+            }
         });
     }
 
