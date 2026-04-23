@@ -5,6 +5,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    DimensionType,
+    PeriodAggregation,
+)
 from typing_extensions import override
 
 # trigger the PathEncoder
@@ -47,11 +52,6 @@ from dbt_common.dataclass_schema import (
     dbtClassMixin,
 )
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    ConversionCalculationType,
-    DimensionType,
-    PeriodAggregation,
-)
 
 
 @dataclass

@@ -2,6 +2,22 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
+from metricflow_semantic_interfaces.references import (
+    DimensionReference,
+    EntityReference,
+    LinkableElementReference,
+    MeasureReference,
+    SemanticModelReference,
+    TimeDimensionReference,
+)
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources import SourceFileMetadata
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
@@ -12,28 +28,13 @@ from dbt.artifacts.resources.v1.semantic_layer_components import (
 )
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.references import (
-    DimensionReference,
-    EntityReference,
-    LinkableElementReference,
-    MeasureReference,
-    SemanticModelReference,
-    TimeDimensionReference,
-)
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    TimeGranularity,
-)
 
 """
 The classes in this file are dataclasses which are used to construct the Semantic
 Model node in dbt-core. Additionally, these classes need to at a minimum support
 what is specified in their protocol definitions in dbt-semantic-interfaces.
 Their protocol definitions can be found here:
-https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/semantic_model.py
+https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/metricflow_semantic_interfaces/protocols/semantic_model.py
 """
 
 
@@ -60,7 +61,7 @@ class NodeRelation(dbtClassMixin):
 
 # ====================================
 # Dimension objects
-# Dimension protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/dimension.py
+# Dimension protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/metricflow_semantic_interfaces/protocols/dimension.py
 # ====================================
 
 
@@ -109,7 +110,7 @@ class Dimension(dbtClassMixin):
 
 # ====================================
 # Entity objects
-# Entity protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/entity.py
+# Entity protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/metricflow_semantic_interfaces/protocols/entity.py
 # ====================================
 
 
@@ -134,7 +135,7 @@ class Entity(dbtClassMixin):
 
 # ====================================
 # Measure object
-# Measure protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/measure.py
+# Measure protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/metricflow_semantic_interfaces/protocols/measure.py
 # ====================================
 
 

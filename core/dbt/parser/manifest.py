@@ -12,6 +12,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Typ
 import jinja2
 import msgpack
 from jinja2.nodes import Call, Const
+from metricflow_semantic_interfaces.enum_extension import assert_values_exhausted
+from metricflow_semantic_interfaces.type_enums import MetricType
 
 import dbt.deprecations
 import dbt.exceptions
@@ -138,8 +140,6 @@ from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
 from dbt_common.ui import error_tag
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
 
 PERF_INFO_FILE_NAME = "perf_info.json"
 

@@ -3,6 +3,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
 from dbt.artifacts.resources.types import NodeType, TimePeriod
 from dbt.artifacts.resources.v1.config import NodeConfig
@@ -11,11 +17,6 @@ from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
-from dbt_semantic_interfaces.type_enums import (
-    DimensionType,
-    EntityType,
-    TimeGranularity,
-)
 
 NodeVersion = Union[str, float]
 
