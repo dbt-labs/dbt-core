@@ -123,12 +123,10 @@ impl WarnErrorOptions {
                         invalid_fusion_codes.insert(*code);
                     }
                 },
-                // List supported groups here
-                WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => {}
+                WarnErrorOptionValue::LegacyGroup(
+                    LegacyWarnErrorGroupValue::All | LegacyWarnErrorGroupValue::Deprecations,
+                ) => {}
                 WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis) => {}
-                WarnErrorOptionValue::LegacyGroup(group) => {
-                    not_yet_supported.insert(group.as_ref());
-                }
                 WarnErrorOptionValue::SupportedLegacy(_) => {}
                 WarnErrorOptionValue::NotYetSupportedLegacy(legacy) => {
                     not_yet_supported.insert(legacy.as_ref());
@@ -457,7 +455,12 @@ impl WarnErrorOptions {
 
         let matches = |value: &WarnErrorOptionValue| match value {
             WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => MatchType::All,
-            WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::Deprecations) => {
+            WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::Deprecations)
+                if matches!(
+                    error_code,
+                    ErrorCode::PackageRedirectDeprecation | ErrorCode::WEOIncludeExcludeDeprecation
+                ) =>
+            {
                 MatchType::Group
             }
             WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis)
@@ -603,8 +606,6 @@ mod tests {
 
     #[test]
     fn error_decision_honors_precedence() {
-        // TODO: we can't test deprecations group precedence yet as we have no mapping of our
-        // error codes to dbt-core deprecations.
         let options = WarnErrorOptions {
             error: vec![
                 WarnErrorOptionValue::FusionCode(ErrorCode::Generic as u16),
@@ -641,6 +642,25 @@ mod tests {
             options.decision_for_error_code(ErrorCode::IoError),
             WarnErrorDecision::Retain,
             "Specific code match in warn should take precedence over all matches in error"
+        );
+
+        let deprecations_options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::LegacyGroup(
+                LegacyWarnErrorGroupValue::All,
+            )],
+            warn: vec![WarnErrorOptionValue::LegacyGroup(
+                LegacyWarnErrorGroupValue::Deprecations,
+            )],
+            silence: vec![WarnErrorOptionValue::FusionCode(
+                ErrorCode::WEOIncludeExcludeDeprecation as u16,
+            )],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            deprecations_options.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
+            WarnErrorDecision::Silence,
+            "Named event silence should beat Deprecations warn and All error"
         );
     }
 
