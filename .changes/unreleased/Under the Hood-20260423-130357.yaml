@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Drop usage of deprecated `warn_or_error` handler method
+time: 2026-04-23T13:03:57.945255-05:00
+custom:
+  Author: QMalcolm
+  Issue: "8133"
