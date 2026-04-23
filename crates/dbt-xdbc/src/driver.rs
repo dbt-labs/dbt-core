@@ -75,6 +75,8 @@ pub enum Backend {
     Athena,
     /// ClickHouse driver implementation (ADBC).
     ClickHouse,
+    /// Exasol driver implementation (ADBC).
+    Exasol,
     /// Databricks driver implementation (ODBC).
     DatabricksODBC,
     /// Redshift driver implementation (ODBC).
@@ -111,6 +113,7 @@ impl fmt::Display for Backend {
             Backend::SQLServer => write!(f, "SQL Server"),
             Backend::Athena => write!(f, "Athena"),
             Backend::ClickHouse => write!(f, "ClickHouse"),
+            Backend::Exasol => write!(f, "Exasol"),
             Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
         }
     }
@@ -131,6 +134,7 @@ impl Backend {
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Athena => Some("adbc_driver_athena"),
             Backend::ClickHouse => Some("adbc_clickhouse"),
+            Backend::Exasol => Some("adbc_driver_exasol"),
             Backend::Generic { library_name, .. } => Some(library_name),
         }
     }
@@ -160,6 +164,7 @@ impl Backend {
             | Backend::SQLServer
             | Backend::Athena
             | Backend::ClickHouse
+            | Backend::Exasol
             | Backend::Generic { .. } => FFIProtocol::Adbc,
             Backend::DatabricksODBC | Backend::RedshiftODBC => FFIProtocol::Odbc,
         }
@@ -434,7 +439,7 @@ impl AdbcDriver {
                 ));
             }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
-            (CdnCache | SystemThenCdnCache | Remote, Athena | ClickHouse) => System(None),
+            (CdnCache | SystemThenCdnCache | Remote, Athena | ClickHouse | Exasol) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
             (CdnCache | SystemThenCdnCache | Remote, Generic { library_name, .. }) => {
                 System(Some(library_name.to_string()))
@@ -670,6 +675,7 @@ mod tests {
         // try_load_with_builder(Backend::Spark, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::ClickHouse, AdbcVersion::V100)?;
+        // try_load_with_builder(Backend::Exasol, AdbcVersion::V100)?;
         Ok(())
     }
 
@@ -685,6 +691,7 @@ mod tests {
         // try_load_with_builder(Backend::Spark, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::ClickHouse, AdbcVersion::V110)?;
+        // try_load_with_builder(Backend::Exasol, AdbcVersion::V110)?;
         Ok(())
     }
 
@@ -701,6 +708,7 @@ mod tests {
             // Backend::Spark,
             // Backend::SQLServer,
             // Backend::ClickHouse,
+            // Backend::Exasol,
         ]
         .iter()
         .copied()

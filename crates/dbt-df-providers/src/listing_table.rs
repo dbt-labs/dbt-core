@@ -178,6 +178,7 @@ pub fn infer_seed_column_name_strategy(
             | AdapterType::Sidecar,
         ) => InferColumnNameStrategy::Verbatim,
         (false, AdapterType::ClickHouse) => todo!("ClickHouse"),
+        (false, AdapterType::Exasol) => todo!("Exasol"),
         (false, AdapterType::Starburst) => todo!("Starburst"),
         (false, AdapterType::Athena) => todo!("Athena"),
         (false, AdapterType::Trino) => todo!("Trino"),
