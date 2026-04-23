@@ -209,7 +209,6 @@ pub enum NotYetSupportedLegacyWarnError {
     Note,
     OpenCommand,
     PackageInstallPathDeprecation,
-    PackageNodeDependsOnRootProjectNode,
     ParseInlineNodeError,
     ParsePerfInfoPath,
     ParsedFileLoadFailed,
@@ -387,6 +386,10 @@ pub enum WillNotSupportLegacyWarnError {
     UnusedTables,
     #[strum(message = "Fusion reports this case under NoNodeForYamlKey instead.")]
     WrongResourceSchemaFile,
+    #[strum(
+        message = "Fusion only supports the newer behavior-change flag `require_ref_searches_node_package_before_root`, where this case is a hard error."
+    )]
+    PackageNodeDependsOnRootProjectNode,
 }
 
 #[cfg(test)]
