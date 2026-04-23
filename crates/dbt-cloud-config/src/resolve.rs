@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn dbt_project_yml_overrides_cloud_yml_host() {
+    fn dbt_project_file_overrides_cloud_yml_host() {
         let yml = cloud_yml("456", "cloud.getdbt.com", "secret");
         let pc = project_cloud(Some("456"), Some("proj-override.dbt.com"), None);
         let r = resolve_cloud_config_with_env_reader(Some(&yml), Some(&pc), env(&[])).unwrap();
