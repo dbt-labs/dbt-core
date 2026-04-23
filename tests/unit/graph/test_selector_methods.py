@@ -824,20 +824,20 @@ def test_select_state_changed_seed_checksum_path_to_path(manifest, previous_stat
         manifest, replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path))
     )
     method = statemethod(manifest, previous_state)
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "modified")
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedExceedsLimitSamePath"
         msg = event.message()
         assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "old")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "unmodified")
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
@@ -851,20 +851,20 @@ def test_select_state_changed_seed_checksum_sha_to_path(manifest, previous_state
         manifest, replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path))
     )
     method = statemethod(manifest, previous_state)
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "modified") == {"seed"}
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
         assert type(event).__name__ == "SeedIncreased"
         msg = event.message()
         assert msg.startswith(warning_tag("Found a seed (pkg.seed) >1MB in size"))
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "old")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "unmodified")
         warn_or_error_patch.assert_called_once()
         event = warn_or_error_patch.call_args[0][0]
@@ -879,16 +879,16 @@ def test_select_state_changed_seed_checksum_path_to_sha(manifest, previous_state
         replace(seed, checksum=FileHash(name="path", checksum=seed.original_file_path)),
     )
     method = statemethod(manifest, previous_state)
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert search_manifest_using_method(manifest, method, "modified") == {"seed"}
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert not search_manifest_using_method(manifest, method, "new")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert "seed" not in search_manifest_using_method(manifest, method, "unmodified")
         warn_or_error_patch.assert_not_called()
-    with mock.patch("dbt.contracts.graph.nodes.warn_or_error") as warn_or_error_patch:
+    with mock.patch("dbt.contracts.graph.nodes.fire_or_defer_event") as warn_or_error_patch:
         assert "seed" in search_manifest_using_method(manifest, method, "old")
         warn_or_error_patch.assert_not_called()
 
