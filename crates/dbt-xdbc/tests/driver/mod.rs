@@ -196,6 +196,30 @@ mod tests {
                     .with_password(password);
                 Ok(builder)
             }
+            Backend::Exasol => {
+                let mut builder = database::Builder::new(backend);
+                let uri = env::var("ADBC_EXASOL_URI")
+                    .unwrap_or_else(|_| "exasol://localhost:8563".to_owned());
+                let username =
+                    env::var("ADBC_EXASOL_USERNAME").unwrap_or_else(|_| "sys".to_owned());
+                let password =
+                    env::var("ADBC_EXASOL_PASSWORD").unwrap_or_else(|_| "exasol".to_owned());
+                let validate_cert =
+                    env::var("ADBC_EXASOL_VALIDATE_CERT").unwrap_or_else(|_| "0".to_owned());
+                // Append certificate validation param if not already in URI
+                let uri = if uri.contains("validateservercertificate") {
+                    uri
+                } else if uri.contains('?') {
+                    format!("{uri}&validateservercertificate={validate_cert}")
+                } else {
+                    format!("{uri}?validateservercertificate={validate_cert}")
+                };
+                builder
+                    .with_parse_uri(uri)?
+                    .with_username(username)
+                    .with_password(password);
+                Ok(builder)
+            }
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {
@@ -319,6 +343,13 @@ mod tests {
                 }
                 Backend::ClickHouse => {
                     assert_eq!(batch.column(0).as_primitive::<UInt16Type>().value(0), 42);
+                }
+                Backend::Exasol => {
+                    // Exasol returns DECIMAL for integer arithmetic
+                    assert_eq!(
+                        batch.column(0).as_primitive::<Decimal128Type>().value(0),
+                        42
+                    );
                 }
                 _ => {
                     // BigQuery and others use Int64. We change this function as we expand the set
@@ -1166,5 +1197,11 @@ mod tests {
     #[test]
     fn statement_execute_clickhouse() -> Result<()> {
         execute_statement(Backend::ClickHouse)
+    }
+
+    #[test_with::env(ADBC_EXASOL_URI)]
+    #[test]
+    fn statement_execute_exasol() -> Result<()> {
+        execute_statement(Backend::Exasol)
     }
 }

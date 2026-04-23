@@ -98,6 +98,7 @@ pub const DUCKDB_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.13";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0+dbt0.21.1";
 pub const SPARK_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.1";
 pub const MSSQLSERVER_DRIVER_VERSION: &str = "1.3.1";
+pub const EXASOL_DRIVER_VERSION: &str = "0.9.0";
 
 pub use install::pre_install_all_drivers;
 pub use install::pre_install_driver;

@@ -32,6 +32,8 @@ pub enum AdapterType {
     Sidecar,
     /// ClickHouse
     ClickHouse,
+    /// Exasol
+    Exasol,
     /// Athena
     Athena,
     /// Starburst
@@ -60,6 +62,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Athena | Trino | Starburst => '"',
         Datafusion => '"',
         ClickHouse => '"',
+        Exasol => '"',
         Sidecar => '"',
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
