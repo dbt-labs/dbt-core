@@ -1341,6 +1341,14 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         absorbed: list[FunctionOverload] = []
         for overload in overloads:
             overload_name = overload.defined_in
+
+            # Prevent self-reference
+            if overload_name == root_node.name:
+                raise ParsingError(
+                    f"Function '{root_node.name}' cannot list itself in overloads "
+                    f"(defined_in: '{overload_name}')."
+                )
+
             # Find the overload node in the manifest by name
             overload_unique_id = f"function.{root_node.package_name}.{overload_name}"
             overload_node = self.manifest.functions.get(overload_unique_id)
