@@ -12,13 +12,16 @@ use dbt_telemetry::{Invocation, TelemetryOutputFlags};
 use opentelemetry::Value as OtelValue;
 use opentelemetry_sdk as sdk;
 
+type SharedSpans = Arc<Mutex<Vec<sdk::trace::SpanData>>>;
+type SharedLogs = Arc<Mutex<Vec<sdk::logs::SdkLogRecord>>>;
+
 #[derive(Debug)]
 struct TestSpanExporter {
-    pub spans: Arc<Mutex<Vec<sdk::trace::SpanData>>>,
+    pub spans: SharedSpans,
 }
 
 impl TestSpanExporter {
-    fn new() -> (Self, Arc<Mutex<Vec<sdk::trace::SpanData>>>) {
+    fn new() -> (Self, SharedSpans) {
         let shared = Arc::new(Mutex::new(Vec::new()));
         (
             Self {
@@ -30,26 +33,20 @@ impl TestSpanExporter {
 }
 
 impl sdk::trace::SpanExporter for TestSpanExporter {
-    fn export(
-        &self,
-        batch: Vec<sdk::trace::SpanData>,
-    ) -> impl Future<Output = sdk::error::OTelSdkResult> + Send {
-        let spans = self.spans.clone();
-        async move {
-            let mut guard = spans.lock().unwrap();
-            guard.extend(batch);
-            Ok(())
-        }
+    async fn export(&self, batch: Vec<sdk::trace::SpanData>) -> sdk::error::OTelSdkResult {
+        let mut guard = self.spans.lock().unwrap();
+        guard.extend(batch);
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 struct TestLogExporter {
-    pub logs: Arc<Mutex<Vec<sdk::logs::SdkLogRecord>>>,
+    pub logs: SharedLogs,
 }
 
 impl TestLogExporter {
-    fn new() -> (Self, Arc<Mutex<Vec<sdk::logs::SdkLogRecord>>>) {
+    fn new() -> (Self, SharedLogs) {
         let shared = Arc::new(Mutex::new(Vec::new()));
         (
             Self {
