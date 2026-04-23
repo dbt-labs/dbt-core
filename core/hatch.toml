@@ -174,7 +174,7 @@ dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
     "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@ash2shukla/fix/add-top-evel-fire-or-defer",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
