@@ -20,7 +20,7 @@ from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.utils import JSONEncoder
 from dbt_common.events.contextvars import task_contextvars
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.events.types import PrintEvent
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
@@ -78,7 +78,7 @@ class ListTask(GraphRunnableTask):
         spec = self.get_selection_spec()
         unique_ids = sorted(selector.get_selected(spec))
         if not unique_ids:
-            warn_or_error(NoNodesSelected())
+            fire_event(NoNodesSelected(), force_warn_or_error_handling=True)
             return
         if self.manifest is None:
             raise DbtInternalError("manifest is None in _iterate_selected_nodes")

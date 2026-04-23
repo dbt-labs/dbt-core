@@ -110,7 +110,7 @@ from dbt_common.contracts.constraints import (
 )
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.contextvars import set_log_contextvars
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import fire_event
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -718,13 +718,14 @@ class ModelNode(ModelResource, CompiledNode):
             breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
 
         if self.version is None:
-            warn_or_error(
+            fire_event(
                 UnversionedBreakingChange(
                     breaking_changes=[breaking_change],
                     model_name=self.name,
                     model_file_path=self.original_file_path,
                 ),
                 node=self,
+                force_warn_or_error_handling=True,
             )
             return False
         else:
@@ -935,7 +936,7 @@ class ModelNode(ModelResource, CompiledNode):
                 )
 
             if self.version is None:
-                warn_or_error(
+                fire_event(
                     UnversionedBreakingChange(
                         contract_enforced_disabled=contract_enforced_disabled,
                         columns_removed=columns_removed,
@@ -947,6 +948,7 @@ class ModelNode(ModelResource, CompiledNode):
                         model_file_path=self.original_file_path,
                     ),
                     node=self,
+                    force_warn_or_error_handling=True,
                 )
             else:
                 raise (
@@ -988,27 +990,32 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         if self.checksum.name == "path":
             msg: str
             if other.checksum.name != "path":
-                warn_or_error(
-                    SeedIncreased(package_name=self.package_name, name=self.name), node=self
+                fire_event(
+                    SeedIncreased(package_name=self.package_name, name=self.name),
+                    node=self,
+                    force_warn_or_error_handling=True,
                 )
             elif result:
-                warn_or_error(
+                fire_event(
                     SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
                     node=self,
+                    force_warn_or_error_handling=True,
                 )
             elif not result:
-                warn_or_error(
+                fire_event(
                     SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
                     node=self,
+                    force_warn_or_error_handling=True,
                 )
             else:
-                warn_or_error(
+                fire_event(
                     SeedExceedsLimitChecksumChanged(
                         package_name=self.package_name,
                         name=self.name,
                         checksum_name=other.checksum.name,
                     ),
                     node=self,
+                    force_warn_or_error_handling=True,
                 )
 
         return result

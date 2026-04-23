@@ -71,7 +71,7 @@ from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
 
@@ -632,7 +632,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                warn_or_error(NothingToDo())
+                fire_event(NothingToDo(), force_warn_or_error_handling=True)
                 result = self.get_result(
                     results=[],
                     generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
