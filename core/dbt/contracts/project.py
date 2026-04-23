@@ -373,6 +373,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     support_custom_ref_kwargs: bool = False
     require_corrected_analysis_fqns: bool = False
     require_source_and_semantic_model_names_without_spaces: bool = False
+    use_catalogs_v2: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -396,6 +397,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
             "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
             "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
+            "use_catalogs_v2": self.use_catalogs_v2,
         }
 
 
