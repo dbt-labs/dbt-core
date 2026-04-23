@@ -1023,6 +1023,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -1056,6 +1070,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -1369,6 +1399,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -1669,6 +1715,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "store_failures": {
           "anyOf": [
             {
@@ -1723,6 +1781,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -1761,6 +1825,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -2834,6 +2912,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -2867,6 +2959,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -3144,6 +3252,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "max_staleness": {
@@ -3452,6 +3576,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -3475,6 +3611,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -3539,6 +3681,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -4577,6 +4733,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -4664,6 +4834,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -5060,6 +5246,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -5148,6 +5350,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"
@@ -5464,6 +5676,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "submission_method": {
           "type": [
             "string",
@@ -5511,6 +5735,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -5581,6 +5811,20 @@
           "anyOf": [
             {
               "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
               "type": [
                 "boolean",
                 "null"
@@ -5973,6 +6217,13 @@
         "continue",
         "fail",
         "unknown"
+      ]
+    },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
       ]
     },
     "OnSchemaChange": {
@@ -6575,6 +6826,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -6617,6 +6882,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -6929,6 +7210,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -7261,6 +7558,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -7285,6 +7594,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -7328,6 +7643,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -7590,6 +7919,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "check_cols": {
           "anyOf": [
             {
@@ -7633,6 +7976,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -7971,6 +8330,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -8313,6 +8688,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "strategy": {
           "type": [
             "string",
@@ -8360,6 +8747,12 @@
           ]
         },
         "target_database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -8436,6 +8829,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -8701,6 +9108,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -8734,6 +9155,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -9009,6 +9446,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "max_staleness": {
@@ -9300,6 +9753,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sync": {
           "description": "Schema synchronization configuration",
           "anyOf": [
@@ -9335,6 +9800,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -9378,6 +9849,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -9907,6 +10392,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -9940,6 +10439,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -10186,6 +10701,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "max_staleness": {
@@ -10456,6 +10987,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -10479,6 +11022,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -10522,6 +11071,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
