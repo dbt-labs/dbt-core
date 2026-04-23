@@ -1,7 +1,7 @@
 import json
 from hashlib import sha1
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -11,11 +11,7 @@ import dbt.utils
 from dbt.config import Project
 from dbt.config.project import load_yml_dict, package_config_from_data
 from dbt.config.renderer import PackageRenderer
-from dbt.constants import (
-    DEPENDENCIES_FILE_NAME,
-    PACKAGE_LOCK_FILE_NAME,
-    PACKAGE_LOCK_HASH_KEY,
-)
+from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
 from dbt.contracts.project import PackageSpec
 from dbt.deps.base import downloads_directory
 from dbt.deps.registry import RegistryPinnedPackage
