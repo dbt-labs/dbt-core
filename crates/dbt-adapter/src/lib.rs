@@ -24,7 +24,6 @@ pub(crate) mod python;
 pub mod query_cache;
 pub mod query_comment;
 pub mod query_ctx;
-pub mod record_and_replay;
 pub mod relation;
 pub mod render_constraint;
 pub mod response;

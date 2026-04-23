@@ -39,6 +39,4 @@ impl Connection for NoopConnection {
             adbc_core::error::Status::NotImplemented,
         ))
     }
-
-    fn update_node_id(&mut self, _node_id: Option<String>) {}
 }

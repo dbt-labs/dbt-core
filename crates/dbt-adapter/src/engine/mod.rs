@@ -23,6 +23,9 @@ pub use xdbc::XdbcEngine;
 mod noop_connection;
 pub use noop_connection::NoopConnection;
 
+mod record_replay;
+pub use record_replay::RecordReplayEngine;
+
 mod sidecar;
 pub use sidecar::SidecarEngine;
 

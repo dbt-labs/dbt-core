@@ -25,6 +25,7 @@ dbt-sql-utils = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
+xdbc-record-replay = { workspace = true }
 
 arrow = { workspace = true }
 arrow-array = { workspace = true }
@@ -48,7 +49,6 @@ once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
-rusqlite = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -8,7 +8,6 @@ use tracy_client::span;
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -128,6 +127,7 @@ pub fn recycle_connection(node_id: Option<&String>) -> Option<Box<dyn Connection
 }
 
 /// Clears the global connection recycling pool.
+#[allow(dead_code)]
 pub(crate) fn drain_recycling_pool() {
     while RECYCLING_POOL.recycle().is_some() {}
 }
@@ -150,7 +150,7 @@ pub(crate) fn borrow_tlocal_connection<'a>(
         engine.adapter_type(),
         state,
         node_id,
-        engine.recordings_dir(),
+        engine.generation(),
         |state, node_id| engine.new_connection(state, node_id),
     )
 }
@@ -159,7 +159,7 @@ pub(crate) fn borrow_tlocal_connection_impl<'a>(
     adapter_type: AdapterType,
     state: Option<&State>,
     node_id: Option<String>,
-    recordings_dir: Option<&Path>,
+    engine_generation: u64,
     new_connection_fn: impl Fn(Option<&State>, Option<String>) -> AdapterResult<Box<dyn Connection>>,
 ) -> AdapterResult<ConnectionGuard<'a>> {
     let conn = match CONNECTION.with(|c| c.take()) {
@@ -172,10 +172,10 @@ pub(crate) fn borrow_tlocal_connection_impl<'a>(
             }
         }
         Some(mut c) => {
-            // Discard cached connections whose recordings path doesn't match
-            // the current engine. This prevents stale record/replay connections
-            // from writing to the wrong directory across sequential runs.
-            if c.recordings_path() != recordings_dir {
+            // Discard cached connections whose generation doesn't match the
+            // current engine. This prevents stale connections from being
+            // reused across sequential runs with different configurations.
+            if c.generation() != engine_generation {
                 new_connection_fn(state, node_id)?
             } else {
                 c.update_node_id(node_id);
@@ -708,7 +708,7 @@ mod tests {
                 AdapterType::Snowflake,
                 None,
                 None,
-                None,
+                0,
                 new_connection_fn,
             );
             assert_eq!(new_connection_calls.load(Ordering::Relaxed), 1);
@@ -740,7 +740,7 @@ mod tests {
                 AdapterType::Snowflake,
                 None,
                 None,
-                None,
+                0,
                 new_connection_fn,
             );
             assert_eq!(

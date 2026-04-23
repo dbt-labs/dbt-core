@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -134,9 +133,14 @@ pub trait AdapterEngine: Send + Sync {
         false
     }
 
-    /// Returns the recordings directory for record/replay engines.
-    fn recordings_dir(&self) -> Option<&Path> {
-        None
+    /// Returns a generation counter identifying this engine instance.
+    ///
+    /// The connection pool uses this to detect stale connections when the
+    /// engine changes between sequential runs (e.g. different recording
+    /// directories). Override this in engines that create stateful
+    /// connections that become invalid across configuration changes.
+    fn generation(&self) -> u64 {
+        0
     }
 
     /// Get the physical execution backend for sidecar engines.

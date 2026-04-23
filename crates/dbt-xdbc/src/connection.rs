@@ -4,7 +4,6 @@
 
 use core::fmt;
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::driver_manager::ManagedConnection as ManagedAdbcConnection;
@@ -43,8 +42,21 @@ pub trait Connection: Send {
     /// Allocate and initialize a new statement.
     fn new_statement(&mut self) -> Result<Box<dyn Statement>>;
 
-    /// Updates the node_id associated with this [Connection]
-    fn update_node_id(&mut self, node_id: Option<String>);
+    /// Updates the node_id associated with this [Connection].
+    ///
+    /// Called when a pooled connection is reused for a different node.
+    /// Record/replay connections override this to update their recording context.
+    fn update_node_id(&mut self, _node_id: Option<String>) {}
+
+    /// Returns a generation counter identifying which engine created this connection.
+    ///
+    /// Used by the connection pool to detect stale connections when the engine
+    /// configuration changes between sequential runs (e.g. different recording
+    /// directories). Connections whose generation doesn't match the current engine
+    /// are discarded rather than reused.
+    fn generation(&self) -> u64 {
+        0
+    }
 
     /// Cancel the in-progress operation on a connection.
     fn cancel(&mut self) -> Result<()>;
@@ -355,12 +367,6 @@ pub trait Connection: Send {
         unimplemented!("ADBC connection float option retrieval")
     }
 
-    /// Returns the recordings directory path for record/replay connections.
-    /// Non-recording connections return `None`.
-    fn recordings_path(&self) -> Option<&Path> {
-        None
-    }
-
     /// [Debug](std::fmt::Debug) implementation for Connection.
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "dyn Connection")
@@ -516,10 +522,6 @@ impl Connection for AdbcConnection {
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
-
-    fn update_node_id(&mut self, _node_id: Option<String>) {
-        // noop: AdbcConnection does not use the node id
-    }
 }
 
 /// ODBC Connection.
@@ -555,6 +557,4 @@ impl Connection for OdbcConnection {
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
-
-    fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
