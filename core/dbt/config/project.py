@@ -144,6 +144,9 @@ def package_and_project_data_from_root(project_root):
     if "projects" in packages_yml_dict:
         msg = "The 'projects' key cannot be specified in packages.yml"
         raise DbtProjectError(msg)
+    if "skills" in packages_yml_dict:
+        msg = "The 'skills' key cannot be specified in packages.yml"
+        raise DbtProjectError(msg)
 
     packages_specified_path = PACKAGES_FILE_NAME
     packages_dict = {}
@@ -258,7 +261,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
 
 
 def _query_comment_from_cfg(
-    cfg_query_comment: Union[QueryComment, NoValue, str, None]
+    cfg_query_comment: Union[QueryComment, NoValue, str, None],
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment="")
