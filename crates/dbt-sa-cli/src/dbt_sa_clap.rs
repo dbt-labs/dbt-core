@@ -23,8 +23,8 @@ use dbt_common::io_args::{
 };
 use dbt_common::row_limit::RowLimit;
 
+use clap::ValueEnum;
 use clap::{Parser, Subcommand};
-use clap::{ValueEnum, arg};
 
 use dbt_common::node_selector::{IndirectSelection, parse_model_specifiers};
 

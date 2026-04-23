@@ -20,9 +20,8 @@ use strum_macros::Display;
 use uuid::Uuid;
 
 use clap::{
-    ArgAction, Parser, ValueEnum, arg,
+    ArgAction, Parser, ValueEnum,
     builder::{BoolishValueParser, TypedValueParser},
-    command,
 };
 use dbt_common::constants::{
     DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
