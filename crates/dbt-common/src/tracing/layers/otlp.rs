@@ -51,6 +51,25 @@ impl OTLPExporterLayer {
         trace_exporter: impl sdk_trace::SpanExporter + 'static,
         log_exporter: impl sdk_logs::LogExporter + 'static,
     ) -> Self {
+        Self::new_with_exporters(trace_exporter, log_exporter, true)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_tests(
+        trace_exporter: impl sdk_trace::SpanExporter + 'static,
+        log_exporter: impl sdk_logs::LogExporter + 'static,
+    ) -> Self {
+        // These tests validate OTLP layer filtering/serialization, not the OpenTelemetry
+        // SDK's batch processor lifecycle. Using simple exporters avoids flaky shutdown
+        // interactions when libtest runs adjacent tracing tests with high parallelism.
+        Self::new_with_exporters(trace_exporter, log_exporter, false)
+    }
+
+    fn new_with_exporters(
+        trace_exporter: impl sdk_trace::SpanExporter + 'static,
+        log_exporter: impl sdk_logs::LogExporter + 'static,
+        use_batch_exporters: bool,
+    ) -> Self {
         // Set up resource with service information
         let resource = Resource::builder()
             .with_detectors(&[Box::new(EnvResourceDetector::new())])
@@ -61,16 +80,30 @@ impl OTLPExporterLayer {
             .build();
 
         // Initialize a tracer provider.
-        let tracer_provider = SdkTracerProvider::builder()
-            .with_resource(resource.clone())
-            .with_batch_exporter(trace_exporter)
-            .build();
+        let tracer_provider = if use_batch_exporters {
+            SdkTracerProvider::builder()
+                .with_resource(resource.clone())
+                .with_batch_exporter(trace_exporter)
+                .build()
+        } else {
+            SdkTracerProvider::builder()
+                .with_resource(resource.clone())
+                .with_simple_exporter(trace_exporter)
+                .build()
+        };
 
         // Initialize a logger provider.
-        let logger_provider = SdkLoggerProvider::builder()
-            .with_resource(resource)
-            .with_batch_exporter(log_exporter)
-            .build();
+        let logger_provider = if use_batch_exporters {
+            SdkLoggerProvider::builder()
+                .with_resource(resource)
+                .with_batch_exporter(log_exporter)
+                .build()
+        } else {
+            SdkLoggerProvider::builder()
+                .with_resource(resource)
+                .with_simple_exporter(log_exporter)
+                .build()
+        };
 
         // Get tracer
         let tracer = tracer_provider.tracer(DBT_FUSION);

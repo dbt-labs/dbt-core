@@ -85,7 +85,7 @@ fn test_otlp_layer_exports_only_marked_records() {
     let (log_exporter, logs) = TestLogExporter::new();
 
     // Build OTLP layer with test exporters
-    let otlp_layer = OTLPExporterLayer::new(trace_exporter, log_exporter);
+    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
     // Clone providers for graceful shutdown later (batch processors flush on shutdown)
     let trace_provider = otlp_layer.tracer_provider();
     let log_provider = otlp_layer.logger_provider();
@@ -185,7 +185,7 @@ fn test_otlp_export_with_links() {
     let (trace_exporter, spans) = TestSpanExporter::new();
     let (log_exporter, _logs) = TestLogExporter::new();
 
-    let otlp_layer = OTLPExporterLayer::new(trace_exporter, log_exporter);
+    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
     let trace_provider = otlp_layer.tracer_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -270,7 +270,7 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
     let (trace_exporter, spans) = TestSpanExporter::new();
     let (log_exporter, _logs) = TestLogExporter::new();
 
-    let otlp_layer = OTLPExporterLayer::new(trace_exporter, log_exporter);
+    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
     let trace_provider = otlp_layer.tracer_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(

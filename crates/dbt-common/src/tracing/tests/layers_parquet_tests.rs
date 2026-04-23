@@ -22,8 +22,8 @@ fn test_tracing_parquet_filtering() {
     let trace_id = rand::random::<u128>();
 
     // Create a temporary file for the parquet output
-    let temp_dir = std::env::temp_dir();
-    let temp_file_path = temp_dir.join("test_telemetry_filtering.parquet");
+    let temp_dir = tempfile::tempdir().expect("Failed to create temporary test directory");
+    let temp_file_path = temp_dir.path().join("test_telemetry_filtering.parquet");
 
     let (parquet_layer, mut shutdown_handle) = build_parquet_writer_layer(
         fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
