@@ -128,3 +128,37 @@ class TestMacroNonEnforcement:
         event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
         run_dbt(["parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
+
+
+class TestMacroArgValidationAfterPartialParse:
+    """Regression test for partial parse bug where macro argument validation
+    warnings were silenced on the second run of dbt parse (skip_parsing=True)."""
+
+    @pytest.fixture(scope="class")
+    def dbt_profile_target(self):
+        return {"type": "duckdb", "threads": 1, "path": ":memory:"}
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"macros.sql": macros_sql, "macros.yml": bad_arg_count_macros_yml}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"flags": {"validate_macro_args": True}}
+
+    def test_warning_persists_after_partial_parse(self, project) -> None:
+        # First parse — full parse, warning should fire
+        event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) >= 1, (
+            "Expected warning on first parse but got none"
+        )
+
+        # Second parse — partial parse with nothing changed (skip_parsing=True)
+        # Bug: warning was silently dropped here
+        event_catcher2 = EventCatcher(event_to_catch=InvalidMacroAnnotation)
+        run_dbt(["parse"], callbacks=[event_catcher2.catch])
+        assert len(event_catcher2.caught_events) >= 1, (
+            "Expected warning on second parse (partial) but got none — "
+            "macro argument validation was skipped during partial parse reuse"
+        )
