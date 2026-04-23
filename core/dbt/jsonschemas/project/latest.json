@@ -1007,6 +1007,13 @@
         "unknown"
       ]
     },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
+      ]
+    },
     "OnSchemaChange": {
       "type": "string",
       "enum": [
@@ -2553,6 +2560,21 @@
             }
           ]
         },
+        "+change_tracking": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+cluster_by": {
           "anyOf": [
             {
@@ -2642,6 +2664,23 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -3046,6 +3085,23 @@
             }
           ]
         },
+        "+max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+max_staleness": {
           "type": [
             "string",
@@ -3135,6 +3191,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"
@@ -3458,6 +3524,18 @@
             }
           ]
         },
+        "+storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+submission_method": {
           "type": [
             "string",
@@ -3498,6 +3576,12 @@
           "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_file_size": {
           "type": [
             "string",
             "null"
@@ -3569,6 +3653,21 @@
           "anyOf": [
             {
               "description": "Snowflake Python model config: use anonymous stored procedure (default: true)",
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+use_uniform": {
+          "anyOf": [
+            {
               "default": null,
               "type": [
                 "boolean",

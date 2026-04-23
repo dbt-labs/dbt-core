@@ -75,6 +75,10 @@ people_model_sql = """
 select 1 as id, 'Drew' as first_name, 'yellow' as favorite_color, 5 as tenure, current_timestamp as created_at
 """
 
+metricflow_time_spine_sql = """
+SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
+"""
+
 
 class TestSpacesInSourceNameHappyPath:
     """No warnings when source names have no spaces."""
@@ -145,6 +149,7 @@ class TestSpacesInSemanticModelNameWarning:
     def models(self) -> Dict[str, str]:
         return {
             "people.sql": people_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "schema.yml": semantic_model_with_space_in_name_yml,
         }
 
@@ -173,6 +178,7 @@ class TestSpacesInSemanticModelNameError:
     def models(self) -> Dict[str, str]:
         return {
             "people.sql": people_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "schema.yml": semantic_model_with_space_in_name_yml,
         }
 
