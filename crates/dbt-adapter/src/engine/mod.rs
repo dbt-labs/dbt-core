@@ -2,9 +2,10 @@ use crate::adapter::adapter_impl::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::AdapterType;
-use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{AdapterResult, ErrorCode};
 use dbt_xdbc::*;
 use minijinja::State;
 
@@ -76,17 +77,14 @@ pub(crate) fn make_behavior(
         if !behavior_flags.iter().any(|f| f.name == key)
             && REMOVED_IN_FUSION.contains(&key.as_str())
         {
-            // Suppressed until dbt Core v1.12 ships support for Fusion warning names in
-            // warn_error_options, so users running both engines can silence cross-engine
-            // warnings without breaking Core.
-            // emit_warn_log_message(
-            //     ErrorCode::InvalidConfig,
-            //     format!(
-            //         "Behavior flag '{key}' has been removed in dbt Fusion. \
-            //          This flag can be safely removed from your dbt_project.yml."
-            //     ),
-            //     None,
-            // );
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                format!(
+                    "Behavior flag '{key}' has been removed in dbt Fusion. \
+                     This flag can be safely removed from your dbt_project.yml."
+                ),
+                None,
+            );
         }
     }
     Arc::new(Behavior::new(behavior_flags, behavior_flag_overrides))

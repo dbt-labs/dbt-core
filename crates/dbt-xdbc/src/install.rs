@@ -315,7 +315,6 @@ pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'stat
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::Athena
         | Backend::ClickHouse
-        | Backend::Exasol
         | Backend::DatabricksODBC
         | Backend::RedshiftODBC
         | Backend::Generic { .. } => {

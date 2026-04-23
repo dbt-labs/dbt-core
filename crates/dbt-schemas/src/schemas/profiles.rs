@@ -50,7 +50,7 @@ pub enum DbConfig {
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
     // Hive,
-    // Exasol, // TODO: add ExasolDbConfig when profile schema is defined
+    // Exasol,
     // Oracle,
     // Synapse,
     Fabric(Box<FabricDbConfig>),

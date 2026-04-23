@@ -49,7 +49,6 @@ pub fn create_static_relation(
             StaticBaseRelationObject::new(Arc::new(relation_type))
         }
         ClickHouse => todo!("ClickHouse"),
-        Exasol => todo!("Exasol"),
         Starburst => todo!("Starburst"),
         Athena => todo!("Athena"),
         Trino => todo!("Trino"),

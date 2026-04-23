@@ -31,7 +31,6 @@ impl ColumnBuilder {
             }
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => todo!("ClickHouse"),
-            Exasol => todo!("Exasol"),
             Starburst => todo!("Starburst"),
             Athena => todo!("Athena"),
             Trino => todo!("Trino"),
@@ -96,7 +95,6 @@ impl ColumnBuilder {
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
             ClickHouse => todo!("ClickHouse"),
-            Exasol => todo!("Exasol"),
             Starburst => todo!("Starburst"),
             Athena => todo!("Athena"),
             Trino => todo!("Trino"),

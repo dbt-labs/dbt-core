@@ -564,7 +564,6 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                 end.map(|end| format!("{event_time} < '{end}'")),
             ),
             AdapterType::ClickHouse => todo!("ClickHouse"),
-            AdapterType::Exasol => todo!("Exasol"),
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),

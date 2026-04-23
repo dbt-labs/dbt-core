@@ -262,7 +262,6 @@ impl ProfileSetup {
                 ));
             }
             AdapterType::ClickHouse => todo!("ClickHouse"),
-            AdapterType::Exasol => todo!("Exasol"),
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),

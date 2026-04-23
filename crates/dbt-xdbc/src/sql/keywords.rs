@@ -21,7 +21,6 @@ pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
         | Salesforce
         | SQLServer
         | ClickHouse
-        | Exasol
         | Generic { .. } => &[],
     }
 }
