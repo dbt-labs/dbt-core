@@ -296,8 +296,10 @@ pub struct CommonArgs {
     pub indirect_selection: Option<IndirectSelection>,
 
     /// Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.
-    #[arg(global = true, long, env = "DBT_QUIET", short = 'q')]
+    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
     pub quiet: bool,
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_quiet: bool,
 
     /// The number of threads to use [Run with --threads 0 to use max_cpu [default: max_cpu]]
     // has no ENV_VAR, but can be set in profiles.yml
@@ -599,6 +601,13 @@ pub fn check_target(filename: &str) -> Result<String, String> {
 }
 
 impl CommonArgs {
+    /// Resolve the effective value of `--quiet` / `--no-quiet`.
+    ///
+    /// `--no-quiet` always wins, allowing callers to override an ambient `DBT_QUIET=true`.
+    pub fn get_quiet(&self) -> bool {
+        if self.no_quiet { false } else { self.quiet }
+    }
+
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut show = if self.show.contains(&ShowOptions::All) {
             ShowOptions::iter().collect()
@@ -630,7 +639,7 @@ impl CommonArgs {
                 .collect()
         };
         // quiet overrules all show options..
-        if self.quiet {
+        if self.get_quiet() {
             show = HashSet::default();
         }
 
@@ -700,7 +709,7 @@ impl CommonArgs {
             },
             log_path: self.log_path.clone(),
             project_dir: self.project_dir.clone(),
-            quiet: self.quiet,
+            quiet: self.get_quiet(),
             write_json: if self.no_write_json {
                 false
             } else {

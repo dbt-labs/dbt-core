@@ -1391,8 +1391,10 @@ pub struct CommonArgs {
     pub indirect_selection: Option<IndirectSelection>,
 
     /// Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.
-    #[arg(global = true, long, env = "DBT_QUIET", short = 'q')]
+    #[arg(global = true, long, env = "DBT_QUIET", short = 'q', default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
     pub quiet: bool,
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_quiet: bool,
 
     /// The number of threads to use [Run with --threads 0 to use max_cpu [default: max_cpu]]
     // has no ENV_VAR
@@ -1871,6 +1873,14 @@ impl CommonArgs {
         }
     }
 
+    /// Resolve the effective value of `--quiet` / `--no-quiet`.
+    ///
+    /// `--no-quiet` always wins over `DBT_QUIET` or `--quiet`, allowing callers to
+    /// override an ambient `DBT_QUIET=true` from the command line.
+    pub fn get_quiet(&self) -> bool {
+        if self.no_quiet { false } else { self.quiet }
+    }
+
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let select_option = self.select.clone().map(|selectors| {
             let mut expr = parse_model_specifiers(&selectors).unwrap();
@@ -1889,7 +1899,7 @@ impl CommonArgs {
             }
             expr
         });
-        let show = resolve_show_arg(self.show.as_slice(), self.quiet);
+        let show = resolve_show_arg(self.show.as_slice(), self.get_quiet());
         let replay = pick_replay_mode(self, arg.io.invocation_id, out_dir);
         let build_cache_mode = if self.use_build_cache {
             Some(BuildCacheMode::ReadWrite)
@@ -2003,7 +2013,7 @@ impl CommonArgs {
             },
             log_path: self.log_path.clone(),
             project_dir: self.project_dir.clone(),
-            quiet: self.quiet,
+            quiet: self.get_quiet(),
             send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
             write_json: if self.no_write_json {
                 false
@@ -2234,7 +2244,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
         io: IoArgs {
             invocation_id: common_args.invocation_id.unwrap_or_else(Uuid::now_v7),
             otel_parent_span_id: common_args.parent_span_id,
-            show: resolve_show_arg(common_args.show.as_slice(), common_args.quiet),
+            show: resolve_show_arg(common_args.show.as_slice(), common_args.get_quiet()),
             is_compile: command == FsCommand::Compile,
             debug: common_args.debug,
             in_dir: PathBuf::new(),
@@ -2285,7 +2295,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         io: IoArgs {
             invocation_id: common_args.invocation_id.unwrap_or_else(Uuid::now_v7),
             otel_parent_span_id: common_args.parent_span_id,
-            show: resolve_show_arg(common_args.show.as_slice(), common_args.quiet),
+            show: resolve_show_arg(common_args.show.as_slice(), common_args.get_quiet()),
             is_compile: command == FsCommand::Compile,
             debug: common_args.debug,
             in_dir: PathBuf::new(),
