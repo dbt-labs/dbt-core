@@ -102,10 +102,8 @@ pub enum NotYetSupportedLegacyWarnError {
     ConnectionUsed,
     ConstraintNotEnforced,
     ConstraintNotSupported,
-    CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
     CustomOutputPathInSourceFreshnessDeprecation,
-    CustomTopLevelKeyDeprecation,
     DatabaseErrorRunningHook,
     DebugCmdOut,
     DebugCmdResult,
@@ -127,8 +125,6 @@ pub enum NotYetSupportedLegacyWarnError {
     DepsUpToDate,
     DepsUpdateAvailable,
     DisableTracking,
-    DuplicateNameDistinctNodeTypesDeprecation,
-    DuplicateYAMLKeysDeprecation,
     DynamicLevel,
     EndOfRunSummary,
     EndRunResult,
@@ -145,7 +141,6 @@ pub enum NotYetSupportedLegacyWarnError {
     FoundStats,
     FreshnessCheckComplete,
     GenericExceptionOnRun,
-    GenericJSONSchemaValidationDeprecation,
     GetMetaKeyWarning,
     GitNothingToDo,
     GitProgressCheckedOutAt,
@@ -162,7 +157,6 @@ pub enum NotYetSupportedLegacyWarnError {
     InvalidDisabledTargetInTestNode,
     InvalidOptionYAML,
     InvalidProfileTemplateYAML,
-    InvalidValueForField,
     JinjaLogDebug,
     JinjaLogInfo,
     ListCmdOut,
@@ -238,7 +232,6 @@ pub enum NotYetSupportedLegacyWarnError {
     RegistryResponseMissingNestedKeys,
     RegistryResponseMissingTopKeys,
     RegistryResponseUnexpectedType,
-    ResourceNamesWithSpacesDeprecation,
     ResourceReport,
     RetryExternalCall,
     Rollback,
@@ -356,6 +349,34 @@ pub enum WillNotSupportLegacyWarnError {
         message = "Fusion already validates allowed YAML keys strictly, so this warning would be redundant."
     )]
     ValidationWarning,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    CustomKeyInConfigDeprecation,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    CustomTopLevelKeyDeprecation,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    DuplicateNameDistinctNodeTypesDeprecation,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    DuplicateYAMLKeysDeprecation,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    GenericJSONSchemaValidationDeprecation,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    InvalidValueForField,
+    #[strum(
+        message = "Fusion already enforces this as a hard YAML parsing or schema validation error, so this warn_error_options entry has no effect."
+    )]
+    ResourceNamesWithSpacesDeprecation,
     #[strum(
         message = "Fusion already enforces the latest behavior, which prevents packages from overriding built-in materializations."
     )]
