@@ -1232,7 +1232,14 @@ impl Display for PersistTarget {
 }
 // ----------------------------------------------------------------------------------------------
 pub fn check_selector(selector: &str) -> Result<String, String> {
-    // Convert the single selector to a vector with one element
+    // Parity with dbt-core: a delimiter-only value (e.g. "," or ",,") must not
+    // hard-error at CLI-parse time. Accept it here; parse_model_specifiers
+    // handles the assembled list — either skipping the token when real selectors
+    // are present, or synthesizing a literal no-match criterion when every
+    // token is delimiter-only (runtime then emits dbt1092 + dbt1601).
+    if selector.chars().all(|c| c == ',' || c.is_whitespace()) {
+        return Ok(selector.to_string());
+    }
     let query = vec![selector.to_string()];
     match parse_model_specifiers(&query) {
         Ok(_) => Ok(selector.to_string()),
@@ -1465,5 +1472,27 @@ mod tests {
                 )
             );
         }
+    }
+
+    // Parity with dbt-core on delimiter-only --select values: the CLI validator
+    // must not hard-error on a per-value token like "," or ",,". Downstream
+    // selection resolves this to zero matches + dbt1601 "Nothing to do".
+    #[test]
+    fn test_check_selector_allows_comma_only() {
+        let result = check_selector(",,");
+        assert!(
+            result.is_ok(),
+            "check_selector(\",,\") must be Ok to match dbt-core behavior, got: {result:?}"
+        );
+    }
+
+    // Regression pin: normal selectors must keep passing the validator unchanged.
+    #[test]
+    fn test_check_selector_preserves_normal_selector() {
+        let result = check_selector("tag:foo");
+        assert!(
+            result.is_ok(),
+            "check_selector(\"tag:foo\") must remain Ok, got: {result:?}"
+        );
     }
 }

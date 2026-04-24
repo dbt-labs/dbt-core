@@ -552,10 +552,22 @@ pub fn parse_model_specifiers(tokens: &[String]) -> FsResult<SelectExpression> {
     // collapse OR level
     let root = match or_terms.len() {
         0 => {
-            return Err(fs_err!(
-                ErrorCode::SelectorError,
-                "selector contained only delimiters but no actual criteria"
-            ));
+            // Every token was delimiter-only (e.g. "--select ,,"). Match
+            // dbt-core behavior: preserve the raw text as a literal fqn
+            // criterion that resolves to zero matches at runtime, producing
+            // the standard dbt1092 "does not match" + dbt1601 "Nothing to do"
+            // warnings rather than aborting the invocation.
+            let raw = tokens.join(" ");
+            SelectExpression::Atom(SelectionCriteria::new(
+                MethodName::Fqn,
+                vec![],
+                raw,
+                false,
+                None,
+                None,
+                Some(IndirectSelection::default()),
+                None,
+            ))
         }
         1 => or_terms.pop().unwrap(),
         _ => SelectExpression::Or(or_terms),
