@@ -44,6 +44,10 @@ impl SqlLiteralFormatter {
                 let escaped_str = l.replace("'", "\\'");
                 format!("'{escaped_str}'")
             }
+            AdapterType::Snowflake => {
+                let escaped_str = l.replace('\\', "\\\\").replace('\'', "''");
+                format!("'{escaped_str}'")
+            }
             _ => {
                 // XXX: this of course not enough for all strings in any SQL dialect
                 // but it's a start
@@ -165,5 +169,14 @@ mod tests {
         assert_eq!(formatter.format_str(""), "''");
         assert_eq!(formatter.format_str("\\"), "'\\'");
         assert_eq!(formatter.format_str("\\'"), "'\\\\''");
+    }
+
+    #[test]
+    fn test_snowflake_format_str() {
+        let f = SqlLiteralFormatter::new(AdapterType::Snowflake);
+
+        assert_eq!(f.format_str(""), "''");
+        assert_eq!(f.format_str("hello"), "'hello'");
+        assert_eq!(f.format_str("Mom\\Baby"), "'Mom\\\\Baby'");
     }
 }
