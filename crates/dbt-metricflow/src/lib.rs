@@ -1300,10 +1300,15 @@ fn resolve_metric(
                     let name = m.get("name")?.as_str()?.to_string();
                     let filter = m.get("filter").and_then(|f| f.as_str()).map(String::from);
                     let alias = m.get("alias").and_then(|a| a.as_str()).map(String::from);
-                    let offset_window = m
-                        .get("offset_window")
-                        .and_then(|o| o.as_str())
-                        .map(String::from);
+                    let offset_window = m.get("offset_window").and_then(|o| {
+                        if let Some(s) = o.as_str() {
+                            Some(s.to_string())
+                        } else {
+                            let count = o.get("count").and_then(|c| c.as_u64())?;
+                            let gran = o.get("granularity").and_then(|g| g.as_str())?;
+                            Some(format!("{count} {gran}"))
+                        }
+                    });
                     let offset_to_grain = m
                         .get("offset_to_grain")
                         .and_then(|o| o.as_str())
@@ -2361,11 +2366,22 @@ fn render_date_trunc(granularity: &str, expr: &str, dialect: Dialect) -> String 
 
 fn render_extract(part: &str, expr: &str, dialect: Dialect) -> String {
     let p = part.to_uppercase();
+    if p == "DOW" {
+        return match dialect {
+            Dialect::DuckDB => format!("EXTRACT(ISODOW FROM {expr})"),
+            Dialect::Snowflake => format!("EXTRACT(DAYOFWEEKISO FROM {expr})"),
+            Dialect::Databricks => format!("EXTRACT(DAYOFWEEK_ISO FROM {expr})"),
+            Dialect::Redshift => {
+                format!("(EXTRACT(DOW FROM {expr}) + 6) % 7 + 1")
+            }
+            Dialect::BigQuery => {
+                let base = format!("EXTRACT(DAYOFWEEK FROM {expr})");
+                format!("IF({base} = 1, 7, {base} - 1)")
+            }
+        };
+    }
     let mapped = match p.as_str() {
-        "DOW" => match dialect {
-            Dialect::BigQuery | Dialect::Databricks => "DAYOFWEEK",
-            _ => "DOW",
-        },
+        "DOY" if matches!(dialect, Dialect::BigQuery) => "DAYOFYEAR",
         other => other,
     };
     format!("EXTRACT({mapped} FROM {expr})")
@@ -2384,13 +2400,33 @@ fn render_cast_double(expr: &str, dialect: Dialect) -> String {
 fn render_interval(count: i64, granularity: &str, dialect: Dialect) -> String {
     let gran_upper = granularity.to_uppercase();
     match dialect {
-        Dialect::DuckDB | Dialect::Snowflake | Dialect::Redshift => {
+        Dialect::Redshift => {
+            let (days, gran) = match granularity {
+                "month" | "months" => (count * 30, "day"),
+                "year" | "years" => (count * 365, "day"),
+                "week" | "weeks" => (count * 7, "day"),
+                _ => (count, granularity),
+            };
+            format!("INTERVAL '{days} {gran}'")
+        }
+        Dialect::DuckDB | Dialect::Snowflake => {
             format!("INTERVAL '{count} {granularity}'")
         }
         Dialect::BigQuery | Dialect::Databricks => {
             format!("INTERVAL {count} {gran_upper}")
         }
     }
+}
+
+fn render_interval_str(raw: &str, dialect: Dialect) -> String {
+    if matches!(dialect, Dialect::Redshift) {
+        if let Some((num_str, gran)) = raw.split_once(' ') {
+            if let Ok(count) = num_str.trim().parse::<i64>() {
+                return render_interval(count, gran.trim(), dialect);
+            }
+        }
+    }
+    format!("INTERVAL '{raw}'")
 }
 
 /// Resolve an order-by name to the canonical SQL output column name.
@@ -2515,10 +2551,11 @@ fn qualify_measure_expr(alias: &str, expr: &str) -> String {
     }
 }
 
-fn render_full_relation(model: &ResolvedModel, _dialect: Dialect) -> String {
-    // Use the relation_name from the dbt manifest as-is — it's already
-    // fully-qualified and properly quoted for the target warehouse.
-    model.relation_name.clone()
+fn render_full_relation(model: &ResolvedModel, dialect: Dialect) -> String {
+    match dialect {
+        Dialect::Databricks => model.relation_name.replace('"', "`"),
+        _ => model.relation_name.clone(),
+    }
 }
 
 /// Generate an inline time spine CTE that produces a DATE column named `out_col`
@@ -2561,13 +2598,21 @@ fn inline_time_spine_sql(
             )
         }
         Dialect::Redshift => {
-            let cast_n = render_type_cast("n", "INT", dialect);
-            let dateadd = format!("DATEADD('{granularity}', {cast_n}, {min_expr})");
+            let digits = "(SELECT 0 n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 \
+                           UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 \
+                           UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
+            let dateadd = format!("DATEADD('{granularity}', n, {min_expr})");
             let cast = render_type_cast(&dateadd, target_type, dialect);
             format!(
                 "SELECT {cast} AS {out_col} \
-                 FROM (SELECT ROW_NUMBER() OVER () - 1 AS n \
-                 FROM pg_catalog.generate_series(1, 100000)) \
+                 FROM (\
+                 SELECT (p0.n + p1.n * 10 + p2.n * 100 + p3.n * 1000 + p4.n * 10000) AS n \
+                 FROM {digits} p0 \
+                 CROSS JOIN {digits} p1 \
+                 CROSS JOIN {digits} p2 \
+                 CROSS JOIN {digits} p3 \
+                 CROSS JOIN {digits} p4\
+                 ) \
                  WHERE {out_col} <= {max_expr}"
             )
         }
@@ -3420,6 +3465,7 @@ fn compile_complex_metrics(
                     model_aliases,
                     join_edges,
                     dialect,
+                    "",
                     ctes,
                 )?;
             }
@@ -3431,6 +3477,7 @@ fn compile_complex_metrics(
                     model_aliases,
                     join_edges,
                     dialect,
+                    "",
                     ctes,
                 )?;
             }
@@ -3442,6 +3489,7 @@ fn compile_complex_metrics(
                     model_aliases,
                     join_edges,
                     dialect,
+                    "",
                     ctes,
                 )?;
             }
@@ -3476,6 +3524,7 @@ fn compile_complex_metrics(
     build_final_sql(spec, ctes, dialect)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn compile_simple_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
@@ -3483,10 +3532,16 @@ fn compile_simple_metric_cte(
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
     dialect: Dialect,
+    cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
 ) -> Result<(), MetricFlowError> {
+    let cte_name = if cte_scope.is_empty() {
+        metric.name.clone()
+    } else {
+        format!("{cte_scope}__{}", metric.name)
+    };
     // Check if this CTE already exists (might be shared by multiple derived metrics).
-    if ctes.iter().any(|(name, _)| name == &metric.name) {
+    if ctes.iter().any(|(name, _)| *name == cte_name) {
         return Ok(());
     }
 
@@ -3680,11 +3735,12 @@ fn compile_simple_metric_cte(
         let _ = write!(cte_sql, " GROUP BY {}", group_indices.join(", "));
     }
 
-    ctes.push((metric.name.clone(), cte_sql));
+    ctes.push((cte_name, cte_sql));
     Ok(())
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[allow(clippy::too_many_arguments)]
 fn compile_derived_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
@@ -3692,12 +3748,32 @@ fn compile_derived_metric_cte(
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
     dialect: Dialect,
+    cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
 ) -> Result<(), MetricFlowError> {
     // Check if this derived metric CTE already exists (shared by multiple inputs).
-    if ctes.iter().any(|(name, _)| name == &metric.name) {
+    let scoped_name = if cte_scope.is_empty() {
+        metric.name.clone()
+    } else {
+        format!("{cte_scope}__{}", metric.name)
+    };
+    if ctes.iter().any(|(name, _)| *name == scoped_name) {
         return Ok(());
     }
+
+    // Propagate any filters defined on this derived metric down to its inputs.
+    // When filters are present we assign a unique CTE-name scope so that two
+    // outer derived metrics with different filters each get their own copies of
+    // shared base CTEs rather than incorrectly reusing the first one's filtered CTE.
+    let (child_spec, child_scope) = if metric.metric_filters.is_empty() {
+        (spec.clone(), cte_scope.to_string())
+    } else {
+        let mut s = spec.clone();
+        s.where_filters
+            .extend(metric.metric_filters.iter().cloned());
+        (s, metric.name.clone())
+    };
+    let child_scope = child_scope.as_str();
 
     // When a derived metric has offset inputs AND the spec requests a non-day
     // granularity, base CTEs must be compiled at day granularity so the offset
@@ -3710,7 +3786,7 @@ fn compile_derived_metric_cte(
     let day_spec;
     let base_spec = if has_offsets {
         let mut seen_time_dims: HashSet<String> = HashSet::new();
-        let day_group_by: Vec<GroupBySpec> = spec
+        let day_group_by: Vec<GroupBySpec> = child_spec
             .group_by
             .iter()
             .filter_map(|gb| match gb {
@@ -3729,16 +3805,16 @@ fn compile_derived_metric_cte(
             })
             .collect();
         day_spec = SemanticQuerySpec {
-            metrics: spec.metrics.clone(),
+            metrics: child_spec.metrics.clone(),
             group_by: day_group_by,
             where_filters: Vec::new(),
-            order_by: spec.order_by.clone(),
-            limit: spec.limit,
-            time_constraint: spec.time_constraint.clone(),
+            order_by: child_spec.order_by.clone(),
+            limit: child_spec.limit,
+            time_constraint: child_spec.time_constraint.clone(),
         };
         &day_spec
     } else {
-        spec
+        &child_spec
     };
 
     // First, compile all input metrics as CTEs (using base_spec for day granularity).
@@ -3753,6 +3829,7 @@ fn compile_derived_metric_cte(
                         model_aliases,
                         join_edges,
                         dialect,
+                        child_scope,
                         ctes,
                     )?;
                 }
@@ -3764,6 +3841,7 @@ fn compile_derived_metric_cte(
                         model_aliases,
                         join_edges,
                         dialect,
+                        child_scope,
                         ctes,
                     )?;
                 }
@@ -3775,6 +3853,7 @@ fn compile_derived_metric_cte(
                         model_aliases,
                         join_edges,
                         dialect,
+                        child_scope,
                         ctes,
                     )?;
                 }
@@ -3788,6 +3867,7 @@ fn compile_derived_metric_cte(
                             model_aliases,
                             join_edges,
                             dialect,
+                            child_scope,
                             ctes,
                         )?;
                     }
@@ -3841,8 +3921,8 @@ fn compile_derived_metric_cte(
 
         // Create offset wrapper CTE.
         let join_condition = if let Some(ref offset_window) = input.offset_window {
-            // spine.time - INTERVAL N unit = base.time
-            format!("spine.{time_col} - INTERVAL '{offset_window}' = base.{time_col}")
+            let interval = render_interval_str(offset_window, dialect);
+            format!("spine.{time_col} - {interval} = base.{time_col}")
         } else if let Some(ref grain) = input.offset_to_grain {
             // DATE_TRUNC('grain', spine.time) = base.time
             format!("DATE_TRUNC('{grain}', spine.{time_col}) = base.{time_col}")
@@ -3864,7 +3944,11 @@ fn compile_derived_metric_cte(
             };
             offset_select.push_str(&format!(", base.{col}"));
         }
-        offset_select.push_str(&format!(", base.{}", input.name));
+        if alias == metric.name.as_str() {
+            offset_select.push_str(&format!(", base.{} AS {}", input.name, metric.name));
+        } else {
+            offset_select.push_str(&format!(", base.{}", input.name));
+        }
 
         let offset_sql = format!(
             "SELECT {offset_select} \
@@ -3901,12 +3985,17 @@ fn compile_derived_metric_cte(
 
     // Determine the effective CTE name for each input:
     // - If the input has an offset, the wrapper CTE is named after the alias.
-    // - Otherwise, the CTE is the base metric name.
+    // - Otherwise, the CTE is the base metric name, scoped when child_scope is set.
     let effective_cte_name = |input: &MetricInput| -> String {
-        if input.offset_window.is_some() || input.offset_to_grain.is_some() {
+        let base = if input.offset_window.is_some() || input.offset_to_grain.is_some() {
             input.alias.as_deref().unwrap_or(&input.name).to_string()
         } else {
             input.name.clone()
+        };
+        if child_scope.is_empty() {
+            base
+        } else {
+            format!("{child_scope}__{base}")
         }
     };
 
@@ -4095,7 +4184,7 @@ fn compile_derived_metric_cte(
 
     // Skip if an offset wrapper CTE already produced a CTE with the same name
     // (happens when the derived metric is a simple passthrough of an offset alias).
-    if !ctes.iter().any(|(name, _)| name == &metric.name) {
+    if !ctes.iter().any(|(name, _)| *name == scoped_name) {
         // When offsets forced day-level base CTEs but the spec wants coarser granularity,
         // wrap the derived CTE in an outer aggregation that truncates and re-aggregates.
         let needs_reagg = has_offsets
@@ -4105,7 +4194,7 @@ fn compile_derived_metric_cte(
             });
         if needs_reagg {
             // Emit the day-level derived CTE with a temporary name.
-            let inner_name = format!("{}_day", metric.name);
+            let inner_name = format!("{scoped_name}_day");
             ctes.push((inner_name.clone(), cte_sql));
             // Build outer aggregation CTE.
             let mut outer_select: Vec<String> = Vec::new();
@@ -4140,14 +4229,15 @@ fn compile_derived_metric_cte(
                 outer_select.join(", "),
                 outer_group.join(", "),
             );
-            ctes.push((metric.name.clone(), outer_sql));
+            ctes.push((scoped_name, outer_sql));
         } else {
-            ctes.push((metric.name.clone(), cte_sql));
+            ctes.push((scoped_name, cte_sql));
         }
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn compile_ratio_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
@@ -4155,6 +4245,7 @@ fn compile_ratio_metric_cte(
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
     dialect: Dialect,
+    cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
 ) -> Result<(), MetricFlowError> {
     let numerator = metric.numerator.as_ref().ok_or_else(|| {
@@ -4175,6 +4266,7 @@ fn compile_ratio_metric_cte(
                     model_aliases,
                     join_edges,
                     dialect,
+                    cte_scope,
                     ctes,
                 )?;
             }
@@ -4186,6 +4278,7 @@ fn compile_ratio_metric_cte(
                     model_aliases,
                     join_edges,
                     dialect,
+                    cte_scope,
                     ctes,
                 )?;
             }
@@ -4202,6 +4295,7 @@ fn compile_ratio_metric_cte(
                     model_aliases,
                     join_edges,
                     dialect,
+                    cte_scope,
                     ctes,
                 )?;
             }
@@ -4213,6 +4307,7 @@ fn compile_ratio_metric_cte(
                     model_aliases,
                     join_edges,
                     dialect,
+                    cte_scope,
                     ctes,
                 )?;
             }
@@ -4516,9 +4611,10 @@ fn compile_cumulative_metric_cte(
 
     // ── Step 3: Join spine → source with time range predicate ────────────
     let join_cond = if let (Some(count), Some(gran)) = (&cp.window_count, &cp.window_granularity) {
+        let interval = render_interval(*count, gran, dialect);
         format!(
             "src.src_time <= spine.spine_time \
-             AND src.src_time > spine.spine_time - INTERVAL '{count} {gran}'"
+             AND src.src_time > spine.spine_time - {interval}"
         )
     } else if let Some(ref grain) = cp.grain_to_date {
         format!(
@@ -6067,6 +6163,480 @@ mod tests {
         assert!(
             err.contains("unknown order-by"),
             "error should mention 'unknown order-by':\n{err}"
+        );
+    }
+
+    #[test]
+    fn test_no_duplicate_cte_for_shared_derived_input() {
+        let mut store = MockStore::new();
+
+        store.metrics.push(RawMetricRow {
+            name: "base".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_events",
+                    "agg": "count",
+                    "expr": "1",
+                    "agg_time_dimension": "ds"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "wrapped".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "base_alias",
+                "metrics": [{"name": "base", "alias": "base_alias", "offset_window": null, "offset_to_grain": null, "filter": null}]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "wrapped_last_period".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "wrapped_period_alias",
+                "metrics": [{"name": "wrapped", "alias": "wrapped_period_alias", "offset_window": "1 day", "offset_to_grain": null, "filter": null}]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "wrapped_growth".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "wrapped - wrapped_last_period",
+                "metrics": [
+                    {"name": "wrapped",             "alias": null, "offset_window": null, "offset_to_grain": null, "filter": null},
+                    {"name": "wrapped_last_period", "alias": null, "offset_window": null, "offset_to_grain": null, "filter": null}
+                ]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_events".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "event".into(),
+            unique_id: "semantic_model.fct_events".into(),
+        });
+        store.dimensions.push((
+            "semantic_model.fct_events".into(),
+            vec![RawDimensionRow {
+                name: "ds".into(),
+                dimension_type: "time".into(),
+                expr: "ds".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["wrapped_growth".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "day".into(),
+                date_part: None,
+            }],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB)
+            .expect("wrapped_growth should compile without error");
+
+        let cte_defs = sql.matches("wrapped AS (").count();
+        assert_eq!(
+            cte_defs, 1,
+            "CTE 'wrapped' must be defined exactly once\n  SQL:\n{sql}"
+        );
+    }
+
+    #[test]
+    fn test_no_duplicate_cte_when_offset_alias_equals_metric_name() {
+        let mut store = MockStore::new();
+
+        store.metrics.push(RawMetricRow {
+            name: "base".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_events",
+                    "agg": "count",
+                    "expr": "1",
+                    "agg_time_dimension": "ds"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "base_last_year".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "base_last_year",
+                "metrics": [{
+                    "name": "base",
+                    "alias": "base_last_year",
+                    "offset_window": "1 year",
+                    "offset_to_grain": null,
+                    "filter": null
+                }]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "yoy_growth".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "base - base_last_year",
+                "metrics": [
+                    {"name": "base",           "alias": null, "offset_window": null, "offset_to_grain": null, "filter": null},
+                    {"name": "base_last_year", "alias": null, "offset_window": null, "offset_to_grain": null, "filter": null}
+                ]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_events".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "event".into(),
+            unique_id: "semantic_model.fct_events".into(),
+        });
+        store.dimensions.push((
+            "semantic_model.fct_events".into(),
+            vec![RawDimensionRow {
+                name: "ds".into(),
+                dimension_type: "time".into(),
+                expr: "ds".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["yoy_growth".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "month".into(),
+                date_part: None,
+            }],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB)
+            .expect("yoy_growth should compile without error");
+
+        let cte_defs = sql.matches("base_last_year AS (").count();
+        assert_eq!(
+            cte_defs, 1,
+            "CTE 'base_last_year' must be defined exactly once\n  SQL:\n{sql}"
+        );
+    }
+
+    #[test]
+    fn test_offset_window_object_format_is_applied() {
+        let mut store = MockStore::new();
+
+        store.metrics.push(RawMetricRow {
+            name: "events".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_events",
+                    "agg": "count",
+                    "expr": "1",
+                    "agg_time_dimension": "ds"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "events_last_year".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "events_last_year_alias",
+                "metrics": [{
+                    "name": "events",
+                    "alias": "events_last_year_alias",
+                    "offset_window": {"count": 1, "granularity": "year"},
+                    "offset_to_grain": null,
+                    "filter": null
+                }]
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_events".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "event".into(),
+            unique_id: "semantic_model.fct_events".into(),
+        });
+        store.dimensions.push((
+            "semantic_model.fct_events".into(),
+            vec![RawDimensionRow {
+                name: "ds".into(),
+                dimension_type: "time".into(),
+                expr: "ds".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["events_last_year".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "month".into(),
+                date_part: None,
+            }],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB)
+            .expect("events_last_year should compile without error");
+
+        assert!(
+            sql.contains("INTERVAL"),
+            "SQL must contain an INTERVAL expression for the 1-year offset\n  SQL:\n{sql}"
+        );
+        assert!(
+            sql.contains("INNER JOIN"),
+            "offset CTE must use an INNER JOIN to apply the time shift\n  SQL:\n{sql}"
+        );
+    }
+
+    #[test]
+    fn test_filter_on_outer_derived_metric_propagates_to_inputs() {
+        let mut store = MockStore::new();
+
+        store.metrics.push(RawMetricRow {
+            name: "count_nps".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "response_id",
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_nps",
+                    "agg": "count",
+                    "agg_time_dimension": "created_at"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "nps".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{"expr": "count_nps", "metrics": [{"name": "count_nps"}]}"#.into(),
+            metric_filter: String::new(),
+        });
+
+        store.metrics.push(RawMetricRow {
+            name: "nps_developer".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{"expr": "nps", "metrics": [{"name": "nps"}]}"#.into(),
+            metric_filter: r#"{"where_filters": [
+                {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'developer'"}
+            ]}"#
+            .into(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_nps".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_nps\"", "alias": "fct_nps", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "nps_survey".into(),
+            unique_id: "semantic_model.fct_nps".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_nps".into(),
+            vec![RawEntityRow {
+                name: "nps_survey".into(),
+                entity_type: "primary".into(),
+                expr: "response_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_nps".into(),
+            vec![
+                RawDimensionRow {
+                    name: "account_plan_tier".into(),
+                    dimension_type: "categorical".into(),
+                    expr: "account_plan_tier".into(),
+                    time_granularity: String::new(),
+                },
+                RawDimensionRow {
+                    name: "created_at".into(),
+                    dimension_type: "time".into(),
+                    expr: "created_at".into(),
+                    time_granularity: "day".into(),
+                },
+            ],
+        ));
+        store.join_graph.push(RawJoinGraphRow {
+            model_name: "fct_nps".into(),
+            entity_name: "nps_survey".into(),
+            entity_type: "primary".into(),
+            expr: "response_id".into(),
+        });
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["nps_developer".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+
+        assert!(
+            sql.contains("account_plan_tier"),
+            "filter must propagate — account_plan_tier missing:\n{sql}"
+        );
+        assert!(
+            sql.contains("'developer'"),
+            "= 'developer' must appear in the generated SQL:\n{sql}"
+        );
+    }
+
+    #[test]
+    fn test_two_derived_metrics_with_different_filters_get_independent_ctes() {
+        let mut store = MockStore::new();
+
+        store.metrics.push(RawMetricRow {
+            name: "count_nps".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "expr": "response_id",
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_nps",
+                    "agg": "count",
+                    "agg_time_dimension": "created_at"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+        store.metrics.push(RawMetricRow {
+            name: "nps".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{"expr": "count_nps", "metrics": [{"name": "count_nps"}]}"#.into(),
+            metric_filter: String::new(),
+        });
+        store.metrics.push(RawMetricRow {
+            name: "nps_developer".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{"expr": "nps", "metrics": [{"name": "nps"}]}"#.into(),
+            metric_filter: r#"{"where_filters": [
+                {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'developer'"}
+            ]}"#
+            .into(),
+        });
+        store.metrics.push(RawMetricRow {
+            name: "nps_enterprise".into(),
+            metric_type: "derived".into(),
+            description: String::new(),
+            type_params: r#"{"expr": "nps", "metrics": [{"name": "nps"}]}"#.into(),
+            metric_filter: r#"{"where_filters": [
+                {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'enterprise'"}
+            ]}"#
+            .into(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_nps".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_nps\"", "alias": "fct_nps", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "nps_survey".into(),
+            unique_id: "semantic_model.fct_nps".into(),
+        });
+        store.entities.push((
+            "semantic_model.fct_nps".into(),
+            vec![RawEntityRow {
+                name: "nps_survey".into(),
+                entity_type: "primary".into(),
+                expr: "response_id".into(),
+            }],
+        ));
+        store.dimensions.push((
+            "semantic_model.fct_nps".into(),
+            vec![
+                RawDimensionRow {
+                    name: "account_plan_tier".into(),
+                    dimension_type: "categorical".into(),
+                    expr: "account_plan_tier".into(),
+                    time_granularity: String::new(),
+                },
+                RawDimensionRow {
+                    name: "created_at".into(),
+                    dimension_type: "time".into(),
+                    expr: "created_at".into(),
+                    time_granularity: "day".into(),
+                },
+            ],
+        ));
+        store.join_graph.push(RawJoinGraphRow {
+            model_name: "fct_nps".into(),
+            entity_name: "nps_survey".into(),
+            entity_type: "primary".into(),
+            expr: "response_id".into(),
+        });
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["nps_developer".into(), "nps_enterprise".into()],
+            group_by: vec![],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
+
+        assert!(
+            sql.contains("'developer'"),
+            "developer filter must appear in SQL:\n{sql}"
+        );
+        assert!(
+            sql.contains("'enterprise'"),
+            "enterprise filter must appear — base CTEs are being shared:\n{sql}"
         );
     }
 }

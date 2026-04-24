@@ -3636,10 +3636,8 @@ fn validate_no_other_dialect_constructs(sql: &str) -> Vec<String> {
 fn redshift_compile_scorecard() {
     run_dialect_compile_scorecard(Dialect::Redshift, "Redshift", |sql| {
         let mut issues = Vec::new();
-        // Redshift uses pg_catalog.generate_series (integers), but should NOT
-        // have DuckDB-style generate_series with INTERVAL for date ranges.
-        if sql.contains("generate_series") && !sql.contains("pg_catalog.generate_series") {
-            issues.push("DuckDB-only generate_series() (not pg_catalog variant)".to_string());
+        if sql.contains("generate_series") {
+            issues.push("generate_series() not supported on all Redshift node types".to_string());
         }
         if sql.contains("GENERATOR") {
             issues.push("Snowflake-only GENERATOR()".to_string());
