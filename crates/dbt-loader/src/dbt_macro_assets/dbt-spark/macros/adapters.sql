@@ -299,9 +299,12 @@
 
 {% macro spark__get_columns_in_relation(relation) -%}
   {% call statement('get_columns_in_relation', fetch_result=True) %}
-      describe extended {{ relation.include(schema=(schema is not none)) }}
+      describe extended {{ relation.render() }}
   {% endcall %}
-  {% do return(load_result('get_columns_in_relation').table) %}
+  {% set table = load_result('get_columns_in_relation').table %}
+  {#- DIVERGENCE BEGIN: dbt-core Spark does not cast table to Column. All other adapters do it -#}
+  {% do return(sql_convert_columns_in_relation(table)) %}
+  {#- DIVERGENCE END: dbt-core Spark does not cast table to Column. All other adapters do it -#}
 {% endmacro %}
 
 {% macro spark__list_relations_without_caching(relation) %}
