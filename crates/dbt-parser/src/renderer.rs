@@ -20,7 +20,9 @@ use dbt_jinja_utils::listener::{
 };
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
-use dbt_jinja_utils::phases::compile::build_compile_node_context_inner;
+use dbt_jinja_utils::phases::compile::{
+    DependencyValidationConfig, build_compile_node_context_inner,
+};
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
@@ -795,7 +797,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             &root_project_name,
             node_resolver.clone(),
             runtime_config.clone(),
-            true,
+            DependencyValidationConfig::new_for_node(&model).skip_validation(),
         );
 
         // Inject the DbtNamespace to intercept dbt macro calls

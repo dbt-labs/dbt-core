@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnv;
+use crate::phases::compile::DependencyValidationConfig;
 use dbt_adapter::Adapter;
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::relation::RelationObject;
@@ -15,6 +16,7 @@ use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_schemas::filter::{RunFilter, Sample};
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
+use dbt_telemetry::NodeType;
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::constants::MACRO_DISPATCH_ORDER;
 use minijinja::constants::TARGET_PACKAGE_NAME;
@@ -106,7 +108,8 @@ pub fn build_compile_and_run_base_context(
     builtins.insert("ref".to_string(), ref_value);
 
     // Create source function
-    let source_function = SourceFunction::new(node_resolver.clone(), package_name.to_owned());
+    let source_function =
+        SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned());
     let source_value = MinijinjaValue::from_object(source_function);
     ctx.insert("source".to_string(), source_value.clone());
     builtins.insert("source".to_string(), source_value);
@@ -324,21 +327,13 @@ pub struct RefFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    /// Optional validation configuration - None means no validation
-    validation_config: Option<RefValidationConfig>,
+    /// Validation configuration
+    validation_config: DependencyValidationConfig,
     /// Optional microbatch context for filtering refs during batch execution
     microbatch_context: Option<MicrobatchRefContext>,
     /// The unique_id of the node that owns this ref context.
     /// Used for O(1) defer decisions via `NodeResolver::prefers_deferred`.
     current_node_unique_id: String,
-}
-
-#[derive(Debug)]
-pub struct RefValidationConfig {
-    /// The set of allowed node dependencies for this specific node
-    pub allowed_dependencies: Arc<BTreeSet<String>>,
-    /// Whether to skip dependency validation used for REPL and inline queries
-    pub skip_validation: bool,
 }
 
 impl RefFunction {
@@ -352,7 +347,8 @@ impl RefFunction {
             node_resolver,
             package_name,
             runtime_config,
-            validation_config: None,
+            // Default; no validation
+            validation_config: DependencyValidationConfig::default(),
             microbatch_context: None,
             current_node_unique_id: String::new(),
         }
@@ -363,18 +359,14 @@ impl RefFunction {
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
-        allowed_dependencies: Arc<BTreeSet<String>>,
-        skip_validation: bool,
+        validation_config: DependencyValidationConfig,
         current_node_unique_id: String,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
             runtime_config,
-            validation_config: Some(RefValidationConfig {
-                allowed_dependencies,
-                skip_validation,
-            }),
+            validation_config,
             microbatch_context: None,
             current_node_unique_id,
         }
@@ -389,8 +381,7 @@ impl RefFunction {
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
-        allowed_dependencies: Arc<BTreeSet<String>>,
-        skip_validation: bool,
+        validation_config: DependencyValidationConfig,
         microbatch_context: MicrobatchRefContext,
         current_node_unique_id: String,
     ) -> Self {
@@ -398,10 +389,7 @@ impl RefFunction {
             node_resolver,
             package_name,
             runtime_config,
-            validation_config: Some(RefValidationConfig {
-                allowed_dependencies,
-                skip_validation,
-            }),
+            validation_config,
             microbatch_context: Some(microbatch_context),
             current_node_unique_id,
         }
@@ -453,16 +441,15 @@ impl RefFunction {
         package_name: &Option<String>,
         model_name: &str,
     ) -> Result<(), MinijinjaError> {
-        let Some(validation_config) = &self.validation_config else {
-            // No validation config means no validation needed
-            return Ok(());
-        };
-
-        if validation_config.skip_validation {
+        if self.validation_config.skip_validation {
             return Ok(());
         }
 
-        if validation_config.allowed_dependencies.contains(unique_id) {
+        if self
+            .validation_config
+            .allowed_dependencies
+            .contains(unique_id)
+        {
             Ok(())
         } else {
             // Construct the ref string for the error message
@@ -472,14 +459,39 @@ impl RefFunction {
                 format!("{{{{ ref('{model_name}') }}}}")
             };
 
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                format!(
-                    "dbt was unable to infer all dependencies for the model \"{model_name}\". This typically happens when ref() is placed within a conditional block.
+            if self.validation_config.node_type == NodeType::UnitTest {
+                let unit_test_name = self
+                    .validation_config
+                    .current_node_unique_id
+                    .as_deref()
+                    .and_then(|uid| uid.rsplit('.').next())
+                    .unwrap_or("<unknown>");
+                let ref_call = if let Some(pkg) = package_name {
+                    format!("ref('{pkg}', '{model_name}')")
+                } else {
+                    format!("ref('{model_name}')")
+                };
+                Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!(
+                        "Unit test '{unit_test_name}' references {{{{ {ref_call} }}}}, \
+but this dependency was not mocked.\n\n\
+Add it to the unit test's `given` block:\n  \
+- input: {ref_call}\n    \
+rows: [...]\n\n\
+Or remove the ref() from the model if it's unused."
+                    ),
+                ))
+            } else {
+                Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!(
+                        "dbt was unable to infer all dependencies for the model \"{model_name}\". This typically happens when ref() is placed within a conditional block.
 To fix this, add the following hint to the top of the model \"{model_name}\":
 -- depends_on: {ref_string}"
-                ),
-            ))
+                    ),
+                ))
+            }
         }
     }
 }
@@ -489,7 +501,7 @@ impl Object for RefFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listeners: &[Rc<dyn RenderingEventListener>],
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let (package_name, model_name, version) = self.resolve_args(args)?;
 
@@ -512,6 +524,10 @@ impl Object for RefFunction {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };
+
+                for listener in listeners {
+                    listener.on_ref_or_source_resolved(&unique_id);
+                }
 
                 // Apply microbatch filtering if we have a microbatch context and
                 // the referenced model has event_time configured
@@ -597,6 +613,7 @@ pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
     microbatch_context: Option<MicrobatchRefContext>,
+    validation_config: DependencyValidationConfig,
 }
 
 impl SourceFunction {
@@ -613,17 +630,80 @@ impl SourceFunction {
             node_resolver,
             package_name,
             microbatch_context: Some(microbatch_context),
+            validation_config: DependencyValidationConfig::default(),
         }
     }
 }
 
 impl SourceFunction {
-    /// Construct a new `SourceFunction` from a `NodeResolver` and package name.
-    pub fn new(node_resolver: Arc<dyn NodeResolverTracker>, package_name: String) -> Self {
+    /// Construct a new `SourceFunction` from a `NodeResolver` and package name, with
+    /// no ref validation
+    pub fn new_unvalidated(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+    ) -> Self {
         Self {
             node_resolver,
             package_name,
             microbatch_context: None,
+            validation_config: DependencyValidationConfig::default(),
+        }
+    }
+
+    /// Construct a `SourceFunction` with dependency validation (used for unit tests).
+    pub fn new_with_validation(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+        validation_config: DependencyValidationConfig,
+    ) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+            microbatch_context: None,
+            validation_config,
+        }
+    }
+
+    /// Validate that the referenced source is in the allowed dependencies.
+    fn validate_dependency(
+        &self,
+        unique_id: &str,
+        source_name: &str,
+        table_name: &str,
+    ) -> Result<(), MinijinjaError> {
+        if self.validation_config.skip_validation {
+            return Ok(());
+        }
+
+        if self
+            .validation_config
+            .allowed_dependencies
+            .contains(unique_id)
+        {
+            Ok(())
+        } else if self.validation_config.node_type == NodeType::UnitTest {
+            let unit_test_name = self
+                .validation_config
+                .current_node_unique_id
+                .as_deref()
+                .and_then(|uid| uid.rsplit('.').next())
+                .unwrap_or("<unknown>");
+            Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                format!(
+                    "Unit test '{unit_test_name}' references \
+{{{{ source('{source_name}', '{table_name}') }}}}, but this dependency was not mocked.\n\n\
+Add it to the unit test's `given` block:\n  \
+- input: source('{source_name}', '{table_name}')\n    \
+rows: [...]\n\n\
+Or remove the source() from the model if it's unused."
+                ),
+            ))
+        } else {
+            Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                format!("dbt was unable to resolve '{source_name}.{table_name}'"),
+            ))
         }
     }
 }
@@ -633,7 +713,7 @@ impl Object for SourceFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listeners: &[Rc<dyn RenderingEventListener>],
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         let num_args = parser.positional_len();
@@ -656,6 +736,12 @@ impl Object for SourceFunction {
             .lookup_source(&self.package_name, &source_name, &table_name)
         {
             Ok((unique_id, relation, _)) => {
+                for listener in listeners {
+                    listener.on_ref_or_source_resolved(&unique_id);
+                }
+
+                self.validate_dependency(&unique_id, &source_name, &table_name)?;
+
                 // Apply microbatch filtering if we have a microbatch context and
                 // the referenced source has event_time configured
                 if let Some(ref microbatch_ctx) = self.microbatch_context {
@@ -691,16 +777,7 @@ pub struct FunctionFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    /// Optional validation configuration - None means no validation
-    validation_config: Option<FunctionValidationConfig>,
-}
-
-#[derive(Debug)]
-pub struct FunctionValidationConfig {
-    /// The set of allowed function dependencies for this specific node
-    pub allowed_dependencies: Arc<BTreeSet<String>>,
-    /// Whether to skip dependency validation used for REPL and inline queries
-    pub skip_validation: bool,
+    validation_config: DependencyValidationConfig,
 }
 
 impl FunctionFunction {
@@ -714,7 +791,7 @@ impl FunctionFunction {
             node_resolver,
             package_name,
             runtime_config,
-            validation_config: None,
+            validation_config: DependencyValidationConfig::default(),
         }
     }
 
@@ -723,17 +800,13 @@ impl FunctionFunction {
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
-        allowed_dependencies: Arc<BTreeSet<String>>,
-        skip_validation: bool,
+        validation_config: DependencyValidationConfig,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
             runtime_config,
-            validation_config: Some(FunctionValidationConfig {
-                allowed_dependencies,
-                skip_validation,
-            }),
+            validation_config,
         }
     }
 
@@ -768,16 +841,15 @@ impl FunctionFunction {
         package_name: &Option<String>,
         function_name: &str,
     ) -> Result<(), MinijinjaError> {
-        let Some(validation_config) = &self.validation_config else {
-            // No validation config means no validation needed
-            return Ok(());
-        };
-
-        if validation_config.skip_validation {
+        if self.validation_config.skip_validation {
             return Ok(());
         }
 
-        if validation_config.allowed_dependencies.contains(unique_id) {
+        if self
+            .validation_config
+            .allowed_dependencies
+            .contains(unique_id)
+        {
             Ok(())
         } else {
             // Construct the function string for the error message

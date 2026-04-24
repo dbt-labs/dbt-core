@@ -61,6 +61,9 @@ pub trait RenderingEventListener: std::fmt::Debug {
     ) {
     }
 
+    /// Called when a ref() or source() call is resolved to its unique_id
+    fn on_ref_or_source_resolved(&self, _unique_id: &str) {}
+
     /// Called after rendering to check and emit mangled ref warnings.
     /// Only MangledRefWarningPrinter implements this; default is no-op.
     fn check_and_emit_mangled_ref_warnings(

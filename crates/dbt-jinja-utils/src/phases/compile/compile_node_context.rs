@@ -1,16 +1,12 @@
 //! This module contains the scope guard for resolving models.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
-
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{AdapterType, load_store::ResultStore};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_common::{dashmap::DashMap, serde_utils::convert_yml_to_value_map};
+use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
@@ -23,6 +19,10 @@ use minijinja::{
     machinery::Span,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::phases::MacroLookupContext;
 use crate::phases::compile_and_run_context::{FunctionFunction, SourceFunction};
@@ -34,13 +34,84 @@ use super::compile_config::CompileConfig;
 /// The name of the repl model
 pub const REPL_MODEL_NAME: &str = "__repl__";
 
+/// Configure ref validation behavior
+#[derive(Debug, Clone)]
+pub struct DependencyValidationConfig {
+    /// Expressed as `unique_id`s
+    pub allowed_dependencies: Arc<BTreeSet<String>>,
+    /// Whether to skip validation
+    pub skip_validation: bool,
+    /// What kind of node is being validated?
+    pub node_type: NodeType,
+    /// `unique_id` of the node whose dependencies are being validated, if any
+    pub current_node_unique_id: Option<String>,
+}
+
+impl DependencyValidationConfig {
+    /// Make a new config struct for a given node
+    pub fn new_for_node(node: &impl InternalDbtNode) -> DependencyValidationConfig {
+        DependencyValidationConfig {
+            node_type: node.resource_type(),
+            current_node_unique_id: Some(node.common().unique_id.clone()),
+            ..Self::default()
+        }
+    }
+
+    /// Make an unvalidated config for an unspecified node type
+    pub fn new_unvalidated() -> DependencyValidationConfig {
+        Self::default()
+    }
+
+    /// Make a validated config for an unspecified node type
+    pub fn new_validated() -> DependencyValidationConfig {
+        DependencyValidationConfig {
+            skip_validation: false,
+            ..Self::default()
+        }
+    }
+
+    /// Allow these `unique_id`s in the dependency allowlist. Additive.
+    pub fn allow_dependencies(
+        mut self,
+        addl_deps: impl IntoIterator<Item = impl Into<String>>,
+    ) -> DependencyValidationConfig {
+        let mut deps = Arc::unwrap_or_clone(self.allowed_dependencies);
+        deps.extend(addl_deps.into_iter().map(|s| s.into()));
+        self.allowed_dependencies = Arc::new(deps);
+        self
+    }
+
+    /// Disable validation
+    pub fn skip_validation(mut self) -> DependencyValidationConfig {
+        self.skip_validation = true;
+        self
+    }
+
+    /// Enable validation
+    pub fn validate(mut self) -> DependencyValidationConfig {
+        self.skip_validation = false;
+        self
+    }
+}
+
+impl Default for DependencyValidationConfig {
+    fn default() -> Self {
+        DependencyValidationConfig {
+            allowed_dependencies: Arc::new(BTreeSet::new()),
+            skip_validation: true,
+            node_type: NodeType::Unspecified,
+            current_node_unique_id: None,
+        }
+    }
+}
+
 /// Build a compile model context (wrapper for build_compile_node_context_inner)
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn build_compile_node_context<T>(
     model: &T,
     resolver_state: &ResolverState,
     base_context: &BTreeMap<String, MinijinjaValue>,
-    skip_ref_validation: bool,
+    ref_validation_config: DependencyValidationConfig,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
     Arc<DashMap<String, MinijinjaValue>>,
@@ -55,7 +126,7 @@ where
         &resolver_state.root_project_name,
         resolver_state.node_resolver.clone(),
         resolver_state.runtime_config.clone(),
-        skip_ref_validation,
+        ref_validation_config,
     )
 }
 
@@ -69,7 +140,7 @@ pub fn build_compile_node_context_inner<T>(
     root_project_name: &str,
     node_resolver: Arc<dyn NodeResolverTracker>,
     runtime_config: Arc<DbtRuntimeConfig>,
-    skip_ref_validation: bool,
+    ref_validation_config: DependencyValidationConfig,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
     Arc<DashMap<String, MinijinjaValue>>,
@@ -202,16 +273,15 @@ where
         MinijinjaValue::from_object(compile_config),
     );
 
-    // Create validated ref function with dependency checking
-    let allowed_dependencies: Arc<BTreeSet<String>> =
-        Arc::new(model.base().depends_on.nodes.iter().cloned().collect());
+    // Add model depends_on to dependency allowlist
+    let validation_config_with_depends_on =
+        ref_validation_config.allow_dependencies(&model.base().depends_on.nodes);
 
     let ref_function = RefFunction::new_with_validation(
         node_resolver.clone(),
         model.common().package_name.clone(),
         runtime_config.clone(),
-        allowed_dependencies.clone(),
-        skip_ref_validation,
+        validation_config_with_depends_on.clone(),
         model.common().unique_id.clone(),
     );
 
@@ -224,8 +294,7 @@ where
         node_resolver.clone(),
         model.common().package_name.clone(),
         runtime_config.clone(),
-        allowed_dependencies,
-        skip_ref_validation,
+        validation_config_with_depends_on.clone(),
     );
 
     let function_value = MinijinjaValue::from_object(function_function);
@@ -233,8 +302,11 @@ where
     base_builtins.insert("function".to_string(), function_value);
 
     // Recreate source function with the node's package_name (not root project's)
-    let source_function =
-        SourceFunction::new(node_resolver.clone(), model.common().package_name.clone());
+    let source_function = SourceFunction::new_with_validation(
+        node_resolver.clone(),
+        model.common().package_name.clone(),
+        validation_config_with_depends_on,
+    );
     let source_value = MinijinjaValue::from_object(source_function);
     ctx.insert("source".to_string(), source_value.clone());
     base_builtins.insert("source".to_string(), source_value);
