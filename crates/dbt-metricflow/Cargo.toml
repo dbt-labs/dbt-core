@@ -9,7 +9,20 @@ description = "MetricFlow semantic query compiler. Translates metric queries int
 [lints]
 workspace = true
 
+[[bin]]
+name = "dbt-metricflow"
+path = "src/bin/dbt_metricflow.rs"
+
 [dependencies]
 dbt-fusion-workspace-hack = { version = "0.1" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+arrow-array = { workspace = true }
+arrow-ipc = { workspace = true }
+dbt-auth = { workspace = true }
+dbt-profile = { workspace = true }
+dbt-xdbc = { workspace = true }
+dirs = { workspace = true }
+tempfile = { workspace = true }
