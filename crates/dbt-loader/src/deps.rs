@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::EvalArgs;
-use dbt_common::tracing::metrics::error_count_checkpoint;
+use dbt_common::tracing::dbt_metrics::error_count_checkpoint;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::Var;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;

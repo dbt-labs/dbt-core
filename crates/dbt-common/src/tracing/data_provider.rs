@@ -220,7 +220,13 @@ impl<'a> DataProvider<'a> {
     }
 
     /// Gets a specific per-invocation metric (stored in the root invocation span).
-    pub fn get_metric(&self, key: MetricKey) -> u64 {
+    pub fn get_metric(&self, key: impl Into<MetricKey>) -> u64 {
+        // Keep the public API generic while routing through a non-generic helper to
+        // avoid extra monomorphized copies at call sites.
+        self.get_metric_inner(key.into())
+    }
+
+    fn get_metric_inner(&self, key: MetricKey) -> u64 {
         self.root_span
             .map(|root_span| get_metric_from_span_extension(&root_span.extensions(), key))
             .unwrap_or_default()
@@ -234,7 +240,13 @@ impl<'a> DataProvider<'a> {
     }
 
     /// Increments a per-invocation metric counter on the invocation span extensions directly.
-    pub fn increment_metric(&self, key: MetricKey, value: u64) {
+    pub fn increment_metric(&self, key: impl Into<MetricKey>, value: u64) {
+        // Keep the public API generic while routing through a non-generic helper to
+        // avoid extra monomorphized copies at call sites.
+        self.increment_metric_inner(key.into(), value);
+    }
+
+    fn increment_metric_inner(&self, key: MetricKey, value: u64) {
         if let Some(root_span) = self.root_span {
             increment_metric_on_span(root_span, key, value);
         }

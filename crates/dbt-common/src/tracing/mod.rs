@@ -4,6 +4,7 @@ mod config;
 pub mod constants;
 pub mod convert;
 pub mod data_provider;
+pub mod dbt_metrics;
 pub mod emit;
 pub mod event_classifiers;
 pub mod event_info;

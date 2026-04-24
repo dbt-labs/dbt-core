@@ -4,13 +4,13 @@ use dbt_telemetry::{
     SpanEndInfo, has_node_warning, node_processed::NodeOutcomeDetail,
 };
 
-use crate::tracing::metrics::{NodeSubOutcome, OutcomeCountsKey, OutcomeKind};
-
 use super::super::{
     data_provider::DataProvider,
+    dbt_metrics::{
+        FusionMetricKey, InvocationMetricKey, NodeSubOutcome, OutcomeCountsKey, OutcomeKind,
+    },
     event_classifiers::is_exit_with_status_log,
     layer::TelemetryMiddleware,
-    metrics::{InvocationMetricKey, MetricKey},
 };
 
 /// Middleware that aggregates telemetry metrics from span and log records.
@@ -47,8 +47,8 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             for ((outcome, skip_reason, sub_outcome), count) in data_provider
                 .get_all_metrics()
                 .iter()
-                .filter_map(|(key, count)| match key {
-                    MetricKey::OutcomeCounts(outcome_key) if *count > 0 => {
+                .filter_map(|(key, count)| match FusionMetricKey::try_from(*key).ok() {
+                    Some(FusionMetricKey::OutcomeCounts(outcome_key)) if *count > 0 => {
                         Some((outcome_key.into_parts(), *count))
                     }
                     _ => None,
@@ -93,31 +93,31 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
 
             // Update aggregated metrics
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsSuccess),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsSuccess),
                 success,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsWarning),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsWarning),
                 warning,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsError),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsError),
                 error,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsReused),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsReused),
                 reused,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsSkipped),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsSkipped),
                 skipped,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsCanceled),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsCanceled),
                 canceled,
             );
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsNoOp),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsNoOp),
                 no_op,
             );
 
@@ -126,11 +126,13 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             let node_type_counts: std::collections::HashMap<String, u64> = data_provider
                 .get_all_metrics()
                 .iter()
-                .filter_map(|(key, count)| match key {
-                    MetricKey::NodeCounts(node_type) if *count > 0 => {
+                .filter_map(|(key, count)| match FusionMetricKey::try_from(*key).ok() {
+                    Some(FusionMetricKey::NodeCounts(node_type)) if *count > 0 => {
                         Some((node_type.as_static_ref().to_string(), *count))
                     }
-                    MetricKey::HookCounts if *count > 0 => Some(("hook".to_string(), *count)),
+                    Some(FusionMetricKey::HookCounts) if *count > 0 => {
+                        Some(("hook".to_string(), *count))
+                    }
                     _ => None,
                 })
                 .collect();
@@ -157,15 +159,15 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
 
             // Store totals in invocation attributes
             invocation.metrics = Some(InvocationMetrics {
-                total_errors: Some(data_provider.get_metric(MetricKey::InvocationMetric(
+                total_errors: Some(data_provider.get_metric(FusionMetricKey::InvocationMetric(
                     InvocationMetricKey::TotalErrors,
                 ))),
-                total_warnings: Some(data_provider.get_metric(MetricKey::InvocationMetric(
+                total_warnings: Some(data_provider.get_metric(FusionMetricKey::InvocationMetric(
                     InvocationMetricKey::TotalWarnings,
                 ))),
-                autofix_suggestions: Some(data_provider.get_metric(MetricKey::InvocationMetric(
-                    InvocationMetricKey::AutoFixSuggestions,
-                ))),
+                autofix_suggestions: Some(data_provider.get_metric(
+                    FusionMetricKey::InvocationMetric(InvocationMetricKey::AutoFixSuggestions),
+                )),
                 node_type_counts,
                 status_counts,
             });
@@ -200,20 +202,20 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 attrs.node_skip_reason(),
                 sub_outcome,
             );
-            data_provider.increment_metric(MetricKey::OutcomeCounts(key), 1);
+            data_provider.increment_metric(FusionMetricKey::OutcomeCounts(key), 1);
         }
 
         // Count hook processed spans - hooks are always counted regardless of selection
         if let Some(hook_attrs) = span.attributes.downcast_ref::<HookProcessed>() {
             // Count the hook
-            data_provider.increment_metric(MetricKey::HookCounts, 1);
+            data_provider.increment_metric(FusionMetricKey::HookCounts, 1);
 
             let key = OutcomeCountsKey::new(
                 OutcomeKind::Hook(hook_attrs.hook_outcome()),
                 NodeSkipReason::Unspecified,
                 None,
             );
-            data_provider.increment_metric(MetricKey::OutcomeCounts(key), 1);
+            data_provider.increment_metric(FusionMetricKey::OutcomeCounts(key), 1);
         }
 
         Some(span)
@@ -234,13 +236,13 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             match log_record.severity_number {
                 SeverityNumber::Error => {
                     data_provider.increment_metric(
-                        MetricKey::InvocationMetric(InvocationMetricKey::TotalErrors),
+                        FusionMetricKey::InvocationMetric(InvocationMetricKey::TotalErrors),
                         1,
                     );
                 }
                 SeverityNumber::Warn => {
                     data_provider.increment_metric(
-                        MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
+                        FusionMetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
                         1,
                     );
                 }

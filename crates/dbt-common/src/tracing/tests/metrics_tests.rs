@@ -4,12 +4,16 @@ use crate::tracing::{
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
     layers::data_layer::TelemetryDataLayer,
-    metrics::{InvocationMetricKey, MetricKey, get_metric, increment_metric},
+    metrics::{MetricKey, get_metric, increment_metric},
 };
 use dbt_telemetry::TelemetryOutputFlags;
 use tracing_subscriber::{Registry, registry::LookupSpan};
 
 use super::mocks::{MockDynSpanEvent, TestLayer};
+
+const TOTAL_ERRORS_KEY: MetricKey = MetricKey::from_raw(1);
+const TOTAL_WARNINGS_KEY: MetricKey = MetricKey::from_raw(2);
+const AUTOFIX_SUGGESTIONS_KEY: MetricKey = MetricKey::from_raw(3);
 
 #[test]
 fn metrics_are_scoped_to_root_span() {
@@ -46,10 +50,7 @@ fn metrics_are_scoped_to_root_span() {
             });
             {
                 let _child_scope = first_child.enter();
-                increment_metric(
-                    MetricKey::InvocationMetric(InvocationMetricKey::TotalErrors),
-                    3,
-                );
+                increment_metric(TOTAL_ERRORS_KEY, 3);
 
                 let first_child_id = first_child.id().expect("child span must have id");
                 tracing::dispatcher::get_default(|dispatch| {
@@ -63,30 +64,13 @@ fn metrics_are_scoped_to_root_span() {
 
                     assert_eq!(first_root.id().expect("must exist"), root_span.id());
 
-                    DataProvider::new(&root_span, &span_ref).increment_metric(
-                        MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
-                        2,
-                    );
+                    DataProvider::new(&root_span, &span_ref)
+                        .increment_metric(TOTAL_WARNINGS_KEY, 2);
                 });
 
-                assert_eq!(
-                    get_metric(MetricKey::InvocationMetric(
-                        InvocationMetricKey::TotalErrors
-                    )),
-                    3
-                );
-                assert_eq!(
-                    get_metric(MetricKey::InvocationMetric(
-                        InvocationMetricKey::TotalWarnings
-                    )),
-                    2
-                );
-                assert_eq!(
-                    get_metric(MetricKey::InvocationMetric(
-                        InvocationMetricKey::AutoFixSuggestions
-                    )),
-                    0
-                );
+                assert_eq!(get_metric(TOTAL_ERRORS_KEY), 3);
+                assert_eq!(get_metric(TOTAL_WARNINGS_KEY), 2);
+                assert_eq!(get_metric(AUTOFIX_SUGGESTIONS_KEY), 0);
 
                 tracing::dispatcher::get_default(|dispatch| {
                     let registry = dispatch
@@ -97,9 +81,7 @@ fn metrics_are_scoped_to_root_span() {
                         .expect("child span must exist in registry");
                     let root_span = span_ref.scope().from_root().next().unwrap();
                     assert_eq!(
-                        DataProvider::new(&root_span, &span_ref).get_metric(
-                            MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings)
-                        ),
+                        DataProvider::new(&root_span, &span_ref).get_metric(TOTAL_WARNINGS_KEY),
                         2
                     );
                 });
@@ -107,24 +89,9 @@ fn metrics_are_scoped_to_root_span() {
         }
         drop(first_root);
 
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::TotalErrors
-            )),
-            0
-        );
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::TotalWarnings
-            )),
-            0
-        );
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::AutoFixSuggestions
-            )),
-            0
-        );
+        assert_eq!(get_metric(TOTAL_ERRORS_KEY), 0);
+        assert_eq!(get_metric(TOTAL_WARNINGS_KEY), 0);
+        assert_eq!(get_metric(AUTOFIX_SUGGESTIONS_KEY), 0);
 
         let second_root = create_root_info_span(MockDynSpanEvent {
             name: "second_root".to_string(),
@@ -141,63 +108,20 @@ fn metrics_are_scoped_to_root_span() {
             });
             {
                 let _child_scope = second_child.enter();
-                increment_metric(
-                    MetricKey::InvocationMetric(InvocationMetricKey::TotalErrors),
-                    7,
-                );
+                increment_metric(TOTAL_ERRORS_KEY, 7);
 
-                assert_eq!(
-                    get_metric(MetricKey::InvocationMetric(
-                        InvocationMetricKey::TotalErrors
-                    )),
-                    7
-                );
-                assert_eq!(
-                    get_metric(MetricKey::InvocationMetric(
-                        InvocationMetricKey::AutoFixSuggestions
-                    )),
-                    0
-                );
+                assert_eq!(get_metric(TOTAL_ERRORS_KEY), 7);
+                assert_eq!(get_metric(AUTOFIX_SUGGESTIONS_KEY), 0);
             }
         }
         drop(second_root);
 
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::TotalErrors
-            )),
-            0
-        );
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::TotalWarnings
-            )),
-            0
-        );
-        assert_eq!(
-            get_metric(MetricKey::InvocationMetric(
-                InvocationMetricKey::AutoFixSuggestions
-            )),
-            0
-        );
+        assert_eq!(get_metric(TOTAL_ERRORS_KEY), 0);
+        assert_eq!(get_metric(TOTAL_WARNINGS_KEY), 0);
+        assert_eq!(get_metric(AUTOFIX_SUGGESTIONS_KEY), 0);
     });
 
-    assert_eq!(
-        get_metric(MetricKey::InvocationMetric(
-            InvocationMetricKey::TotalErrors
-        )),
-        0
-    );
-    assert_eq!(
-        get_metric(MetricKey::InvocationMetric(
-            InvocationMetricKey::TotalWarnings
-        )),
-        0
-    );
-    assert_eq!(
-        get_metric(MetricKey::InvocationMetric(
-            InvocationMetricKey::AutoFixSuggestions
-        )),
-        0
-    );
+    assert_eq!(get_metric(TOTAL_ERRORS_KEY), 0);
+    assert_eq!(get_metric(TOTAL_WARNINGS_KEY), 0);
+    assert_eq!(get_metric(AUTOFIX_SUGGESTIONS_KEY), 0);
 }

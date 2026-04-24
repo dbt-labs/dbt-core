@@ -17,6 +17,7 @@ use tracing::level_filters::LevelFilter;
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
+    dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     event_classifiers::is_exit_with_status_log,
     formatters::{
         deps::{format_package_installed_end, format_package_installed_start, format_package_spec},
@@ -33,7 +34,6 @@ use super::super::{
         query_log::format_query_log,
     },
     layer::{ConsumerLayer, TelemetryConsumer},
-    metrics::{InvocationMetricKey, MetricKey},
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
 };
@@ -396,7 +396,7 @@ impl JsonCompatLayer {
             .as_secs_f32();
 
         let completed_at_str = format_timestamp_utc_zulu(span.end_time_unix_nano);
-        let success = data_provider.get_metric(MetricKey::InvocationMetric(
+        let success = data_provider.get_metric(FusionMetricKey::InvocationMetric(
             InvocationMetricKey::TotalErrors,
         )) == 0;
 

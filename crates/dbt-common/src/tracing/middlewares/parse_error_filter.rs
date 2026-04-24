@@ -4,8 +4,8 @@ use dbt_telemetry::{AnyTelemetryEvent, LogMessage, LogRecordInfo, SeverityNumber
 
 use super::super::{
     data_provider::DataProvider,
+    dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     layer::TelemetryMiddleware,
-    metrics::{InvocationMetricKey, MetricKey},
 };
 
 /// An unfortunate temporary wrapper used to mark log messages that are parsing errors.
@@ -188,7 +188,7 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
 
             // Increment autofix counter
             data_provider.increment_metric(
-                MetricKey::InvocationMetric(InvocationMetricKey::AutoFixSuggestions),
+                FusionMetricKey::InvocationMetric(InvocationMetricKey::AutoFixSuggestions),
                 1,
             );
 

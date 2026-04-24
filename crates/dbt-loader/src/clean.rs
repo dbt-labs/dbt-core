@@ -14,9 +14,9 @@ use dbt_common::{
     lease::{self, Lease},
     stdfs,
     tracing::{
+        dbt_metrics::error_count_checkpoint,
         emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
         event_info::store_event_attributes,
-        metrics::error_count_checkpoint,
     },
 };
 use dbt_jinja_utils::{

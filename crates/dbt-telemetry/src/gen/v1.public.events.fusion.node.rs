@@ -466,6 +466,7 @@ impl ::prost::Name for NodeProcessed {
 }
 /// Node type, also known as "resource type" in dbt core.
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum NodeType {
@@ -537,6 +538,7 @@ impl NodeType {
 /// Core outcome for any node evaluation result within any phase.
 /// Represents the aggregated result of all operations in the phase
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum NodeOutcome {
@@ -645,6 +647,7 @@ impl NodeCancelReason {
 }
 /// Reasons why a node may be skipped. Only applies to nodes selected for evaluation.
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum NodeSkipReason {

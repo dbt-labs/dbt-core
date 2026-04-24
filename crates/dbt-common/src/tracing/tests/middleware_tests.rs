@@ -1,10 +1,11 @@
 use crate::tracing::{
     data_provider::DataProvider,
+    dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     emit::{create_info_span, create_root_info_span, emit_info_event, emit_warn_log_message},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
     layers::data_layer::TelemetryDataLayer,
-    metrics::{InvocationMetricKey, MetricKey, get_metric},
+    metrics::get_metric,
     middlewares::{
         metric_aggregator::TelemetryMetricAggregator,
         warn_error_options::TelemetryWarnErrorOptionsMiddleware,
@@ -36,7 +37,7 @@ fn middleware_modifies_drops_and_updates_metrics() {
 
             if span.span_name.ends_with("child") {
                 metrics.increment_metric(
-                    MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
+                    FusionMetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
                     1,
                 );
 
@@ -126,7 +127,7 @@ fn middleware_modifies_drops_and_updates_metrics() {
             );
         });
 
-        get_metric(MetricKey::InvocationMetric(
+        get_metric(FusionMetricKey::InvocationMetric(
             InvocationMetricKey::TotalWarnings,
         ))
     });
@@ -252,10 +253,10 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
         emit_warn_log_message(ErrorCode::NoNodesSelected, "silence", None);
 
         (
-            get_metric(MetricKey::InvocationMetric(
+            get_metric(FusionMetricKey::InvocationMetric(
                 InvocationMetricKey::TotalErrors,
             )),
-            get_metric(MetricKey::InvocationMetric(
+            get_metric(FusionMetricKey::InvocationMetric(
                 InvocationMetricKey::TotalWarnings,
             )),
         )

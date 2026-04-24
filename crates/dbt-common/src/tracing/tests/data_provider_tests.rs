@@ -3,10 +3,12 @@ use super::super::{
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     layers::data_layer::TelemetryDataLayer,
-    metrics::{InvocationMetricKey, MetricKey, get_metric},
+    metrics::{MetricKey, get_metric},
     tests::mocks::{MockDynSpanEvent, MockMiddleware, TestLayer},
 };
 use dbt_telemetry::TelemetryOutputFlags;
+
+const TEST_WARNING_METRIC: MetricKey = MetricKey::from_raw(1);
 
 #[derive(Debug, Clone, PartialEq)]
 struct TestExtension {
@@ -18,7 +20,7 @@ fn data_provider_isolates_roots_and_shares_within_tree() {
     let trace_id = rand::random::<u128>();
     let (test_layer, ..) = TestLayer::new();
 
-    let test_metric = MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings);
+    let test_metric = TEST_WARNING_METRIC;
 
     // Middleware will increment metric and store extension on each span
     let middleware = MockMiddleware::new().with_span_start(move |span, data_provider| {

@@ -103,6 +103,7 @@ impl HookType {
 }
 /// Hook outcome for a single hook execution
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum HookOutcome {

@@ -1,9 +1,13 @@
-use dbt_telemetry::{HookOutcome, NodeOutcome, NodeSkipReason, NodeType, TestOutcome};
-use error::{FsError, FsResult};
-use strum::EnumCount as _;
-#[cfg(test)]
-use strum_macros::EnumIter;
-use strum_macros::{EnumCount, FromRepr};
+//! Multi-scoped globally accessible metric system based on tracing.
+//!
+//! This module provides API's for incrementing and reading arbitraty metrics,
+//! that are scoped to the current reachable root tracing span. Meaning you can
+//! have can have globally accessible metrics that may still be scoped and isolated
+//! between parallel logically independent program threads, e.g. a service.
+//!
+//! Module provides process-wide public getters & writers, while tracing layers &middleware
+//! may safely access metrics through [`crate::tracing::data_provider::DataProvider`].
+
 use tracing_subscriber::registry::Extensions;
 
 use crate::sccmap;
@@ -12,96 +16,30 @@ use super::{
     constants::ROOT_SPAN_NAME,
     span_info::{SpanAccess, with_root_span},
 };
-use std::sync::atomic::AtomicU64;
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumCount, FromRepr)]
-#[cfg_attr(test, derive(EnumIter))]
-pub enum InvocationMetricKey {
-    TotalErrors = 0,
-    TotalWarnings,
-    AutoFixSuggestions,
-    // Run summary totals based on node outcomes. These may change or fold into
-    // becoming an actual log report later.
-    NodeTotalsSuccess,
-    NodeTotalsWarning,
-    NodeTotalsError,
-    NodeTotalsReused,
-    NodeTotalsSkipped,
-    NodeTotalsCanceled,
-    NodeTotalsNoOp,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OutcomeKind {
-    Node(NodeOutcome),
-    Hook(HookOutcome),
-}
+pub struct MetricKey(u64);
 
-/// A sub-outcome discriminator for [`OutcomeCountsKey`] that refines how a
-/// node's primary outcome is bucketed in aggregation. Only variants that
-/// change routing are included; plain success maps to `None`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum NodeSubOutcome {
-    /// Test or unit-test node warned (failures between warn/error thresholds).
-    TestWarned,
-    /// Test or unit-test node failed (failures above error threshold).
-    TestFailed,
-    /// Source freshness exceeded warning threshold (`OutcomeWarned` + `NodeOutcome::Success`).
-    FreshnessWarned,
-    /// Source freshness exceeded error threshold (`OutcomeFailed` + `NodeOutcome::Success`).
-    FreshnessFailed,
-    /// Non-test, non-freshness node completed with warnings (`NodeWarningOutcome::WithWarnings`).
-    NodeWarned,
-}
-
-impl NodeSubOutcome {
-    /// Maps a [`TestOutcome`] to its corresponding sub-outcome.
-    /// Returns `None` for `Passed` (routes to the plain success bucket).
-    pub fn from_test_outcome(t: TestOutcome) -> Option<Self> {
-        match t {
-            TestOutcome::Passed => None,
-            TestOutcome::Warned => Some(Self::TestWarned),
-            TestOutcome::Failed => Some(Self::TestFailed),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OutcomeCountsKey(OutcomeKind, NodeSkipReason, Option<NodeSubOutcome>);
-
-impl OutcomeCountsKey {
-    pub fn new(
-        outcome: OutcomeKind,
-        skip_reason: NodeSkipReason,
-        sub_outcome: Option<NodeSubOutcome>,
-    ) -> Self {
-        Self(outcome, skip_reason, sub_outcome)
+impl MetricKey {
+    pub const fn from_raw(raw: u64) -> Self {
+        Self(raw)
     }
 
-    pub fn outcome(&self) -> OutcomeKind {
+    pub const fn into_raw(self) -> u64 {
         self.0
     }
+}
 
-    pub fn skip_reason(&self) -> NodeSkipReason {
-        self.1
-    }
-
-    pub fn sub_outcome(&self) -> Option<NodeSubOutcome> {
-        self.2
-    }
-
-    pub fn into_parts(self) -> (OutcomeKind, NodeSkipReason, Option<NodeSubOutcome>) {
-        (self.0, self.1, self.2)
+impl From<u64> for MetricKey {
+    fn from(raw: u64) -> Self {
+        Self::from_raw(raw)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MetricKey {
-    InvocationMetric(InvocationMetricKey),
-    NodeCounts(NodeType),
-    OutcomeCounts(OutcomeCountsKey),
-    HookCounts,
+impl From<MetricKey> for u64 {
+    fn from(key: MetricKey) -> Self {
+        key.into_raw()
+    }
 }
 
 /// A private struct holding all metric counters.
@@ -110,64 +48,38 @@ pub enum MetricKey {
 /// replace or remove the metrics storage from the span extensions.
 #[derive(Debug)]
 struct MetricCounters {
-    // Using AtomicU64 for invocation metrics
-    invocation_counters: [AtomicU64; InvocationMetricKey::COUNT],
-    // Other metrics with complex keys stored in a map
     metrics: sccmap::HashMap<MetricKey, u64>,
 }
 
 impl MetricCounters {
     fn new() -> Self {
         Self {
-            invocation_counters: std::array::from_fn(|_| AtomicU64::new(0)),
             metrics: sccmap::new(),
         }
     }
 
     fn increment(&self, key: MetricKey, value: u64) {
-        match key {
-            MetricKey::InvocationMetric(im) => {
-                // SAFETY: arry size is statically defined by enum count and pre-allocated on creation.
-                // Enum discriminant is u8 starting from 0, so index is always valid. Also we do exhaustive testing,
-                self.invocation_counters[im as usize]
-                    .fetch_add(value, std::sync::atomic::Ordering::AcqRel);
-            }
-            _ => {
-                self.metrics
-                    .entry_sync(key)
-                    .and_modify(|v| *v = v.saturating_add(value))
-                    .or_insert(value);
-            }
-        }
+        self.metrics
+            .entry_sync(key)
+            .and_modify(|v| *v = v.saturating_add(value))
+            .or_insert(value);
     }
 
     fn get(&self, key: MetricKey) -> u64 {
-        match key {
-            MetricKey::InvocationMetric(im) => {
-                // SAFETY: arry size is statically defined by enum count and pre-allocated on creation.
-                // Enum discriminant is u8 starting from 0, so index is always valid. Also we do exhaustive testing,
-                self.invocation_counters[im as usize].load(std::sync::atomic::Ordering::Acquire)
-            }
-            _ => self.metrics.read_sync(&key, |_, v| *v).unwrap_or_default(),
-        }
+        self.metrics.read_sync(&key, |_, v| *v).unwrap_or_default()
     }
 
     fn iter(&self) -> impl Iterator<Item = (MetricKey, u64)> + '_ {
-        let invocation_metrics = (0..InvocationMetricKey::COUNT).map(|i| {
-            let key = MetricKey::InvocationMetric(
-                InvocationMetricKey::from_repr(i as u8).expect("Must be valid"),
-            );
-            let value = self.invocation_counters[i].load(std::sync::atomic::Ordering::Relaxed);
-            (key, value)
-        });
-
-        let mut other_metrics = Vec::new();
+        // Scc maps do not provide Iterator implementations, due
+        // to locking requirements => thus we must eagerly collect and
+        // allocate a Vec here.
+        let mut metrics = Vec::new();
         self.metrics.iter_sync(|k, v| {
-            other_metrics.push((*k, *v));
+            metrics.push((*k, *v));
             true
         });
 
-        invocation_metrics.chain(other_metrics)
+        metrics.into_iter()
     }
 }
 
@@ -182,7 +94,13 @@ pub(super) fn init_metrics_storage_on_root_span(root_span: &dyn SpanAccess) {
 }
 
 /// Increments an invocation metric counter
-pub fn increment_metric(key: MetricKey, value: u64) {
+pub fn increment_metric(key: impl Into<MetricKey>, value: u64) {
+    // Keep the public API generic while routing through a non-generic helper to
+    // avoid extra monomorphized copies at call sites.
+    increment_metric_inner(key.into(), value);
+}
+
+fn increment_metric_inner(key: MetricKey, value: u64) {
     with_root_span(|root_span| {
         debug_assert_eq!(
             root_span.name(),
@@ -220,7 +138,13 @@ pub(super) fn get_metric_from_span_extension(span_ext: &Extensions<'_>, key: Met
 }
 
 /// Gets a specific invocation totals metrics (stored in the root invocation span).
-pub fn get_metric(key: MetricKey) -> u64 {
+pub fn get_metric(key: impl Into<MetricKey>) -> u64 {
+    // Keep the public API generic while routing through a non-generic helper to
+    // avoid extra monomorphized copies at call sites.
+    get_metric_inner(key.into())
+}
+
+fn get_metric_inner(key: MetricKey) -> u64 {
     with_root_span(|root_span| {
         debug_assert_eq!(
             root_span.name(),
@@ -241,87 +165,4 @@ pub(super) fn get_all_metrics_from_span_extension(
         .get::<MetricCounters>()
         .map(|counters| counters.iter().collect())
         .unwrap_or_default()
-}
-
-/// Get the `TotalErrors` invocation metric value.
-pub fn get_error_count() -> u64 {
-    get_metric(MetricKey::InvocationMetric(
-        InvocationMetricKey::TotalErrors,
-    ))
-}
-
-/// Produce an error that forces returning an exit code based on the current
-/// error counter. The return effect is achieved through [FsError::ExitWithStatus].
-///
-/// If there were any errors recorded, exit code will be 1, otherwise 0.
-pub fn return_exit_code_from_error_counter() -> Box<FsError> {
-    let exit_code = if get_error_count() > 0 { 1 } else { 0 };
-    FsError::exit_with_status(exit_code)
-}
-
-/// Check the error count and return an status code so the CLI produces a status code immediately.
-///
-/// This is good to run right at the end of functions responsible to handling a CLI sub-command.
-pub fn error_count_checkpoint() -> FsResult<()> {
-    if get_error_count() > 0 {
-        Err(FsError::exit_with_status(1))
-    } else {
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::collections::HashSet;
-    use strum::IntoEnumIterator;
-
-    #[test]
-    fn test_increment_and_get_all_metrics() {
-        let metrics = MetricCounters::new();
-
-        // Test invocation metrics. First store distinct values on each then check expected
-        for (i, key) in InvocationMetricKey::iter().enumerate() {
-            let key = MetricKey::InvocationMetric(key);
-            assert_eq!(metrics.get(key), 0);
-            metrics.increment(key, i as u64);
-            assert_eq!(metrics.get(key), i as u64);
-        }
-
-        for (i, key) in InvocationMetricKey::iter().enumerate() {
-            let key = MetricKey::InvocationMetric(key);
-            assert_eq!(metrics.get(key), i as u64);
-            metrics.increment(key, 3);
-            assert_eq!(metrics.get(key), (i as u64) + 3);
-        }
-
-        // Test NodeType metrics
-        for key in [
-            MetricKey::NodeCounts(Default::default()),
-            MetricKey::OutcomeCounts(OutcomeCountsKey(
-                OutcomeKind::Node(Default::default()),
-                Default::default(),
-                Default::default(),
-            )),
-        ] {
-            assert_eq!(metrics.get(key), 0);
-            metrics.increment(key, 2);
-            assert_eq!(metrics.get(key), 2);
-            metrics.increment(key, 4);
-            assert_eq!(metrics.get(key), 6);
-        }
-    }
-
-    #[test]
-    fn test_iterator_contains_all_keys() {
-        let metrics = MetricCounters::new();
-
-        // Check iterator only returns simple keys when no metrics have been added
-        let all_keys: HashSet<MetricKey> = metrics.iter().map(|(k, _)| k).collect();
-
-        let exporter_keys: HashSet<MetricKey> = InvocationMetricKey::iter()
-            .map(MetricKey::InvocationMetric)
-            .collect();
-        assert_eq!(all_keys, exporter_keys);
-    }
 }

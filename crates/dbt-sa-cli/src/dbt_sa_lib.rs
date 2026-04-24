@@ -2,11 +2,11 @@ use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
 use dbt_common::io_utils::checkpoint_maybe_exit;
+use dbt_common::tracing::dbt_metrics::error_count_checkpoint;
 use dbt_common::tracing::emit::{
     emit_error_log_from_fs_error, emit_info_log_message, emit_info_progress_message,
 };
 use dbt_common::tracing::invocation::create_invocation_attributes;
-use dbt_common::tracing::metrics::error_count_checkpoint;
 use dbt_init::{FsError, init};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;

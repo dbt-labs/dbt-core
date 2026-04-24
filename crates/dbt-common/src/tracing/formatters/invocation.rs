@@ -7,11 +7,11 @@ use itertools::Itertools;
 
 use crate::tracing::{
     data_provider::DataProvider,
+    dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     formatters::{
         color::{BLUE, DIM, GREEN, MAGENTA, RED, WHITE, YELLOW, maybe_apply_color},
         layout::format_delimiter,
     },
-    metrics::{InvocationMetricKey, MetricKey},
 };
 
 use super::duration::format_duration_for_summary;
@@ -128,25 +128,25 @@ fn extract_invocation_command_and_target(attributes: &Invocation) -> (&str, Opti
 }
 
 fn collect_outcome_totals(data_provider: &DataProvider<'_>) -> InvocationOutcomeTotals {
-    let success = data_provider.get_metric(MetricKey::InvocationMetric(
+    let success = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsSuccess,
     ));
-    let warn = data_provider.get_metric(MetricKey::InvocationMetric(
+    let warn = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsWarning,
     ));
-    let error = data_provider.get_metric(MetricKey::InvocationMetric(
+    let error = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsError,
     ));
-    let reused = data_provider.get_metric(MetricKey::InvocationMetric(
+    let reused = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsReused,
     ));
-    let skipped = data_provider.get_metric(MetricKey::InvocationMetric(
+    let skipped = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsSkipped,
     ));
-    let canceled = data_provider.get_metric(MetricKey::InvocationMetric(
+    let canceled = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsCanceled,
     ));
-    let no_op = data_provider.get_metric(MetricKey::InvocationMetric(
+    let no_op = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsNoOp,
     ));
 
@@ -164,13 +164,13 @@ fn collect_outcome_totals(data_provider: &DataProvider<'_>) -> InvocationOutcome
 
 /// Collects invocation-level metrics exposed through the data provider for the Invocation span.
 fn collect_invocation_metrics(data_provider: &DataProvider<'_>) -> InvocationMetricsSnapshot {
-    let warnings = data_provider.get_metric(MetricKey::InvocationMetric(
+    let warnings = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::TotalWarnings,
     ));
-    let errors = data_provider.get_metric(MetricKey::InvocationMetric(
+    let errors = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::TotalErrors,
     ));
-    let autofix = data_provider.get_metric(MetricKey::InvocationMetric(
+    let autofix = data_provider.get_metric(FusionMetricKey::InvocationMetric(
         InvocationMetricKey::AutoFixSuggestions,
     ));
 
@@ -298,7 +298,7 @@ fn format_evaluated_line(data_provider: &DataProvider<'_>, _colorize: bool) -> O
     let mut parts = Vec::new();
 
     // First, add hooks if any
-    let hook_count = data_provider.get_metric(MetricKey::HookCounts);
+    let hook_count = data_provider.get_metric(FusionMetricKey::HookCounts);
     if hook_count > 0 {
         let word = if hook_count > 1 { "hooks" } else { "hook" };
         parts.push(format!("{} {}", hook_count, word));
@@ -308,8 +308,8 @@ fn format_evaluated_line(data_provider: &DataProvider<'_>, _colorize: bool) -> O
     for (node_type, count) in data_provider
         .get_all_metrics()
         .iter()
-        .filter_map(|(key, count)| match key {
-            MetricKey::NodeCounts(node_type) => Some((*node_type, count)),
+        .filter_map(|(key, count)| match FusionMetricKey::try_from(*key).ok() {
+            Some(FusionMetricKey::NodeCounts(node_type)) => Some((node_type, count)),
             _ => None,
         })
         .sorted_by(|a, b| {
