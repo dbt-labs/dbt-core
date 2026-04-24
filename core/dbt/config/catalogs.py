@@ -578,7 +578,11 @@ def bridge_v2_catalog_to_integration(
         name=catalog.name,
         catalog_type=v1_catalog_type,
         catalog_name=catalog.name,
-        table_format=catalog.table_format.value.upper(),
+        table_format=(
+            catalog.table_format.value.upper()
+            if adapter_type == "snowflake"
+            else catalog.table_format.value
+        ),
         external_volume=str(external_volume) if external_volume is not None else None,
         file_format=str(file_format) if file_format is not None else None,
         adapter_properties=adapter_properties,

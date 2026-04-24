@@ -548,7 +548,7 @@ class TestBridgeV2CatalogToIntegration:
         )
         config = bridge_v2_catalog_to_integration(cat, "databricks")
         assert config.catalog_type == "hive_metastore"
-        assert config.table_format == "DEFAULT"
+        assert config.table_format == "default"
         assert config.file_format == "delta"
         assert config.adapter_properties == {}
 
