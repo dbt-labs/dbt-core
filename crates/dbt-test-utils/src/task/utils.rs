@@ -380,8 +380,7 @@ where
 
         let shutdown_errors: Vec<FsError> = shutdown_items
             .iter_mut()
-            .filter_map(|item| item.shutdown().err())
-            .map(|err| *err)
+            .filter_map(|item| item.shutdown().err().map(FsError::from))
             .collect();
 
         match result {

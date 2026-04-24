@@ -3,9 +3,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
-use dbt_error::{ErrorCode, FsResult};
-
-use super::{shared_writer::SharedWriter, shutdown::TelemetryShutdown};
+use super::{
+    error::{TracingError, TracingResult},
+    shared_writer::SharedWriter,
+    shutdown::TelemetryShutdown,
+};
 
 /// Channel-based non-blocking writer that performs writes on a separate thread.
 ///
@@ -117,13 +119,12 @@ impl BackgroundWriter {
     }
 
     /// Send data to be written
-    pub fn write_bytes(&self, data: &[u8], append_newline: bool) -> FsResult<()> {
+    pub fn write_bytes(&self, data: &[u8], append_newline: bool) -> TracingResult<()> {
         if self.shutdown_flag.load(Ordering::Acquire) {
             // Writer thread has shut down
-            return err!(
-                ErrorCode::IoError,
+            return Err(TracingError::io(
                 "Attempt to write to telemetry writer after shutdown",
-            );
+            ));
         }
 
         let mut data = data.to_vec();
@@ -136,10 +137,7 @@ impl BackgroundWriter {
             .map_err(|_| {
                 // Channel is disconnected, mark as shut down
                 self.shutdown_flag.store(true, Ordering::Release);
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Telemetry writer thread has terminated unexpectedly",
-                )
+                TracingError::channel_closed("Telemetry writer thread has terminated unexpectedly")
             })
     }
 }
@@ -161,7 +159,7 @@ impl SharedWriter for BackgroundWriter {
 }
 
 impl TelemetryShutdown for BackgroundWriterShutdownHandle {
-    fn shutdown(&mut self) -> FsResult<()> {
+    fn shutdown(&mut self) -> TracingResult<()> {
         if !self.shutdown_flag.swap(true, Ordering::AcqRel) {
             // Send shutdown message. Ignore error if the channel is already closed.
             self.sender.send(TelemetryMessage::Shutdown).ok();
@@ -170,10 +168,7 @@ impl TelemetryShutdown for BackgroundWriterShutdownHandle {
         // Wait for the writer thread to finish
         if let Some(handle) = self.writer_thread.take() {
             handle.join().map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to close telemetry file writer: {e:?}"
-                )
+                TracingError::thread_join(format!("Failed to close telemetry file writer: {e:?}"))
             })?;
         }
 
@@ -181,11 +176,10 @@ impl TelemetryShutdown for BackgroundWriterShutdownHandle {
         let err_lock = self.shutdown_err.lock().expect("Mutex poisoned");
 
         if let Some(e) = err_lock.as_ref() {
-            return Err(fs_err!(
-                ErrorCode::IoError,
+            return Err(TracingError::io(format!(
                 "Telemetry writer encountered an error: {}. Some telemetry data may have been lost.",
                 e
-            ));
+            )));
         }
 
         Ok(())
@@ -351,7 +345,7 @@ mod tests {
             panic!("Expected shutdown to return error due to write failure");
         };
 
-        assert_eq!(error.code, ErrorCode::IoError);
+        assert!(matches!(&error, TracingError::Io(_)));
         assert_contains!(error.to_string(), "Mock write error");
 
         // Verify only first message was written (writer failed after 1)
@@ -374,7 +368,7 @@ mod tests {
             panic!("Expected shutdown to return error due to write failure");
         };
 
-        assert_eq!(error.code, ErrorCode::IoError);
+        assert!(matches!(&error, TracingError::Io(_)));
         assert_contains!(error.to_string(), "Mock flush error");
 
         // After shutdown, writes should fail

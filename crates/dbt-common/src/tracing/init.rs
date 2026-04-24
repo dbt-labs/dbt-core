@@ -10,8 +10,12 @@ use tracing_subscriber::{
 };
 
 use super::{
-    config::FsTraceConfig, constants::PROCESS_SPAN_NAME, event_info::store_event_attributes,
-    layers::data_layer::TelemetryDataLayer, shutdown::TelemetryShutdownItem,
+    config::FsTraceConfig,
+    constants::PROCESS_SPAN_NAME,
+    error::{TracingError, TracingResult},
+    event_info::store_event_attributes,
+    layers::data_layer::TelemetryDataLayer,
+    shutdown::TelemetryShutdownItem,
     tracing_features_handle::TracingFeaturesHandle,
 };
 use dbt_error::{FsError, FsResult};
@@ -56,6 +60,7 @@ pub struct TelemetryHandle {
     process_span_handle: Option<span::Span>,
 }
 
+// This impl block is intended to stay with the future generic tracing library.
 impl TelemetryHandle {
     pub(crate) fn new(items: Vec<TelemetryShutdownItem>, process_span_handle: span::Span) -> Self {
         TelemetryHandle {
@@ -65,7 +70,7 @@ impl TelemetryHandle {
     }
 
     /// Gracefully shuts down telemetry
-    pub fn shutdown(&mut self) -> Vec<FsError> {
+    pub fn shutdown(&mut self) -> Vec<TracingError> {
         // First, drop the process span handle to ensure that
         // the process span is closed properly.
         if let Some(handle) = self.process_span_handle.take() {
@@ -76,8 +81,16 @@ impl TelemetryHandle {
         self.items
             .iter_mut()
             .filter_map(|item| item.shutdown().err())
-            .map(|err| *err)
             .collect()
+    }
+}
+
+// Fusion-specific compatibility methods. This impl block should move out of the
+// generic tracing library boundary when tracing is extracted.
+impl TelemetryHandle {
+    /// Gracefully shuts down telemetry and converts shutdown failures to Fusion errors.
+    pub fn shutdown_fs_errors(&mut self) -> Vec<FsError> {
+        self.shutdown().into_iter().map(FsError::from).collect()
     }
 }
 
@@ -115,7 +128,8 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<(TelemetryHandle, Tracing
         std::cmp::max(config.max_log_verbosity, config.max_file_log_verbosity);
 
     let process_span =
-        init_tracing_with_consumer_layer(effective_max_verbosity, config.package, data_layer)?;
+        init_tracing_with_consumer_layer(effective_max_verbosity, config.package, data_layer)
+            .map_err(FsError::from)?;
 
     Ok((
         TelemetryHandle::new(shutdown_items, process_span),
@@ -148,16 +162,16 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
     max_log_verbosity: LevelFilter,
     package: &str,
     data_layer: D,
-) -> FsResult<span::Span> {
+) -> TracingResult<span::Span> {
     // Check if tracing is already initialized
     if PROCESS_SPAN.get().is_some() {
-        return Err(unexpected_fs_err!("Tracing is already initialized"));
+        return Err(TracingError::AlreadyInitialized);
     }
 
     let subscriber = create_tracing_subcriber_with_layer(max_log_verbosity, data_layer);
 
     tracing::subscriber::set_global_default(subscriber)
-        .map_err(|_| unexpected_fs_err!("Failed to set-up tracing"))?;
+        .map_err(|_| TracingError::SetGlobalSubscriber)?;
 
     // Create the process span and store it in the global PROCESS_SPAN
     store_event_attributes(create_process_event_data(package));

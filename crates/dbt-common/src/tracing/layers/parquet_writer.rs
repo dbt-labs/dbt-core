@@ -11,17 +11,17 @@ use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterPr
 
 use super::super::{
     data_provider::DataProvider,
+    error::{TracingError, TracingResult},
     layer::{ConsumerLayer, TelemetryConsumer},
     shutdown::{TelemetryShutdown, TelemetryShutdownItem},
 };
-use dbt_error::{ErrorCode, FsResult};
 
 /// Build a parquet writer layer with a background writer. Do not wrap
 /// or buffer the writer, as the layer already does its own buffering
 /// and operates on a non-blocking worker thread.
 pub fn build_parquet_writer_layer<W: Write + Send + 'static>(
     writer: W,
-) -> FsResult<(ConsumerLayer, TelemetryShutdownItem)> {
+) -> TracingResult<(ConsumerLayer, TelemetryShutdownItem)> {
     let (parquet_layer, handle) = TelemetryParquetWriterLayer::new(writer)?;
 
     Ok((Box::new(parquet_layer), Box::new(handle)))
@@ -39,7 +39,7 @@ impl<W> ParquetWriter<W>
 where
     W: Write + Send + 'static,
 {
-    fn new(writer: W) -> FsResult<Self> {
+    fn new(writer: W) -> TracingResult<Self> {
         let writer_properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
@@ -49,7 +49,7 @@ where
             arrow::datatypes::Schema::new(get_telemetry_arrow_schema()).into(),
             Some(writer_properties),
         )
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create Parquet writer: {}", e))?;
+        .map_err(|e| TracingError::io(format!("Failed to create Parquet writer: {}", e)))?;
 
         Ok(Self {
             buffer: Vec::with_capacity(PARQUET_WRITER_BUF_SIZE),
@@ -57,7 +57,7 @@ where
         })
     }
 
-    fn write_record(&mut self, record: TelemetryRecord) -> FsResult<()> {
+    fn write_record(&mut self, record: TelemetryRecord) -> TracingResult<()> {
         // Write batch if buffer is full
         if self.buffer.len() >= PARQUET_WRITER_BUF_SIZE {
             self.flush_batch()?;
@@ -69,14 +69,14 @@ where
         Ok(())
     }
 
-    fn flush_batch(&mut self) -> FsResult<()> {
+    fn flush_batch(&mut self) -> TracingResult<()> {
         if self.buffer.is_empty() {
             return Ok(());
         }
 
         // Serialize records to Arrow RecordBatch
         let record_batch = serialize_to_arrow(&self.buffer)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to serialize to Arrow: {}", e))?;
+            .map_err(|e| TracingError::io(format!("Failed to serialize to Arrow: {}", e)))?;
 
         // Write the batch
         let Some(ref mut writer) = self.parquet_writer else {
@@ -87,13 +87,13 @@ where
 
         writer
             .write(&record_batch)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to write Parquet batch: {}", e))?;
+            .map_err(|e| TracingError::io(format!("Failed to write Parquet batch: {}", e)))?;
 
         // Flush if we are over memory limit
         if writer.memory_size() >= PARQUET_WRITER_MEMORY_LIMIT {
-            writer.flush().map_err(|e| {
-                fs_err!(ErrorCode::IoError, "Failed to flush Parquet writer: {}", e)
-            })?;
+            writer
+                .flush()
+                .map_err(|e| TracingError::io(format!("Failed to flush Parquet writer: {}", e)))?;
         }
 
         // Clear buffer for reuse (truncate avoids reallocation)
@@ -102,15 +102,15 @@ where
         Ok(())
     }
 
-    fn finalize(&mut self) -> FsResult<()> {
+    fn finalize(&mut self) -> TracingResult<()> {
         // Flush any remaining records
         self.flush_batch()?;
 
         // Close the parquet writer
         if let Some(writer) = self.parquet_writer.take() {
-            writer.close().map_err(|e| {
-                fs_err!(ErrorCode::IoError, "Failed to close Parquet writer: {}", e)
-            })?;
+            writer
+                .close()
+                .map_err(|e| TracingError::io(format!("Failed to close Parquet writer: {}", e)))?;
         }
 
         Ok(())
@@ -145,7 +145,7 @@ where
 }
 
 impl TelemetryParquetWriterLayer {
-    pub fn new<W>(writer: W) -> FsResult<(Self, TelemetryParquetWriterHandle)>
+    pub fn new<W>(writer: W) -> TracingResult<(Self, TelemetryParquetWriterHandle)>
     where
         W: Write + Send + 'static,
     {
@@ -217,13 +217,12 @@ impl TelemetryParquetWriterLayer {
     }
 
     /// Send a telemetry record to be written
-    pub fn write_record(&self, record: TelemetryRecord) -> FsResult<()> {
+    pub fn write_record(&self, record: TelemetryRecord) -> TracingResult<()> {
         if self.shutdown_flag.load(Ordering::Acquire) {
             // Writer thread has shut down
-            return err!(
-                ErrorCode::IoError,
+            return Err(TracingError::io(
                 "Attempt to write to telemetry parquet writer after shutdown",
-            );
+            ));
         }
 
         self.sender
@@ -231,8 +230,7 @@ impl TelemetryParquetWriterLayer {
             .map_err(|_| {
                 // Channel is disconnected, mark as shut down
                 self.shutdown_flag.store(true, Ordering::Release);
-                fs_err!(
-                    ErrorCode::IoError,
+                TracingError::channel_closed(
                     "Telemetry parquet writer thread has terminated unexpectedly",
                 )
             })
@@ -290,7 +288,7 @@ pub struct TelemetryParquetWriterHandle {
 }
 
 impl TelemetryShutdown for TelemetryParquetWriterHandle {
-    fn shutdown(&mut self) -> FsResult<()> {
+    fn shutdown(&mut self) -> TracingResult<()> {
         if !self.shutdown_flag.swap(true, Ordering::AcqRel) {
             // Send shutdown message. Ignore error if the channel is already closed.
             self.sender.send(ParquetMessage::Shutdown).ok();
@@ -299,10 +297,9 @@ impl TelemetryShutdown for TelemetryParquetWriterHandle {
         // Wait for the writer thread to finish
         if let Some(handle) = self.writer_thread.take() {
             handle.join().map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
+                TracingError::thread_join(format!(
                     "Failed to close telemetry parquet writer: {e:?}"
-                )
+                ))
             })?;
         }
 
@@ -310,11 +307,10 @@ impl TelemetryShutdown for TelemetryParquetWriterHandle {
         let err_lock = self.shutdown_err.lock().expect("Mutex poisoned");
 
         if let Some(e) = err_lock.as_ref() {
-            return Err(fs_err!(
-                ErrorCode::IoError,
+            return Err(TracingError::io(format!(
                 "Telemetry parquet writer encountered an error: {}. Some telemetry data may have been lost.",
                 e
-            ));
+            )));
         }
 
         Ok(())
@@ -502,7 +498,7 @@ mod tests {
             panic!("Expected shutdown to return error due to write failure");
         };
 
-        assert_eq!(error.code, ErrorCode::IoError);
+        assert!(matches!(&error, TracingError::Io(_)));
         assert!(
             // Due to internal parquet buffering, our mock writer will only
             // be really hit on finalize, NOT on the initial write

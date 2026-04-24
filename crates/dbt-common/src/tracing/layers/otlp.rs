@@ -2,11 +2,10 @@ use std::borrow::Cow;
 
 use super::super::{
     data_provider::DataProvider,
+    error::{TracingError, TracingResult},
     layer::{ConsumerLayer, TelemetryConsumer},
     shutdown::{TelemetryShutdown, TelemetryShutdownItem},
 };
-
-use dbt_error::{ErrorCode, FsResult};
 
 use dbt_telemetry::{
     LogMessage,
@@ -203,23 +202,21 @@ impl OTLPExporterLayer {
 }
 
 impl TelemetryShutdown for SdkTracerProvider {
-    fn shutdown(&mut self) -> FsResult<()> {
+    fn shutdown(&mut self) -> TracingResult<()> {
         SdkTracerProvider::shutdown(self).map_err(|otel_error| {
-            fs_err!(
-                ErrorCode::IoError,
+            TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP trace exporter: {otel_error}"
-            )
+            ))
         })
     }
 }
 
 impl TelemetryShutdown for SdkLoggerProvider {
-    fn shutdown(&mut self) -> FsResult<()> {
+    fn shutdown(&mut self) -> TracingResult<()> {
         SdkLoggerProvider::shutdown(self).map_err(|otel_error| {
-            fs_err!(
-                ErrorCode::IoError,
+            TracingError::shutdown(format!(
                 "Failed to gracefully shutdown OTLP log exporter: {otel_error}"
-            )
+            ))
         })
     }
 }

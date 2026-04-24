@@ -35,7 +35,7 @@ use crate::{
     tracing::middlewares::parse_error_filter::TelemetryParsingErrorFilter,
     warn_error_options::WarnErrorOptions,
 };
-use dbt_error::{ErrorCode, FsResult};
+use dbt_error::{ErrorCode, FsError, FsResult};
 use tracing::level_filters::LevelFilter;
 
 /// Configuration for tracing.
@@ -425,7 +425,8 @@ impl FsTraceConfig {
             let file = std::fs::File::create(file_path)
                 .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create parquet file: {}", e))?;
 
-            let (parquet_layer, writer_handle) = build_parquet_writer_layer(file)?;
+            let (parquet_layer, writer_handle) =
+                build_parquet_writer_layer(file).map_err(FsError::from)?;
 
             // Keep a handle for shutdown
             shutdown_items.push(writer_handle);
