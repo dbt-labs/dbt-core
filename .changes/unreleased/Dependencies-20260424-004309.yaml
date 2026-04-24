@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update protobuf requirement from <7.0,>=6.0 to >=6.0,<8.0 in /core"
+time: 2026-04-24T00:43:09.00000Z
+custom:
+  Author: dependabot[bot]
+  Issue: 12877
