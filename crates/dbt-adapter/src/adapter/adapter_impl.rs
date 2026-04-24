@@ -2239,7 +2239,7 @@ impl AdapterImpl {
     pub fn standardize_grants_dict(
         &self,
         grants_table: Arc<AgateTable>,
-    ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
+    ) -> AdapterResult<IndexMap<String, Vec<String>>> {
         let record_batch = grants_table.original_record_batch();
 
         match self.adapter_type() {
@@ -2248,7 +2248,7 @@ impl AdapterImpl {
                 let privilege_cols =
                     get_column_values::<StringArray>(&record_batch, "privilege_type")?;
 
-                let mut result = BTreeMap::new();
+                let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
                     let privilege = privilege_cols.value(i);
                     let grantee = grantee_cols.value(i);
@@ -2265,7 +2265,7 @@ impl AdapterImpl {
                     get_column_values::<StringArray>(&record_batch, "granted_to")?;
                 let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege")?;
 
-                let mut result = BTreeMap::new();
+                let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
                     let privilege = privilege_cols.value(i);
                     let grantee = grantee_cols.value(i);
@@ -2288,7 +2288,7 @@ impl AdapterImpl {
                 let object_type_cols =
                     get_column_values::<StringArray>(&record_batch, "ObjectType")?;
 
-                let mut result = BTreeMap::new();
+                let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
                     let privilege = privilege_cols.value(i);
                     let grantee = grantee_cols.value(i);

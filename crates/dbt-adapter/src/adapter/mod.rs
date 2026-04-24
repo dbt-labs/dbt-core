@@ -428,8 +428,8 @@ impl Adapter {
         grants_table: &Arc<AgateTable>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(
-                adapter.standardize_grants_dict(grants_table.clone())?,
+            Typed { adapter, .. } => Ok(Value::from_serialize(
+                &adapter.standardize_grants_dict(grants_table.clone())?,
             )),
             Parse(_) => unreachable!(
                 "standardize_grants_dict should be handled in dispatch for ParseAdapter"

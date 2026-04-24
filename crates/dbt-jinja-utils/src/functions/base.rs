@@ -6,6 +6,8 @@ use std::{
     sync::Arc,
 };
 
+use indexmap::IndexMap;
+
 use dbt_agate::AgateTable;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, fs_err,
@@ -565,8 +567,11 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
         let dict_a = parse_dict_of_lists(&dict_a_arg)?;
         let dict_b = parse_dict_of_lists(&dict_b_arg)?;
 
-        // Convert dict_b to lowercase for case-insensitive comparison
-        let mut dict_b_lowered: HashMap<String, Vec<String>> = HashMap::new();
+        // Convert dict_b to lowercase for case-insensitive comparison.
+        // IndexMap preserves insertion order so `diff_of_two_dicts` matches
+        // Python's dict semantics (iteration follows dict_a's insertion order),
+        // which apply_grants macros rely on for deterministic REVOKE/GRANT order.
+        let mut dict_b_lowered: IndexMap<String, Vec<String>> = IndexMap::new();
         for (key, value_list) in dict_b {
             dict_b_lowered.insert(
                 key.to_lowercase(),
@@ -575,7 +580,7 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
         }
 
         // Perform the difference
-        let mut dict_diff: HashMap<String, Vec<String>> = HashMap::new();
+        let mut dict_diff: IndexMap<String, Vec<String>> = IndexMap::new();
         for (key, value_list) in dict_a {
             if let Some(lowered_b_vals) = dict_b_lowered.get(&key.to_lowercase()) {
                 // Filter out values that appear in dict_b, ignoring case
@@ -992,8 +997,8 @@ pub fn local_md5_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
 }
 
 /// Parse a dictionary of lists into a BTreeMap<String, Vec<String>>
-fn parse_dict_of_lists(dict: &Value) -> Result<BTreeMap<String, Vec<String>>, Error> {
-    let mut result = BTreeMap::new();
+fn parse_dict_of_lists(dict: &Value) -> Result<IndexMap<String, Vec<String>>, Error> {
+    let mut result = IndexMap::new();
 
     // Iterate over the keys in the dictionary
     for key in dict.try_iter()? {
@@ -1783,5 +1788,82 @@ mod tests {
                 "expected graph.{key} to be non-empty"
             );
         }
+    }
+
+    #[test]
+    fn diff_of_two_dicts_preserves_insertion_order() {
+        // Regression test: Fusion used to build the diff through a `HashMap`
+        // (and `standardize_grants_dict` through a `BTreeMap`), which scrambled
+        // or sorted iteration order and caused non-deterministic REVOKE/GRANT
+        // statement order in `apply_grants`, producing SQL mismatches against
+        // Python dbt (which uses an insertion-ordered dict). The ten keys and
+        // deliberately non-alphabetical insertion order here mirror the real
+        // `show grants` shape from the fct_directmail SQL-mismatch report:
+        // `SELECT` is inserted first (multiple grantees) and must stay first,
+        // while the remaining privileges follow in their insertion positions.
+        //
+        // dict_a is constructed via `Value::from_serialize(&IndexMap)` to mirror
+        // the production path: `standardize_grants_dict` returns an `IndexMap`
+        // that is handed to Jinja as a `Value` before being passed here.
+        let mut env = Environment::new();
+        env.add_function("diff_of_two_dicts", diff_of_two_dicts_fn());
+        env.add_function("tojson", tojson);
+        env.set_unknown_method_callback(unknown_method_callback);
+
+        let mut dict_a: IndexMap<String, Vec<String>> = IndexMap::new();
+        dict_a.insert(
+            "SELECT".to_string(),
+            vec![
+                "ALATION".to_string(),
+                "DM_APPDBA".to_string(),
+                "MONTECARLO".to_string(),
+            ],
+        );
+        for privilege in [
+            "APPLYBUDGET",
+            "DELETE",
+            "EVOLVE SCHEMA",
+            "INSERT",
+            "REBUILD",
+            "REFERENCES",
+            "SELECT ERROR TABLE",
+            "TRUNCATE",
+            "UPDATE",
+        ] {
+            dict_a.insert(privilege.to_string(), vec!["MONTECARLO".to_string()]);
+        }
+
+        // Iterate like the real `apply_grants` macro does — via Jinja
+        // `.items()` — since `tojson` would reroute through serde_json and sort
+        // keys. This mirrors the production iteration that produces the REVOKE
+        // statement sequence.
+        let template_source = r#"
+{%- set diff = diff_of_two_dicts(dict_a, {}) -%}
+{%- for privilege, grantees in diff.items() -%}
+{{ privilege }}={{ grantees | join(',') }}
+{% endfor -%}
+"#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let rendered = tmpl
+            .render(
+                minijinja::context!(dict_a => Value::from_serialize(&dict_a)),
+                &[],
+            )
+            .unwrap();
+
+        let expected = "\
+SELECT=ALATION,DM_APPDBA,MONTECARLO
+APPLYBUDGET=MONTECARLO
+DELETE=MONTECARLO
+EVOLVE SCHEMA=MONTECARLO
+INSERT=MONTECARLO
+REBUILD=MONTECARLO
+REFERENCES=MONTECARLO
+SELECT ERROR TABLE=MONTECARLO
+TRUNCATE=MONTECARLO
+UPDATE=MONTECARLO
+";
+
+        assert_eq!(rendered, expected);
     }
 }
