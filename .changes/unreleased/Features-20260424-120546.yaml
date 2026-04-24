@@ -1,0 +1,6 @@
+kind: Features
+body: Add catalogs.yml v2 spec support, gated behind the use_catalogs_v2 behavior flag
+time: 2026-04-24T12:05:46.463161+05:30
+custom:
+    Author: aahel
+    Issue: "12878"
