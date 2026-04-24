@@ -23,6 +23,16 @@ use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
 use dbt_common::cancellation::CancellationToken;
 
+macro_rules! invalid_value {
+    ($msg:expr) => {
+        Err(AdapterError::new(AdapterErrorKind::UnexpectedResult, $msg))
+    };
+
+    ($($arg:tt)*) => {
+        Err(AdapterError::new(AdapterErrorKind::UnexpectedResult, format!($($arg)*)))
+    };
+}
+
 // TODO: turn this into a struct and collapse all the common code from X_get_relation functions
 
 #[inline(never)]

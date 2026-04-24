@@ -35,7 +35,7 @@ pub struct DuckDBMetadataAdapter {
 
 impl DuckDBMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = AdapterImpl::new(engine);
+        let adapter = AdapterImpl::new(engine, None);
         Self { adapter }
     }
 }

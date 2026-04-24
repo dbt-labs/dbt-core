@@ -1,6 +1,6 @@
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
-use crate::funcs::execute_macro;
+use crate::macro_exec::execute_macro;
 use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{

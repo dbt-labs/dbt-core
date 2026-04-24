@@ -5,10 +5,12 @@ use crate::engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
-use crate::funcs::{
-    convert_macro_result_to_record_batch, execute_macro, format_sql_with_bindings, none_value,
-};
+use crate::formatter::format_sql_with_bindings;
 use crate::information_schema::InformationSchema;
+use crate::macro_exec::{
+    convert_macro_result_to_record_batch, execute_macro, execute_macro_with_package,
+    execute_macro_wrapper_with_package,
+};
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
@@ -36,10 +38,8 @@ use crate::relation::snowflake::SnowflakeRelation;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::{
-    AdapterResult, execute_macro_with_package, execute_macro_wrapper_with_package, load_catalogs,
-    python,
-};
+use crate::value::*;
+use crate::{AdapterResult, load_catalogs, python};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{BooleanArray, RecordBatch, StringArray, TimestampMillisecondArray};
@@ -53,6 +53,7 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
@@ -132,6 +133,53 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
         }
 
         emit_warn_log_message(ErrorCode::DuplicateColumns, msg, None);
+    }
+}
+
+pub fn quote_ident(adapter_type: AdapterType, identifier: &str) -> String {
+    let q = dbt_adapter_core::quote_char(adapter_type);
+    format!("{q}{identifier}{q}")
+}
+
+pub fn quote_component(
+    adapter_type: AdapterType,
+    quoting: &ResolvedQuoting,
+    identifier: &str,
+    component: ComponentName,
+) -> String {
+    if quoting.must_quote(component) {
+        quote_ident(adapter_type, identifier)
+    } else {
+        identifier.to_string()
+    }
+}
+
+/// Returns the relation name for current node from the state.
+pub fn database_schema_alias_from_state(state: &State) -> Option<(String, String, String)> {
+    let model = state.lookup("model", &[])?;
+    let database = model.get_attr("database").ok()?.as_str()?.to_string();
+    let schema = model.get_attr("schema").ok()?.as_str()?.to_string();
+    let alias = model.get_attr("alias").ok()?.as_str()?.to_string();
+    Some((database, schema, alias))
+}
+
+/// Checks if the given [BaseRelation] matches the node currently being rendered
+pub(crate) fn matches_current_relation(state: &State, relation: &dyn BaseRelation) -> bool {
+    if let Some((database, schema, alias)) = database_schema_alias_from_state(state) {
+        // Lowercase name comparison because relation names from the local project
+        // are user specified, whereas the input relation may have been a normalized name
+        // from the warehouse
+        relation
+            .database_as_str()
+            .is_ok_and(|s| s.eq_ignore_ascii_case(&database))
+            && relation
+                .schema_as_str()
+                .is_ok_and(|s| s.eq_ignore_ascii_case(&schema))
+            && relation
+                .identifier_as_str()
+                .is_ok_and(|s| s.eq_ignore_ascii_case(&alias))
+    } else {
+        false
     }
 }
 
@@ -799,25 +847,13 @@ impl AdapterImpl {
         }
     }
 
-    /// Quote like [AdapterImpl::quote] when the adapter is not in mock mode.
-    pub fn quote_identifier_for_adapter_type(
-        adapter_type: AdapterType,
-        identifier: &str,
-    ) -> String {
-        match adapter_type {
-            Snowflake | Redshift | Postgres | Sidecar | Salesforce | DuckDB | Fabric
-            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
-                format!("\"{identifier}\"")
-            }
-            Bigquery | Databricks | Spark => {
-                format!("`{identifier}`")
-            }
-        }
-    }
-
+    /// Wrap the identifier in the appropriate quoting character for the adapter.
+    ///
+    /// Assumes the identifier is not quoted.
+    ///
     /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L214
     pub fn quote(&self, identifier: &str) -> String {
-        Self::quote_identifier_for_adapter_type(self.adapter_type(), identifier)
+        quote_ident(self.adapter_type(), identifier)
     }
 
     /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L217
@@ -4212,6 +4248,7 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
 #[derive(Clone)]
 pub struct AdapterImpl {
     inner: AdapterImplInner,
+    schema_store: Option<Arc<dyn SchemaStoreTrait>>,
 }
 
 #[derive(Clone)]
@@ -4229,15 +4266,23 @@ enum AdapterImplInner {
 }
 
 impl AdapterImpl {
-    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
+    pub fn new(
+        engine: Arc<dyn AdapterEngine>,
+        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+    ) -> Self {
         Self {
             inner: AdapterImplInner::Impl(engine),
+            schema_store,
         }
     }
 
-    pub fn new_replay(replay: Arc<dyn Replayer>) -> Self {
+    pub fn new_replay(
+        replay: Arc<dyn Replayer>,
+        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+    ) -> Self {
         Self {
             inner: AdapterImplInner::Replay(replay),
+            schema_store,
         }
     }
 
@@ -4277,7 +4322,17 @@ impl AdapterImpl {
                 flags,
                 behavior,
             }),
+            schema_store: None,
         }
+    }
+
+    pub fn get_schema_from_cache(
+        &self,
+        relation: &dyn BaseRelation,
+    ) -> Option<dbt_schema_store::SchemaEntry> {
+        self.schema_store
+            .as_ref()
+            .and_then(|ss| ss.get_schema(&relation.get_canonical_fqn().unwrap_or_default()))
     }
 
     fn mock_state(&self) -> Option<&MockState> {
@@ -4314,6 +4369,7 @@ impl AdapterImpl {
         }
     }
 
+    #[inline]
     pub fn adapter_type(&self) -> AdapterType {
         match self.inner_adapter() {
             Impl(adapter_type, _) | Replay(adapter_type, _) => adapter_type,
@@ -4325,11 +4381,6 @@ impl AdapterImpl {
             Replay(_, replay) => Some(replay),
             Impl(..) => None,
         }
-    }
-
-    pub fn column_type(&self) -> Option<Value> {
-        let value = Value::from_object(crate::column::ColumnStatic::new(self.adapter_type()));
-        Some(value)
     }
 
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
@@ -4531,7 +4582,7 @@ mod tests {
     use crate::column::Column;
     use crate::config::AdapterConfig;
     use crate::engine::XdbcEngine;
-    use crate::query_comment::QueryCommentConfig;
+    use crate::engine::query_comment::QueryCommentConfig;
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
 
@@ -4600,25 +4651,25 @@ mod tests {
 
     #[test]
     fn test_adapter_type() {
-        let adapter = AdapterImpl::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
         assert_eq!(adapter.adapter_type(), Snowflake);
     }
 
     #[test]
     fn test_quote_for_snowflake() {
-        let adapter = AdapterImpl::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
         assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
     #[test]
     fn test_quote_for_bigquery() {
-        let adapter = AdapterImpl::new(engine(Bigquery));
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
         assert_eq!(adapter.quote("abc"), "`abc`");
     }
 
     #[test]
     fn test_quote_seed_column_for_snowflake() -> AdapterResult<()> {
-        let adapter = AdapterImpl::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
         let env = Environment::new();
         let state = State::new_for_env(&env);
         let quoted = adapter
@@ -4638,7 +4689,7 @@ mod tests {
 
     #[test]
     fn test_quote_as_configured_for_snowflake() -> AdapterResult<()> {
-        let adapter = AdapterImpl::new(engine(Snowflake));
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
 
         let env = Environment::new();
         let state = State::new_for_env(&env);
@@ -4661,13 +4712,13 @@ mod tests {
 
     #[test]
     fn test_redshift_quote() {
-        let adapter = AdapterImpl::new(engine(Redshift));
+        let adapter = AdapterImpl::new(engine(Redshift), None);
         assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
     #[test]
     fn test_table_format_primary_motherduck_ducklake() {
-        let adapter = AdapterImpl::new(engine(DuckDB));
+        let adapter = AdapterImpl::new(engine(DuckDB), None);
 
         assert_eq!(
             adapter.table_format_for_database("my_db"),
@@ -4681,7 +4732,7 @@ mod tests {
 
     #[test]
     fn test_table_format_unaliased_motherduck_attachment() {
-        let adapter = AdapterImpl::new(engine(DuckDB));
+        let adapter = AdapterImpl::new(engine(DuckDB), None);
 
         assert_eq!(
             adapter.table_format_for_database("some_db"),

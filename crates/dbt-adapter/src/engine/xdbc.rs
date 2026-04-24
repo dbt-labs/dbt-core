@@ -20,9 +20,9 @@ use parking_lot::RwLock;
 use serde::Deserialize;
 
 use crate::cache::RelationCache;
+use crate::engine::query_comment::QueryCommentConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
 use crate::query_cache::QueryCache;
-use crate::query_comment::QueryCommentConfig;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 

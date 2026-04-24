@@ -11,7 +11,6 @@ use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
-use crate::funcs::none_value;
 use crate::relation::bigquery::*;
 use crate::relation::databricks::{GenericRelation, typed_constraint::TypedConstraint};
 use crate::relation::duckdb_should_include_database;
@@ -19,6 +18,7 @@ use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
+use crate::value::none_value;
 
 use std::sync::Arc;
 use std::{fmt, ops::Deref};

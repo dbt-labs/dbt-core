@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dbt_adapter::funcs::none_value;
 use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
@@ -85,7 +84,7 @@ fn full_refresh_mock_config() -> Arc<MockJinjaObject> {
 /// Shorthand: build harness, mock get_relation → None, render, assert success.
 fn run_no_existing(adapter_type: AdapterType) -> MacroTestHarness {
     let harness = build_view_harness(adapter_type);
-    harness.mock().on("get_relation", |_| Ok(none_value()));
+    harness.mock().on("get_relation", |_| Ok(Value::from(())));
     let ctx = harness
         .materialization_context("my_view", "SELECT id, name FROM source_table")
         .build();
@@ -127,7 +126,7 @@ fn run_existing_table(adapter_type: AdapterType) -> MacroTestHarness {
     harness.mock().on("get_relation", move |_| {
         Ok(RelationObject::new(Arc::clone(&existing)).into_value())
     });
-    harness.mock().on("drop_relation", |_| Ok(none_value()));
+    harness.mock().on("drop_relation", |_| Ok(Value::from(())));
     let ctx = harness
         .materialization_context("my_view", "SELECT id, name FROM source_table")
         .config(Value::from_dyn_object(full_refresh_mock_config()))
@@ -196,7 +195,7 @@ mod databricks {
     fn v2_no_existing_relation() {
         let harness = build_view_harness(ADAPTER);
         harness.set_behavior_flags([("use_materialization_v2", true)]);
-        harness.mock().on("get_relation", |_| Ok(none_value()));
+        harness.mock().on("get_relation", |_| Ok(Value::from(())));
 
         let ctx = harness
             .materialization_context("my_view", "SELECT id, name FROM source_table")

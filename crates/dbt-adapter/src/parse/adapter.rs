@@ -1,7 +1,7 @@
 use crate::AdapterEngine;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
-use crate::funcs::*;
 use crate::relation::{RelationObject, do_create_relation};
+use crate::value::empty_mutable_vec_value;
 
 use dashmap::{DashMap, DashSet};
 use dbt_adapter_core::AdapterType;

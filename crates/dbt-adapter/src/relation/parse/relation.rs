@@ -1,4 +1,4 @@
-use crate::funcs::none_value;
+use crate::value::none_value;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;

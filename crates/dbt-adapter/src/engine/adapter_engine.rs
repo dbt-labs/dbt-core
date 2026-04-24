@@ -23,10 +23,10 @@ use minijinja::State;
 use tracy_client::span;
 
 use crate::cache::RelationCache;
+use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
 use crate::errors::{adbc_error_to_adapter_error, arrow_error_to_adapter_error};
 use crate::query_cache::QueryCache;
-use crate::query_comment::QueryCommentConfig;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;

@@ -1,4 +1,5 @@
 use dbt_adapter_core::AdapterType;
+use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use minijinja::Value;
 use minijinja::value::ValueKind;
 use minijinja_contrib::modules::py_datetime::date::PyDate;
@@ -71,6 +72,72 @@ impl SqlLiteralFormatter {
     pub fn none_value(&self) -> String {
         "NULL".to_string()
     }
+}
+
+pub fn format_sql_with_bindings(
+    adapter_type: AdapterType,
+    sql: &str,
+    bindings: &Value,
+) -> AdapterResult<String> {
+    let formatter = SqlLiteralFormatter::new(adapter_type);
+    let mut result = String::with_capacity(sql.len());
+    // this placeholder char is seen from `get_binding_char` macro
+    let binding_char = if adapter_type == AdapterType::Fabric {
+        "?"
+    } else {
+        "%s"
+    };
+    let mut parts = sql.split(binding_char);
+    let mut binding_iter = bindings.as_object().unwrap().try_iter().unwrap();
+
+    // Add the first part (before any %s)
+    if let Some(first) = parts.next() {
+        result.push_str(first);
+    }
+
+    // For each remaining part, insert a binding value before it
+    for part in parts {
+        match binding_iter.next() {
+            Some(value) => {
+                // Convert minijinja::Value to a SQL-safe string
+                match value.kind() {
+                    ValueKind::String => {
+                        result.push_str(&formatter.format_str(value.as_str().unwrap()))
+                    }
+                    ValueKind::Bytes => result.push_str(&formatter.format_bytes(&value)),
+                    ValueKind::None => result.push_str(&formatter.none_value()),
+                    ValueKind::Bool => result.push_str(&formatter.format_bool(value.is_true())),
+                    _ => {
+                        // TODO: handle the SQL escaping of more data types
+                        if let Some(date) = value.downcast_object::<PyDate>() {
+                            result.push_str(&formatter.format_date(date.as_ref().clone()));
+                        } else if let Some(datetime) = value.downcast_object::<PyDateTime>() {
+                            result.push_str(&formatter.format_datetime(datetime.as_ref().clone()));
+                        } else {
+                            result.push_str(&value.to_string())
+                        }
+                    }
+                }
+            }
+            None => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "Not enough bindings provided for SQL template".to_string(),
+                ));
+            }
+        }
+        result.push_str(part);
+    }
+
+    // Check if we used all bindings
+    if binding_iter.next().is_some() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "Too many bindings provided for SQL template".to_string(),
+        ));
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

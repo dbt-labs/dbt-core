@@ -60,7 +60,6 @@ fn config_changes_mock(requires_full_refresh: bool, changes: BTreeMap<&str, Valu
 
 mod databricks {
     use super::*;
-    use dbt_adapter::funcs::none_value;
 
     const ADAPTER: AdapterType = AdapterType::Databricks;
 
@@ -163,7 +162,7 @@ mod databricks {
     #[test]
     fn no_existing_relation_creates_mv() {
         let harness = build_harness();
-        harness.mock().on("get_relation", |_| Ok(none_value()));
+        harness.mock().on("get_relation", |_| Ok(Value::from(())));
 
         let ctx = harness
             .materialization_context("my_mv", "SELECT id, name FROM source")

@@ -4,11 +4,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::response::{AdapterResponse, ResultObject};
+use crate::value::none_value;
 use dbt_agate::AgateTable;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_telemetry::NodeEvaluated;
-
-use super::funcs::none_value;
 
 /// A store for DBT query results that provides callable functions to access the store
 #[derive(Clone, Default)]

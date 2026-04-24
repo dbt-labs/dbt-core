@@ -146,6 +146,15 @@ impl RelationCache {
         );
     }
 
+    pub fn insert_many(
+        &self,
+        to_insert: impl IntoIterator<Item = (CatalogAndSchema, Vec<Arc<dyn BaseRelation>>)>,
+    ) {
+        to_insert
+            .into_iter()
+            .for_each(|(schema, relations)| self.insert_schema(schema, relations));
+    }
+
     /// Drops an entire schema
     pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
         let schema_key = Self::get_schema_cache_key_from_relation(relation);

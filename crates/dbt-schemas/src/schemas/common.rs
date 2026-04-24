@@ -23,6 +23,7 @@ use crate::schemas::manifest::BigqueryPartitionConfig;
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
+use super::relations::base::ComponentName;
 use super::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
 };
@@ -474,6 +475,13 @@ impl ResolvedQuoting {
             database: false,
             identifier: false,
             schema: false,
+        }
+    }
+    pub fn must_quote(&self, what: ComponentName) -> bool {
+        match what {
+            ComponentName::Database => self.database,
+            ComponentName::Schema => self.schema,
+            ComponentName::Identifier => self.identifier,
         }
     }
 }

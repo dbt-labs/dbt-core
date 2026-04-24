@@ -26,7 +26,7 @@ pub struct PostgresMetadataAdapter {
 
 impl PostgresMetadataAdapter {
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = AdapterImpl::new(engine);
+        let adapter = AdapterImpl::new(engine, None);
         Self { adapter }
     }
 }

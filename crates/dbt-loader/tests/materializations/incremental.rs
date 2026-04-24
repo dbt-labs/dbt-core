@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dbt_adapter::funcs::none_value;
 use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_jinja_utils::mock_object::MockJinjaObject;
@@ -127,7 +126,7 @@ mod databricks {
     #[test]
     fn no_existing_relation_creates_table() {
         let harness = build_harness();
-        harness.mock().on("get_relation", |_| Ok(none_value()));
+        harness.mock().on("get_relation", |_| Ok(Value::from(())));
 
         let ctx = incremental_ctx(&harness);
         render_incremental(&harness, ADAPTER, ctx)
@@ -184,7 +183,7 @@ mod databricks {
             .on("get_relation_config", |_| Ok(Value::UNDEFINED));
 
         let model_config = Arc::new(MockJinjaObject::new());
-        model_config.on("get_changeset", |_| Ok(none_value()));
+        model_config.on("get_changeset", |_| Ok(Value::from(())));
         let model_config_val = Value::from_dyn_object(model_config);
         harness.mock().on("get_config_from_model", move |_| {
             Ok(model_config_val.clone())

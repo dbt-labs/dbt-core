@@ -1,12 +1,12 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/comment.py
 
-use crate::funcs::none_value;
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
+use crate::value::none_value;
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::value::{Value, ValueMap};

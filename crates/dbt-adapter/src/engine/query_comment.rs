@@ -1,9 +1,10 @@
-use indexmap::IndexMap;
-use std::{fmt::Debug, sync::LazyLock};
+use std::fmt::Debug;
 
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::project::QueryComment;
+
+use indexmap::IndexMap;
 use minijinja::{Error, State};
 use regex::Regex;
 use serde::Deserialize;
@@ -11,7 +12,7 @@ use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
 // Reference: https://github.com/dbt-labs/dbt-adapters/blob/317e809abd19026d3784e04281b307c5e6a9d469/dbt-adapters/src/dbt/adapters/contracts/connection.py#L197
-pub const DEFAULT_QUERY_COMMENT: &str = "
+const DEFAULT_QUERY_COMMENT: &str = "
 {%- set comment_dict = {} -%}
 {%- do comment_dict.update(
     app='dbt',
@@ -32,7 +33,7 @@ pub const DEFAULT_QUERY_COMMENT: &str = "
 
 // Extended default query comment that includes dbt Cloud environment variables when present.
 // Used automatically when any DBT_CLOUD_* environment variable is set.
-pub const DEFAULT_QUERY_COMMENT_WITH_CLOUD: &str = "
+const DEFAULT_QUERY_COMMENT_WITH_CLOUD: &str = "
 {%- set comment_dict = {} -%}
 {%- do comment_dict.update(
     app='dbt',
@@ -79,12 +80,6 @@ pub struct QueryCommentConfig {
     /// (BigQuery only) Export comment to job labels
     job_label: bool,
 }
-
-pub static EMPTY_CONFIG: LazyLock<QueryCommentConfig> = LazyLock::new(|| QueryCommentConfig {
-    comment: "".into(),
-    append: false,
-    job_label: false,
-});
 
 /// Returns true if a resolved cloud config indicates a dbt Cloud job.
 ///
@@ -223,7 +218,7 @@ mod tests {
     use dbt_schemas::schemas::project::QueryComment;
     use serde::Deserialize;
 
-    use crate::query_comment::{
+    use crate::engine::query_comment::{
         DEFAULT_QUERY_COMMENT, DEFAULT_QUERY_COMMENT_WITH_CLOUD, QueryCommentConfig,
     };
 

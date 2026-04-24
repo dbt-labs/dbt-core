@@ -14,8 +14,8 @@ use dbt_xdbc::*;
 use minijinja::State;
 
 use crate::cache::RelationCache;
+use crate::engine::query_comment::QueryCommentConfig;
 use crate::query_cache::QueryCache;
-use crate::query_comment::QueryCommentConfig;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 

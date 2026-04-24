@@ -1,28 +1,26 @@
-pub mod adapter_factory;
-pub mod adapter_impl;
+use crate::adapter::adapter_impl::matches_current_relation;
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 #[cfg(debug_assertions)]
 use crate::column::Column;
-use crate::column::ColumnStatic;
 use crate::engine::XdbcEngine;
-use crate::funcs::*;
+use crate::engine::query_comment::QueryCommentConfig;
+use crate::macro_exec::*;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
-use crate::query_comment::QueryCommentConfig;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::relation::RelationObject;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
+use crate::relation::factory::create_static_relation;
 use crate::relation::parse::EmptyRelation;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
+use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
-pub use adapter_factory::*;
-pub use adapter_impl::AdapterImpl;
 
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
@@ -30,8 +28,7 @@ use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
-use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
-use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig, ResolvedQuoting};
+use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, GrantAccessToTarget};
@@ -57,9 +54,17 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
+pub mod adapter_factory;
+pub mod adapter_impl;
+pub use adapter_factory::*;
+pub use adapter_impl::{AdapterImpl, quote_component, quote_ident};
+#[cfg(test)]
+mod tests;
+
 // Thread-local counter to track adapter call depth.
-// Used to avoid recording/replaying nested adapter calls (e.g., truncate_relation calling execute).
-// Only the outermost call is recorded/replayed.
+//
+// Used to avoid recording/replaying nested adapter calls (e.g. truncate_relation
+// calling execute). Only the outermost call is recorded/replayed.
 thread_local! {
     static ADAPTER_CALL_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
@@ -67,14 +72,11 @@ thread_local! {
 /// The inner adapter implementation inside a [Adapter].
 #[derive(Clone)]
 enum InnerAdapter {
-    /// The actual implementation for all phases except parsing.
-    /// The relation cache is now stored in the engine, not here.
-    Typed {
-        adapter: Arc<AdapterImpl>,
-        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
-    },
     /// The state necessary to perform operation in a shallow way during the parsing phase.
     Parse(Box<ParseAdapterState>),
+    /// The actual implementation for all phases except parsing.
+    /// The relation cache is now stored in the engine, not here.
+    Typed { adapter: Arc<AdapterImpl> },
 }
 
 use InnerAdapter::*;
@@ -136,19 +138,12 @@ impl fmt::Display for Adapter {
 }
 
 impl Adapter {
-    /// Create a new bridge adapter.
-    ///
-    /// The relation cache is obtained from the engine. No longer needs to be passed explicitly.
     pub fn new(
         adapter: Arc<AdapterImpl>,
-        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
         time_machine: Option<TimeMachine>,
         cancellation_token: CancellationToken,
     ) -> Self {
-        let inner = Typed {
-            adapter,
-            schema_store,
-        };
+        let inner = Typed { adapter };
         Self {
             inner,
             time_machine,
@@ -219,7 +214,6 @@ impl Adapter {
         ))
     }
 
-    /// Get the cancellation token.
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation_token.clone()
     }
@@ -227,36 +221,6 @@ impl Adapter {
     /// Get a reference to the time machine, if enabled.
     pub fn time_machine(&self) -> Option<&TimeMachine> {
         self.time_machine.as_ref()
-    }
-
-    /// Checks if the given [BaseRelation] matches the node currently being rendered
-    fn matches_current_relation(&self, state: &State, relation: &dyn BaseRelation) -> bool {
-        if let Some((database, schema, alias)) = state.database_schema_alias_from_state() {
-            // Lowercase name comparison because relation names from the local project
-            // are user specified, whereas the input relation may have been a normalized name
-            // from the warehouse
-            relation
-                .database_as_str()
-                .is_ok_and(|s| s.eq_ignore_ascii_case(&database))
-                && relation
-                    .schema_as_str()
-                    .is_ok_and(|s| s.eq_ignore_ascii_case(&schema))
-                && relation
-                    .identifier_as_str()
-                    .is_ok_and(|s| s.eq_ignore_ascii_case(&alias))
-        } else {
-            false
-        }
-    }
-
-    /// Loads a schema from the schema cache
-    fn get_schema_from_cache(&self, relation: &dyn BaseRelation) -> Option<SchemaEntry> {
-        match &self.inner {
-            Typed { schema_store, .. } => schema_store
-                .as_ref()
-                .and_then(|ss| ss.get_schema(&relation.get_canonical_fqn().unwrap_or_default())),
-            Parse(_) => None,
-        }
     }
 
     pub fn parse_adapter_state(&self) -> Option<&ParseAdapterState> {
@@ -305,6 +269,7 @@ impl Adapter {
 }
 
 impl Adapter {
+    #[inline]
     pub fn adapter_type(&self) -> AdapterType {
         match &self.inner {
             Typed { adapter, .. } => adapter.adapter_type(),
@@ -312,6 +277,14 @@ impl Adapter {
         }
     }
 
+    pub fn engine(&self) -> &Arc<dyn crate::AdapterEngine> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.engine(),
+            Parse(state) => &state.engine,
+        }
+    }
+
+    #[inline]
     pub fn is_parse(&self) -> bool {
         matches!(&self.inner, Parse(_))
     }
@@ -326,52 +299,6 @@ impl Adapter {
         }
     }
 
-    pub fn column_type(&self) -> Option<Value> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.column_type(),
-            Parse(_) => {
-                let value = Value::from_object(ColumnStatic::new(self.adapter_type()));
-                Some(value)
-            }
-        }
-    }
-
-    pub fn engine(&self) -> &Arc<dyn crate::AdapterEngine> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.engine(),
-            Parse(state) => &state.engine,
-        }
-    }
-
-    pub fn quoting(&self) -> ResolvedQuoting {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.quoting(),
-            Parse(state) => state.engine.quoting(),
-        }
-    }
-
-    pub fn quote_component(
-        &self,
-        _state: &State,
-        identifier: &str,
-        component: ComponentName,
-    ) -> AdapterResult<String> {
-        let quoted = match component {
-            ComponentName::Database => self.quoting().database,
-            ComponentName::Schema => self.quoting().schema,
-            ComponentName::Identifier => self.quoting().identifier,
-        };
-        if quoted {
-            let quoted =
-                AdapterImpl::quote_identifier_for_adapter_type(self.adapter_type(), identifier);
-            Ok(quoted)
-        } else {
-            Ok(identifier.to_string())
-        }
-    }
-}
-
-impl Adapter {
     /// Execute a SQL query without requiring a Jinja [State].
     ///
     /// Used for lightweight operations like `dbt debug` connection tests
@@ -412,49 +339,6 @@ impl Adapter {
     /// This adapter as a Value
     pub fn as_value(&self) -> Value {
         Value::from_object(self.clone())
-    }
-
-    /// Used internally to hydrate the relation cache with the given schema -> relation map
-    ///
-    /// This operation should be additive and not reset the cache.
-    pub fn update_relation_cache(
-        &self,
-        schema_to_relations_map: BTreeMap<CatalogAndSchema, RelationVec>,
-    ) -> FsResult<()> {
-        match &self.inner {
-            Typed { adapter, .. } => {
-                schema_to_relations_map
-                    .into_iter()
-                    .for_each(|(schema, relations)| {
-                        adapter
-                            .engine()
-                            .relation_cache()
-                            .insert_schema(schema, relations)
-                    });
-                Ok(())
-            }
-            Parse(_) => Ok(()),
-        }
-    }
-
-    pub fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
-        match &self.inner {
-            Typed { adapter, .. } => adapter
-                .engine()
-                .relation_cache()
-                .contains_relation(relation.as_ref()),
-            Parse(_) => false,
-        }
-    }
-
-    pub fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
-        match &self.inner {
-            Typed { adapter, .. } => adapter
-                .engine()
-                .relation_cache()
-                .contains_full_schema(schema),
-            Parse(_) => false,
-        }
     }
 
     /// Cache added
@@ -566,16 +450,8 @@ impl Adapter {
     /// ```
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn quote(&self, _state: &State, identifier: &str) -> Result<Value, minijinja::Error> {
-        match &self.inner {
-            Typed { adapter, .. } => {
-                let quoted_identifier = adapter.quote(identifier);
-                Ok(Value::from(quoted_identifier))
-            }
-            Parse(state) => Ok(Value::from(AdapterImpl::quote_identifier_for_adapter_type(
-                state.adapter_type,
-                identifier,
-            ))),
-        }
+        let quoted = quote_ident(self.adapter_type(), identifier);
+        Ok(Value::from(quoted))
     }
 
     /// Quote as configured.
@@ -1216,10 +1092,11 @@ impl Adapter {
                             );
 
                             if let Ok(relations_list) = maybe_relations_list {
-                                let _ = self.update_relation_cache(BTreeMap::from([(
-                                    db_schema,
-                                    relations_list,
-                                )]));
+                                let to_insert = Vec::from([(db_schema, relations_list)]);
+                                adapter
+                                    .engine()
+                                    .relation_cache()
+                                    .insert_many(to_insert.into_iter());
 
                                 self.get_relation_value_from_cache(temp_relation.as_ref())
                                     .or(Some(none_value()))
@@ -1236,7 +1113,7 @@ impl Adapter {
                 // - Relation doesn't exist (contains_full_schema): return none_value
                 // - Cache hit with relation: return cached value unless needs_information && !has_information
                 if let Some(cache_result) = maybe_cache_result {
-                    if let Some(cached_entry) = self
+                    if let Some(cached_entry) = adapter
                         .engine()
                         .relation_cache()
                         .get_relation(temp_relation.as_ref())
@@ -1365,10 +1242,10 @@ impl Adapter {
                 // Check if the relation being queried is the same as the one currently being rendered
                 // Skip local compilation results for the current relation since the compiled sql
                 // may represent a schema that the model will have when the run is done, not the current state
-                let is_current_relation = self.matches_current_relation(state, relation);
+                let is_current_relation = matches_current_relation(state, relation);
 
                 let maybe_from_cache = if !is_current_relation {
-                    self.get_schema_from_cache(relation)
+                    adapter.get_schema_from_cache(relation)
                 } else {
                     None
                 };
@@ -4177,22 +4054,27 @@ impl Object for Adapter {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        dispatch_adapter_get_value(self, key)
+        match key.as_str() {
+            Some("behavior") => Some(self.behavior()),
+            // NOTE(serramatutu): BigQuery adapter calls `Relation` from `adapter.Relation`
+            // instead of `api.Relation` when executing materialized views
+            Some("Relation") => {
+                create_static_relation(self.adapter_type(), self.engine().quoting())
+            }
+            _ => None,
+        }
     }
 }
 
 impl Adapter {
     fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
-        if let Some(cached_entry) = self.engine().relation_cache().get_relation(temp_relation) {
+        let relation_cache = self.engine().relation_cache();
+        if let Some(cached_entry) = relation_cache.get_relation(temp_relation) {
             Some(RelationObject::new(cached_entry.relation()).into_value())
         }
         // If we have captured the entire schema previously, we can check for non-existence
         // In these cases, return early with a None value
-        else if self
-            .engine()
-            .relation_cache()
-            .contains_full_schema_for_relation(temp_relation)
-        {
+        else if relation_cache.contains_full_schema_for_relation(temp_relation) {
             Some(none_value())
         } else {
             None

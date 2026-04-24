@@ -20,7 +20,7 @@
 //!    `RelationConfig` but captures historical differences in Jinja implementations across
 //!    adapters.
 
-use crate::funcs::none_value;
+use crate::value::none_value;
 
 use crate::AdapterType;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
