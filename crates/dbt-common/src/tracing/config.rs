@@ -9,7 +9,7 @@ use super::{
             build_json_compat_layer, build_json_compat_layer_with_background_writer,
         },
         jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
-        otlp::build_otlp_layer,
+        otlp::{OtlpResourceConfig, build_otlp_layer},
         parquet_writer::build_parquet_writer_layer,
         query_log::build_query_log_layer_with_background_writer,
         tui_layer::build_tui_layer,
@@ -27,8 +27,8 @@ use crate::{
     constants::{
         DBT_DEFAULT_LOG_FILE_BACKUP_COUNT, DBT_DEFAULT_LOG_FILE_MAX_BYTES,
         DBT_DEFAULT_LOG_FILE_NAME, DBT_DEFAULT_OTEL_PARQUET_FILE_NAME,
-        DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML,
-        DBT_TARGET_DIR_NAME,
+        DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_FUSION, DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME,
+        DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
     io_args::{FsCommand, IoArgs, LogFormat, ShowOptions},
     io_utils::determine_project_dir,
@@ -533,7 +533,10 @@ impl FsTraceConfig {
 
         // Create OTLP layer - if enabled and endpoint is set via env vars
         if self.export_to_otlp
-            && let Some((otlp_layer, mut handles)) = build_otlp_layer()
+            && let Some((otlp_layer, mut handles)) = build_otlp_layer(OtlpResourceConfig::new(
+                DBT_FUSION,
+                env!("CARGO_PKG_VERSION"),
+            ))
         {
             shutdown_items.append(&mut handles);
             consumer_layers.push(otlp_layer)

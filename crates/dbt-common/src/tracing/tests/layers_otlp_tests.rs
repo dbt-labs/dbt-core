@@ -4,30 +4,59 @@ use crate::tracing::{
     emit::{create_info_span, create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
-    layers::{data_layer::TelemetryDataLayer, otlp::OTLPExporterLayer},
+    layers::{
+        data_layer::TelemetryDataLayer,
+        otlp::{OTLPExporterLayer, OtlpResourceConfig},
+    },
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
 use dbt_telemetry::{Invocation, TelemetryOutputFlags};
-use opentelemetry::Value as OtelValue;
+use opentelemetry::{Key, KeyValue, Value as OtelValue};
 use opentelemetry_sdk as sdk;
+use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 
 type SharedSpans = Arc<Mutex<Vec<sdk::trace::SpanData>>>;
 type SharedLogs = Arc<Mutex<Vec<sdk::logs::SdkLogRecord>>>;
+type SharedResource = Arc<Mutex<Option<sdk::Resource>>>;
+
+const TEST_SERVICE_NAME: &str = "test-service";
+const TEST_SERVICE_VERSION: &str = "test-version";
+
+fn test_otlp_resource_config() -> OtlpResourceConfig {
+    OtlpResourceConfig::new(TEST_SERVICE_NAME, TEST_SERVICE_VERSION)
+}
+
+fn assert_resource_string_attribute(resource: &SharedResource, key: &'static str, expected: &str) {
+    let resource = resource.lock().unwrap();
+    let resource = resource.as_ref().expect("resource should be set");
+    let value = resource
+        .get(&Key::new(key))
+        .unwrap_or_else(|| panic!("resource should contain {key}"));
+
+    assert!(
+        matches!(&value, OtelValue::String(s) if s.as_ref() == expected),
+        "expected resource attribute {key}={expected}, got {value:?}"
+    );
+}
 
 #[derive(Debug)]
 struct TestSpanExporter {
     pub spans: SharedSpans,
+    pub resource: SharedResource,
 }
 
 impl TestSpanExporter {
-    fn new() -> (Self, SharedSpans) {
-        let shared = Arc::new(Mutex::new(Vec::new()));
+    fn new() -> (Self, SharedSpans, SharedResource) {
+        let spans = Arc::new(Mutex::new(Vec::new()));
+        let resource = Arc::new(Mutex::new(None));
         (
             Self {
-                spans: shared.clone(),
+                spans: spans.clone(),
+                resource: resource.clone(),
             },
-            shared,
+            spans,
+            resource,
         )
     }
 }
@@ -38,21 +67,29 @@ impl sdk::trace::SpanExporter for TestSpanExporter {
         guard.extend(batch);
         Ok(())
     }
+
+    fn set_resource(&mut self, resource: &sdk::Resource) {
+        *self.resource.lock().unwrap() = Some(resource.clone());
+    }
 }
 
 #[derive(Debug)]
 struct TestLogExporter {
     pub logs: SharedLogs,
+    pub resource: SharedResource,
 }
 
 impl TestLogExporter {
-    fn new() -> (Self, SharedLogs) {
-        let shared = Arc::new(Mutex::new(Vec::new()));
+    fn new() -> (Self, SharedLogs, SharedResource) {
+        let logs = Arc::new(Mutex::new(Vec::new()));
+        let resource = Arc::new(Mutex::new(None));
         (
             Self {
-                logs: shared.clone(),
+                logs: logs.clone(),
+                resource: resource.clone(),
             },
-            shared,
+            logs,
+            resource,
         )
     }
 }
@@ -71,6 +108,10 @@ impl sdk::logs::LogExporter for TestLogExporter {
             Ok(())
         }
     }
+
+    fn set_resource(&mut self, resource: &sdk::Resource) {
+        *self.resource.lock().unwrap() = Some(resource.clone());
+    }
 }
 
 #[test]
@@ -78,11 +119,16 @@ fn test_otlp_layer_exports_only_marked_records() {
     let trace_id = rand::random::<u128>();
 
     // Create test exporters and share state
-    let (trace_exporter, spans) = TestSpanExporter::new();
-    let (log_exporter, logs) = TestLogExporter::new();
+    let (trace_exporter, spans, trace_resource) = TestSpanExporter::new();
+    let (log_exporter, logs, log_resource) = TestLogExporter::new();
 
     // Build OTLP layer with test exporters
-    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
+    let otlp_layer = OTLPExporterLayer::new_for_tests(
+        trace_exporter,
+        log_exporter,
+        test_otlp_resource_config()
+            .with_resource_attributes([KeyValue::new("test.attribute", "present")]),
+    );
     // Clone providers for graceful shutdown later (batch processors flush on shutdown)
     let trace_provider = otlp_layer.tracer_provider();
     let log_provider = otlp_layer.logger_provider();
@@ -150,8 +196,15 @@ fn test_otlp_layer_exports_only_marked_records() {
     assert_eq!(exported_spans.len(), 1, "expected one OTLP-exported span");
     assert_eq!(exported_logs.len(), 1, "expected one OTLP-exported log");
 
+    for resource in [&trace_resource, &log_resource] {
+        assert_resource_string_attribute(resource, SERVICE_NAME, TEST_SERVICE_NAME);
+        assert_resource_string_attribute(resource, SERVICE_VERSION, TEST_SERVICE_VERSION);
+        assert_resource_string_attribute(resource, "test.attribute", "present");
+    }
+
     // Validate span attributes include name=exportable
     let span = &exported_spans[0];
+    assert_eq!(span.instrumentation_scope.name(), TEST_SERVICE_NAME);
     let has_name_attr = span.attributes.iter().any(|kv| {
         kv.key.as_str() == "name"
             && matches!(&kv.value, OtelValue::String(s) if s.as_ref() == "exportable")
@@ -179,10 +232,11 @@ fn test_otlp_export_with_links() {
     // Test that links are exported to OTLP
     let trace_id = rand::random::<u128>();
 
-    let (trace_exporter, spans) = TestSpanExporter::new();
-    let (log_exporter, _logs) = TestLogExporter::new();
+    let (trace_exporter, spans, _trace_resource) = TestSpanExporter::new();
+    let (log_exporter, _logs, _log_resource) = TestLogExporter::new();
 
-    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
+    let otlp_layer =
+        OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
     let trace_provider = otlp_layer.tracer_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(
@@ -264,10 +318,11 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
     let trace_id = rand::random::<u128>();
     let expected_parent_span_id: u64 = 0xdeadbeefcafebabe;
 
-    let (trace_exporter, spans) = TestSpanExporter::new();
-    let (log_exporter, _logs) = TestLogExporter::new();
+    let (trace_exporter, spans, _trace_resource) = TestSpanExporter::new();
+    let (log_exporter, _logs, _log_resource) = TestLogExporter::new();
 
-    let otlp_layer = OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter);
+    let otlp_layer =
+        OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
     let trace_provider = otlp_layer.tracer_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(
