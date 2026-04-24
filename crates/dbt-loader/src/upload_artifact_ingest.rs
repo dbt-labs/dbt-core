@@ -3,7 +3,10 @@ use crate::cloud_http_client::{
     build_private_api_url, build_retry_client,
 };
 use dbt_cloud_config::ResolvedCloudConfig;
-use dbt_common::constants::{DBT_DEFAULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME, DBT_MANIFEST_JSON};
+use dbt_common::constants::{
+    DBT_CATALOG_JSON, DBT_DEFAULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME, DBT_MANIFEST_JSON,
+    DBT_SOURCES_JSON,
+};
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::{
     emit_debug_log_message, emit_info_progress_message, emit_warn_log_message,
@@ -42,6 +45,8 @@ impl UploadConfig {
 struct ArtifactPaths {
     manifest_path: PathBuf,
     run_results_path: PathBuf,
+    sources_path: Option<PathBuf>,
+    catalog_path: Option<PathBuf>,
     publication_path: Option<PathBuf>,
     log_path: Option<PathBuf>,
 }
@@ -54,6 +59,7 @@ struct IngestCreateResult {
 pub async fn upload_artifacts_ingest_if_enabled(
     dbt_cloud_config: &Option<ResolvedCloudConfig>,
     io: &IoArgs,
+    write_catalog: bool,
 ) -> FsResult<()> {
     if !should_upload_artifacts() {
         return Ok(());
@@ -67,13 +73,15 @@ pub async fn upload_artifacts_ingest_if_enabled(
         config.tenant_hostname, config.account_id, config.environment_id
     ));
 
-    let Some(artifact_paths) = resolve_artifact_paths(io).await else {
+    let Some(artifact_paths) = resolve_artifact_paths(io, write_catalog).await else {
         return Ok(());
     };
 
     let zip_bytes = match build_artifact_zip(
         &artifact_paths.manifest_path,
         &artifact_paths.run_results_path,
+        artifact_paths.sources_path.as_deref(),
+        artifact_paths.catalog_path.as_deref(),
         artifact_paths.publication_path.as_deref(),
         artifact_paths.log_path.as_deref(),
     )
@@ -237,7 +245,7 @@ fn required_value(
     value
 }
 
-async fn resolve_artifact_paths(io: &IoArgs) -> Option<ArtifactPaths> {
+async fn resolve_artifact_paths(io: &IoArgs, write_catalog: bool) -> Option<ArtifactPaths> {
     let manifest_path = io.out_dir.join(DBT_MANIFEST_JSON);
     let run_results_path = io.out_dir.join(RUN_RESULTS_JSON);
     if tokiofs::metadata(&manifest_path).await.is_err()
@@ -258,7 +266,14 @@ async fn resolve_artifact_paths(io: &IoArgs) -> Option<ArtifactPaths> {
     Some(ArtifactPaths {
         manifest_path,
         run_results_path,
-        publication_path: resolve_publication_path(io),
+        sources_path: resolve_optional_artifact_path(io, DBT_SOURCES_JSON).await,
+        // Only include catalog.json if the write-catalog arg was set
+        catalog_path: if write_catalog {
+            resolve_optional_artifact_path(io, DBT_CATALOG_JSON).await
+        } else {
+            None
+        },
+        publication_path: resolve_publication_path(io).await,
         log_path: resolve_log_path(io).await,
     })
 }
@@ -421,6 +436,12 @@ async fn is_non_empty_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Returns the path to `file_name` in `io.out_dir` if it exists and is non-empty.
+async fn resolve_optional_artifact_path(io: &IoArgs, file_name: &str) -> Option<PathBuf> {
+    let path = io.out_dir.join(file_name);
+    is_non_empty_file(&path).await.then_some(path)
+}
+
 async fn resolve_log_path(io: &IoArgs) -> Option<PathBuf> {
     // main.rs writes the resolved absolute log dir into io.log_path before tracing
     // init, so it is the canonical resolver. Fall back to {in_dir}/logs only for
@@ -447,16 +468,15 @@ async fn resolve_log_path(io: &IoArgs) -> Option<PathBuf> {
     }
 }
 
-fn resolve_publication_path(io: &IoArgs) -> Option<PathBuf> {
+async fn resolve_publication_path(io: &IoArgs) -> Option<PathBuf> {
     let env_path = std::env::var(DBT_CLOUD_PUBLICATION_FILE_PATH)
         .ok()
         .filter(|value| !value.is_empty())
         .map(PathBuf::from);
-    let fallback_path = io.out_dir.join(PUBLICATION_JSON);
-    let fallback = fallback_path.exists().then_some(fallback_path);
+    let fallback = resolve_optional_artifact_path(io, PUBLICATION_JSON).await;
 
     match env_path {
-        Some(path) if path.exists() => Some(path),
+        Some(path) if is_non_empty_file(&path).await => Some(path),
         Some(path) => {
             emit_warn_log_message(
                 ErrorCode::FileNotFound,
@@ -475,6 +495,8 @@ fn resolve_publication_path(io: &IoArgs) -> Option<PathBuf> {
 async fn build_artifact_zip(
     manifest_path: &Path,
     run_results_path: &Path,
+    sources_path: Option<&Path>,
+    catalog_path: Option<&Path>,
     publication_path: Option<&Path>,
     log_path: Option<&Path>,
 ) -> FsResult<Vec<u8>> {
@@ -487,6 +509,12 @@ async fn build_artifact_zip(
 
     add_file_to_zip(&mut zip, manifest_path, DBT_MANIFEST_JSON, options).await?;
     add_file_to_zip(&mut zip, run_results_path, RUN_RESULTS_JSON, options).await?;
+    if let Some(sources_path) = sources_path {
+        add_file_to_zip(&mut zip, sources_path, DBT_SOURCES_JSON, options).await?;
+    }
+    if let Some(catalog_path) = catalog_path {
+        add_file_to_zip(&mut zip, catalog_path, DBT_CATALOG_JSON, options).await?;
+    }
     if let Some(publication_path) = publication_path {
         add_file_to_zip(&mut zip, publication_path, PUBLICATION_JSON, options).await?;
     }
@@ -633,17 +661,25 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manifest_path = temp_dir.path().join(DBT_MANIFEST_JSON);
         let run_results_path = temp_dir.path().join(RUN_RESULTS_JSON);
+        let sources_path = temp_dir.path().join(DBT_SOURCES_JSON);
+        let catalog_path = temp_dir.path().join(DBT_CATALOG_JSON);
         let publication_path = temp_dir.path().join(PUBLICATION_JSON);
+        let log_path = temp_dir.path().join(DBT_DEFAULT_LOG_FILE_NAME);
 
         std::fs::write(&manifest_path, "{\"manifest\":true}").unwrap();
         std::fs::write(&run_results_path, "{\"run_results\":true}").unwrap();
+        std::fs::write(&sources_path, "{\"sources\":true}").unwrap();
+        std::fs::write(&catalog_path, "{\"catalog\":true}").unwrap();
         std::fs::write(&publication_path, "{\"publication\":true}").unwrap();
+        std::fs::write(&log_path, "some log content").unwrap();
 
         let zip_bytes = build_artifact_zip(
             &manifest_path,
             &run_results_path,
+            Some(sources_path.as_path()),
+            Some(catalog_path.as_path()),
             Some(publication_path.as_path()),
-            None,
+            Some(log_path.as_path()),
         )
         .await
         .unwrap();
@@ -651,7 +687,10 @@ mod tests {
         let mut archive = ZipArchive::new(Cursor::new(zip_bytes)).unwrap();
         assert!(archive.by_name(DBT_MANIFEST_JSON).is_ok());
         assert!(archive.by_name(RUN_RESULTS_JSON).is_ok());
+        assert!(archive.by_name(DBT_SOURCES_JSON).is_ok());
+        assert!(archive.by_name(DBT_CATALOG_JSON).is_ok());
         assert!(archive.by_name(PUBLICATION_JSON).is_ok());
+        assert!(archive.by_name(DBT_DEFAULT_LOG_FILE_NAME).is_ok());
     }
 
     #[tokio::test]
@@ -668,6 +707,8 @@ mod tests {
         let zip_bytes = build_artifact_zip(
             &manifest_path,
             &run_results_path,
+            None,
+            None,
             None,
             Some(log_path.as_path()),
         )
@@ -689,14 +730,110 @@ mod tests {
         std::fs::write(&manifest_path, "{\"manifest\":true}").unwrap();
         std::fs::write(&run_results_path, "{\"run_results\":true}").unwrap();
 
-        let zip_bytes = build_artifact_zip(&manifest_path, &run_results_path, None, None)
-            .await
-            .unwrap();
+        let zip_bytes =
+            build_artifact_zip(&manifest_path, &run_results_path, None, None, None, None)
+                .await
+                .unwrap();
 
         let mut archive = ZipArchive::new(Cursor::new(zip_bytes)).unwrap();
         assert!(archive.by_name(DBT_MANIFEST_JSON).is_ok());
         assert!(archive.by_name(RUN_RESULTS_JSON).is_ok());
         assert!(archive.by_name(DBT_DEFAULT_LOG_FILE_NAME).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_optional_artifact_path_returns_some_when_file_exists() {
+        let temp_dir = tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let sources_path = temp_dir.path().join(DBT_SOURCES_JSON);
+        std::fs::write(&sources_path, "{\"sources\":true}").unwrap();
+
+        let result = resolve_optional_artifact_path(&io, DBT_SOURCES_JSON).await;
+        assert_eq!(result, Some(sources_path));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_optional_artifact_path_returns_none_when_missing() {
+        let temp_dir = tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let result = resolve_optional_artifact_path(&io, DBT_SOURCES_JSON).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_optional_artifact_path_returns_none_for_empty_file() {
+        let temp_dir = tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let sources_path = temp_dir.path().join(DBT_SOURCES_JSON);
+        std::fs::write(&sources_path, "").unwrap();
+
+        let result = resolve_optional_artifact_path(&io, DBT_SOURCES_JSON).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_artifact_paths_excludes_catalog_when_write_catalog_false() {
+        let temp_dir = tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        // Write all artifacts to disk
+        std::fs::write(temp_dir.path().join(DBT_MANIFEST_JSON), "{}").unwrap();
+        std::fs::write(temp_dir.path().join(RUN_RESULTS_JSON), "{}").unwrap();
+        std::fs::write(temp_dir.path().join(DBT_CATALOG_JSON), "{\"catalog\":true}").unwrap();
+        std::fs::write(temp_dir.path().join(DBT_SOURCES_JSON), "{\"sources\":true}").unwrap();
+
+        // With write_catalog=false, catalog should be excluded even though the file exists
+        let paths = resolve_artifact_paths(&io, false).await.unwrap();
+        assert!(paths.catalog_path.is_none());
+        assert!(paths.sources_path.is_some());
+
+        // With write_catalog=true, catalog should be included
+        let paths = resolve_artifact_paths(&io, true).await.unwrap();
+        assert!(paths.catalog_path.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_build_artifact_zip_with_sources_but_no_catalog() {
+        let temp_dir = tempdir().unwrap();
+        let manifest_path = temp_dir.path().join(DBT_MANIFEST_JSON);
+        let run_results_path = temp_dir.path().join(RUN_RESULTS_JSON);
+        let sources_path = temp_dir.path().join(DBT_SOURCES_JSON);
+
+        std::fs::write(&manifest_path, "{\"manifest\":true}").unwrap();
+        std::fs::write(&run_results_path, "{\"run_results\":true}").unwrap();
+        std::fs::write(&sources_path, "{\"sources\":true}").unwrap();
+
+        let zip_bytes = build_artifact_zip(
+            &manifest_path,
+            &run_results_path,
+            Some(sources_path.as_path()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let mut archive = ZipArchive::new(Cursor::new(zip_bytes)).unwrap();
+        assert!(archive.by_name(DBT_MANIFEST_JSON).is_ok());
+        assert!(archive.by_name(RUN_RESULTS_JSON).is_ok());
+        assert!(archive.by_name(DBT_SOURCES_JSON).is_ok());
+        assert!(archive.by_name(DBT_CATALOG_JSON).is_err());
     }
 
     #[tokio::test]
@@ -787,6 +924,8 @@ mod tests {
         let zip_bytes = build_artifact_zip(
             &manifest_path,
             &run_results_path,
+            None,
+            None,
             None,
             Some(otel_file.as_path()),
         )

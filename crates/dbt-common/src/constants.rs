@@ -40,6 +40,7 @@ pub const DBT_MANIFEST_JSON: &str = "manifest.json";
 pub const DBT_MANIFEST_INFO: &str = "manifest.info";
 pub const DBT_SEMANTIC_MANIFEST_JSON: &str = "semantic_manifest.json";
 pub const DBT_CATALOG_JSON: &str = "catalog.json";
+pub const DBT_SOURCES_JSON: &str = "sources.json";
 pub const DBT_COMPILED_DIR_NAME: &str = "compiled";
 pub const DBT_METADATA_DIR_NAME: &str = "metadata";
 pub const DBT_EPHEMERAL_DIR_NAME: &str = "ephemeral";
