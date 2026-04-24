@@ -1,6 +1,7 @@
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchReader};
+use arrow::record_batch::RecordBatchIterator;
 use arrow_schema::Schema;
 use dbt_xdbc::{Connection, Statement};
 use std::fmt;
@@ -88,18 +89,15 @@ impl Connection for ReplayConnection {
                     ));
                 }
 
-                let data_base64 = entry.data_base64.ok_or_else(|| {
-                    to_adbc_error(
-                        RecordReplayError("Missing data in recording".to_string()),
-                        Some(&path),
-                    )
-                })?;
-
-                let reader = sqlite_handler
-                    .decode_arrow_ipc(&data_base64)
-                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
-
-                Ok(reader.schema().as_ref().clone())
+                entry
+                    .data
+                    .map(|(schema, _batches)| schema.as_ref().clone())
+                    .ok_or_else(|| {
+                        to_adbc_error(
+                            RecordReplayError("Missing data in recording".to_string()),
+                            Some(&path),
+                        )
+                    })
             }
             StorageType::FileArrowIpc | StorageType::FileParquet => {
                 replay_file_schema(&path, &unique_id, storage_type)
@@ -181,17 +179,20 @@ impl Statement for ReplayStatement {
                     ));
                 }
 
-                let data_base64 = entry.data_base64.ok_or_else(|| {
-                    to_adbc_error(
-                        RecordReplayError("Missing data in recording".to_string()),
-                        Some(&path),
-                    )
-                })?;
-
-                let reader = sqlite_handler
-                    .decode_arrow_ipc(&data_base64)
-                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
-                Ok(reader)
+                entry
+                    .data
+                    .map(|(schema, batches)| {
+                        Box::new(RecordBatchIterator::new(
+                            batches.into_iter().map(Ok),
+                            schema,
+                        )) as Box<dyn RecordBatchReader + Send>
+                    })
+                    .ok_or_else(|| {
+                        to_adbc_error(
+                            RecordReplayError("Missing data in recording".to_string()),
+                            Some(&path),
+                        )
+                    })
             }
             StorageType::FileArrowIpc | StorageType::FileParquet => {
                 replay_file_execute(&path, &unique_id, replay_sql, storage_type, &self.config)

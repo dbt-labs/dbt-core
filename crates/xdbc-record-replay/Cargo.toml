@@ -12,6 +12,10 @@ edition.workspace = true
 [lib]
 doctest = false
 
+[[bin]]
+name = "dump-recording"
+path = "src/bin/dump_recording.rs"
+
 [lints]
 workspace = true
 

@@ -1,4 +1,4 @@
-use arrow::array::{RecordBatch, RecordBatchReader};
+use arrow::array::RecordBatch;
 use arrow::ipc::reader::StreamReader as ArrowStreamReader;
 use arrow::ipc::writer::StreamWriter as ArrowStreamWriter;
 use arrow_schema::Schema;
@@ -10,11 +10,43 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::{RECORDS_NAME, fix_decimal_precision_in_schema};
+use crate::error::RecordReplayError;
 
+#[derive(Debug)]
 pub(crate) struct RecordingEntry {
     pub sql: Option<String>,
-    pub data_base64: Option<String>,
     pub error: Option<String>,
+    pub data: Option<(Arc<Schema>, Vec<RecordBatch>)>,
+}
+
+fn decode_arrow_ipc(
+    data_base64: &str,
+) -> Result<(Arc<Schema>, Vec<RecordBatch>), RecordReplayError> {
+    let bytes = BASE64_STANDARD
+        .decode(data_base64)
+        .map_err(|e| RecordReplayError(format!("Could not decode base64: {e}")))?;
+    let reader = ArrowStreamReader::try_new(Cursor::new(bytes), None)?;
+    let schema = reader.schema();
+    let batches = reader
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| RecordReplayError(format!("Could not collect record batches: {e}")))?;
+    Ok((schema, batches))
+}
+
+impl RecordingEntry {
+    fn try_from_sqlite_row(
+        sql: Option<String>,
+        data_base64: Option<String>,
+        error: Option<String>,
+    ) -> Result<Self, RecordReplayError> {
+        Ok(Self {
+            sql,
+            error,
+            data: data_base64
+                .map(|data| decode_arrow_ipc(&data))
+                .transpose()?,
+        })
+    }
 }
 
 pub(crate) struct SqliteHandler {
@@ -33,7 +65,7 @@ impl SqliteHandler {
         self.db_path.exists()
     }
 
-    pub fn connect(&self) -> Result<rusqlite::Connection, crate::error::RecordReplayError> {
+    pub fn connect(&self) -> Result<rusqlite::Connection, RecordReplayError> {
         let conn = rusqlite::Connection::open(&self.db_path)?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS recordings (
@@ -53,7 +85,7 @@ impl SqliteHandler {
         &self,
         batches: &[RecordBatch],
         schema: Arc<Schema>,
-    ) -> Result<String, crate::error::RecordReplayError> {
+    ) -> Result<String, RecordReplayError> {
         let mut buffer = Vec::new();
         {
             let mut writer = ArrowStreamWriter::try_new(&mut buffer, &schema)?;
@@ -65,23 +97,13 @@ impl SqliteHandler {
         Ok(BASE64_STANDARD.encode(&buffer))
     }
 
-    pub fn decode_arrow_ipc(
-        &self,
-        data_base64: &str,
-    ) -> Result<Box<dyn RecordBatchReader + Send>, crate::error::RecordReplayError> {
-        let bytes = BASE64_STANDARD.decode(data_base64)?;
-        let cursor = Cursor::new(bytes);
-        let reader = ArrowStreamReader::try_new(cursor, None)?;
-        Ok(Box::new(reader))
-    }
-
     pub fn write_execute(
         &self,
         unique_id: &str,
         sql: &str,
         batches: &[RecordBatch],
         schema: Arc<Schema>,
-    ) -> Result<(), crate::error::RecordReplayError> {
+    ) -> Result<(), RecordReplayError> {
         let conn = self.connect()?;
         let data_base64 = self.encode_arrow_ipc(batches, schema)?;
         conn.execute(
@@ -97,7 +119,7 @@ impl SqliteHandler {
         unique_id: &str,
         sql: &str,
         error_msg: &str,
-    ) -> Result<(), crate::error::RecordReplayError> {
+    ) -> Result<(), RecordReplayError> {
         let conn = self.connect()?;
         conn.execute(
             "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
@@ -107,11 +129,7 @@ impl SqliteHandler {
         Ok(())
     }
 
-    pub fn write_schema(
-        &self,
-        unique_id: &str,
-        schema: &Schema,
-    ) -> Result<(), crate::error::RecordReplayError> {
+    pub fn write_schema(&self, unique_id: &str, schema: &Schema) -> Result<(), RecordReplayError> {
         let fixed_schema = fix_decimal_precision_in_schema(schema);
         let schema_ref = Arc::new(fixed_schema);
         let empty_batch = RecordBatch::new_empty(schema_ref.clone());
@@ -130,7 +148,7 @@ impl SqliteHandler {
         &self,
         unique_id: &str,
         error_msg: &str,
-    ) -> Result<(), crate::error::RecordReplayError> {
+    ) -> Result<(), RecordReplayError> {
         let conn = self.connect()?;
         conn.execute(
             "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
@@ -144,45 +162,49 @@ impl SqliteHandler {
         &self,
         unique_id: &str,
         replay_sql: &str,
-    ) -> Result<RecordingEntry, crate::error::RecordReplayError> {
+    ) -> Result<RecordingEntry, RecordReplayError> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
             "SELECT sql, data_base64, error FROM recordings
              WHERE unique_id = ?1 AND record_type = 'execute'",
         )?;
-        let entry = stmt
-            .query_row(params![unique_id], |row| {
-                Ok(RecordingEntry {
-                    sql: row.get(0)?,
-                    data_base64: row.get(1)?,
-                    error: row.get(2)?,
-                })
-            })
-            .map_err(|e| {
-                crate::error::RecordReplayError(format!(
-                    "Failed to read execute replay sql ({replay_sql}) for unique_id '{unique_id}': {e}"
-                ))
-            })?;
-        Ok(entry)
+        stmt.query_row(params![unique_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(|e| {
+            RecordReplayError(format!(
+                "Could not query row for replay sql ({replay_sql}): {e}"
+            ))
+        })
+        .and_then(|(sql, err, data)| RecordingEntry::try_from_sqlite_row(sql, err, data))
     }
 
-    pub fn read_schema(
-        &self,
-        unique_id: &str,
-    ) -> Result<RecordingEntry, crate::error::RecordReplayError> {
+    pub fn read_schema(&self, unique_id: &str) -> Result<RecordingEntry, RecordReplayError> {
         let conn = self.connect()?;
         let mut stmt = conn.prepare(
             "SELECT sql, data_base64, error FROM recordings
              WHERE unique_id = ?1 AND record_type = 'get_table_schema'",
         )?;
-        let entry = stmt.query_row(params![unique_id], |row| {
-            Ok(RecordingEntry {
-                sql: row.get(0)?,
-                data_base64: row.get(1)?,
-                error: row.get(2)?,
-            })
-        })?;
-        Ok(entry)
+        stmt.query_row(params![unique_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .map_err(|e| RecordReplayError(format!("Could not query row: {e}")))
+        .and_then(|(sql, err, data)| RecordingEntry::try_from_sqlite_row(sql, err, data))
+    }
+
+    pub(crate) fn read_all_rows(&self) -> Result<Vec<RecordingEntry>, RecordReplayError> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare("SELECT sql, data_base64, error FROM recordings")?;
+        let rows = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .map_err(|e| RecordReplayError(format!("Could not query row: {e}")))?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let (sql, err, data) = row?;
+            out.push(RecordingEntry::try_from_sqlite_row(sql, err, data)?);
+        }
+        Ok(out)
     }
 }
 
@@ -220,14 +242,12 @@ mod tests {
         let entry = handler.read_execute(unique_id, sql).unwrap();
         assert_eq!(entry.sql.as_deref(), Some(sql));
         assert!(entry.error.is_none());
-        assert!(entry.data_base64.is_some());
+        assert!(entry.data.is_some());
 
-        let mut reader = handler
-            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
-            .unwrap();
-        let read_batch = reader.next().unwrap().unwrap();
-        assert_eq!(read_batch.num_rows(), 3);
-        assert_eq!(read_batch.num_columns(), 2);
+        let (schema, batches) = entry.data.unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].num_rows(), 3);
+        assert_eq!(schema.fields().len(), 2);
     }
 
     #[test]
@@ -246,7 +266,7 @@ mod tests {
         let entry = handler.read_execute(unique_id, sql).unwrap();
         assert_eq!(entry.sql.as_deref(), Some(sql));
         assert_eq!(entry.error.as_deref(), Some(error_msg));
-        assert!(entry.data_base64.is_none());
+        assert!(entry.data.is_none());
     }
 
     #[test]
@@ -269,12 +289,9 @@ mod tests {
         let entry = handler.read_schema(unique_id).unwrap();
         assert!(entry.sql.is_none());
         assert!(entry.error.is_none());
-        assert!(entry.data_base64.is_some());
+        assert!(entry.data.is_some());
 
-        let reader = handler
-            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
-            .unwrap();
-        let read_schema = reader.schema();
+        let (read_schema, _) = entry.data.unwrap();
         assert_eq!(read_schema.fields().len(), 2);
         assert_eq!(read_schema.field(0).name(), "col1");
         assert_eq!(read_schema.field(1).name(), "col2");
@@ -296,7 +313,7 @@ mod tests {
 
         let entry = handler.read_schema(unique_id).unwrap();
         assert_eq!(entry.error.as_deref(), Some(error_msg));
-        assert!(entry.data_base64.is_none());
+        assert!(entry.data.is_none());
     }
 
     #[test]
@@ -321,13 +338,11 @@ mod tests {
         handler.write_execute(unique_id, sql, &[], schema).unwrap();
 
         let entry = handler.read_execute(unique_id, sql).unwrap();
-        let mut reader = handler
-            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
-            .unwrap();
 
-        assert!(reader.next().is_none());
-        assert_eq!(reader.schema().fields().len(), 1);
-        assert_eq!(reader.schema().field(0).name(), "x");
+        let (schema, batches) = entry.data.unwrap();
+        assert!(batches.is_empty());
+        assert_eq!(schema.fields().len(), 1);
+        assert_eq!(schema.field(0).name(), "x");
     }
 
     #[test]

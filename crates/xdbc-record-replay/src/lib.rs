@@ -119,3 +119,24 @@ impl Config {
 }
 
 pub type SharedConfig = Arc<Config>;
+
+/// Debug-print the recordings at `recordings_dir` into `stream`
+pub fn debug_recording_file(
+    mut stream: impl std::io::Write,
+    recordings_dir: &Path,
+) -> Result<(), String> {
+    let handler = storage::sqlite::SqliteHandler::new(recordings_dir);
+    let rows = match handler.read_all_rows() {
+        Ok(r) => r,
+        Err(e) => {
+            return Err(format!("error: {e}"));
+        }
+    };
+
+    for row in rows {
+        write!(stream, "{:#?}\n=====================\n", row)
+            .map_err(|e| format!("Failed to write to stream: {e}"))?;
+    }
+
+    Ok(())
+}
