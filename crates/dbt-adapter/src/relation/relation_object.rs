@@ -138,6 +138,17 @@ impl RelationObject {
     }
 }
 
+/// Always returns the unfiltered relation string (via [`BaseRelation::render_self_as_str`]),
+/// reference: https://github.com/dbt-labs/dbt-adapters/blob/616a8d3cb595605872c011070c240e7a2b825d79/dbt-adapters/src/dbt/adapters/base/relation.py#L268-L269
+fn render_without_filter(ro: &Arc<RelationObject>) -> Value {
+    let rendered = ro.render_self_as_str();
+    if rendered.is_empty() {
+        none_value()
+    } else {
+        Value::from(rendered)
+    }
+}
+
 impl fmt::Debug for RelationObject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.render_self_as_str())
@@ -191,15 +202,7 @@ impl Object for RelationObject {
                 let default: Option<Value> = args.get("default").ok();
                 self.get(&key, default)
             }
-            "render" => {
-                let rendered = self.render_self_as_str();
-                let val = if rendered.is_empty() {
-                    none_value()
-                } else {
-                    Value::from(rendered)
-                };
-                Ok(val)
-            }
+            "render" => Ok(render_without_filter(self)),
             "without_identifier" => self
                 .without_identifier()
                 .map(|r| Value::from_object(RelationObject::new(r))),
@@ -348,10 +351,19 @@ impl Object for RelationObject {
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
             Some("StreamingTable") => Some(Value::from(RelationType::StreamingTable.to_string())),
+            // the Jinja logics `if resolved.render is defined and resolved.render is callable `
+            // in `macro build_ref_function` depends on this
+            Some("render") => {
+                let this = Arc::clone(self);
+                Some(Value::from_func_func("render", move |_state, _args| {
+                    Ok(render_without_filter(&this))
+                }))
+            }
             // BigQuery
             Some("location") => Some(Value::from(self.location())),
             Some("project") => Some(Value::from(self.database())),
             Some("dataset") => Some(Value::from(self.schema())),
+
             _ => None,
         }
     }
@@ -370,6 +382,7 @@ impl Object for RelationObject {
             "can_be_renamed",
             "can_be_replaced",
             "name",
+            "render",
         ])
     }
 
