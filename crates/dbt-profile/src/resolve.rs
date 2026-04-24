@@ -46,9 +46,8 @@ pub struct ResolveArgs {
     /// Searched first; if unset falls back to `project_dir` then `~/.dbt/`.
     pub profiles_dir: Option<PathBuf>,
 
-    /// Path to the dbt project directory. Used to:
-    /// 1. Find a `profiles.yml` in the project root (second search location).
-    /// 2. Read `dbt_project.yml` for the default profile name (standalone mode only).
+    /// Path to the dbt project directory.
+    /// Used to read `dbt_project.yml` for the default profile name (standalone mode only).
     pub project_dir: Option<PathBuf>,
 
     /// Explicit profile name (equivalent to `--profile`).
@@ -122,8 +121,7 @@ impl ResolvedProfile {
 /// [`render_target`].
 pub fn resolve(args: &ResolveArgs) -> Result<ResolvedProfile> {
     let penv = ProfileEnvironment::new(args.vars.clone());
-    let profile_path =
-        find_profiles_path(args.profiles_dir.as_deref(), args.project_dir.as_deref())?;
+    let profile_path = find_profiles_path(args.profiles_dir.as_deref())?;
     let profile_name = resolve_profile_name(args)?;
 
     resolve_with_env(&penv, &profile_path, &profile_name, args.target.as_deref())
@@ -203,13 +201,15 @@ const PROFILES_YML: &str = "profiles.yml";
 
 /// Find the `profiles.yml` file by searching standard locations.
 ///
-/// When `profiles_dir` is set (e.g. from `--profiles-dir`), only that directory
-/// is searched — no fallback to project_dir or ~/.dbt. This matches dbt semantics
-/// where an explicit `--profiles-dir` that lacks profiles.yml must error.
-pub fn find_profiles_path(
-    profiles_dir: Option<&Path>,
-    project_dir: Option<&Path>,
-) -> Result<PathBuf> {
+/// Search order:
+/// 1. `profiles_dir` (e.g. from `--profiles-dir`) — exclusive, no fallback.
+/// 2. Current working directory.
+/// 3. `~/.dbt/`.
+///
+/// When `profiles_dir` is set, only that directory is searched. This matches
+/// dbt semantics where an explicit `--profiles-dir` that lacks profiles.yml
+/// must error.
+pub fn find_profiles_path(profiles_dir: Option<&Path>) -> Result<PathBuf> {
     let mut searched = Vec::new();
 
     if let Some(dir) = profiles_dir {
@@ -225,8 +225,8 @@ pub fn find_profiles_path(
         });
     }
 
-    if let Some(dir) = project_dir {
-        let p = dir.join(PROFILES_YML);
+    if let Ok(cwd) = std::env::current_dir() {
+        let p = cwd.join(PROFILES_YML);
         if p.exists() {
             return Ok(p);
         }

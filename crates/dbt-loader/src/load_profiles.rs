@@ -30,10 +30,10 @@ pub fn load_profiles(
 ) -> FsResult<DbtProfile> {
     let profile = get_profile_with_span(arg.profile.as_ref(), raw_dbt_project.profile.clone())?;
 
-    // Locate profiles.yml via dbt-profile's standard search order
-    let profile_path =
-        find_profiles_path(arg.profiles_dir.as_deref(), Some(arg.io.in_dir.as_path()))
-            .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", e))?;
+    // Locate profiles.yml via dbt-profile's standard search order:
+    // --profiles-dir (exclusive) > CWD > ~/.dbt/
+    let profile_path = find_profiles_path(arg.profiles_dir.as_deref())
+        .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", e))?;
 
     let abs_profile_path = canonicalize(&profile_path)?;
     let abs_in_dir = canonicalize(&arg.io.in_dir)?;

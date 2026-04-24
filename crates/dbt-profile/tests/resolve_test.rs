@@ -232,6 +232,7 @@ cool_profile:
     );
 
     let args = ResolveArgs {
+        profiles_dir: Some(project_dir.to_path_buf()),
         project_dir: Some(project_dir.to_path_buf()),
         ..Default::default()
     };
