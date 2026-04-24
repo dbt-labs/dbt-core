@@ -540,6 +540,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().description.clone()
     }
 
+    fn columns(&self) -> Vec<DbtColumnRef> {
+        self.base().columns.clone()
+    }
+
     fn alias(&self) -> String {
         self.base().alias.clone()
     }
