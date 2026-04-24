@@ -416,17 +416,20 @@ unsafe impl zstd_safe::WriteBuf for ZstdWriteBuffer {
 
 const DRIVER_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Configure the HTTP agent
-pub fn build_http_agent() -> ureq::Agent {
-    // Use Rustls as the TLS provider but on the OS for the root certificates.
-    //
-    // [1]: https://github.com/dbt-labs/dbt-fusion/issues/147
-    let tls_config = TlsConfig::builder()
+/// Build a TLS configuration that uses the OS certificate store.
+///
+/// [1]: https://github.com/dbt-labs/dbt-fusion/issues/147
+pub fn build_tls_config() -> TlsConfig {
+    TlsConfig::builder()
         .provider(TlsProvider::Rustls)
         .root_certs(RootCerts::PlatformVerifier)
-        .build();
+        .build()
+}
+
+/// Configure the HTTP agent for driver downloads.
+pub fn build_http_agent() -> ureq::Agent {
     let http_config = ureq::Agent::config_builder()
-        .tls_config(tls_config)
+        .tls_config(build_tls_config())
         .timeout_global(Some(DRIVER_DOWNLOAD_TIMEOUT))
         .build();
     ureq::Agent::new_with_config(http_config)
