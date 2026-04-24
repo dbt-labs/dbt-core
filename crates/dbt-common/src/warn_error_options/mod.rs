@@ -569,6 +569,9 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::InvalidConcurrentBatchesConfig => {
             error_code == ErrorCode::InvalidConcurrentBatchesConfig
         }
+        SupportedLegacyWarnError::MicrobatchModelNoEventTimeInputs => {
+            error_code == ErrorCode::MicrobatchModelNoEventTimeInputs
+        }
         SupportedLegacyWarnError::InvalidMacroAnnotation => {
             error_code == ErrorCode::ValidateMacroArgs
         }

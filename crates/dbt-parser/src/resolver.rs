@@ -20,7 +20,7 @@ use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
-use dbt_schemas::schemas::common::Access;
+use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
 use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
@@ -351,6 +351,9 @@ pub async fn resolve(
         &mut operations,
         &node_resolver,
     );
+    for warning in microbatch_model_no_event_time_inputs_warnings(&nodes) {
+        emit_warn_log_from_fs_error(&warning, arg.io.status_reporter.as_ref());
+    }
 
     // Check for model deprecation warnings
     check_for_model_deprecations(&arg.io, &nodes);
@@ -451,6 +454,40 @@ fn check_access(
     }
 
     violations
+}
+
+fn microbatch_model_no_event_time_inputs_warnings(nodes: &Nodes) -> Vec<FsError> {
+    nodes
+        .models
+        .values()
+        .filter(|model| {
+            model.__model_attr__.incremental_strategy == Some(DbtIncrementalStrategy::Microbatch)
+                && model.__model_attr__.event_time.is_some()
+                && !has_event_time_input(nodes, model.as_ref())
+        })
+        .map(|model| {
+            FsError::new(
+                ErrorCode::MicrobatchModelNoEventTimeInputs,
+                format!(
+                    "The microbatch model '{}' has no 'ref' or 'source' input with an 'event_time' configuration. \nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model.",
+                    model.common().name
+                ),
+            )
+        })
+        .collect()
+}
+
+fn has_event_time_input(nodes: &Nodes, model: &dyn InternalDbtNode) -> bool {
+    model.base().depends_on.nodes.iter().any(|unique_id| {
+        nodes
+            .models
+            .get(unique_id)
+            .is_some_and(|node| node.__model_attr__.event_time.is_some())
+            || nodes
+                .sources
+                .get(unique_id)
+                .is_some_and(|node| node.deprecated_config.event_time.is_some())
+    })
 }
 
 /// Helper function to check access for a node referencing other models.
