@@ -11,7 +11,11 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 119] = [
+); 124] = [
+    (
+        ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
+        "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
+    ),
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.7"),
         "d13dd1e196fdb281e069a4ddb11c00fc8a631d2f8ccc0d7e1259585dd322f4a8",
@@ -23,6 +27,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.9"),
         "ec2d400ed5cc868150aba4d2b995964cc821bb413d697f81bf5e2c358caca31e",
+    ),
+    (
+        ("bigquery", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.10"),
+        "ba4854112679eaff31303fbdb171827f500f7f9773973804136465ddd5d60507",
     ),
     (
         ("bigquery", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.7"),
@@ -37,6 +45,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "7015f7c515997ff666bbe3d96d62dd0da39824177dc9bc69155a989a500eed4d",
     ),
     (
+        ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.21.10"),
+        "16028dee53e2da1d4bf08b57b39a70ae5334f9923a68e9b047afbc22e7a46f6c",
+    ),
+    (
         ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.21.7"),
         "78852480c7c95d7f01937b590510b9ea4b2296b5678c8374d0d1e5c16b6d1fc6",
     ),
@@ -49,6 +61,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "288009c1fd5c18ec9a54cfd7c7223179151d3fc57832f77d0c069220cbcc008b",
     ),
     (
+        ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.10"),
+        "1e0f6a2db045e217d42e52cc499df1422c81d49c37d7a64704665b4720d04cd0",
+    ),
+    (
         ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.7"),
         "be650f3c507000db77d2fd06e88e4c000c112ba931464b9fdf23104cfaef05b5",
     ),
@@ -59,6 +75,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.9"),
         "36b9e54aa4ee5df0ebadb66f1635daa9736dc3173794762c09da401b5d9f177f",
+    ),
+    (
+        ("bigquery", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.10"),
+        "d9c7d501dc590dba12005972af1243797ee97fa717d1bcfe3e971397ed6f002b",
     ),
     (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.7"),
