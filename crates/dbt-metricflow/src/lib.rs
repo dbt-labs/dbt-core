@@ -1325,6 +1325,28 @@ fn resolve_metric(
         })
         .unwrap_or_default();
 
+    // New-style cumulative metrics store their input metric inside
+    // cumulative_type_params.metric rather than in the top-level metrics array.
+    // Merge it into input_metrics so downstream lookup can find agg_params.
+    let mut input_metrics: Vec<MetricInput> = input_metrics;
+    if let Some(m) = tp
+        .get("cumulative_type_params")
+        .and_then(|c| c.get("metric"))
+        .filter(|m| !m.is_null())
+    {
+        if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
+            if !input_metrics.iter().any(|im| im.name == name) {
+                input_metrics.push(MetricInput {
+                    name: name.to_string(),
+                    filter: m.get("filter").and_then(|f| f.as_str()).map(String::from),
+                    alias: m.get("alias").and_then(|a| a.as_str()).map(String::from),
+                    offset_window: None,
+                    offset_to_grain: None,
+                });
+            }
+        }
+    }
+
     // Parse ratio metric numerator/denominator.
     let numerator = tp.get("numerator").and_then(|n| {
         if n.is_null() {
@@ -6637,6 +6659,110 @@ mod tests {
         assert!(
             sql.contains("'enterprise'"),
             "enterprise filter must appear — base CTEs are being shared:\n{sql}"
+        );
+    }
+
+    // ── Bug: new-style cumulative metrics store input in cumulative_type_params.metric ──
+    //
+    // dbt 1.9+ changed the manifest format for cumulative metrics: the input metric
+    // is stored inside type_params.cumulative_type_params.metric (an object) instead
+    // of in the top-level type_params.metrics array (which is now always []).
+    //
+    //   type_params:
+    //     metrics: []                          ← always empty for cumulative
+    //     cumulative_type_params:
+    //       window: {count: 7, granularity: day}
+    //       metric: {name: "base_daily"}       ← input lives here
+    //
+    // The parser only read type_params.metrics, so input_metrics was always empty,
+    // causing compile_cumulative_metric_cte to fail with
+    // "cumulative metric X has no aggregation params".
+    //
+    // The fix is to also pull from cumulative_type_params.metric when metrics is empty.
+    #[test]
+    fn test_cumulative_metric_with_new_style_input_metric() {
+        let mut store = MockStore::new();
+
+        // The base simple metric that provides the aggregation.
+        store.metrics.push(RawMetricRow {
+            name: "base_daily".into(),
+            metric_type: "simple".into(),
+            description: String::new(),
+            type_params: r#"{
+                "metric_aggregation_params": {
+                    "semantic_model": "fct_events",
+                    "agg": "count",
+                    "expr": "1",
+                    "agg_time_dimension": "ds"
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        // New-style cumulative: metrics array is empty, input lives in
+        // cumulative_type_params.metric — the exact shape dbt 1.9+ emits.
+        store.metrics.push(RawMetricRow {
+            name: "base_l7d".into(),
+            metric_type: "cumulative".into(),
+            description: String::new(),
+            type_params: r#"{
+                "metrics": [],
+                "metric_aggregation_params": null,
+                "cumulative_type_params": {
+                    "window": {"count": 7, "granularity": "day"},
+                    "grain_to_date": null,
+                    "period_agg": "first",
+                    "metric": {
+                        "name": "base_daily",
+                        "filter": null,
+                        "alias": null,
+                        "offset_window": null,
+                        "offset_to_grain": null
+                    }
+                }
+            }"#
+            .into(),
+            metric_filter: String::new(),
+        });
+
+        store.models.push(RawModelRow {
+            name: "fct_events".into(),
+            node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
+            primary_entity: "event".into(),
+            unique_id: "semantic_model.fct_events".into(),
+        });
+        store.dimensions.push((
+            "semantic_model.fct_events".into(),
+            vec![RawDimensionRow {
+                name: "ds".into(),
+                dimension_type: "time".into(),
+                expr: "ds".into(),
+                time_granularity: "day".into(),
+            }],
+        ));
+
+        let spec = SemanticQuerySpec {
+            metrics: vec!["base_l7d".into()],
+            group_by: vec![GroupBySpec::TimeDimension {
+                name: "metric_time".into(),
+                granularity: "day".into(),
+                date_part: None,
+            }],
+            where_filters: vec![],
+            order_by: vec![],
+            limit: None,
+            time_constraint: None,
+        };
+
+        // Pre-fix: fails with "cumulative metric base_l7d has no aggregation params".
+        // Post-fix: compiles and the SQL contains a rolling window condition.
+        let sql = compile(&mut store, &spec, Dialect::DuckDB)
+            .expect("new-style cumulative metric should compile without error");
+
+        assert!(
+            sql.contains("INTERVAL"),
+            "rolling-window cumulative SQL must contain an INTERVAL for the 7-day window\n  SQL:\n{sql}"
         );
     }
 }
