@@ -56,6 +56,15 @@ resource_types_to_schema_file_keys = {
 schema_file_keys = list(schema_file_keys_to_resource_types.keys())
 
 
+def normalize_tags(tags: Union[List[str], str, None]) -> List[str]:
+    """Return a sorted, deduplicated list of tags."""
+    if tags is None:
+        return []
+    if isinstance(tags, str):
+        tags = [tags]
+    return sorted(set(tags))
+
+
 def trimmed(inp: str) -> str:
     if len(inp) < 50:
         return inp
