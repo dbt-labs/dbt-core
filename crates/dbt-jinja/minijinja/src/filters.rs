@@ -899,7 +899,10 @@ mod builtins {
 
     /// Returns the first item from an iterable.
     ///
-    /// If the list is empty `undefined` is returned.
+    /// If the list is empty `undefined` is returned. Mirrors Python Jinja2:
+    /// an undefined input yields undefined (no error), and a non-iterable
+    /// input (None, number, ...) raises a `TypeError` of the form
+    /// `'<typename>' object is not iterable`.
     ///
     /// ```jinja
     /// <dl>
@@ -909,21 +912,28 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn first(value: &Value) -> Result<Value, Error> {
-        if let Some(s) = value.as_str() {
-            Ok(s.chars().next().map_or(Value::UNDEFINED, Value::from))
-        } else if let Some(mut iter) = value.as_object().and_then(|x| x.try_iter()) {
-            Ok(iter.next().unwrap_or(Value::UNDEFINED))
-        } else {
-            Err(Error::new(
-                ErrorKind::InvalidOperation,
-                "cannot get first item from value",
-            ))
+        if value.is_undefined() {
+            return Ok(Value::UNDEFINED);
         }
+        if let Some(s) = value.as_str() {
+            return Ok(s.chars().next().map_or(Value::UNDEFINED, Value::from));
+        }
+        if let Some(mut iter) = value.as_object().and_then(|x| x.try_iter()) {
+            return Ok(iter.next().unwrap_or(Value::UNDEFINED));
+        }
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("'{}' object is not iterable", value.python_type_name()),
+        ))
     }
 
     /// Returns the last item from an iterable.
     ///
-    /// If the list is empty `undefined` is returned.
+    /// If the list is empty `undefined` is returned. Mirrors Python Jinja2:
+    /// an undefined input yields undefined, dicts yield their last key in
+    /// insertion order, and a non-iterable input (None, number, ...) raises
+    /// a `TypeError` of the form `'<typename>' object is not reversible`
+    /// (Jinja2's `last` filter calls `reversed(...)` under the hood).
     ///
     /// ```jinja
     /// <h2>Most Recent Update</h2>
@@ -938,18 +948,28 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn last(value: Value) -> Result<Value, Error> {
+        if value.is_undefined() {
+            return Ok(Value::UNDEFINED);
+        }
         if let Some(s) = value.as_str() {
-            Ok(s.chars().next_back().map_or(Value::UNDEFINED, Value::from))
-        } else if matches!(value.kind(), ValueKind::Seq | ValueKind::Iterable) {
+            return Ok(s.chars().next_back().map_or(Value::UNDEFINED, Value::from));
+        }
+        if value.kind() == ValueKind::Map {
+            return Ok(value
+                .as_object()
+                .and_then(|o| o.try_iter_pairs())
+                .and_then(|iter| iter.last().map(|(k, _)| k))
+                .unwrap_or(Value::UNDEFINED));
+        }
+        if matches!(value.kind(), ValueKind::Seq | ValueKind::Iterable) {
             let rev = ok!(value.reverse());
             let mut iter = ok!(rev.try_iter());
-            Ok(iter.next().unwrap_or_default())
-        } else {
-            Err(Error::new(
-                ErrorKind::InvalidOperation,
-                "cannot get last item from value",
-            ))
+            return Ok(iter.next().unwrap_or_default());
         }
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("'{}' object is not reversible", value.python_type_name()),
+        ))
     }
 
     /// Returns the smallest item from an iterable.
