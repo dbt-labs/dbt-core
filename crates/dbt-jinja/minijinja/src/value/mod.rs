@@ -1139,6 +1139,32 @@ impl Value {
         )
     }
 
+    /// Returns the CPython type name that would appear in a `TypeError` for
+    /// this value (e.g. `'int' object is not iterable`).
+    ///
+    /// This is a best-effort mapping — minijinja's `Value` is structurally
+    /// typed where Python is nominally typed, so types fall back to
+    /// `"object"` when there's no obvious one-to-one mapping. Used by
+    /// filters and globals that mirror Python's exact error wording.
+    pub fn python_type_name(&self) -> &'static str {
+        match self.kind() {
+            ValueKind::None => "NoneType",
+            ValueKind::Bool => "bool",
+            ValueKind::Number => {
+                if self.is_integer() {
+                    "int"
+                } else {
+                    "float"
+                }
+            }
+            ValueKind::String => "str",
+            ValueKind::Bytes => "bytes",
+            ValueKind::Seq => "list",
+            ValueKind::Map => "dict",
+            _ => "object",
+        }
+    }
+
     /// Returns `true` if the map represents keyword arguments.
     pub fn is_kwargs(&self) -> bool {
         Kwargs::extract(self).is_some()
