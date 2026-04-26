@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
 use minijinja::{render, Environment};
-use minijinja_contrib::globals::{cycler, joiner};
+use minijinja_contrib::globals::{create_dict_namespace, cycler, joiner};
 
 #[test]
 fn test_cycler() {
@@ -41,6 +41,119 @@ joiner: {{ j }}"), @r"
     second: [|]
     joiner: Joiner { sep: '|', used: true }
     ");
+}
+
+fn dict_env() -> Environment<'static> {
+    let mut env = Environment::new();
+    env.add_global("dict", create_dict_namespace());
+    env
+}
+
+#[test]
+fn test_dict_fromkeys_default_none() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict.fromkeys(['a', 'b']) }}"),
+        @"{'a': None, 'b': None}"
+    );
+}
+
+#[test]
+fn test_dict_fromkeys_custom_default() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict.fromkeys(['a', 'b'], 0) }}"),
+        @"{'a': 0, 'b': 0}"
+    );
+}
+
+#[test]
+fn test_dict_fromkeys_string_iterable() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict.fromkeys('abc', '!') }}"),
+        @"{'a': '!', 'b': '!', 'c': '!'}"
+    );
+}
+
+#[test]
+fn test_dict_fromkeys_dedupes() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict.fromkeys(['a', 'a', 'b']) }}"),
+        @"{'a': None, 'b': None}"
+    );
+}
+
+#[test]
+fn test_dict_call_empty() {
+    let env = dict_env();
+    assert_snapshot!(render!(in env, r"{{ dict() }}"), @"{}");
+}
+
+#[test]
+fn test_dict_call_kwargs() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict(a=1, b=2) }}"),
+        @"{'a': 1, 'b': 2}"
+    );
+}
+
+#[test]
+fn test_dict_call_pairs() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict([('a', 1), ('b', 2)]) }}"),
+        @"{'a': 1, 'b': 2}"
+    );
+}
+
+#[test]
+fn test_dict_call_mapping() {
+    let env = dict_env();
+    assert_snapshot!(
+        render!(in env, r"{{ dict({'a': 1, 'b': 2}) }}"),
+        @"{'a': 1, 'b': 2}"
+    );
+}
+
+#[test]
+fn test_dict_call_pairs_with_kwargs_overrides() {
+    let env = dict_env();
+    // kwargs come after positional and override matching keys, like Python.
+    assert_snapshot!(
+        render!(in env, r"{{ dict([('a', 1), ('b', 2)], b=99) }}"),
+        @"{'a': 1, 'b': 99}"
+    );
+}
+
+#[test]
+fn test_dict_call_bad_pair_length_errors() {
+    let env = dict_env();
+    let err = env
+        .render_str(r"{{ dict([('a',), ('b', 2)]) }}", (), &[])
+        .unwrap_err();
+    let detail = err.detail().unwrap_or_default();
+    assert!(
+        detail.contains("dictionary update sequence element #0 has length 1"),
+        "unexpected error: {detail}"
+    );
+}
+
+// Error-path parity with CPython: dict.fromkeys(<non-iterable>) raises a
+// TypeError of the form "'<typename>' object is not iterable". This is
+// covered here (rather than in the SLT) because the SLT's dbt-jinja
+// executor wraps the same error in a different envelope string, making
+// a single shared SLT golden unworkable.
+#[test]
+fn test_dict_fromkeys_int_errors_like_python() {
+    let env = dict_env();
+    let err = env
+        .render_str(r"{{ dict.fromkeys(42) }}", (), &[])
+        .unwrap_err();
+    let detail = err.detail().unwrap_or_default();
+    assert_eq!(detail, "'int' object is not iterable");
 }
 
 #[test]

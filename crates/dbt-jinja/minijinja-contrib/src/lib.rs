@@ -82,6 +82,7 @@ pub fn add_to_environment(env: &mut Environment) {
     }
     env.add_function("cycler", globals::cycler);
     env.add_function("joiner", globals::joiner);
+    env.add_global("dict", globals::create_dict_namespace());
     env.add_global("modules", Value::from_object(modules));
     env.add_global("validation", Value::from_object(validation_namespace));
 }

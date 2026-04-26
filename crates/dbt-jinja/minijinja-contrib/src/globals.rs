@@ -3,9 +3,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_map::MutableMap;
 #[allow(unused)]
 use minijinja::value::Value;
-use minijinja::value::{from_args, Object, ObjectRepr, Rest};
+use minijinja::value::{from_args, Kwargs, Object, ObjectRepr, Rest, ValueKind};
 use minijinja::{Error, ErrorKind, State};
 
 /// Returns the current time in UTC as unix timestamp.
@@ -81,6 +82,119 @@ pub fn cycler(items: Rest<Value>) -> Result<Value, Error> {
             pos: AtomicUsize::new(0),
         }))
     }
+}
+
+/// Build the callable `dict` namespace so templates can write
+/// `{{ dict(...) }}` and `{{ dict.fromkeys(...) }}` the same way they would
+/// in Python's Jinja2.
+///
+/// Exposes:
+/// - `dict()` / `dict([(k, v), ...])` / `dict({...})` / `dict(**kwargs)` — constructors.
+/// - `dict.fromkeys(iterable, value=None)` — class method.
+pub fn create_dict_namespace() -> Value {
+    Value::from_object(DictNamespace)
+}
+
+#[derive(Debug)]
+struct DictNamespace;
+
+impl Object for DictNamespace {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
+            "fromkeys" => Some(Value::from_function(dict_fromkeys)),
+            _ => None,
+        }
+    }
+
+    fn call(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
+        // Mirrors CPython's `dict(*args, **kwargs)`: at most one positional
+        // arg (a mapping or an iterable of key/value pairs), then keyword
+        // arguments, with kwargs overriding any keys from the positional.
+        let (data, kwargs): (Option<&Value>, Kwargs) = from_args(args)?;
+        let map = MutableMap::new();
+
+        if let Some(data) = data {
+            match data.kind() {
+                ValueKind::Map => {
+                    if let Some(pairs) = data.as_object().and_then(|o| o.try_iter_pairs()) {
+                        for (k, v) in pairs {
+                            map.insert(k, v);
+                        }
+                    }
+                }
+                _ => {
+                    let iter = data.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            format!("'{}' object is not iterable", data.python_type_name()),
+                        )
+                    })?;
+                    for (idx, item) in iter.enumerate() {
+                        let pair_iter = item.try_iter().map_err(|_| {
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                format!(
+                                    "cannot convert dictionary update sequence element #{idx} to a sequence"
+                                ),
+                            )
+                        })?;
+                        let pair: Vec<Value> = pair_iter.collect();
+                        if pair.len() != 2 {
+                            return Err(Error::new(
+                                ErrorKind::InvalidOperation,
+                                format!(
+                                    "dictionary update sequence element #{idx} has length {}; 2 is required",
+                                    pair.len()
+                                ),
+                            ));
+                        }
+                        let mut pair = pair.into_iter();
+                        let k = pair.next().unwrap();
+                        let v = pair.next().unwrap();
+                        map.insert(k, v);
+                    }
+                }
+            }
+        }
+
+        let kwarg_keys: Vec<String> = kwargs.args().map(|s| s.to_string()).collect();
+        for key in kwarg_keys {
+            let v: Value = kwargs.get(&key)?;
+            map.insert(Value::from(key), v);
+        }
+        kwargs.assert_all_used()?;
+
+        Ok(Value::from_object(map))
+    }
+}
+
+/// `dict.fromkeys(iterable, value=None)` — build a dict whose keys come from
+/// `iterable`, all mapped to `value` (or `None` if omitted). Mirrors Python,
+/// including CPython's `TypeError: '<typename>' object is not iterable`
+/// on a non-iterable argument so SLT goldens cross-validate against Mantle.
+fn dict_fromkeys(args: &[Value]) -> Result<Value, Error> {
+    let (keys, default): (&Value, Option<&Value>) = from_args(args)?;
+    let iter = keys.try_iter().map_err(|_| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("'{}' object is not iterable", keys.python_type_name()),
+        )
+    })?;
+    let default = default.cloned().unwrap_or_else(|| Value::from(()));
+    let map = MutableMap::new();
+    for key in iter {
+        map.insert(key, default.clone());
+    }
+    Ok(Value::from_object(map))
 }
 
 /// A tiny helper that can be used to “join” multiple sections.  A
