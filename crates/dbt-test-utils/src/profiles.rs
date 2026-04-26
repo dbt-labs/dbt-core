@@ -88,6 +88,9 @@ pub fn load_db_config<P: AsRef<Path>>(
         DbConfig::DuckDB(duck) => {
             duck.schema = Some(schema.to_string());
         }
+        DbConfig::Spark(s) => {
+            s.schema = Some(schema.to_string());
+        }
         _ => {}
     }
 
