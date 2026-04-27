@@ -132,8 +132,12 @@ from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.base_types import EventGroupType, EventLevel
+from dbt_common.events.functions import (
+    fire_event,
+    fire_or_defer_event,
+    get_invocation_id,
+)
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
@@ -608,13 +612,14 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and node.deprecation_date:
                 if node.is_past_deprecation_date:
-                    fire_event(
+                    fire_or_defer_event(
                         DeprecatedModel(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
                             deprecation_date=node.deprecation_date.isoformat(),
                         ),
                         force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                 # At this point _process_refs should already have been called, and
                 # we just rebuilt the parent and child maps.
@@ -629,7 +634,7 @@ class ManifestLoader:
                     else:
                         event_cls = UpcomingReferenceDeprecation
 
-                    fire_event(
+                    fire_or_defer_event(
                         event_cls(
                             model_name=child_node.name,
                             ref_model_package=node.package_name,
@@ -639,6 +644,7 @@ class ManifestLoader:
                             ref_model_deprecation_date=node.deprecation_date.isoformat(),
                         ),
                         force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_for_spaces_in_resource_names(self):
@@ -1599,12 +1605,13 @@ class ManifestLoader:
                         models_forcing_concurrent_batches += 1
 
                 if models_forcing_concurrent_batches > 0:
-                    fire_event(
+                    fire_or_defer_event(
                         InvalidConcurrentBatchesConfig(
                             num_models=models_forcing_concurrent_batches,
                             adapter_type=adapter.type(),
                         ),
                         force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_microbatch_model_has_a_filtered_input(self):
@@ -1684,7 +1691,7 @@ def invalid_target_fail_unless_test(
 
             fire_event(event, EventLevel.WARN if should_warn_if_disabled else None)
         else:
-            fire_event(
+            fire_or_defer_event(
                 NodeNotFoundOrDisabled(
                     original_file_path=node.original_file_path,
                     unique_id=node.unique_id,
@@ -1695,6 +1702,7 @@ def invalid_target_fail_unless_test(
                     disabled=str(disabled),
                 ),
                 force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
     else:
         raise TargetNotFoundError(
@@ -1725,13 +1733,14 @@ def warn_if_package_node_depends_on_root_project_node(
         and target_model.package_name == current_project
         and ref_package_name != current_project
     ):
-        fire_event(
+        fire_or_defer_event(
             PackageNodeDependsOnRootProjectNode(
                 node_name=node.name,
                 package_name=node.package_name,
                 root_project_unique_id=target_model.unique_id,
             ),
             force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
         )
 
 

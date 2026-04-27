@@ -109,8 +109,9 @@ from dbt_common.contracts.constraints import (
     ModelLevelConstraint,
 )
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventGroupType
 from dbt_common.events.contextvars import set_log_contextvars
-from dbt_common.events.functions import fire_event
+from dbt_common.events.functions import fire_or_defer_event
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -718,7 +719,7 @@ class ModelNode(ModelResource, CompiledNode):
             breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
 
         if self.version is None:
-            fire_event(
+            fire_or_defer_event(
                 UnversionedBreakingChange(
                     breaking_changes=[breaking_change],
                     model_name=self.name,
@@ -726,6 +727,7 @@ class ModelNode(ModelResource, CompiledNode):
                 ),
                 node=self,
                 force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return False
         else:
@@ -936,7 +938,7 @@ class ModelNode(ModelResource, CompiledNode):
                 )
 
             if self.version is None:
-                fire_event(
+                fire_or_defer_event(
                     UnversionedBreakingChange(
                         contract_enforced_disabled=contract_enforced_disabled,
                         columns_removed=columns_removed,
@@ -949,6 +951,7 @@ class ModelNode(ModelResource, CompiledNode):
                     ),
                     node=self,
                     force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
                 raise (
@@ -990,25 +993,28 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         if self.checksum.name == "path":
             msg: str
             if other.checksum.name != "path":
-                fire_event(
+                fire_or_defer_event(
                     SeedIncreased(package_name=self.package_name, name=self.name),
                     node=self,
                     force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif result:
-                fire_event(
+                fire_or_defer_event(
                     SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
                     node=self,
                     force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif not result:
-                fire_event(
+                fire_or_defer_event(
                     SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
                     node=self,
                     force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
-                fire_event(
+                fire_or_defer_event(
                     SeedExceedsLimitChecksumChanged(
                         package_name=self.package_name,
                         name=self.name,
@@ -1016,6 +1022,7 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
                     ),
                     node=self,
                     force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
 
         return result
