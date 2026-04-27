@@ -20,6 +20,7 @@
 //!    `RelationConfig` but captures historical differences in Jinja implementations across
 //!    adapters.
 
+use crate::errors::AdapterResult;
 use crate::value::none_value;
 
 use crate::AdapterType;
@@ -309,14 +310,14 @@ impl Object for RelationConfig {
 pub(crate) trait ComponentConfigLoader<R> {
     /// Load the current applied state for the component given the remote state
     #[expect(clippy::wrong_self_convention)]
-    fn from_remote_state(&self, remote_state: &R) -> Box<dyn ComponentConfig>;
+    fn from_remote_state(&self, remote_state: &R) -> AdapterResult<Box<dyn ComponentConfig>>;
 
     /// Load the desired component state from local dbt configs
     #[expect(clippy::wrong_self_convention)]
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Box<dyn ComponentConfig>;
+    ) -> AdapterResult<Box<dyn ComponentConfig>>;
 
     /// The unique type name of the component loaded by this loader
     fn type_name(&self) -> &'static str;
@@ -345,15 +346,17 @@ impl<'a, R> RelationConfigLoader<'a, R> {
 
     /// Load the current applied state for the relation and all its components given the remote state
     #[expect(clippy::wrong_self_convention)]
-    pub(crate) fn from_remote_state(&self, remote_state: &R) -> RelationConfig {
-        RelationConfig::new(
+    pub(crate) fn from_remote_state(&self, remote_state: &R) -> AdapterResult<RelationConfig> {
+        let components = self
+            .component_loaders
+            .iter()
+            .map(|l| l.from_remote_state(remote_state))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(RelationConfig::new(
             self.adapter_type,
-            self.component_loaders
-                .iter()
-                .map(|l| l.from_remote_state(remote_state))
-                .collect::<Vec<_>>(),
+            components,
             self.requires_full_refresh_fn,
-        )
+        ))
     }
 
     /// Load the desired relation state from local dbt configs
@@ -361,15 +364,17 @@ impl<'a, R> RelationConfigLoader<'a, R> {
     pub(crate) fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> RelationConfig {
-        RelationConfig::new(
+    ) -> AdapterResult<RelationConfig> {
+        let components = self
+            .component_loaders
+            .iter()
+            .map(|l| l.from_local_config(relation_config))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(RelationConfig::new(
             self.adapter_type,
-            self.component_loaders
-                .iter()
-                .map(|l| l.from_local_config(relation_config))
-                .collect::<Vec<_>>(),
+            components,
             self.requires_full_refresh_fn,
-        )
+        ))
     }
 }
 

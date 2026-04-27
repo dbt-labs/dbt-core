@@ -1,5 +1,6 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/tags.py
 
+use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
@@ -97,15 +98,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationTagsLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(from_remote_state(remote_state))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(from_remote_state(remote_state)))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(from_local_config(relation_config))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(from_local_config(relation_config)))
     }
 }
 

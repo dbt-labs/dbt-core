@@ -3635,7 +3635,7 @@ impl AdapterImpl {
             }
         };
 
-        let config = config_loader.from_remote_state(&remote_state);
+        let config = config_loader.from_remote_state(&remote_state)?;
 
         Ok(config)
     }
@@ -3663,7 +3663,7 @@ impl AdapterImpl {
                 ));
             }
         };
-        let config = config_loader.from_local_config(model);
+        let config = config_loader.from_local_config(model)?;
         Ok(Value::from_object(config))
     }
 
@@ -3802,7 +3802,7 @@ impl AdapterImpl {
         }
 
         let tags = (&ColumnTagsLoader as &dyn ComponentConfigLoader<DatabricksRelationMetadata>)
-            .from_local_config(model);
+            .from_local_config(model)?;
         Ok(tags.as_jinja())
     }
     /// TODO: implement if necessary, currently its noop

@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use minijinja::Value;
 use serde::Serialize;
 
+use crate::errors::AdapterResult;
 use crate::relation::{
     config_v2::{ComponentConfig, ComponentConfigLoader},
     databricks::config::{DatabricksRelationMetadata, DatabricksRelationMetadataKey},
@@ -179,15 +180,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for ColumnMasksLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(ColumnMasks::from_remote_state(remote_state))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(ColumnMasks::from_remote_state(remote_state)))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(ColumnMasks::from_local_config(relation_config))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(ColumnMasks::from_local_config(relation_config)))
     }
 }
 

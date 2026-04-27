@@ -5,6 +5,7 @@
 //!
 //! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py
 
+use crate::errors::AdapterResult;
 use crate::relation::config_v2::{ComponentConfig, ComponentConfigLoader};
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -345,15 +346,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for ConstraintsLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(Constraints::from_remote_state(remote_state))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(Constraints::from_remote_state(remote_state)))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Box<dyn ComponentConfig> {
-        Box::new(Constraints::from_local_config(relation_config))
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(Constraints::from_local_config(relation_config)))
     }
 }
 

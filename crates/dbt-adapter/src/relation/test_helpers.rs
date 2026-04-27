@@ -110,8 +110,14 @@ pub(crate) fn run_test_case<L, C>(
     let desired_local_config = create_mock_local_config(tc.desired_state);
     let current_local_config = create_mock_local_config(tc.current_state);
 
-    let desired = tc.relation_loader.from_local_config(&desired_local_config);
-    let current = tc.relation_loader.from_local_config(&current_local_config);
+    let desired = tc
+        .relation_loader
+        .from_local_config(&desired_local_config)
+        .expect("desired config loader failed: test setup produced an invalid model config");
+    let current = tc
+        .relation_loader
+        .from_local_config(&current_local_config)
+        .expect("current config loader failed: test setup produced an invalid model config");
     let changeset = RelationConfig::diff(&desired, &current);
 
     let mut errors = changesets_eq(&tc.expected_changeset, &changeset);
