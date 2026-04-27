@@ -251,6 +251,7 @@ impl TimeMachineEventValidationEngine {
 
         // Register deviations
         engine.register_deviation(Box::new(DbtPovModelCostCalculatorDeviation));
+        engine.register_deviation(Box::new(DbtArtifactsDeviation));
         engine.register_deviation(Box::new(ElementaryDeviation));
 
         // Register sanitizers
@@ -460,6 +461,53 @@ impl KnownDeviation for DbtPovModelCostCalculatorDeviation {
         } else {
             DeviationMatch::None
         }
+    }
+}
+
+/// Deviation for the `dbt_artifacts` package.
+///
+/// dbt Artifacts hooks generate SQL with runtime-dependent data: timestamps, thread IDs,
+/// node runtimes, and rows affected. These values are inherently non-deterministic across
+/// runs and cannot be meaningfully compared.
+pub struct DbtArtifactsDeviation;
+
+impl KnownDeviation for DbtArtifactsDeviation {
+    fn name(&self) -> &'static str {
+        "dbt_artifacts"
+    }
+
+    fn reason(&self) -> &'static str {
+        "dbt Artifacts embeds runtime data (timestamps, thread ids, node runtimes, rows affected) that differ between recording and replay"
+    }
+
+    fn check(&self, incoming: &IncomingEvent, _recorded: &AdapterCallEvent) -> DeviationMatch<'_> {
+        // Direct match: node belongs to the dbt_artifacts package.
+        if incoming.node_id.contains(".dbt_artifacts.") {
+            return DeviationMatch::Matched(MatchedDeviation {
+                rule_name: self.name(),
+                reason: self.reason(),
+            });
+        }
+
+        // Indirect match: dbt_artifacts registers on-run-end hooks under the consuming
+        // project's namespace (`operation.<project>.<project>-on_run_end-N`). Detect
+        // these by confirming the SQL is an INSERT INTO targeting a dbt_artifacts schema.
+        if incoming.node_id.contains("-on_run_end-") {
+            static RE: LazyLock<Regex> = LazyLock::new(|| {
+                Regex::new(r"(?i)insert\s+into\s+[^\s(]*dbt_artifacts").expect("valid regex")
+            });
+            if extract_sql_from_args(incoming.args)
+                .map(|sql| RE.is_match(sql))
+                .unwrap_or(false)
+            {
+                return DeviationMatch::Matched(MatchedDeviation {
+                    rule_name: self.name(),
+                    reason: self.reason(),
+                });
+            }
+        }
+
+        DeviationMatch::None
     }
 }
 
@@ -1191,6 +1239,94 @@ mod tests {
         let sql = r#"values ("abc","2026-02-13 14:49:54")"#;
         let expected = r#"values ("abc","<TIMESTAMP>")"#;
         assert_eq!(sanitizer.sanitize(sql), expected);
+    }
+
+    #[test]
+    fn test_dbt_artifacts_deviation_skips_dbt_artifacts_nodes() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!(["INSERT INTO artifacts_table VALUES (1)"]);
+        let recorded_args = serde_json::json!(["INSERT INTO artifacts_table VALUES (2)"]);
+
+        let incoming = IncomingEvent::new(
+            "operation.dbt_artifacts.dbt_artifacts-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Skipped(_)
+        ));
+    }
+
+    #[test]
+    fn test_dbt_artifacts_deviation_skips_consuming_project_on_run_end_hook() {
+        // dbt_artifacts registers on-run-end hooks under the consuming project's namespace,
+        // so the node_id won't contain ".dbt_artifacts." — detect via INSERT INTO targeting
+        // a schema whose name contains dbt_artifacts.
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_sql = "insert into `proj`.`myproject_dbt_artifacts`.`model_executions` ( node_id ) select col1 from values ( 'abc' )";
+        let recorded_sql = "insert into `proj`.`myproject_dbt_artifacts`.`model_executions` ( node_id ) select col1 from values ( 'xyz' )";
+        let incoming_args = serde_json::json!([incoming_sql]);
+        let recorded_args = serde_json::json!([recorded_sql]);
+
+        let incoming = IncomingEvent::new(
+            "operation.myproject.myproject-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Skipped(_)
+        ));
+    }
+
+    #[test]
+    fn test_dbt_artifacts_deviation_does_not_skip_non_dbt_artifacts_on_run_end_hook() {
+        // An on_run_end hook that does NOT target a dbt_artifacts schema should not be skipped.
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args =
+            serde_json::json!(["insert into `proj`.`myschema`.`audit` values ( 1 )"]);
+        let recorded_args =
+            serde_json::json!(["insert into `proj`.`myschema`.`audit` values ( 2 )"]);
+
+        let incoming = IncomingEvent::new(
+            "operation.myproject.myproject-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Mismatch(_)
+        ));
+    }
+
+    #[test]
+    fn test_dbt_artifacts_deviation_does_not_skip_other_nodes() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!(["INSERT INTO t VALUES (1)"]);
+        let recorded_args = serde_json::json!(["INSERT INTO t VALUES (2)"]);
+
+        let incoming = IncomingEvent::new(
+            "operation.client.client-on_run_end-0",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        assert!(matches!(
+            engine.validate(&incoming, &recorded),
+            ValidationResult::Mismatch(_)
+        ));
     }
 
     #[test]
