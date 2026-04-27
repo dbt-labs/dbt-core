@@ -129,7 +129,11 @@ fn test_otlp_layer_exports_only_marked_records() {
         test_otlp_resource_config()
             .with_resource_attributes([KeyValue::new("test.attribute", "present")]),
     );
-    // Clone providers for graceful shutdown later (batch processors flush on shutdown)
+    // Keep both provider handles alive across with_default and shut them down
+    // explicitly after it returns. If the OTLP layer owns the last provider
+    // handle, DefaultGuard teardown can drop the layer while tracing-core is
+    // updating thread-local subscribers; provider Drop emits OpenTelemetry SDK
+    // tracing events and can deadlock that teardown path.
     let trace_provider = otlp_layer.tracer_provider();
     let log_provider = otlp_layer.logger_provider();
 
@@ -237,7 +241,10 @@ fn test_otlp_export_with_links() {
 
     let otlp_layer =
         OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
+    // Keep both provider handles alive across with_default and shut them down
+    // explicitly after it returns. See test_otlp_layer_exports_only_marked_records.
     let trace_provider = otlp_layer.tracer_provider();
+    let log_provider = otlp_layer.logger_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
@@ -268,6 +275,9 @@ fn test_otlp_export_with_links() {
     });
 
     trace_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+    log_provider
         .shutdown()
         .expect("Failed to shutdown telemetry");
 
@@ -323,7 +333,10 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
 
     let otlp_layer =
         OTLPExporterLayer::new_for_tests(trace_exporter, log_exporter, test_otlp_resource_config());
+    // Keep both provider handles alive across with_default and shut them down
+    // explicitly after it returns. See test_otlp_layer_exports_only_marked_records.
     let trace_provider = otlp_layer.tracer_provider();
+    let log_provider = otlp_layer.logger_provider();
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
@@ -356,6 +369,9 @@ fn test_otlp_export_includes_parent_span_id_on_root_span() {
     });
 
     trace_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+    log_provider
         .shutdown()
         .expect("Failed to shutdown telemetry");
 
