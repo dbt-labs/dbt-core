@@ -382,7 +382,6 @@ impl Object for RelationObject {
             "can_be_renamed",
             "can_be_replaced",
             "name",
-            "render",
         ])
     }
 
