@@ -714,6 +714,18 @@ fn merge_yaml_values(lhs: dbt_yaml::Value, rhs: dbt_yaml::Value) -> (bool, dbt_y
 static CLEAN_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^0-9a-zA-Z_]+").expect("valid regex"));
 
+/// Matches strings that are a single bare call to one of dbt-Core's whitelisted
+/// renderable test-arg functions (e.g. `var('foo')`, `env_var('FOO', 'default')`).
+/// Mirrors `looks_like_func` in dbt-core/clients/jinja.py — used by
+/// `add_rendered_test_kwargs` to decide which test-arg strings get wrapped in
+/// `{{ }}` and rendered through the native Jinja env. The end-of-string anchor
+/// is significant: shapes like `var('x') ~ 'y'` that have content after the
+/// closing paren are intentionally excluded so we don't diverge from Core by
+/// accepting expressions Core rejects.
+static LOOKS_LIKE_FUNC: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$").expect("valid regex")
+});
+
 /// Generates a unique hash for a generic test based on uncleaned kwargs.
 /// This matches mantle's behavior where the unique_id includes a hash of the
 /// test metadata (namespace, name, kwargs) WITHOUT cleaning, ensuring that
@@ -1045,13 +1057,24 @@ fn generate_test_macro(
     fn format_value_for_jinja(value: &Value, jinja_set_vars: &BTreeMap<String, String>) -> String {
         match value {
             Value::String(s) => {
-                // Check if this is a reference to one of our Jinja set variables
+                // Strings shaped like a single bare call to one of dbt-Core's renderable
+                // functions (`env_var(...)`, `ref(...)`, `var(...)`, `source(...)`, `doc(...)`)
+                // are emitted unquoted so Jinja evaluates them when the generated test SQL is
+                // rendered. Core does the same in `add_rendered_test_kwargs` (clients/jinja.py)
+                // by re-wrapping such values in `{{ }}` before native rendering. Without this,
+                // Fusion would forward the literal string into `config()` and a strict enum
+                // deserializer (e.g. `severity`) would reject it as `unknown variant `var('...')``
+                // (production conformance bucket dbt1501). The end-of-string anchor in
+                // `LOOKS_LIKE_FUNC` keeps us aligned with Core: shapes like `var('x') ~ 'y'`
+                // are not matched here, mirroring Core's rejection of those expressions.
+                //
+                // `get_where_subquery(` is Fusion-internal: emitted by `get_test_details` to
+                // wrap the `model` test arg, and must always pass through unquoted.
                 if s.starts_with("get_where_subquery(")
-                    || s.starts_with("ref(")
-                    || s.starts_with("source(")
+                    || LOOKS_LIKE_FUNC.is_match(s)
                     || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
                 {
-                    s.to_string() // Don't add quotes if it's already a ref, source, or jinja var
+                    s.to_string()
                 } else if s.starts_with("{{") && s.ends_with("}}") {
                     // Strip Jinja delimiters: {{ expr }} → expr (used directly inside macro args)
                     s[2..s.len() - 2].trim().to_string()
