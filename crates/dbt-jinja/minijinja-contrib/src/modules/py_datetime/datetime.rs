@@ -610,13 +610,15 @@ impl PyDateTime {
         Ok(Value::from(s))
     }
 
-    /// isoformat() -> "YYYY-MM-DDTHH:MM:SS[.ffffff][+HH:MM]"
-    pub fn isoformat(&self) -> String {
+    /// Format with a custom date/time separator. `sep == 'T'` produces the
+    /// ISO 8601 form returned by Python's `dt.isoformat()`; `sep == ' '`
+    /// matches Python's `str(dt)` form.
+    fn isoformat_with_sep(&self, sep: char) -> String {
         match &self.state {
             DateTimeState::Naive(ndt) => {
                 // naive => omit offset
-                // Use the same separator (T or space) that was in the input
-                let formatted = ndt.format("%Y-%m-%dT%H:%M:%S.%6f").to_string();
+                let fmt = format!("%Y-%m-%d{sep}%H:%M:%S.%6f");
+                let formatted = ndt.format(&fmt).to_string();
                 // Only include decimal point and microseconds if they are non-zero
                 if formatted.ends_with(".000000") {
                     formatted[..formatted.len() - 7].to_string()
@@ -626,7 +628,8 @@ impl PyDateTime {
             }
             DateTimeState::Aware(adt) => {
                 // aware => include offset
-                let formatted = adt.format("%Y-%m-%dT%H:%M:%S.%6f%:z").to_string(); // Always use T for aware datetimes
+                let fmt = format!("%Y-%m-%d{sep}%H:%M:%S.%6f%:z");
+                let formatted = adt.format(&fmt).to_string();
                 if formatted.contains(".000000") {
                     formatted.replace(".000000", "")
                 } else {
@@ -634,8 +637,8 @@ impl PyDateTime {
                 }
             }
             DateTimeState::FixedOffset(dt) => {
-                // Fixed offset case - use original format
-                let formatted = dt.format("%Y-%m-%dT%H:%M:%S.%6f%:z").to_string();
+                let fmt = format!("%Y-%m-%d{sep}%H:%M:%S.%6f%:z");
+                let formatted = dt.format(&fmt).to_string();
                 if formatted.contains(".000000") {
                     formatted.replace(".000000", "")
                 } else {
@@ -643,6 +646,11 @@ impl PyDateTime {
                 }
             }
         }
+    }
+
+    /// isoformat() -> "YYYY-MM-DDTHH:MM:SS[.ffffff][+HH:MM]"
+    pub fn isoformat(&self) -> String {
+        self.isoformat_with_sep('T')
     }
 
     /// .timestamp() -> float
@@ -1182,8 +1190,9 @@ impl Object for PyDateTime {
     }
 
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Just produce isoformat-like string
-        write!(f, "{}", self.isoformat())
+        // Match Python's `str(datetime)`: space between date and time
+        // (note: `dt.isoformat()` keeps the 'T' separator).
+        write!(f, "{}", self.isoformat_with_sep(' '))
     }
 }
 
@@ -1451,5 +1460,60 @@ mod tests {
             .render(minijinja::context!(dt => Value::from_object(dt)), &[])
             .unwrap();
         assert_eq!(result, "None");
+    }
+
+    // ── render() / Python's str(datetime) ────────────────────────────────
+    //
+    // Bare `{{ dt }}` should produce Python's `str(datetime)` form — space
+    // separator between date and time. `dt.isoformat()` keeps the 'T'
+    // separator (Python distinguishes the two; we now do too).
+
+    fn render_dt(dt: PyDateTime) -> String {
+        let mut env = Environment::new();
+        env.add_global("dt", Value::from_object(dt));
+        env.template_from_str("{{ dt }}")
+            .unwrap()
+            .render(minijinja::context!(), &[])
+            .unwrap()
+    }
+
+    #[test]
+    fn test_str_naive_no_microseconds_uses_space() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45")).unwrap();
+        assert_eq!(render_dt(dt), "2024-01-01 12:30:45");
+    }
+
+    #[test]
+    fn test_str_naive_with_microseconds_uses_space() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45.123456")).unwrap();
+        assert_eq!(render_dt(dt), "2024-01-01 12:30:45.123456");
+    }
+
+    #[test]
+    fn test_str_naive_drops_zero_microseconds() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T00:00:00.000000")).unwrap();
+        assert_eq!(render_dt(dt), "2024-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_str_aware_includes_offset() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-15T08:30:00-05:00")).unwrap();
+        assert_eq!(render_dt(dt), "2024-01-15 08:30:00-05:00");
+    }
+
+    #[test]
+    fn test_str_aware_with_microseconds_and_offset() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-15T08:30:00.500000+00:00")).unwrap();
+        assert_eq!(render_dt(dt), "2024-01-15 08:30:00.500000+00:00");
+    }
+
+    #[test]
+    fn test_isoformat_still_uses_t_separator() {
+        // Sibling-of-the-fix invariant: isoformat() must NOT change.
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45")).unwrap();
+        assert_eq!(dt.isoformat(), "2024-01-01T12:30:45");
+
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-15T08:30:00.500000+00:00")).unwrap();
+        assert_eq!(dt.isoformat(), "2024-01-15T08:30:00.500000+00:00");
     }
 }
