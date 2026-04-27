@@ -465,6 +465,7 @@ bollard = "0.18.1"
 chrono = { version = "0.4.41", features = ["std", "clock", "serde"] }
 chrono-tz = { version = "0.10" }
 clap = { version = "4.4.4", features = ["derive"] }
+clap_complete = "4.5"
 counter = "0.6.0"
 dashmap = "6.1.0"
 fancy-regex = "0.14.0"

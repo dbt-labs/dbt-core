@@ -135,6 +135,7 @@ pub enum FsCommand {
     Debug,
     Retry,
     Docs,
+    Completions,
     /// All other commands provided by private cli's
     Extension(&'static str),
 }
@@ -163,6 +164,7 @@ impl FsCommand {
             FsCommand::Debug => "debug",
             FsCommand::Retry => "retry",
             FsCommand::Docs => "docs",
+            FsCommand::Completions => "completions",
             FsCommand::Extension(s) => s,
         }
     }

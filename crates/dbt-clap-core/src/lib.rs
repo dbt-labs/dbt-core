@@ -23,6 +23,7 @@ use clap::{
     ArgAction, Parser, ValueEnum,
     builder::{BoolishValueParser, TypedValueParser},
 };
+use clap_complete::Shell;
 use dbt_common::constants::{
     DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
 };
@@ -140,6 +141,11 @@ impl CliParser {
     fn format_error(&self, err: clap::Error) -> clap::Error {
         let mut cmd = self.app();
         err.format(&mut cmd)
+    }
+
+    /// Write shell completion scripts for the given shell to `writer`.
+    pub fn write_completions<W: std::io::Write>(&self, shell: Shell, writer: &mut W) {
+        clap_complete::generate(shell, &mut self.app(), "dbt", writer);
     }
 }
 
@@ -283,7 +289,8 @@ got {:?}, expected an instance of {}",
                 Command::Core(System(_))
                 | Command::Core(Man(_))
                 | Command::Core(Init(_))
-                | Command::Core(Docs(_)) => {
+                | Command::Core(Docs(_))
+                | Command::Core(Completions(_)) => {
                     // These commands do not require a project directory
                     (PathBuf::from("."), PathBuf::from("."))
                 }
@@ -322,6 +329,7 @@ got {:?}, expected an instance of {}",
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Retry(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Docs(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Completions(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             },
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
@@ -396,6 +404,7 @@ got {:?}, expected an instance of {}",
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
                 Retry(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
                 Docs(_args) => unreachable!("Docs command does not need a phase"),
+                Completions(_args) => unreachable!("Completions command does not need a phase"),
             },
             Command::Extension(ext_cmd) => ext_cmd.stage(),
         }
@@ -2147,6 +2156,25 @@ pub struct SystemUpdateArgs {
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 pub struct SystemUninstallArgs {}
+
+/// Generate shell completion scripts
+#[derive(Parser, Debug, Clone)]
+pub struct CompletionsArgs {
+    /// The shell to generate completions for
+    #[arg(value_enum)]
+    pub shell: Shell,
+    // Flattened Common args
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+}
+
+impl CompletionsArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
+        eval_args.phase = Phases::Deps;
+        eval_args
+    }
+}
 
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Default, Display, ValueEnum, Serialize, Deserialize,
