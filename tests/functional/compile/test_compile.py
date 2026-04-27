@@ -336,3 +336,15 @@ class TestSqlParseGroupingDepthLimit:
 
         # Flag set to 10000: compile succeeds
         run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+
+
+class TestSqlParseOnlyTokensLeavesDepthNone:
+    def test_only_tokens_set_leaves_depth_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
+
+
+class TestSqlParseOnlyDepthLeavesTokensNone:
+    def test_only_depth_set_leaves_tokens_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None
