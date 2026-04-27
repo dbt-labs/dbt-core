@@ -293,17 +293,12 @@ pub fn is_installable_driver(backend: Backend) -> bool {
     INSTALLABLE_DRIVERS.contains(&backend)
 }
 
-/// Return the backend name is the [DriverTriplet] for the given backend for this machine.
-pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'static>) {
-    #[cfg(target_os = "linux")]
-    const OS: &str = LINUX_TARGET_OS;
-    #[cfg(target_os = "macos")]
-    const OS: &str = MACOS_TARGET_OS;
-    #[cfg(target_os = "windows")]
-    const OS: &str = WINDOWS_TARGET_OS;
-
+/// Return the backend name and selected driver version.
+///
+/// Pre-condition: is_installable_driver(backend)
+pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str) {
     debug_assert!(is_installable_driver(backend));
-    let (backend_name, version) = match backend {
+    match backend {
         Backend::Snowflake => ("snowflake", SNOWFLAKE_DRIVER_VERSION),
         Backend::BigQuery => ("bigquery", BIGQUERY_DRIVER_VERSION),
         Backend::Postgres => ("postgresql", POSTGRES_DRIVER_VERSION),
@@ -321,8 +316,21 @@ pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'stat
         | Backend::Generic { .. } => {
             unreachable!("driver_parameters() called with backend={:?}", backend)
         }
-    };
+    }
+}
 
+/// Return the backend name is the [DriverTriplet] for the given backend for this machine.
+///
+/// Pre-condition: is_installable_driver(backend)
+pub fn driver_parameters(backend: Backend) -> (&'static str, DriverTriplet<'static>) {
+    #[cfg(target_os = "linux")]
+    const OS: &str = LINUX_TARGET_OS;
+    #[cfg(target_os = "macos")]
+    const OS: &str = MACOS_TARGET_OS;
+    #[cfg(target_os = "windows")]
+    const OS: &str = WINDOWS_TARGET_OS;
+
+    let (backend_name, version) = backend_name_and_version(backend);
     let triplet = DriverTriplet {
         os: OS,
         arch: env::consts::ARCH,
@@ -655,43 +663,27 @@ mod tests {
     /// download.
     #[test]
     fn test_all_checksums_are_listed() {
-        let backend_and_versions = [
-            ("snowflake", SNOWFLAKE_DRIVER_VERSION),
-            ("bigquery", BIGQUERY_DRIVER_VERSION),
-            ("postgresql", POSTGRES_DRIVER_VERSION),
-            ("databricks", DATABRICKS_DRIVER_VERSION),
-            ("redshift", REDSHIFT_DRIVER_VERSION),
-            ("duckdb", DUCKDB_DRIVER_VERSION),
-            ("salesforce", SALESFORCE_DRIVER_VERSION),
-            ("spark", SPARK_DRIVER_VERSION),
-            ("mssql", MSSQLSERVER_DRIVER_VERSION),
-        ];
-        debug_assert!(
-            backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),
-            "backend_and_versions must have the same length as INSTALLABLE_DRIVERS"
-        );
         let target_os_and_archs = [
             (LINUX_TARGET_OS, vec!["x86_64", "aarch64"]),
             (MACOS_TARGET_OS, vec!["x86_64", "aarch64"]),
             (WINDOWS_TARGET_OS, vec!["x86_64"]),
         ];
-        for (backend, version) in backend_and_versions.iter() {
-            for (target_os, archs) in target_os_and_archs.iter() {
+        for backend in INSTALLABLE_DRIVERS {
+            let (backend_name, version) = backend_name_and_version(*backend);
+            for (os, archs) in target_os_and_archs.iter() {
                 for arch in archs {
-                    if backend == &"mssql" && target_os == &MACOS_TARGET_OS && arch == &"x86_64" {
-                        // there is no driver available for macos x86_64
-                        continue;
+                    match (backend, *os, *arch) {
+                        // no driver available for Intel Macs connecting to MS SQL
+                        (Backend::SQLServer, MACOS_TARGET_OS, "x86_64") => continue,
+                        _ => {
+                            let triplet = DriverTriplet { os, arch, version };
+                            let checksum = find_expected_checksum(backend_name, triplet);
+                            assert!(
+                                checksum.is_some(),
+                                "Missing checksum for backend: {backend}, version: {version}, os: {os}, arch: {arch}"
+                            );
+                        }
                     }
-                    let triplet = DriverTriplet {
-                        os: target_os,
-                        arch,
-                        version,
-                    };
-                    let checksum = find_expected_checksum(backend, triplet);
-                    assert!(
-                        checksum.is_some(),
-                        "Missing checksum for backend: {backend}, version: {version}, target_os: {target_os}, target_arch: {arch}"
-                    );
                 }
             }
         }
