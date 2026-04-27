@@ -328,7 +328,7 @@ def _validate_optional_bool(block: Dict[str, Any], key: str, context: str) -> No
     raise DbtValidationError(f"{context} '{key}' must be a boolean")
 
 
-def _validate_u32_range(block: Dict[str, Any], key: str, max_val: int, context: str) -> None:
+def _validate_int_range(block: Dict[str, Any], key: str, max_val: int, context: str) -> None:
     val = block.get(key)
     if val is None:
         return
@@ -346,8 +346,7 @@ def _validate_enum_str(block: Dict[str, Any], key: str, allowed: Set[str], conte
         return
     if str(val).strip().lower() not in allowed:
         raise DbtValidationError(
-            f"{context} '{key}' value '{val}' is invalid. "
-            f"Must be one of: {sorted(s.upper() for s in allowed)}"
+            f"{context} '{key}' value '{val}' is invalid. " f"Must be one of: {sorted(allowed)}"
         )
 
 
@@ -407,8 +406,8 @@ def _validate_horizon(catalog: CatalogV2) -> None:
     _require_non_empty_str(snowflake, "external_volume", ctx)
     _validate_optional_non_empty_str(snowflake, "base_location_root", ctx)
     _validate_optional_bool(snowflake, "change_tracking", ctx)
-    _validate_u32_range(snowflake, "data_retention_time_in_days", 90, ctx)
-    _validate_u32_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
+    _validate_int_range(snowflake, "data_retention_time_in_days", 90, ctx)
+    _validate_int_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
     _validate_enum_str(
         snowflake,
         "storage_serialization_policy",
@@ -432,7 +431,7 @@ def _validate_snowflake_linked(catalog: CatalogV2, type_name: str) -> None:
 
     _require_non_empty_str(snowflake, "catalog_database", ctx)
     _validate_optional_bool(snowflake, "auto_refresh", ctx)
-    _validate_u32_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
+    _validate_int_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
     _validate_enum_str(snowflake, "target_file_size", _VALID_TARGET_FILE_SIZES, ctx)
 
 
