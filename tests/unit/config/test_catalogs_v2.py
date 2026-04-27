@@ -348,7 +348,14 @@ class TestValidateV2CatalogForPlatform:
     def test_unity_databricks_only(self):
         cat = _make_catalog(
             catalog_type=V2CatalogType.UNITY,
-            databricks={"file_format": "delta"},
+            databricks={"file_format": "parquet"},
+        )
+        validate_v2_catalog_for_platform(cat, "databricks")
+
+    def test_unity_databricks_uniform(self):
+        cat = _make_catalog(
+            catalog_type=V2CatalogType.UNITY,
+            databricks={"file_format": "delta", "use_uniform": True},
         )
         validate_v2_catalog_for_platform(cat, "databricks")
 
@@ -356,7 +363,7 @@ class TestValidateV2CatalogForPlatform:
         cat = _make_catalog(
             catalog_type=V2CatalogType.UNITY,
             snowflake={"catalog_database": "DB"},
-            databricks={"file_format": "delta"},
+            databricks={"file_format": "parquet"},
         )
         validate_v2_catalog_for_platform(cat, "snowflake")
         validate_v2_catalog_for_platform(cat, "databricks")
@@ -366,10 +373,18 @@ class TestValidateV2CatalogForPlatform:
         with pytest.raises(DbtValidationError, match="requires at least one config block"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
-    def test_unity_databricks_wrong_file_format(self):
+    def test_unity_databricks_wrong_file_format_no_uniform(self):
         cat = _make_catalog(
             catalog_type=V2CatalogType.UNITY,
-            databricks={"file_format": "parquet"},
+            databricks={"file_format": "delta"},
+        )
+        with pytest.raises(DbtValidationError, match="file_format must be 'parquet'"):
+            validate_v2_catalog_for_platform(cat, "databricks")
+
+    def test_unity_databricks_wrong_file_format_with_uniform(self):
+        cat = _make_catalog(
+            catalog_type=V2CatalogType.UNITY,
+            databricks={"file_format": "parquet", "use_uniform": True},
         )
         with pytest.raises(DbtValidationError, match="file_format must be 'delta'"):
             validate_v2_catalog_for_platform(cat, "databricks")
@@ -516,7 +531,7 @@ class TestBridgeV2CatalogToIntegration:
         cat = _make_catalog(
             catalog_type=V2CatalogType.UNITY,
             snowflake={"catalog_database": "UNITY_DB"},
-            databricks={"file_format": "delta"},
+            databricks={"file_format": "parquet"},
         )
         config = bridge_v2_catalog_to_integration(cat, "snowflake")
         assert config.catalog_type == "ICEBERG_REST"

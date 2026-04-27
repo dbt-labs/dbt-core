@@ -1,12 +1,18 @@
+import dataclasses
 import os
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from dbt.artifacts.resources import (
+    BiglakeMetastoreBigqueryConfig,
     Catalog,
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
+    HiveMetastoreDatabricksConfig,
+    HorizonSnowflakeConfig,
+    LinkedSnowflakeConfig,
+    UnityDatabricksConfig,
     V2CatalogType,
     V2TableFormat,
 )
@@ -128,49 +134,6 @@ _TYPE_TABLE_FORMAT: Dict[V2CatalogType, V2TableFormat] = {
     V2CatalogType.BIGLAKE_METASTORE: V2TableFormat.ICEBERG,
 }
 
-# Allowed keys per (type, platform) — for unknown-key rejection
-_ALLOWED_PLATFORM_KEYS: Dict[tuple, Set[str]] = {
-    (V2CatalogType.HORIZON, "snowflake"): {
-        "external_volume",
-        "change_tracking",
-        "data_retention_time_in_days",
-        "max_data_extension_time_in_days",
-        "storage_serialization_policy",
-        "base_location_root",
-    },
-    (V2CatalogType.GLUE, "snowflake"): {
-        "catalog_database",
-        "auto_refresh",
-        "max_data_extension_time_in_days",
-        "target_file_size",
-    },
-    (V2CatalogType.ICEBERG_REST, "snowflake"): {
-        "catalog_database",
-        "auto_refresh",
-        "max_data_extension_time_in_days",
-        "target_file_size",
-    },
-    (V2CatalogType.UNITY, "snowflake"): {
-        "catalog_database",
-        "auto_refresh",
-        "max_data_extension_time_in_days",
-        "target_file_size",
-    },
-    (V2CatalogType.UNITY, "databricks"): {
-        "file_format",
-        "location_root",
-        "use_uniform",
-    },
-    (V2CatalogType.HIVE_METASTORE, "databricks"): {
-        "file_format",
-    },
-    (V2CatalogType.BIGLAKE_METASTORE, "bigquery"): {
-        "external_volume",
-        "file_format",
-        "base_location_root",
-    },
-}
-
 # v2 type + adapter_type → v1 catalog_type string (matching fs bridge)
 _V2_TO_V1_CATALOG_TYPE: Dict[tuple, str] = {
     (V2CatalogType.HORIZON, "snowflake"): "BUILT_IN",
@@ -181,10 +144,6 @@ _V2_TO_V1_CATALOG_TYPE: Dict[tuple, str] = {
     (V2CatalogType.HIVE_METASTORE, "databricks"): "hive_metastore",
     (V2CatalogType.BIGLAKE_METASTORE, "bigquery"): "biglake_metastore",
 }
-
-_VALID_STORAGE_SERIALIZATION_POLICIES = {"compatible", "optimized"}
-_VALID_TARGET_FILE_SIZES = {"auto", "16mb", "32mb", "64mb", "128mb"}
-_VALID_HIVE_FILE_FORMATS = {"delta", "parquet", "hudi"}
 
 
 def load_catalogs_v2(
@@ -209,7 +168,7 @@ def load_catalogs_v2(
     raw_catalogs = raw_yaml.get("catalogs", [])
     renderer = SecretRenderer(cli_vars)
 
-    seen_names: Set[str] = set()
+    seen_names: set = set()
     catalogs: List[CatalogV2] = []
 
     for raw_catalog in raw_catalogs:
@@ -301,61 +260,28 @@ def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str,
     return getattr(catalog.config, platform, None)
 
 
-def _require_non_empty_str(block: Dict[str, Any], key: str, context: str) -> str:
-    val = block.get(key)
-    if val is None:
-        raise DbtValidationError(f"{context} requires '{key}'")
-    val = str(val).strip()
-    if not val:
-        raise DbtValidationError(f"{context} '{key}' must be non-empty")
-    return val
-
-
-def _validate_optional_non_empty_str(block: Dict[str, Any], key: str, context: str) -> None:
-    val = block.get(key)
-    if val is not None and not str(val).strip():
-        raise DbtValidationError(f"{context} '{key}' cannot be blank")
-
-
-def _validate_optional_bool(block: Dict[str, Any], key: str, context: str) -> None:
-    val = block.get(key)
-    if val is None:
-        return
-    if isinstance(val, bool):
-        return
-    if isinstance(val, str) and val.strip().lower() in ("true", "false"):
-        return
-    raise DbtValidationError(f"{context} '{key}' must be a boolean")
-
-
-def _validate_int_range(block: Dict[str, Any], key: str, max_val: int, context: str) -> None:
-    val = block.get(key)
-    if val is None:
-        return
-    try:
-        int_val = int(val)
-    except (ValueError, TypeError):
-        raise DbtValidationError(f"{context} '{key}' must be a non-negative integer")
-    if int_val < 0 or int_val > max_val:
-        raise DbtValidationError(f"{context} '{key}' must be in 0..={max_val}")
-
-
-def _validate_enum_str(block: Dict[str, Any], key: str, allowed: Set[str], context: str) -> None:
-    val = block.get(key)
-    if val is None:
-        return
-    if str(val).strip().lower() not in allowed:
-        raise DbtValidationError(
-            f"{context} '{key}' value '{val}' is invalid. " f"Must be one of: {sorted(allowed)}"
-        )
-
-
-def _check_unknown_keys(block: Dict[str, Any], allowed: Set[str], context: str) -> None:
-    unknown = set(block.keys()) - allowed
+def _build_platform_config(cls: type, block: Dict[str, Any], ctx: str) -> Any:
+    """Construct a typed platform config dataclass, converting errors to DbtValidationError."""
+    known = {f.name for f in dataclasses.fields(cls)}
+    required = {
+        f.name
+        for f in dataclasses.fields(cls)
+        if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING  # type: ignore[misc]
+    }
+    unknown = set(block.keys()) - known
     if unknown:
         raise DbtValidationError(
-            f"Unknown keys in {context}: {sorted(unknown)}. " f"Allowed: {sorted(allowed)}"
+            f"Unknown keys in {ctx}: {sorted(unknown)}. Allowed: {sorted(known)}"
         )
+    missing = required - set(block.keys())
+    if len(missing) == 1:
+        raise DbtValidationError(f"{ctx} requires '{next(iter(missing))}'")
+    elif missing:
+        raise DbtValidationError(f"{ctx} requires {sorted(missing)}")
+    try:
+        return cls(**block)
+    except DbtValidationError as e:
+        raise DbtValidationError(f"{ctx}: {e}")
 
 
 def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> None:
@@ -394,45 +320,25 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
 
 
 def _validate_horizon(catalog: CatalogV2) -> None:
-    name = catalog.name
-    ctx = f"Catalog '{name}' horizon/snowflake"
     snowflake = _get_platform_block(catalog, "snowflake")
     if snowflake is None:
-        raise DbtValidationError(f"Catalog '{name}' type 'horizon' requires config.snowflake")
-
-    allowed = _ALLOWED_PLATFORM_KEYS[(V2CatalogType.HORIZON, "snowflake")]
-    _check_unknown_keys(snowflake, allowed, f"{ctx} config")
-
-    _require_non_empty_str(snowflake, "external_volume", ctx)
-    _validate_optional_non_empty_str(snowflake, "base_location_root", ctx)
-    _validate_optional_bool(snowflake, "change_tracking", ctx)
-    _validate_int_range(snowflake, "data_retention_time_in_days", 90, ctx)
-    _validate_int_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
-    _validate_enum_str(
-        snowflake,
-        "storage_serialization_policy",
-        _VALID_STORAGE_SERIALIZATION_POLICIES,
-        ctx,
+        raise DbtValidationError(
+            f"Catalog '{catalog.name}' type 'horizon' requires config.snowflake"
+        )
+    _build_platform_config(
+        HorizonSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' horizon/snowflake"
     )
 
 
 def _validate_snowflake_linked(catalog: CatalogV2, type_name: str) -> None:
-    """Shared validation for glue, iceberg_rest, and unity on snowflake."""
-    name = catalog.name
-    ctx = f"Catalog '{name}' {type_name}/snowflake"
     snowflake = _get_platform_block(catalog, "snowflake")
     if snowflake is None:
-        raise DbtValidationError(f"Catalog '{name}' type '{type_name}' requires config.snowflake")
-
-    ct = V2CatalogType(type_name) if type_name != "unity" else V2CatalogType.UNITY
-    allowed = _ALLOWED_PLATFORM_KEYS.get((ct, "snowflake"))
-    if allowed:
-        _check_unknown_keys(snowflake, allowed, f"{ctx} config")
-
-    _require_non_empty_str(snowflake, "catalog_database", ctx)
-    _validate_optional_bool(snowflake, "auto_refresh", ctx)
-    _validate_int_range(snowflake, "max_data_extension_time_in_days", 90, ctx)
-    _validate_enum_str(snowflake, "target_file_size", _VALID_TARGET_FILE_SIZES, ctx)
+        raise DbtValidationError(
+            f"Catalog '{catalog.name}' type '{type_name}' requires config.snowflake"
+        )
+    _build_platform_config(
+        LinkedSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' {type_name}/snowflake"
+    )
 
 
 def _validate_glue(catalog: CatalogV2) -> None:
@@ -453,65 +359,36 @@ def _validate_unity(catalog: CatalogV2) -> None:
             f"Catalog '{name}' of type 'unity' requires at least one config block: "
             f"snowflake or databricks"
         )
-
     if snowflake is not None:
         _validate_snowflake_linked(catalog, "unity")
-
     if databricks is not None:
-        ctx = f"Catalog '{name}' unity/databricks"
-        allowed = _ALLOWED_PLATFORM_KEYS[(V2CatalogType.UNITY, "databricks")]
-        _check_unknown_keys(databricks, allowed, f"{ctx} config")
-
-        file_format = _require_non_empty_str(databricks, "file_format", ctx)
-        if file_format.lower() != "delta":
-            raise DbtValidationError(f"{ctx} file_format must be 'delta'")
-
-        _validate_optional_non_empty_str(databricks, "location_root", ctx)
-        _validate_optional_bool(databricks, "use_uniform", ctx)
+        _build_platform_config(
+            UnityDatabricksConfig, databricks, f"Catalog '{name}' unity/databricks"
+        )
 
 
 def _validate_hive_metastore(catalog: CatalogV2) -> None:
     name = catalog.name
-    ctx = f"Catalog '{name}' hive_metastore/databricks"
     databricks = _get_platform_block(catalog, "databricks")
     if databricks is None:
         raise DbtValidationError(
             f"Catalog '{name}' type 'hive_metastore' requires config.databricks"
         )
-
-    allowed = _ALLOWED_PLATFORM_KEYS[(V2CatalogType.HIVE_METASTORE, "databricks")]
-    _check_unknown_keys(databricks, allowed, f"{ctx} config")
-
-    file_format = _require_non_empty_str(databricks, "file_format", ctx)
-    if file_format.lower() not in _VALID_HIVE_FILE_FORMATS:
-        raise DbtValidationError(
-            f"{ctx} file_format must be one of: {sorted(f.upper() for f in _VALID_HIVE_FILE_FORMATS)}"
-        )
+    _build_platform_config(
+        HiveMetastoreDatabricksConfig, databricks, f"Catalog '{name}' hive_metastore/databricks"
+    )
 
 
 def _validate_biglake_metastore(catalog: CatalogV2) -> None:
     name = catalog.name
-    ctx = f"Catalog '{name}' biglake_metastore/bigquery"
     bigquery = _get_platform_block(catalog, "bigquery")
     if bigquery is None:
         raise DbtValidationError(
             f"Catalog '{name}' type 'biglake_metastore' requires config.bigquery"
         )
-
-    allowed = _ALLOWED_PLATFORM_KEYS[(V2CatalogType.BIGLAKE_METASTORE, "bigquery")]
-    _check_unknown_keys(bigquery, allowed, f"{ctx} config")
-
-    external_volume = _require_non_empty_str(bigquery, "external_volume", ctx)
-    if not external_volume.startswith("gs://"):
-        raise DbtValidationError(
-            f"{ctx} 'external_volume' must be a path to a Cloud Storage bucket (gs://<bucket_name>)"
-        )
-
-    file_format = _require_non_empty_str(bigquery, "file_format", ctx)
-    if file_format.lower() != "parquet":
-        raise DbtValidationError(f"{ctx} file_format must be 'parquet'")
-
-    _validate_optional_non_empty_str(bigquery, "base_location_root", ctx)
+    _build_platform_config(
+        BiglakeMetastoreBigqueryConfig, bigquery, f"Catalog '{name}' biglake_metastore/bigquery"
+    )
 
 
 # v2 field name → v1 adapter_properties field name translations.
