@@ -330,7 +330,7 @@ impl HubClient {
                     };
 
                     emit_warn_log_message(
-                        ErrorCode::DependencyWarning,
+                        ErrorCode::IncompatiblePackageVersion,
                         format!(
                             "Package '{}' requires dbt version {}, but current version is {}. \
                          This package may not be compatible with your dbt version.",
