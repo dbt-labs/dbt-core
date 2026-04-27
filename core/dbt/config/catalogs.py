@@ -1,7 +1,6 @@
-import dataclasses
 import os
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from dbt.artifacts.resources import (
     BiglakeMetastoreBigqueryConfig,
@@ -21,6 +20,8 @@ from dbt.config.renderer import SecretRenderer
 from dbt.constants import CATALOGS_FILE_NAME
 from dbt.exceptions import YamlLoadError
 from dbt_common.clients.system import load_file_contents
+from dbt_common.dataclass_schema import ValidationError as SchemaValidationError
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
 
@@ -260,26 +261,13 @@ def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str,
     return getattr(catalog.config, platform, None)
 
 
-def _build_platform_config(cls: type, block: Dict[str, Any], ctx: str) -> Any:
-    """Construct a typed platform config dataclass, converting errors to DbtValidationError."""
-    known = {f.name for f in dataclasses.fields(cls)}
-    required = {
-        f.name
-        for f in dataclasses.fields(cls)
-        if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING  # type: ignore[misc]
-    }
-    unknown = set(block.keys()) - known
-    if unknown:
-        raise DbtValidationError(
-            f"Unknown keys in {ctx}: {sorted(unknown)}. Allowed: {sorted(known)}"
-        )
-    missing = required - set(block.keys())
-    if len(missing) == 1:
-        raise DbtValidationError(f"{ctx} requires '{next(iter(missing))}'")
-    elif missing:
-        raise DbtValidationError(f"{ctx} requires {sorted(missing)}")
+def _validate_platform_config(cls: Type[dbtClassMixin], block: Dict[str, Any], ctx: str) -> None:
+    """Validate a raw platform config dict against a dbtClassMixin dataclass."""
     try:
-        return cls(**block)
+        cls.validate(block)
+        cls.from_dict(block)
+    except SchemaValidationError as e:
+        raise DbtValidationError(f"{ctx}: {e.message}")
     except DbtValidationError as e:
         raise DbtValidationError(f"{ctx}: {e}")
 
@@ -325,7 +313,7 @@ def _validate_horizon(catalog: CatalogV2) -> None:
         raise DbtValidationError(
             f"Catalog '{catalog.name}' type 'horizon' requires config.snowflake"
         )
-    _build_platform_config(
+    _validate_platform_config(
         HorizonSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' horizon/snowflake"
     )
 
@@ -336,7 +324,7 @@ def _validate_snowflake_linked(catalog: CatalogV2, type_name: str) -> None:
         raise DbtValidationError(
             f"Catalog '{catalog.name}' type '{type_name}' requires config.snowflake"
         )
-    _build_platform_config(
+    _validate_platform_config(
         LinkedSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' {type_name}/snowflake"
     )
 
@@ -362,7 +350,7 @@ def _validate_unity(catalog: CatalogV2) -> None:
     if snowflake is not None:
         _validate_snowflake_linked(catalog, "unity")
     if databricks is not None:
-        _build_platform_config(
+        _validate_platform_config(
             UnityDatabricksConfig, databricks, f"Catalog '{name}' unity/databricks"
         )
 
@@ -374,7 +362,7 @@ def _validate_hive_metastore(catalog: CatalogV2) -> None:
         raise DbtValidationError(
             f"Catalog '{name}' type 'hive_metastore' requires config.databricks"
         )
-    _build_platform_config(
+    _validate_platform_config(
         HiveMetastoreDatabricksConfig, databricks, f"Catalog '{name}' hive_metastore/databricks"
     )
 
@@ -386,7 +374,7 @@ def _validate_biglake_metastore(catalog: CatalogV2) -> None:
         raise DbtValidationError(
             f"Catalog '{name}' type 'biglake_metastore' requires config.bigquery"
         )
-    _build_platform_config(
+    _validate_platform_config(
         BiglakeMetastoreBigqueryConfig, bigquery, f"Catalog '{name}' biglake_metastore/bigquery"
     )
 

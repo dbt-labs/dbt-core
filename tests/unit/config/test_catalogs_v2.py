@@ -256,7 +256,7 @@ class TestValidateV2CatalogForPlatform:
             catalog_type=V2CatalogType.HORIZON,
             snowflake={"change_tracking": True},
         )
-        with pytest.raises(DbtValidationError, match="requires 'external_volume'"):
+        with pytest.raises(DbtValidationError, match="is a required property"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_horizon_wrong_table_format(self):
@@ -282,7 +282,9 @@ class TestValidateV2CatalogForPlatform:
             catalog_type=V2CatalogType.HORIZON,
             snowflake={"external_volume": "vol", "unknown_key": "val"},
         )
-        with pytest.raises(DbtValidationError, match="Unknown keys.*unknown_key"):
+        with pytest.raises(
+            DbtValidationError, match="unknown_key.*unexpected|Additional properties"
+        ):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_horizon_retention_days_out_of_range(self):
@@ -318,7 +320,7 @@ class TestValidateV2CatalogForPlatform:
             catalog_type=V2CatalogType.GLUE,
             snowflake={"auto_refresh": True},
         )
-        with pytest.raises(DbtValidationError, match="requires 'catalog_database'"):
+        with pytest.raises(DbtValidationError, match="is a required property"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_glue_invalid_target_file_size(self):
