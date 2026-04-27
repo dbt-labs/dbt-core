@@ -219,7 +219,7 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
     if raw_format not in _VALID_V2_TABLE_FORMATS:
         raise DbtValidationError(
             f"Invalid table_format '{rendered['table_format']}'. "
-            f"Must be one of: {sorted(_VALID_V2_TABLE_FORMATS)}"
+            f"Must be {sorted(_VALID_V2_TABLE_FORMATS)}"
         )
     table_format = V2TableFormat(raw_format)
 
