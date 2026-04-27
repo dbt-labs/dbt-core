@@ -1545,14 +1545,31 @@ fn quote_table_names_for_redshift(sql: &str, schema: &str) -> String {
 }
 
 pub fn bigquery_data_ddl(dataset: &str) -> Vec<String> {
+    let prefix = format!("{dataset}.");
     snowflake_data_ddl(dataset)
         .into_iter()
         .map(|s| {
-            s.replace("VARCHAR", "STRING")
+            let s = s
+                .replace("VARCHAR", "STRING")
                 .replace("DOUBLE", "FLOAT64")
                 .replace("INTEGER", "INT64")
                 .replace("BOOLEAN", "BOOL")
-                .replace("TIMESTAMP_NTZ", "TIMESTAMP")
+                .replace("TIMESTAMP_NTZ", "TIMESTAMP");
+            // Snowflake auto-uppercases unquoted identifiers; BigQuery is case-sensitive.
+            // Uppercase table names after the dataset prefix to match manifest aliases.
+            let mut result = String::new();
+            let mut rest = s.as_str();
+            while let Some(pos) = rest.find(&prefix) {
+                result.push_str(&rest[..pos + prefix.len()]);
+                rest = &rest[pos + prefix.len()..];
+                let end = rest
+                    .find(|c: char| !c.is_alphanumeric() && c != '_')
+                    .unwrap_or(rest.len());
+                result.push_str(&rest[..end].to_uppercase());
+                rest = &rest[end..];
+            }
+            result.push_str(rest);
+            result
         })
         .collect()
 }

@@ -2575,7 +2575,7 @@ fn qualify_measure_expr(alias: &str, expr: &str) -> String {
 
 fn render_full_relation(model: &ResolvedModel, dialect: Dialect) -> String {
     match dialect {
-        Dialect::Databricks => model.relation_name.replace('"', "`"),
+        Dialect::BigQuery | Dialect::Databricks => model.relation_name.replace('"', "`"),
         _ => model.relation_name.clone(),
     }
 }

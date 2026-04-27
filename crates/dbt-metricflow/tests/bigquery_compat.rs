@@ -197,14 +197,25 @@ fn bigquery_compat_record() {
     let mut bq = BigQueryConn::connect();
     bq.execute_update(&format!("CREATE SCHEMA IF NOT EXISTS {dataset}"));
     bq.set_dataset(dataset.clone());
+    let database = "dbt-test-env";
+    // BigQuery schema creation is eventually consistent — poll until queryable.
+    for attempt in 0..30 {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            bq.execute_query(&format!(
+                "SELECT 1 FROM `{database}`.`{dataset}`.INFORMATION_SCHEMA.TABLES LIMIT 0"
+            ))
+        })) {
+            Ok(_) => break,
+            Err(_) if attempt < 29 => std::thread::sleep(std::time::Duration::from_millis(200)),
+            Err(_) => panic!("dataset {dataset} not available after 6 s"),
+        }
+    }
     eprintln!("bigquery_compat [record]: dataset {dataset} created");
 
     for stmt in common::bigquery_data_ddl(&dataset) {
         bq.execute_update(&stmt);
     }
     eprintln!("bigquery_compat [record]: test data loaded");
-
-    let database = "dbt-test-env";
 
     let mut store = common::setup_metric_store(database, &dataset);
 
