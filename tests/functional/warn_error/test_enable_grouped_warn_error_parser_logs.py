@@ -21,12 +21,12 @@ def models():
     }
 
 
-class TestAllowEventDeferralFalse:
+class TestEnableGroupedWarnErrorParserLogsFalse:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "flags": {
-                "allow_events_deferral": False,
+                "enable_grouped_warn_error_parser_logs": False,
             },
         }
 
@@ -38,12 +38,12 @@ class TestAllowEventDeferralFalse:
         assert "missing_model_two" not in msg
 
 
-class TestAllowEventDeferralTrue:
+class TestEnableGroupedWarnErrorParserLogsTrue:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "flags": {
-                "allow_events_deferral": True,
+                "enable_grouped_warn_error_parser_logs": True,
             },
         }
 
@@ -55,7 +55,7 @@ class TestAllowEventDeferralTrue:
         assert "missing_model_two" in msg
 
 
-class TestAllowEventDeferralOmittedDefaultsToFalse:
+class TestEnableGroupedWarnErrorParserLogsOmittedDefaultsToFalse:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {

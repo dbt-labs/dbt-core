@@ -100,7 +100,7 @@ def preflight(func):
         # Logging
         callbacks = ctx.obj.get("callbacks", [])
         setup_event_logger(flags=flags, callbacks=callbacks)
-        get_event_manager().allow_deferral = flags.allow_events_deferral
+        get_event_manager().allow_deferral = flags.enable_grouped_warn_error_parser_logs
 
         # Tracking
         initialize_from_flags(flags.SEND_ANONYMOUS_USAGE_STATS, flags.PROFILES_DIR)
