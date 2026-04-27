@@ -79,7 +79,7 @@ jobs:
       - name: Generate AI summary
         id: summarize
         env:
-          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEDROCK_TOKEN }}
+          AWS_BEDROCK_TOKEN: ${{ secrets.AWS_BEDROCK_TOKEN }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -115,7 +115,7 @@ jobs:
                 {
                   method: 'POST',
                   headers: {
-                    'Authorization': `Bearer ${process.env.AWS_BEARER_TOKEN_BEDROCK}`,
+                    'Authorization': `Bearer ${process.env.AWS_BEDROCK_TOKEN}`,
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({
