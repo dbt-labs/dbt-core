@@ -13,7 +13,6 @@ from dbt_common.exceptions import DbtValidationError
 
 class BuiltInStubIntegration(CatalogIntegration):
     catalog_type = "BUILT_IN"
-    allows_writes = True
 
     def __init__(self, config: CatalogIntegrationConfig):
         super().__init__(config)
@@ -23,7 +22,6 @@ class BuiltInStubIntegration(CatalogIntegration):
 
 class IcebergRestStubIntegration(CatalogIntegration):
     catalog_type = "ICEBERG_REST"
-    allows_writes = True
 
     def __init__(self, config: CatalogIntegrationConfig):
         super().__init__(config)
