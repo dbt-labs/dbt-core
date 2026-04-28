@@ -606,6 +606,9 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::UnversionedBreakingChange => {
             error_code == ErrorCode::UnversionedBreakingChange
         }
+        SupportedLegacyWarnError::UnsupportedConstraintMaterialization => {
+            error_code == ErrorCode::UnsupportedConstraintMaterialization
+        }
     }
 }
 
@@ -862,6 +865,11 @@ mod tests {
                 "UnversionedBreakingChange",
                 SupportedLegacyWarnError::UnversionedBreakingChange,
                 ErrorCode::UnversionedBreakingChange,
+            ),
+            (
+                "UnsupportedConstraintMaterialization",
+                SupportedLegacyWarnError::UnsupportedConstraintMaterialization,
+                ErrorCode::UnsupportedConstraintMaterialization,
             ),
             // Tested separately below.
         ];

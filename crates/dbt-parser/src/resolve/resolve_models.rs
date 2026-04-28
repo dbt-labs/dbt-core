@@ -62,6 +62,7 @@ use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::ModelConfig;
+use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::state::DbtPackage;
@@ -741,6 +742,10 @@ pub async fn resolve_models(
             model_config.meta.clone(),
             model_config.tags.clone().map(|tags| tags.into()),
         )?;
+        let materialized = model_config
+            .materialized
+            .clone()
+            .expect("materialized should be set after defaulting missing materializations to view");
 
         if let Some(versions) = &properties.versions {
             columns = process_versioned_columns(
@@ -749,6 +754,22 @@ pub async fn resolve_models(
                 versions,
                 columns,
             )?;
+        }
+
+        if model_config
+            .contract
+            .as_ref()
+            .is_some_and(|contract| contract.enforced)
+            && !materialization_enforces_constraints(&materialized)
+            && has_warn_unsupported_constraints(&model_constraints, &columns)
+        {
+            emit_warn_log_message(
+                ErrorCode::UnsupportedConstraintMaterialization,
+                format!(
+                    "Constraint types are not supported for {materialized} materializations and will be ignored.  Set 'warn_unsupported: false' on this constraint to ignore this warning."
+                ),
+                arg.io.status_reporter.as_ref(),
+            );
         }
 
         // For versioned models, use the per-version deprecation_date if present,
@@ -902,10 +923,7 @@ pub async fn resolve_models(
                     })
                     .collect(),
                 metrics,
-                materialized: model_config
-                    .materialized
-                    .clone()
-                    .expect("materialized is required"),
+                materialized,
                 quoting: model_config
                     .quoting
                     .expect("quoting is required")
@@ -1143,6 +1161,28 @@ fn process_versioned_columns(
     }
 
     Ok(columns)
+}
+
+fn materialization_enforces_constraints(materialized: &DbtMaterialization) -> bool {
+    matches!(
+        materialized,
+        DbtMaterialization::Table | DbtMaterialization::Incremental
+    )
+}
+
+fn has_warn_unsupported_constraints(
+    model_constraints: &[ModelConstraint],
+    columns: &[DbtColumnRef],
+) -> bool {
+    model_constraints
+        .iter()
+        .any(|constraint| constraint.warn_unsupported != Some(false))
+        || columns.iter().any(|column| {
+            column
+                .constraints
+                .iter()
+                .any(|constraint| constraint.warn_unsupported != Some(false))
+        })
 }
 
 pub fn validate_merge_update_columns_xor(model_config: &ModelConfig, path: &Path) -> FsResult<()> {

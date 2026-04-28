@@ -44,6 +44,7 @@ pub enum SupportedLegacyWarnError {
     WarnStateTargetEqual,
     WEOIncludeExcludeDeprecation,
     UnversionedBreakingChange,
+    UnsupportedConstraintMaterialization,
 }
 
 /// Legacy dbt-core event names that Fusion will eventually support in `warn-error-options` configuration, but does not yet support. These may have a corresponding fusion-native error code providing similar functionality.
@@ -274,7 +275,6 @@ pub enum NotYetSupportedLegacyWarnError {
     UnableToPartialParse,
     UnexpectedJinjaBlockDeprecation,
     UnpinnedRefNewVersionAvailable,
-    UnsupportedConstraintMaterialization,
     UnusedResourceConfigPath,
     WarnLevel,
     WriteCatalogFailure,
