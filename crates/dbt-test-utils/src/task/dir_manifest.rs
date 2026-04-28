@@ -7,8 +7,11 @@ use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
 use super::{ProjectEnv, Task, TestEnv, TestError, TestResult};
-use crate::task::goldie::diff_goldie;
+use crate::task::goldie::{OutputNormalizer, diff_goldie};
 
+// TODO: make this configurable per call site (extend via builder) instead of a
+// hardcoded list. The baked-in `.git` entry is rarely what callers want
+// uniformly — some tests need it filtered out entirely via a normalizer.
 const SKIPPED_DIR_NAMES: &[&str] = &[".git"];
 
 fn should_skip(file_name: &OsStr) -> bool {
@@ -105,6 +108,8 @@ pub struct CompareDirManifest {
     pub name: String,
     /// Relative path under project dir to compare (e.g., "dbt_packages", "target/compiled")
     pub dir: String,
+    /// Extra normalizers applied in order to the manifest string before golden diff.
+    pub normalizers: Vec<OutputNormalizer>,
 }
 
 impl CompareDirManifest {
@@ -112,7 +117,14 @@ impl CompareDirManifest {
         Self {
             name: name.into(),
             dir: dir.into(),
+            normalizers: vec![],
         }
+    }
+
+    /// Set extra output normalizers applied before golden comparison.
+    pub fn with_normalizers(mut self, normalizers: Vec<OutputNormalizer>) -> Self {
+        self.normalizers = normalizers;
+        self
     }
 }
 
@@ -132,7 +144,10 @@ impl Task for CompareDirManifest {
                 target_path.display()
             )));
         }
-        let manifest = compute_dir_manifest(&target_path)?;
+        let mut manifest = compute_dir_manifest(&target_path)?;
+        for normalizer in &self.normalizers {
+            manifest = normalizer(manifest);
+        }
         let task_suffix = if task_index > 0 {
             format!("_{task_index}")
         } else {

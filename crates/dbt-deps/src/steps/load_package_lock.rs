@@ -304,16 +304,15 @@ fn try_load_from_deprecated_dbt_packages_lock(
             // HACK: This is a temporary hack to ensure the old package lock format is invalidated (i.e. not loaded)
             // when it conflicts with the packages.yml spec (ex. a version constraint conflicts)
             // We only validate hub packages for now to aid the most common autofix upgrade scenario
-            if let Some(dbt_packages) = dbt_packages {
-                if let Err(e) = validate_deprecated_hub_lock_hack(dbt_packages, &dbt_packages_lock)
-                {
-                    emit_warn_log_message(
-                        ErrorCode::InvalidConfig,
-                        e.to_string(),
-                        io.status_reporter.as_ref(),
-                    );
-                    return Ok(None);
-                }
+            if let Some(dbt_packages) = dbt_packages
+                && let Err(e) = validate_deprecated_hub_lock_hack(dbt_packages, &dbt_packages_lock)
+            {
+                emit_warn_log_message(
+                    ErrorCode::InvalidConfig,
+                    e.to_string(),
+                    io.status_reporter.as_ref(),
+                );
+                return Ok(None);
             }
 
             Ok(Some(dbt_packages_lock))

@@ -157,6 +157,7 @@ pub enum ErrorCode {
     PackageResolutionFailed = 1151,
     PackageDownloadFailed = 1152,
     ProfileLoadFailed = 1153,
+    GitError = 1154,
 
     // Network/HTTP [1200–1249]
     NetworkError = 1200,

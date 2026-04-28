@@ -1,7 +1,8 @@
 mod steps;
 
 mod add_package;
-mod github_client;
+mod context;
+pub(crate) mod git_client;
 mod hub_client;
 pub mod package_listing;
 pub mod private_package;
@@ -22,13 +23,14 @@ use dbt_common::{ErrorCode, FsResult, err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
 use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
-use hub_client::{DBT_HUB_URL, HubClient};
 use std::{collections::BTreeMap, path::Path};
 use steps::{
     compute_package_lock, install_packages, load_dbt_packages,
     load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
 use tracing::Instrument as _;
+
+use crate::context::DepsOperationContext;
 
 /// Loads and installs packages, and returns the packages lock and the dependencies map
 #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
@@ -72,19 +74,15 @@ pub async fn get_or_install_packages(
         return Ok((dbt_packages_lock, vec![]));
     }
 
-    let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
-    let hub_url = hub_url_from_env
-        .as_deref()
-        .map(|s| {
-            if s.ends_with('/') {
-                // dbt-core required a trailing slash - here we support but do not require it.
-                &s[0..s.len() - 1]
-            } else {
-                s
-            }
-        })
-        .unwrap_or(DBT_HUB_URL);
-    let hub_registry = HubClient::new(hub_url);
+    let deps_context = DepsOperationContext::from_entry(
+        io,
+        &vars,
+        env,
+        token,
+        skip_private_deps,
+        version_check,
+        use_v2_compatible_package_downloads,
+    );
 
     // Add package first if specified, then load the package definition
     if let Some(add_package) = add_package {
@@ -120,19 +118,9 @@ pub async fn get_or_install_packages(
                 format!("resolving packages from {}", package_yml_name),
                 None,
             ));
-            let lock_result = compute_package_lock(
-                io,
-                &vars,
-                env,
-                &hub_registry,
-                dbt_packages,
-                version_check,
-                skip_private_deps,
-                token,
-                use_v2_compatible_package_downloads,
-            )
-            .instrument(fetch_span.clone())
-            .await;
+            let lock_result = compute_package_lock(&deps_context, dbt_packages)
+                .instrument(fetch_span.clone())
+                .await;
 
             match lock_result {
                 Ok(lock) => {
@@ -199,19 +187,10 @@ pub async fn get_or_install_packages(
             }
         });
 
-        install_packages(
-            io,
-            &vars,
-            &hub_registry,
-            env,
-            &dbt_packages_lock,
-            packages_install_path,
-            skip_private_deps,
-            use_v2_compatible_package_downloads,
-        )
-        .instrument(install_span.clone())
-        .await
-        .record_status(&install_span)?;
+        install_packages(&deps_context, &dbt_packages_lock, packages_install_path)
+            .instrument(install_span.clone())
+            .await
+            .record_status(&install_span)?;
     }
 
     // A package is considered "missing" if the 'dbt_project.yml' file for that
@@ -247,19 +226,10 @@ pub async fn get_or_install_packages(
                 }
             });
 
-            install_packages(
-                io,
-                &vars,
-                &hub_registry,
-                env,
-                &dbt_packages_lock,
-                packages_install_path,
-                skip_private_deps,
-                use_v2_compatible_package_downloads,
-            )
-            .instrument(install_span.clone())
-            .await
-            .record_status(&install_span)?;
+            install_packages(&deps_context, &dbt_packages_lock, packages_install_path)
+                .instrument(install_span.clone())
+                .await
+                .record_status(&install_span)?;
 
             for package in dbt_packages_lock.packages.iter() {
                 if !packages_install_path.join(package.package_name()).exists() {

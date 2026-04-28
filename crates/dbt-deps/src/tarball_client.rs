@@ -6,7 +6,7 @@
 //! Supports selective extraction with root directory stripping and subdirectory filtering.
 
 use async_compression::tokio::bufread::GzipDecoder;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, tokiofs};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use futures::StreamExt;
 use reqwest::{Client, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -41,9 +41,13 @@ impl TarballClient {
     ///
     /// # Arguments
     /// * `download_url` - URL of the tarball to download
-    /// * `target_path` - Directory to extract contents into
+    /// * `target_path` - Directory to extract contents into. **Must already exist
+    ///   and be writable; lifecycle (creation and cleanup on error) is the
+    ///   caller's responsibility.**
     /// * `strip_root` - If true, strip the single root directory from archive
     /// * `subdirectory` - If provided, only extract entries from this subdirectory
+    /// * `headers` - Additional HTTP request headers (e.g. `Authorization`);
+    ///   pass `&[]` when none are needed
     ///
     /// Streams download directly from network through gzip decoder to tar extractor,
     /// avoiding intermediate memory buffering or file I/O.
@@ -53,28 +57,13 @@ impl TarballClient {
         target_path: &Path,
         strip_root: bool,
         subdirectory: Option<&str>,
+        headers: &[(&str, &str)],
     ) -> FsResult<PathBuf> {
-        match self
-            .download_and_extract_tarball_inner(download_url, target_path, strip_root, subdirectory)
-            .await
-        {
-            Ok(path) => Ok(path),
-            Err(e) => {
-                // Clean up partial extraction on failure
-                let _ = tokiofs::remove_dir_all(target_path).await;
-                Err(e)
-            }
+        let mut req = self.client.get(download_url);
+        for (name, value) in headers {
+            req = req.header(*name, *value);
         }
-    }
-
-    async fn download_and_extract_tarball_inner(
-        &self,
-        download_url: &str,
-        target_path: &Path,
-        strip_root: bool,
-        subdirectory: Option<&str>,
-    ) -> FsResult<PathBuf> {
-        let res = self.client.get(download_url).send().await.map_err(|e| {
+        let res = req.send().await.map_err(|e| {
             fs_err!(
                 ErrorCode::RuntimeError,
                 "Failed to get tarball from {download_url}; status: {}",
@@ -102,8 +91,6 @@ impl TarballClient {
         let mut entries = archive
             .entries()
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read tar entries: {}", e))?;
-
-        tokiofs::create_dir_all(target_path).await?;
 
         let mut root_dir: Option<String> = None;
         let mut prefix = PathBuf::new();
@@ -240,10 +227,11 @@ impl TarballClient {
 
 /// Download and extract a tarball package to a directory.
 ///
-/// Creates the download directory, downloads and extracts the tarball, and cleans up on failure.
+/// `download_dir` must already exist and be writable; cleanup on error is the
+/// caller's responsibility.
 pub async fn download_tarball_package(tarball_url: &str, download_dir: &Path) -> FsResult<PathBuf> {
     let client = TarballClient::new();
     client
-        .download_and_extract_tarball(tarball_url, download_dir, true, None)
+        .download_and_extract_tarball(tarball_url, download_dir, true, None, &[])
         .await
 }

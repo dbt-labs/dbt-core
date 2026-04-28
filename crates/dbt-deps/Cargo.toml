@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 astral-tokio-tar = { workspace = true }
 async-compression = { workspace = true }
+async-trait = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }

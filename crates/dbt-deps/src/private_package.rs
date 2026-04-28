@@ -51,10 +51,10 @@ impl ProviderDetail {
     ) -> bool {
         // Check if provider matches (if specified)
         // "ado" and "azure_active_directory" are distinct providers with different path requirements
-        if let Some(requested_provider) = provider {
-            if self.provider.as_deref() != Some(requested_provider) {
-                return false;
-            }
+        if let Some(requested_provider) = provider
+            && self.provider.as_deref() != Some(requested_provider)
+        {
+            return false;
         }
 
         // Validate path structure based on provider type
