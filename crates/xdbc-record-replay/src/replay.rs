@@ -71,7 +71,13 @@ impl Connection for ReplayConnection {
         table_name: &str,
     ) -> AdbcResult<Schema> {
         let path = self.recordings_path.clone();
-        let unique_id = compute_file_name_for_table_schema(&path, catalog, db_schema, table_name);
+        let unique_id = compute_file_name_for_table_schema(
+            &path,
+            self.ctx.node_id.as_deref(),
+            catalog,
+            db_schema,
+            table_name,
+        );
 
         let storage_type = crate::storage::detect_storage_type(&path, &unique_id);
 

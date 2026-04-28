@@ -58,6 +58,7 @@ pub fn compute_file_name(
 
 pub fn compute_file_name_for_table_schema(
     recordings_dir: &Path,
+    node_id: Option<&str>,
     catalog: Option<&str>,
     db_schema: Option<&str>,
     table_name: &str,
@@ -69,10 +70,13 @@ pub fn compute_file_name_for_table_schema(
         table_name
     );
     let hash = checksum8(&fqn);
-    let counter_key = format!("get_table_schema.{hash}");
+    let counter_key = match node_id {
+        Some(node_id) => format!("{node_id}.get_table_schema.{hash}"),
+        None => format!("get_table_schema.{hash}"),
+    };
     let dir_counters = COUNTERS.entry(recordings_dir.to_path_buf()).or_default();
-    let mut entry = dir_counters.entry(counter_key).or_insert(0);
-    let file_name = format!("get_table_schema.{hash}-{}", *entry);
+    let mut entry = dir_counters.entry(counter_key.clone()).or_insert(0);
+    let file_name = format!("{counter_key}-{}", *entry);
     *entry += 1;
     file_name
 }

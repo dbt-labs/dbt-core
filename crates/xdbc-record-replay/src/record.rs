@@ -71,7 +71,13 @@ impl Connection for RecordConnection {
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
 
-        let unique_id = compute_file_name_for_table_schema(&path, catalog, db_schema, table_name);
+        let unique_id = compute_file_name_for_table_schema(
+            &path,
+            self.ctx.node_id.as_deref(),
+            catalog,
+            db_schema,
+            table_name,
+        );
 
         let sqlite_handler = SqliteHandler::new(&path);
 

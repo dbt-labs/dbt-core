@@ -623,9 +623,14 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
                 }
             }
             "get_table_schema" => {
-                // Extract table name from unique_id (format: get_table_schema.HASH-INDEX)
+                // Extract table name from unique_id. The unique_id has one of two
+                // shapes:
+                //   - "get_table_schema.HASH-INDEX"               (metadata queries during pre-compile)
+                //   - "{node_id}.get_table_schema.HASH-INDEX"     (scoped by node)
                 let table_name = unique_id
-                    .strip_prefix("get_table_schema.")
+                    .rsplit_once(".get_table_schema.")
+                    .map(|(_, rest)| rest)
+                    .or_else(|| unique_id.strip_prefix("get_table_schema."))
                     .and_then(|s| s.split('-').next())
                     .unwrap_or(&unique_id)
                     .to_string();
