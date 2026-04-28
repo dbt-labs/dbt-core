@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use chrono::{
     offset::Offset, DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
-    Timelike, Utc,
+    Timelike, Utc, Weekday,
 };
 use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
@@ -399,6 +399,57 @@ impl PyDateTimeClass {
         })
     }
 
+    // datetime.fromisocalendar(year, week, day)
+    //   ISO year/week/day -> naive datetime at midnight (00:00:00).
+    //   Mirrors CPython's exact error wording.
+    fn fromisocalendar(args: &[Value]) -> Result<PyDateTime, Error> {
+        let iter = ArgsIter::new("fromisocalendar", &["year", "week", "day"], args);
+        let year: i64 = iter.next_arg()?;
+        let week: i64 = iter.next_arg()?;
+        let day: i64 = iter.next_arg()?;
+        iter.finish()?;
+
+        if !(1..=9999).contains(&year) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Year is out of range: {year}"),
+            ));
+        }
+        if !(1..=53).contains(&week) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Invalid week: {week}"),
+            ));
+        }
+        if !(1..=7).contains(&day) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Invalid day: {day} (range is [1, 7])"),
+            ));
+        }
+
+        let weekday = match day {
+            1 => Weekday::Mon,
+            2 => Weekday::Tue,
+            3 => Weekday::Wed,
+            4 => Weekday::Thu,
+            5 => Weekday::Fri,
+            6 => Weekday::Sat,
+            7 => Weekday::Sun,
+            _ => unreachable!(),
+        };
+
+        let date =
+            NaiveDate::from_isoywd_opt(year as i32, week as u32, weekday).ok_or_else(|| {
+                Error::new(ErrorKind::InvalidArgument, format!("Invalid week: {week}"))
+            })?;
+
+        Ok(PyDateTime {
+            state: DateTimeState::Naive(date.and_hms_opt(0, 0, 0).unwrap()),
+            tzinfo: None,
+        })
+    }
+
     fn fromisoformat(args: &[Value]) -> Result<PyDateTime, Error> {
         let mut parser = ArgParser::new(args, None);
         let date_str: String = parser.next_positional()?;
@@ -490,6 +541,7 @@ impl Object for PyDateTimeClass {
             "combine" => Ok(Value::from_object(Self::combine(args)?)),
             "strptime" => Ok(Value::from_object(Self::strptime(args)?)),
             "fromisoformat" => Ok(Value::from_object(Self::fromisoformat(args)?)),
+            "fromisocalendar" => Ok(Value::from_object(Self::fromisocalendar(args)?)),
             "strftime" => {
                 // Handle strftime(datetime, format) case
                 let mut parser = ArgParser::new(args, None);
@@ -1167,6 +1219,7 @@ impl Object for PyDateTime {
             "strptime" => Ok(Value::from_object(PyDateTimeClass::strptime(args)?)),
             "combine" => Ok(Value::from_object(PyDateTimeClass::combine(args)?)),
             "fromisoformat" => Ok(Value::from_object(PyDateTimeClass::fromisoformat(args)?)),
+            "fromisocalendar" => Ok(Value::from_object(PyDateTimeClass::fromisocalendar(args)?)),
 
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
@@ -1462,6 +1515,73 @@ mod tests {
         assert_eq!(result, "None");
     }
 
+    // ── datetime.fromisocalendar ─────────────────────────────────────────
+    //
+    // Same error wordings as PyDateClass::fromisocalendar — CPython-exact.
+
+    fn dt_fromisocalendar_err(args: &[Value]) -> String {
+        PyDateTimeClass::fromisocalendar(args)
+            .unwrap_err()
+            .detail()
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    #[test]
+    fn test_datetime_fromisocalendar_happy_path_is_midnight() {
+        let dt = PyDateTimeClass::fromisocalendar(args!(2024, 1, 1)).unwrap();
+        // Confirm the date and time pieces line up with CPython's
+        // datetime.fromisocalendar(2024, 1, 1) -> 2024-01-01 00:00:00.
+        match dt.state {
+            DateTimeState::Naive(naive) => {
+                assert_eq!(naive.year(), 2024);
+                assert_eq!(naive.month(), 1);
+                assert_eq!(naive.day(), 1);
+                assert_eq!(naive.hour(), 0);
+                assert_eq!(naive.minute(), 0);
+                assert_eq!(naive.second(), 0);
+            }
+            other => panic!("expected naive datetime, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_datetime_fromisocalendar_invalid_week() {
+        assert_eq!(dt_fromisocalendar_err(args!(2024, 0, 1)), "Invalid week: 0");
+        assert_eq!(
+            dt_fromisocalendar_err(args!(2024, 54, 1)),
+            "Invalid week: 54"
+        );
+        // 2024 has only 52 ISO weeks; CPython errors with "Invalid week: 53".
+        assert_eq!(
+            dt_fromisocalendar_err(args!(2024, 53, 1)),
+            "Invalid week: 53"
+        );
+    }
+
+    #[test]
+    fn test_datetime_fromisocalendar_invalid_day() {
+        assert_eq!(
+            dt_fromisocalendar_err(args!(2024, 1, 0)),
+            "Invalid day: 0 (range is [1, 7])"
+        );
+        assert_eq!(
+            dt_fromisocalendar_err(args!(2024, 1, 8)),
+            "Invalid day: 8 (range is [1, 7])"
+        );
+    }
+
+    #[test]
+    fn test_datetime_fromisocalendar_year_out_of_range() {
+        assert_eq!(
+            dt_fromisocalendar_err(args!(0, 1, 1)),
+            "Year is out of range: 0"
+        );
+        assert_eq!(
+            dt_fromisocalendar_err(args!(10000, 1, 1)),
+            "Year is out of range: 10000"
+        );
+    }
     // ── render() / Python's str(datetime) ────────────────────────────────
     //
     // Bare `{{ dt }}` should produce Python's `str(datetime)` form — space

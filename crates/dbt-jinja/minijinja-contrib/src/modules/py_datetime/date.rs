@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone, Weekday};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::{value::Object, Error, ErrorKind, Value};
 
@@ -116,6 +116,59 @@ impl PyDateClass {
         Ok(PyDate::new(naive_date))
     }
 
+    // ------------------
+    // date.fromisocalendar(year, week, day)
+    //   ISO year, week (1..=53), day (1=Mon..7=Sun) -> Gregorian date.
+    //   Mirrors CPython's exact error wording so SLT goldens cross-validate
+    //   against Mantle.
+    // ------------------
+    fn fromisocalendar(args: &[Value]) -> Result<PyDate, Error> {
+        let iter = ArgsIter::new("fromisocalendar", &["year", "week", "day"], args);
+        let year: i64 = iter.next_arg()?;
+        let week: i64 = iter.next_arg()?;
+        let day: i64 = iter.next_arg()?;
+        iter.finish()?;
+
+        if !(1..=9999).contains(&year) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Year is out of range: {year}"),
+            ));
+        }
+        if !(1..=53).contains(&week) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Invalid week: {week}"),
+            ));
+        }
+        if !(1..=7).contains(&day) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!("Invalid day: {day} (range is [1, 7])"),
+            ));
+        }
+
+        let weekday = match day {
+            1 => Weekday::Mon,
+            2 => Weekday::Tue,
+            3 => Weekday::Wed,
+            4 => Weekday::Thu,
+            5 => Weekday::Fri,
+            6 => Weekday::Sat,
+            7 => Weekday::Sun,
+            _ => unreachable!(),
+        };
+
+        // chrono returns None when week 53 doesn't exist for `year`.
+        // Python's error in that case is "Invalid week: 53" — match it.
+        let naive =
+            NaiveDate::from_isoywd_opt(year as i32, week as u32, weekday).ok_or_else(|| {
+                Error::new(ErrorKind::InvalidArgument, format!("Invalid week: {week}"))
+            })?;
+
+        Ok(PyDate::new(naive))
+    }
+
     fn fromisoformat(args: &[Value]) -> Result<PyDate, Error> {
         let iso_str = args.first().and_then(|v| v.as_str()).ok_or_else(|| {
             Error::new(
@@ -160,6 +213,7 @@ impl Object for PyDateClass {
             "fromtimestamp" => Self::from_timestamp(args).map(Value::from_object),
             "fromordinal" => Self::date_from_ordinal(args).map(Value::from_object),
             "fromisoformat" => Self::fromisoformat(args).map(Value::from_object),
+            "fromisocalendar" => Self::fromisocalendar(args).map(Value::from_object),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
                 format!("date has no method named '{method}'"),
@@ -387,6 +441,7 @@ impl Object for PyDate {
             "fromtimestamp" => PyDateClass::from_timestamp(args).map(Value::from_object),
             "fromordinal" => PyDateClass::date_from_ordinal(args).map(Value::from_object),
             "fromisoformat" => PyDateClass::fromisoformat(args).map(Value::from_object),
+            "fromisocalendar" => PyDateClass::fromisocalendar(args).map(Value::from_object),
 
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
@@ -608,5 +663,59 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Invalid date: year=2023, month=13, day=15"));
+    }
+
+    // ── date.fromisocalendar ────────────────────────────────────────────
+    //
+    // Error wordings mirror CPython exactly so SLT happy-path goldens cross-
+    // validate against Mantle and the error messages users see match what
+    // they'd see in dbt-core.
+
+    fn fromisocalendar_err(args: &[Value]) -> String {
+        PyDateClass::fromisocalendar(args)
+            .unwrap_err()
+            .detail()
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    #[test]
+    fn test_date_fromisocalendar_invalid_week_zero() {
+        assert_eq!(fromisocalendar_err(args!(2024, 0, 1)), "Invalid week: 0");
+    }
+
+    #[test]
+    fn test_date_fromisocalendar_invalid_week_too_high() {
+        assert_eq!(fromisocalendar_err(args!(2024, 54, 1)), "Invalid week: 54");
+    }
+
+    #[test]
+    fn test_date_fromisocalendar_week_53_in_non_53_year() {
+        // 2024 has only 52 ISO weeks; CPython errors with "Invalid week: 53".
+        assert_eq!(fromisocalendar_err(args!(2024, 53, 1)), "Invalid week: 53");
+    }
+
+    #[test]
+    fn test_date_fromisocalendar_invalid_day() {
+        assert_eq!(
+            fromisocalendar_err(args!(2024, 1, 0)),
+            "Invalid day: 0 (range is [1, 7])"
+        );
+        assert_eq!(
+            fromisocalendar_err(args!(2024, 1, 8)),
+            "Invalid day: 8 (range is [1, 7])"
+        );
+    }
+
+    #[test]
+    fn test_date_fromisocalendar_year_out_of_range() {
+        assert_eq!(
+            fromisocalendar_err(args!(0, 1, 1)),
+            "Year is out of range: 0"
+        );
+        assert_eq!(
+            fromisocalendar_err(args!(10000, 1, 1)),
+            "Year is out of range: 10000"
+        );
     }
 }
