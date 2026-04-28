@@ -140,6 +140,7 @@ pub enum ErrorCode {
     InvalidConcurrentBatchesConfig = 1091,
     NoNodesForSelectionCriteria = 1092,
     MicrobatchModelNoEventTimeInputs = 1093,
+    UnversionedBreakingChange = 1094,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]

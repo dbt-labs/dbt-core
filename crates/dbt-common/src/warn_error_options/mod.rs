@@ -603,6 +603,9 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::WEOIncludeExcludeDeprecation => {
             error_code == ErrorCode::WEOIncludeExcludeDeprecation
         }
+        SupportedLegacyWarnError::UnversionedBreakingChange => {
+            error_code == ErrorCode::UnversionedBreakingChange
+        }
     }
 }
 
@@ -854,6 +857,11 @@ mod tests {
                 "NoNodesForSelectionCriteria",
                 SupportedLegacyWarnError::NoNodesForSelectionCriteria,
                 ErrorCode::NoNodesForSelectionCriteria,
+            ),
+            (
+                "UnversionedBreakingChange",
+                SupportedLegacyWarnError::UnversionedBreakingChange,
+                ErrorCode::UnversionedBreakingChange,
             ),
             // Tested separately below.
         ];

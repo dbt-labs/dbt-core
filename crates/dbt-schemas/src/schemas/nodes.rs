@@ -5098,7 +5098,7 @@ impl DbtModel {
             \n  - {breaking_change}\n"
         );
 
-        emit_warn_log_message(ErrorCode::DependencyWarning, warning_message, None);
+        emit_warn_log_message(ErrorCode::UnversionedBreakingChange, warning_message, None);
     }
 }
 

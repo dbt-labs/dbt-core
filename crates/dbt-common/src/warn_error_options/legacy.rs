@@ -43,6 +43,7 @@ pub enum SupportedLegacyWarnError {
     FreshnessConfigProblem,
     WarnStateTargetEqual,
     WEOIncludeExcludeDeprecation,
+    UnversionedBreakingChange,
 }
 
 /// Legacy dbt-core event names that Fusion will eventually support in `warn-error-options` configuration, but does not yet support. These may have a corresponding fusion-native error code providing similar functionality.
@@ -275,7 +276,6 @@ pub enum NotYetSupportedLegacyWarnError {
     UnpinnedRefNewVersionAvailable,
     UnsupportedConstraintMaterialization,
     UnusedResourceConfigPath,
-    UnversionedBreakingChange,
     WarnLevel,
     WriteCatalogFailure,
     WritingInjectedSQLForNode,
