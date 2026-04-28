@@ -1264,6 +1264,10 @@ class PartialParsing:
                         self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                     if file_id and file_id in self.saved_files:
                         self.add_to_pp_files(self.saved_files[file_id])
+                    # If this root had overloads, re-schedule their SQL files too so
+                    # the overload nodes exist in the manifest before YAML re-absorption.
+                    if hasattr(removed_function, "overloads") and removed_function.overloads:
+                        self._reschedule_overload_files(unique_id)
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:

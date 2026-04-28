@@ -78,7 +78,9 @@ class FunctionOverload(dbtClassMixin):
     returns: Optional[FunctionReturns] = None
     description: Optional[str] = None
     # Populated during patch processing from the overload's SQL file
-    body: Optional[str] = None
+    raw_body: Optional[str] = None
+    # Populated during compile by the FunctionRunner
+    compiled_body: Optional[str] = None
 
 
 @dataclass

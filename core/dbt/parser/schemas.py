@@ -1380,7 +1380,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
                     arguments=overload.arguments,
                     returns=overload.returns,
                     description=overload.description,
-                    body=overload_node.raw_code,
+                    raw_body=overload_node.raw_code,
                 )
             )
 

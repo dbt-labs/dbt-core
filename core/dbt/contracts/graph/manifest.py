@@ -1176,6 +1176,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
             unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
             saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
+            function_overload_owners=dict(self.function_overload_owners),
         )
         copy.build_flat_graph()
         return copy
@@ -1919,6 +1920,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.semantic_models,
             self.unit_tests,
             self.saved_queries,
+            self.fixtures,
+            self.function_overload_owners,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
