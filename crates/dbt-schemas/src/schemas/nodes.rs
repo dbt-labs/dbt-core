@@ -314,30 +314,29 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
         if path_kind != NodePathKind::Definition && self.resource_type() == NodeType::Model {
-            let out_dir_relative =
-                || pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
             match path_kind {
                 NodePathKind::Compiled => {
                     let common = self.common();
-                    out_dir_relative()
-                        .join(get_target_write_path(
-                            DBT_COMPILED_DIR_NAME,
-                            &common.package_name,
-                            &common.path,
-                            &common.original_file_path,
-                        ))
-                        .into()
+                    let abs = get_target_write_path(
+                        in_dir,
+                        &out_dir.join(DBT_COMPILED_DIR_NAME),
+                        &common.package_name,
+                        &common.path,
+                        &common.original_file_path,
+                    );
+                    pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
                 }
                 NodePathKind::Executable => {
                     let common = self.common();
-                    let rel = get_target_write_path(
-                        DBT_RUN_DIR_NAME,
+                    let abs = get_target_write_path(
+                        in_dir,
+                        &out_dir.join(DBT_RUN_DIR_NAME),
                         &common.package_name,
                         &common.path,
                         &common.original_file_path,
                     )
                     .with_file_name(format!("{}.sql", self.base().alias));
-                    out_dir_relative().join(rel).into()
+                    pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
                 }
                 NodePathKind::Definition => unreachable!(),
             }

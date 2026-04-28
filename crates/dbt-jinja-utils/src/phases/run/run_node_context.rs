@@ -185,12 +185,13 @@ fn extend_with_model_context<S: Serialize>(
     );
 
     // Create the lazy wrapper for the model with the compiled path
-    let compiled_path = io_args.out_dir.join(get_target_write_path(
-        DBT_COMPILED_DIR_NAME,
+    let compiled_path = get_target_write_path(
+        &io_args.in_dir,
+        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
         &common_attr.package_name,
         &common_attr.path,
         &common_attr.original_file_path,
-    ));
+    );
     let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
 
     base_context.insert("model".to_owned(), MinijinjaValue::from_object(lazy_model));
@@ -338,12 +339,17 @@ pub fn build_run_node_context<S: Serialize>(
         MinijinjaValue::from(&common_attr.package_name),
     );
 
-    let relative_path = get_target_write_path(
-        DBT_COMPILED_DIR_NAME,
+    let abs_compiled = get_target_write_path(
+        &io_args.in_dir,
+        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
         &common_attr.package_name,
         &common_attr.path,
         &common_attr.original_file_path,
     );
+    let relative_path = abs_compiled
+        .strip_prefix(&io_args.out_dir)
+        .map(|p| p.to_path_buf())
+        .unwrap_or(abs_compiled);
     context.insert(
         CURRENT_PATH.to_string(),
         MinijinjaValue::from(relative_path.to_string_lossy()),
@@ -494,16 +500,18 @@ fn write_file(
     // Mirror dbt-core's target/run/{package_name}/{original_file_path} structure.
     // The directory comes from get_target_write_path; the filename is the alias (node_name)
     // to avoid ENAMETOOLONG on Linux for generic tests with very long names.
-    let relative = get_target_write_path(DBT_RUN_DIR_NAME, package_name, path, original_file_path);
-    let run_dir = relative
+    // project_root.join(target_path) handles both absolute and relative target_path correctly.
+    let abs_run_path = get_target_write_path(
+        project_root,
+        &project_root.join(target_path).join(DBT_RUN_DIR_NAME),
+        package_name,
+        path,
+        original_file_path,
+    );
+    let full_path = abs_run_path
         .parent()
-        .unwrap_or_else(|| Path::new(DBT_RUN_DIR_NAME));
-    let build_path = target_path.join(run_dir).join(format!("{node_name}.sql"));
-    let full_path = if build_path.is_absolute() {
-        build_path
-    } else {
-        project_root.join(&build_path)
-    };
+        .unwrap_or(&abs_run_path)
+        .join(format!("{node_name}.sql"));
 
     // Create parent directories if needed
     if let Some(parent) = full_path.parent()
