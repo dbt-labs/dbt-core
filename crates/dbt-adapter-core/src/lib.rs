@@ -40,8 +40,6 @@ pub enum AdapterType {
     Salesforce,
     // Microsoft Fabric DWH
     Fabric,
-    /// Sidecar (internal dispatch type for DuckDB backend in sidecar mode)
-    Sidecar,
     /// ClickHouse
     ClickHouse,
     /// Exasol
@@ -91,7 +89,6 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Datafusion => '"',
         ClickHouse => '"',
         Exasol => '"',
-        Sidecar => '"',
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
     }
@@ -160,7 +157,6 @@ mod tests {
             ("sPark", AdapterType::Spark),
             ("dUckdb", AdapterType::DuckDB),
             ("fAbric", AdapterType::Fabric),
-            ("sIdecar", AdapterType::Sidecar),
             ("cLickhouse", AdapterType::ClickHouse),
             ("aThena", AdapterType::Athena),
             ("sTarburst", AdapterType::Starburst),

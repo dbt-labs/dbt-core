@@ -25,7 +25,7 @@ pub fn create_static_relation(
             let snowflake_relation_type = SnowflakeRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(snowflake_relation_type))
         }
-        Postgres | Sidecar => {
+        Postgres => {
             let postgres_relation_type = PostgresRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(postgres_relation_type))
         }

@@ -419,7 +419,7 @@ pub fn do_create_relation(
 ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
     use AdapterType::*;
     let relation = match adapter_type {
-        Postgres | Sidecar => Box::new(PostgresRelation::try_new(
+        Postgres => Box::new(PostgresRelation::try_new(
             Some(database),
             Some(schema),
             identifier,

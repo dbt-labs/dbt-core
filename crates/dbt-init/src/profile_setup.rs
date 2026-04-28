@@ -187,13 +187,6 @@ impl ProfileSetup {
         existing_config: Option<&DbConfig>,
     ) -> FsResult<ProfileTarget> {
         let db_config = match adapter {
-            AdapterType::Sidecar => {
-                return Err(fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "Sidecar is an internal adapter type and cannot be used directly in profiles.yml. \
-                     Use 'type: snowflake' (or another warehouse) with 'execute: sidecar' instead."
-                ));
-            }
             AdapterType::Snowflake => {
                 let snowflake_config = match existing_config {
                     Some(DbConfig::Snowflake(config)) => Some(config),

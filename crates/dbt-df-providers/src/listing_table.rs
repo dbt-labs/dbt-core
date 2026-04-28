@@ -174,8 +174,7 @@ pub fn infer_seed_column_name_strategy(
             AdapterType::Bigquery
             | AdapterType::Databricks
             | AdapterType::Spark
-            | AdapterType::Fabric
-            | AdapterType::Sidecar,
+            | AdapterType::Fabric,
         ) => InferColumnNameStrategy::Verbatim,
         (false, AdapterType::ClickHouse) => todo!("ClickHouse"),
         (false, AdapterType::Exasol) => todo!("Exasol"),

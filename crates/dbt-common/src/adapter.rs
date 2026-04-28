@@ -16,8 +16,6 @@ pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
         Salesforce => Dialect::Postgresql,
         // DuckDB uses its own dialect with Trino-based parser/binder and DuckDB function registry
         DuckDB => Dialect::Duckdb,
-        // Sidecar uses DuckDB backend but should be treated as Postgres-like
-        Sidecar => Dialect::Postgresql,
         _ => return None,
     };
     Some(dialect)

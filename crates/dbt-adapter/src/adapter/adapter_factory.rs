@@ -28,7 +28,6 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Spark => Backend::Spark,
         AdapterType::DuckDB => Backend::DuckDB,
-        AdapterType::Sidecar => Backend::DuckDB,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => Backend::ClickHouse,
         AdapterType::Exasol => Backend::Exasol,

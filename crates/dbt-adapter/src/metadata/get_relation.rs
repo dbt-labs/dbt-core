@@ -75,13 +75,6 @@ pub fn get_relation(
         AdapterType::Fabric => fabric_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
-        AdapterType::Sidecar => {
-            // This branch should not be reached - sidecar adapters override get_relation()
-            Err(AdapterError::new(
-                AdapterErrorKind::Internal,
-                "get_relation called on Sidecar adapter type without override",
-            ))
-        }
         AdapterType::ClickHouse => todo!("ClickHouse"),
         AdapterType::Exasol => todo!("Exasol"),
         AdapterType::Starburst => todo!("Starburst"),

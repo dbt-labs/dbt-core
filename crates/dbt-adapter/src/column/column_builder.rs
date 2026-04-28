@@ -26,9 +26,7 @@ impl ColumnBuilder {
             Bigquery => Ok(Self::build_bigquery(field, type_ops)),
             Databricks | Spark => Ok(Self::build_databricks(field, type_ops)),
             Redshift => Ok(Self::build_redshift(field, type_ops)),
-            Postgres | Salesforce | Sidecar | DuckDB => {
-                Ok(Self::build_postgres_like(field, type_ops))
-            }
+            Postgres | Salesforce | DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => todo!("ClickHouse"),
             Exasol => todo!("Exasol"),
@@ -52,7 +50,7 @@ impl ColumnBuilder {
     ) -> Column {
         use AdapterType::*;
         match self.adapter_type {
-            Postgres | Sidecar => Column::new(
+            Postgres => Column::new(
                 Postgres,
                 name,
                 dtype,
