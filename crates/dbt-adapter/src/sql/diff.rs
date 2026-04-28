@@ -40,7 +40,13 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
+    // Apply meta_get→get normalization to both sides: Mantle recordings vary in
+    // whether they preserve `dbt.config.meta_get(...)` or rewrite it to
+    // `dbt.config.get(...)`, and Fusion preserves the user's source verbatim.
+    // The two are semantically equivalent (the generated `config` class routes
+    // both lookups through the same dict), so we normalize them on both sides.
     let actual = canonicalize_python_meta_get_calls(&actual);
+    let expected = canonicalize_python_meta_get_calls(&expected);
     let actual = canonicalize_python_meta_dict(&actual);
     let expected = canonicalize_python_meta_dict(&expected);
     let actual = canonicalize_databricks_legacy_alter_column_comment_to_modern(&actual);
@@ -2342,10 +2348,10 @@ fn canonicalize_python_config_dict(actual: &str, expected: &str) -> String {
     actual.to_string()
 }
 
-/// Canonicalize `dbt.config.meta_get(` call sites to `dbt.config.get(` to match what Mantle
-/// emits in the Snowflake stored procedure body.  Fusion passes the user's Python source verbatim,
-/// preserving `meta_get` calls; Mantle rewrites them to `get`.  Both are semantically equivalent
-/// because the generated `config` class routes all lookups through the same `config_dict`.
+/// Canonicalize `dbt.config.meta_get(` call sites to `dbt.config.get(`.  Fusion passes the user's
+/// Python source verbatim; Mantle recordings vary — some preserve `meta_get`, others rewrite to
+/// `get`.  The two forms are semantically equivalent because the generated `config` class routes
+/// all lookups through the same dict, so the caller applies this normalization to both sides.
 fn canonicalize_python_meta_get_calls(sql: &str) -> String {
     if !sql.contains("dbt.config.meta_get(") {
         return sql.to_string();
@@ -5580,6 +5586,47 @@ def model(dbt, session):
             result.is_ok(),
             "Populated meta_dict + meta_get call sites should be treated as equivalent \
              to populated config_dict + get call sites: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_meta_get_normalizes_both_sides() {
+        // Some Mantle recordings preserve `dbt.config.meta_get(...)` in the
+        // generated stored procedure body (rather than rewriting to `get`).
+        // Fusion's actual passes the user's source verbatim, so it also has
+        // `meta_get`. The canonicalizer must normalize BOTH sides — otherwise
+        // the actual gets rewritten to `get` while the expected keeps
+        // `meta_get`, causing a spurious mismatch.
+        let actual = r#"
+config_dict = {'k': 'v'}
+
+class config:
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+def model(dbt, session):
+    x = dbt.config.meta_get("k")
+    return session.table("t")
+"#;
+
+        let expected = r#"
+config_dict = {'k': 'v'}
+
+class config:
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+def model(dbt, session):
+    x = dbt.config.meta_get("k")
+    return session.table("t")
+"#;
+
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "matching meta_get on both sides should compare equal: {result:?}"
         );
     }
 

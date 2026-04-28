@@ -601,6 +601,11 @@ pub async fn resolve_models(
 
         let mut model_config = model_config_resolved;
 
+        // Render any deferred Jinja in `+meta` values (same as Python model path).
+        if let Some(ref mut meta) = model_config.meta {
+            render_meta_jinja(meta, &env, base_ctx, &dbt_asset.path, arg);
+        }
+
         // Capture inline SQL config overrides (from `{{ config(...) }}`) separately.
         // This should include only values explicitly set in the SQL file, not inherited defaults.
         let inline_overrides = if let Some(explicit) = sql_file_info.explicit_config.as_ref() {
@@ -1229,6 +1234,8 @@ fn process_python_models(
             config_resolver,
             maybe_properties.as_ref(),
             arg,
+            env.as_ref(),
+            base_ctx,
         ) {
             Ok(config) => config,
             Err(err) => {
@@ -1340,6 +1347,7 @@ fn check_config_get_on_meta_keys(
 /// These need to be merged with:
 /// 1. Project-level config (from dbt_project.yml)
 /// 2. Schema.yml properties config (if present)
+#[allow(clippy::too_many_arguments)]
 fn merge_python_config(
     python_file_info: &PythonFileInfo<ModelConfig>,
     python_asset: &dbt_schemas::state::DbtAsset,
@@ -1348,6 +1356,8 @@ fn merge_python_config(
     config_resolver: &ProjectConfigResolver<ModelConfig>,
     maybe_properties: Option<&ModelProperties>,
     arg: &ResolveArgs,
+    env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
 ) -> FsResult<ModelConfig> {
     let model_name = python_asset
         .path
@@ -1399,6 +1409,14 @@ fn merge_python_config(
         merged_config.meta_keys_defaults = Some(python_file_info.meta_keys_defaults.clone());
     }
 
+    // Render any deferred Jinja in `+meta` values before downstream consumers (e.g. the
+    // Python wrapper macro `build_config_dict`) emit them into the generated stored
+    // procedure body. ProjectModelConfig.meta is `Verbatim`, so values like
+    // `{{ env_var('FOO') }}` arrive here as literal strings; render them once now.
+    if let Some(ref mut meta) = merged_config.meta {
+        render_meta_jinja(meta, env, base_ctx, &python_asset.path, arg);
+    }
+
     // Warn if config.get() used on meta keys
     check_config_get_on_meta_keys(python_file_info, &merged_config, &python_asset.path, arg)?;
 
@@ -1436,6 +1454,73 @@ fn merge_python_config(
     merged_config.static_analysis = Some(StaticAnalysisKind::Off.into());
 
     Ok(merged_config)
+}
+
+/// Recursively render Jinja in string values inside a model's `+meta` map.
+///
+/// `ProjectModelConfig.meta` is wrapped in `Verbatim<…>` so its inner strings skip
+/// rendering at YAML deserialization time (the original motivation was to avoid
+/// eager rendering with insufficient context — see #6602). By the time we reach
+/// node-config merge, the parse-phase Jinja env and context (env_var, target,
+/// var, …) are fully bound, so it is safe — and necessary — to render here.
+///
+/// Render failures are surfaced as warnings rather than errors: an unrenderable
+/// meta value is left as-is (matching today's behavior) and downstream code can
+/// continue. Non-string values (numbers, bools, sequences, nested maps) are
+/// walked recursively so a `+meta` block like `{tags: ["{{ var('x') }}"]}` is
+/// rendered consistently.
+pub(crate) fn render_meta_jinja(
+    meta: &mut indexmap::IndexMap<String, dbt_yaml::Value>,
+    env: &JinjaEnv,
+    ctx: &BTreeMap<String, minijinja::Value>,
+    path: &Path,
+    arg: &ResolveArgs,
+) {
+    for value in meta.values_mut() {
+        render_yml_value_jinja(value, env, ctx, path, arg);
+    }
+}
+
+fn render_yml_value_jinja(
+    value: &mut dbt_yaml::Value,
+    env: &JinjaEnv,
+    ctx: &BTreeMap<String, minijinja::Value>,
+    path: &Path,
+    arg: &ResolveArgs,
+) {
+    use dbt_yaml::Value;
+    match value {
+        Value::String(s, span) => {
+            if !(s.contains("{{") || s.contains("{%")) {
+                return;
+            }
+            match env.render_str(s.as_str(), ctx, &[]) {
+                Ok(rendered) => {
+                    *value = Value::String(rendered, span.clone());
+                }
+                Err(e) => {
+                    let warning = fs_err!(
+                        code => ErrorCode::Generic,
+                        loc => path.to_path_buf(),
+                        "Failed to render Jinja in `+meta` value: {}",
+                        e
+                    );
+                    emit_warn_log_from_fs_error(&warning, arg.io.status_reporter.as_ref());
+                }
+            }
+        }
+        Value::Sequence(seq, _) => {
+            for v in seq.iter_mut() {
+                render_yml_value_jinja(v, env, ctx, path, arg);
+            }
+        }
+        Value::Mapping(map, _) => {
+            for (_, v) in map.iter_mut() {
+                render_yml_value_jinja(v, env, ctx, path, arg);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Determine if a DbtAsset is a Python model based on file extension

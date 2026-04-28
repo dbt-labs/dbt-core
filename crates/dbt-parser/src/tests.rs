@@ -164,6 +164,77 @@ mod tests {
     }
 
     #[test]
+    fn test_meta_field_renders_at_node_merge() {
+        // Project-level `+meta` values are intentionally `Verbatim` (see
+        // `test_meta_field_defers_jinja_expansion`). At node-config merge time we DO
+        // render Jinja in those values so downstream consumers — manifest,
+        // `config.meta_get(...)`, and the Python wrapper macro `build_config_dict` —
+        // see resolved values rather than raw Jinja literals. This test pins that
+        // contract.
+        use crate::args::ResolveArgs;
+        use crate::resolve::resolve_models::render_meta_jinja;
+        use indexmap::IndexMap;
+        use std::path::PathBuf;
+
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+
+        let mut meta: IndexMap<String, dbt_yaml::Value> = IndexMap::new();
+        meta.insert(
+            "literal".to_string(),
+            dbt_yaml::Value::string("plain".to_string()),
+        );
+        meta.insert(
+            "expr".to_string(),
+            dbt_yaml::Value::string("{{ 1 + 2 }}".to_string()),
+        );
+        meta.insert(
+            "env_with_default".to_string(),
+            dbt_yaml::Value::string(
+                "@{{ env_var('DOES_NOT_EXIST_XYZ', 'fallback_db') }}.raw".to_string(),
+            ),
+        );
+        // Nested rendering inside a sequence
+        meta.insert(
+            "seq".to_string(),
+            dbt_yaml::Value::Sequence(
+                vec![
+                    dbt_yaml::Value::string("{{ 'rendered' }}".to_string()),
+                    dbt_yaml::Value::string("kept".to_string()),
+                ],
+                dbt_yaml::Span::default(),
+            ),
+        );
+
+        let arg = ResolveArgs::default();
+
+        render_meta_jinja(&mut meta, &env, &ctx, &PathBuf::from("test.py"), &arg);
+
+        let as_str = |k: &str| match meta.get(k).unwrap() {
+            dbt_yaml::Value::String(s, _) => s.clone(),
+            other => panic!("expected string at {k}, got {other:?}"),
+        };
+        assert_eq!(as_str("literal"), "plain");
+        assert_eq!(as_str("expr"), "3");
+        assert_eq!(as_str("env_with_default"), "@fallback_db.raw");
+
+        match meta.get("seq").unwrap() {
+            dbt_yaml::Value::Sequence(seq, _) => {
+                assert_eq!(seq.len(), 2);
+                match &seq[0] {
+                    dbt_yaml::Value::String(s, _) => assert_eq!(s, "rendered"),
+                    other => panic!("expected string in seq[0], got {other:?}"),
+                }
+                match &seq[1] {
+                    dbt_yaml::Value::String(s, _) => assert_eq!(s, "kept"),
+                    other => panic!("expected string in seq[1], got {other:?}"),
+                }
+            }
+            other => panic!("expected sequence at seq, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_freshness_dict_literal_renders_as_typed() {
         use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod};
 
