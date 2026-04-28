@@ -2689,6 +2689,7 @@
         "count": {
           "anyOf": [
             {
+              "default": null,
               "type": [
                 "integer",
                 "null"
@@ -2702,6 +2703,7 @@
           ]
         },
         "period": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessPeriod"
