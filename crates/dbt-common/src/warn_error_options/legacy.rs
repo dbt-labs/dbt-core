@@ -118,7 +118,6 @@ pub enum NotYetSupportedLegacyWarnError {
     DepsListSubdirectory,
     DepsLockUpdating,
     DepsNoPackagesFound,
-    DepsNotifyUpdatesAvailable,
     DepsScrubbedPackageName,
     DepsSetDownloadDirectory,
     DepsStartPackageInstall,
@@ -282,6 +281,27 @@ pub enum NotYetSupportedLegacyWarnError {
     WritingInjectedSQLForNode,
 }
 
+/// Legacy dbt-core event names that are valid event names but are not warnings in dbt Core.
+/// dbt Core silently ignores these in `warn_error_options`, so Fusion does the same.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    EnumIter,
+    EnumString,
+    AsRefStr,
+)]
+pub enum NotAWarningInDbtCoreLegacyWarnError {
+    DepsNotifyUpdatesAvailable,
+}
+
 /// Legacy dbt-core event names that Fusion will not support in `warn-error-options` configuration, either because they are no longer relevant or can't be implemented in a way that provides value to users.
 ///
 /// NOTE: each variant in this enum should have a message describing why it will not be supported, matching
@@ -416,32 +436,48 @@ pub enum WillNotSupportLegacyWarnError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use strum::IntoEnumIterator;
 
     #[test]
     fn enums_are_not_overlapping() {
-        let all_not_yet_supported_names = NotYetSupportedLegacyWarnError::iter()
-            .map(|variant| variant.as_ref().to_string())
-            .collect::<Vec<_>>();
-        let all_will_not_support_names = WillNotSupportLegacyWarnError::iter()
-            .map(|variant| variant.as_ref().to_string())
-            .collect::<Vec<_>>();
+        let groups = [
+            (
+                "SupportedLegacyWarnError",
+                SupportedLegacyWarnError::iter()
+                    .map(|variant| variant.as_ref().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "NotYetSupportedLegacyWarnError",
+                NotYetSupportedLegacyWarnError::iter()
+                    .map(|variant| variant.as_ref().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "WillNotSupportLegacyWarnError",
+                WillNotSupportLegacyWarnError::iter()
+                    .map(|variant| variant.as_ref().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "NotAWarningInDbtCoreLegacyWarnError",
+                NotAWarningInDbtCoreLegacyWarnError::iter()
+                    .map(|variant| variant.as_ref().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+        ];
 
-        for supported in SupportedLegacyWarnError::iter() {
-            assert!(
-                !all_not_yet_supported_names.contains(&supported.as_ref().to_string())
-                    && !all_will_not_support_names.contains(&supported.as_ref().to_string()),
-                "Variant `{}` of `SupportedLegacyWarnError` should not also be present in `NotYetSupportedLegacyWarnError` or `WillNotSupportLegacyWarnError`",
-                supported.as_ref()
-            );
-        }
-
-        for not_yet_supported in NotYetSupportedLegacyWarnError::iter() {
-            assert!(
-                !all_will_not_support_names.contains(&not_yet_supported.as_ref().to_string()),
-                "Variant `{}` of `NotYetSupportedLegacyWarnError` should not also be present in `WillNotSupportLegacyWarnError`",
-                not_yet_supported.as_ref()
-            );
+        let mut seen = BTreeMap::new();
+        for (group_name, variants) in groups {
+            for variant in variants {
+                let previous_group = seen.insert(variant.clone(), group_name);
+                assert!(
+                    previous_group.is_none(),
+                    "Variant `{variant}` of `{group_name}` should not also be present in `{}`",
+                    previous_group.unwrap()
+                );
+            }
         }
     }
 

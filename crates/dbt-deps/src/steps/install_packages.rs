@@ -1,7 +1,7 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::pretty_string::{GREEN, RED};
-use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
+use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::tracing::formatters::deps::get_package_display_name;
 use dbt_common::tracing::span_info::{
     SpanStatusRecorder as _, find_and_update_span_attrs, update_span_attrs,
@@ -225,14 +225,10 @@ async fn install_package(
                     || (std::env::var("NEXTEST").is_ok()
                         && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
             {
-                emit_warn_log_message(
-                    ErrorCode::PackageUpdateAvailable,
-                    format!(
-                        "Updated version available for {}@{}: {}",
-                        pinned_package.name, pinned_package.version, pinned_package.version_latest,
-                    ),
-                    io_args.status_reporter.as_ref(),
-                );
+                emit_info_log_message(format!(
+                    "Updated version available for {}@{}: {}",
+                    pinned_package.name, pinned_package.version, pinned_package.version_latest,
+                ));
             }
 
             // Store resolved package version

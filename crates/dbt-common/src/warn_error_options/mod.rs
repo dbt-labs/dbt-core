@@ -9,7 +9,8 @@ use strum::{AsRefStr, EnumMessage};
 mod legacy;
 
 pub use legacy::{
-    NotYetSupportedLegacyWarnError, SupportedLegacyWarnError, WillNotSupportLegacyWarnError,
+    NotAWarningInDbtCoreLegacyWarnError, NotYetSupportedLegacyWarnError, SupportedLegacyWarnError,
+    WillNotSupportLegacyWarnError,
 };
 
 #[derive(
@@ -432,6 +433,10 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
         return Some(WarnErrorOptionValue::WillNotSupportLegacy(legacy));
     }
 
+    if raw.parse::<NotAWarningInDbtCoreLegacyWarnError>().is_ok() {
+        return None;
+    }
+
     if let Ok(legacy) = raw.try_into() {
         return Some(WarnErrorOptionValue::NotYetSupportedLegacy(legacy));
     }
@@ -752,6 +757,24 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn not_a_warning_in_dbt_core_legacy_names_parse_and_validate_silently() {
+        use strum::IntoEnumIterator;
+
+        for variant in NotAWarningInDbtCoreLegacyWarnError::iter() {
+            let name = variant.as_ref();
+            let parsed = parse_warn_error_options(&format!(
+                "{{error: [{name}], warn: [{name}], silence: [{name}]}}"
+            ))
+            .unwrap();
+
+            assert_eq!(parsed.error, Vec::new());
+            assert_eq!(parsed.warn, Vec::new());
+            assert_eq!(parsed.silence, Vec::new());
+            assert_eq!(parsed.validation_messages(), (Vec::new(), None));
+        }
     }
 
     #[test]
