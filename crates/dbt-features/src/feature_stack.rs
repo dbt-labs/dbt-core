@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use dbt_clap_core::Cli;
+use dbt_clap_core::InitArgs;
 use dbt_common::DiscreteEventEmitter;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -12,6 +13,7 @@ use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
 use std::borrow::Cow;
+use uuid::Uuid;
 // use dbt_tasks::task_runner::RunTasksOk;
 use std::fmt;
 use std::sync::Arc;
@@ -53,6 +55,16 @@ pub trait CliExtensionHooks: Send + Sync {
         _eval_arg: &mut Cow<EvalArgs>,
         _dbt_state: &Arc<DbtState>,
         _config: &CompilationConfig,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Called when `dbt init` is invoked, before project initialization begins.
+    async fn will_init_project(
+        &self,
+        _invocation_id: Uuid,
+        _cli: &Cli,
+        _init_args: &InitArgs,
     ) -> FsResult<()> {
         Ok(())
     }
