@@ -75,17 +75,28 @@ impl FromStr for SchemaOrigin {
 
 #[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
-    #[serde(deserialize_with = "i64_or_string_i64")]
+    // F1: an empty rule object (`error_after: {}` with no children) must
+    // deserialize successfully — the validator below treats it as
+    // semantically equivalent to omitting the rule. Without `default`, the
+    // custom deserializer on `count` causes serde to reject `{}` with a
+    // "missing field `count`" error before the validator ever runs.
+    #[serde(default, deserialize_with = "i64_or_string_i64")]
     pub count: Option<i64>,
+    #[serde(default)]
     pub period: Option<FreshnessPeriod>,
 }
 
 impl FreshnessRules {
     pub fn validate(rule: Option<&Self>) -> FsResult<()> {
-        if rule.is_none() {
+        let Some(rule) = rule else {
+            return Ok(());
+        };
+        // F1: an empty rule object (`error_after: {}` or all children commented
+        // out) is semantically equivalent to omitting the key. Mantle accepts
+        // it; reject only when the rule is *partially* populated.
+        if rule.is_empty() {
             return Ok(());
         }
-        let rule = rule.expect("rule should be Some now");
         if rule.count.is_none() || rule.period.is_none() {
             return Err(fs_err!(
                 ErrorCode::InvalidArgument,
@@ -1962,6 +1973,59 @@ period: hour
         let rules: FreshnessRules = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(rules.count, Some(24));
         assert_eq!(rules.period, Some(FreshnessPeriod::hour));
+    }
+
+    // MVT for F1+F2: pin the validator's truth table for the three failure modes
+    // reported across multiple projects. See `.agents/...` analysis: a partial
+    // freshness rule must still be rejected (negative regression guards), while
+    // a fully-empty rule must be accepted (`is_empty()` short-circuit).
+    #[test]
+    fn test_freshness_rules_validate_empty_ok() {
+        let rule = FreshnessRules {
+            count: None,
+            period: None,
+        };
+        assert!(rule.is_empty());
+        FreshnessRules::validate(Some(&rule))
+            .expect("an empty freshness rule must validate as OK (variant 3)");
+    }
+
+    #[test]
+    fn test_freshness_rules_validate_count_only_err() {
+        let rule = FreshnessRules {
+            count: Some(25),
+            period: None,
+        };
+        let err = FreshnessRules::validate(Some(&rule))
+            .expect_err("a count-only freshness rule must still be rejected (variant 1)");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("count and period are required when freshness is provided"),
+            "unexpected error message: {msg}"
+        );
+        assert!(
+            msg.contains("count: Some(25)") && msg.contains("period: None"),
+            "expected diagnostic to echo the offending values; got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_freshness_rules_validate_period_only_err() {
+        let rule = FreshnessRules {
+            count: None,
+            period: Some(FreshnessPeriod::hour),
+        };
+        let err = FreshnessRules::validate(Some(&rule))
+            .expect_err("a period-only freshness rule must still be rejected (variant 2)");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("count and period are required when freshness is provided"),
+            "unexpected error message: {msg}"
+        );
+        assert!(
+            msg.contains("count: None") && msg.contains("period: Some(hour)"),
+            "expected diagnostic to echo the offending values; got: {msg}"
+        );
     }
 
     #[test]

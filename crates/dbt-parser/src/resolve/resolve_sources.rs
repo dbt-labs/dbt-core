@@ -8,7 +8,7 @@ use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
-use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -269,8 +269,20 @@ pub fn resolve_sources(
         }
 
         if let Some(freshness) = merged_freshness.as_ref() {
-            FreshnessRules::validate(freshness.error_after.as_ref())?;
-            FreshnessRules::validate(freshness.warn_after.as_ref())?;
+            // F2: a partially-populated freshness rule (only one of
+            // {count, period}) is tolerated by Mantle at parse time and only
+            // enforced when `dbt source freshness` actually consumes the rule.
+            // Match that behavior here — demote the validation failure to a
+            // warning so `parse` / `run` / `build` are not aborted, while the
+            // safety net inside `dbt-freshness` still produces a hard error
+            // when the rule is consumed. F1 (fully-empty rule) is already
+            // accepted silently by `FreshnessRules::validate`.
+            if let Err(err) = FreshnessRules::validate(freshness.error_after.as_ref()) {
+                emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            }
+            if let Err(err) = FreshnessRules::validate(freshness.warn_after.as_ref()) {
+                emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            }
         }
 
         // Add any other non-standard dbt keys that might be used by dbt packages under
