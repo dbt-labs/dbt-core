@@ -217,9 +217,27 @@ pub fn resolve_seeds(
             let column_types = column_types
                 .iter()
                 .map(|(k, v)| {
+                    // Normalize column names for Snowflake case folding.
+                    // If the key is not a valid unquoted identifier (e.g. contains
+                    // spaces), auto-wrap it in double-quotes before parsing so it
+                    // is treated as a quoted (case-preserving) identifier instead
+                    // of being rejected. This matches Mantle behavior.
+                    // Normalize column names for Snowflake case folding.
+                    // If the key is not a valid unquoted identifier (e.g. it
+                    // contains spaces), auto-wrap it in SQL double-quotes so it
+                    // is treated as a case-preserving quoted identifier instead
+                    // of being rejected. This matches Mantle behavior.
+                    let key = k.as_str();
+                    let sql;
+                    let sql_str = if Dialect::Snowflake.parse_identifier(key).is_ok() {
+                        key
+                    } else {
+                        sql = format!("\"{}\"", key.replace('"', "\"\""));
+                        sql.as_str()
+                    };
                     Ok((
                         Dialect::Snowflake
-                            .parse_identifier(k.as_str())
+                            .parse_identifier(sql_str)
                             .map_err(|e| {
                                 fs_err!(
                                     code => ErrorCode::InvalidColumnReference,
