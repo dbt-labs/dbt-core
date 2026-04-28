@@ -580,6 +580,10 @@ fn apply_connection_args(
         .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
     builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout)?;
 
+    if let Ok(client_timeout) = std::env::var("DBT_SNOWFLAKE_CLIENT_TIMEOUT") {
+        builder.with_named_option(snowflake::CLIENT_TIMEOUT, client_timeout)?;
+    }
+
     // disable any logging from Gosnowflake that's not a fatal/panic
     builder.with_named_option(snowflake::LOG_TRACING, LogLevel::Fatal.to_string())?;
 
@@ -673,6 +677,9 @@ mod tests {
                 OptionDatabase::Other(name) => name.to_owned(),
                 _ => continue,
             };
+            if key == snowflake::CLIENT_TIMEOUT {
+                continue;
+            }
             results.insert(key.into(), option_str_value(&v).into());
         }
 
