@@ -14,6 +14,7 @@ use dbt_common::ErrorCode;
 use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::io_args::IoArgs;
+use dbt_common::path::get_target_write_path;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
 use dbt_adapter::load_store::ResultStore;
@@ -184,19 +185,16 @@ fn extend_with_model_context<S: Serialize>(
     );
 
     // Create the lazy wrapper for the model with the compiled path
-    let compiled_path = io_args
-        .out_dir
-        .join(DBT_COMPILED_DIR_NAME)
-        .join(&common_attr.path);
-    let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path);
+    let compiled_path = io_args.out_dir.join(get_target_write_path(
+        DBT_COMPILED_DIR_NAME,
+        &common_attr.package_name,
+        &common_attr.path,
+        &common_attr.original_file_path,
+    ));
+    let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
 
     base_context.insert("model".to_owned(), MinijinjaValue::from_object(lazy_model));
-    // For "node", we'll use the same lazy model wrapper
-    let node_compiled_path = io_args
-        .out_dir
-        .join(DBT_COMPILED_DIR_NAME)
-        .join(&common_attr.path);
-    let lazy_node = LazyModelWrapper::new(model_map, node_compiled_path);
+    let lazy_node = LazyModelWrapper::new(model_map, compiled_path);
 
     base_context.insert("node".to_owned(), MinijinjaValue::from_object(lazy_node));
     base_context.insert("connection_name".to_owned(), MinijinjaValue::from(""));
@@ -289,6 +287,9 @@ pub fn build_run_node_context<S: Serialize>(
             resource_type: resource_type.as_static_ref().to_string(),
             project_root: io_args.in_dir.clone(),
             target_path: io_args.out_dir.clone(),
+            package_name: common_attr.package_name.clone(),
+            path: common_attr.path.clone(),
+            original_file_path: common_attr.original_file_path.clone(),
         }),
     );
 
@@ -337,7 +338,12 @@ pub fn build_run_node_context<S: Serialize>(
         MinijinjaValue::from(&common_attr.package_name),
     );
 
-    let relative_path = PathBuf::from(DBT_COMPILED_DIR_NAME).join(&common_attr.path);
+    let relative_path = get_target_write_path(
+        DBT_COMPILED_DIR_NAME,
+        &common_attr.package_name,
+        &common_attr.path,
+        &common_attr.original_file_path,
+    );
     context.insert(
         CURRENT_PATH.to_string(),
         MinijinjaValue::from(relative_path.to_string_lossy()),
@@ -399,7 +405,7 @@ impl std::fmt::Debug for HookConfig {
 /// Context function that writes a payload to file
 #[derive(Debug)]
 pub struct WriteConfig {
-    /// The node ({operation, model}) name
+    /// The node ({operation, model}) name or alias (for ENAMETOOLONG safety on Linux)
     pub node_name: String,
     /// The resource type string (see `fusion::node::NodeType`)
     pub resource_type: String,
@@ -407,6 +413,12 @@ pub struct WriteConfig {
     pub project_root: PathBuf,
     /// The directory to write the file into
     pub target_path: PathBuf,
+    /// The package (project) name, used to mirror dbt-core's target/run/{pkg}/... structure
+    pub package_name: String,
+    /// The node's path relative to the project root (common_attr.path)
+    pub path: PathBuf,
+    /// The node's original source file path (common_attr.original_file_path)
+    pub original_file_path: PathBuf,
 }
 
 impl Object for WriteConfig {
@@ -439,6 +451,9 @@ impl Object for WriteConfig {
             &self.project_root,
             &self.target_path,
             &self.node_name,
+            &self.package_name,
+            &self.path,
+            &self.original_file_path,
             &self.resource_type,
             payload,
         ) {
@@ -457,10 +472,14 @@ impl Object for WriteConfig {
 }
 
 /// Write a file to disk
+#[allow(clippy::too_many_arguments)]
 fn write_file(
     project_root: &Path,
     target_path: &Path,
-    model_name: &str,
+    node_name: &str,
+    package_name: &str,
+    path: &Path,
+    original_file_path: &Path,
     resource_type: &str,
     payload: &str,
 ) -> Result<(), Error> {
@@ -472,10 +491,14 @@ fn write_file(
         ));
     }
 
-    // Construct build path - simple implementation
-    let build_path = target_path
-        .join(DBT_RUN_DIR_NAME)
-        .join(format!("{model_name}.sql"));
+    // Mirror dbt-core's target/run/{package_name}/{original_file_path} structure.
+    // The directory comes from get_target_write_path; the filename is the alias (node_name)
+    // to avoid ENAMETOOLONG on Linux for generic tests with very long names.
+    let relative = get_target_write_path(DBT_RUN_DIR_NAME, package_name, path, original_file_path);
+    let run_dir = relative
+        .parent()
+        .unwrap_or_else(|| Path::new(DBT_RUN_DIR_NAME));
+    let build_path = target_path.join(run_dir).join(format!("{node_name}.sql"));
     let full_path = if build_path.is_absolute() {
         build_path
     } else {

@@ -8,6 +8,7 @@ use chrono::Utc;
 use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::path::get_target_write_path;
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
@@ -301,9 +302,9 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// For models the path changes depending on the requested kind:
     ///
-    ///   - `Compiled`   - `target/compiled/{path}` (compiled SQL)
-    ///   - `Executable` - `target/run/{name}.sql` (flat — matches write_file() in run_node_context.rs)
-    ///   - `Definition` - original source path
+    ///   - `Compiled`   — `target/compiled/{package}/{path_segment}` (via `get_target_write_path`)
+    ///   - `Executable` — `target/run/{package}/{path_segment}/{alias}.sql` (mirrors `write_file()`)
+    ///   - `Definition` — original source path
     ///
     /// For all other node types the definition path is always returned.
     fn get_node_path(
@@ -316,14 +317,28 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             let out_dir_relative =
                 || pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
             match path_kind {
-                NodePathKind::Compiled => out_dir_relative()
-                    .join(DBT_COMPILED_DIR_NAME)
-                    .join(&self.common().path)
-                    .into(),
-                NodePathKind::Executable => out_dir_relative()
-                    .join(DBT_RUN_DIR_NAME)
-                    .join(format!("{}.sql", self.common().name))
-                    .into(),
+                NodePathKind::Compiled => {
+                    let common = self.common();
+                    out_dir_relative()
+                        .join(get_target_write_path(
+                            DBT_COMPILED_DIR_NAME,
+                            &common.package_name,
+                            &common.path,
+                            &common.original_file_path,
+                        ))
+                        .into()
+                }
+                NodePathKind::Executable => {
+                    let common = self.common();
+                    let rel = get_target_write_path(
+                        DBT_RUN_DIR_NAME,
+                        &common.package_name,
+                        &common.path,
+                        &common.original_file_path,
+                    )
+                    .with_file_name(format!("{}.sql", self.base().alias));
+                    out_dir_relative().join(rel).into()
+                }
                 NodePathKind::Definition => unreachable!(),
             }
         } else {

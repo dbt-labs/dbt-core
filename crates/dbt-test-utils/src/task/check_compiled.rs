@@ -1,7 +1,9 @@
+use std::path::Component;
+
 use crate::task::{ProjectEnv, Task, TestEnv, TestResult, utils::iter_files_recursively};
 use async_trait::async_trait;
 use dbt_common::{
-    constants::{DBT_COMPILED_DIR_NAME, DBT_MODELS_DIR_NAME, DBT_TARGET_DIR_NAME},
+    constants::{DBT_COMPILED_DIR_NAME, DBT_TARGET_DIR_NAME},
     stdfs,
 };
 use dbt_test_primitives::is_update_golden_files_mode;
@@ -16,15 +18,14 @@ impl Task for CheckCompiledFiles {
                 .temp_dir
                 .join(DBT_TARGET_DIR_NAME)
                 .join(DBT_COMPILED_DIR_NAME)
-                .join(DBT_MODELS_DIR_NAME)
                 .as_path(),
             &|abs_path| {
-                if abs_path
-                    .as_os_str()
-                    .to_str()
-                    .unwrap_or_default()
-                    .ends_with(".sql")
-                {
+                let path_str = abs_path.as_os_str().to_str().unwrap_or_default();
+                let has_hooks = abs_path
+                    .components()
+                    .any(|c| c == Component::Normal("hooks".as_ref()));
+                // Exclude hooks — they were never checked before and have no golden files
+                if path_str.ends_with(".sql") && !has_hooks {
                     let actual = stdfs::read_to_string(abs_path)?;
                     let path =
                         stdfs::diff_paths(abs_path, test_env.temp_dir.join(DBT_TARGET_DIR_NAME))

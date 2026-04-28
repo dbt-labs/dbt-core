@@ -4,6 +4,51 @@ use std::{
     path::{Component, Display, Path, PathBuf},
 };
 
+/// Compute the relative path for a node inside `target/compiled` or `target/run`,
+/// matching dbt-core's `ParsedNode.get_target_write_path` behavior.
+///
+/// Returns `{subdirectory}/{package_name}/{path_segment}` where `path_segment` is:
+/// - `original_file_path` when its filename matches `path`'s filename (one-to-one, e.g. models)
+/// - `original_file_path/{path}` otherwise (many-to-one, e.g. generic tests from schema YAML)
+///
+/// Exception: if `original_file_path` contains `..` components, `path` is used directly instead.
+///
+/// The `..` case arises when `--target-path` points outside the project root (which dbt-core
+/// permits). Fusion's generic test nodes store `original_file_path` as the path to the generated
+/// SQL file; when that file lives in an out-of-project target directory, the path computed
+/// relative to the project root contains `..` segments. Embedding those segments into the
+/// compiled/run path produces nonsense, so we fall back to `path` (e.g. `generic_tests/foo.sql`)
+/// which is always relative to the project root and gives a clean result.
+///
+/// **Limitation**: the `..` check is a heuristic — it catches literal `..` components in the
+/// stored path but would not catch out-of-project paths expressed via symlinks or after
+/// canonicalization. This is sufficient for the cases we have today (test harness writes an
+/// absolute `--target-path` outside the project, producing a relative path with `..` components),
+/// but a fully robust check would require calling `std::fs::canonicalize` on both the project
+/// root and `original_file_path`, which involves I/O and is not worth the cost here.
+///
+/// dbt-core reference: `contracts/graph/nodes.py` `ParsedNode.get_target_write_path`
+pub fn get_target_write_path(
+    subdirectory: &str,
+    package_name: &str,
+    path: &Path,
+    original_file_path: &Path,
+) -> PathBuf {
+    let escapes_root = original_file_path
+        .components()
+        .any(|c| c == Component::ParentDir);
+    let path_segment = if escapes_root {
+        path.to_path_buf()
+    } else if path.file_name() == original_file_path.file_name() {
+        original_file_path.to_path_buf()
+    } else {
+        original_file_path.join(path)
+    };
+    PathBuf::from(subdirectory)
+        .join(package_name)
+        .join(path_segment)
+}
+
 use normalize_path::NormalizePath;
 
 /// Self-normalizing path. Wrapper around [PathBuf].
