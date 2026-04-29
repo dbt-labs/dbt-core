@@ -210,6 +210,7 @@ impl DbConfig {
                 "autocreate",
                 "db_groups",
                 "ra3_node",
+                "datasharing",
                 "connect_timeout",
                 "role",
                 "retries",
@@ -528,6 +529,8 @@ pub struct RedshiftDbConfig {
     pub db_groups: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ra3_node: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub datasharing: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub autocommit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1263,6 +1266,7 @@ pub struct RedshiftTargetEnv {
     pub autocreate: bool,
     pub db_groups: Option<Vec<String>>,
     pub ra3_node: Option<bool>,
+    pub datasharing: Option<bool>,
     pub connect_timeout: Option<i64>,
     pub role: Option<String>,
     pub retries: i64,
@@ -1574,6 +1578,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     autocreate: config.autocreate.unwrap_or(false),
                     db_groups: config.db_groups,
                     ra3_node: config.ra3_node,
+                    datasharing: config.datasharing,
                     connect_timeout: config.connect_timeout,
                     role: config.role,
                     retries: config.retries.unwrap_or(1),

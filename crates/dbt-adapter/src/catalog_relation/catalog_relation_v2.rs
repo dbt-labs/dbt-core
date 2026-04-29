@@ -1,4 +1,5 @@
 use super::*;
+use crate::try_parse_bool_str;
 use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
 use dbt_yaml as yml;
 
@@ -197,20 +198,8 @@ fn parse_model_bool(
     key: &str,
     adapter_type: AdapterType,
 ) -> AdapterResult<Option<bool>> {
-    CatalogRelation::get_model_config_value(model, key, adapter_type)
-        .map(|v| {
-            if v.eq_ignore_ascii_case("true") {
-                Ok(true)
-            } else if v.eq_ignore_ascii_case("false") {
-                Ok(false)
-            } else {
-                Err(AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    format!("Model field '{key}' must be true or false"),
-                ))
-            }
-        })
-        .transpose()
+    let raw = CatalogRelation::get_model_config_value(model, key, adapter_type);
+    try_parse_bool_str(raw.as_deref(), key)
 }
 
 fn parse_model_u32(

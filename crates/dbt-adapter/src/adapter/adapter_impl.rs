@@ -136,6 +136,13 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
     }
 }
 
+/// Read a boolean adapter config, tolerating the casing variants
+/// dbt-core users may write in `profiles.yml`. Missing keys default to
+/// `false`; unparseable values return a `Configuration` error.
+fn get_bool_config(engine: &dyn AdapterEngine, key: &str) -> AdapterResult<bool> {
+    crate::try_parse_bool_str(engine.config(key).as_deref(), key).map(|o| o.unwrap_or(false))
+}
+
 pub fn quote_ident(adapter_type: AdapterType, identifier: &str) -> String {
     let q = dbt_adapter_core::quote_char(adapter_type);
     format!("{q}{identifier}{q}")
@@ -1347,6 +1354,10 @@ impl AdapterImpl {
             }
             // Assume that all other adapters support transactions for now.
             (_, "transactions") => Ok(Some(true)),
+            (Redshift, "datasharing") => Ok(Some(get_bool_config(
+                self.engine().as_ref(),
+                "datasharing",
+            )?)),
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
@@ -2796,7 +2807,8 @@ impl AdapterImpl {
                 }
             }
             Impl(Redshift, engine) => {
-                let ra3_node = engine.config("ra3_node").unwrap_or(Cow::Borrowed("false"));
+                let ra3_node = get_bool_config(engine.as_ref(), "ra3_node")?;
+                let datasharing = get_bool_config(engine.as_ref(), "datasharing")?;
 
                 // We have no guarantees that `database` is unquoted, but we do know that `configured_database` will be unquoted.
                 // For the Redshift adapter, we can just trim the `"` character per `self.quote`.
@@ -2804,17 +2816,14 @@ impl AdapterImpl {
                 let configured_database = engine.config("database");
 
                 if let Some(configured_database) = configured_database {
-                    let ra3_node: bool = FromStr::from_str(&ra3_node).map_err(|_| {
-                        AdapterError::new(
-                            AdapterErrorKind::Configuration,
-                            r#"Failed to parse ra3_node, expected "true" or "false""#,
-                        )
-                    })?;
-                    if !database.eq_ignore_ascii_case(&configured_database) && !ra3_node {
+                    if !database.eq_ignore_ascii_case(&configured_database)
+                        && !ra3_node
+                        && !datasharing
+                    {
                         return Err(AdapterError::new(
                             AdapterErrorKind::UnexpectedDbReference,
                             format!(
-                                "Cross-db references allowed only in RA3.* node ({database} vs {configured_database})"
+                                "Cross-db references allowed only in RA3.* node or with datasharing enabled ({database} vs {configured_database})"
                             ),
                         ));
                     }
@@ -4569,7 +4578,6 @@ mod tests {
     use minijinja::{Environment, State, Value};
 
     fn engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
-        let backend = backend_of(adapter_type);
         let config = match adapter_type {
             Snowflake => Mapping::from_iter([
                 ("user".into(), "U".into()),
@@ -4600,7 +4608,11 @@ mod tests {
             Bigquery | Redshift => Mapping::new(),
             _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
         };
-        let auth = auth_for_backend(backend);
+        build_engine(adapter_type, config)
+    }
+
+    fn build_engine(adapter_type: AdapterType, config: Mapping) -> Arc<dyn AdapterEngine> {
+        let auth = auth_for_backend(backend_of(adapter_type));
         let resolved_quoting = match adapter_type {
             Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
             Bigquery => DEFAULT_RESOLVED_QUOTING,
@@ -4934,5 +4946,80 @@ mod tests {
         ])));
         // empty column → true
         assert!(try_to_int_col(&Float64Array::from(Vec::<f64>::new())));
+    }
+
+    #[test]
+    fn test_verify_database_redshift_cross_db_blocked_without_flags() {
+        let config = Mapping::from_iter([("database".into(), "mydb".into())]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        let result = adapter.verify_database("otherdb".to_string());
+        assert!(
+            result.is_err(),
+            "cross-db ref should be blocked without ra3_node or datasharing"
+        );
+    }
+
+    #[test]
+    fn test_verify_database_redshift_same_db_always_allowed() {
+        let config = Mapping::from_iter([("database".into(), "mydb".into())]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        assert!(adapter.verify_database("mydb".to_string()).is_ok());
+    }
+
+    #[test]
+    fn test_verify_database_redshift_cross_db_allowed_with_ra3_node() {
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("ra3_node".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        assert!(adapter.verify_database("otherdb".to_string()).is_ok());
+    }
+
+    #[test]
+    fn test_verify_database_redshift_cross_db_allowed_with_datasharing() {
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        assert!(adapter.verify_database("otherdb".to_string()).is_ok());
+    }
+
+    #[test]
+    fn test_verify_database_redshift_accepts_mixed_case_string_flags() {
+        // dbt-core accepts booleans as strings in any casing (e.g. "True" from YAML).
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), "True".into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        assert!(adapter.verify_database("otherdb".to_string()).is_ok());
+    }
+
+    #[test]
+    fn test_has_feature_datasharing_false_by_default() {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let result = adapter
+            .has_feature(&state, "datasharing", CancellationToken::never_cancels())
+            .unwrap();
+        assert_eq!(result, Some(false));
+    }
+
+    #[test]
+    fn test_has_feature_datasharing_true_when_set() {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        let result = adapter
+            .has_feature(&state, "datasharing", CancellationToken::never_cancels())
+            .unwrap();
+        assert_eq!(result, Some(true));
     }
 }

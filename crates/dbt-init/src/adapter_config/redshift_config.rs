@@ -28,6 +28,12 @@ impl InteractiveSetup for RedshiftDbConfig {
             ConfigField::input("region", "Region (e.g., us-east-1)")
                 .when_field_equals("auth_method", FieldValue::Integer(1)),
             ConfigField::confirm("ra3_node", "Use RA3 node type?", false).optional(),
+            ConfigField::confirm(
+                "datasharing",
+                "Enable datasharing for cross-database operations?",
+                false,
+            )
+            .optional(),
         ]
     }
 
@@ -91,6 +97,11 @@ impl InteractiveSetup for RedshiftDbConfig {
                     self.ra3_node = Some(b);
                 }
             }
+            "datasharing" => {
+                if let FieldValue::Boolean(b) = value {
+                    self.datasharing = Some(b);
+                }
+            }
             "auth_method" => {
                 if let FieldValue::Integer(auth_method) = value {
                     match auth_method {
@@ -132,6 +143,7 @@ impl InteractiveSetup for RedshiftDbConfig {
                 .map(|s| FieldValue::String(s.clone())),
             "region" => self.region.as_ref().map(|s| FieldValue::String(s.clone())),
             "ra3_node" => self.ra3_node.map(FieldValue::Boolean),
+            "datasharing" => self.datasharing.map(FieldValue::Boolean),
             "auth_method" => {
                 if self.password.is_some() {
                     Some(FieldValue::Integer(0))
@@ -157,6 +169,7 @@ impl InteractiveSetup for RedshiftDbConfig {
             "cluster_id" => self.cluster_id.is_some(),
             "region" => self.region.is_some(),
             "ra3_node" => self.ra3_node.is_some(),
+            "datasharing" => self.datasharing.is_some(),
             _ => false,
         }
     }
@@ -175,6 +188,7 @@ pub fn setup_redshift_profile(
         autocreate: None,
         db_groups: None,
         ra3_node: None,
+        datasharing: None,
         autocommit: None,
         retries: None,
         method: None,
