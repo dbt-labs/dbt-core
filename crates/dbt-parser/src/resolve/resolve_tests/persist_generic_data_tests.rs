@@ -1036,13 +1036,30 @@ fn generate_test_macro(
         _ => dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default()),
     };
 
+    // Compute the config block emit ahead of the macro call so we can place it
+    // *after* the macro call below (matching dbt-Core). dbt's `config()` is
+    // resolution-order sensitive — multiple calls merge with last-call-wins —
+    // so when a custom test macro internally calls `{{ config(severity=...) }}`
+    // and the user also supplies an embedded `config:` block, Core's order
+    // (macro call then embedded config) lets the embedded block win. Fusion
+    // previously emitted the embedded block first, which inverted precedence.
+    //
+    // We use `format_value_for_jinja` (not `serde_json::to_string`) so string
+    // values that are references to a generated `{% set %}` variable — created
+    // by `process_kwarg` when an embedded config value contained `{{ ... }}` —
+    // are emitted unquoted and Jinja resolves them at render time. Raw JSON
+    // serialization would quote those names into literal strings (e.g.
+    // `"dbt_custom_arg_config_severity"`), and a strict downstream config
+    // deserializer (e.g. the `severity` enum) would reject them as
+    // `unknown variant` (production conformance bucket dbt1501).
     let (non_empty, cfg_json) = merge_yaml_values(passed_in_cfg, embedded_cfg);
-    if non_empty {
-        // we write the config out as a JSON in {{ config(...) }}
-        let config_str = serde_json::to_string(&cfg_json)
+    let config_emit = if non_empty {
+        let cfg_serde: Value = serde_json::to_value(&cfg_json)
             .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
-        sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
-    }
+        Some(format_value_for_jinja(&cfg_serde, jinja_set_vars))
+    } else {
+        None
+    };
 
     // Build test macro call with namespace
     // dbt allows referencing a macro of test_<name> using just <name> in data_tests
@@ -1111,7 +1128,7 @@ fn generate_test_macro(
     }
 
     // Format all kwargs, handling ref calls specially
-    // Exclude an embedded 'config' kwarg as it is emitted via config(...) above
+    // Exclude an embedded 'config' kwarg as it is emitted via config(...) below
     // Exclude reserved 'name' kwarg (used to name the test node, not passed to the macro).
     let formatted_args: Vec<String> = kwargs
         .iter()
@@ -1126,6 +1143,9 @@ fn generate_test_macro(
         qualified_name,
         formatted_args.join(", ")
     ));
+    if let Some(config_str) = config_emit {
+        sql.push_str(&format!("{{{{ config({config_str}) }}}}"));
+    }
     Ok(sql)
 }
 
