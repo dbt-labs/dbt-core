@@ -3,6 +3,7 @@
 use arrow_array::RecordBatch;
 use dbt_metricflow::{Dialect, InMemoryMetricStore, compile, parse_query_spec};
 use serde_json::json;
+use std::collections::HashMap;
 
 #[allow(clippy::too_many_arguments)]
 pub fn sm(
@@ -2915,4 +2916,647 @@ pub fn extract_scalar(batches: &[RecordBatch]) -> Option<f64> {
     } else {
         None
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ported test infrastructure — shared between snowflake_compat and others
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Rewrite all relation_names in a manifest to use a specific database/schema.
+pub fn rewrite_manifest_relations(manifest: &mut serde_json::Value, database: &str, schema: &str) {
+    if let Some(models) = manifest
+        .get_mut("semantic_models")
+        .and_then(|v| v.as_array_mut())
+    {
+        for model in models {
+            if let Some(nr) = model.get_mut("node_relation") {
+                let alias = nr
+                    .get("alias")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_uppercase();
+                nr["alias"] = json!(alias);
+                nr["database"] = json!(database);
+                nr["schema_name"] = json!(schema);
+                nr["relation_name"] = json!(format!("\"{database}\".\"{schema}\".\"{alias}\""));
+            }
+        }
+    }
+    if let Some(pc) = manifest.get_mut("project_configuration") {
+        if let Some(spines) = pc.get_mut("time_spines").and_then(|v| v.as_array_mut()) {
+            for spine in spines {
+                if let Some(nr) = spine.get_mut("node_relation") {
+                    let alias = nr
+                        .get("alias")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("mf_time_spine")
+                        .to_uppercase();
+                    nr["alias"] = json!(alias);
+                    nr["database"] = json!(database);
+                    nr["schema_name"] = json!(schema);
+                    nr["relation_name"] = json!(format!("\"{database}\".\"{schema}\".\"{alias}\""));
+                }
+            }
+        }
+    }
+}
+
+/// Transform DuckDB-flavored SQL DDL to Snowflake by schema-qualifying table names.
+pub fn schema_qualify_sql(sql: &str, schema: &str) -> Vec<String> {
+    let mut stmts = Vec::new();
+    for raw_stmt in sql.split(';') {
+        // Strip leading comment lines before checking if the statement is empty.
+        let stripped: String = raw_stmt
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let stmt = stripped.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        let qualified = stmt
+            .replace("CREATE TABLE ", &format!("CREATE TABLE {schema}."))
+            .replace("INSERT INTO ", &format!("INSERT INTO {schema}."));
+        stmts.push(qualified);
+    }
+    stmts
+}
+
+/// Generate Snowflake DDL for all ported test data tables.
+pub fn snowflake_ported_data_ddl(schema: &str) -> Vec<String> {
+    let sql_files: &[&str] = &[
+        include_str!("../data/tables_simple_model_extra.sql"),
+        include_str!("../data/tables_time_spine.sql"),
+        include_str!("../data/tables_extended_date_model.sql"),
+        include_str!("../data/tables_multi_hop_model.sql"),
+        include_str!("../data/tables_scd_model.sql"),
+    ];
+    let mut stmts = Vec::new();
+    for file_sql in sql_files {
+        stmts.extend(schema_qualify_sql(file_sql, schema));
+    }
+    // fct_bookings_dt: copy of fct_bookings with dt instead of ds
+    stmts.push(format!(
+        "CREATE TABLE {schema}.fct_bookings_dt AS \
+         SELECT ds AS dt, listing_id, guest_id, host_id, is_instant, booking_value, referrer_id \
+         FROM {schema}.fct_bookings"
+    ));
+    stmts
+}
+
+/// Ported test case loaded from JSON.
+#[derive(serde::Deserialize)]
+pub struct PortedTestCase {
+    pub name: String,
+    #[allow(dead_code)]
+    pub file: String,
+    pub model: String,
+    pub spec: PortedSpec,
+    pub check_query: String,
+    pub check_order: bool,
+    #[allow(dead_code)]
+    pub allow_empty: bool,
+    pub skip_reason: Option<String>,
+    pub min_max_only: bool,
+}
+
+#[derive(serde::Deserialize)]
+pub struct PortedSpec {
+    #[serde(default)]
+    pub metrics: Vec<String>,
+    #[serde(default)]
+    pub group_by: Vec<String>,
+    #[serde(default, rename = "where")]
+    pub where_filters: Vec<String>,
+    #[serde(default)]
+    pub order_by: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<u64>,
+    #[serde(default)]
+    pub time_constraint: Option<Vec<String>>,
+    #[serde(default = "default_true")]
+    pub apply_group_by: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl PortedSpec {
+    pub fn to_json(&self) -> String {
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "metrics".into(),
+            serde_json::to_value(&self.metrics).unwrap(),
+        );
+        if !self.group_by.is_empty() {
+            obj.insert(
+                "group_by".into(),
+                serde_json::to_value(&self.group_by).unwrap(),
+            );
+        }
+        if !self.where_filters.is_empty() {
+            obj.insert(
+                "where".into(),
+                serde_json::to_value(&self.where_filters).unwrap(),
+            );
+        }
+        if !self.order_by.is_empty() {
+            obj.insert(
+                "order_by".into(),
+                serde_json::to_value(&self.order_by).unwrap(),
+            );
+        }
+        if let Some(limit) = self.limit {
+            obj.insert("limit".into(), serde_json::Value::Number(limit.into()));
+        }
+        if let Some(ref tc) = self.time_constraint {
+            obj.insert("time_constraint".into(), serde_json::to_value(tc).unwrap());
+        }
+        if !self.apply_group_by {
+            obj.insert("apply_group_by".into(), serde_json::Value::Bool(false));
+        }
+        serde_json::to_string(&obj).unwrap()
+    }
+}
+
+pub fn load_ported_test_cases() -> Vec<PortedTestCase> {
+    serde_json::from_str(include_str!("../data/ported_test_cases.json"))
+        .expect("failed to parse ported_test_cases.json")
+}
+
+/// Map of model_name -> InMemoryMetricStore for ported tests.
+pub type PortedStores = HashMap<String, InMemoryMetricStore>;
+
+/// Run the ported test scorecard against a given dialect.
+///
+/// `execute` is called with (test_name, compiled_sql) and should return
+/// the result batches, or None to skip.
+#[allow(clippy::type_complexity)]
+pub fn run_ported_scorecard(
+    stores: &mut PortedStores,
+    dialect: Dialect,
+    dialect_name: &str,
+    execute: &mut dyn FnMut(&str, &str) -> Result<Option<Vec<RecordBatch>>, String>,
+) {
+    let test_cases = load_ported_test_cases();
+
+    let mut pass = 0u32;
+    let mut fail = 0u32;
+    let mut skip = 0u32;
+    let mut results: Vec<(String, bool, String)> = Vec::new();
+
+    for tc in &test_cases {
+        let store = match stores.get_mut(tc.model.as_str()) {
+            Some(s) => s,
+            None => {
+                skip += 1;
+                continue;
+            }
+        };
+
+        if let Some(ref reason) = tc.skip_reason {
+            if !reason.is_empty() {
+                skip += 1;
+                continue;
+            }
+        }
+
+        let spec_json = tc.spec.to_json();
+        let spec = match parse_query_spec(&spec_json) {
+            Ok(s) => s,
+            Err(e) => {
+                fail += 1;
+                results.push((tc.name.clone(), false, format!("parse error: {e}")));
+                continue;
+            }
+        };
+        let sql = match compile(store, &spec, dialect) {
+            Ok(s) => s,
+            Err(e) => {
+                fail += 1;
+                results.push((tc.name.clone(), false, format!("compile error: {e}")));
+                continue;
+            }
+        };
+
+        match execute(&tc.name, &sql) {
+            Ok(Some(batches)) => {
+                let rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+                pass += 1;
+                results.push((tc.name.clone(), true, format!("{rows} rows")));
+            }
+            Ok(None) => {
+                skip += 1;
+            }
+            Err(msg) => {
+                fail += 1;
+                results.push((tc.name.clone(), false, msg));
+            }
+        }
+    }
+
+    let bar = "=".repeat(70);
+    eprintln!("\n{bar}");
+    eprintln!("{dialect_name} Ported Tests Scorecard");
+    eprintln!("{bar}");
+    for (name, ok, detail) in &results {
+        let icon = if *ok { "PASS" } else { "FAIL" };
+        eprintln!("  [{icon}] {name}: {detail}");
+    }
+    eprintln!("{bar}");
+    let total = pass + fail;
+    eprintln!(
+        "  Total: {total}  Pass: {pass}  Fail: {fail}  Skip: {skip}  ({:.0}%)",
+        if total > 0 {
+            (pass as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        }
+    );
+    eprintln!("{bar}\n");
+
+    assert_eq!(
+        fail, 0,
+        "{fail} of {total} {dialect_name} ported tests failed"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Result comparison utilities (shared between DuckDB and Snowflake tests)
+// ═══════════════════════════════════════════════════════════════════════════
+
+pub fn extract_named_rows(batches: &[RecordBatch]) -> (Vec<String>, Vec<Vec<String>>) {
+    use arrow_array::{
+        Array, BooleanArray, Date32Array, Float64Array, Int32Array, Int64Array, StringArray,
+        TimestampMicrosecondArray, TimestampMillisecondArray, TimestampNanosecondArray,
+        TimestampSecondArray,
+    };
+
+    let col_names: Vec<String> = batches
+        .first()
+        .map(|b| {
+            b.schema()
+                .fields()
+                .iter()
+                .map(|f| f.name().to_lowercase())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut rows = Vec::new();
+    for batch in batches {
+        for row_idx in 0..batch.num_rows() {
+            let mut row = Vec::new();
+            for col_idx in 0..batch.num_columns() {
+                let col = batch.column(col_idx);
+                let val = if col.is_null(row_idx) {
+                    "NULL".to_string()
+                } else if let Some(a) = col.as_any().downcast_ref::<Float64Array>() {
+                    format!("{:.6}", a.value(row_idx))
+                } else if let Some(a) = col.as_any().downcast_ref::<Int64Array>() {
+                    a.value(row_idx).to_string()
+                } else if let Some(a) = col.as_any().downcast_ref::<Int32Array>() {
+                    a.value(row_idx).to_string()
+                } else if let Some(a) = col.as_any().downcast_ref::<StringArray>() {
+                    a.value(row_idx).to_string()
+                } else if let Some(a) = col.as_any().downcast_ref::<BooleanArray>() {
+                    a.value(row_idx).to_string()
+                } else if let Some(a) = col.as_any().downcast_ref::<Date32Array>() {
+                    format!("{}", a.value_as_date(row_idx).unwrap())
+                } else if let Some(a) = col.as_any().downcast_ref::<TimestampMicrosecondArray>() {
+                    format!("{}", a.value_as_datetime(row_idx).unwrap())
+                } else if let Some(a) = col.as_any().downcast_ref::<TimestampMillisecondArray>() {
+                    format!("{}", a.value_as_datetime(row_idx).unwrap())
+                } else if let Some(a) = col.as_any().downcast_ref::<TimestampSecondArray>() {
+                    format!("{}", a.value_as_datetime(row_idx).unwrap())
+                } else if let Some(a) = col.as_any().downcast_ref::<TimestampNanosecondArray>() {
+                    format!("{}", a.value_as_datetime(row_idx).unwrap())
+                } else if let Some(a) = col.as_any().downcast_ref::<arrow_array::Decimal128Array>()
+                {
+                    let scale = a.scale() as f64;
+                    format!("{:.6}", a.value(row_idx) as f64 / 10f64.powf(scale))
+                } else {
+                    format!("{:?}", col.as_ref())
+                };
+                row.push(val);
+            }
+            rows.push(row);
+        }
+    }
+    (col_names, rows)
+}
+
+pub fn compare_results(
+    our_batches: &[RecordBatch],
+    ref_batches: &[RecordBatch],
+    check_order: bool,
+) -> Result<(), String> {
+    let our_rows: usize = our_batches.iter().map(|b| b.num_rows()).sum();
+    let ref_rows: usize = ref_batches.iter().map(|b| b.num_rows()).sum();
+
+    if our_rows != ref_rows {
+        return Err(format!("row count: ours={our_rows}, ref={ref_rows}"));
+    }
+    if our_rows == 0 {
+        return Ok(());
+    }
+
+    let (our_names, our_data) = extract_named_rows(our_batches);
+    let (ref_names, ref_data) = extract_named_rows(ref_batches);
+
+    let col_mapping: Vec<Option<usize>> = ref_names
+        .iter()
+        .map(|ref_name| {
+            if let Some(idx) = our_names.iter().position(|n| n == ref_name) {
+                return Some(idx);
+            }
+            for (idx, our_name) in our_names.iter().enumerate() {
+                if our_name.starts_with(ref_name) || ref_name.starts_with(our_name) {
+                    return Some(idx);
+                }
+                if ref_name.contains(our_name) || our_name.contains(ref_name) {
+                    return Some(idx);
+                }
+                let time_grans = [
+                    "day",
+                    "week",
+                    "month",
+                    "quarter",
+                    "year",
+                    "hour",
+                    "minute",
+                    "second",
+                    "millisecond",
+                ];
+                if let Some(pos) = ref_name.rfind("__") {
+                    let ref_base = &ref_name[..pos];
+                    let ref_suffix = &ref_name[pos + 2..];
+                    if time_grans.contains(&ref_suffix) && ref_base == our_name.as_str() {
+                        return Some(idx);
+                    }
+                }
+                if let Some(pos) = our_name.rfind("__") {
+                    let our_base = &our_name[..pos];
+                    let our_suffix = &our_name[pos + 2..];
+                    if time_grans.contains(&our_suffix) && our_base == ref_name {
+                        return Some(idx);
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    let mapped_count = col_mapping.iter().filter(|m| m.is_some()).count();
+    let use_name_mapping = mapped_count > 0 && mapped_count >= ref_names.len() / 2;
+
+    let mut our_projected: Vec<Vec<String>>;
+    let ref_projected: Vec<Vec<String>>;
+
+    if use_name_mapping {
+        our_projected = our_data
+            .iter()
+            .map(|row| {
+                col_mapping
+                    .iter()
+                    .map(|mapping| match mapping {
+                        Some(idx) => row.get(*idx).cloned().unwrap_or_else(|| "??".into()),
+                        None => "??UNMAPPED".into(),
+                    })
+                    .collect()
+            })
+            .collect();
+        ref_projected = ref_data;
+    } else {
+        our_projected = our_data;
+        ref_projected = ref_data;
+    }
+
+    let mut ref_sorted = ref_projected;
+    if !check_order {
+        our_projected.sort();
+        ref_sorted.sort();
+    }
+
+    for (i, (our_row, ref_row)) in our_projected.iter().zip(ref_sorted.iter()).enumerate() {
+        let cols_to_check = ref_row.len().min(our_row.len());
+        for j in 0..cols_to_check {
+            let ours = &our_row[j];
+            let theirs = &ref_row[j];
+            if ours == "??UNMAPPED" {
+                continue;
+            }
+            if ours == theirs {
+                continue;
+            }
+            // Normalize date/timestamp: "2019-12-01" == "2019-12-01 00:00:00"
+            let ours_norm = ours.strip_suffix(" 00:00:00").unwrap_or(ours);
+            let theirs_norm = theirs.strip_suffix(" 00:00:00").unwrap_or(theirs);
+            if ours_norm == theirs_norm {
+                continue;
+            }
+            if let (Ok(a), Ok(b)) = (ours.parse::<f64>(), theirs.parse::<f64>()) {
+                if (a - b).abs() < 0.01 || (a - b).abs() / (b.abs().max(1.0)) < 0.001 {
+                    continue;
+                }
+            }
+            let ref_col_name = ref_names.get(j).map(|s| s.as_str()).unwrap_or("?");
+            return Err(format!(
+                "row {i}, col {ref_col_name}: ours={ours}, ref={theirs}"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Rewrite a DuckDB-flavored check_query for Snowflake execution.
+pub fn rewrite_check_query_for_snowflake(
+    check_query: &str,
+    database: &str,
+    schema: &str,
+) -> String {
+    // Step 1: replace `main.table_name` with `DATABASE.SCHEMA.TABLE_NAME`.
+    let input = check_query;
+    let mut out = String::with_capacity(input.len() * 2);
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 5 <= bytes.len() && &input[i..i + 5] == "main." {
+            let at_boundary =
+                i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
+            if at_boundary {
+                let start = i + 5;
+                let mut end = start;
+                while end < bytes.len()
+                    && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_')
+                {
+                    end += 1;
+                }
+                if end > start {
+                    let table = input[start..end].to_uppercase();
+                    out.push_str(&format!("{database}.{schema}.{table}"));
+                    i = end;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+
+    // Step 2: DuckDB→Snowflake syntax adaptations.
+    let mut result = out;
+    result = result.replace("GEN_RANDOM_UUID()", "UUID_STRING()");
+    result = result.replace("EXTRACT(isodow FROM", "EXTRACT(DAYOFWEEKISO FROM");
+    result = result.replace("EXTRACT(doy FROM", "EXTRACT(DAYOFYEAR FROM");
+
+    // DuckDB: `APPROX_QUANTILE(expr, p)` → Snowflake: `APPROX_PERCENTILE(expr, p)`
+    result = result.replace("APPROX_QUANTILE(", "APPROX_PERCENTILE(");
+
+    // DuckDB: `expr + INTERVAL ((dynamic_expr)) gran` → Snowflake: `DATEADD('GRAN', dynamic_expr, expr)`
+    result = rewrite_dynamic_intervals(&result);
+
+    // DuckDB: `INTERVAL N gran` → Snowflake: `INTERVAL 'N GRAN'`
+    result = rewrite_duckdb_intervals(&result);
+    result
+}
+
+fn rewrite_dynamic_intervals(sql: &str) -> String {
+    let grans = [
+        "day", "days", "month", "months", "year", "years", "hour", "hours",
+    ];
+    let mut result = sql.to_string();
+    // Match: `<ident> + INTERVAL ((<expr>)) <gran>`
+    // Replace with: `DATEADD('<GRAN>', <expr>, <ident>)`
+    for gran in grans {
+        loop {
+            let pattern = "+ INTERVAL ((";
+            if let Some(plus_pos) = result.find(pattern) {
+                // Find the base expression before `+`: scan backwards for the identifier.
+                let before = &result[..plus_pos].trim_end();
+                // Find the start of the last identifier/expression token.
+                let base_start = before
+                    .rfind(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.')
+                    .map(|p| p + 1)
+                    .unwrap_or(0);
+                let base = before[base_start..].to_string();
+
+                // Find the matching `))`
+                let inner_start = plus_pos + pattern.len();
+                if let Some(close_pos) = result[inner_start..].find("))") {
+                    let expr = result[inner_start..inner_start + close_pos].to_string();
+                    let after_close = &result[inner_start + close_pos + 2..].trim_start();
+                    // Check if next word is the granularity.
+                    let word_end = after_close
+                        .find(|c: char| !c.is_ascii_alphabetic())
+                        .unwrap_or(after_close.len());
+                    let word = &after_close[..word_end];
+                    if word.eq_ignore_ascii_case(gran) {
+                        let gran_upper = gran.to_uppercase();
+                        let total_end = result.len() - after_close.len()
+                            + word_end
+                            + (result[inner_start + close_pos + 2..].len() - after_close.len());
+                        let replacement = format!("DATEADD('{gran_upper}', {expr}, {base})");
+                        // Replace from base_start to total_end
+                        result = format!(
+                            "{}{}{}",
+                            &result[..base_start],
+                            replacement,
+                            &result[total_end..]
+                        );
+                        continue;
+                    }
+                }
+            }
+            break;
+        }
+    }
+    result
+}
+
+fn rewrite_duckdb_intervals(sql: &str) -> String {
+    let grans = [
+        "day", "days", "week", "weeks", "month", "months", "year", "years", "hour", "hours",
+        "minute", "minutes", "second", "seconds",
+    ];
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.char_indices().peekable();
+    while let Some((i, _)) = chars.peek() {
+        let rest = &sql[*i..];
+        if rest.len() >= 10 && rest[..9].eq_ignore_ascii_case("INTERVAL ") {
+            let after_kw = &rest[9..];
+            // Check if already quoted: INTERVAL '...'
+            if after_kw.starts_with('\'') {
+                out.push_str("INTERVAL ");
+                for _ in 0..9 {
+                    chars.next();
+                }
+                continue;
+            }
+            // Try to match: <digits><whitespace><granularity>
+            let num_end = after_kw
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(after_kw.len());
+            if num_end > 0 {
+                let num = &after_kw[..num_end];
+                let space_start = num_end;
+                let trimmed = after_kw[space_start..].trim_start();
+                let space_len = after_kw[space_start..].len() - trimmed.len();
+                if space_len > 0 {
+                    // Check if next word is a granularity.
+                    let word_end = trimmed
+                        .find(|c: char| !c.is_ascii_alphabetic())
+                        .unwrap_or(trimmed.len());
+                    let word = &trimmed[..word_end];
+                    if grans.iter().any(|g| g.eq_ignore_ascii_case(word)) {
+                        let total_consumed = 9 + num_end + space_len + word_end;
+                        out.push_str(&format!("INTERVAL '{} {}'", num, word.to_uppercase()));
+                        for _ in 0..total_consumed {
+                            chars.next();
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+        let (_, c) = chars.next().unwrap();
+        out.push(c);
+    }
+    out
+}
+
+/// Wrap compiled SQL with min/max projection for tests that only check
+/// extreme values of grouped dimensions.
+pub fn wrap_min_max_only(sql: &str, spec: &PortedSpec) -> String {
+    let col_names: Vec<String> = spec
+        .group_by
+        .iter()
+        .filter_map(|gb| {
+            let parsed = dbt_metricflow::parse_group_by_str(gb)?;
+            Some(match &parsed {
+                dbt_metricflow::GroupBySpec::Dimension { entity, name } => match entity {
+                    Some(e) => format!("{e}__{name}"),
+                    None => name.clone(),
+                },
+                dbt_metricflow::GroupBySpec::TimeDimension {
+                    name, granularity, ..
+                } => {
+                    format!("{name}__{granularity}")
+                }
+                dbt_metricflow::GroupBySpec::Entity { name } => name.clone(),
+            })
+        })
+        .collect();
+    let min_max_cols: Vec<String> = col_names
+        .iter()
+        .map(|c| format!("MIN({c}) AS {c}__min\n  , MAX({c}) AS {c}__max"))
+        .collect();
+    format!(
+        "SELECT\n  {}\nFROM (\n  {}\n) outer_subq",
+        min_max_cols.join("\n  , "),
+        sql.replace('\n', "\n  ")
+    )
 }

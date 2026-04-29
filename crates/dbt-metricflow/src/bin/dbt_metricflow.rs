@@ -138,6 +138,7 @@ fn run_compile(args: &[String]) {
         order_by,
         limit,
         time_constraint,
+        apply_group_by: true,
     };
 
     match compile(&mut store, &spec, dialect) {

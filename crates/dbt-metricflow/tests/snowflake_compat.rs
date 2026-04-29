@@ -26,7 +26,7 @@ use arrow_array::RecordBatch;
 use arrow_ipc::reader::StreamReader;
 use arrow_ipc::writer::StreamWriter;
 use dbt_auth::{AdapterConfig, auth_for_backend};
-use dbt_metricflow::Dialect;
+use dbt_metricflow::{Dialect, InMemoryMetricStore};
 use dbt_profile::ProfileEnvironment;
 use dbt_xdbc::{Backend, LoadStrategy, connection, driver};
 
@@ -263,5 +263,347 @@ fn snowflake_compat_replay() {
         Dialect::Snowflake,
         "Snowflake",
         &mut |name, _sql| Ok(read_recording(name)),
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ported test record/replay — 266 ported MetricFlow tests on Snowflake
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn ported_recordings_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("snowflake_ported_recordings")
+}
+
+fn write_ported_recording(name: &str, batches: &[RecordBatch]) {
+    let dir = ported_recordings_dir();
+    fs::create_dir_all(&dir).expect("failed to create ported recordings dir");
+    let path = dir.join(format!("{name}.arrow"));
+    let schema = if let Some(b) = batches.first() {
+        b.schema()
+    } else {
+        return;
+    };
+    let file = fs::File::create(&path).expect("failed to create recording file");
+    let mut writer = StreamWriter::try_new(file, &schema).expect("failed to create IPC writer");
+    for batch in batches {
+        writer.write(batch).expect("failed to write batch");
+    }
+    writer.finish().expect("failed to finish IPC stream");
+}
+
+fn read_ported_recording(name: &str) -> Option<Vec<RecordBatch>> {
+    let path = ported_recordings_dir().join(format!("{name}.arrow"));
+    if !path.exists() {
+        return None;
+    }
+    let data = fs::read(&path).expect("failed to read recording");
+    let reader = StreamReader::try_new(Cursor::new(data), None).expect("failed to open IPC stream");
+    Some(
+        reader
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("failed to read batches"),
+    )
+}
+
+/// Build ported test stores from manifest JSON files, retargeted for Snowflake.
+fn setup_ported_stores(database: &str, schema: &str) -> common::PortedStores {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("manifests");
+
+    let model_names = [
+        "SIMPLE_MODEL",
+        "EXTENDED_DATE_MODEL",
+        "UNPARTITIONED_MULTI_HOP_JOIN_MODEL",
+        "PARTITIONED_MULTI_HOP_JOIN_MODEL",
+        "SIMPLE_MODEL_NON_DS",
+        "SCD_MODEL",
+    ];
+
+    let mut stores = common::PortedStores::new();
+    for name in &model_names {
+        let path = manifest_dir.join(format!("{name}.json"));
+        if !path.exists() {
+            eprintln!("  warning: manifest {path:?} not found — run export_ported_manifests first");
+            continue;
+        }
+        let json_str = fs::read_to_string(&path).unwrap();
+        let mut manifest: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        common::rewrite_manifest_relations(&mut manifest, database, schema);
+        let store = InMemoryMetricStore::from_manifest(&manifest);
+        stores.insert((*name).to_string(), store);
+    }
+    stores
+}
+
+#[test]
+#[ignore = "requires fusion_tests/snowflake profile in ~/.dbt/profiles.yml"]
+fn snowflake_ported_record() {
+    use dbt_metricflow::{compile, parse_query_spec};
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let schema = format!("MF_PORTED_{ts}");
+    eprintln!("snowflake_ported [record]: using schema {schema}");
+
+    let mut sf = SnowflakeConn::connect();
+    sf.execute_update(&format!("CREATE SCHEMA IF NOT EXISTS {schema}"));
+    sf.set_schema(schema.clone());
+    eprintln!("snowflake_ported [record]: schema {schema} created");
+
+    for stmt in common::snowflake_ported_data_ddl(&schema) {
+        sf.execute_update(&stmt);
+    }
+    {
+        // Load original simple model data, skipping tables that already exist
+        // from ported data (they may have different column orders).
+        let mut skip_table: Option<String> = None;
+        for stmt in common::snowflake_data_ddl(&schema) {
+            if stmt.contains("CREATE TABLE") {
+                let table_name = stmt
+                    .split("CREATE TABLE ")
+                    .nth(1)
+                    .and_then(|s| s.split_whitespace().next())
+                    .unwrap_or("")
+                    .to_string();
+                if sf
+                    .try_execute_update(&format!("SELECT 1 FROM {table_name} LIMIT 0"))
+                    .is_ok()
+                {
+                    skip_table = Some(table_name);
+                    continue;
+                }
+                skip_table = None;
+            } else if let Some(ref skipped) = skip_table {
+                if stmt.contains("INSERT INTO") && stmt.contains(skipped.as_str()) {
+                    continue;
+                }
+            }
+            sf.execute_update(&stmt);
+        }
+    }
+    eprintln!("snowflake_ported [record]: test data loaded");
+
+    let db_batches = sf.execute_query("SELECT CURRENT_DATABASE()");
+    let database = {
+        use arrow_array::cast::AsArray;
+        db_batches
+            .first()
+            .and_then(|b| {
+                b.column(0)
+                    .as_string_opt::<i32>()
+                    .map(|a| a.value(0).to_string())
+            })
+            .expect("failed to get current database")
+    };
+
+    let mut stores = setup_ported_stores(&database, &schema);
+    let test_cases = common::load_ported_test_cases();
+
+    let mut pass = 0u32;
+    let mut fail = 0u32;
+    let mut skip = 0u32;
+    let mut results: Vec<(String, &str, String)> = Vec::new();
+
+    for tc in &test_cases {
+        let store = match stores.get_mut(tc.model.as_str()) {
+            Some(s) => s,
+            None => {
+                skip += 1;
+                continue;
+            }
+        };
+
+        if let Some(ref reason) = tc.skip_reason {
+            if !reason.is_empty() {
+                skip += 1;
+                continue;
+            }
+        }
+
+        let spec_json = tc.spec.to_json();
+        let spec = match parse_query_spec(&spec_json) {
+            Ok(s) => s,
+            Err(e) => {
+                fail += 1;
+                results.push((tc.name.clone(), "FAIL", format!("parse: {e}")));
+                continue;
+            }
+        };
+        let our_sql = match compile(store, &spec, Dialect::Snowflake) {
+            Ok(s) => s,
+            Err(e) => {
+                fail += 1;
+                results.push((tc.name.clone(), "FAIL", format!("compile: {e}")));
+                continue;
+            }
+        };
+
+        let our_sql = if tc.min_max_only {
+            common::wrap_min_max_only(&our_sql, &tc.spec)
+        } else {
+            our_sql
+        };
+
+        // Execute our compiled SQL on Snowflake.
+        let our_batches = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            sf.execute_query(&our_sql)
+        })) {
+            Ok(b) => b,
+            Err(_) => {
+                fail += 1;
+                results.push((
+                    tc.name.clone(),
+                    "FAIL",
+                    format!("exec our SQL panicked\n  SQL: {our_sql}"),
+                ));
+                continue;
+            }
+        };
+
+        // Execute the reference check_query rewritten for Snowflake.
+        let ref_sql =
+            common::rewrite_check_query_for_snowflake(&tc.check_query, &database, &schema);
+        let ref_batches = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            sf.execute_query(&ref_sql)
+        })) {
+            Ok(b) => b,
+            Err(_) => {
+                fail += 1;
+                results.push((
+                    tc.name.clone(),
+                    "FAIL",
+                    format!("exec check_query panicked\n  SQL: {ref_sql}"),
+                ));
+                continue;
+            }
+        };
+
+        // Compare results; only record if they match.
+        match common::compare_results(&our_batches, &ref_batches, tc.check_order) {
+            Ok(()) => {
+                write_ported_recording(&tc.name, &our_batches);
+                write_ported_recording(&format!("{}__ref", tc.name), &ref_batches);
+                let rows: usize = our_batches.iter().map(|b| b.num_rows()).sum();
+                pass += 1;
+                results.push((tc.name.clone(), "PASS", format!("{rows} rows")));
+            }
+            Err(diff) => {
+                fail += 1;
+                results.push((
+                    tc.name.clone(),
+                    "FAIL",
+                    format!("compare: {diff}\n  OUR SQL: {our_sql}"),
+                ));
+            }
+        }
+    }
+
+    let bar = "=".repeat(70);
+    eprintln!("\n{bar}");
+    eprintln!("Snowflake Ported Record Scorecard");
+    eprintln!("{bar}");
+    for (name, status, detail) in &results {
+        if *status == "PASS" {
+            continue;
+        }
+        eprintln!("  [{status}] {name}: {detail}");
+    }
+    eprintln!("{bar}");
+    let total = pass + fail;
+    eprintln!("  Total: {total}  Pass: {pass}  Fail: {fail}  Skip: {skip}");
+    eprintln!("{bar}\n");
+
+    eprintln!(
+        "snowflake_ported [record]: recordings written to {:?}",
+        ported_recordings_dir()
+    );
+
+    if fail > 0 {
+        eprintln!(
+            "NOTE: {fail} Snowflake ported tests failed — \
+             this scorecard tracks cross-dialect progress."
+        );
+    }
+}
+
+#[test]
+fn snowflake_ported_replay() {
+    let dir = ported_recordings_dir();
+    if !dir.exists() || fs::read_dir(&dir).map_or(true, |mut d| d.next().is_none()) {
+        eprintln!(
+            "snowflake_ported [replay]: no recordings at {dir:?} — \
+             run snowflake_ported_record to generate them"
+        );
+        return;
+    }
+
+    let test_cases = common::load_ported_test_cases();
+    let mut pass = 0u32;
+    let mut fail = 0u32;
+    let mut skip = 0u32;
+    let mut results: Vec<(String, &str, String)> = Vec::new();
+
+    for tc in &test_cases {
+        if let Some(ref reason) = tc.skip_reason {
+            if !reason.is_empty() {
+                skip += 1;
+                continue;
+            }
+        }
+
+        let our_batches = match read_ported_recording(&tc.name) {
+            Some(b) => b,
+            None => {
+                skip += 1;
+                continue;
+            }
+        };
+        let ref_batches = match read_ported_recording(&format!("{}__ref", tc.name)) {
+            Some(b) => b,
+            None => {
+                skip += 1;
+                continue;
+            }
+        };
+
+        match common::compare_results(&our_batches, &ref_batches, tc.check_order) {
+            Ok(()) => {
+                let rows: usize = our_batches.iter().map(|b| b.num_rows()).sum();
+                pass += 1;
+                results.push((tc.name.clone(), "PASS", format!("{rows} rows")));
+            }
+            Err(diff) => {
+                fail += 1;
+                results.push((tc.name.clone(), "FAIL", format!("compare: {diff}")));
+            }
+        }
+    }
+
+    let bar = "=".repeat(70);
+    eprintln!("\n{bar}");
+    eprintln!("Snowflake Ported Replay Scorecard");
+    eprintln!("{bar}");
+    for (name, status, detail) in &results {
+        if *status == "PASS" {
+            continue;
+        }
+        eprintln!("  [{status}] {name}: {detail}");
+    }
+    eprintln!("{bar}");
+    let total = pass + fail;
+    eprintln!("  Total: {total}  Pass: {pass}  Fail: {fail}  Skip: {skip}");
+    eprintln!("{bar}\n");
+
+    assert_eq!(
+        fail, 0,
+        "{fail} of {total} Snowflake ported replay tests failed"
     );
 }

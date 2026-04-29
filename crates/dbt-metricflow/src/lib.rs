@@ -30,15 +30,19 @@ pub struct RawMetricRow {
     pub description: String,
     pub type_params: String,
     pub metric_filter: String,
+    pub time_granularity: Option<String>,
 }
 
 /// Raw semantic model row.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RawModelRow {
     pub name: String,
     pub node_relation: String,
     pub primary_entity: String,
     pub unique_id: String,
+    /// SCD validity window columns (is_valid_from, is_valid_to).
+    pub scd_valid_from: Option<String>,
+    pub scd_valid_to: Option<String>,
 }
 
 /// Raw entity row.
@@ -50,12 +54,13 @@ pub struct RawEntityRow {
 }
 
 /// Raw dimension row.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RawDimensionRow {
     pub name: String,
     pub dimension_type: String,
     pub expr: String,
     pub time_granularity: String,
+    pub is_partition: bool,
 }
 
 /// Raw join graph entry.
@@ -73,6 +78,7 @@ pub struct RawTimeSpineRow {
     pub node_relation: String,
     pub primary_column: String,
     pub primary_granularity: String,
+    pub custom_granularities: Vec<(String, String)>,
 }
 
 /// Abstraction over the metadata store (dbt index, or any other source).
@@ -101,6 +107,9 @@ pub trait MetricStore {
         entity_name: &str,
     ) -> Result<bool, MetricFlowError>;
     fn lookup_time_spine(&mut self) -> Result<Option<RawTimeSpineRow>, MetricFlowError>;
+    fn lookup_all_time_spines(&mut self) -> Result<Vec<RawTimeSpineRow>, MetricFlowError> {
+        Ok(self.lookup_time_spine()?.into_iter().collect())
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -120,6 +129,7 @@ pub struct InMemoryMetricStore {
     pub entities: HashMap<String, Vec<RawEntityRow>>,
     pub dimensions: HashMap<String, Vec<RawDimensionRow>>,
     pub time_spine: Option<RawTimeSpineRow>,
+    pub time_spines: Vec<RawTimeSpineRow>,
 }
 
 impl InMemoryMetricStore {
@@ -144,6 +154,17 @@ impl InMemoryMetricStore {
                     .unwrap_or_default();
                 let unique_id = format!("semantic_model.test.{name}");
 
+                // Parse optional SCD validity_params.
+                let vp = m.get("validity_params");
+                let scd_valid_from = vp
+                    .and_then(|v| v.get("is_valid_from"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let scd_valid_to = vp
+                    .and_then(|v| v.get("is_valid_to"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
                 store.model_order.push(name.to_string());
                 store.models.insert(
                     name.to_string(),
@@ -152,6 +173,8 @@ impl InMemoryMetricStore {
                         node_relation: nr,
                         primary_entity: pe.to_string(),
                         unique_id: unique_id.clone(),
+                        scd_valid_from,
+                        scd_valid_to,
                     },
                 );
 
@@ -178,6 +201,17 @@ impl InMemoryMetricStore {
                         });
                     }
                 }
+                // Include primary_entity as a synthetic entity if not already
+                // in the explicit list — needed for dimension-only query
+                // resolution where entities drive model lookup.
+                if !pe.is_empty() && !ents.iter().any(|e| e.name == pe) {
+                    ents.push(RawEntityRow {
+                        name: pe.to_string(),
+                        entity_type: "primary".to_string(),
+                        expr: pe.to_string(),
+                    });
+                }
+
                 store.entities.insert(unique_id.clone(), ents);
 
                 // Dimensions
@@ -206,6 +240,10 @@ impl InMemoryMetricStore {
                                 .unwrap_or_default()
                                 .to_string(),
                             time_granularity: gran.to_string(),
+                            is_partition: d
+                                .get("is_partition")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
                         });
                     }
                 }
@@ -235,6 +273,10 @@ impl InMemoryMetricStore {
                             .map(|v| v.to_string())
                             .unwrap_or_default(),
                         metric_filter: m.get("filter").map(|v| v.to_string()).unwrap_or_default(),
+                        time_granularity: m
+                            .get("time_granularity")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
                     },
                 );
             }
@@ -245,7 +287,7 @@ impl InMemoryMetricStore {
                 .or_else(|| v.get("time_spine_table_configurations"))
                 .and_then(|v| v.as_array())
         }) {
-            if let Some(s) = spines.first() {
+            for s in spines {
                 let nr = s
                     .get("node_relation")
                     .map(|v| v.to_string())
@@ -260,11 +302,32 @@ impl InMemoryMetricStore {
                     .and_then(|v| v.get("time_granularity"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("day");
-                store.time_spine = Some(RawTimeSpineRow {
+                let custom_grans: Vec<(String, String)> = s
+                    .get("custom_granularities")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|cg| {
+                                let name = cg.get("name")?.as_str()?;
+                                let column = cg
+                                    .get("column_name")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(name);
+                                Some((name.to_string(), column.to_string()))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let row = RawTimeSpineRow {
                     node_relation: nr,
                     primary_column: col.to_string(),
                     primary_granularity: gran.to_string(),
-                });
+                    custom_granularities: custom_grans,
+                };
+                if store.time_spine.is_none() {
+                    store.time_spine = Some(row.clone());
+                }
+                store.time_spines.push(row);
             }
         }
 
@@ -366,6 +429,10 @@ impl MetricStore for InMemoryMetricStore {
     fn lookup_time_spine(&mut self) -> Result<Option<RawTimeSpineRow>, MetricFlowError> {
         Ok(self.time_spine.clone())
     }
+
+    fn lookup_all_time_spines(&mut self) -> Result<Vec<RawTimeSpineRow>, MetricFlowError> {
+        Ok(self.time_spines.clone())
+    }
 }
 
 /// SQL dialect for rendering.
@@ -405,6 +472,8 @@ pub struct SemanticQuerySpec {
     /// Optional time constraint: `[start_date, end_date]` applied as
     /// `WHERE metric_time >= start AND metric_time <= end`.
     pub time_constraint: Option<(String, String)>,
+    /// When false, skip GROUP BY (produce all rows without deduplication).
+    pub apply_group_by: bool,
 }
 
 /// A group-by specification — either a dimension or time dimension.
@@ -440,9 +509,15 @@ fn group_by_output_cols(group_by: &[GroupBySpec]) -> Vec<String> {
         .iter()
         .map(|gb| match gb {
             GroupBySpec::TimeDimension {
-                name, granularity, ..
+                name,
+                granularity,
+                date_part,
             } => {
-                if time_dim_counts.get(name.as_str()).copied().unwrap_or(1) > 1 {
+                if let Some(part) = date_part {
+                    format!("{name}__extract_{part}")
+                } else if time_dim_counts.get(name.as_str()).copied().unwrap_or(1) > 1
+                    || !is_standard_granularity(granularity)
+                {
                     format!("{name}__{granularity}")
                 } else {
                     name.clone()
@@ -500,6 +575,8 @@ pub struct ResolvedMetric {
     pub join_to_timespine: bool,
     /// Value to fill nulls with.
     pub fill_nulls_with: Option<i64>,
+    /// Metric-level time granularity (e.g., "month" for a monthly-grain metric).
+    pub time_granularity: Option<String>,
 }
 
 /// Aggregation parameters for a simple metric's measure.
@@ -510,13 +587,15 @@ pub struct AggParams {
     pub expr: String,
     pub agg_time_dimension: Option<String>,
     pub non_additive_dimension: Option<serde_json::Value>,
+    pub percentile: Option<f64>,
+    pub use_discrete_percentile: bool,
 }
 
 /// A reference to an input metric (used in derived/ratio metrics).
 #[derive(Debug, Clone)]
 pub struct MetricInput {
     pub name: String,
-    pub filter: Option<String>,
+    pub filters: Vec<String>,
     pub alias: Option<String>,
     pub offset_window: Option<String>,
     pub offset_to_grain: Option<String>,
@@ -553,6 +632,9 @@ pub struct ResolvedModel {
     pub primary_entity: Option<String>,
     pub entities: Vec<EntityDef>,
     pub dimensions: Vec<DimensionDef>,
+    /// SCD validity window columns, if this is a slowly changing dimension.
+    pub scd_valid_from: Option<String>,
+    pub scd_valid_to: Option<String>,
 }
 
 /// Entity definition within a semantic model.
@@ -564,12 +646,13 @@ pub struct EntityDef {
 }
 
 /// Dimension definition within a semantic model.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DimensionDef {
     pub name: String,
     pub dimension_type: String,
     pub expr: String,
     pub time_granularity: Option<String>,
+    pub is_partition: bool,
 }
 
 /// Time spine information.
@@ -578,6 +661,7 @@ pub struct TimeSpine {
     pub relation_name: String,
     pub primary_column: String,
     pub primary_granularity: String,
+    pub custom_granularities: Vec<(String, String)>,
 }
 
 /// A join between two semantic models via a shared entity.
@@ -589,6 +673,24 @@ struct JoinEdge {
     from_expr: String,
     to_expr: String,
     entity_name: String,
+}
+
+/// A pre-computed multi-hop subquery join.
+/// For entity chains like `account_id__customer_id__customer_name`, we need a
+/// subquery that chains the intermediate tables independently (each dimension
+/// from a different leaf model gets its own copy of the bridge).
+#[derive(Debug)]
+struct MultiHopSubquery {
+    /// Alias for the subquery (e.g., `__mh0`).
+    alias: String,
+    /// Full subquery SQL (without the alias).
+    subquery_sql: String,
+    /// The expression on the fact/primary side of the join (e.g., `a.account_id`).
+    fact_join_expr: String,
+    /// The column name in the subquery that joins to the fact table.
+    subquery_join_col: String,
+    /// Map from dimension name → column expression in the subquery.
+    dim_columns: HashMap<String, String>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -737,16 +839,7 @@ fn validate_where_dim_refs(
                         avail_time_dims.join(", ")
                     )));
                 }
-                if let Some(g_arg) = args.get(1) {
-                    let granularity = g_arg.trim().trim_matches('\'').trim_matches('"');
-                    if !granularity.is_empty() && !VALID_GRANULARITIES.contains(&granularity) {
-                        return Err(MetricFlowError::Other(format!(
-                            "unknown granularity in where filter: {granularity:?}\n\
-                             Valid granularities: {}",
-                            VALID_GRANULARITIES.join(", ")
-                        )));
-                    }
-                }
+                // Skip granularity validation — custom granularities are validated during compilation.
                 cursor = abs_start + end + 1;
             } else {
                 break;
@@ -820,17 +913,7 @@ fn validate_spec(
     // ── Validate group-by ──────────────────────────────────────────────
     for gb in &spec.group_by {
         match gb {
-            GroupBySpec::TimeDimension {
-                name, granularity, ..
-            } => {
-                // Check granularity.
-                if !VALID_GRANULARITIES.contains(&granularity.as_str()) {
-                    return Err(MetricFlowError::Other(format!(
-                        "unknown granularity: {granularity:?}\n\
-                         Valid granularities: {}",
-                        VALID_GRANULARITIES.join(", ")
-                    )));
-                }
+            GroupBySpec::TimeDimension { name, .. } => {
                 // Check time dimension name.
                 let base_name = name.split("__").last().unwrap_or(name);
                 let found = avail_time_dims
@@ -849,26 +932,31 @@ fn validate_spec(
                     Some(e) => format!("{e}__{name}"),
                     None => name.clone(),
                 };
+                // For multi-hop paths (e.g. account_id__customer_id), use the
+                // last entity in the chain for model lookup.
+                let target_entity = entity
+                    .as_ref()
+                    .map(|e| e.rsplit_once("__").map_or(e.as_str(), |(_, last)| last));
                 // Check that dimension exists in at least one resolved model.
                 let found = model_aliases.values().any(|(_alias, model)| {
-                    model.dimensions.iter().any(|d| {
-                        if d.dimension_type == "time" {
-                            return false; // time dims must use TimeDimension syntax
+                    let has_entity_match = match target_entity {
+                        Some(e) => {
+                            model.entities.iter().any(|ent| ent.name == e)
+                                || model.primary_entity.as_deref() == Some(e)
                         }
-                        if d.name == *name {
-                            // If entity is specified, verify the model has that entity
-                            // (check both explicit entities and primary_entity).
-                            match entity {
-                                Some(e) => {
-                                    model.entities.iter().any(|ent| ent.name == *e)
-                                        || model.primary_entity.as_deref() == Some(e.as_str())
-                                }
-                                None => true,
-                            }
-                        } else {
-                            false
-                        }
-                    })
+                        None => true,
+                    };
+                    if !has_entity_match {
+                        return false;
+                    }
+                    // Check dimensions.
+                    let in_dims = model
+                        .dimensions
+                        .iter()
+                        .any(|d| d.dimension_type != "time" && d.name == *name);
+                    // Also treat entities as selectable "dimensions" (dundered identifier).
+                    let in_entities = model.entities.iter().any(|e| e.name == *name);
+                    in_dims || in_entities
                 });
                 if !found {
                     return Err(MetricFlowError::Other(format!(
@@ -908,7 +996,10 @@ fn validate_spec(
             } => {
                 vec![name.clone(), format!("{name}__{granularity}")]
             }
-            GroupBySpec::Dimension { name, .. } => vec![name.clone()],
+            GroupBySpec::Dimension { entity, name } => match entity {
+                Some(e) => vec![format!("{e}__{name}"), name.clone()],
+                None => vec![name.clone()],
+            },
             GroupBySpec::Entity { name } => vec![name.clone()],
         })
         .collect();
@@ -966,11 +1057,8 @@ pub fn parse_query_spec(json_str: &str) -> Result<SemanticQuerySpec, MetricFlowE
         .filter_map(|m| m.as_str().map(String::from))
         .collect::<Vec<_>>();
 
-    if metrics.is_empty() {
-        return Err(MetricFlowError::Other(
-            "at least one metric is required".into(),
-        ));
-    }
+    // Dimension-only queries (no metrics) are allowed — they select only
+    // dimensions/entities from semantic models.
 
     let group_by = match v.get("group_by").and_then(|g| g.as_array()) {
         Some(arr) => {
@@ -1051,6 +1139,11 @@ pub fn parse_query_spec(json_str: &str) -> Result<SemanticQuerySpec, MetricFlowE
             Some((start, end))
         });
 
+    let apply_group_by = v
+        .get("apply_group_by")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
     Ok(SemanticQuerySpec {
         metrics,
         group_by,
@@ -1058,6 +1151,7 @@ pub fn parse_query_spec(json_str: &str) -> Result<SemanticQuerySpec, MetricFlowE
         order_by,
         limit,
         time_constraint,
+        apply_group_by,
     })
 }
 
@@ -1091,20 +1185,22 @@ pub fn parse_group_by_str(s: &str) -> Option<GroupBySpec> {
         });
     }
 
-    // Dimension('entity__name') or Dimension('name')
+    // Dimension('entity__name') or Dimension('entity1__entity2__name') or Dimension('name')
     if let Some(inner) = s
         .strip_prefix("Dimension(")
         .and_then(|s| s.strip_suffix(')'))
     {
         let dim_ref = inner.trim().trim_matches('\'').trim_matches('"');
-        if let Some((entity, name)) = dim_ref.split_once("__") {
-            if !is_valid_identifier(entity) || !is_valid_identifier(name) {
-                return None;
+        // Use rsplit_once to split off the last segment as the dimension name.
+        // For multi-hop: account_id__customer_id__customer_name →
+        //   entity = "account_id__customer_id", name = "customer_name"
+        if let Some((entity, name)) = dim_ref.rsplit_once("__") {
+            if entity.split("__").all(is_valid_identifier) && is_valid_identifier(name) {
+                return Some(GroupBySpec::Dimension {
+                    entity: Some(entity.to_string()),
+                    name: name.to_string(),
+                });
             }
-            return Some(GroupBySpec::Dimension {
-                entity: Some(entity.to_string()),
-                name: name.to_string(),
-            });
         }
         if !is_valid_identifier(dim_ref) {
             return None;
@@ -1225,6 +1321,7 @@ fn resolve_metric(
     let description = row.description;
     let type_params_json = row.type_params;
     let metric_filter_json = row.metric_filter;
+    let metric_time_granularity = row.time_granularity;
 
     let metric_type = match metric_type_str.as_str() {
         "simple" => MetricType::Simple,
@@ -1285,6 +1382,15 @@ fn resolve_metric(
                 .get("non_additive_dimension")
                 .filter(|v| !v.is_null())
                 .cloned(),
+            percentile: p
+                .get("agg_params")
+                .and_then(|ap| ap.get("percentile"))
+                .and_then(|v| v.as_f64()),
+            use_discrete_percentile: p
+                .get("agg_params")
+                .and_then(|ap| ap.get("use_discrete_percentile"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
         })
     });
 
@@ -1298,7 +1404,10 @@ fn resolve_metric(
             arr.iter()
                 .filter_map(|m| {
                     let name = m.get("name")?.as_str()?.to_string();
-                    let filter = m.get("filter").and_then(|f| f.as_str()).map(String::from);
+                    let filters = m
+                        .get("filter")
+                        .map(parse_input_metric_filters)
+                        .unwrap_or_default();
                     let alias = m.get("alias").and_then(|a| a.as_str()).map(String::from);
                     let offset_window = m.get("offset_window").and_then(|o| {
                         if let Some(s) = o.as_str() {
@@ -1315,7 +1424,7 @@ fn resolve_metric(
                         .map(String::from);
                     Some(MetricInput {
                         name,
-                        filter,
+                        filters,
                         alias,
                         offset_window,
                         offset_to_grain,
@@ -1338,7 +1447,10 @@ fn resolve_metric(
             if !input_metrics.iter().any(|im| im.name == name) {
                 input_metrics.push(MetricInput {
                     name: name.to_string(),
-                    filter: m.get("filter").and_then(|f| f.as_str()).map(String::from),
+                    filters: m
+                        .get("filter")
+                        .map(parse_input_metric_filters)
+                        .unwrap_or_default(),
                     alias: m.get("alias").and_then(|a| a.as_str()).map(String::from),
                     offset_window: None,
                     offset_to_grain: None,
@@ -1354,7 +1466,10 @@ fn resolve_metric(
         }
         Some(MetricInput {
             name: n.get("name")?.as_str()?.to_string(),
-            filter: n.get("filter").and_then(|f| f.as_str()).map(String::from),
+            filters: n
+                .get("filter")
+                .map(parse_input_metric_filters)
+                .unwrap_or_default(),
             alias: n.get("alias").and_then(|a| a.as_str()).map(String::from),
             offset_window: None,
             offset_to_grain: None,
@@ -1367,7 +1482,10 @@ fn resolve_metric(
         }
         Some(MetricInput {
             name: d.get("name")?.as_str()?.to_string(),
-            filter: d.get("filter").and_then(|f| f.as_str()).map(String::from),
+            filters: d
+                .get("filter")
+                .map(parse_input_metric_filters)
+                .unwrap_or_default(),
             alias: d.get("alias").and_then(|a| a.as_str()).map(String::from),
             offset_window: None,
             offset_to_grain: None,
@@ -1475,6 +1593,7 @@ fn resolve_metric(
         conversion_params,
         join_to_timespine,
         fill_nulls_with,
+        time_granularity: metric_time_granularity,
     })
 }
 
@@ -1504,6 +1623,24 @@ fn parse_metric_filters(filter_json: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn parse_input_metric_filters(v: &serde_json::Value) -> Vec<String> {
+    if v.is_null() {
+        return vec![];
+    }
+    v.get("where_filters")
+        .and_then(|wf| wf.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| {
+                    f.get("where_sql_template")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.trim().to_string())
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Resolve a semantic model by name from the store.
 fn resolve_model(
     store: &mut impl MetricStore,
@@ -1516,6 +1653,8 @@ fn resolve_model(
     let node_relation_json = row.node_relation;
     let primary_entity = row.primary_entity;
     let unique_id = row.unique_id;
+    let scd_valid_from = row.scd_valid_from;
+    let scd_valid_to = row.scd_valid_to;
 
     let nr: serde_json::Value =
         serde_json::from_str(&node_relation_json).unwrap_or(serde_json::Value::Null);
@@ -1584,6 +1723,7 @@ fn resolve_model(
                 } else {
                     Some(r.time_granularity)
                 },
+                is_partition: r.is_partition,
             }
         })
         .collect();
@@ -1597,6 +1737,8 @@ fn resolve_model(
         primary_entity,
         entities,
         dimensions,
+        scd_valid_from,
+        scd_valid_to,
     })
 }
 
@@ -1616,18 +1758,189 @@ fn find_model_for_entity_any(
     store.find_model_for_entity(entity_name, false)
 }
 
+/// Find a model that has `entity_name` as primary/unique AND contains `dim_name`
+/// (as either a dimension or an entity). Falls back to any primary/unique model.
+fn find_model_for_entity_and_dim(
+    store: &mut impl MetricStore,
+    entity_name: &str,
+    dim_name: &str,
+) -> Result<Option<String>, MetricFlowError> {
+    let join_rows = store.lookup_all_join_graph_entities()?;
+    let candidates: Vec<&str> = join_rows
+        .iter()
+        .filter(|r| {
+            r.entity_name == entity_name
+                && matches!(r.entity_type.as_str(), "primary" | "unique" | "natural")
+        })
+        .map(|r| r.model_name.as_str())
+        .collect();
+    for model_name in &candidates {
+        if let Some(model_row) = store.lookup_semantic_model(model_name)? {
+            let dims = store.lookup_model_dimensions(&model_row.unique_id)?;
+            if dims.iter().any(|d| d.name == dim_name) {
+                return Ok(Some((*model_name).to_string()));
+            }
+            let ents = store.lookup_model_entities(&model_row.unique_id)?;
+            if ents.iter().any(|e| e.name == dim_name) {
+                return Ok(Some((*model_name).to_string()));
+            }
+        }
+    }
+    if let Some(first) = candidates.first() {
+        return Ok(Some((*first).to_string()));
+    }
+    Ok(None)
+}
+
+/// Find the best "dimension/mapping" model for an entity — prefers models with
+/// no dimensions (pure bridge/mapping tables) over models with measures.
+/// `exclude` lists model names to skip (e.g., models backing metric subqueries).
+fn find_dimension_model_for_entity(
+    store: &mut impl MetricStore,
+    entity_name: &str,
+    exclude: &[&str],
+) -> Result<Option<String>, MetricFlowError> {
+    let join_rows = store.lookup_all_join_graph_entities()?;
+    let candidates: Vec<&str> = join_rows
+        .iter()
+        .filter(|r| {
+            r.entity_name == entity_name
+                && matches!(r.entity_type.as_str(), "primary" | "unique" | "natural")
+                && !exclude.contains(&r.model_name.as_str())
+        })
+        .map(|r| r.model_name.as_str())
+        .collect();
+    let mut best: Option<(String, usize)> = None;
+    for model_name in &candidates {
+        if let Some(model_row) = store.lookup_semantic_model(model_name)? {
+            let dims = store.lookup_model_dimensions(&model_row.unique_id)?;
+            let score = dims.len();
+            if best.as_ref().is_none_or(|(_, s)| score < *s) {
+                best = Some(((*model_name).to_string(), score));
+            }
+        }
+    }
+    Ok(best.map(|(name, _)| name))
+}
+
 /// Load time spine from the store, if any.
 fn load_time_spine(store: &mut impl MetricStore) -> Option<TimeSpine> {
     let row = store.lookup_time_spine().ok()??;
 
     let nr: serde_json::Value = serde_json::from_str(&row.node_relation).ok()?;
-    let relation_name = nr.get("relation_name")?.as_str()?.to_string();
+    let relation_name = nr
+        .get("relation_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            // Construct from schema + alias when relation_name is null.
+            let alias = nr.get("alias")?.as_str()?;
+            let schema = nr.get("schema_name").and_then(|v| v.as_str());
+            Some(if let Some(s) = schema {
+                format!("\"{s}\".\"{alias}\"")
+            } else {
+                format!("\"{alias}\"")
+            })
+        })?;
 
     Some(TimeSpine {
         relation_name,
         primary_column: row.primary_column,
         primary_granularity: row.primary_granularity,
+        custom_granularities: row.custom_granularities,
     })
+}
+
+fn parse_time_spine_row(row: &RawTimeSpineRow) -> Option<TimeSpine> {
+    let nr: serde_json::Value = serde_json::from_str(&row.node_relation).ok()?;
+    let relation_name = nr
+        .get("relation_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            let alias = nr.get("alias")?.as_str()?;
+            let schema = nr.get("schema_name").and_then(|v| v.as_str());
+            Some(if let Some(s) = schema {
+                format!("\"{s}\".\"{alias}\"")
+            } else {
+                format!("\"{alias}\"")
+            })
+        })?;
+    Some(TimeSpine {
+        relation_name,
+        primary_column: row.primary_column.clone(),
+        primary_granularity: row.primary_granularity.clone(),
+        custom_granularities: row.custom_granularities.clone(),
+    })
+}
+
+fn granularity_rank(gran: &str) -> u8 {
+    match gran {
+        "nanosecond" => 1,
+        "microsecond" => 2,
+        "millisecond" => 3,
+        "second" => 4,
+        "minute" => 5,
+        "hour" => 6,
+        "day" => 7,
+        "week" => 8,
+        "month" => 9,
+        "quarter" => 10,
+        "year" => 11,
+        _ => 7,
+    }
+}
+
+fn load_all_time_spines_from_store(store: &mut impl MetricStore) -> Vec<TimeSpine> {
+    store
+        .lookup_all_time_spines()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(parse_time_spine_row)
+        .collect()
+}
+
+fn is_standard_granularity(gran: &str) -> bool {
+    matches!(
+        gran,
+        "nanosecond"
+            | "microsecond"
+            | "millisecond"
+            | "second"
+            | "minute"
+            | "hour"
+            | "day"
+            | "week"
+            | "month"
+            | "quarter"
+            | "year"
+    )
+}
+
+fn find_custom_granularity_spine<'a>(
+    spines: &'a [TimeSpine],
+    gran_name: &str,
+) -> Option<(&'a TimeSpine, &'a str)> {
+    for spine in spines {
+        for (name, column) in &spine.custom_granularities {
+            if name == gran_name {
+                return Some((spine, column.as_str()));
+            }
+        }
+    }
+    None
+}
+
+fn pick_time_spine_for_granularity<'a>(
+    spines: &'a [TimeSpine],
+    query_gran: &str,
+) -> Option<&'a TimeSpine> {
+    let query_rank = granularity_rank(query_gran);
+    // Pick the spine whose primary_granularity is <= query_gran and closest to it.
+    spines
+        .iter()
+        .filter(|s| granularity_rank(&s.primary_granularity) <= query_rank)
+        .max_by_key(|s| granularity_rank(&s.primary_granularity))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1775,9 +2088,376 @@ fn find_join_path(edges: &[JoinEdge], from: &str, to: &str) -> Option<Vec<JoinEd
     None
 }
 
+/// Build multi-hop subquery joins for entity chains with >1 segment.
+///
+/// Returns a list of `MultiHopSubquery` structs, each representing a
+/// subquery that chains intermediate tables to a leaf model. The subquery
+/// is joined to the fact table independently, producing correct Cartesian
+/// product semantics when multiple dimensions come from different leaf
+/// models along the same entity chain.
+#[allow(clippy::cognitive_complexity)]
+fn plan_multi_hop_joins(
+    spec: &SemanticQuerySpec,
+    primary_model_name: &str,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    join_edges: &[JoinEdge],
+    dialect: Dialect,
+    metric_filters: &[String],
+) -> Vec<MultiHopSubquery> {
+    let mut result = Vec::new();
+    let mut counter = 0usize;
+
+    // Collect multi-hop (entity_chain, dim_name) pairs from group-by and filters.
+    let mut multi_hop_dims: Vec<(String, String)> = Vec::new();
+    // Also collect single-hop (entity, dim_name) pairs — these may be absorbed
+    // into a multi-hop subquery when the entity is an intermediate model.
+    let mut single_hop_dims: Vec<(String, String)> = Vec::new();
+
+    for gb in &spec.group_by {
+        if let GroupBySpec::Dimension {
+            entity: Some(entity_name),
+            name,
+        } = gb
+        {
+            if entity_name.contains("__") {
+                multi_hop_dims.push((entity_name.clone(), name.clone()));
+            } else {
+                single_hop_dims.push((entity_name.clone(), name.clone()));
+            }
+        }
+    }
+
+    // Also collect from filters.
+    for filter in metric_filters.iter().chain(spec.where_filters.iter()) {
+        let mut cursor = 0usize;
+        while let Some(pos) = filter[cursor..].find("Dimension(") {
+            let abs = cursor + pos;
+            let preceded_by_alpha = abs > 0 && filter.as_bytes()[abs - 1].is_ascii_alphabetic();
+            if preceded_by_alpha {
+                cursor = abs + 10;
+                continue;
+            }
+            let inner_start = abs + 10;
+            if let Some(paren_end) = filter[inner_start..].find(')') {
+                let dim_ref = filter[inner_start..inner_start + paren_end]
+                    .trim()
+                    .trim_matches('\'')
+                    .trim_matches('"');
+                if let Some((chain, dim_name)) = dim_ref.rsplit_once("__") {
+                    if chain.contains("__") {
+                        let entity_chain = chain.to_string();
+                        if !multi_hop_dims
+                            .iter()
+                            .any(|(e, d)| *e == entity_chain && *d == dim_name)
+                        {
+                            multi_hop_dims.push((entity_chain, dim_name.to_string()));
+                        }
+                    }
+                }
+                cursor = inner_start + paren_end + 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    if multi_hop_dims.is_empty() {
+        return result;
+    }
+
+    // Group by (entity_chain, leaf_model) — dimensions from the same leaf model
+    // can share a subquery.
+    let mut groups: Vec<(String, String, Vec<String>)> = Vec::new(); // (entity_chain, leaf_model, dim_names)
+
+    for (entity_chain, dim_name) in &multi_hop_dims {
+        let target_entity = entity_chain
+            .rsplit_once("__")
+            .map_or(entity_chain.as_str(), |(_, last)| last);
+
+        // Find the leaf model that has this dimension AND the target entity.
+        let mut leaf_model_name = None;
+        for (model_name, (_alias, model)) in model_aliases {
+            if model_name == primary_model_name {
+                continue;
+            }
+            let has_entity = model.entities.iter().any(|e| e.name == target_entity)
+                || model.primary_entity.as_deref() == Some(target_entity);
+            if !has_entity {
+                continue;
+            }
+            let has_dim = model.dimensions.iter().any(|d| d.name == *dim_name)
+                || model.entities.iter().any(|e| e.name == *dim_name);
+            if has_dim {
+                leaf_model_name = Some(model_name.clone());
+                break;
+            }
+        }
+
+        if let Some(ref leaf) = leaf_model_name {
+            if let Some(group) = groups
+                .iter_mut()
+                .find(|(ec, lm, _)| ec == entity_chain && lm == leaf)
+            {
+                if !group.2.contains(dim_name) {
+                    group.2.push(dim_name.clone());
+                }
+            } else {
+                groups.push((entity_chain.clone(), leaf.clone(), vec![dim_name.clone()]));
+            }
+        }
+    }
+
+    // Check whether multiple groups share an entity chain — that's the case
+    // that requires independent subqueries.
+    // Single-group chains can use flat joins.
+    let chain_counts: HashMap<&str, usize> = {
+        let mut m = HashMap::new();
+        for (chain, _, _) in &groups {
+            *m.entry(chain.as_str()).or_insert(0) += 1;
+        }
+        m
+    };
+
+    let needs_subqueries = chain_counts.values().any(|&c| c > 1);
+    if !needs_subqueries {
+        return result;
+    }
+
+    for (_entity_chain, leaf_model_name, dim_names) in &groups {
+        // Find the join path from primary to leaf.
+        let path = match find_join_path(join_edges, primary_model_name, leaf_model_name) {
+            Some(p) if p.len() >= 2 => p,
+            _ => continue,
+        };
+
+        // The first edge connects primary to the intermediate model.
+        let first_edge = &path[0];
+
+        // Get the primary model's alias for the fact join expression.
+        let primary_alias = model_aliases
+            .get(primary_model_name)
+            .map(|(a, _)| a.as_str())
+            .unwrap_or("t");
+
+        let fact_join_expr = format!("{primary_alias}.{}", first_edge.from_expr);
+
+        // Build the subquery: SELECT * FROM intermediate LEFT JOIN ... LEFT JOIN leaf
+        let mut subquery_parts = Vec::new();
+        let intermediate_model = &path[0].to_model;
+        let intermediate_relation = model_aliases
+            .get(intermediate_model)
+            .map(|(_, m)| render_full_relation(m, dialect))
+            .unwrap_or_else(|| format!("\"{intermediate_model}\""));
+        let intermediate_alias = model_aliases
+            .get(intermediate_model)
+            .map(|(a, _)| a.clone())
+            .unwrap_or_else(|| format!("__mhi{counter}"));
+
+        subquery_parts.push(format!(
+            "SELECT * FROM {intermediate_relation} AS {intermediate_alias}"
+        ));
+
+        for edge in &path[1..] {
+            let to_relation = model_aliases
+                .get(&edge.to_model)
+                .map(|(_, m)| render_full_relation(m, dialect))
+                .unwrap_or_else(|| format!("\"{}\"", edge.to_model));
+            let to_alias = model_aliases
+                .get(&edge.to_model)
+                .map(|(a, _)| a.clone())
+                .unwrap_or_else(|| edge.to_model.clone());
+            let from_alias = model_aliases
+                .get(&edge.from_model)
+                .map(|(a, _)| a.clone())
+                .unwrap_or_else(|| edge.from_model.clone());
+            subquery_parts.push(format!(
+                " LEFT JOIN {to_relation} AS {to_alias} ON {from_alias}.{} = {to_alias}.{}",
+                edge.from_expr, edge.to_expr
+            ));
+        }
+
+        let subquery_sql = subquery_parts.join("");
+        let alias = format!("__mh{counter}");
+        counter += 1;
+
+        // The subquery join column is the first edge's to_expr (the intermediate
+        // model's column that connects to the fact table).
+        let subquery_join_col = first_edge.to_expr.clone();
+
+        // Build dim_columns map: dimension name → column in the subquery.
+        let mut dim_columns = HashMap::new();
+        let leaf_model = model_aliases.get(leaf_model_name.as_str()).map(|(_, m)| *m);
+        if let Some(model) = leaf_model {
+            for dn in dim_names {
+                if let Some(dim) = model.dimensions.iter().find(|d| &d.name == dn) {
+                    dim_columns.insert(dn.clone(), format!("{alias}.{}", dim.expr));
+                } else if let Some(ent) = model.entities.iter().find(|e| &e.name == dn) {
+                    dim_columns.insert(dn.clone(), format!("{alias}.{}", ent.expr));
+                }
+            }
+        }
+
+        // Also add columns from intermediate models (for mixed-length joins
+        // like `account_id__extra_dim` where `extra_dim` is in bridge_table).
+        for edge in &path {
+            if let Some((_, model)) = model_aliases.get(&edge.to_model) {
+                for dn in dim_names {
+                    if !dim_columns.contains_key(dn.as_str()) {
+                        if let Some(dim) = model.dimensions.iter().find(|d| &d.name == dn) {
+                            dim_columns.insert(dn.clone(), format!("{alias}.{}", dim.expr));
+                        }
+                    }
+                }
+            }
+        }
+
+        result.push(MultiHopSubquery {
+            alias,
+            subquery_sql,
+            fact_join_expr,
+            subquery_join_col,
+            dim_columns,
+        });
+    }
+
+    // Absorb single-hop dimensions into existing subqueries when the entity
+    // references an intermediate model in one of the multi-hop paths.
+    // This avoids double-counting from joining bridge_table both flat and as
+    // part of a subquery.
+    for (entity_name, dim_name) in &single_hop_dims {
+        // Check if any subquery has a path through a model containing this entity+dim.
+        // If so, add the dimension to that subquery's dim_columns.
+        let already_handled = result
+            .iter()
+            .any(|mh| mh.dim_columns.contains_key(dim_name.as_str()));
+        if already_handled {
+            continue;
+        }
+        // Find a subquery whose path includes a model with this entity and dimension.
+        for mh in result.iter_mut() {
+            // The subquery's SQL includes intermediate models. Check model_aliases
+            // for models that have this entity and dimension.
+            for (model_name, (_alias, model)) in model_aliases {
+                if model_name == primary_model_name {
+                    continue;
+                }
+                let has_entity = model.entities.iter().any(|e| e.name == *entity_name)
+                    || model.primary_entity.as_deref() == Some(entity_name.as_str());
+                if !has_entity {
+                    continue;
+                }
+                let dim_entry = model.dimensions.iter().find(|d| d.name == *dim_name);
+                if dim_entry.is_none() {
+                    continue;
+                }
+                // Check if this model is part of this subquery's path
+                // (the subquery_sql contains the model's relation).
+                let model_relation = render_full_relation(model, dialect);
+                if mh.subquery_sql.contains(&model_relation) {
+                    if let Some(dim) = dim_entry {
+                        mh.dim_columns
+                            .insert(dim_name.clone(), format!("{}.{}", mh.alias, dim.expr));
+                        break;
+                    }
+                }
+            }
+            if mh.dim_columns.contains_key(dim_name.as_str()) {
+                break;
+            }
+        }
+    }
+
+    result
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Where-filter template resolution
 // ═══════════════════════════════════════════════════════════════════════════
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_where_filter_custom_gran(
+    template: &str,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    dialect: Dialect,
+    primary_model_name: &str,
+    all_time_spines: &[TimeSpine],
+    agg_time_dim: Option<&str>,
+    custom_gran_joins: &mut Vec<(String, String, String)>,
+    cg_alias_counter: &mut u32,
+    _cte_sql: &mut String,
+) -> String {
+    let mut result = template.to_string();
+    while let Some(start) = result.find("{{ TimeDimension(") {
+        let Some(end) = result[start..].find("}}").map(|i| start + i + 2) else {
+            break;
+        };
+        let inner = &result[start + 2..end - 2].trim();
+        let td_ref = inner
+            .strip_prefix("TimeDimension(")
+            .and_then(|s| s.strip_suffix(')'))
+            .unwrap_or(inner);
+        let parts: Vec<&str> = td_ref.split(',').collect();
+        let name = parts
+            .first()
+            .unwrap_or(&"metric_time")
+            .trim()
+            .trim_matches('\'')
+            .trim_matches('"');
+        let granularity = parts
+            .get(1)
+            .unwrap_or(&"day")
+            .trim()
+            .trim_matches('\'')
+            .trim_matches('"');
+
+        if !is_standard_granularity(granularity) {
+            if let Some((spine, custom_col)) =
+                find_custom_granularity_spine(all_time_spines, granularity)
+            {
+                let existing = custom_gran_joins
+                    .iter()
+                    .find(|(_, _, on)| on.contains(&format!(".{custom_col}")));
+                let alias = if let Some((a, _, _)) = existing {
+                    a.clone()
+                } else {
+                    let cg_alias = if *cg_alias_counter == 0 {
+                        "ts_cg".to_string()
+                    } else {
+                        format!("ts_cg{cg_alias_counter}")
+                    };
+                    *cg_alias_counter += 1;
+                    let time_expr = resolve_time_dimension_ref_with_agg(
+                        name,
+                        "day",
+                        model_aliases,
+                        dialect,
+                        primary_model_name,
+                        agg_time_dim,
+                    );
+                    let spine_rel = match dialect {
+                        Dialect::Databricks => spine.relation_name.replace('"', "`"),
+                        _ => spine.relation_name.clone(),
+                    };
+                    let on_cond = format!("{time_expr} = {cg_alias}.{}", spine.primary_column);
+                    custom_gran_joins.push((cg_alias.clone(), spine_rel, on_cond));
+                    cg_alias
+                };
+                let resolved = format!("{alias}.{custom_col}");
+                result.replace_range(start..end, &resolved);
+                continue;
+            }
+        }
+        let resolved = resolve_time_dimension_ref(
+            name,
+            granularity,
+            model_aliases,
+            dialect,
+            primary_model_name,
+        );
+        result.replace_range(start..end, &resolved);
+    }
+    resolve_where_filter(&result, model_aliases, dialect, primary_model_name)
+}
 
 /// Resolve Jinja-style dimension references in where filters.
 ///
@@ -1805,7 +2485,11 @@ fn resolve_where_filter(
             .trim_matches('\'')
             .trim_matches('"');
 
-        let resolved = resolve_dimension_ref(dim_ref, model_aliases, dialect, primary_model_name);
+        let resolved = if dim_ref == "metric_time" || dim_ref.ends_with("__metric_time") {
+            resolve_time_dimension_ref(dim_ref, "day", model_aliases, dialect, primary_model_name)
+        } else {
+            resolve_dimension_ref(dim_ref, model_aliases, dialect, primary_model_name)
+        };
         result.replace_range(start..end, &resolved);
     }
 
@@ -1907,6 +2591,42 @@ fn resolve_where_filter(
         result.replace_range(start..end, &resolved);
     }
 
+    // Resolve bare <name>__<gran> time dimension references (not wrapped in Jinja).
+    // Matches metric_time__day, revenue_instance__ds__day, etc.
+    for gran in VALID_GRANULARITIES {
+        let suffix = format!("__{gran}");
+        let mut search_start = 0;
+        while let Some(pos) = result[search_start..].find(&suffix) {
+            let abs_end = search_start + pos + suffix.len();
+            // Check that the suffix is followed by a non-identifier character (or EOF).
+            let at_boundary =
+                abs_end >= result.len() || !result.as_bytes()[abs_end].is_ascii_alphanumeric();
+            if !at_boundary {
+                search_start = abs_end;
+                continue;
+            }
+            // Walk backwards to find the start of the identifier.
+            let ident_start = result[..search_start + pos]
+                .rfind(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            let bare = &result[ident_start..abs_end];
+            let name = &result[ident_start..search_start + pos];
+            if name.is_empty() || name.starts_with('_') {
+                search_start = abs_end;
+                continue;
+            }
+            let resolved =
+                resolve_time_dimension_ref(name, gran, model_aliases, dialect, primary_model_name);
+            if resolved != bare {
+                result.replace_range(ident_start..abs_end, &resolved);
+                search_start = ident_start + resolved.len();
+            } else {
+                search_start = abs_end;
+            }
+        }
+    }
+
     result
 }
 
@@ -1977,6 +2697,7 @@ fn extract_metric_filter_refs(filters: &[String]) -> Vec<MetricFilterRef> {
 /// and a JOIN clause like:
 ///   LEFT JOIN __mf_booking_value ON outer.guest_id = __mf_booking_value.guest
 /// Compile a simple metric filter CTE: `SELECT entity_expr AS entity, AGG(expr) AS col FROM src GROUP BY 1`
+#[allow(clippy::too_many_arguments)]
 fn compile_simple_metric_filter_cte(
     metric_name: &str,
     ap: &AggParams,
@@ -1984,23 +2705,114 @@ fn compile_simple_metric_filter_cte(
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     dialect: Dialect,
     ctes: &mut Vec<(String, String)>,
+    metric_filters: &[String],
+    join_edges: &[JoinEdge],
 ) -> Option<String> {
-    let (_, source_model) = model_aliases.get(&ap.semantic_model)?;
+    let (source_alias, source_model) = model_aliases.get(&ap.semantic_model)?;
     let cte_name = format!("__mf_{metric_name}");
     let source_relation = render_full_relation(source_model, dialect);
-    let agg_expr = render_agg(&ap.agg, &ap.expr, dialect);
+    let agg_expr = render_agg_with_params(
+        &ap.agg,
+        &ap.expr,
+        dialect,
+        ap.percentile,
+        ap.use_discrete_percentile,
+    );
 
     let mut select_parts: Vec<String> = Vec::new();
+    let mut needs_source_alias = false;
+    // For multi-hop entity references (e.g. account_id__customer_id__customer_third_hop_id),
+    // we need to join through intermediate models and select from the leaf model.
+    let mut join_sql = String::new();
     for entity_name in entities {
         let bare_entity = entity_name
             .rsplit("__")
             .next()
             .unwrap_or(entity_name.as_str());
         let source_entity = source_model.entities.iter().find(|e| e.name == bare_entity);
-        let source_expr = source_entity
-            .map(|e| e.expr.as_str())
-            .unwrap_or(entity_name.as_str());
-        select_parts.push(format!("{source_expr} AS {entity_name}"));
+        if source_entity.is_some() {
+            let source_expr = source_entity.map(|e| e.expr.as_str()).unwrap();
+            select_parts.push(format!("{source_expr} AS {entity_name}"));
+        } else if entity_name.contains("__") {
+            // Multi-hop: need to find the entity in another model and join to it.
+            let segments: Vec<&str> = entity_name.split("__").collect();
+            let target_entity = *segments.last().unwrap();
+            // Find the model with this entity that is reachable from the source.
+            let mut target_model_name = None;
+            for (mn, (_a, m)) in model_aliases {
+                if mn == &ap.semantic_model {
+                    continue;
+                }
+                let has = m.entities.iter().any(|e| e.name == target_entity);
+                if has {
+                    target_model_name = Some(mn.clone());
+                    break;
+                }
+            }
+            if let Some(ref tmn) = target_model_name {
+                if let Some(path) = find_join_path(join_edges, &ap.semantic_model, tmn) {
+                    let mut joined_models: HashSet<String> = HashSet::new();
+                    joined_models.insert(ap.semantic_model.clone());
+                    for edge in &path {
+                        if joined_models.contains(&edge.to_model) {
+                            continue;
+                        }
+                        let _left_alias = model_aliases
+                            .get(&edge.from_model)
+                            .map(|(_, m)| m.name.chars().next().unwrap_or('t'));
+                        let (to_alias, to_model) = model_aliases.get(&edge.to_model)?;
+                        let to_relation = render_full_relation(to_model, dialect);
+                        let fa = model_aliases
+                            .get(&edge.from_model)
+                            .map(|(a, _)| a.as_str())
+                            .unwrap_or("t");
+                        if edge.from_model == ap.semantic_model {
+                            needs_source_alias = true;
+                        }
+                        let from_ref = format!("{fa}.{}", edge.from_expr);
+                        // Build join condition with partition matching.
+                        let mut join_conds =
+                            vec![format!("{from_ref} = {to_alias}.{}", edge.to_expr)];
+                        if let Some((_, from_model_ref)) = model_aliases.get(&edge.from_model) {
+                            for from_dim in &from_model_ref.dimensions {
+                                if from_dim.is_partition {
+                                    if let Some(to_dim) = to_model
+                                        .dimensions
+                                        .iter()
+                                        .find(|d| d.is_partition && d.name == from_dim.name)
+                                    {
+                                        join_conds.push(format!(
+                                            "DATE_TRUNC('day', CAST({fa}.{} AS TIMESTAMP)) = DATE_TRUNC('day', CAST({to_alias}.{} AS TIMESTAMP))",
+                                            from_dim.expr, to_dim.expr
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        let _ = write!(
+                            join_sql,
+                            " LEFT JOIN {to_relation} AS {to_alias} ON ({})",
+                            join_conds.join(") AND ("),
+                        );
+                        joined_models.insert(edge.to_model.clone());
+                    }
+                    // Select from the target model's entity expression.
+                    let (target_alias, target_model) = model_aliases.get(tmn)?;
+                    let target_ent = target_model
+                        .entities
+                        .iter()
+                        .find(|e| e.name == target_entity)?;
+                    select_parts.push(format!(
+                        "{target_alias}.{} AS {entity_name}",
+                        target_ent.expr
+                    ));
+                }
+            } else {
+                select_parts.push(format!("{entity_name} AS {entity_name}"));
+            }
+        } else {
+            select_parts.push(format!("{entity_name} AS {entity_name}"));
+        }
     }
 
     let col_name = if entities.is_empty() {
@@ -2017,8 +2829,24 @@ fn compile_simple_metric_filter_cte(
         format!(" GROUP BY {}", group_indices.join(", "))
     };
 
+    // Apply metric filters as WHERE clause.
+    let where_clause = if metric_filters.is_empty() {
+        String::new()
+    } else {
+        let resolved: Vec<String> = metric_filters
+            .iter()
+            .map(|f| resolve_where_filter(f, model_aliases, dialect, &ap.semantic_model))
+            .collect();
+        format!(" WHERE {}", resolved.join(" AND "))
+    };
+
+    let from_part = if needs_source_alias {
+        format!("{source_relation} AS {source_alias}")
+    } else {
+        source_relation
+    };
     let cte_sql = format!(
-        "SELECT {} FROM {source_relation}{group_clause}",
+        "SELECT {} FROM {from_part}{join_sql}{where_clause}{group_clause}",
         select_parts.join(", "),
     );
     ctes.push((cte_name, cte_sql));
@@ -2026,6 +2854,7 @@ fn compile_simple_metric_filter_cte(
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[allow(clippy::too_many_arguments)]
 fn compile_metric_filter_ctes(
     refs: &[MetricFilterRef],
     all_metrics: &HashMap<String, ResolvedMetric>,
@@ -2034,6 +2863,7 @@ fn compile_metric_filter_ctes(
     primary_alias: &str,
     dialect: Dialect,
     ctes: &mut Vec<(String, String)>,
+    join_edges: &[JoinEdge],
 ) -> Vec<String> {
     let mut joins = Vec::new();
 
@@ -2058,6 +2888,8 @@ fn compile_metric_filter_ctes(
                     model_aliases,
                     dialect,
                     ctes,
+                    &metric.metric_filters,
+                    join_edges,
                 );
             }
             MetricType::Derived => {
@@ -2081,6 +2913,8 @@ fn compile_metric_filter_ctes(
                             model_aliases,
                             dialect,
                             ctes,
+                            &sub_metric.metric_filters,
+                            join_edges,
                         ) {
                             sub_cols.push((sub_name.to_string(), col));
                         }
@@ -2165,6 +2999,8 @@ fn compile_metric_filter_ctes(
                     model_aliases,
                     dialect,
                     ctes,
+                    &num_metric.metric_filters,
+                    join_edges,
                 );
                 let den_col = compile_simple_metric_filter_cte(
                     &den_label,
@@ -2173,6 +3009,8 @@ fn compile_metric_filter_ctes(
                     model_aliases,
                     dialect,
                     ctes,
+                    &den_metric.metric_filters,
+                    join_edges,
                 );
                 if let (Some(nc), Some(dc)) = (num_col, den_col) {
                     let num_cte = format!("__mf_{num_label}");
@@ -2244,30 +3082,74 @@ fn compile_metric_filter_ctes(
 fn resolve_dimension_ref(
     dim_ref: &str,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
-    _dialect: Dialect,
+    dialect: Dialect,
     primary_model_name: &str,
 ) -> String {
-    let (entity, dim_name) = if let Some((e, d)) = dim_ref.split_once("__") {
-        (Some(e), d)
+    resolve_dimension_ref_with_mh(dim_ref, model_aliases, dialect, primary_model_name, &[])
+}
+
+fn resolve_dimension_ref_with_mh(
+    dim_ref: &str,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    _dialect: Dialect,
+    primary_model_name: &str,
+    multi_hop_subqueries: &[MultiHopSubquery],
+) -> String {
+    // For multi-hop paths (e.g. account_id__customer_id__customer_name),
+    // use rsplit_once to separate the last segment (dimension) from the
+    // entity chain. Then use the last entity in the chain for model lookup.
+    let (entity_chain, dim_name) = if let Some((chain, d)) = dim_ref.rsplit_once("__") {
+        (Some(chain), d)
     } else {
         (None, dim_ref)
     };
 
+    // Check multi-hop subqueries first — these override normal resolution
+    // when dimensions come from different leaf models along the same chain.
+    if !multi_hop_subqueries.is_empty() {
+        for mh in multi_hop_subqueries {
+            if let Some(col_expr) = mh.dim_columns.get(dim_name) {
+                return col_expr.clone();
+            }
+        }
+    }
+
+    let target_entity =
+        entity_chain.map(|chain| chain.rsplit_once("__").map_or(chain, |(_, last)| last));
+
     let check_model = |alias: &str, model: &ResolvedModel| -> Option<String> {
-        if let Some(entity_name) = entity {
+        if let Some(entity_name) = target_entity {
             let has_entity = model.entities.iter().any(|e| e.name == entity_name)
                 || model.primary_entity.as_deref() == Some(entity_name);
             if !has_entity {
                 return None;
             }
         }
-        model
-            .dimensions
-            .iter()
-            .find(|d| d.name == dim_name)
-            .map(|dim| format!("{}.{}", alias, dim.expr))
+        if let Some(dim) = model.dimensions.iter().find(|d| d.name == dim_name) {
+            return Some(format!("{}.{}", alias, dim.expr));
+        }
+        // Also resolve entities used as dimensions (dundered identifiers).
+        if let Some(ent) = model.entities.iter().find(|e| e.name == dim_name) {
+            return Some(format!("{}.{}", alias, ent.expr));
+        }
+        None
     };
 
+    // For entity-prefixed dimensions, prefer the model where the entity
+    // is primary/unique (the canonical source).
+    if let Some(entity_name) = target_entity {
+        for (alias, model) in model_aliases.values() {
+            let is_primary = model.entities.iter().any(|e| {
+                e.name == entity_name
+                    && matches!(e.entity_type.as_str(), "primary" | "unique" | "natural")
+            }) || model.primary_entity.as_deref() == Some(entity_name);
+            if is_primary {
+                if let Some(result) = check_model(alias, model) {
+                    return result;
+                }
+            }
+        }
+    }
     // Check primary model first for deterministic resolution.
     if let Some((alias, model)) = model_aliases.get(primary_model_name) {
         if let Some(result) = check_model(alias, model) {
@@ -2307,6 +3189,35 @@ fn resolve_entity_ref(
     entity_name.to_string()
 }
 
+fn resolve_raw_time_column(
+    name: &str,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    primary_model_name: &str,
+) -> String {
+    let dim_name = name.split_once("__").map_or(name, |(_, d)| d);
+    let check = |alias: &str, model: &ResolvedModel| -> Option<String> {
+        for dim in &model.dimensions {
+            if dim.dimension_type == "time"
+                && (name == "metric_time" || dim.name == dim_name || dim.name == name)
+            {
+                return Some(format!("{}.{}", alias, dim.expr));
+            }
+        }
+        None
+    };
+    if let Some((alias, model)) = model_aliases.get(primary_model_name) {
+        if let Some(result) = check(alias, model) {
+            return result;
+        }
+    }
+    for (alias, model) in model_aliases.values() {
+        if let Some(result) = check(alias, model) {
+            return result;
+        }
+    }
+    name.to_string()
+}
+
 fn resolve_time_dimension_ref(
     name: &str,
     granularity: &str,
@@ -2314,21 +3225,73 @@ fn resolve_time_dimension_ref(
     dialect: Dialect,
     primary_model_name: &str,
 ) -> String {
+    resolve_time_dimension_ref_with_agg(
+        name,
+        granularity,
+        model_aliases,
+        dialect,
+        primary_model_name,
+        None,
+    )
+}
+
+fn resolve_time_dimension_ref_with_agg(
+    name: &str,
+    granularity: &str,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    dialect: Dialect,
+    primary_model_name: &str,
+    agg_time_dim: Option<&str>,
+) -> String {
     // Strip an optional entity prefix: `user_account_activity__date_day` → `date_day`.
-    // Also extract the entity name for scoped matching (mirrors resolve_dimension_ref).
-    let (entity_prefix, dim_name) = match name.split_once("__") {
+    // Use rsplit_once to correctly handle multi-hop chains:
+    // `listing__user__ds` → entity_prefix = "listing__user", dim_name = "ds".
+    let (entity_prefix, dim_name) = match name.rsplit_once("__") {
         Some((e, d)) => (Some(e), d),
         None => (None, name),
     };
+    // For multi-hop chains, the target entity is the last segment of the chain.
+    let target_entity = entity_prefix.and_then(|e| {
+        if e.contains("__") {
+            e.rsplit_once("__").map(|(_, last)| last)
+        } else {
+            Some(e)
+        }
+    });
 
-    let check_model = |alias: &str, model: &ResolvedModel| -> Option<String> {
-        // If an entity prefix was supplied, require the model to own that entity
-        // (check both explicit entities and the primary_entity).
-        if let Some(entity) = entity_prefix {
-            let has_entity = model.entities.iter().any(|e| e.name == entity)
-                || model.primary_entity.as_deref() == Some(entity);
+    let check_model = |alias: &str,
+                       model: &ResolvedModel,
+                       require_primary_entity: bool,
+                       allow_any_time_dim: bool|
+     -> Option<String> {
+        if let Some(entity) = target_entity.or(entity_prefix) {
+            let entity_entry = model.entities.iter().find(|e| e.name == entity);
+            let is_primary_entity = model.primary_entity.as_deref() == Some(entity);
+            let has_entity = entity_entry.is_some() || is_primary_entity;
             if !has_entity {
                 return None;
+            }
+            if require_primary_entity {
+                let is_primary_or_unique = is_primary_entity
+                    || entity_entry.is_some_and(|e| {
+                        matches!(e.entity_type.as_str(), "primary" | "unique" | "natural")
+                    });
+                if !is_primary_or_unique {
+                    return None;
+                }
+            }
+        }
+        if name == "metric_time" {
+            if let Some(atd) = agg_time_dim {
+                for dim in &model.dimensions {
+                    if dim.dimension_type == "time" && dim.name == atd {
+                        return Some(render_date_trunc(
+                            granularity,
+                            &format!("{}.{}", alias, dim.expr),
+                            dialect,
+                        ));
+                    }
+                }
             }
         }
         for dim in &model.dimensions {
@@ -2342,16 +3305,49 @@ fn resolve_time_dimension_ref(
                 ));
             }
         }
+        // When entity-prefixed, fall back to any time dimension on the target model.
+        if allow_any_time_dim && entity_prefix.is_some() && name != "metric_time" {
+            for dim in &model.dimensions {
+                if dim.dimension_type == "time" {
+                    return Some(render_date_trunc(
+                        granularity,
+                        &format!("{}.{}", alias, dim.expr),
+                        dialect,
+                    ));
+                }
+            }
+        }
         None
     };
+
+    // When entity-prefixed, prefer the model where the entity is primary/unique.
+    // First pass: exact dim name match only.
+    if entity_prefix.is_some() {
+        for (alias, model) in model_aliases.values() {
+            if let Some(result) = check_model(alias, model, true, false) {
+                return result;
+            }
+        }
+        // Second pass: allow any time dim fallback.
+        for (alias, model) in model_aliases.values() {
+            if let Some(result) = check_model(alias, model, true, true) {
+                return result;
+            }
+        }
+    }
     // Check primary model first for deterministic resolution.
     if let Some((alias, model)) = model_aliases.get(primary_model_name) {
-        if let Some(result) = check_model(alias, model) {
+        if let Some(result) = check_model(alias, model, false, false) {
             return result;
         }
     }
     for (alias, model) in model_aliases.values() {
-        if let Some(result) = check_model(alias, model) {
+        if let Some(result) = check_model(alias, model, false, false) {
+            return result;
+        }
+    }
+    for (alias, model) in model_aliases.values() {
+        if let Some(result) = check_model(alias, model, false, true) {
             return result;
         }
     }
@@ -2478,7 +3474,18 @@ fn resolve_order_by_col(name: &str, group_by: &[GroupBySpec]) -> String {
     name.to_string()
 }
 
+#[cfg(test)]
 fn render_agg(agg: &str, expr: &str, dialect: Dialect) -> String {
+    render_agg_with_params(agg, expr, dialect, None, false)
+}
+
+fn render_agg_with_params(
+    agg: &str,
+    expr: &str,
+    dialect: Dialect,
+    percentile: Option<f64>,
+    use_discrete: bool,
+) -> String {
     match agg {
         "sum" => format!("SUM({expr})"),
         "count" => format!("COUNT({expr})"),
@@ -2494,10 +3501,37 @@ fn render_agg(agg: &str, expr: &str, dialect: Dialect) -> String {
             Dialect::BigQuery => format!("APPROX_QUANTILES({expr}, 2)[OFFSET(1)]"),
             _ => format!("MEDIAN({expr})"),
         },
-        "percentile" => match dialect {
-            Dialect::BigQuery => format!("APPROX_QUANTILES({expr}, 100)[OFFSET(50)]"),
-            _ => format!("PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY {expr})"),
-        },
+        "percentile" => {
+            let pct = percentile.unwrap_or(0.5);
+            if use_discrete {
+                match dialect {
+                    Dialect::BigQuery => {
+                        let offset = (pct * 100.0) as i64;
+                        format!("APPROX_QUANTILES({expr}, 100)[OFFSET({offset})]")
+                    }
+                    _ => format!("PERCENTILE_DISC({pct}) WITHIN GROUP (ORDER BY {expr})"),
+                }
+            } else {
+                match dialect {
+                    Dialect::BigQuery => {
+                        let offset = (pct * 100.0) as i64;
+                        format!("APPROX_QUANTILES({expr}, 100)[OFFSET({offset})]")
+                    }
+                    _ => format!("PERCENTILE_CONT({pct}) WITHIN GROUP (ORDER BY {expr})"),
+                }
+            }
+        }
+        "approximate_continuous" | "approximate_discrete" => {
+            let pct = percentile.unwrap_or(0.5);
+            match dialect {
+                Dialect::BigQuery => {
+                    let offset = (pct * 100.0) as i64;
+                    format!("APPROX_QUANTILES({expr}, 100)[OFFSET({offset})]")
+                }
+                Dialect::DuckDB => format!("APPROX_QUANTILE({expr}, {pct})"),
+                _ => format!("APPROX_PERCENTILE({expr}, {pct})"),
+            }
+        }
         other => format!("{other}({expr})"),
     }
 }
@@ -2596,8 +3630,23 @@ fn inline_time_spine_sql(
     granularity: &str,
     dialect: Dialect,
 ) -> String {
+    inline_time_spine_sql_bounded(out_col, src_cte, src_col, granularity, dialect, None)
+}
+
+fn inline_time_spine_sql_bounded(
+    out_col: &str,
+    src_cte: &str,
+    src_col: &str,
+    granularity: &str,
+    dialect: Dialect,
+    max_bound: Option<&str>,
+) -> String {
     let min_expr = format!("(SELECT MIN({src_col}) FROM {src_cte})");
-    let max_expr = format!("(SELECT MAX({src_col}) FROM {src_cte})");
+    let max_expr = if let Some(bound) = max_bound {
+        format!("GREATEST((SELECT MAX({src_col}) FROM {src_cte}), CAST('{bound}' AS DATE))")
+    } else {
+        format!("(SELECT MAX({src_col}) FROM {src_cte})")
+    };
     let subdaily = matches!(granularity, "hour" | "minute" | "second" | "millisecond");
     let target_type = if subdaily { "TIMESTAMP" } else { "DATE" };
     let gran_upper = granularity.to_uppercase();
@@ -2654,6 +3703,132 @@ fn inline_time_spine_sql(
     }
 }
 
+fn expand_time_constraint_to_granularity(
+    start: &str,
+    end: &str,
+    granularity: &str,
+) -> (String, String) {
+    fn parse_date(s: &str) -> Option<(i32, u32, u32)> {
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        Some((
+            parts[0].parse().ok()?,
+            parts[1].parse().ok()?,
+            parts[2].parse().ok()?,
+        ))
+    }
+
+    fn days_in_month(year: i32, month: u32) -> u32 {
+        match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => {
+                if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                    29
+                } else {
+                    28
+                }
+            }
+            _ => 30,
+        }
+    }
+
+    fn day_of_week(year: i32, month: u32, day: u32) -> u32 {
+        // Zeller-like: 0=Mon, 6=Sun
+        let (y, m) = if month <= 2 {
+            (year - 1, month + 12)
+        } else {
+            (year, month)
+        };
+        let q = day as i32;
+        let k = y % 100;
+        let j = y / 100;
+        let h = (q + (13 * (m as i32 + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
+        // Convert Zeller's h (0=Sat) to ISO (0=Mon)
+        ((h + 5) % 7) as u32
+    }
+
+    fn format_date(year: i32, month: u32, day: u32) -> String {
+        format!("{year:04}-{month:02}-{day:02}")
+    }
+
+    let rank = granularity_rank(granularity);
+    if rank <= 7 {
+        // day or finer — no expansion needed
+        return (start.to_string(), end.to_string());
+    }
+
+    let Some((sy, sm, sd)) = parse_date(start) else {
+        return (start.to_string(), end.to_string());
+    };
+    let Some((ey, em, ed)) = parse_date(end) else {
+        return (start.to_string(), end.to_string());
+    };
+
+    let new_start = match granularity {
+        "week" => {
+            let dow = day_of_week(sy, sm, sd);
+            // Go back to Monday
+            let mut d = sd as i32 - dow as i32;
+            let (mut y, mut m) = (sy, sm);
+            if d < 1 {
+                // Previous month
+                if m == 1 {
+                    m = 12;
+                    y -= 1;
+                } else {
+                    m -= 1;
+                }
+                d += days_in_month(y, m) as i32;
+            }
+            format_date(y, m, d as u32)
+        }
+        "month" => format_date(sy, sm, 1),
+        "quarter" => {
+            let qm = ((sm - 1) / 3) * 3 + 1;
+            format_date(sy, qm, 1)
+        }
+        "year" => format_date(sy, 1, 1),
+        _ => start.to_string(),
+    };
+
+    let new_end = match granularity {
+        "week" => {
+            let dow = day_of_week(ey, em, ed);
+            // Go forward to Sunday (6) then to next Monday minus 1 day = Sunday
+            let days_to_sunday = if dow == 0 { 6 } else { 6 - dow };
+            let mut d = ed + days_to_sunday;
+            let (mut y, mut m) = (ey, em);
+            let dim = days_in_month(y, m);
+            if d > dim {
+                d -= dim;
+                m += 1;
+                if m > 12 {
+                    m = 1;
+                    y += 1;
+                }
+            }
+            format_date(y, m, d)
+        }
+        "month" => {
+            // End of the month containing end date
+            let dim = days_in_month(ey, em);
+            format_date(ey, em, dim)
+        }
+        "quarter" => {
+            let qm = ((em - 1) / 3) * 3 + 3;
+            let dim = days_in_month(ey, qm);
+            format_date(ey, qm, dim)
+        }
+        "year" => format_date(ey, 12, 31),
+        _ => end.to_string(),
+    };
+
+    (new_start, new_end)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Main compilation pipeline
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2670,6 +3845,77 @@ pub fn compile(
     for metric_name in &spec.metrics {
         resolve_metrics_recursive(store, metric_name, &mut all_metrics)?;
     }
+
+    // Expand time constraints to granularity boundaries, considering both query
+    // granularity and metric-level time_granularity.
+    let spec = &{
+        let mut s = spec.clone();
+        // Find the coarsest granularity from query group_by (metric_time only)
+        // AND metric-level time_granularity.
+        let coarsest_query = s
+            .group_by
+            .iter()
+            .filter_map(|gb| {
+                if let GroupBySpec::TimeDimension {
+                    name, granularity, ..
+                } = gb
+                {
+                    if name == "metric_time" {
+                        Some(granularity.as_str())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|g| granularity_rank(g))
+            .unwrap_or("day");
+
+        let coarsest_metric = s
+            .metrics
+            .iter()
+            .filter_map(|name| all_metrics.get(name))
+            .filter_map(|m| m.time_granularity.as_deref())
+            .max_by_key(|g| granularity_rank(g))
+            .unwrap_or("day");
+
+        let coarsest = if granularity_rank(coarsest_metric) > granularity_rank(coarsest_query) {
+            coarsest_metric
+        } else {
+            coarsest_query
+        };
+
+        if let Some((ref start, ref end)) = s.time_constraint {
+            let (new_start, new_end) = expand_time_constraint_to_granularity(start, end, coarsest);
+            s.time_constraint = Some((new_start, new_end));
+        }
+
+        // Also clamp group-by granularities: if a metric's time_granularity is coarser
+        // than the query granularity, bump metric_time to at least the metric's grain.
+        // Only applies to metric_time, not entity-prefixed time dimensions.
+        if s.metrics.len() == 1 {
+            if let Some(metric_gran) = all_metrics
+                .get(&s.metrics[0])
+                .and_then(|m| m.time_granularity.as_deref())
+            {
+                for gb in &mut s.group_by {
+                    if let GroupBySpec::TimeDimension {
+                        name, granularity, ..
+                    } = gb
+                    {
+                        if name == "metric_time"
+                            && granularity_rank(metric_gran) > granularity_rank(granularity)
+                        {
+                            *granularity = metric_gran.to_string();
+                        }
+                    }
+                }
+            }
+        }
+
+        s
+    };
 
     // 1b. Also resolve metrics referenced in {{ Metric() }} WHERE filters.
     let all_filters: Vec<String> = all_metrics
@@ -2705,17 +3951,70 @@ pub fn compile(
 
     // Also resolve models needed for dimension entity references in group_by.
     for gb in &spec.group_by {
-        if let GroupBySpec::Dimension {
-            entity: Some(entity_name),
-            ..
-        } = gb
-        {
-            // Find the semantic model that owns this entity as primary/unique.
-            if let Some(model_name) = find_model_for_entity_pk(store, entity_name)? {
-                if !needed_models.contains(&model_name) {
-                    needed_models.push(model_name);
+        match gb {
+            GroupBySpec::Dimension {
+                entity: Some(entity_name),
+                name,
+            } => {
+                // For multi-hop entity chains (e.g. "account_id__customer_id"),
+                // resolve all intermediate and target models.
+                let entity_segments: Vec<&str> = entity_name.split("__").collect();
+                if entity_segments.len() > 1 {
+                    // Add all models that participate in the entity chain.
+                    // Use lookup_all_join_graph_entities to find bridge models.
+                    let join_rows = store.lookup_all_join_graph_entities()?;
+                    for seg in &entity_segments {
+                        for row in &join_rows {
+                            if row.entity_name == *seg && !needed_models.contains(&row.model_name) {
+                                needed_models.push(row.model_name.clone());
+                            }
+                        }
+                    }
+                }
+                let target_entity = entity_segments.last().copied().unwrap_or(entity_name);
+                if let Some(model_name) = find_model_for_entity_and_dim(store, target_entity, name)?
+                {
+                    if !needed_models.contains(&model_name) {
+                        needed_models.push(model_name);
+                    }
+                }
+                // Single-hop fallback
+                if entity_segments.len() == 1 {
+                    if let Some(model_name) =
+                        find_model_for_entity_and_dim(store, entity_name, name)?
+                    {
+                        if !needed_models.contains(&model_name) {
+                            needed_models.push(model_name);
+                        }
+                    }
                 }
             }
+            GroupBySpec::TimeDimension { name, .. } => {
+                if let Some((entity_chain, dim_name)) = name.rsplit_once("__") {
+                    let entity_segments: Vec<&str> = entity_chain.split("__").collect();
+                    if entity_segments.len() > 1 {
+                        let join_rows = store.lookup_all_join_graph_entities()?;
+                        for seg in &entity_segments {
+                            for row in &join_rows {
+                                if row.entity_name == *seg
+                                    && !needed_models.contains(&row.model_name)
+                                {
+                                    needed_models.push(row.model_name.clone());
+                                }
+                            }
+                        }
+                    }
+                    let target_entity = entity_segments.last().copied().unwrap_or(entity_chain);
+                    if let Some(model_name) =
+                        find_model_for_entity_and_dim(store, target_entity, dim_name)?
+                    {
+                        if !needed_models.contains(&model_name) {
+                            needed_models.push(model_name);
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -2729,7 +4028,13 @@ pub fn compile(
                     .unwrap_or(false)
             });
             if !already_covered {
-                if let Some(model_name) = find_model_for_entity_any(store, entity_name)? {
+                let model_name = find_model_for_entity_pk(store, entity_name)?;
+                let model_name = if model_name.is_some() {
+                    model_name
+                } else {
+                    find_model_for_entity_any(store, entity_name)?
+                };
+                if let Some(model_name) = model_name {
                     if !needed_models.contains(&model_name) {
                         needed_models.push(model_name);
                     }
@@ -2740,6 +4045,7 @@ pub fn compile(
 
     // Also resolve models needed for entity references in where filters.
     // e.g. {{ Dimension('listing__country_latest') }} needs the listing model.
+    // e.g. {{ TimeDimension('listing__ds', 'alien_day') }} needs the listing model.
     for filter in spec
         .where_filters
         .iter()
@@ -2769,6 +4075,70 @@ pub fn compile(
                 cursor = abs_start + paren_end + 1;
             } else {
                 break;
+            }
+        }
+        // Also extract entity references from TimeDimension patterns.
+        let mut cursor = 0usize;
+        while let Some(td_start) = filter[cursor..].find("TimeDimension(") {
+            let abs_start = cursor + td_start + 14;
+            if let Some(paren_end) = filter[abs_start..].find(')') {
+                let inner = &filter[abs_start..abs_start + paren_end];
+                let td_name = inner
+                    .split(',')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('\'')
+                    .trim_matches('"');
+                if let Some((entity_name, _)) = td_name.split_once("__") {
+                    if let Some(model_name) = find_model_for_entity_pk(store, entity_name)? {
+                        if !needed_models.contains(&model_name) {
+                            needed_models.push(model_name);
+                        }
+                    }
+                }
+                cursor = abs_start + paren_end + 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Also resolve models needed for per-input metric filters.
+    // Ratio metrics have numerator/denominator filters; derived metrics have
+    // per-input filters. These reference dimensions on joined models.
+    for m in all_metrics.values() {
+        let input_filters = m
+            .input_metrics
+            .iter()
+            .flat_map(|i| i.filters.iter())
+            .chain(m.numerator.iter().flat_map(|n| n.filters.iter()))
+            .chain(m.denominator.iter().flat_map(|d| d.filters.iter()));
+        for filter in input_filters {
+            let mut cursor = 0usize;
+            while let Some(dim_start) = filter[cursor..].find("Dimension(") {
+                let abs_pos = cursor + dim_start;
+                if abs_pos > 0 && filter.as_bytes()[abs_pos - 1].is_ascii_alphanumeric() {
+                    cursor = abs_pos + 10;
+                    continue;
+                }
+                let abs_start = abs_pos + 10;
+                if let Some(paren_end) = filter[abs_start..].find(')') {
+                    let dim_ref = filter[abs_start..abs_start + paren_end]
+                        .trim()
+                        .trim_matches('\'')
+                        .trim_matches('"');
+                    if let Some((entity_name, _)) = dim_ref.split_once("__") {
+                        if let Some(model_name) = find_model_for_entity_pk(store, entity_name)? {
+                            if !needed_models.contains(&model_name) {
+                                needed_models.push(model_name);
+                            }
+                        }
+                    }
+                    cursor = abs_start + paren_end + 1;
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -2849,6 +4219,20 @@ pub fn compile(
         }
     }
 
+    let all_time_spines = load_all_time_spines_from_store(store);
+
+    // Dimension-only queries (no metrics) — dispatch before metric validation.
+    if spec.metrics.is_empty() {
+        return compile_dimension_only_query(
+            store,
+            spec,
+            &model_alias_map,
+            &join_edges,
+            &all_time_spines,
+            dialect,
+        );
+    }
+
     // Validate the query spec against the resolved models.
     validate_spec(spec, &all_metrics, &model_alias_map)?;
 
@@ -2869,13 +4253,23 @@ pub fn compile(
         .len()
         <= 1;
 
-    if all_simple && all_same_model && !top_level.is_empty() {
+    let any_spine_join = top_level.iter().any(|m| m.join_to_timespine);
+    let all_same_agg_time = {
+        let agg_time_dims: HashSet<_> = top_level
+            .iter()
+            .filter_map(|m| m.agg_params.as_ref()?.agg_time_dimension.as_deref())
+            .collect();
+        agg_time_dims.len() <= 1
+    };
+    if all_simple && all_same_model && all_same_agg_time && !top_level.is_empty() && !any_spine_join
+    {
         compile_simple_metrics(
             spec,
             &top_level,
             &all_metrics,
             &model_alias_map,
             &join_edges,
+            &all_time_spines,
             dialect,
         )
     } else {
@@ -2997,6 +4391,651 @@ fn collect_needed_models(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Dimension-only query compilation (no metrics)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[allow(clippy::cognitive_complexity)]
+fn compile_dimension_only_query(
+    store: &mut impl MetricStore,
+    spec: &SemanticQuerySpec,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    join_edges: &[JoinEdge],
+    all_time_spines: &[TimeSpine],
+    dialect: Dialect,
+) -> Result<String, MetricFlowError> {
+    // Deterministic model ordering (same order as compile() builds needed_models).
+    let needed_models: Vec<String> = {
+        let mut v: Vec<String> = model_aliases.keys().cloned().collect();
+        v.sort();
+        v
+    };
+
+    let primary_model_name = needed_models.first().cloned().unwrap_or_default();
+
+    // Check if metric_time is requested.
+    let mut needs_time_spine = false;
+    let mut finest_metric_time_gran = "day";
+    for gb in &spec.group_by {
+        if let GroupBySpec::TimeDimension {
+            name, granularity, ..
+        } = gb
+        {
+            if name == "metric_time" {
+                needs_time_spine = true;
+                if granularity_rank(granularity) < granularity_rank(finest_metric_time_gran) {
+                    finest_metric_time_gran = granularity;
+                }
+            }
+        }
+    }
+
+    // Check if we have metric filter references ({{ Metric(...) }}).
+    if spec.where_filters.iter().any(|f| f.contains("Metric(")) {
+        return compile_dimension_only_with_metric_filter(
+            store,
+            spec,
+            model_aliases,
+            join_edges,
+            all_time_spines,
+            dialect,
+        );
+    }
+
+    // Determine if we need a subquery wrapper for WHERE filters that reference
+    // dimensions not in the GROUP BY (need to SELECT them for WHERE, then project
+    // only the GROUP BY columns out).
+    let needs_subquery_wrapper = spec.where_filters.iter().any(|f| {
+        let mut refs_entity = None;
+        if let Some(start) = f.find("Dimension(") {
+            // Skip if this is actually "TimeDimension("
+            if start == 0
+                || f.as_bytes()
+                    .get(start.wrapping_sub(4)..start)
+                    .is_none_or(|b| b != b"Time")
+            {
+                if let Some(end) = f[start..].find(')') {
+                    let inner = &f[start + 10..start + end];
+                    let dim_ref = inner.trim().trim_matches('\'').trim_matches('"');
+                    if let Some((entity_part, _)) = dim_ref.rsplit_once("__") {
+                        refs_entity = Some(entity_part.to_string());
+                    }
+                }
+            }
+        }
+        if let Some(ref filter_entity) = refs_entity {
+            !spec.group_by.iter().any(|gb| {
+                matches!(gb,
+                GroupBySpec::Dimension { entity: Some(entity), .. } if entity == filter_entity)
+            })
+        } else {
+            false
+        }
+    });
+
+    // Build SELECT columns, GROUP BY columns.
+    let mut select_cols: Vec<String> = Vec::new();
+    let mut group_by_cols: Vec<String> = Vec::new();
+    let mut output_col_names: Vec<String> = Vec::new();
+    let mut custom_gran_joins: Vec<(String, String, String)> = Vec::new();
+    let mut cg_alias_counter = 0u32;
+
+    let spine_alias = if needs_time_spine { "ts" } else { "" };
+
+    for gb in &spec.group_by {
+        match gb {
+            GroupBySpec::TimeDimension {
+                name,
+                granularity,
+                date_part,
+            } => {
+                if name == "metric_time" {
+                    if let Some(spine) =
+                        pick_time_spine_for_granularity(all_time_spines, finest_metric_time_gran)
+                    {
+                        let raw_col = format!("{spine_alias}.{}", spine.primary_column);
+                        if let Some(dp) = date_part {
+                            let expr = render_extract(
+                                dp,
+                                &format!("CAST({raw_col} AS TIMESTAMP)"),
+                                dialect,
+                            );
+                            let alias = format!("metric_time__extract_{dp}");
+                            select_cols.push(format!("{expr} AS {alias}"));
+                            group_by_cols.push(expr);
+                            output_col_names.push(alias);
+                        } else {
+                            let expr = render_date_trunc(
+                                granularity,
+                                &format!("CAST({raw_col} AS TIMESTAMP)"),
+                                dialect,
+                            );
+                            let alias = format!("metric_time__{granularity}");
+                            select_cols.push(format!("{expr} AS {alias}"));
+                            group_by_cols.push(expr);
+                            output_col_names.push(alias);
+                        }
+                    }
+                } else if !is_standard_granularity(granularity) {
+                    if let Some((spine, custom_col)) =
+                        find_custom_granularity_spine(all_time_spines, granularity)
+                    {
+                        let cg_alias = if cg_alias_counter == 0 {
+                            "ts_cg".to_string()
+                        } else {
+                            format!("ts_cg{cg_alias_counter}")
+                        };
+                        cg_alias_counter += 1;
+                        let time_expr = resolve_time_dimension_ref(
+                            name,
+                            "day",
+                            model_aliases,
+                            dialect,
+                            &primary_model_name,
+                        );
+                        let spine_rel = spine.relation_name.clone();
+                        let on_cond = format!("{time_expr} = {cg_alias}.{}", spine.primary_column);
+                        custom_gran_joins.push((cg_alias.clone(), spine_rel, on_cond));
+                        let col_expr = format!("{cg_alias}.{custom_col}");
+                        let alias = format!("{name}__{granularity}");
+                        select_cols.push(format!("{col_expr} AS {alias}"));
+                        group_by_cols.push(col_expr);
+                        output_col_names.push(alias);
+                    }
+                } else {
+                    let resolved = resolve_time_dimension_ref(
+                        name,
+                        granularity,
+                        model_aliases,
+                        dialect,
+                        &primary_model_name,
+                    );
+                    let alias = format!("{name}__{granularity}");
+                    select_cols.push(format!("{resolved} AS {alias}"));
+                    group_by_cols.push(resolved);
+                    output_col_names.push(alias);
+                }
+            }
+            GroupBySpec::Dimension { entity, name } => {
+                let full_ref = match entity {
+                    Some(e) => format!("{e}__{name}"),
+                    None => name.clone(),
+                };
+                let resolved =
+                    resolve_dimension_ref(&full_ref, model_aliases, dialect, &primary_model_name);
+                select_cols.push(format!("{resolved} AS {full_ref}"));
+                group_by_cols.push(resolved);
+                output_col_names.push(full_ref);
+            }
+            GroupBySpec::Entity { name } => {
+                let resolved = resolve_entity_ref(name, model_aliases, &primary_model_name);
+                select_cols.push(format!("{resolved} AS {name}"));
+                group_by_cols.push(resolved);
+                output_col_names.push(name.clone());
+            }
+        }
+    }
+
+    // Build FROM clause.
+    let from_clause: String;
+    let mut join_clauses: Vec<String> = Vec::new();
+
+    if needs_time_spine && needed_models.is_empty() {
+        let spine = pick_time_spine_for_granularity(all_time_spines, finest_metric_time_gran)
+            .ok_or_else(|| MetricFlowError::Other("no time spine found".into()))?;
+        from_clause = format!("{} {spine_alias}", spine.relation_name);
+    } else if needed_models.is_empty() {
+        return Err(MetricFlowError::Other(
+            "dimension-only query has no models to select from".into(),
+        ));
+    } else {
+        let (primary_alias, primary_model) = model_aliases
+            .get(&primary_model_name)
+            .ok_or_else(|| MetricFlowError::Other("primary model not resolved".into()))?;
+        from_clause = format!("{} {primary_alias}", primary_model.relation_name);
+
+        // Join additional models via join graph.
+        for target_model in &needed_models {
+            if *target_model == primary_model_name {
+                continue;
+            }
+            if let Some(path) = find_join_path(join_edges, &primary_model_name, target_model) {
+                let mut prev = primary_model_name.clone();
+                for edge in &path {
+                    let (ta, tm) = model_aliases.get(&edge.to_model).ok_or_else(|| {
+                        MetricFlowError::Other(format!("model not resolved: {}", edge.to_model))
+                    })?;
+                    let (pa, _) = model_aliases.get(&prev).ok_or_else(|| {
+                        MetricFlowError::Other(format!("model not resolved: {prev}"))
+                    })?;
+                    let cond = format!("{pa}.{} = {ta}.{}", edge.from_expr, edge.to_expr);
+                    if !join_clauses
+                        .iter()
+                        .any(|j| j.contains(&format!("{} {ta}", tm.relation_name)))
+                    {
+                        join_clauses.push(format!(
+                            "FULL OUTER JOIN\n  {} {ta}\nON\n  {cond}",
+                            tm.relation_name
+                        ));
+                    }
+                    prev = edge.to_model.clone();
+                }
+            }
+        }
+
+        if needs_time_spine {
+            let spine = pick_time_spine_for_granularity(all_time_spines, finest_metric_time_gran)
+                .ok_or_else(|| MetricFlowError::Other("no time spine found".into()))?;
+            join_clauses.insert(
+                0,
+                format!("CROSS JOIN\n  {} {spine_alias}", spine.relation_name),
+            );
+        }
+    }
+
+    // WHERE clause.
+    let mut where_parts: Vec<String> = Vec::new();
+    let mut dummy_sql = String::new();
+    for filter in &spec.where_filters {
+        where_parts.push(resolve_where_filter_custom_gran(
+            filter,
+            model_aliases,
+            dialect,
+            &primary_model_name,
+            all_time_spines,
+            None,
+            &mut custom_gran_joins,
+            &mut cg_alias_counter,
+            &mut dummy_sql,
+        ));
+    }
+
+    // Time constraint on metric_time.
+    if let Some((ref start, ref end)) = spec.time_constraint {
+        for gb in &spec.group_by {
+            if let GroupBySpec::TimeDimension {
+                name, granularity, ..
+            } = gb
+            {
+                if name == "metric_time" {
+                    if let Some(spine) =
+                        pick_time_spine_for_granularity(all_time_spines, finest_metric_time_gran)
+                    {
+                        let raw = format!("{spine_alias}.{}", spine.primary_column);
+                        let trunc = render_date_trunc(
+                            granularity,
+                            &format!("CAST({raw} AS TIMESTAMP)"),
+                            dialect,
+                        );
+                        let cast_trunc = render_type_cast(&trunc, "TIMESTAMP", dialect);
+                        let start_ts =
+                            render_type_cast(&format!("'{start}'"), "TIMESTAMP", dialect);
+                        let has_time = end.contains(' ') || end.contains('T');
+                        let subdaily = matches!(granularity.as_str(), "hour" | "minute" | "second");
+                        if has_time && subdaily {
+                            let end_bound = format!(
+                                "DATE_TRUNC('{granularity}', CAST('{end}' AS TIMESTAMP)) + INTERVAL '1 {granularity}'"
+                            );
+                            where_parts.push(format!(
+                                "{cast_trunc} >= {start_ts} AND {cast_trunc} < {end_bound}"
+                            ));
+                        } else if has_time {
+                            let end_ts =
+                                render_type_cast(&format!("'{end}'"), "TIMESTAMP", dialect);
+                            where_parts.push(format!(
+                                "{cast_trunc} >= {start_ts} AND {cast_trunc} <= {end_ts}"
+                            ));
+                        } else {
+                            let end_bound =
+                                format!("CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'");
+                            where_parts.push(format!(
+                                "{cast_trunc} >= {start_ts} AND {cast_trunc} < {end_bound}"
+                            ));
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Assemble.
+    if needs_subquery_wrapper {
+        // For subquery wrapping, add WHERE filter dimensions to the inner SELECT.
+        let mut inner_select_cols = select_cols.clone();
+        let mut all_output_names = output_col_names.clone();
+        for filter in &spec.where_filters {
+            let mut cursor = 0usize;
+            while let Some(pos) = filter[cursor..].find("Dimension(") {
+                let abs_pos = cursor + pos;
+                if abs_pos > 0 && filter[..abs_pos].ends_with("Time") {
+                    cursor = abs_pos + 10;
+                    continue;
+                }
+                if let Some(paren_end) = filter[abs_pos..].find(')') {
+                    let inner = &filter[abs_pos + 10..abs_pos + paren_end];
+                    let dim_ref = inner.trim().trim_matches('\'').trim_matches('"');
+                    let col_alias = dim_ref.to_string();
+                    if !all_output_names.contains(&col_alias) {
+                        let resolved = resolve_dimension_ref(
+                            dim_ref,
+                            model_aliases,
+                            dialect,
+                            &primary_model_name,
+                        );
+                        inner_select_cols.push(format!("{resolved} AS {col_alias}"));
+                        all_output_names.push(col_alias);
+                    }
+                    cursor = abs_pos + paren_end + 1;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let inner_select = inner_select_cols.join("\n  , ");
+        let mut inner_sql = format!("SELECT\n  {inner_select}\nFROM {from_clause}");
+        for join in &join_clauses {
+            inner_sql.push_str(&format!("\n{join}"));
+        }
+        for (cg_alias, cg_relation, cg_on) in &custom_gran_joins {
+            inner_sql.push_str(&format!(
+                "\nLEFT OUTER JOIN {cg_relation} {cg_alias}\nON {cg_on}"
+            ));
+        }
+        let outer_cols: Vec<&str> = output_col_names
+            .iter()
+            .filter(|n| {
+                spec.group_by.iter().any(|gb| match gb {
+                    GroupBySpec::Dimension { entity, name } => {
+                        **n == match entity {
+                            Some(e) => format!("{e}__{name}"),
+                            None => name.clone(),
+                        }
+                    }
+                    GroupBySpec::TimeDimension {
+                        name, granularity, ..
+                    } => **n == format!("{name}__{granularity}"),
+                    GroupBySpec::Entity { name } => *n == name,
+                })
+            })
+            .map(|s| s.as_str())
+            .collect();
+        let outer_select = outer_cols.join("\n  , ");
+        let mut sql = format!(
+            "SELECT\n  {outer_select}\nFROM (\n  {}\n) outer_subq",
+            inner_sql.replace('\n', "\n  ")
+        );
+        // Resolve WHERE against output column aliases (not model aliases).
+        if !spec.where_filters.is_empty() {
+            let mut resolved_filters: Vec<String> = Vec::new();
+            for filter in &spec.where_filters {
+                let mut resolved = filter.clone();
+                while let Some(start) = resolved.find("{{ Dimension(") {
+                    if let Some(end) = resolved[start..].find("}}").map(|i| start + i + 2) {
+                        let snippet = resolved[start + 2..end - 2].trim().to_string();
+                        let dim_ref = snippet
+                            .strip_prefix("Dimension(")
+                            .and_then(|s| s.strip_suffix(')'))
+                            .unwrap_or(&snippet)
+                            .trim()
+                            .trim_matches('\'')
+                            .trim_matches('"')
+                            .to_string();
+                        resolved.replace_range(start..end, &dim_ref);
+                    } else {
+                        break;
+                    }
+                }
+                resolved_filters.push(resolved);
+            }
+            sql.push_str(&format!("\nWHERE {}", resolved_filters.join(" AND ")));
+        }
+        if spec.apply_group_by {
+            sql.push_str(&format!("\nGROUP BY\n  {}", outer_cols.join("\n  , ")));
+        }
+        if !spec.order_by.is_empty() {
+            let parts: Vec<String> = spec
+                .order_by
+                .iter()
+                .map(|o| {
+                    let col = resolve_order_by_col(&o.name, &spec.group_by);
+                    if o.descending {
+                        format!("{col} DESC")
+                    } else {
+                        col
+                    }
+                })
+                .collect();
+            sql.push_str(&format!("\nORDER BY\n  {}", parts.join("\n  , ")));
+        }
+        if let Some(limit) = spec.limit {
+            sql.push_str(&format!("\nLIMIT {limit}"));
+        }
+        Ok(sql)
+    } else {
+        let select = select_cols.join("\n  , ");
+        let mut sql = format!("SELECT\n  {select}\nFROM {from_clause}");
+        for join in &join_clauses {
+            sql.push_str(&format!("\n{join}"));
+        }
+        for (cg_alias, cg_relation, cg_on) in &custom_gran_joins {
+            sql.push_str(&format!(
+                "\nLEFT OUTER JOIN {cg_relation} {cg_alias}\nON {cg_on}"
+            ));
+        }
+        if !where_parts.is_empty() {
+            sql.push_str(&format!("\nWHERE {}", where_parts.join(" AND ")));
+        }
+        if spec.apply_group_by {
+            sql.push_str(&format!("\nGROUP BY\n  {}", group_by_cols.join("\n  , ")));
+        }
+        if !spec.order_by.is_empty() {
+            let parts: Vec<String> = spec
+                .order_by
+                .iter()
+                .map(|o| {
+                    let col = resolve_order_by_col(&o.name, &spec.group_by);
+                    if o.descending {
+                        format!("{col} DESC")
+                    } else {
+                        col
+                    }
+                })
+                .collect();
+            sql.push_str(&format!("\nORDER BY\n  {}", parts.join("\n  , ")));
+        }
+        if let Some(limit) = spec.limit {
+            sql.push_str(&format!("\nLIMIT {limit}"));
+        }
+        Ok(sql)
+    }
+}
+
+fn compile_dimension_only_with_metric_filter(
+    store: &mut impl MetricStore,
+    spec: &SemanticQuerySpec,
+    model_aliases: &HashMap<String, (String, &ResolvedModel)>,
+    _join_edges: &[JoinEdge],
+    _all_time_spines: &[TimeSpine],
+    dialect: Dialect,
+) -> Result<String, MetricFlowError> {
+    let entity_for_join = spec
+        .group_by
+        .iter()
+        .find_map(|gb| {
+            if let GroupBySpec::Entity { name } = gb {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+
+    let metric_filter_refs = extract_metric_filter_refs(&spec.where_filters);
+
+    let mut all_metrics: HashMap<String, ResolvedMetric> = HashMap::new();
+    for mfr in &metric_filter_refs {
+        resolve_metrics_recursive(store, &mfr.metric_name, &mut all_metrics)?;
+    }
+
+    // Build metric subquery CTEs.
+    let mut cte_sqls: Vec<(String, String)> = Vec::new();
+    let mut metric_model_names: Vec<String> = Vec::new();
+    for mfr in &metric_filter_refs {
+        if let Some(metric) = all_metrics.get(&mfr.metric_name) {
+            if let Some(ref ap) = metric.agg_params {
+                let entity_name = mfr.entities.first().map(|s| s.as_str()).unwrap_or("id");
+                let model = resolve_model(store, &ap.semantic_model)?;
+                metric_model_names.push(ap.semantic_model.clone());
+                let agg_expr = render_agg_with_params(
+                    &ap.agg,
+                    &ap.expr,
+                    dialect,
+                    ap.percentile,
+                    ap.use_discrete_percentile,
+                );
+                let entity_expr = model
+                    .entities
+                    .iter()
+                    .find(|e| e.name == entity_name)
+                    .map(|e| e.expr.clone())
+                    .unwrap_or_else(|| entity_name.to_string());
+                cte_sqls.push((
+                    format!("mf__{}", mfr.metric_name),
+                    format!("SELECT\n  {entity_expr} AS {entity_name}\n  , {agg_expr} AS {}\nFROM {}\nGROUP BY {entity_expr}",
+                        mfr.metric_name, model.relation_name),
+                ));
+            }
+        }
+    }
+
+    // Pick the base model: prefer a pure dimension/mapping table for the entity,
+    // excluding models that back the metric subqueries.
+    let exclude_models: Vec<&str> = metric_model_names.iter().map(|s| s.as_str()).collect();
+    let primary_model_name =
+        find_dimension_model_for_entity(store, &entity_for_join, &exclude_models)?
+            .or_else(|| model_aliases.keys().next().cloned())
+            .unwrap_or_default();
+
+    let base_model = resolve_model(store, &primary_model_name)?;
+    let base_alias = base_model.alias.chars().next().unwrap_or('t').to_string();
+    let from_model = format!("{} {base_alias}", base_model.relation_name);
+    let entity_col = base_model
+        .entities
+        .iter()
+        .find(|e| e.name == entity_for_join)
+        .map(|e| format!("{base_alias}.{}", e.expr))
+        .unwrap_or_else(|| format!("{base_alias}.{entity_for_join}"));
+
+    // Inner subquery: entity column + metric columns.
+    let mut inner_select: Vec<String> = Vec::new();
+    for gb in &spec.group_by {
+        if let GroupBySpec::Entity { name } = gb {
+            inner_select.push(format!("{entity_col} AS {name}"));
+        }
+    }
+    let mut inner_joins: Vec<String> = Vec::new();
+    for (cte_name, _) in &cte_sqls {
+        let metric_name = cte_name.strip_prefix("mf__").unwrap_or(cte_name);
+        inner_select.push(format!(
+            "a.{metric_name} AS {entity_for_join}__{metric_name}"
+        ));
+        inner_joins.push(format!(
+            "FULL OUTER JOIN (\n  SELECT * FROM {cte_name}\n) a\nON {entity_col} = a.{entity_for_join}"));
+    }
+
+    let mut sql = String::new();
+    if !cte_sqls.is_empty() {
+        sql.push_str("WITH ");
+        for (i, (name, body)) in cte_sqls.iter().enumerate() {
+            if i > 0 {
+                sql.push_str(", ");
+            }
+            sql.push_str(&format!("{name} AS (\n  {}\n)", body.replace('\n', "\n  ")));
+        }
+        sql.push('\n');
+    }
+
+    let mut inner_sql = format!(
+        "SELECT\n    {}\n  FROM {from_model}",
+        inner_select.join("\n    , ")
+    );
+    for join in &inner_joins {
+        inner_sql.push_str(&format!("\n  {join}"));
+    }
+
+    let outer_cols: Vec<String> = spec
+        .group_by
+        .iter()
+        .map(|gb| match gb {
+            GroupBySpec::Entity { name } => name.clone(),
+            GroupBySpec::Dimension { entity, name } => match entity {
+                Some(e) => format!("{e}__{name}"),
+                None => name.clone(),
+            },
+            GroupBySpec::TimeDimension {
+                name, granularity, ..
+            } => format!("{name}__{granularity}"),
+        })
+        .collect();
+
+    // Resolve WHERE — replace {{ Metric(...) }} with column refs.
+    let mut where_clause = String::new();
+    for filter in &spec.where_filters {
+        let mut resolved = filter.clone();
+        while let Some(start) = resolved.find("{{ Metric(") {
+            if let Some(end) = resolved[start..].find("}}").map(|i| start + i + 2) {
+                let inner = resolved[start + 2..end - 2].trim();
+                let mfr_inner = inner
+                    .strip_prefix("Metric(")
+                    .and_then(|s| s.strip_suffix(')'))
+                    .unwrap_or(inner);
+                let metric_name = mfr_inner
+                    .split(',')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('\'')
+                    .trim_matches('"');
+                resolved.replace_range(start..end, &format!("{entity_for_join}__{metric_name}"));
+            } else {
+                break;
+            }
+        }
+        where_clause = resolved;
+    }
+
+    sql.push_str(&format!(
+        "SELECT\n  {}\nFROM (\n  {}\n) outer_subq",
+        outer_cols.join("\n  , "),
+        inner_sql.replace('\n', "\n  ")
+    ));
+    if !where_clause.is_empty() {
+        sql.push_str(&format!("\nWHERE {where_clause}"));
+    }
+    sql.push_str(&format!("\nGROUP BY {}", outer_cols.join(", ")));
+    if !spec.order_by.is_empty() {
+        let parts: Vec<String> = spec
+            .order_by
+            .iter()
+            .map(|o| {
+                let col = resolve_order_by_col(&o.name, &spec.group_by);
+                if o.descending {
+                    format!("{col} DESC")
+                } else {
+                    col
+                }
+            })
+            .collect();
+        sql.push_str(&format!("\nORDER BY {}", parts.join(", ")));
+    }
+    if let Some(limit) = spec.limit {
+        sql.push_str(&format!("\nLIMIT {limit}"));
+    }
+    Ok(sql)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Simple metric compilation (single-query path)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3007,6 +5046,7 @@ fn compile_simple_metrics(
     all_metrics: &HashMap<String, ResolvedMetric>,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
+    all_time_spines: &[TimeSpine],
     dialect: Dialect,
 ) -> Result<String, MetricFlowError> {
     let mut sql = String::new();
@@ -3048,18 +5088,96 @@ fn compile_simple_metrics(
     for gb in &spec.group_by {
         if let GroupBySpec::Dimension {
             entity: Some(entity_name),
-            ..
+            name: dim_name,
         } = gb
         {
-            // Find the model that owns this entity as primary/unique (the join target).
-            for (model_name, (_alias, model)) in model_aliases {
+            // For multi-hop entity chains (e.g. "account_id__customer_id"),
+            // add all models reachable via any entity in the chain.
+            let entity_segments: Vec<&str> = entity_name.split("__").collect();
+            // Prefer the model that has both the entity AND the dimension over
+            // models that merely share the entity name.
+            let mut best_match: Option<&String> = None;
+            let mut entity_only_match: Option<&String> = None;
+            for (model_name, (_alias, model)) in model_aliases.iter() {
                 if model_name == &primary_model_name || target_set.contains(model_name) {
                     continue;
                 }
-                let has_entity = model.entities.iter().any(|e| e.name == *entity_name);
-                if has_entity {
+                let has_entity = entity_segments
+                    .iter()
+                    .any(|seg| model.entities.iter().any(|e| e.name == *seg));
+                if !has_entity {
+                    continue;
+                }
+                let has_dim = model.dimensions.iter().any(|d| d.name == *dim_name);
+                if has_dim && best_match.is_none() {
+                    best_match = Some(model_name);
+                } else if entity_only_match.is_none() {
+                    entity_only_match = Some(model_name);
+                }
+            }
+            let selected = best_match.or(entity_only_match);
+            if let Some(model_name) = selected {
+                if !target_set.contains(model_name) {
                     target_models.push(model_name.clone());
                     target_set.insert(model_name.clone());
+                }
+            }
+        }
+    }
+
+    // 2b. TimeDimension with entity prefix (e.g. TimeDimension('user__last_login_ts', 'minute')).
+    // For multi-hop chains like 'listing__user__ds', find the model where the target
+    // entity is primary and that has the dimension. For intermediate entities, find
+    // the model where that entity is primary (the join path resolution will add
+    // intermediates automatically).
+    for gb in &spec.group_by {
+        if let GroupBySpec::TimeDimension { name, .. } = gb {
+            if let Some((entity_chain, dim_name)) = name.rsplit_once("__") {
+                let target_entity = entity_chain
+                    .rsplit_once("__")
+                    .map(|(_, last)| last)
+                    .unwrap_or(entity_chain);
+                // Find the model where the target entity is primary AND has the dimension.
+                let mut found = false;
+                for (model_name, (_alias, model)) in model_aliases.iter() {
+                    if model_name == &primary_model_name || target_set.contains(model_name) {
+                        continue;
+                    }
+                    let is_primary = model.entities.iter().any(|e| {
+                        e.name == target_entity
+                            && matches!(e.entity_type.as_str(), "primary" | "unique" | "natural")
+                    }) || model.primary_entity.as_deref() == Some(target_entity);
+                    if !is_primary {
+                        continue;
+                    }
+                    let has_dim = model.dimensions.iter().any(|d| d.name == dim_name);
+                    if has_dim {
+                        target_models.push(model_name.clone());
+                        target_set.insert(model_name.clone());
+                        found = true;
+                        break;
+                    }
+                }
+                // Fallback: any model with the target entity as primary.
+                if !found {
+                    for (model_name, (_alias, model)) in model_aliases.iter() {
+                        if model_name == &primary_model_name || target_set.contains(model_name) {
+                            continue;
+                        }
+                        let is_primary = model.entities.iter().any(|e| {
+                            e.name == target_entity
+                                && matches!(
+                                    e.entity_type.as_str(),
+                                    "primary" | "unique" | "natural"
+                                )
+                        }) || model.primary_entity.as_deref()
+                            == Some(target_entity);
+                        if is_primary {
+                            target_models.push(model_name.clone());
+                            target_set.insert(model_name.clone());
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -3148,11 +5266,53 @@ fn compile_simple_metrics(
         }
     }
 
+    // Plan multi-hop subquery joins.
+    let all_metric_filters: Vec<String> = metrics
+        .iter()
+        .flat_map(|m| m.metric_filters.iter().cloned())
+        .collect();
+    let mh_subqueries = plan_multi_hop_joins(
+        spec,
+        &primary_model_name,
+        model_aliases,
+        join_edges,
+        dialect,
+        &all_metric_filters,
+    );
+
     // Build SELECT columns.
     let _ = writeln!(sql, "SELECT");
 
     let mut select_parts: Vec<String> = Vec::new();
     let out_cols = group_by_output_cols(&spec.group_by);
+
+    // Determine the agg_time_dimension for metric_time resolution.
+    // When all metrics share the same agg_time_dimension, use it to resolve metric_time.
+    let shared_agg_time_dim: Option<&str> = if metrics.len() == 1 {
+        metrics[0]
+            .agg_params
+            .as_ref()
+            .and_then(|ap| ap.agg_time_dimension.as_deref())
+    } else {
+        let first = metrics[0]
+            .agg_params
+            .as_ref()
+            .and_then(|ap| ap.agg_time_dimension.as_deref());
+        if metrics.iter().all(|m| {
+            m.agg_params
+                .as_ref()
+                .and_then(|ap| ap.agg_time_dimension.as_deref())
+                == first
+        }) {
+            first
+        } else {
+            None
+        }
+    };
+
+    // Collect custom granularity JOINs needed.
+    let mut custom_gran_joins: Vec<(String, String, String)> = Vec::new(); // (alias, relation, on_cond)
+    let mut cg_alias_counter = 0u32;
 
     // Group-by columns.
     for (gb, out_col) in spec.group_by.iter().zip(out_cols.iter()) {
@@ -3162,18 +5322,57 @@ fn compile_simple_metrics(
                 granularity,
                 date_part,
             } => {
-                let col_expr = resolve_time_dimension_ref(
-                    name,
-                    granularity,
-                    model_aliases,
-                    dialect,
-                    &primary_model_name,
-                );
-                if let Some(part) = date_part {
-                    let extract_expr = render_extract(part, &col_expr, dialect);
-                    select_parts.push(format!("  {extract_expr} AS {out_col}"));
+                if !is_standard_granularity(granularity) {
+                    if let Some((spine, custom_col)) =
+                        find_custom_granularity_spine(all_time_spines, granularity)
+                    {
+                        let cg_alias = if cg_alias_counter == 0 {
+                            "ts_cg".to_string()
+                        } else {
+                            format!("ts_cg{cg_alias_counter}")
+                        };
+                        cg_alias_counter += 1;
+                        let time_expr = resolve_time_dimension_ref_with_agg(
+                            name,
+                            "day",
+                            model_aliases,
+                            dialect,
+                            &primary_model_name,
+                            shared_agg_time_dim,
+                        );
+                        let spine_rel = match dialect {
+                            Dialect::Databricks => spine.relation_name.replace('"', "`"),
+                            _ => spine.relation_name.clone(),
+                        };
+                        let on_cond = format!("{time_expr} = {cg_alias}.{}", spine.primary_column);
+                        custom_gran_joins.push((cg_alias.clone(), spine_rel, on_cond));
+                        let col_expr = format!("{cg_alias}.{custom_col}");
+                        if let Some(part) = date_part {
+                            let extract_expr = render_extract(part, &col_expr, dialect);
+                            select_parts.push(format!("  {extract_expr} AS {out_col}"));
+                        } else {
+                            select_parts.push(format!("  {col_expr} AS {out_col}"));
+                        }
+                    } else {
+                        return Err(MetricFlowError::Other(format!(
+                            "unknown custom granularity: {granularity}"
+                        )));
+                    }
                 } else {
-                    select_parts.push(format!("  {col_expr} AS {out_col}"));
+                    let col_expr = resolve_time_dimension_ref_with_agg(
+                        name,
+                        granularity,
+                        model_aliases,
+                        dialect,
+                        &primary_model_name,
+                        shared_agg_time_dim,
+                    );
+                    if let Some(part) = date_part {
+                        let extract_expr = render_extract(part, &col_expr, dialect);
+                        select_parts.push(format!("  {extract_expr} AS {out_col}"));
+                    } else {
+                        select_parts.push(format!("  {col_expr} AS {out_col}"));
+                    }
                 }
             }
             GroupBySpec::Dimension { entity, name } => {
@@ -3181,8 +5380,13 @@ fn compile_simple_metrics(
                     Some(e) => format!("{e}__{name}"),
                     None => name.clone(),
                 };
-                let col_expr =
-                    resolve_dimension_ref(&dim_ref, model_aliases, dialect, &primary_model_name);
+                let col_expr = resolve_dimension_ref_with_mh(
+                    &dim_ref,
+                    model_aliases,
+                    dialect,
+                    &primary_model_name,
+                    &mh_subqueries,
+                );
                 select_parts.push(format!("  {col_expr} AS {out_col}"));
             }
             GroupBySpec::Entity { name } => {
@@ -3193,6 +5397,14 @@ fn compile_simple_metrics(
     }
 
     // Metric columns.
+    // When a metric has metric_filters AND other metrics in this query don't have the
+    // same filter, wrap the measure in CASE WHEN so the filter applies only to this metric.
+    let any_metric_has_filter = metrics.iter().any(|m| !m.metric_filters.is_empty());
+    let all_share_same_filters = metrics
+        .windows(2)
+        .all(|w| w[0].metric_filters == w[1].metric_filters);
+    let use_case_when = any_metric_has_filter && !all_share_same_filters;
+
     for metric in metrics {
         if let Some(ref ap) = metric.agg_params {
             let model_alias = model_aliases
@@ -3201,12 +5413,27 @@ fn compile_simple_metrics(
                 .unwrap_or("t");
             let col_expr =
                 if ap.semantic_model != primary_model_name && is_complex_measure_expr(&ap.expr) {
-                    // Expression is pre-computed in the derived-table JOIN; reference it by name.
                     format!("{model_alias}.__mf_{}_expr", metric.name)
                 } else {
                     qualify_measure_expr(model_alias, &ap.expr)
                 };
-            let agg_expr = render_agg(&ap.agg, &col_expr, dialect);
+            let filtered_expr = if use_case_when && !metric.metric_filters.is_empty() {
+                let conds: Vec<String> = metric
+                    .metric_filters
+                    .iter()
+                    .map(|f| resolve_where_filter(f, model_aliases, dialect, &primary_model_name))
+                    .collect();
+                format!("CASE WHEN {} THEN {col_expr} END", conds.join(" AND "))
+            } else {
+                col_expr
+            };
+            let agg_expr = render_agg_with_params(
+                &ap.agg,
+                &filtered_expr,
+                dialect,
+                ap.percentile,
+                ap.use_discrete_percentile,
+            );
             select_parts.push(format!("  {agg_expr} AS {}", metric.name));
         }
     }
@@ -3234,8 +5461,33 @@ fn compile_simple_metrics(
         }
     }
 
+    // Emit multi-hop subquery joins (independent bridge-through-leaf paths).
+    // Collect models that are covered by subqueries so we skip them in flat joins.
+    let mut mh_covered_models: HashSet<String> = HashSet::new();
+    for mh in &mh_subqueries {
+        let _ = writeln!(
+            sql,
+            "LEFT JOIN ({}) AS {} ON {} = {}.{}",
+            mh.subquery_sql, mh.alias, mh.fact_join_expr, mh.alias, mh.subquery_join_col,
+        );
+        // Parse model names from the subquery to mark them as covered.
+        for (model_name, (_, model)) in model_aliases {
+            if model_name == &primary_model_name {
+                continue;
+            }
+            let rel = render_full_relation(model, dialect);
+            if mh.subquery_sql.contains(&rel) {
+                mh_covered_models.insert(model_name.clone());
+            }
+        }
+    }
+
     // JOIN clauses — emit one LEFT JOIN per edge in the resolved join sequence.
     for edge in &join_sequence {
+        // Skip models that are already covered by multi-hop subqueries.
+        if mh_covered_models.contains(&edge.to_model) {
+            continue;
+        }
         let (join_alias, join_model) = match model_aliases.get(&edge.to_model) {
             Some((a, m)) => (a.as_str(), *m),
             None => continue,
@@ -3249,25 +5501,85 @@ fn compile_simple_metrics(
                 .unwrap_or(primary_alias.as_str())
         };
         let join_relation = render_full_relation(join_model, dialect);
+        // Build join condition: entity key + any shared partition dimensions.
+        let mut join_conds = vec![format!(
+            "{left_alias}.{} = {join_alias}.{}",
+            edge.from_expr, edge.to_expr
+        )];
+        // Add partition dimension matching: check from-model AND primary model.
+        let from_model_opt = model_aliases.get(&edge.from_model).map(|(_, m)| *m);
+        if let Some(from_model_ref) = from_model_opt {
+            for from_dim in &from_model_ref.dimensions {
+                if from_dim.is_partition {
+                    if let Some(to_dim) = join_model
+                        .dimensions
+                        .iter()
+                        .find(|d| d.is_partition && d.name == from_dim.name)
+                    {
+                        join_conds.push(format!(
+                            "{left_alias}.{} = {join_alias}.{}",
+                            from_dim.expr, to_dim.expr
+                        ));
+                    }
+                }
+            }
+        }
+        // For multi-hop joins, also check if the primary model shares a partition
+        // dimension with the target model (even if intermediates don't have it).
+        if edge.from_model != primary_model_name {
+            for prim_dim in &primary_model.dimensions {
+                if prim_dim.is_partition {
+                    if let Some(to_dim) = join_model
+                        .dimensions
+                        .iter()
+                        .find(|d| d.is_partition && d.name == prim_dim.name)
+                    {
+                        let cond = format!(
+                            "{primary_alias}.{} = {join_alias}.{}",
+                            prim_dim.expr, to_dim.expr
+                        );
+                        if !join_conds.contains(&cond) {
+                            join_conds.push(cond);
+                        }
+                    }
+                }
+            }
+        }
+        // SCD temporal range condition: when the joined model is a slowly changing
+        // dimension, add fact.time >= scd.valid_from AND (fact.time < scd.valid_to OR
+        // scd.valid_to IS NULL) using the primary model's agg_time_dimension.
+        if let (Some(vf), Some(vt)) = (
+            join_model.scd_valid_from.as_deref(),
+            join_model.scd_valid_to.as_deref(),
+        ) {
+            if let Some(fte) = shared_agg_time_dim.and_then(|atd| {
+                primary_model
+                    .dimensions
+                    .iter()
+                    .find(|d| d.name == atd)
+                    .map(|d| format!("{primary_alias}.{}", d.expr))
+            }) {
+                join_conds.push(format!("{fte} >= {join_alias}.{vf}"));
+                join_conds.push(format!(
+                    "({fte} < {join_alias}.{vt} OR {join_alias}.{vt} IS NULL)"
+                ));
+            }
+        }
+        let join_on = join_conds.join(" AND ");
         if let Some(complex_exprs) = complex_exprs_by_model.get(&edge.to_model) {
-            // Derived-table JOIN: pre-compute complex measure exprs so that bare column
-            // references inside them are resolved against the secondary table only.
             let derived_cols: Vec<String> = complex_exprs
                 .iter()
                 .map(|(name, expr)| format!("  {expr} AS __mf_{name}_expr"))
                 .collect();
             let _ = writeln!(
                 sql,
-                "LEFT JOIN (\n  SELECT *,\n{}\n  FROM {join_relation}\n) AS {join_alias} ON {left_alias}.{} = {join_alias}.{}",
+                "LEFT JOIN (\n  SELECT *,\n{}\n  FROM {join_relation}\n) AS {join_alias} ON {join_on}",
                 derived_cols.join(",\n"),
-                edge.from_expr,
-                edge.to_expr,
             );
         } else {
             let _ = writeln!(
                 sql,
-                "LEFT JOIN {join_relation} AS {join_alias} ON {left_alias}.{} = {join_alias}.{}",
-                edge.from_expr, edge.to_expr,
+                "LEFT JOIN {join_relation} AS {join_alias} ON {join_on}",
             );
         }
     }
@@ -3279,6 +5591,9 @@ fn compile_simple_metrics(
             let _ = writeln!(sql, "CROSS JOIN {join_relation} AS {join_alias}");
         }
     }
+
+    // Custom granularity JOINs are deferred until WHERE filters are resolved
+    // (they may add more custom_gran_joins). Emitted below before the WHERE clause.
 
     // Semi-additive measure handling: INNER JOIN to subquery with MIN/MAX on
     // the non-additive time dimension.
@@ -3316,10 +5631,35 @@ fn compile_simple_metrics(
 
                 let mut nad_select = Vec::new();
                 let mut nad_join_conds = Vec::new();
+                let mut group_count = 0usize;
                 for (name, expr) in &grouping_exprs {
                     nad_select.push(format!("{expr} AS {name}"));
                     nad_join_conds.push(format!("{primary_alias}.{expr} = __nad.{name}"));
+                    group_count += 1;
                 }
+
+                // When the query groups by metric_time, partition the NAD subquery
+                // by the query's time granularity so MIN/MAX is computed per period.
+                let query_time_gran = spec.group_by.iter().find_map(|gb| {
+                    if let GroupBySpec::TimeDimension {
+                        name, granularity, ..
+                    } = gb
+                    {
+                        if name == "metric_time" || name == nad_name {
+                            return Some(granularity.clone());
+                        }
+                    }
+                    None
+                });
+                if let Some(ref gran) = query_time_gran {
+                    let time_trunc = format!("DATE_TRUNC('{gran}', {nad_expr})");
+                    nad_select.push(format!("{time_trunc} AS __nad_metric_time"));
+                    nad_join_conds.push(format!(
+                        "DATE_TRUNC('{gran}', {primary_alias}.{nad_expr}) = __nad.__nad_metric_time"
+                    ));
+                    group_count += 1;
+                }
+
                 let trunc = format!("DATE_TRUNC('{nad_gran}', {nad_expr})");
                 nad_select.push(format!("{agg_fn}({trunc}) AS __nad_time"));
                 nad_join_conds.push(format!(
@@ -3327,17 +5667,54 @@ fn compile_simple_metrics(
                 ));
 
                 let nad_from = render_full_relation(primary_model, dialect);
-                let group_by = if grouping_exprs.is_empty() {
+
+                // Build WHERE for the NAD subquery: include only filters that
+                // reference the primary table. Filters on joined dimensions
+                // (e.g., d1.home_state_latest) are excluded since the NAD
+                // subquery is a standalone `SELECT ... FROM table`.
+                let strip_alias = format!("{}.", primary_alias);
+                let mut nad_where_parts: Vec<String> = Vec::new();
+                for filter in metric
+                    .metric_filters
+                    .iter()
+                    .chain(spec.where_filters.iter())
+                {
+                    let resolved =
+                        resolve_where_filter(filter, model_aliases, dialect, &primary_model_name);
+                    // Skip filters that reference joined table aliases (d1., d2., etc.)
+                    let has_joined_ref = resolved.contains("d1.")
+                        || resolved.contains("d2.")
+                        || resolved.contains("D1.")
+                        || resolved.contains("D2.");
+                    if has_joined_ref {
+                        continue;
+                    }
+                    nad_where_parts.push(resolved.replace(&strip_alias, ""));
+                }
+                if let Some((start, end)) = &spec.time_constraint {
+                    nad_where_parts.push(format!(
+                        "CAST({nad_expr} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+                    ));
+                    nad_where_parts.push(format!(
+                        "CAST({nad_expr} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+                    ));
+                }
+                let nad_where = if nad_where_parts.is_empty() {
                     String::new()
                 } else {
-                    let indices: Vec<String> =
-                        (1..=grouping_exprs.len()).map(|i| i.to_string()).collect();
+                    format!(" WHERE {}", nad_where_parts.join(" AND "))
+                };
+
+                let group_by = if group_count == 0 {
+                    String::new()
+                } else {
+                    let indices: Vec<String> = (1..=group_count).map(|i| i.to_string()).collect();
                     format!(" GROUP BY {}", indices.join(", "))
                 };
 
                 let _ = writeln!(
                     sql,
-                    "INNER JOIN (SELECT {} FROM {nad_from}{group_by}) AS __nad ON {}",
+                    "INNER JOIN (SELECT {} FROM {nad_from}{nad_where}{group_by}) AS __nad ON {}",
                     nad_select.join(", "),
                     nad_join_conds.join(" AND "),
                 );
@@ -3362,39 +5739,67 @@ fn compile_simple_metrics(
         primary_alias,
         dialect,
         &mut metric_filter_ctes,
+        join_edges,
     );
     for join_clause in &metric_filter_joins {
         let _ = writeln!(sql, "{join_clause}");
     }
 
     // WHERE clause: metric filters + user filters.
+    // When use_case_when is active, metric-level filters are already in the CASE WHEN;
+    // only add them to WHERE when all metrics share the same filters.
     let mut where_parts: Vec<String> = Vec::new();
 
-    for metric in metrics {
-        for filter in &metric.metric_filters {
-            let resolved =
-                resolve_where_filter(filter, model_aliases, dialect, &primary_model_name);
-            where_parts.push(resolved);
+    if !use_case_when {
+        for metric in metrics {
+            for filter in &metric.metric_filters {
+                let resolved = resolve_where_filter_custom_gran(
+                    filter,
+                    model_aliases,
+                    dialect,
+                    &primary_model_name,
+                    all_time_spines,
+                    shared_agg_time_dim,
+                    &mut custom_gran_joins,
+                    &mut cg_alias_counter,
+                    &mut sql,
+                );
+                where_parts.push(resolved);
+            }
         }
     }
 
     for filter in &spec.where_filters {
-        let resolved = resolve_where_filter(filter, model_aliases, dialect, &primary_model_name);
-        where_parts.push(resolved);
-    }
-
-    // Time constraint: metric_time >= start AND metric_time <= end.
-    if let Some((start, end)) = &spec.time_constraint {
-        // Find the metric_time column expression (use the primary agg_time_dim).
-        let time_col = resolve_time_dimension_ref(
-            "metric_time",
-            "day",
+        let resolved = resolve_where_filter_custom_gran(
+            filter,
             model_aliases,
             dialect,
             &primary_model_name,
+            all_time_spines,
+            shared_agg_time_dim,
+            &mut custom_gran_joins,
+            &mut cg_alias_counter,
+            &mut sql,
         );
-        where_parts.push(format!("{time_col} >= '{start}'"));
-        where_parts.push(format!("{time_col} <= '{end}'"));
+        where_parts.push(resolved);
+    }
+
+    // Time constraint: filter on the raw agg_time_dimension column using
+    // TIMESTAMP comparisons (>= start, < end+1day) to match MetricFlow semantics.
+    if let Some((start, end)) = &spec.time_constraint {
+        let raw_time_col =
+            resolve_raw_time_column("metric_time", model_aliases, &primary_model_name);
+        where_parts.push(format!(
+            "CAST({raw_time_col} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+        ));
+        where_parts.push(format!(
+            "CAST({raw_time_col} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+        ));
+    }
+
+    // Emit custom granularity JOINs (from both group-by and WHERE filter processing).
+    for (cg_alias, cg_relation, cg_on) in &custom_gran_joins {
+        let _ = writeln!(sql, "LEFT OUTER JOIN {cg_relation} {cg_alias} ON {cg_on}");
     }
 
     if !where_parts.is_empty() {
@@ -3472,20 +5877,118 @@ fn compile_complex_metrics(
     // Conversion metrics: CTE with self-join.
 
     let time_spine = load_time_spine(store);
+    let all_time_spines = load_all_time_spines_from_store(store);
+
+    // Find the coarsest metric-level time_granularity across all top-level metrics.
+    let coarsest_metric_gran: Option<String> = spec
+        .metrics
+        .iter()
+        .filter_map(|name| all_metrics.get(name))
+        .filter_map(|m| m.time_granularity.clone())
+        .max_by_key(|g| granularity_rank(g));
 
     for metric_name in &spec.metrics {
         let metric = all_metrics
             .get(metric_name)
             .ok_or_else(|| MetricFlowError::Other(format!("metric not found: {metric_name}")))?;
 
+        // If any metric has a time_granularity coarser than the query's, create a
+        // modified spec with clamped granularities and expanded time constraint.
+        // All metrics in this multi-metric query use the same (coarsest) grain.
+        let metric_spec;
+        let effective_spec = if let Some(ref coarsest) = coarsest_metric_gran {
+            let coarsest_query = spec
+                .group_by
+                .iter()
+                .filter_map(|gb| {
+                    if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                        Some(granularity.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .max_by_key(|g| granularity_rank(g))
+                .unwrap_or("day");
+            if granularity_rank(coarsest) > granularity_rank(coarsest_query) {
+                let mut s = spec.clone();
+                for gb in &mut s.group_by {
+                    if let GroupBySpec::TimeDimension {
+                        name, granularity, ..
+                    } = gb
+                    {
+                        if name == "metric_time"
+                            && granularity_rank(coarsest) > granularity_rank(granularity)
+                        {
+                            *granularity = coarsest.clone();
+                        }
+                    }
+                }
+                if let Some((ref start, ref end)) = s.time_constraint {
+                    let (new_start, new_end) =
+                        expand_time_constraint_to_granularity(start, end, coarsest);
+                    s.time_constraint = Some((new_start, new_end));
+                }
+                metric_spec = s;
+                &metric_spec
+            } else {
+                spec
+            }
+        } else {
+            spec
+        };
+
+        // For multi-metric queries where the outer WHERE won't apply the time
+        // constraint (non-metric-time output dimension), push the time constraint
+        // into each top-level simple metric CTE via the spec's where_filters.
+        let has_time_gb = effective_spec
+            .group_by
+            .iter()
+            .any(|gb| matches!(gb, GroupBySpec::TimeDimension { .. }));
+        let outer_time_col_name = group_by_output_cols(&spec.group_by)
+            .iter()
+            .find(|c| c.contains("metric_time") || c.contains("__ds"))
+            .cloned();
+        let is_metric_time_col = outer_time_col_name
+            .as_ref()
+            .is_some_and(|c| c.contains("metric_time"));
+        let need_cte_time_filter = has_time_gb
+            && spec.metrics.len() > 1
+            && !is_metric_time_col
+            && effective_spec.time_constraint.is_some();
+
         match metric.metric_type {
             MetricType::Simple => {
+                let cte_spec;
+                let cte_effective_spec = if need_cte_time_filter {
+                    let (start, end) = effective_spec.time_constraint.as_ref().unwrap();
+                    let raw_time_col = resolve_raw_time_column(
+                        "metric_time",
+                        model_aliases,
+                        metric
+                            .agg_params
+                            .as_ref()
+                            .map(|ap| ap.semantic_model.as_str())
+                            .unwrap_or(""),
+                    );
+                    let mut s = effective_spec.clone();
+                    s.where_filters.push(format!(
+                        "CAST({raw_time_col} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+                    ));
+                    s.where_filters.push(format!(
+                        "CAST({raw_time_col} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+                    ));
+                    cte_spec = s;
+                    &cte_spec
+                } else {
+                    effective_spec
+                };
                 compile_simple_metric_cte(
                     metric,
-                    spec,
+                    cte_effective_spec,
                     all_metrics,
                     model_aliases,
                     join_edges,
+                    &all_time_spines,
                     dialect,
                     "",
                     ctes,
@@ -3501,6 +6004,7 @@ fn compile_complex_metrics(
                     dialect,
                     "",
                     ctes,
+                    &all_time_spines,
                 )?;
             }
             MetricType::Ratio => {
@@ -3510,6 +6014,7 @@ fn compile_complex_metrics(
                     all_metrics,
                     model_aliases,
                     join_edges,
+                    &all_time_spines,
                     dialect,
                     "",
                     ctes,
@@ -3525,6 +6030,7 @@ fn compile_complex_metrics(
                     dialect,
                     time_spine.as_ref(),
                     ctes,
+                    &all_time_spines,
                 )?;
             }
             MetricType::Conversion => {
@@ -3537,22 +6043,31 @@ fn compile_complex_metrics(
                     join_edges,
                     dialect,
                     ctes,
+                    &all_time_spines,
                 )?;
             }
         }
     }
 
     // Build the final SQL from CTEs.
-    build_final_sql(spec, ctes, dialect)
+    build_final_sql(
+        spec,
+        ctes,
+        dialect,
+        all_metrics,
+        time_spine.as_ref(),
+        &all_time_spines,
+    )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 fn compile_simple_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
     all_metrics: &HashMap<String, ResolvedMetric>,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
+    all_time_spines: &[TimeSpine],
     dialect: Dialect,
     cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
@@ -3586,6 +6101,22 @@ fn compile_simple_metric_cte(
     let mut select_parts: Vec<String> = Vec::new();
     let out_cols = group_by_output_cols(&spec.group_by);
 
+    let metric_agg_time_dim = ap.agg_time_dimension.as_deref();
+
+    // Plan multi-hop subquery joins (for chains like account_id__customer_id
+    // with dimensions from different leaf models).
+    let mh_subqueries = plan_multi_hop_joins(
+        spec,
+        &ap.semantic_model,
+        model_aliases,
+        join_edges,
+        dialect,
+        &metric.metric_filters,
+    );
+
+    let mut custom_gran_joins: Vec<(String, String, String)> = Vec::new();
+    let mut cg_alias_counter = 0u32;
+
     // Group-by columns.
     for (gb, out_col) in spec.group_by.iter().zip(out_cols.iter()) {
         match gb {
@@ -3594,18 +6125,57 @@ fn compile_simple_metric_cte(
                 granularity,
                 date_part,
             } => {
-                let col_expr = resolve_time_dimension_ref(
-                    name,
-                    granularity,
-                    model_aliases,
-                    dialect,
-                    &ap.semantic_model,
-                );
-                if let Some(part) = date_part {
-                    let extract_expr = render_extract(part, &col_expr, dialect);
-                    select_parts.push(format!("{extract_expr} AS {out_col}"));
+                if !is_standard_granularity(granularity) {
+                    if let Some((spine, custom_col)) =
+                        find_custom_granularity_spine(all_time_spines, granularity)
+                    {
+                        let cg_alias = if cg_alias_counter == 0 {
+                            "ts_cg".to_string()
+                        } else {
+                            format!("ts_cg{cg_alias_counter}")
+                        };
+                        cg_alias_counter += 1;
+                        let time_expr = resolve_time_dimension_ref_with_agg(
+                            name,
+                            "day",
+                            model_aliases,
+                            dialect,
+                            &ap.semantic_model,
+                            metric_agg_time_dim,
+                        );
+                        let spine_rel = match dialect {
+                            Dialect::Databricks => spine.relation_name.replace('"', "`"),
+                            _ => spine.relation_name.clone(),
+                        };
+                        let on_cond = format!("{time_expr} = {cg_alias}.{}", spine.primary_column);
+                        custom_gran_joins.push((cg_alias.clone(), spine_rel, on_cond));
+                        let col_expr = format!("{cg_alias}.{custom_col}");
+                        if let Some(part) = date_part {
+                            let extract_expr = render_extract(part, &col_expr, dialect);
+                            select_parts.push(format!("{extract_expr} AS {out_col}"));
+                        } else {
+                            select_parts.push(format!("{col_expr} AS {out_col}"));
+                        }
+                    } else {
+                        return Err(MetricFlowError::Other(format!(
+                            "unknown custom granularity: {granularity}"
+                        )));
+                    }
                 } else {
-                    select_parts.push(format!("{col_expr} AS {out_col}"));
+                    let col_expr = resolve_time_dimension_ref_with_agg(
+                        name,
+                        granularity,
+                        model_aliases,
+                        dialect,
+                        &ap.semantic_model,
+                        metric_agg_time_dim,
+                    );
+                    if let Some(part) = date_part {
+                        let extract_expr = render_extract(part, &col_expr, dialect);
+                        select_parts.push(format!("{extract_expr} AS {out_col}"));
+                    } else {
+                        select_parts.push(format!("{col_expr} AS {out_col}"));
+                    }
                 }
             }
             GroupBySpec::Dimension { entity, name } => {
@@ -3613,8 +6183,13 @@ fn compile_simple_metric_cte(
                     Some(e) => format!("{e}__{name}"),
                     None => name.clone(),
                 };
-                let col_expr =
-                    resolve_dimension_ref(&dim_ref, model_aliases, dialect, &ap.semantic_model);
+                let col_expr = resolve_dimension_ref_with_mh(
+                    &dim_ref,
+                    model_aliases,
+                    dialect,
+                    &ap.semantic_model,
+                    &mh_subqueries,
+                );
                 select_parts.push(format!("{col_expr} AS {out_col}"));
             }
             GroupBySpec::Entity { name } => {
@@ -3626,13 +6201,28 @@ fn compile_simple_metric_cte(
 
     // Aggregation.
     let col_expr = qualify_measure_expr(primary_alias, &ap.expr);
-    let agg_expr = render_agg(&ap.agg, &col_expr, dialect);
+    let agg_expr = render_agg_with_params(
+        &ap.agg,
+        &col_expr,
+        dialect,
+        ap.percentile,
+        ap.use_discrete_percentile,
+    );
     select_parts.push(format!("{agg_expr} AS {}", metric.name));
 
     let _ = write!(cte_sql, "SELECT {}", select_parts.join(", "));
 
     let from_relation = render_full_relation(primary_model, dialect);
     let _ = write!(cte_sql, " FROM {from_relation} AS {primary_alias}");
+
+    // Compute the qualified fact-table time expression for SCD joins.
+    let fact_time_expr: Option<String> = ap.agg_time_dimension.as_deref().and_then(|atd| {
+        primary_model
+            .dimensions
+            .iter()
+            .find(|d| d.name == atd)
+            .map(|d| format!("{primary_alias}.{}", d.expr))
+    });
 
     // Add joins for dimensions from other models.
     add_dimension_joins(
@@ -3644,6 +6234,8 @@ fn compile_simple_metric_cte(
         join_edges,
         dialect,
         &mut cte_sql,
+        &mh_subqueries,
+        fact_time_expr.as_deref(),
     );
 
     // Semi-additive measure handling: INNER JOIN to a subquery that filters on
@@ -3684,10 +6276,34 @@ fn compile_simple_metric_cte(
         // Build the subquery.
         let mut nad_select = Vec::new();
         let mut nad_join_conds = Vec::new();
+        let mut group_count = 0usize;
         for (name, expr) in &grouping_exprs {
             nad_select.push(format!("{expr} AS {name}"));
             nad_join_conds.push(format!("{primary_alias}.{expr} = __nad.{name}"));
+            group_count += 1;
         }
+
+        // Partition by query time granularity when metric_time is in group_by.
+        let query_time_gran = spec.group_by.iter().find_map(|gb| {
+            if let GroupBySpec::TimeDimension {
+                name, granularity, ..
+            } = gb
+            {
+                if name == "metric_time" || name == nad_name {
+                    return Some(granularity.clone());
+                }
+            }
+            None
+        });
+        if let Some(ref gran) = query_time_gran {
+            let time_trunc = format!("DATE_TRUNC('{gran}', {nad_expr})");
+            nad_select.push(format!("{time_trunc} AS __nad_metric_time"));
+            nad_join_conds.push(format!(
+                "DATE_TRUNC('{gran}', {primary_alias}.{nad_expr}) = __nad.__nad_metric_time"
+            ));
+            group_count += 1;
+        }
+
         let trunc = format!("DATE_TRUNC('{nad_granularity}', {nad_expr})");
         nad_select.push(format!("{agg_fn}({trunc}) AS __nad_time"));
         nad_join_conds.push(format!(
@@ -3695,16 +6311,51 @@ fn compile_simple_metric_cte(
         ));
 
         let nad_from = render_full_relation(primary_model, dialect);
-        let group_by = if grouping_exprs.is_empty() {
+
+        // Build WHERE clause for the NAD subquery: only include filters that
+        // reference the primary table. Filters on joined dimensions are excluded
+        // since the NAD subquery is a standalone `SELECT ... FROM table`.
+        let strip_alias = format!("{}.", primary_alias);
+        let mut nad_where_parts: Vec<String> = Vec::new();
+        for filter in metric
+            .metric_filters
+            .iter()
+            .chain(spec.where_filters.iter())
+        {
+            let resolved = resolve_where_filter(filter, model_aliases, dialect, &ap.semantic_model);
+            let has_joined_ref = resolved.contains("d1.")
+                || resolved.contains("d2.")
+                || resolved.contains("D1.")
+                || resolved.contains("D2.");
+            if has_joined_ref {
+                continue;
+            }
+            nad_where_parts.push(resolved.replace(&strip_alias, ""));
+        }
+        if let Some((start, end)) = &spec.time_constraint {
+            nad_where_parts.push(format!(
+                "CAST({nad_expr} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+            ));
+            nad_where_parts.push(format!(
+                "CAST({nad_expr} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+            ));
+        }
+        let nad_where = if nad_where_parts.is_empty() {
             String::new()
         } else {
-            let indices: Vec<String> = (1..=grouping_exprs.len()).map(|i| i.to_string()).collect();
+            format!(" WHERE {}", nad_where_parts.join(" AND "))
+        };
+
+        let group_by = if group_count == 0 {
+            String::new()
+        } else {
+            let indices: Vec<String> = (1..=group_count).map(|i| i.to_string()).collect();
             format!(" GROUP BY {}", indices.join(", "))
         };
 
         let _ = write!(
             cte_sql,
-            " INNER JOIN (SELECT {} FROM {nad_from}{group_by}) AS __nad ON {}",
+            " INNER JOIN (SELECT {} FROM {nad_from}{nad_where}{group_by}) AS __nad ON {}",
             nad_select.join(", "),
             nad_join_conds.join(" AND "),
         );
@@ -3713,7 +6364,8 @@ fn compile_simple_metric_cte(
     // Metric filter CTEs: if any metric_filter references {{ Metric(...) }}, emit the
     // corresponding __mf_* CTE before this one and JOIN it into the CTE body so that
     // the WHERE reference resolves correctly.
-    let mf_refs = extract_metric_filter_refs(&metric.metric_filters);
+    let mut mf_refs = extract_metric_filter_refs(&metric.metric_filters);
+    mf_refs.extend(extract_metric_filter_refs(&spec.where_filters));
     if !mf_refs.is_empty() {
         let mf_joins = compile_metric_filter_ctes(
             &mf_refs,
@@ -3723,30 +6375,60 @@ fn compile_simple_metric_cte(
             primary_alias,
             dialect,
             ctes,
+            join_edges,
         );
         for join in &mf_joins {
             let _ = write!(cte_sql, " {join}");
         }
     }
 
-    // WHERE: metric-level filters + user-supplied spec.where_filters.
+    // WHERE: metric-level filters + user-supplied spec.where_filters + time constraint.
+    // Resolve filters first (may add custom granularity joins), then emit JOINs, then WHERE.
     let mut where_parts: Vec<String> = Vec::new();
-    for filter in &metric.metric_filters {
-        where_parts.push(resolve_where_filter(
+    let all_filters = metric
+        .metric_filters
+        .iter()
+        .chain(spec.where_filters.iter());
+    for filter in all_filters {
+        let resolved = resolve_where_filter_custom_gran(
             filter,
             model_aliases,
             dialect,
             &ap.semantic_model,
-        ));
+            all_time_spines,
+            metric_agg_time_dim,
+            &mut custom_gran_joins,
+            &mut cg_alias_counter,
+            &mut cte_sql,
+        );
+        where_parts.push(resolved);
     }
-    for filter in &spec.where_filters {
-        where_parts.push(resolve_where_filter(
-            filter,
-            model_aliases,
-            dialect,
-            &ap.semantic_model,
-        ));
+    // Push time constraint into CTE only when no time dimension in group_by
+    // (outer query can't apply it).
+    let has_time_gb = spec
+        .group_by
+        .iter()
+        .any(|gb| matches!(gb, GroupBySpec::TimeDimension { .. }));
+    if !has_time_gb {
+        if let Some((start, end)) = &spec.time_constraint {
+            let raw_time_col =
+                resolve_raw_time_column("metric_time", model_aliases, &ap.semantic_model);
+            where_parts.push(format!(
+                "CAST({raw_time_col} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+            ));
+            where_parts.push(format!(
+                "CAST({raw_time_col} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+            ));
+        }
     }
+
+    for (cg_alias, cg_relation, cg_on) in &custom_gran_joins {
+        let _ = write!(
+            cte_sql,
+            " LEFT OUTER JOIN {cg_relation} {cg_alias} ON {cg_on}"
+        );
+    }
+
     if !where_parts.is_empty() {
         let _ = write!(cte_sql, " WHERE {}", where_parts.join(" AND "));
     }
@@ -3772,6 +6454,7 @@ fn compile_derived_metric_cte(
     dialect: Dialect,
     cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
+    all_time_spines: &[TimeSpine],
 ) -> Result<(), MetricFlowError> {
     // Check if this derived metric CTE already exists (shared by multiple inputs).
     let scoped_name = if cte_scope.is_empty() {
@@ -3798,17 +6481,30 @@ fn compile_derived_metric_cte(
     let child_scope = child_scope.as_str();
 
     // When a derived metric has offset inputs AND the spec requests a non-day
-    // granularity, base CTEs must be compiled at day granularity so the offset
-    // join (spine.time - INTERVAL = base.time) lines up correctly.  A separate
-    // "day-level spec" is used for base CTE compilation when any input has an offset.
+    // granularity, base CTEs must be compiled at a uniform granularity so the
+    // offset join (spine.time - INTERVAL = base.time) lines up correctly.
+    // For daily-or-coarser queries we normalize to "day"; for subdaily queries
+    // we keep the query's finer granularity (e.g. "hour").
     let has_offsets = metric
         .input_metrics
         .iter()
         .any(|i| i.offset_window.is_some() || i.offset_to_grain.is_some());
-    let day_spec;
+    let normalized_spec;
     let base_spec = if has_offsets {
+        let base_gran = child_spec
+            .group_by
+            .iter()
+            .find_map(|gb| {
+                if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                    if matches!(granularity.as_str(), "hour" | "minute" | "second") {
+                        return Some(granularity.as_str());
+                    }
+                }
+                None
+            })
+            .unwrap_or("day");
         let mut seen_time_dims: HashSet<String> = HashSet::new();
-        let day_group_by: Vec<GroupBySpec> = child_spec
+        let mut norm_group_by: Vec<GroupBySpec> = child_spec
             .group_by
             .iter()
             .filter_map(|gb| match gb {
@@ -3816,7 +6512,7 @@ fn compile_derived_metric_cte(
                     if seen_time_dims.insert(name.clone()) {
                         Some(GroupBySpec::TimeDimension {
                             name: name.clone(),
-                            granularity: "day".into(),
+                            granularity: base_gran.into(),
                             date_part: None,
                         })
                     } else {
@@ -3826,72 +6522,239 @@ fn compile_derived_metric_cte(
                 other => Some(other.clone()),
             })
             .collect();
-        day_spec = SemanticQuerySpec {
+        // Extract Dimension('entity__name') refs from WHERE filters that are NOT
+        // already in group_by — these need to be carried through base CTEs for
+        // WHERE filtering, then stripped from the final output.
+        let existing_dim_cols: HashSet<String> = norm_group_by
+            .iter()
+            .filter_map(|gb| match gb {
+                GroupBySpec::Dimension {
+                    entity: Some(e),
+                    name,
+                } => Some(format!("{e}__{name}")),
+                GroupBySpec::Dimension { entity: None, name } => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
+        for filter in child_spec
+            .where_filters
+            .iter()
+            .chain(metric.metric_filters.iter())
+        {
+            let mut cursor = 0usize;
+            while let Some(start) = filter[cursor..].find("Dimension('") {
+                let abs_pos = cursor + start;
+                // Skip TimeDimension('...') — only match standalone Dimension('...')
+                if abs_pos >= 4 && filter[abs_pos.saturating_sub(4)..abs_pos] == *"Time" {
+                    cursor = abs_pos + 11;
+                    continue;
+                }
+                let abs_start = abs_pos + 11;
+                if let Some(end) = filter[abs_start..].find("')") {
+                    let dim_ref = &filter[abs_start..abs_start + end];
+                    if !existing_dim_cols.contains(dim_ref) {
+                        if let Some((entity, name)) = dim_ref.split_once("__") {
+                            if !norm_group_by.iter().any(|gb| matches!(gb, GroupBySpec::Dimension { entity: Some(e), name: n } if e == entity && n == name)) {
+                                norm_group_by.push(GroupBySpec::Dimension {
+                                    entity: Some(entity.to_string()),
+                                    name: name.to_string(),
+                                });
+                            }
+                        } else if !norm_group_by.iter().any(|gb| matches!(gb, GroupBySpec::Dimension { entity: None, name: n } if n == dim_ref)) {
+                            norm_group_by.push(GroupBySpec::Dimension {
+                                entity: None,
+                                name: dim_ref.to_string(),
+                            });
+                        }
+                    }
+                    cursor = abs_start + end + 2;
+                } else {
+                    break;
+                }
+            }
+        }
+        normalized_spec = SemanticQuerySpec {
             metrics: child_spec.metrics.clone(),
-            group_by: day_group_by,
+            group_by: norm_group_by,
             where_filters: Vec::new(),
             order_by: child_spec.order_by.clone(),
             limit: child_spec.limit,
             time_constraint: child_spec.time_constraint.clone(),
+            apply_group_by: child_spec.apply_group_by,
         };
-        &day_spec
+        &normalized_spec
     } else {
         &child_spec
     };
 
     // First, compile all input metrics as CTEs (using base_spec for day granularity).
     for input in &metric.input_metrics {
+        let input_spec_owned;
+        let input_scope_owned;
+        let (effective_spec, effective_scope) = if input.filters.is_empty() {
+            (base_spec, child_scope)
+        } else {
+            input_spec_owned = SemanticQuerySpec {
+                where_filters: base_spec
+                    .where_filters
+                    .iter()
+                    .cloned()
+                    .chain(input.filters.iter().cloned())
+                    .collect(),
+                ..base_spec.clone()
+            };
+            let alias = input.alias.as_deref().unwrap_or(&input.name);
+            input_scope_owned = format!("{child_scope}__{alias}");
+            (&input_spec_owned, input_scope_owned.as_str())
+        };
         if let Some(input_metric) = all_metrics.get(&input.name) {
             match input_metric.metric_type {
                 MetricType::Simple => {
                     compile_simple_metric_cte(
                         input_metric,
-                        base_spec,
+                        effective_spec,
                         all_metrics,
                         model_aliases,
                         join_edges,
+                        all_time_spines,
                         dialect,
-                        child_scope,
+                        effective_scope,
                         ctes,
                     )?;
                 }
                 MetricType::Derived => {
                     compile_derived_metric_cte(
                         input_metric,
-                        base_spec,
+                        effective_spec,
                         all_metrics,
                         model_aliases,
                         join_edges,
                         dialect,
-                        child_scope,
+                        effective_scope,
                         ctes,
+                        all_time_spines,
                     )?;
                 }
                 MetricType::Ratio => {
                     compile_ratio_metric_cte(
                         input_metric,
-                        base_spec,
+                        effective_spec,
+                        all_metrics,
+                        model_aliases,
+                        join_edges,
+                        all_time_spines,
+                        dialect,
+                        effective_scope,
+                        ctes,
+                    )?;
+                }
+                MetricType::Cumulative => {
+                    compile_cumulative_metric_cte(
+                        input_metric,
+                        effective_spec,
                         all_metrics,
                         model_aliases,
                         join_edges,
                         dialect,
-                        child_scope,
+                        None,
                         ctes,
+                        all_time_spines,
                     )?;
                 }
                 _ => {
-                    // Fallback: try to compile as simple if possible.
                     if input_metric.agg_params.is_some() {
                         compile_simple_metric_cte(
                             input_metric,
-                            base_spec,
+                            effective_spec,
                             all_metrics,
                             model_aliases,
                             join_edges,
+                            all_time_spines,
                             dialect,
-                            child_scope,
+                            effective_scope,
                             ctes,
                         )?;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Spine-join wrappers for join_to_timespine inputs ─────────────
+    // When an input metric has join_to_timespine=true, wrap its CTE in a
+    // LEFT JOIN from the time spine table to fill gaps with COALESCE(..., fill_value).
+    let query_gran = base_spec
+        .group_by
+        .iter()
+        .find_map(|gb| {
+            if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                Some(granularity.as_str())
+            } else {
+                None
+            }
+        })
+        .unwrap_or("day");
+    if let Some(spine) = pick_time_spine_for_granularity(all_time_spines, query_gran) {
+        let spine_relation = match dialect {
+            Dialect::Databricks => spine.relation_name.replace('"', "`"),
+            _ => spine.relation_name.clone(),
+        };
+        let has_time_for_spine = base_spec
+            .group_by
+            .iter()
+            .any(|gb| matches!(gb, GroupBySpec::TimeDimension { .. }));
+        for input in &metric.input_metrics {
+            if let Some(input_metric) = all_metrics.get(&input.name) {
+                if input_metric.join_to_timespine && has_time_for_spine {
+                    let base_cte = if child_scope.is_empty() {
+                        input.name.clone()
+                    } else {
+                        format!("{child_scope}__{}", input.name)
+                    };
+                    let raw_cte = format!("{base_cte}_raw");
+                    if !ctes.iter().any(|(n, _)| *n == raw_cte) {
+                        let time_col = base_spec
+                            .group_by
+                            .iter()
+                            .find_map(|gb| {
+                                if let GroupBySpec::TimeDimension { name, .. } = gb {
+                                    Some(name.as_str())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or("metric_time");
+                        let fill = input_metric.fill_nulls_with.unwrap_or(0);
+                        let trunc =
+                            format!("DATE_TRUNC('{query_gran}', t.{})", spine.primary_column);
+                        let mut sel = vec![format!("{trunc} AS {time_col}")];
+                        for gb in &base_spec.group_by {
+                            match gb {
+                                GroupBySpec::Dimension {
+                                    entity: Some(e),
+                                    name,
+                                } => {
+                                    sel.push(format!("mc.{e}__{name}"));
+                                }
+                                GroupBySpec::Dimension { entity: None, name } => {
+                                    sel.push(format!("mc.{name}"));
+                                }
+                                _ => {}
+                            }
+                        }
+                        sel.push(format!(
+                            "COALESCE(mc.{}, {fill}) AS {}",
+                            input.name, input.name
+                        ));
+                        let spine_sql = format!(
+                            "SELECT DISTINCT {} FROM {spine_relation} AS t LEFT JOIN {raw_cte} AS mc ON {trunc} = mc.{time_col}",
+                            sel.join(", "),
+                        );
+                        // Rename the original CTE to _raw, add spine-joined under original name.
+                        if let Some(pos) = ctes.iter().position(|(n, _)| *n == base_cte) {
+                            ctes[pos].0 = raw_cte.clone();
+                        }
+                        ctes.push((base_cte.clone(), spine_sql));
                     }
                 }
             }
@@ -3901,6 +6764,8 @@ fn compile_derived_metric_cte(
     // ── Offset wrapper CTEs ────────────────────────────────────────────
     // For inputs with offset_window or offset_to_grain, create wrapper CTEs
     // that join the base metric CTE to an inline time spine with a shifted condition.
+    // Track renamed wrappers so `effective_cte_name` can look up the right name.
+    let mut renamed_wrappers: HashMap<String, String> = HashMap::new();
     let has_time_dim = spec
         .group_by
         .iter()
@@ -3909,8 +6774,19 @@ fn compile_derived_metric_cte(
         if input.offset_window.is_none() && input.offset_to_grain.is_none() {
             continue;
         }
-        let alias = input.alias.as_deref().unwrap_or(&input.name);
-        if ctes.iter().any(|(name, _)| name == alias) {
+        let raw_alias = input.alias.as_deref().unwrap_or(&input.name);
+        // When the alias collides with an already-emitted CTE name, use a distinct
+        // wrapper name so we don't produce duplicate CTE names.
+        let needs_rename = ctes.iter().any(|(name, _)| name == raw_alias);
+        let alias = if needs_rename {
+            let renamed = format!("{raw_alias}_offset");
+            renamed_wrappers.insert(raw_alias.to_string(), renamed.clone());
+            renamed
+        } else {
+            raw_alias.to_string()
+        };
+        let wrapper_spine = format!("{alias}_spine");
+        if ctes.iter().any(|(name, _)| name == &wrapper_spine) {
             continue;
         }
         if !has_time_dim {
@@ -3933,52 +6809,288 @@ fn compile_derived_metric_cte(
             })
             .unwrap_or_else(|| "metric_time__day".to_string());
 
-        // Create inline time spine CTE over the base CTE's time range.
+        // Detect custom granularity in offset_window early so we can skip the
+        // standard spine CTE for custom granularity offsets.
         let spine_name = format!("{alias}_spine");
-        if !ctes.iter().any(|(name, _)| name == &spine_name) {
-            let spine_sql =
-                inline_time_spine_sql(&time_col, &input.name, &time_col, "day", dialect);
-            ctes.push((spine_name.clone(), spine_sql));
-        }
+        let custom_offset_gran = input.offset_window.as_ref().and_then(|ow| {
+            let parts: Vec<&str> = ow.splitn(2, ' ').collect();
+            if parts.len() == 2 {
+                let gran = parts[1].trim_end_matches('s');
+                if !is_standard_granularity(gran) {
+                    let count: i64 = parts[0].parse().unwrap_or(1);
+                    return Some((count, gran.to_string()));
+                }
+            }
+            None
+        });
 
-        // Create offset wrapper CTE.
-        let join_condition = if let Some(ref offset_window) = input.offset_window {
-            let interval = render_interval_str(offset_window, dialect);
-            format!("spine.{time_col} - {interval} = base.{time_col}")
-        } else if let Some(ref grain) = input.offset_to_grain {
-            // DATE_TRUNC('grain', spine.time) = base.time
-            format!("DATE_TRUNC('{grain}', spine.{time_col}) = base.{time_col}")
-        } else {
-            unreachable!()
-        };
-
-        // Carry non-time group-by columns through the offset wrapper.
-        let mut offset_select = format!("spine.{time_col}");
-        for gb in &spec.group_by {
-            let col = match gb {
-                GroupBySpec::TimeDimension { .. } => continue,
-                GroupBySpec::Dimension {
-                    entity: Some(e),
-                    name,
-                } => format!("{e}__{name}"),
-                GroupBySpec::Dimension { entity: None, name } => name.clone(),
-                GroupBySpec::Entity { name } => name.clone(),
+        if let Some((offset_count, custom_gran)) = custom_offset_gran {
+            // Custom granularity offset: use FIRST_VALUE/LAST_VALUE/ROW_NUMBER/LEAD pattern.
+            let (spine, custom_col) = find_custom_granularity_spine(all_time_spines, &custom_gran)
+                .ok_or_else(|| {
+                    MetricFlowError::Other(format!(
+                        "custom granularity '{}' not found on any time spine",
+                        custom_gran
+                    ))
+                })?;
+            let spine_rel = match dialect {
+                Dialect::Databricks => spine.relation_name.replace('"', "`"),
+                _ => spine.relation_name.clone(),
             };
-            offset_select.push_str(&format!(", base.{col}"));
-        }
-        if alias == metric.name.as_str() {
-            offset_select.push_str(&format!(", base.{} AS {}", input.name, metric.name));
-        } else {
-            offset_select.push_str(&format!(", base.{}", input.name));
-        }
+            let ds_col = &spine.primary_column;
 
-        let offset_sql = format!(
-            "SELECT {offset_select} \
-             FROM {spine_name} AS spine \
-             INNER JOIN {base} AS base ON {join_condition}",
-            base = input.name,
-        );
-        ctes.push((alias.to_string(), offset_sql));
+            // Build CTE: map each spine day to its custom gran bucket + position.
+            let mapping_cte_name = format!("{alias}_cg_map");
+            let mapping_sql = format!(
+                "SELECT \
+                 {ds_col} AS ds__day, \
+                 {custom_col} AS ds__cg, \
+                 FIRST_VALUE({ds_col}) OVER (PARTITION BY {custom_col} ORDER BY {ds_col} \
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS ds__cg__first_value, \
+                 LAST_VALUE({ds_col}) OVER (PARTITION BY {custom_col} ORDER BY {ds_col} \
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS ds__cg__last_value, \
+                 ROW_NUMBER() OVER (PARTITION BY {custom_col} ORDER BY {ds_col}) AS ds__day__row_number \
+                 FROM {spine_rel} AS ts"
+            );
+            ctes.push((mapping_cte_name.clone(), mapping_sql));
+
+            // Build offset mapping subquery using LEAD to shift by N custom-gran buckets.
+            let row_offset_expr = format!("{mapping_cte_name}.ds__day__row_number - 1");
+            let add_days = |base: &str| match dialect {
+                Dialect::DuckDB => format!("{base} + INTERVAL (({row_offset_expr})) day"),
+                _ => format!("DATEADD('DAY', {row_offset_expr}, {base})"),
+            };
+            let offset_first = add_days("lead_q.ds__cg__first_value__offset");
+            let lead_subq = format!(
+                "SELECT ds__day, \
+                 CASE \
+                   WHEN {offset_first} \
+                     <= lead_q.ds__cg__last_value__offset \
+                   THEN {offset_first} \
+                   ELSE lead_q.ds__cg__last_value__offset \
+                 END AS ds__day__lead \
+                 FROM {mapping_cte_name} \
+                 INNER JOIN (\
+                   SELECT ds__cg, \
+                     LEAD(ds__cg__first_value, {offset_count}) OVER (ORDER BY ds__cg) AS ds__cg__first_value__offset, \
+                     LEAD(ds__cg__last_value, {offset_count}) OVER (ORDER BY ds__cg) AS ds__cg__last_value__offset \
+                   FROM (\
+                     SELECT ds__cg__first_value, ds__cg__last_value, ds__cg \
+                     FROM {mapping_cte_name} \
+                     GROUP BY ds__cg__first_value, ds__cg__last_value, ds__cg\
+                   ) cg_distinct\
+                 ) lead_q \
+                 ON {mapping_cte_name}.ds__cg = lead_q.ds__cg"
+            );
+
+            // The offset wrapper: replaces the standard spine+base JOIN.
+            // Select the lead day as the time column, carry through non-time dims and metric.
+            let mut offset_select = format!("offset_map.ds__day__lead AS {time_col}");
+            for gb in &base_spec.group_by {
+                let col = match gb {
+                    GroupBySpec::TimeDimension { .. } => continue,
+                    GroupBySpec::Dimension {
+                        entity: Some(e),
+                        name,
+                    } => format!("{e}__{name}"),
+                    GroupBySpec::Dimension { entity: None, name } => name.clone(),
+                    GroupBySpec::Entity { name } => name.clone(),
+                };
+                offset_select.push_str(&format!(", base.{col}"));
+            }
+            if alias == metric.name.as_str() {
+                offset_select.push_str(&format!(", base.{} AS {}", input.name, metric.name));
+            } else {
+                offset_select.push_str(&format!(", base.{}", input.name));
+            }
+
+            let offset_sql = format!(
+                "SELECT {offset_select} \
+                 FROM ({lead_subq}) AS offset_map \
+                 INNER JOIN {base} AS base ON offset_map.ds__day = base.{time_col}",
+                base = input.name,
+            );
+
+            // Check if the outer spec needs re-aggregation (coarser gran, date_part, or
+            // custom gran on top of the day-level offset output).
+            let cg_needs_reagg = spec.group_by.iter().any(|gb| {
+                matches!(gb, GroupBySpec::TimeDimension { granularity, date_part, .. }
+                    if granularity.as_str() != "day" || date_part.is_some())
+            });
+            if cg_needs_reagg {
+                let raw_name = format!("{alias}_cg_offset");
+                ctes.push((raw_name.clone(), offset_sql));
+
+                let group_by_cols_outer = group_by_output_cols(&spec.group_by);
+                let metric_col = if alias == metric.name.as_str() {
+                    metric.name.as_str()
+                } else {
+                    input.name.as_str()
+                };
+                let mut reagg_sel: Vec<String> = Vec::new();
+                let mut reagg_grp: Vec<String> = Vec::new();
+                let mut gi = 1usize;
+                let mut cg_join_reagg = String::new();
+                for (gb, out_col) in spec.group_by.iter().zip(group_by_cols_outer.iter()) {
+                    match gb {
+                        GroupBySpec::TimeDimension {
+                            granularity,
+                            date_part,
+                            ..
+                        } => {
+                            let src = format!("CAST(raw.{time_col} AS TIMESTAMP)");
+                            if let Some(part) = date_part {
+                                reagg_sel.push(format!(
+                                    "{} AS {out_col}",
+                                    render_extract(part, &src, dialect)
+                                ));
+                            } else if !is_standard_granularity(granularity) {
+                                if let Some((cg_spine, cg_col)) =
+                                    find_custom_granularity_spine(all_time_spines, granularity)
+                                {
+                                    let cg_rel = match dialect {
+                                        Dialect::Databricks => {
+                                            cg_spine.relation_name.replace('"', "`")
+                                        }
+                                        _ => cg_spine.relation_name.clone(),
+                                    };
+                                    if cg_join_reagg.is_empty() {
+                                        cg_join_reagg = format!(
+                                            " LEFT OUTER JOIN {cg_rel} ts_reagg \
+                                             ON raw.{time_col} = ts_reagg.{}",
+                                            cg_spine.primary_column,
+                                        );
+                                    }
+                                    reagg_sel.push(format!("ts_reagg.{cg_col} AS {out_col}"));
+                                } else {
+                                    reagg_sel.push(format!("raw.{time_col} AS {out_col}"));
+                                }
+                            } else {
+                                let trunc = render_date_trunc(granularity, &src, dialect);
+                                reagg_sel.push(format!("{trunc} AS {out_col}"));
+                            }
+                        }
+                        _ => {
+                            reagg_sel.push(format!("raw.{out_col}"));
+                        }
+                    }
+                    reagg_grp.push(gi.to_string());
+                    gi += 1;
+                }
+                reagg_sel.push(format!("SUM(raw.{metric_col}) AS {}", metric.name));
+                let reagg_sql = format!(
+                    "SELECT {} FROM {raw_name} AS raw{cg_join_reagg} GROUP BY {}",
+                    reagg_sel.join(", "),
+                    reagg_grp.join(", "),
+                );
+                ctes.push((alias.to_string(), reagg_sql));
+            } else {
+                ctes.push((alias.to_string(), offset_sql));
+            }
+        } else {
+            // Standard offset: use INTERVAL-based spine approach.
+            // Generate inline time spine CTE.
+            let spine_gran = base_spec
+                .group_by
+                .iter()
+                .find_map(|gb| {
+                    if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                        Some(granularity.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("day");
+            let subdaily_spine = matches!(spine_gran, "hour" | "minute" | "second");
+            let spine_target_type = if subdaily_spine { "TIMESTAMP" } else { "DATE" };
+            if !ctes.iter().any(|(name, _)| name == &spine_name) {
+                let offset_extension = input
+                    .offset_window
+                    .as_ref()
+                    .map(|w| render_interval_str(w, dialect));
+                let offset_spine = pick_time_spine_for_granularity(all_time_spines, spine_gran);
+                let spine_sql = if let Some(ts) = offset_spine {
+                    let spine_rel = match dialect {
+                        Dialect::Databricks => ts.relation_name.replace('"', "`"),
+                        _ => ts.relation_name.clone(),
+                    };
+                    let cast = render_type_cast(
+                        &format!("t.{}", ts.primary_column),
+                        spine_target_type,
+                        dialect,
+                    );
+                    if let Some(ref ext) = offset_extension {
+                        format!(
+                            "SELECT DISTINCT {cast} AS {time_col} FROM {spine_rel} AS t \
+                             WHERE {cast} >= (SELECT MIN({time_col}) FROM {0}) \
+                             AND {cast} <= (SELECT MAX({time_col}) FROM {0}) + {ext}",
+                            input.name,
+                        )
+                    } else {
+                        format!("SELECT DISTINCT {cast} AS {time_col} FROM {spine_rel} AS t",)
+                    }
+                } else if let Some(ref ext) = offset_extension {
+                    let min_expr = format!("(SELECT MIN({time_col}) FROM {0})", input.name);
+                    let max_expr = format!("(SELECT MAX({time_col}) FROM {0}) + {ext}", input.name);
+                    match dialect {
+                        Dialect::DuckDB => {
+                            let cast = render_type_cast("ds", spine_target_type, dialect);
+                            format!(
+                                "SELECT {cast} AS {time_col} \
+                                 FROM generate_series({min_expr}, {max_expr}, INTERVAL '1 {spine_gran}') AS t(ds)"
+                            )
+                        }
+                        _ => inline_time_spine_sql(
+                            &time_col,
+                            &input.name,
+                            &time_col,
+                            spine_gran,
+                            dialect,
+                        ),
+                    }
+                } else {
+                    inline_time_spine_sql(&time_col, &input.name, &time_col, spine_gran, dialect)
+                };
+                ctes.push((spine_name.clone(), spine_sql));
+            }
+
+            let join_condition = if let Some(ref offset_window) = input.offset_window {
+                let interval = render_interval_str(offset_window, dialect);
+                format!("spine.{time_col} - {interval} = base.{time_col}")
+            } else if let Some(ref grain) = input.offset_to_grain {
+                format!("DATE_TRUNC('{grain}', spine.{time_col}) = base.{time_col}")
+            } else {
+                unreachable!()
+            };
+
+            // Carry non-time group-by columns through the offset wrapper.
+            let mut offset_select = format!("spine.{time_col}");
+            for gb in &base_spec.group_by {
+                let col = match gb {
+                    GroupBySpec::TimeDimension { .. } => continue,
+                    GroupBySpec::Dimension {
+                        entity: Some(e),
+                        name,
+                    } => format!("{e}__{name}"),
+                    GroupBySpec::Dimension { entity: None, name } => name.clone(),
+                    GroupBySpec::Entity { name } => name.clone(),
+                };
+                offset_select.push_str(&format!(", base.{col}"));
+            }
+            if alias == metric.name.as_str() {
+                offset_select.push_str(&format!(", base.{} AS {}", input.name, metric.name));
+            } else {
+                offset_select.push_str(&format!(", base.{}", input.name));
+            }
+
+            let offset_sql = format!(
+                "SELECT {offset_select} \
+                 FROM {spine_name} AS spine \
+                 INNER JOIN {base} AS base ON {join_condition}",
+                base = input.name,
+            );
+            ctes.push((alias.to_string(), offset_sql));
+        }
     }
 
     // Now build the derived metric CTE that references the input CTEs.
@@ -3997,6 +7109,28 @@ fn compile_derived_metric_cte(
     } else {
         group_by_cols.clone()
     };
+    // Dims added to base_spec for WHERE filtering but not in the original group_by.
+    // Only non-time dimensions count (time dims differ by granularity, not by presence).
+    let where_only_dims: Vec<String> = if has_offsets {
+        let time_dim_names: HashSet<&str> = base_spec
+            .group_by
+            .iter()
+            .filter_map(|gb| {
+                if let GroupBySpec::TimeDimension { name, .. } = gb {
+                    Some(name.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        join_cols
+            .iter()
+            .filter(|c| !group_by_cols.contains(c) && !time_dim_names.contains(c.as_str()))
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     if metric.input_metrics.is_empty() {
         return Err(MetricFlowError::Other(format!(
@@ -4009,12 +7143,20 @@ fn compile_derived_metric_cte(
     // - If the input has an offset, the wrapper CTE is named after the alias.
     // - Otherwise, the CTE is the base metric name, scoped when child_scope is set.
     let effective_cte_name = |input: &MetricInput| -> String {
+        let raw_alias = input.alias.as_deref().unwrap_or(&input.name);
         let base = if input.offset_window.is_some() || input.offset_to_grain.is_some() {
-            input.alias.as_deref().unwrap_or(&input.name).to_string()
+            if let Some(renamed) = renamed_wrappers.get(raw_alias) {
+                renamed.clone()
+            } else {
+                raw_alias.to_string()
+            }
         } else {
             input.name.clone()
         };
-        if child_scope.is_empty() {
+        if !input.filters.is_empty() {
+            let alias = input.alias.as_deref().unwrap_or(&input.name);
+            format!("{child_scope}__{alias}__{base}")
+        } else if child_scope.is_empty() {
             base
         } else {
             format!("{child_scope}__{base}")
@@ -4029,20 +7171,49 @@ fn compile_derived_metric_cte(
     let first_effective_cte = effective_cte_name(first_input);
 
     let mut select_parts: Vec<String> = Vec::new();
+    let mut derived_cg_join: Option<(String, String, String)> = None;
     for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
         match gb {
             GroupBySpec::TimeDimension {
                 name,
                 granularity,
                 date_part,
-            } if has_offsets && (granularity != "day" || date_part.is_some()) => {
-                // Base CTEs are at day granularity; apply truncation/extract in the outer CTE.
+            } if has_offsets
+                && ({
+                    let base_gran = base_spec
+                        .group_by
+                        .iter()
+                        .find_map(|g| {
+                            if let GroupBySpec::TimeDimension {
+                                granularity: bg, ..
+                            } = g
+                            {
+                                Some(bg.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or("day");
+                    granularity != base_gran || date_part.is_some()
+                }) =>
+            {
+                // Base CTEs are at base_gran; apply truncation/extract in the outer CTE.
                 let col = format!("{first_cte_alias}.{name}");
                 if let Some(part) = date_part {
                     select_parts.push(format!(
                         "{} AS {out_col}",
                         render_extract(part, &col, dialect)
                     ));
+                } else if let Some((cg_spine, cg_col)) =
+                    find_custom_granularity_spine(all_time_spines, granularity)
+                {
+                    let spine_rel = match dialect {
+                        Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                        _ => cg_spine.relation_name.clone(),
+                    };
+                    derived_cg_join =
+                        Some((spine_rel, cg_spine.primary_column.clone(), name.clone()));
+                    select_parts.push(format!("ts_dcg.{cg_col} AS {out_col}"));
                 } else {
                     let trunc = render_date_trunc(granularity, &col, dialect);
                     select_parts.push(format!("{trunc} AS {out_col}"));
@@ -4054,6 +7225,10 @@ fn compile_derived_metric_cte(
                 select_parts.push(format!("__GROUP_BY_PLACEHOLDER_{out_col}__"));
             }
         }
+    }
+    // Include WHERE-only dims so the deferred filter can reference them.
+    for dim_col in &where_only_dims {
+        select_parts.push(format!("__GROUP_BY_PLACEHOLDER_{dim_col}__"));
     }
 
     // Build expression with CTE references.
@@ -4144,7 +7319,12 @@ fn compile_derived_metric_cte(
 
     // Replace group-by placeholders with COALESCE across all joined aliases.
     // Use join_cols (base CTE names) for column references, group_by_cols for output alias.
-    for (jcol, out_col) in join_cols.iter().zip(group_by_cols.iter()) {
+    let all_out_cols: Vec<&str> = group_by_cols
+        .iter()
+        .chain(where_only_dims.iter())
+        .map(|s| s.as_str())
+        .collect();
+    for (jcol, out_col) in join_cols.iter().zip(all_out_cols.iter()) {
         let placeholder = format!("__GROUP_BY_PLACEHOLDER_{out_col}__");
         let replacement = if joined_aliases.len() == 1 {
             format!("{}.{jcol}", joined_aliases[0])
@@ -4156,6 +7336,14 @@ fn compile_derived_metric_cte(
             format!("COALESCE({}) AS {out_col}", parts.join(", "))
         };
         cte_sql = cte_sql.replace(&placeholder, &replacement);
+    }
+
+    // Add custom granularity time spine JOIN if needed.
+    if let Some((spine_rel, spine_col, time_name)) = &derived_cg_join {
+        let _ = write!(
+            cte_sql,
+            " LEFT OUTER JOIN {spine_rel} AS ts_dcg ON {first_cte_alias}.{time_name} = ts_dcg.{spine_col}",
+        );
     }
 
     // Apply deferred WHERE filters for offset metrics.
@@ -4179,6 +7367,7 @@ fn compile_derived_metric_cte(
                     let dim_ref = resolved[abs_start..abs_start + end].to_string();
                     let col = group_by_cols
                         .iter()
+                        .chain(where_only_dims.iter())
                         .find(|c| {
                             **c == dim_ref
                                 || c.ends_with(&format!(
@@ -4191,6 +7380,72 @@ fn compile_derived_metric_cte(
                     let replacement = format!("{first_cte_alias}.{col}");
                     resolved.replace_range(abs_pos..abs_start + end + 2, &replacement);
                     cursor = abs_pos + replacement.len();
+                } else {
+                    break;
+                }
+            }
+            // Also resolve TimeDimension('name', 'grain') → CTE column.
+            let mut td_cursor = 0usize;
+            while let Some(start) = resolved[td_cursor..].find("TimeDimension('") {
+                let abs_pos = td_cursor + start;
+                let abs_start = abs_pos + 15;
+                if let Some(end) = resolved[abs_start..].find("')") {
+                    let inner = &resolved[abs_start..abs_start + end];
+                    let td_name = inner
+                        .split(',')
+                        .next()
+                        .unwrap_or("metric_time")
+                        .trim()
+                        .trim_matches('\'');
+                    let td_gran = inner
+                        .split(',')
+                        .nth(1)
+                        .map(|s| s.trim().trim_matches('\'').trim_matches('"'))
+                        .unwrap_or("day");
+
+                    // Check for custom granularity that needs a time spine JOIN.
+                    let cg_match = if !is_standard_granularity(td_gran) {
+                        find_custom_granularity_spine(all_time_spines, td_gran)
+                    } else {
+                        None
+                    };
+                    if let Some((cg_spine, cg_col)) = cg_match {
+                        let spine_rel = match dialect {
+                            Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                            _ => cg_spine.relation_name.clone(),
+                        };
+                        let spine_alias = "ts_cg_where";
+                        let time_col = group_by_cols
+                            .iter()
+                            .find(|c| c.contains("metric_time") || c.contains(td_name))
+                            .cloned()
+                            .unwrap_or_else(|| "metric_time".to_string());
+                        if !cte_sql.contains(spine_alias) {
+                            let _ = write!(
+                                cte_sql,
+                                " LEFT OUTER JOIN {spine_rel} AS {spine_alias} \
+                                 ON {first_cte_alias}.{time_col} = {spine_alias}.{}",
+                                cg_spine.primary_column,
+                            );
+                        }
+                        let replacement = format!("{spine_alias}.{cg_col}");
+                        resolved.replace_range(abs_pos..abs_start + end + 2, &replacement);
+                        td_cursor = abs_pos + replacement.len();
+                    } else {
+                        let col_name = format!("{td_name}__{td_gran}");
+                        let col = group_by_cols
+                            .iter()
+                            .find(|c| {
+                                **c == col_name
+                                    || **c == td_name
+                                    || c.ends_with(&format!("__{td_name}"))
+                            })
+                            .cloned()
+                            .unwrap_or(col_name);
+                        let replacement = col;
+                        resolved.replace_range(abs_pos..abs_start + end + 2, &replacement);
+                        td_cursor = abs_pos + replacement.len();
+                    }
                 } else {
                     break;
                 }
@@ -4209,49 +7464,456 @@ fn compile_derived_metric_cte(
     if !ctes.iter().any(|(name, _)| *name == scoped_name) {
         // When offsets forced day-level base CTEs but the spec wants coarser granularity,
         // wrap the derived CTE in an outer aggregation that truncates and re-aggregates.
+        let offset_base_gran = base_spec
+            .group_by
+            .iter()
+            .find_map(|g| {
+                if let GroupBySpec::TimeDimension {
+                    granularity: bg, ..
+                } = g
+                {
+                    Some(bg.as_str())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or("day");
         let needs_reagg = has_offsets
             && spec.group_by.iter().any(|gb| {
                 matches!(gb, GroupBySpec::TimeDimension { granularity, date_part, .. }
-                     if granularity != "day" || date_part.is_some())
+                     if granularity.as_str() != offset_base_gran || date_part.is_some())
             });
-        if needs_reagg {
-            // Emit the day-level derived CTE with a temporary name.
-            let inner_name = format!("{scoped_name}_day");
-            ctes.push((inner_name.clone(), cte_sql));
-            // Build outer aggregation CTE.
-            let mut outer_select: Vec<String> = Vec::new();
-            let mut outer_group: Vec<String> = Vec::new();
-            let mut idx = 1;
+        let has_offset_to_grain = metric
+            .input_metrics
+            .iter()
+            .any(|i| i.offset_to_grain.is_some());
+        let has_custom_gran = spec.group_by.iter().any(|gb| {
+            matches!(gb, GroupBySpec::TimeDimension { granularity, .. }
+                if !is_standard_granularity(granularity))
+        });
+        if needs_reagg && (has_offset_to_grain || has_custom_gran) {
+            // Re-aggregate each input metric individually to the query granularity,
+            // then join them and compute the derived expression at the aggregated level.
+            // This is necessary because SUM(a - b) != SUM(a) - SUM(b) when the FULL OUTER
+            // JOIN produces NULLs on one side.
+
+            // Build truncation expressions for time dimensions at query granularity.
+            // Source CTEs have columns named by join_cols (base granularity),
+            // output needs columns named by group_by_cols (query granularity).
+            let mut trunc_select: Vec<String> = Vec::new();
+            let mut trunc_group: Vec<String> = Vec::new();
+            let mut out_cols_reagg: Vec<String> = Vec::new();
+            let mut reagg_idx = 1;
+            // Map from spec.group_by to the source column name (join_col).
+            // Time dimensions share a base name (e.g., "metric_time") in join_cols.
+            let mut jcol_iter = join_cols.iter();
+            let mut seen_time_names: HashSet<String> = HashSet::new();
             for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                let src_col = match gb {
+                    GroupBySpec::TimeDimension { name, .. } => {
+                        if seen_time_names.insert(name.clone()) {
+                            jcol_iter
+                                .next()
+                                .map(|s| s.as_str())
+                                .unwrap_or(out_col.as_str())
+                        } else {
+                            name.as_str()
+                        }
+                    }
+                    _ => jcol_iter
+                        .next()
+                        .map(|s| s.as_str())
+                        .unwrap_or(out_col.as_str()),
+                };
                 match gb {
                     GroupBySpec::TimeDimension {
                         granularity,
                         date_part,
                         ..
-                    } if granularity != "day" || date_part.is_some() => {
+                    } if granularity.as_str() != offset_base_gran || date_part.is_some() => {
                         if date_part.is_some() {
-                            outer_select.push(out_col.clone());
+                            trunc_select.push(format!("{src_col} AS {out_col}"));
                         } else {
-                            let trunc = render_date_trunc(granularity, out_col, dialect);
-                            outer_select.push(format!("{trunc} AS {out_col}"));
+                            let trunc = render_date_trunc(granularity, src_col, dialect);
+                            trunc_select.push(format!("{trunc} AS {out_col}"));
                         }
-                        outer_group.push(idx.to_string());
-                        idx += 1;
+                        trunc_group.push(reagg_idx.to_string());
+                        out_cols_reagg.push(out_col.clone());
+                        reagg_idx += 1;
                     }
                     _ => {
-                        outer_select.push(out_col.clone());
-                        outer_group.push(idx.to_string());
-                        idx += 1;
+                        if src_col != out_col {
+                            trunc_select.push(format!("{src_col} AS {out_col}"));
+                        } else {
+                            trunc_select.push(out_col.clone());
+                        }
+                        trunc_group.push(reagg_idx.to_string());
+                        out_cols_reagg.push(out_col.clone());
+                        reagg_idx += 1;
                     }
                 }
             }
-            outer_select.push(format!("SUM({}) AS {}", metric.name, metric.name));
-            let outer_sql = format!(
-                "SELECT {} FROM {inner_name} GROUP BY {}",
-                outer_select.join(", "),
-                outer_group.join(", "),
+
+            // Create a re-aggregation CTE for each input metric.
+            let mut reagg_cte_names: Vec<(String, String)> = Vec::new(); // (alias, reagg_cte_name)
+            for input in &metric.input_metrics {
+                let alias = input.alias.as_deref().unwrap_or(&input.name);
+                let eff_cte = effective_cte_name(input);
+                let reagg_name = format!("{eff_cte}_reagg");
+
+                if let Some(ref grain) = input.offset_to_grain {
+                    // For offset-to-grain inputs at non-default granularity, redo the
+                    // spine join considering only granularity-boundary dates.
+                    // Reference approach: filter spine to dates matching the granularity
+                    // start (e.g., Mondays for week), then join to base and group.
+                    let spine_cte = format!("{}_spine", alias);
+                    let base_cte = input.name.clone();
+                    let time_col = join_cols
+                        .first()
+                        .map(|s| s.as_str())
+                        .unwrap_or("metric_time");
+                    let mut sel: Vec<String> = Vec::new();
+                    let mut grp: Vec<String> = Vec::new();
+                    let mut gi = 1;
+                    // Collect all query granularities for filtering.
+                    let mut query_grans: Vec<&str> = Vec::new();
+                    for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                        if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                            let trunc = render_date_trunc(
+                                granularity,
+                                &format!("spine.{time_col}"),
+                                dialect,
+                            );
+                            sel.push(format!("{trunc} AS {out_col}"));
+                            query_grans.push(granularity.as_str());
+                        } else {
+                            sel.push(out_col.clone());
+                        }
+                        grp.push(gi.to_string());
+                        gi += 1;
+                    }
+                    sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
+                    // Filter spine to only granularity-boundary dates (start of week, month, etc.)
+                    // using OR across all query granularities.
+                    let spine_filters: Vec<String> = query_grans
+                        .iter()
+                        .map(|g| {
+                            let trunc = render_date_trunc(g, &format!("spine.{time_col}"), dialect);
+                            format!("{trunc} = spine.{time_col}")
+                        })
+                        .collect();
+                    let where_clause = if spine_filters.len() == 1 {
+                        spine_filters[0].clone()
+                    } else {
+                        spine_filters.join(" OR ")
+                    };
+                    let sql = format!(
+                        "SELECT {} FROM {spine_cte} AS spine INNER JOIN {base_cte} AS base ON DATE_TRUNC('{grain}', spine.{time_col}) = base.{time_col} WHERE {where_clause} GROUP BY {}",
+                        sel.join(", "),
+                        grp.join(", "),
+                    );
+                    ctes.push((reagg_name.clone(), sql));
+                } else if input.offset_window.is_some() {
+                    let base_cte = input.name.clone();
+                    let time_col = join_cols
+                        .first()
+                        .map(|s| s.as_str())
+                        .unwrap_or("metric_time");
+                    let interval =
+                        render_interval_str(input.offset_window.as_ref().unwrap(), dialect);
+                    let mut sel: Vec<String> = Vec::new();
+                    let mut grp: Vec<String> = Vec::new();
+                    let mut gi = 1;
+                    let mut cg_join = String::new();
+                    for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                        if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                            if !is_standard_granularity(granularity) {
+                                if let Some((spine, cg_col)) =
+                                    find_custom_granularity_spine(all_time_spines, granularity)
+                                {
+                                    sel.push(format!("ts_reagg.{cg_col} AS {out_col}"));
+                                    if cg_join.is_empty() {
+                                        cg_join = format!(
+                                            " LEFT OUTER JOIN {} ts_reagg ON spine.{time_col} = ts_reagg.{}",
+                                            spine.relation_name, spine.primary_column,
+                                        );
+                                    }
+                                } else {
+                                    sel.push(format!("spine.{time_col} AS {out_col}"));
+                                }
+                            } else {
+                                let trunc = render_date_trunc(
+                                    granularity,
+                                    &format!("spine.{time_col}"),
+                                    dialect,
+                                );
+                                sel.push(format!("{trunc} AS {out_col}"));
+                            }
+                        } else {
+                            sel.push(out_col.clone());
+                        }
+                        grp.push(gi.to_string());
+                        gi += 1;
+                    }
+                    sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
+                    let spine_cte = format!("{eff_cte}_spine");
+                    let sql = format!(
+                        "SELECT {} FROM {spine_cte} AS spine INNER JOIN {base_cte} AS base ON spine.{time_col} - {interval} = base.{time_col}{cg_join} GROUP BY {}",
+                        sel.join(", "),
+                        grp.join(", "),
+                    );
+                    ctes.push((reagg_name.clone(), sql));
+                } else if has_custom_gran {
+                    // For non-offset inputs with custom granularity, recompile
+                    // the metric at the custom granularity level to preserve
+                    // non-additive aggregation semantics (e.g., COUNT_DISTINCT).
+                    let mut recompiled = false;
+                    if let Some(input_metric) = all_metrics.get(&input.name) {
+                        if input_metric.metric_type == MetricType::Simple {
+                            let cg_spec = SemanticQuerySpec {
+                                group_by: spec.group_by.clone(),
+                                ..base_spec.clone()
+                            };
+                            let cte_count_before = ctes.len();
+                            compile_simple_metric_cte(
+                                input_metric,
+                                &cg_spec,
+                                all_metrics,
+                                model_aliases,
+                                join_edges,
+                                all_time_spines,
+                                dialect,
+                                "cg_reagg",
+                                ctes,
+                            )?;
+                            // Rename the last CTE to the expected reagg name.
+                            if ctes.len() > cte_count_before {
+                                let last = ctes.last_mut().unwrap();
+                                last.0 = reagg_name.clone();
+                            }
+                            recompiled = true;
+                        }
+                    }
+                    if !recompiled {
+                        let time_col = join_cols
+                            .first()
+                            .map(|s| s.as_str())
+                            .unwrap_or("metric_time");
+                        let mut sel: Vec<String> = Vec::new();
+                        let mut grp: Vec<String> = Vec::new();
+                        let mut gi = 1;
+                        let mut cg_join = String::new();
+                        for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                            if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                                if !is_standard_granularity(granularity) {
+                                    if let Some((spine, cg_col)) =
+                                        find_custom_granularity_spine(all_time_spines, granularity)
+                                    {
+                                        sel.push(format!("ts_reagg.{cg_col} AS {out_col}"));
+                                        if cg_join.is_empty() {
+                                            cg_join = format!(
+                                                " LEFT OUTER JOIN {} ts_reagg ON base.{time_col} = ts_reagg.{}",
+                                                spine.relation_name, spine.primary_column,
+                                            );
+                                        }
+                                    } else {
+                                        sel.push(format!("base.{time_col} AS {out_col}"));
+                                    }
+                                } else {
+                                    let trunc = render_date_trunc(
+                                        granularity,
+                                        &format!("base.{time_col}"),
+                                        dialect,
+                                    );
+                                    sel.push(format!("{trunc} AS {out_col}"));
+                                }
+                            } else {
+                                sel.push(format!("base.{out_col}"));
+                            }
+                            grp.push(gi.to_string());
+                            gi += 1;
+                        }
+                        sel.push(format!("SUM(base.{}) AS {}", input.name, input.name));
+                        let sql = format!(
+                            "SELECT {} FROM {eff_cte} AS base{cg_join} GROUP BY {}",
+                            sel.join(", "),
+                            grp.join(", "),
+                        );
+                        ctes.push((reagg_name.clone(), sql));
+                    }
+                } else {
+                    // For non-offset inputs, simple truncation and re-aggregation.
+                    let mut sel = trunc_select.clone();
+                    sel.push(format!("SUM({}) AS {}", input.name, input.name));
+                    let sql = format!(
+                        "SELECT {} FROM {eff_cte} GROUP BY {}",
+                        sel.join(", "),
+                        trunc_group.join(", "),
+                    );
+                    ctes.push((reagg_name.clone(), sql));
+                }
+                reagg_cte_names.push((alias.to_string(), reagg_name));
+            }
+
+            // Build the derived expression joining re-aggregated CTEs.
+            let first_alias = format!("{}_cte", reagg_cte_names[0].0);
+            let mut reagg_select: Vec<String> = Vec::new();
+            let mut reagg_joined: Vec<String> = vec![first_alias.clone()];
+            for col in &out_cols_reagg {
+                reagg_select.push(format!("__REAGG_PH_{col}__"));
+            }
+
+            // Build expression referencing re-aggregated CTEs.
+            let mut reagg_expr = expr.to_string();
+            let mut reps: Vec<(String, String, String)> = reagg_cte_names
+                .iter()
+                .enumerate()
+                .map(|(i, (alias, _reagg_cte))| {
+                    let cte_alias = format!("{alias}_cte");
+                    let placeholder = format!("\x00RA{i}\x00");
+                    let col_ref = format!("{cte_alias}.{}", metric.input_metrics[i].name);
+                    let final_ref = if let Some(fill) = all_metrics
+                        .get(&metric.input_metrics[i].name)
+                        .and_then(|m| m.fill_nulls_with)
+                    {
+                        format!("COALESCE({col_ref}, {fill})")
+                    } else {
+                        col_ref
+                    };
+                    (alias.clone(), placeholder, final_ref)
+                })
+                .collect();
+            reps.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+            for (find, placeholder, _) in &reps {
+                reagg_expr = replace_word(&reagg_expr, find, placeholder);
+            }
+            for (_, placeholder, final_val) in &reps {
+                reagg_expr = reagg_expr.replace(placeholder, final_val);
+            }
+            reagg_select.push(format!("{reagg_expr} AS {}", metric.name));
+
+            let mut reagg_sql = format!(
+                "SELECT {} FROM {} AS {first_alias}",
+                reagg_select.join(", "),
+                reagg_cte_names[0].1
             );
-            ctes.push((scoped_name, outer_sql));
+            for (alias, reagg_cte) in reagg_cte_names.iter().skip(1) {
+                let cte_alias = format!("{alias}_cte");
+                let join_conds: Vec<String> = out_cols_reagg
+                    .iter()
+                    .map(|col| {
+                        if reagg_joined.len() == 1 {
+                            format!(
+                                "{}.{col} IS NOT DISTINCT FROM {cte_alias}.{col}",
+                                reagg_joined[0]
+                            )
+                        } else {
+                            let coalesce = reagg_joined
+                                .iter()
+                                .map(|a| format!("{a}.{col}"))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("COALESCE({coalesce}) IS NOT DISTINCT FROM {cte_alias}.{col}")
+                        }
+                    })
+                    .collect();
+                use std::fmt::Write as _;
+                let _ = write!(
+                    reagg_sql,
+                    " FULL OUTER JOIN {} AS {cte_alias} ON {}",
+                    reagg_cte,
+                    join_conds.join(" AND ")
+                );
+                reagg_joined.push(cte_alias);
+            }
+
+            // Replace group-by placeholders with COALESCE.
+            for col in &out_cols_reagg {
+                let placeholder = format!("__REAGG_PH_{col}__");
+                let replacement = if reagg_joined.len() == 1 {
+                    format!("{}.{col}", reagg_joined[0])
+                } else {
+                    let parts: Vec<String> =
+                        reagg_joined.iter().map(|a| format!("{a}.{col}")).collect();
+                    format!("COALESCE({}) AS {col}", parts.join(", "))
+                };
+                reagg_sql = reagg_sql.replace(&placeholder, &replacement);
+            }
+
+            ctes.push((scoped_name, reagg_sql));
+        } else if needs_reagg {
+            if derived_cg_join.is_some() {
+                // Custom granularity: the derived CTE already has the custom gran column
+                // via time spine JOIN, but we still need to aggregate from day-level rows.
+                // The output column is already named metric_time__alien_day (via ts_dcg.*).
+                // Just add GROUP BY for the custom gran column(s) + SUM the metric.
+                let mut cg_select: Vec<String> = Vec::new();
+                let mut cg_group: Vec<String> = Vec::new();
+                let mut cg_idx = 1;
+                for out_col in &group_by_cols {
+                    cg_select.push(out_col.clone());
+                    cg_group.push(cg_idx.to_string());
+                    cg_idx += 1;
+                }
+                cg_select.push(format!("SUM({}) AS {}", metric.name, metric.name));
+                let inner_name = format!("{scoped_name}_ungrouped");
+                ctes.push((inner_name.clone(), cte_sql));
+                let cg_sql = format!(
+                    "SELECT {} FROM {inner_name} GROUP BY {}",
+                    cg_select.join(", "),
+                    cg_group.join(", "),
+                );
+                ctes.push((scoped_name, cg_sql));
+            } else {
+                let inner_name = format!("{scoped_name}_{offset_base_gran}");
+                ctes.push((inner_name.clone(), cte_sql));
+                let mut outer_select: Vec<String> = Vec::new();
+                let mut outer_group: Vec<String> = Vec::new();
+                let mut idx = 1;
+                for (gb, out_col) in spec.group_by.iter().zip(group_by_cols.iter()) {
+                    match gb {
+                        GroupBySpec::TimeDimension {
+                            granularity,
+                            date_part,
+                            ..
+                        } if granularity.as_str() != offset_base_gran || date_part.is_some() => {
+                            if date_part.is_some() {
+                                outer_select.push(out_col.clone());
+                            } else {
+                                let trunc = render_date_trunc(granularity, out_col, dialect);
+                                outer_select.push(format!("{trunc} AS {out_col}"));
+                            }
+                            outer_group.push(idx.to_string());
+                            idx += 1;
+                        }
+                        _ => {
+                            outer_select.push(out_col.clone());
+                            outer_group.push(idx.to_string());
+                            idx += 1;
+                        }
+                    }
+                }
+                outer_select.push(format!("SUM({}) AS {}", metric.name, metric.name));
+                let outer_sql = format!(
+                    "SELECT {} FROM {inner_name} GROUP BY {}",
+                    outer_select.join(", "),
+                    outer_group.join(", "),
+                );
+                ctes.push((scoped_name, outer_sql));
+            }
+        } else if !where_only_dims.is_empty() {
+            // Extra WHERE-only dims are in the CTE output; strip them via a wrapper.
+            let inner_name = format!("{scoped_name}_filtered");
+            ctes.push((inner_name.clone(), cte_sql));
+            let wanted: Vec<&str> = group_by_cols
+                .iter()
+                .map(|s| s.as_str())
+                .chain(std::iter::once(metric.name.as_str()))
+                .collect();
+            ctes.push((
+                scoped_name,
+                format!("SELECT {} FROM {inner_name}", wanted.join(", ")),
+            ));
         } else {
             ctes.push((scoped_name, cte_sql));
         }
@@ -4266,6 +7928,7 @@ fn compile_ratio_metric_cte(
     all_metrics: &HashMap<String, ResolvedMetric>,
     model_aliases: &HashMap<String, (String, &ResolvedModel)>,
     join_edges: &[JoinEdge],
+    all_time_spines: &[TimeSpine],
     dialect: Dialect,
     cte_scope: &str,
     ctes: &mut Vec<(String, String)>,
@@ -4277,67 +7940,144 @@ fn compile_ratio_metric_cte(
         MetricFlowError::Other(format!("ratio metric {} has no denominator", metric.name))
     })?;
 
+    // Propagate the ratio metric's own metric_filters to both inputs.
+    let base_spec;
+    let base_scope;
+    let (base_spec_ref, base_scope_ref) = if metric.metric_filters.is_empty() {
+        (spec, cte_scope)
+    } else {
+        base_spec = SemanticQuerySpec {
+            where_filters: spec
+                .where_filters
+                .iter()
+                .cloned()
+                .chain(metric.metric_filters.iter().cloned())
+                .collect(),
+            ..spec.clone()
+        };
+        base_scope = metric.name.clone();
+        (&base_spec, base_scope.as_str())
+    };
+
     // Compile numerator and denominator as CTEs.
+    // If a numerator/denominator has per-input filters, propagate them via the spec
+    // and use a scoped CTE name to avoid collisions.
+    let num_spec;
+    let num_scope;
+    let (num_spec_ref, num_scope_ref) = if numerator.filters.is_empty() {
+        (base_spec_ref, base_scope_ref)
+    } else {
+        num_spec = SemanticQuerySpec {
+            where_filters: base_spec_ref
+                .where_filters
+                .iter()
+                .cloned()
+                .chain(numerator.filters.iter().cloned())
+                .collect(),
+            ..base_spec_ref.clone()
+        };
+        num_scope = format!("{}_num", metric.name);
+        (&num_spec, num_scope.as_str())
+    };
     if let Some(num_metric) = all_metrics.get(&numerator.name) {
         match num_metric.metric_type {
             MetricType::Simple => {
                 compile_simple_metric_cte(
                     num_metric,
-                    spec,
+                    num_spec_ref,
                     all_metrics,
                     model_aliases,
                     join_edges,
+                    all_time_spines,
                     dialect,
-                    cte_scope,
+                    num_scope_ref,
                     ctes,
                 )?;
             }
             MetricType::Derived => {
                 compile_derived_metric_cte(
                     num_metric,
-                    spec,
+                    num_spec_ref,
                     all_metrics,
                     model_aliases,
                     join_edges,
                     dialect,
-                    cte_scope,
+                    num_scope_ref,
                     ctes,
+                    all_time_spines,
                 )?;
             }
             _ => {}
         }
     }
+    let den_spec;
+    let den_scope;
+    let (den_spec_ref, den_scope_ref) = if denominator.filters.is_empty() {
+        (base_spec_ref, base_scope_ref)
+    } else {
+        den_spec = SemanticQuerySpec {
+            where_filters: base_spec_ref
+                .where_filters
+                .iter()
+                .cloned()
+                .chain(denominator.filters.iter().cloned())
+                .collect(),
+            ..base_spec_ref.clone()
+        };
+        den_scope = format!("{}_den", metric.name);
+        (&den_spec, den_scope.as_str())
+    };
     if let Some(den_metric) = all_metrics.get(&denominator.name) {
         match den_metric.metric_type {
             MetricType::Simple => {
                 compile_simple_metric_cte(
                     den_metric,
-                    spec,
+                    den_spec_ref,
                     all_metrics,
                     model_aliases,
                     join_edges,
+                    all_time_spines,
                     dialect,
-                    cte_scope,
+                    den_scope_ref,
                     ctes,
                 )?;
             }
             MetricType::Derived => {
                 compile_derived_metric_cte(
                     den_metric,
-                    spec,
+                    den_spec_ref,
                     all_metrics,
                     model_aliases,
                     join_edges,
                     dialect,
-                    cte_scope,
+                    den_scope_ref,
                     ctes,
+                    all_time_spines,
                 )?;
             }
             _ => {}
         }
     }
 
-    // Build the ratio CTE.
+    // Build the ratio CTE: reference the scoped CTE names for numerator and denominator.
+    let num_cte_name = if numerator.filters.is_empty() {
+        if base_scope_ref.is_empty() {
+            numerator.name.clone()
+        } else {
+            format!("{base_scope_ref}__{}", numerator.name)
+        }
+    } else {
+        format!("{}_num__{}", metric.name, numerator.name)
+    };
+    let den_cte_name = if denominator.filters.is_empty() {
+        if base_scope_ref.is_empty() {
+            denominator.name.clone()
+        } else {
+            format!("{base_scope_ref}__{}", denominator.name)
+        }
+    } else {
+        format!("{}_den__{}", metric.name, denominator.name)
+    };
     let group_by_cols = group_by_output_cols(&spec.group_by);
 
     let num_alias = "num";
@@ -4358,7 +8098,7 @@ fn compile_ratio_metric_cte(
     ));
 
     let mut cte_sql = format!("SELECT {}", select_parts.join(", "));
-    let _ = write!(cte_sql, " FROM {} AS {num_alias}", numerator.name);
+    let _ = write!(cte_sql, " FROM {num_cte_name} AS {num_alias}");
 
     let join_conditions: Vec<String> = group_by_cols
         .iter()
@@ -4366,12 +8106,11 @@ fn compile_ratio_metric_cte(
         .collect();
 
     if join_conditions.is_empty() {
-        let _ = write!(cte_sql, " CROSS JOIN {} AS {den_alias}", denominator.name);
+        let _ = write!(cte_sql, " CROSS JOIN {den_cte_name} AS {den_alias}");
     } else {
         let _ = write!(
             cte_sql,
-            " FULL OUTER JOIN {} AS {den_alias} ON {}",
-            denominator.name,
+            " FULL OUTER JOIN {den_cte_name} AS {den_alias} ON {}",
             join_conditions.join(" AND ")
         );
     }
@@ -4380,7 +8119,7 @@ fn compile_ratio_metric_cte(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 fn compile_cumulative_metric_cte(
     metric: &ResolvedMetric,
     spec: &SemanticQuerySpec,
@@ -4390,6 +8129,7 @@ fn compile_cumulative_metric_cte(
     dialect: Dialect,
     _time_spine: Option<&TimeSpine>,
     ctes: &mut Vec<(String, String)>,
+    all_time_spines: &[TimeSpine],
 ) -> Result<(), MetricFlowError> {
     // Cumulative metrics use an inline time spine (generate_series) joined to the
     // source data.  Three patterns:
@@ -4469,7 +8209,13 @@ fn compile_cumulative_metric_cte(
 
     // Measure expression in the source CTE.
     let measure_col = qualify_measure_expr("f", &ap.expr);
-    let agg_src = render_agg(&ap.agg, "src.measure_value", dialect);
+    let agg_src = render_agg_with_params(
+        &ap.agg,
+        "src.measure_value",
+        dialect,
+        ap.percentile,
+        ap.use_discrete_percentile,
+    );
 
     // Collect non-time dimension output names for GROUP BY pass-through.
     let dim_col_names: Vec<String> = spec
@@ -4489,7 +8235,13 @@ fn compile_cumulative_metric_cte(
     if !has_time_dim {
         // No time dimension — falls back to a simple aggregate (no spine needed).
         let col_expr = qualify_measure_expr(primary_alias, &ap.expr);
-        let agg_expr = render_agg(&ap.agg, &col_expr, dialect);
+        let agg_expr = render_agg_with_params(
+            &ap.agg,
+            &col_expr,
+            dialect,
+            ap.percentile,
+            ap.use_discrete_percentile,
+        );
         let mut select_parts: Vec<String> = Vec::new();
         // Add dimension group-by columns.
         for gb in &spec.group_by {
@@ -4529,6 +8281,8 @@ fn compile_cumulative_metric_cte(
             join_edges,
             dialect,
             &mut cte_sql,
+            &[],
+            None,
         );
         {
             let mut where_parts: Vec<String> = Vec::new();
@@ -4600,25 +8354,60 @@ fn compile_cumulative_metric_cte(
         join_edges,
         dialect,
         &mut src_sql,
+        &[],
+        None,
     );
-    // Apply metric-level + user-supplied WHERE filters.
+    // For cumulative metrics, time-dimension filters must be applied AFTER the
+    // cumulative aggregation (on the spine output), not on the source data,
+    // because the source needs historical data for the cumulative window.
+    // Separate filters into time-referencing (deferred) and non-time (applied to source).
+    let time_dim_output_names: Vec<String> = spec
+        .group_by
+        .iter()
+        .filter_map(|gb| {
+            if let GroupBySpec::TimeDimension {
+                name, granularity, ..
+            } = gb
+            {
+                Some(format!("{name}__{granularity}"))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let is_time_filter = |f: &str| -> bool {
+        time_dim_output_names
+            .iter()
+            .any(|td| f.contains(td.as_str()))
+            || f.contains("metric_time")
+            || f.contains("TimeDimension(")
+    };
+    let mut deferred_where_parts: Vec<String> = Vec::new();
     {
         let mut where_parts: Vec<String> = Vec::new();
         for filter in &metric.metric_filters {
-            where_parts.push(resolve_where_filter(
-                filter,
-                model_aliases,
-                dialect,
-                &ap.semantic_model,
-            ));
+            if is_time_filter(filter) {
+                deferred_where_parts.push(filter.clone());
+            } else {
+                where_parts.push(resolve_where_filter(
+                    filter,
+                    model_aliases,
+                    dialect,
+                    &ap.semantic_model,
+                ));
+            }
         }
         for filter in &spec.where_filters {
-            where_parts.push(resolve_where_filter(
-                filter,
-                model_aliases,
-                dialect,
-                &ap.semantic_model,
-            ));
+            if is_time_filter(filter) {
+                deferred_where_parts.push(filter.clone());
+            } else {
+                where_parts.push(resolve_where_filter(
+                    filter,
+                    model_aliases,
+                    dialect,
+                    &ap.semantic_model,
+                ));
+            }
         }
         if !where_parts.is_empty() {
             let _ = write!(src_sql, " WHERE {}", where_parts.join(" AND "));
@@ -4627,8 +8416,93 @@ fn compile_cumulative_metric_cte(
     ctes.push((src_cte.clone(), src_sql));
 
     // ── Step 2: Inline time spine ─────────────────────────────────────────
+    // Cumulative metrics always use a daily spine for accurate rolling windows;
+    // the query granularity (week/month) is applied via DATE_TRUNC in the output.
+    let spine_gran = if matches!(granularity, "hour" | "minute" | "second") {
+        granularity
+    } else {
+        "day"
+    };
     let spine_cte = format!("{}_spine", metric.name);
-    let spine_sql = inline_time_spine_sql("spine_time", &src_cte, "src_time", granularity, dialect);
+    let tc_start = spec
+        .time_constraint
+        .as_ref()
+        .map(|(start, _)| start.as_str());
+    let tc_end = spec.time_constraint.as_ref().map(|(_, end)| end.as_str());
+    let window_extension =
+        if let (Some(count), Some(gran)) = (&cp.window_count, &cp.window_granularity) {
+            Some(render_interval(*count, gran, dialect))
+        } else {
+            None
+        };
+    let is_all_time = cp.window_count.is_none() && cp.grain_to_date.is_none();
+    let spine_sql = if is_all_time {
+        if let Some(ts) = pick_time_spine_for_granularity(all_time_spines, spine_gran) {
+            let cast = render_type_cast(
+                &format!("t.{}", ts.primary_column),
+                if matches!(spine_gran, "hour" | "minute" | "second") {
+                    "TIMESTAMP"
+                } else {
+                    "DATE"
+                },
+                dialect,
+            );
+            let spine_rel = match dialect {
+                Dialect::Databricks => ts.relation_name.replace('"', "`"),
+                _ => ts.relation_name.clone(),
+            };
+            format!("SELECT {cast} AS spine_time FROM {spine_rel} AS t")
+        } else {
+            inline_time_spine_sql_bounded(
+                "spine_time",
+                &src_cte,
+                "src_time",
+                spine_gran,
+                dialect,
+                tc_end,
+            )
+        }
+    } else if let Some(ref ext) = window_extension {
+        let subdaily = matches!(spine_gran, "hour" | "minute" | "second");
+        let target_type = if subdaily { "TIMESTAMP" } else { "DATE" };
+        let min_expr = if let Some(start) = tc_start {
+            format!("GREATEST((SELECT MIN(src_time) FROM {src_cte}), CAST('{start}' AS DATE))")
+        } else {
+            format!("(SELECT MIN(src_time) FROM {src_cte})")
+        };
+        let max_expr = if let Some(bound) = tc_end {
+            format!(
+                "GREATEST((SELECT MAX(src_time) FROM {src_cte}) + {ext}, CAST('{bound}' AS DATE))"
+            )
+        } else {
+            format!("(SELECT MAX(src_time) FROM {src_cte}) + {ext}")
+        };
+        match dialect {
+            Dialect::DuckDB => {
+                let cast = render_type_cast("ds", target_type, dialect);
+                format!(
+                    "SELECT {cast} AS spine_time FROM generate_series({min_expr}, {max_expr}, INTERVAL '1 {spine_gran}') AS t(ds)"
+                )
+            }
+            _ => inline_time_spine_sql_bounded(
+                "spine_time",
+                &src_cte,
+                "src_time",
+                spine_gran,
+                dialect,
+                tc_end,
+            ),
+        }
+    } else {
+        inline_time_spine_sql_bounded(
+            "spine_time",
+            &src_cte,
+            "src_time",
+            spine_gran,
+            dialect,
+            tc_end,
+        )
+    };
     ctes.push((spine_cte.clone(), spine_sql));
 
     // ── Step 3: Join spine → source with time range predicate ────────────
@@ -4647,26 +8521,246 @@ fn compile_cumulative_metric_cte(
         "src.src_time <= spine.spine_time".to_string()
     };
 
-    let trunc = format!("DATE_TRUNC('{granularity}', spine.spine_time)");
-    let mut cum_select = vec![format!("{trunc} AS metric_time")];
-    for dcn in &dim_col_names {
-        cum_select.push(format!("src.{dcn}"));
-    }
-    cum_select.push(format!("{agg_src} AS {}", metric.name));
+    let time_out_col = spec
+        .group_by
+        .iter()
+        .find_map(|gb| {
+            if let GroupBySpec::TimeDimension { name, .. } = gb {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
+        .unwrap_or("metric_time");
 
-    let cum_group: Vec<String> = (1..=1 + dim_col_names.len())
-        .map(|i| i.to_string())
+    // Collect all time dimension specs for non-default-grain handling.
+    let time_dims: Vec<(&str, &str)> = spec
+        .group_by
+        .iter()
+        .filter_map(|gb| {
+            if let GroupBySpec::TimeDimension {
+                name, granularity, ..
+            } = gb
+            {
+                Some((name.as_str(), granularity.as_str()))
+            } else {
+                None
+            }
+        })
         .collect();
+    let has_non_default_grain = time_dims.len() > 1
+        || time_dims
+            .iter()
+            .any(|(_, g)| !matches!(*g, "day" | "hour" | "minute" | "second"));
 
-    let cum_sql = format!(
+    let mut cum_select: Vec<String>;
+    let mut cum_group: Vec<String>;
+
+    let mut cum_extra_join = String::new();
+    if has_non_default_grain {
+        // Daily spine with all coarser-grain truncations as extra columns.
+        cum_select = vec![format!("spine.spine_time AS {time_out_col}__day")];
+        cum_group = vec!["1".to_string()];
+        let mut idx = 2;
+        let mut cg_counter = 0u32;
+        for (td_name, td_gran) in &time_dims {
+            let col_name = format!("{td_name}__{td_gran}");
+            if !is_standard_granularity(td_gran) {
+                if let Some((cg_spine, cg_col)) =
+                    find_custom_granularity_spine(all_time_spines, td_gran)
+                {
+                    let cg_alias = if cg_counter == 0 {
+                        "ts_cg".to_string()
+                    } else {
+                        format!("ts_cg{cg_counter}")
+                    };
+                    cg_counter += 1;
+                    let spine_rel = match dialect {
+                        Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                        _ => cg_spine.relation_name.clone(),
+                    };
+                    cum_extra_join.push_str(&format!(
+                        " LEFT OUTER JOIN {spine_rel} AS {cg_alias} ON spine.spine_time = {cg_alias}.{}",
+                        cg_spine.primary_column,
+                    ));
+                    cum_select.push(format!("{cg_alias}.{cg_col} AS {col_name}"));
+                } else {
+                    cum_select.push(format!(
+                        "DATE_TRUNC('{td_gran}', spine.spine_time) AS {col_name}"
+                    ));
+                }
+            } else {
+                cum_select.push(format!(
+                    "DATE_TRUNC('{td_gran}', spine.spine_time) AS {col_name}"
+                ));
+            }
+            cum_group.push(idx.to_string());
+            idx += 1;
+        }
+        for dcn in &dim_col_names {
+            cum_select.push(format!("src.{dcn}"));
+            cum_group.push(idx.to_string());
+            idx += 1;
+        }
+        cum_select.push(format!("{agg_src} AS {}", metric.name));
+    } else {
+        let trunc = format!("DATE_TRUNC('{granularity}', spine.spine_time)");
+        cum_select = vec![format!("{trunc} AS {time_out_col}")];
+        cum_group = (1..=1 + dim_col_names.len())
+            .map(|i| i.to_string())
+            .collect();
+        for dcn in &dim_col_names {
+            cum_select.push(format!("src.{dcn}"));
+        }
+        cum_select.push(format!("{agg_src} AS {}", metric.name));
+    }
+
+    let mut cum_sql = format!(
         "SELECT {} FROM {spine_cte} AS spine \
-         INNER JOIN {src_cte} AS src ON {join_cond} \
+         INNER JOIN {src_cte} AS src ON {join_cond}{cum_extra_join} \
          GROUP BY {}",
         cum_select.join(", "),
         cum_group.join(", ")
     );
 
-    ctes.push((metric.name.clone(), cum_sql));
+    if !deferred_where_parts.is_empty() {
+        // Wrap in an outer SELECT to apply deferred time-dimension filters.
+        // The cumulative CTE output columns are: time_out_col, dim_col_names, metric.name.
+        // The raw filters reference column names like "revenue_instance__ds__day" or
+        // "{{ TimeDimension('metric_time', 'day') }}". Resolve them against the output names.
+        let inner_name = format!("{}_inner", metric.name);
+        ctes.push((inner_name.clone(), cum_sql));
+        let outer_cols: Vec<String> = std::iter::once(time_out_col.to_string())
+            .chain(dim_col_names.iter().cloned())
+            .chain(std::iter::once(metric.name.clone()))
+            .collect();
+        let resolved_deferred: Vec<String> = deferred_where_parts
+            .iter()
+            .map(|f| {
+                let mut r = f.clone();
+                // Strip Jinja wrappers.
+                r = r.replace("{{ ", "").replace(" }}", "");
+                // Replace TimeDimension('name', 'grain') → output column name.
+                while let Some(start) = r.find("TimeDimension('") {
+                    let inner_start = start + 15;
+                    if let Some(end) = r[inner_start..].find("')") {
+                        let inner = &r[inner_start..inner_start + end];
+                        let td_name = inner
+                            .split(',')
+                            .next()
+                            .unwrap_or("metric_time")
+                            .trim()
+                            .trim_matches('\'');
+                        let td_gran = inner
+                            .split(',')
+                            .nth(1)
+                            .map(|s| s.trim().trim_matches('\'').trim_matches('"'))
+                            .unwrap_or("day");
+                        let col_name = format!("{td_name}__{td_gran}");
+                        let col = outer_cols
+                            .iter()
+                            .find(|c| **c == col_name || **c == td_name)
+                            .cloned()
+                            .unwrap_or_else(|| time_out_col.to_string());
+                        r.replace_range(start..inner_start + end + 2, &col);
+                    } else {
+                        break;
+                    }
+                }
+                // Replace Dimension('entity__name') → output column.
+                while let Some(start) = r.find("Dimension('") {
+                    let inner_start = start + 11;
+                    if let Some(end) = r[inner_start..].find("')") {
+                        let dim_ref = &r[inner_start..inner_start + end];
+                        let col = outer_cols
+                            .iter()
+                            .find(|c| c.as_str() == dim_ref)
+                            .cloned()
+                            .unwrap_or_else(|| dim_ref.to_string());
+                        r.replace_range(start..inner_start + end + 2, &col);
+                    } else {
+                        break;
+                    }
+                }
+                // Replace raw `name__granularity` references with the actual output col.
+                // E.g., `revenue_instance__ds__day` → `revenue_instance__ds` when that's the output.
+                for td in &time_dim_output_names {
+                    if r.contains(td.as_str()) && !outer_cols.contains(td) {
+                        r = r.replace(td.as_str(), time_out_col);
+                    }
+                }
+                r
+            })
+            .collect();
+        cum_sql = format!(
+            "SELECT {} FROM {inner_name} WHERE {}",
+            outer_cols.join(", "),
+            resolved_deferred.join(" AND ")
+        );
+    }
+
+    if has_non_default_grain {
+        // Wrap the daily cumulative in a LAST_VALUE/AVG window function to pick the
+        // representative value per coarser-grain bucket, then GROUP BY to dedup.
+        let daily_cte = format!("{}_daily", metric.name);
+        ctes.push((daily_cte.clone(), cum_sql));
+
+        // Choose window function: LAST_VALUE for all-time, AVG for windowed/grain-to-date.
+        let wfn = if cp.grain_to_date.is_some() {
+            "FIRST_VALUE"
+        } else if cp.window_count.is_some() {
+            "AVG"
+        } else {
+            "LAST_VALUE"
+        };
+
+        // Build partition columns = all the coarser-grain time cols + dim cols.
+        let mut partition_cols: Vec<String> = Vec::new();
+        for (td_name, td_gran) in &time_dims {
+            partition_cols.push(format!("{td_name}__{td_gran}"));
+        }
+        for dcn in &dim_col_names {
+            partition_cols.push(dcn.clone());
+        }
+        let partition_clause = partition_cols.join(", ");
+        let order_col = format!("{time_out_col}__day");
+
+        let mut wfn_select: Vec<String> = Vec::new();
+        for col in &partition_cols {
+            wfn_select.push(col.clone());
+        }
+        wfn_select.push(format!(
+            "{wfn}({metric_name}) OVER (PARTITION BY {partition_clause} ORDER BY {order_col} \
+             ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS {metric_name}",
+            metric_name = metric.name,
+        ));
+
+        let wfn_sql = format!("SELECT {} FROM {daily_cte}", wfn_select.join(", "),);
+        let wfn_cte = format!("{}_wfn", metric.name);
+        ctes.push((wfn_cte.clone(), wfn_sql));
+
+        // Dedup: GROUP BY all partition cols + metric value.
+        let mut dedup_cols: Vec<String> = partition_cols.clone();
+        dedup_cols.push(metric.name.clone());
+        // Rename partition cols to match expected output names.
+        let mut final_select: Vec<String> = Vec::new();
+        for (td_name, td_gran) in &time_dims {
+            final_select.push(format!("{td_name}__{td_gran}"));
+        }
+        for dcn in &dim_col_names {
+            final_select.push(dcn.clone());
+        }
+        final_select.push(metric.name.clone());
+        let group_indices: Vec<String> = (1..=dedup_cols.len()).map(|i| i.to_string()).collect();
+        let dedup_sql = format!(
+            "SELECT {} FROM {wfn_cte} GROUP BY {}",
+            final_select.join(", "),
+            group_indices.join(", ")
+        );
+        ctes.push((metric.name.clone(), dedup_sql));
+    } else {
+        ctes.push((metric.name.clone(), cum_sql));
+    }
     Ok(())
 }
 
@@ -4690,7 +8784,11 @@ fn scoped_aliases_for<'a>(
 ///
 /// For `conversion_rate`: matched / total_base
 /// For `conversions`: COUNT of matched conversion events
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::used_underscore_binding,
+    clippy::cognitive_complexity
+)]
 fn compile_conversion_metric_cte(
     metric: &ResolvedMetric,
     _spec: &SemanticQuerySpec,
@@ -4700,6 +8798,7 @@ fn compile_conversion_metric_cte(
     _join_edges: &[JoinEdge],
     dialect: Dialect,
     ctes: &mut Vec<(String, String)>,
+    all_time_spines: &[TimeSpine],
 ) -> Result<(), MetricFlowError> {
     let cp = metric.conversion_params.as_ref().ok_or_else(|| {
         MetricFlowError::Other(format!(
@@ -4770,35 +8869,40 @@ fn compile_conversion_metric_cte(
     let base_relation = render_full_relation(base_model.1, dialect);
     let conv_relation = render_full_relation(conv_model.1, dialect);
 
-    let base_cte_name = format!("{}_base", metric.name);
-    let conv_cte_name = format!("{}_conv", metric.name);
+    // Determine the time dimension granularity and group-by columns.
+    let spec = _spec;
+    let has_time_dim = spec
+        .group_by
+        .iter()
+        .any(|gb| matches!(gb, GroupBySpec::TimeDimension { .. }));
+    let granularity = spec
+        .group_by
+        .iter()
+        .find_map(|gb| {
+            if let GroupBySpec::TimeDimension { granularity, .. } = gb {
+                Some(granularity.as_str())
+            } else {
+                None
+            }
+        })
+        .unwrap_or("day");
+    let _group_by_cols = group_by_output_cols(&spec.group_by);
+
+    let custom_gran_info = if !is_standard_granularity(granularity) {
+        find_custom_granularity_spine(all_time_spines, granularity)
+            .map(|(spine, col)| (spine.clone(), col.to_string()))
+    } else {
+        None
+    };
 
     // Build extra SELECT columns for constant properties.
-    let base_const_cols: String = cp
+    let const_conditions: Vec<String> = cp
         .constant_properties
         .iter()
-        .map(|(base_prop, _)| format!(", {base_prop}"))
-        .collect();
-    let conv_const_cols: String = cp
-        .constant_properties
-        .iter()
-        .map(|(_, conv_prop)| format!(", {conv_prop}"))
+        .map(|(base_prop, conv_prop)| format!("b.{base_prop} = c.{conv_prop}"))
         .collect();
 
-    // CTE 1: raw base events with entity key, time, and constant property columns.
-    let base_cte = format!(
-        "SELECT {base_entity_expr} AS entity_key, {base_time_dim} AS metric_time{base_const_cols} FROM {base_relation}"
-    );
-    ctes.push((base_cte_name.clone(), base_cte));
-
-    // CTE 2: raw conversion events with entity key, time, and constant property columns.
-    let conv_cte = format!(
-        "SELECT {conv_entity_expr} AS entity_key, {conv_time_dim} AS metric_time{conv_const_cols} FROM {conv_relation}"
-    );
-    ctes.push((conv_cte_name.clone(), conv_cte));
-
-    // Build the window condition.
-    // base event must occur before or at the conversion event, within the window.
+    // Window condition for the join.
     let window_condition = match (&cp.window_count, &cp.window_granularity) {
         (Some(count), Some(gran)) => {
             let interval = render_interval(*count, gran, dialect);
@@ -4806,46 +8910,272 @@ fn compile_conversion_metric_cte(
         }
         _ => "b.metric_time <= c.metric_time".to_string(),
     };
-
-    // Constant property conditions.
-    let const_conditions: Vec<String> = cp
-        .constant_properties
-        .iter()
-        .map(|(base_prop, conv_prop)| format!("b.{base_prop} = c.{conv_prop}"))
-        .collect();
-
     let mut join_conds = vec!["b.entity_key = c.entity_key".to_string(), window_condition];
     join_conds.extend(const_conditions);
-    let join_condition = join_conds.join(" AND ");
+    let _join_condition = join_conds.join(" AND ");
 
-    // CTE 3: the final conversion metric.
-    let metric_expr = match cp.calculation.as_str() {
-        "conversions" => {
-            // Count of unique conversion events that had a matching base event.
+    // Resolve dimension columns for group-by (non-time).
+    let dim_cols: Vec<(String, String)> = spec
+        .group_by
+        .iter()
+        .filter_map(|gb| match gb {
+            GroupBySpec::Dimension {
+                entity: Some(e),
+                name,
+            } => {
+                let dim_ref = format!("{e}__{name}");
+                let base_col = base_model
+                    .1
+                    .dimensions
+                    .iter()
+                    .find(|d| d.name == *name || d.name == dim_ref)
+                    .map(|d| d.expr.to_string())
+                    .unwrap_or_else(|| name.clone());
+                Some((dim_ref, base_col))
+            }
+            GroupBySpec::Dimension { entity: None, name } => Some((name.clone(), name.clone())),
+            _ => None,
+        })
+        .collect();
+
+    let opp_cte_name = format!("{}_opportunities", metric.name);
+    let conv_matched_name = format!("{}_conversions", metric.name);
+
+    // CTE 1: opportunities (base measure aggregated per group-by).
+    let base_measure = qualify_measure_expr(&base_model.0, &base_ap.expr);
+    let base_agg = render_agg_with_params(
+        &base_ap.agg,
+        &base_measure,
+        dialect,
+        base_ap.percentile,
+        base_ap.use_discrete_percentile,
+    );
+    if has_time_dim {
+        if let Some((ref cg_spine, ref cg_col)) = custom_gran_info {
+            let spine_rel = match dialect {
+                Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                _ => cg_spine.relation_name.clone(),
+            };
+            let day_trunc =
+                render_date_trunc("day", &format!("{}.{base_time_dim}", base_model.0), dialect);
+            let mut opp_sel = vec![format!("ts_opp.{cg_col} AS metric_time__{granularity}")];
+            for (out_name, src_col) in &dim_cols {
+                opp_sel.push(format!("{}.{src_col} AS {out_name}", base_model.0));
+            }
+            opp_sel.push(format!("{base_agg} AS base_measure"));
+            let indices: Vec<String> = (1..=1 + dim_cols.len()).map(|i| i.to_string()).collect();
+            let opp_sql = format!(
+                "SELECT {} FROM {base_relation} AS {} \
+                 LEFT OUTER JOIN {spine_rel} AS ts_opp ON {day_trunc} = ts_opp.{} \
+                 GROUP BY {}",
+                opp_sel.join(", "),
+                base_model.0,
+                cg_spine.primary_column,
+                indices.join(", ")
+            );
+            ctes.push((opp_cte_name.clone(), opp_sql));
+        } else {
+            let time_expr = render_date_trunc(
+                granularity,
+                &format!("{}.{base_time_dim}", base_model.0),
+                dialect,
+            );
+            let mut opp_sel = vec![format!("{time_expr} AS metric_time")];
+            for (out_name, src_col) in &dim_cols {
+                opp_sel.push(format!("{}.{src_col} AS {out_name}", base_model.0));
+            }
+            opp_sel.push(format!("{base_agg} AS base_measure"));
+            let indices: Vec<String> = (1..=1 + dim_cols.len()).map(|i| i.to_string()).collect();
+            let opp_sql = format!(
+                "SELECT {} FROM {base_relation} AS {} GROUP BY {}",
+                opp_sel.join(", "),
+                base_model.0,
+                indices.join(", ")
+            );
+            ctes.push((opp_cte_name.clone(), opp_sql));
+        }
+    } else {
+        let mut opp_sel: Vec<String> = Vec::new();
+        for (out_name, src_col) in &dim_cols {
+            opp_sel.push(format!("{}.{src_col} AS {out_name}", base_model.0));
+        }
+        opp_sel.push(format!("{base_agg} AS base_measure"));
+        let group = if dim_cols.is_empty() {
+            String::new()
+        } else {
             format!(
-                "SELECT (SELECT COUNT(*) FROM (SELECT DISTINCT c.entity_key, c.metric_time \
-                 FROM {conv_cte_name} c INNER JOIN {base_cte_name} b ON {join_condition}) matched) \
-                 AS {}",
-                metric.name
+                " GROUP BY {}",
+                (1..=dim_cols.len())
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
+        };
+        let opp_sql = format!(
+            "SELECT {} FROM {base_relation} AS {}{group}",
+            opp_sel.join(", "),
+            base_model.0
+        );
+        ctes.push((opp_cte_name.clone(), opp_sql));
+    }
+
+    // CTE 2: conversions — join base events to conversion events, deduplicate with FIRST_VALUE.
+    // For each conversion event, find the closest matching base event within the window.
+    // Pattern: SELECT DISTINCT first_value(b.time) OVER (PARTITION BY c.time, c.entity ORDER BY b.time DESC), ..., c.measure
+    let conv_measure = qualify_measure_expr(&conv_model.0, &conv_ap.expr);
+    let base_rel = format!("{base_relation} AS b");
+    let uuid_fn = match dialect {
+        Dialect::DuckDB => "GEN_RANDOM_UUID()",
+        _ => "UUID_STRING()",
+    };
+    let conv_rel = format!("(SELECT *, {uuid_fn} AS uuid FROM {conv_relation}) AS c");
+    let mut join_on = vec![format!("b.{base_entity_expr} = c.{conv_entity_expr}")];
+    match (&cp.window_count, &cp.window_granularity) {
+        (Some(count), Some(gran)) => {
+            let interval = render_interval(*count, gran, dialect);
+            join_on.push(format!("b.{base_time_dim} <= c.{conv_time_dim}"));
+            join_on.push(format!(
+                "b.{base_time_dim} > c.{conv_time_dim} - {interval}"
+            ));
         }
         _ => {
-            // conversion_rate = matched_conversions / total_base_events
-            let matched = format!(
-                "(SELECT COUNT(*) FROM (SELECT DISTINCT c.entity_key, c.metric_time \
-                 FROM {conv_cte_name} c INNER JOIN {base_cte_name} b ON {join_condition}) matched)"
-            );
-            let total_base = format!("(SELECT COUNT(*) FROM {base_cte_name})");
-            let cast_matched = render_cast_double(&matched, dialect);
-            let cast_base = render_cast_double(&total_base, dialect);
-            format!(
-                "SELECT {cast_matched} / NULLIF({cast_base}, 0) AS {}",
-                metric.name
-            )
+            join_on.push(format!("b.{base_time_dim} <= c.{conv_time_dim}"));
         }
-    };
+    }
+    for (base_prop, conv_prop) in &cp.constant_properties {
+        join_on.push(format!("b.{base_prop} = c.{conv_prop}"));
+    }
+    let partition_by = format!("c.{conv_time_dim}, c.{conv_entity_expr}");
+    let window_spec = format!(
+        "PARTITION BY {partition_by} ORDER BY b.{base_time_dim} DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
+    );
+    let mut dedup_sel = vec![
+        format!("FIRST_VALUE(b.{base_time_dim}) OVER ({window_spec}) AS ds"),
+        format!("FIRST_VALUE(b.{base_entity_expr}) OVER ({window_spec}) AS entity_key"),
+    ];
+    for (base_prop, _) in &cp.constant_properties {
+        dedup_sel.push(format!(
+            "FIRST_VALUE(b.{base_prop}) OVER ({window_spec}) AS {base_prop}"
+        ));
+    }
+    // Include dimension columns in the dedup via FIRST_VALUE.
+    for (out_name, src_col) in &dim_cols {
+        dedup_sel.push(format!(
+            "FIRST_VALUE(b.{src_col}) OVER ({window_spec}) AS {out_name}"
+        ));
+    }
+    dedup_sel.push("c.uuid".to_string());
+    dedup_sel.push(format!("{conv_measure} AS conv_measure"));
+    let dedup_sql = format!(
+        "SELECT DISTINCT {} FROM {base_rel} INNER JOIN {conv_rel} ON {}",
+        dedup_sel.join(", "),
+        join_on.join(" AND ")
+    );
 
-    ctes.push((metric.name.clone(), metric_expr));
+    // Aggregate conversions per group-by.
+    let conv_agg = render_agg_with_params(
+        &conv_ap.agg,
+        "conv_measure",
+        dialect,
+        conv_ap.percentile,
+        conv_ap.use_discrete_percentile,
+    );
+    let mut conv_sel: Vec<String> = Vec::new();
+    let mut conv_extra_join = String::new();
+    if has_time_dim {
+        if let Some((ref cg_spine, ref cg_col)) = custom_gran_info {
+            let spine_rel = match dialect {
+                Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                _ => cg_spine.relation_name.clone(),
+            };
+            conv_sel.push(format!("ts_conv.{cg_col} AS metric_time__{granularity}"));
+            conv_extra_join = format!(
+                " LEFT OUTER JOIN {spine_rel} AS ts_conv ON deduped.ds = ts_conv.{}",
+                cg_spine.primary_column,
+            );
+        } else {
+            let time_expr = render_date_trunc(granularity, "deduped.ds", dialect);
+            conv_sel.push(format!("{time_expr} AS metric_time"));
+        }
+    }
+    for (out_name, _) in &dim_cols {
+        conv_sel.push(out_name.clone());
+    }
+    conv_sel.push(format!("{conv_agg} AS conv_measure"));
+    let n_group = (if has_time_dim { 1 } else { 0 }) + dim_cols.len();
+    let group = if n_group > 0 {
+        format!(
+            " GROUP BY {}",
+            (1..=n_group)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        String::new()
+    };
+    let conv_sql = format!(
+        "SELECT {} FROM ({dedup_sql}) deduped{conv_extra_join}{group}",
+        conv_sel.join(", ")
+    );
+    ctes.push((conv_matched_name.clone(), conv_sql));
+
+    // CTE 3: final metric — FULL OUTER JOIN opportunities and conversions.
+    let cast_conv = render_cast_double("conv.conv_measure", dialect);
+    let cast_base = render_cast_double("NULLIF(opp.base_measure, 0)", dialect);
+    let metric_expr_str = match cp.calculation.as_str() {
+        "conversions" => "conv.conv_measure".to_string(),
+        _ => format!("{cast_conv} / {cast_base}"),
+    };
+    if has_time_dim || !dim_cols.is_empty() {
+        let time_col = if custom_gran_info.is_some() {
+            format!("metric_time__{granularity}")
+        } else {
+            "metric_time".to_string()
+        };
+        let mut final_sel = Vec::new();
+        if has_time_dim {
+            final_sel.push(format!(
+                "COALESCE(opp.{time_col}, conv.{time_col}) AS {time_col}"
+            ));
+        }
+        for (out_name, _) in &dim_cols {
+            final_sel.push(format!(
+                "COALESCE(opp.{out_name}, conv.{out_name}) AS {out_name}"
+            ));
+        }
+        final_sel.push(format!("{metric_expr_str} AS {}", metric.name));
+        let mut join_on_parts = Vec::new();
+        if has_time_dim {
+            join_on_parts.push(format!("opp.{time_col} = conv.{time_col}"));
+        }
+        for (out_name, _) in &dim_cols {
+            join_on_parts.push(format!(
+                "opp.{out_name} IS NOT DISTINCT FROM conv.{out_name}"
+            ));
+        }
+        let final_sql = format!(
+            "SELECT {} FROM {opp_cte_name} opp FULL OUTER JOIN {conv_matched_name} conv ON {}",
+            final_sel.join(", "),
+            join_on_parts.join(" AND ")
+        );
+        ctes.push((metric.name.clone(), final_sql));
+    } else {
+        let cast_conv_scalar = render_cast_double(
+            &format!("(SELECT SUM(conv_measure) FROM {conv_matched_name})"),
+            dialect,
+        );
+        let cast_base_scalar = render_cast_double(
+            &format!("NULLIF((SELECT SUM(base_measure) FROM {opp_cte_name}), 0)"),
+            dialect,
+        );
+        let scalar_expr = match cp.calculation.as_str() {
+            "conversions" => format!("(SELECT SUM(conv_measure) FROM {conv_matched_name})"),
+            _ => format!("{cast_conv_scalar} / {cast_base_scalar}"),
+        };
+        let final_sql = format!("SELECT {scalar_expr} AS {}", metric.name);
+        ctes.push((metric.name.clone(), final_sql));
+    }
     Ok(())
 }
 
@@ -4854,7 +9184,12 @@ fn compile_conversion_metric_cte(
 /// Scans both the `group_by` specs and any filter strings (metric-level or
 /// user-supplied) for entity-prefixed `Dimension('entity__name')` references,
 /// then emits one LEFT JOIN per referenced model that is not already joined.
-#[allow(clippy::too_many_arguments)]
+///
+/// When multi-hop subqueries are provided (for chains like
+/// `account_id__customer_id__dim` that diverge to different leaf models),
+/// those are emitted as subquery joins and the corresponding dimensions are
+/// skipped from flat join processing.
+#[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 fn add_dimension_joins(
     spec: &SemanticQuerySpec,
     metric_filters: &[String],
@@ -4864,25 +9199,58 @@ fn add_dimension_joins(
     join_edges: &[JoinEdge],
     dialect: Dialect,
     sql: &mut String,
+    multi_hop_subqueries: &[MultiHopSubquery],
+    // For SCD joins: the qualified fact-table time expression, e.g. `"a.ds"`.
+    fact_time_expr: Option<&str>,
 ) {
     let mut joined: HashSet<String> = HashSet::new();
     joined.insert(primary_model_name.to_string());
+
+    // Emit multi-hop subquery joins first.
+    for mh in multi_hop_subqueries {
+        let _ = write!(
+            sql,
+            " LEFT JOIN ({}) AS {} ON {} = {}.{}",
+            mh.subquery_sql, mh.alias, mh.fact_join_expr, mh.alias, mh.subquery_join_col,
+        );
+    }
 
     // Collect (entity_name, dimension_name) pairs from group-by and filters.
     // We need both pieces to find the correct model: the entity tells us HOW
     // to join, and the dimension tells us WHICH model to join (the one that
     // actually owns the column).
+    // Allow multiple entries per entity when different dimensions are needed.
     let mut needed: Vec<(String, Option<String>)> = Vec::new();
 
     for gb in &spec.group_by {
-        if let GroupBySpec::Dimension {
-            entity: Some(entity_name),
-            name,
-        } = gb
-        {
-            if !needed.iter().any(|(e, _)| e == entity_name) {
-                needed.push((entity_name.clone(), Some(name.clone())));
+        match gb {
+            GroupBySpec::Dimension {
+                entity: Some(entity_name),
+                name,
+            } => {
+                if !needed
+                    .iter()
+                    .any(|(e, d)| e == entity_name && d.as_deref() == Some(name.as_str()))
+                {
+                    needed.push((entity_name.clone(), Some(name.clone())));
+                }
             }
+            GroupBySpec::TimeDimension { name, .. } => {
+                if let Some((entity_chain, _dim_name)) = name.rsplit_once("__") {
+                    if entity_chain.contains("__") {
+                        // Multi-hop: add each segment as a separate needed entity
+                        // so intermediate JOINs are emitted.
+                        for seg in entity_chain.split("__") {
+                            if !needed.iter().any(|(e, _)| e == seg) {
+                                needed.push((seg.to_string(), None));
+                            }
+                        }
+                    } else if !needed.iter().any(|(e, _)| e == entity_chain) {
+                        needed.push((entity_chain.to_string(), None));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -4891,7 +9259,6 @@ fn add_dimension_joins(
         let mut cursor = 0usize;
         while let Some(pos) = filter[cursor..].find("Dimension(") {
             let abs = cursor + pos;
-            // Skip if this is actually "TimeDimension(" — check preceding char.
             let preceded_by_alpha = abs > 0 && filter.as_bytes()[abs - 1].is_ascii_alphabetic();
             if preceded_by_alpha {
                 cursor = abs + 10;
@@ -4920,17 +9287,69 @@ fn add_dimension_joins(
     // When a dimension name is known, prefer the model that actually owns that
     // dimension column (not just any model that shares the entity name).
     for (entity_name, dim_name) in &needed {
+        // Skip dimensions that are handled by multi-hop subqueries.
+        if let Some(dn) = dim_name {
+            if multi_hop_subqueries
+                .iter()
+                .any(|mh| mh.dim_columns.contains_key(dn.as_str()))
+            {
+                continue;
+            }
+        }
+
+        // For multi-hop entity chains (e.g. "account_id__customer_id"), use
+        // the last entity for model matching.
+        let entity_segments: Vec<&str> = entity_name.split("__").collect();
+        let target_entity = *entity_segments.last().unwrap_or(&entity_name.as_str());
+
+        // If a model already in `joined` has both the entity AND the dimension,
+        // no additional join is needed (the column is already accessible).
+        let already_satisfied = joined.iter().any(|jm| {
+            if let Some((_alias, model)) = model_aliases.get(jm) {
+                let has_entity = model.entities.iter().any(|e| e.name == target_entity);
+                if dim_name.is_none() {
+                    let is_primary = model.entities.iter().any(|e| {
+                        e.name == target_entity
+                            && matches!(e.entity_type.as_str(), "primary" | "unique" | "natural")
+                    }) || model.primary_entity.as_deref() == Some(target_entity);
+                    return is_primary;
+                }
+                let has_dim = dim_name.as_ref().is_none_or(|dn| {
+                    model.dimensions.iter().any(|d| d.name == *dn)
+                        || model.entities.iter().any(|e| e.name == *dn)
+                });
+                has_entity && has_dim
+            } else {
+                false
+            }
+        });
+        if already_satisfied {
+            continue;
+        }
+
         // Find the best model: one that has both the entity AND the dimension.
         // Fall back to any model with the entity if no dimension match.
+        // For entity-prefixed time dims (dim_name=None), prefer the model
+        // where the entity is primary/unique.
         let mut best: Option<&String> = None;
         let mut fallback: Option<&String> = None;
         for (model_name, (_alias, model)) in model_aliases {
             if joined.contains(model_name) {
                 continue;
             }
-            let has_entity = model.entities.iter().any(|e| e.name == *entity_name);
+            let has_entity = model.entities.iter().any(|e| e.name == target_entity);
             if !has_entity {
                 continue;
+            }
+            if dim_name.is_none() {
+                let is_primary = model.entities.iter().any(|e| {
+                    e.name == target_entity
+                        && matches!(e.entity_type.as_str(), "primary" | "unique" | "natural")
+                }) || model.primary_entity.as_deref() == Some(target_entity);
+                if is_primary {
+                    best = Some(model_name);
+                    break;
+                }
             }
             if let Some(dn) = dim_name {
                 let has_dim = model.dimensions.iter().any(|d| d.name == *dn);
@@ -4966,6 +9385,18 @@ fn add_dimension_joins(
                         " LEFT JOIN {join_relation} AS {alias} ON {left_alias}.{} = {alias}.{}",
                         edge.from_expr, edge.to_expr,
                     );
+                    // SCD temporal range condition: fact.time >= scd.valid_from AND
+                    // (fact.time < scd.valid_to OR scd.valid_to IS NULL)
+                    if let (Some(fte), Some(vf), Some(vt)) = (
+                        fact_time_expr,
+                        model.scd_valid_from.as_deref(),
+                        model.scd_valid_to.as_deref(),
+                    ) {
+                        let _ = write!(
+                            sql,
+                            " AND {fte} >= {alias}.{vf} AND ({fte} < {alias}.{vt} OR {alias}.{vt} IS NULL)",
+                        );
+                    }
                     joined.insert(edge.to_model.clone());
                 }
             }
@@ -4974,11 +9405,14 @@ fn add_dimension_joins(
 }
 
 /// Build the final SQL from CTEs, combining all metric results.
-#[allow(unused_variables)]
+#[allow(unused_variables, clippy::cognitive_complexity)]
 fn build_final_sql(
     spec: &SemanticQuerySpec,
     ctes: &[(String, String)],
     dialect: Dialect,
+    all_metrics: &HashMap<String, ResolvedMetric>,
+    time_spine: Option<&TimeSpine>,
+    all_time_spines: &[TimeSpine],
 ) -> Result<String, MetricFlowError> {
     if ctes.is_empty() {
         return Err(MetricFlowError::Other(
@@ -5001,13 +9435,261 @@ fn build_final_sql(
     // Final SELECT — reference the last CTE for each top-level metric.
     let group_by_cols = group_by_output_cols(&spec.group_by);
 
-    // If there's only one top-level metric, just SELECT * from its CTE.
-    if spec.metrics.len() == 1 {
+    // Check if any top-level metric needs join_to_timespine.
+    let needs_spine_join = spec
+        .metrics
+        .iter()
+        .any(|m| all_metrics.get(m).is_some_and(|rm| rm.join_to_timespine));
+
+    // Find the time column name for spine joins.
+    let spine_time_col = group_by_cols
+        .iter()
+        .find(|c| c.contains("metric_time") || c.contains("__ds"))
+        .cloned();
+
+    // If join_to_timespine is needed, wrap the metric query in a LEFT JOIN from spine.
+    // Pick the best time spine for the query granularity (subdaily queries need an hourly spine).
+    let query_gran_for_spine = spine_time_col
+        .as_ref()
+        .and_then(|time_col| {
+            spec.group_by.iter().find_map(|gb| {
+                if let GroupBySpec::TimeDimension {
+                    name, granularity, ..
+                } = gb
+                {
+                    if name == "metric_time" || time_col.contains(name) {
+                        return Some(granularity.as_str());
+                    }
+                }
+                None
+            })
+        })
+        .unwrap_or("day");
+    let effective_spine = if !all_time_spines.is_empty() {
+        pick_time_spine_for_granularity(all_time_spines, query_gran_for_spine)
+    } else {
+        time_spine
+    };
+    let did_spine_join = needs_spine_join
+        && spine_time_col.is_some()
+        && effective_spine.is_some()
+        && spec.metrics.len() == 1;
+    let mut spine_ref_for_where: Option<String> = None;
+    if did_spine_join {
+        let ts = effective_spine.unwrap();
+        let time_col = spine_time_col.as_ref().unwrap();
+
+        // Determine the query granularity from the group_by.
+        let query_gran = spec
+            .group_by
+            .iter()
+            .find_map(|gb| {
+                if let GroupBySpec::TimeDimension {
+                    name, granularity, ..
+                } = gb
+                {
+                    if name == "metric_time" || time_col.contains(name) {
+                        return Some(granularity.as_str());
+                    }
+                }
+                None
+            })
+            .unwrap_or("day");
+
+        let spine_relation = match dialect {
+            Dialect::Databricks => ts.relation_name.replace('"', "`"),
+            _ => ts.relation_name.clone(),
+        };
+        let spine_col = &ts.primary_column;
+        let is_custom_gran = !is_standard_granularity(query_gran);
+        let subdaily = matches!(query_gran, "hour" | "minute" | "second");
+        let target_type = if subdaily { "TIMESTAMP" } else { "DATE" };
+        let needs_trunc = !is_custom_gran && query_gran != ts.primary_granularity.as_str();
+
+        // The spine column expression used in SELECT and ON.
+        // When the spine is a direct table, reference `spine.col`.
+        // When it's a DISTINCT subquery, the output is already `time_col`.
+        // Build optional WHERE clause for the spine: apply time_constraint and
+        // where_filters that reference metric_time so the spine only spans the
+        // constrained range (otherwise LEFT JOIN produces a row per spine day).
+        let mut spine_where_parts: Vec<String> = Vec::new();
+        if let Some((start, end)) = &spec.time_constraint {
+            let has_time = end.contains(' ') || end.contains('T');
+            if has_time && subdaily {
+                // For subdaily with sub-granularity precision, truncate start DOWN
+                // and round end UP to the query granularity.
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) >= DATE_TRUNC('{query_gran}', CAST('{start}' AS TIMESTAMP))"
+                ));
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) < DATE_TRUNC('{query_gran}', CAST('{end}' AS TIMESTAMP)) + INTERVAL '1 {query_gran}'"
+                ));
+            } else if has_time {
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+                ));
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) <= CAST('{end}' AS TIMESTAMP)"
+                ));
+            } else {
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) >= CAST('{start}' AS TIMESTAMP)"
+                ));
+                spine_where_parts.push(format!(
+                    "CAST(t.{spine_col} AS TIMESTAMP) < CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"
+                ));
+            }
+        }
+        for wf in &spec.where_filters {
+            if wf.contains("metric_time") || wf.contains("TimeDimension") {
+                let resolved = wf
+                    .replace(
+                        "{{ TimeDimension('metric_time', 'day') }}",
+                        &format!("t.{spine_col}"),
+                    )
+                    .replace(
+                        "{{ TimeDimension('metric_time') }}",
+                        &format!("t.{spine_col}"),
+                    );
+                if resolved.contains(&format!("t.{spine_col}")) {
+                    spine_where_parts.push(resolved);
+                }
+            }
+        }
+        let spine_where = if spine_where_parts.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", spine_where_parts.join(" AND "))
+        };
+
+        let (spine_from, spine_ref) = if is_custom_gran {
+            if let Some((cg_spine, cg_col)) =
+                find_custom_granularity_spine(all_time_spines, query_gran)
+            {
+                let cg_spine_rel = match dialect {
+                    Dialect::Databricks => cg_spine.relation_name.replace('"', "`"),
+                    _ => cg_spine.relation_name.clone(),
+                };
+                (
+                    format!(
+                        "(SELECT {cg_col} AS {time_col} FROM {cg_spine_rel} AS t{spine_where} GROUP BY {cg_col}) AS spine"
+                    ),
+                    format!("spine.{time_col}"),
+                )
+            } else {
+                let col_cast =
+                    render_type_cast(&format!("spine.{spine_col}"), target_type, dialect);
+                (format!("{spine_relation} AS spine"), col_cast)
+            }
+        } else if needs_trunc || !spine_where.is_empty() {
+            let raw_trunc = if needs_trunc {
+                let raw = format!("DATE_TRUNC('{query_gran}', t.{spine_col})");
+                render_type_cast(&raw, target_type, dialect)
+            } else {
+                render_type_cast(&format!("t.{spine_col}"), target_type, dialect)
+            };
+            let distinct_kw = if needs_trunc { "DISTINCT " } else { "" };
+            (
+                format!(
+                    "(SELECT {distinct_kw}{raw_trunc} AS {time_col} FROM {spine_relation} AS t{spine_where}) AS spine"
+                ),
+                format!("spine.{time_col}"),
+            )
+        } else {
+            let col_cast = render_type_cast(&format!("spine.{spine_col}"), target_type, dialect);
+            (format!("{spine_relation} AS spine"), col_cast)
+        };
+
+        spine_ref_for_where = Some(spine_ref.clone());
+
+        // Build metric select: COALESCE for fill_nulls_with metrics.
+        let mut select_parts: Vec<String> = Vec::new();
+        select_parts.push(format!("{spine_ref} AS {time_col}"));
+        for col in &group_by_cols {
+            if col == time_col {
+                continue;
+            }
+            select_parts.push(format!("metric_cte.{col}"));
+        }
+        for metric_name in &spec.metrics {
+            if let Some(fill) = all_metrics.get(metric_name).and_then(|m| m.fill_nulls_with) {
+                select_parts.push(format!(
+                    "COALESCE(metric_cte.{metric_name}, {fill}) AS {metric_name}"
+                ));
+            } else {
+                select_parts.push(format!("metric_cte.{metric_name}"));
+            }
+        }
+
+        let _ = writeln!(sql, "SELECT {}", select_parts.join(", "));
+        let _ = writeln!(sql, "FROM {spine_from}");
+
+        let join_cond = format!("{spine_ref} = metric_cte.{time_col}");
+        let _ = writeln!(
+            sql,
+            "LEFT JOIN {} AS metric_cte ON {join_cond}",
+            spec.metrics[0]
+        );
+    } else if spec.metrics.len() == 1 {
         let _ = write!(sql, "SELECT *\nFROM {}", spec.metrics[0]);
     } else {
         // Multiple metrics: FULL OUTER JOIN their CTEs on group-by columns.
+        // When a metric has join_to_timespine, wrap it in a spine-join subquery.
+        let build_spine_subquery = |metric_name: &str, time_col: &str| -> Option<String> {
+            let m = all_metrics.get(metric_name)?;
+            if !m.join_to_timespine {
+                return None;
+            }
+            let ts = effective_spine?;
+            let query_gran = spec
+                .group_by
+                .iter()
+                .find_map(|gb| {
+                    if let GroupBySpec::TimeDimension {
+                        name, granularity, ..
+                    } = gb
+                    {
+                        if name == "metric_time" || time_col.contains(name) {
+                            return Some(granularity.as_str());
+                        }
+                    }
+                    None
+                })
+                .unwrap_or("day");
+            let spine_relation = match dialect {
+                Dialect::Databricks => ts.relation_name.replace('"', "`"),
+                _ => ts.relation_name.clone(),
+            };
+            let spine_col = &ts.primary_column;
+            let subdaily = matches!(query_gran, "hour" | "minute" | "second");
+            let target_type = if subdaily { "TIMESTAMP" } else { "DATE" };
+            let needs_trunc = query_gran != ts.primary_granularity.as_str();
+            let spine_expr = if needs_trunc {
+                let raw = format!("DATE_TRUNC('{query_gran}', t.{spine_col})");
+                render_type_cast(&raw, target_type, dialect)
+            } else {
+                render_type_cast(&format!("t.{spine_col}"), target_type, dialect)
+            };
+            let distinct_kw = if needs_trunc { "DISTINCT " } else { "" };
+            let mut metric_col = format!("mc.{metric_name}");
+            if let Some(fill) = m.fill_nulls_with {
+                metric_col = format!("COALESCE(mc.{metric_name}, {fill})");
+            }
+            let mut other_cols = String::new();
+            for col in &group_by_cols {
+                if col == time_col {
+                    continue;
+                }
+                other_cols.push_str(&format!(", mc.{col}"));
+            }
+            Some(format!(
+                "(SELECT spine.{time_col}{other_cols}, {metric_col} AS {metric_name} FROM (SELECT {distinct_kw}{spine_expr} AS {time_col} FROM {spine_relation} AS t) AS spine LEFT JOIN {metric_name} AS mc ON spine.{time_col} = mc.{time_col})"
+            ))
+        };
+
         let first = &spec.metrics[0];
         let first_alias = format!("{first}_final");
+        let time_col_ref = spine_time_col.as_deref().unwrap_or("metric_time");
 
         let mut select_parts: Vec<String> = Vec::new();
         for col in &group_by_cols {
@@ -5025,11 +9707,22 @@ fn build_final_sql(
 
         for metric_name in &spec.metrics {
             let alias = format!("{metric_name}_final");
-            select_parts.push(format!("{alias}.{metric_name}"));
+            if let Some(fill) = all_metrics.get(metric_name).and_then(|m| m.fill_nulls_with) {
+                select_parts.push(format!(
+                    "COALESCE({alias}.{metric_name}, {fill}) AS {metric_name}"
+                ));
+            } else {
+                select_parts.push(format!("{alias}.{metric_name}"));
+            }
         }
 
         let _ = writeln!(sql, "SELECT {}", select_parts.join(", "));
-        let _ = writeln!(sql, "FROM {first} AS {first_alias}");
+        let first_from = if needs_spine_join {
+            build_spine_subquery(first, time_col_ref).unwrap_or_else(|| first.to_string())
+        } else {
+            first.to_string()
+        };
+        let _ = writeln!(sql, "FROM {first_from} AS {first_alias}");
 
         let mut joined_aliases: Vec<String> = vec![first_alias.clone()];
         for metric_name in spec.metrics.iter().skip(1) {
@@ -5053,12 +9746,19 @@ fn build_final_sql(
                 })
                 .collect();
 
+            let from_ref = if needs_spine_join {
+                build_spine_subquery(metric_name, time_col_ref)
+                    .unwrap_or_else(|| metric_name.to_string())
+            } else {
+                metric_name.to_string()
+            };
+
             if join_conditions.is_empty() {
-                let _ = writeln!(sql, "CROSS JOIN {metric_name} AS {alias}");
+                let _ = writeln!(sql, "CROSS JOIN {from_ref} AS {alias}");
             } else {
                 let _ = writeln!(
                     sql,
-                    "FULL OUTER JOIN {metric_name} AS {alias} ON {}",
+                    "FULL OUTER JOIN {from_ref} AS {alias} ON {}",
                     join_conditions.join(" AND ")
                 );
             }
@@ -5066,21 +9766,104 @@ fn build_final_sql(
         }
     }
 
-    // WHERE filters are pushed into each sub-CTE (compile_simple_metric_cte),
-    // so no unresolved Jinja templates reach here.
+    // WHERE filters: for spine-joined queries, non-time where_filters need to be
+    // applied at the outer level so they filter the spine result.
+    let mut outer_where_parts: Vec<String> = Vec::new();
 
-    // Time constraint: applied at the outer level so it filters the final result.
-    if let Some((start, end)) = &spec.time_constraint {
-        // Find the metric_time column name.
-        let time_col = group_by_cols
-            .iter()
-            .find(|c| c.contains("metric_time") || c.contains("__ds"))
-            .map(|s| s.as_str())
-            .unwrap_or("metric_time");
-        let _ = write!(
-            sql,
-            "\nWHERE {time_col} >= '{start}' AND {time_col} <= '{end}'"
-        );
+    if did_spine_join {
+        for wf in &spec.where_filters {
+            if !wf.contains("metric_time") && !wf.contains("TimeDimension") {
+                // For the outer query, resolve Dimension() references to their
+                // output column names (group-by aliases) rather than source columns.
+                // Only apply if ALL referenced dimensions are in the group_by output.
+                let mut resolved = wf.clone();
+                let mut all_in_output = true;
+                while let Some(start) = resolved.find("{{ Dimension('") {
+                    let inner_start = start + "{{ Dimension('".len();
+                    if let Some(end) = resolved[inner_start..].find("') }}") {
+                        let dim_ref = &resolved[inner_start..inner_start + end];
+                        if !group_by_cols.iter().any(|c| c == dim_ref) {
+                            all_in_output = false;
+                            break;
+                        }
+                        let out_col = dim_ref.to_string();
+                        resolved = format!(
+                            "{}{out_col}{}",
+                            &resolved[..start],
+                            &resolved[inner_start + end + "') }}".len()..]
+                        );
+                    } else {
+                        break;
+                    }
+                }
+                if all_in_output {
+                    let resolved = resolved
+                        .replace("{{ ", "")
+                        .replace(" }}", "")
+                        .replace("{{", "")
+                        .replace("}}", "");
+                    outer_where_parts.push(resolved);
+                }
+            }
+        }
+    }
+
+    // Time constraint: applied at the outer level when a time column exists in the output.
+    // For multi-metric queries with FULL OUTER JOIN, the outer WHERE must use an
+    // unambiguous column. When the output time column is metric_time, use COALESCE
+    // across all metrics. When it's an entity-prefixed dimension (e.g. listing__ds),
+    // skip the outer constraint — each CTE already filters on the fact table's time.
+    let outer_time_col = group_by_cols
+        .iter()
+        .find(|c| c.contains("metric_time") || c.contains("__ds"))
+        .map(|s| s.as_str());
+    if let (Some((start, end)), Some(time_col_name)) = (&spec.time_constraint, outer_time_col) {
+        let is_metric_time = time_col_name.contains("metric_time");
+        let skip_outer_time = spec.metrics.len() > 1 && !is_metric_time;
+        if !skip_outer_time {
+            let time_col = if let Some(ref sref) = spine_ref_for_where {
+                sref.clone()
+            } else if spec.metrics.len() > 1 {
+                let coalesce_parts: Vec<String> = spec
+                    .metrics
+                    .iter()
+                    .map(|m| format!("{m}_final.{time_col_name}"))
+                    .collect();
+                format!("COALESCE({})", coalesce_parts.join(", "))
+            } else {
+                time_col_name.to_string()
+            };
+            let has_time = end.contains(' ') || end.contains('T');
+            let subdaily_outer = has_time && query_gran_for_spine != "day";
+            let (start_expr, end_op, end_expr) = if subdaily_outer {
+                (
+                    format!("DATE_TRUNC('{query_gran_for_spine}', CAST('{start}' AS TIMESTAMP))"),
+                    "<",
+                    format!(
+                        "DATE_TRUNC('{query_gran_for_spine}', CAST('{end}' AS TIMESTAMP)) + INTERVAL '1 {query_gran_for_spine}'"
+                    ),
+                )
+            } else if has_time {
+                (
+                    format!("CAST('{start}' AS TIMESTAMP)"),
+                    "<=",
+                    format!("CAST('{end}' AS TIMESTAMP)"),
+                )
+            } else {
+                (
+                    format!("CAST('{start}' AS TIMESTAMP)"),
+                    "<",
+                    format!("CAST('{end}' AS TIMESTAMP) + INTERVAL '1 day'"),
+                )
+            };
+            outer_where_parts.push(format!(
+                "CAST({time_col} AS TIMESTAMP) >= {start_expr} AND CAST({time_col} AS TIMESTAMP) {end_op} {end_expr}"
+            ));
+        }
+    }
+
+    if !outer_where_parts.is_empty() {
+        let _ = write!(sql, "\nWHERE {}", outer_where_parts.join(" AND "));
     }
 
     // ORDER BY.
@@ -5180,7 +9963,10 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "date_day".into(),
                 time_granularity: Some("day".into()),
+                is_partition: false,
             }],
+            scd_valid_from: None,
+            scd_valid_to: None,
         };
 
         let mut aliases: HashMap<String, (String, &ResolvedModel)> = HashMap::new();
@@ -5227,7 +10013,10 @@ mod tests {
                 dimension_type: "categorical".into(),
                 expr: "status".into(),
                 time_granularity: None,
+                is_partition: false,
             }],
+            scd_valid_from: None,
+            scd_valid_to: None,
         };
 
         let mut aliases: HashMap<String, (String, &ResolvedModel)> = HashMap::new();
@@ -5386,12 +10175,14 @@ mod tests {
             description: String::new(),
             type_params: type_params.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
         store.models.push(RawModelRow {
             name: "fct_users".into(),
             node_relation: r#""db"."main"."fct_users""#.into(),
             primary_entity: "user".into(),
             unique_id: "semantic_model.fct_users".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_users".into(),
@@ -5408,6 +10199,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "created_at".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
         store.join_graph.push(RawJoinGraphRow {
@@ -5424,6 +10216,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -5473,6 +10266,7 @@ mod tests {
             description: String::new(),
             type_params: base_type_params.into(),
             metric_filter: base_filter.into(),
+            time_granularity: None,
         });
 
         // Derived metric wrapping the simple one — forces the CTE code path.
@@ -5486,6 +10280,7 @@ mod tests {
             description: String::new(),
             type_params: derived_type_params.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // Primary model: fct_orders
@@ -5494,6 +10289,7 @@ mod tests {
             node_relation: r#""db"."main"."fct_orders""#.into(),
             primary_entity: "order".into(),
             unique_id: "semantic_model.fct_orders".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_orders".into(),
@@ -5517,6 +10313,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "order_date".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -5526,6 +10323,7 @@ mod tests {
             node_relation: r#""db"."main"."dim_users""#.into(),
             primary_entity: "user".into(),
             unique_id: "semantic_model.dim_users".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.dim_users".into(),
@@ -5542,6 +10340,7 @@ mod tests {
                 dimension_type: "categorical".into(),
                 expr: "is_internal".into(),
                 time_granularity: String::new(),
+                is_partition: false,
             }],
         ));
 
@@ -5576,6 +10375,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -5629,6 +10429,7 @@ mod tests {
             description: String::new(),
             type_params: user_count_params.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // Metric 2: sum of a CASE expression, on account_signups.
@@ -5648,6 +10449,7 @@ mod tests {
             description: String::new(),
             type_params: signup_count_params.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // Primary model: fct_user_activities
@@ -5656,6 +10458,7 @@ mod tests {
             node_relation: r#""db"."main"."fct_user_activities""#.into(),
             primary_entity: "activity".into(),
             unique_id: "semantic_model.fct_user_activities".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_user_activities".into(),
@@ -5680,6 +10483,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "date_day".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -5689,6 +10493,7 @@ mod tests {
             node_relation: r#""db"."main"."account_signups""#.into(),
             primary_entity: "account".into(),
             unique_id: "semantic_model.account_signups".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.account_signups".into(),
@@ -5705,6 +10510,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "created_at".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -5737,6 +10543,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -5791,7 +10598,10 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "date_day".into(),
                 time_granularity: Some("day".into()),
+                is_partition: false,
             }],
+            scd_valid_from: None,
+            scd_valid_to: None,
         };
 
         let secondary = ResolvedModel {
@@ -5811,7 +10621,10 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "created_at".into(),
                 time_granularity: Some("day".into()),
+                is_partition: false,
             }],
+            scd_valid_from: None,
+            scd_valid_to: None,
         };
 
         let user_count = ResolvedMetric {
@@ -5824,6 +10637,8 @@ mod tests {
                 expr: "user_id".into(),
                 agg_time_dimension: Some("date_day".into()),
                 non_additive_dimension: None,
+                percentile: None,
+                use_discrete_percentile: false,
             }),
             metric_filters: vec![],
             derived_expr: None,
@@ -5834,6 +10649,7 @@ mod tests {
             conversion_params: None,
             join_to_timespine: false,
             fill_nulls_with: None,
+            time_granularity: None,
         };
 
         let signup_count = ResolvedMetric {
@@ -5843,11 +10659,11 @@ mod tests {
             agg_params: Some(AggParams {
                 semantic_model: "account_signups".into(),
                 agg: "sum".into(),
-                // Complex expr: contains spaces — qualify_measure_expr returns verbatim,
-                // but compile_simple_metrics must wrap it in a derived table JOIN.
                 expr: "case when account_id is not null then 1 else 0 end".into(),
                 agg_time_dimension: Some("created_at".into()),
                 non_additive_dimension: None,
+                percentile: None,
+                use_discrete_percentile: false,
             }),
             metric_filters: vec![],
             derived_expr: None,
@@ -5858,6 +10674,7 @@ mod tests {
             conversion_params: None,
             join_to_timespine: false,
             fill_nulls_with: None,
+            time_granularity: None,
         };
 
         // account_signups (i=0) → alias "a"; fct_user_activities (i=1) → alias "f1"
@@ -5891,6 +10708,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile_simple_metrics(
@@ -5899,6 +10717,7 @@ mod tests {
             &all_metrics,
             &model_aliases,
             &join_edges,
+            &[],
             Dialect::DuckDB,
         )
         .unwrap();
@@ -5957,6 +10776,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // The filtered simple metric: gross_churn — SUM of delta_arr, but only
@@ -5979,6 +10799,7 @@ mod tests {
                 {"where_sql_template": "{{ Metric('delta_arr', group_by=['opportunity']) }} < 0"}
             ]}"#
             .into(),
+            time_granularity: None,
         });
 
         // The derived metric: arr_churn — forces compilation through compile_complex_metrics.
@@ -5992,6 +10813,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // Single semantic model: fct_opportunities with entity `opportunity`.
@@ -6000,6 +10822,7 @@ mod tests {
             node_relation: r#""db"."main"."fct_opportunities""#.into(),
             primary_entity: "opportunity".into(),
             unique_id: "semantic_model.fct_opportunities".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_opportunities".into(),
@@ -6016,6 +10839,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "close_date".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
         store.join_graph.push(RawJoinGraphRow {
@@ -6032,6 +10856,7 @@ mod tests {
             order_by: vec![],
             limit: Some(5),
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -6084,12 +10909,14 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
         store.models.push(RawModelRow {
             name: "fct_signups".into(),
             node_relation: r#""db"."main"."fct_signups""#.into(),
             primary_entity: "signup".into(),
             unique_id: "semantic_model.fct_signups".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_signups".into(),
@@ -6106,6 +10933,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "created_at".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
         store.join_graph.push(RawJoinGraphRow {
@@ -6137,6 +10965,7 @@ mod tests {
             }],
             limit: Some(5),
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).expect(
@@ -6174,6 +11003,7 @@ mod tests {
             }],
             limit: Some(5),
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let result = compile(&mut store, &spec, Dialect::DuckDB);
@@ -6206,6 +11036,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6218,6 +11049,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6230,6 +11062,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6245,6 +11078,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6252,6 +11086,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "event".into(),
             unique_id: "semantic_model.fct_events".into(),
+            ..Default::default()
         });
         store.dimensions.push((
             "semantic_model.fct_events".into(),
@@ -6260,6 +11095,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "ds".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -6274,6 +11110,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB)
@@ -6304,6 +11141,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6322,6 +11160,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6337,6 +11176,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6344,6 +11184,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "event".into(),
             unique_id: "semantic_model.fct_events".into(),
+            ..Default::default()
         });
         store.dimensions.push((
             "semantic_model.fct_events".into(),
@@ -6352,6 +11193,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "ds".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -6366,6 +11208,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB)
@@ -6396,6 +11239,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6414,6 +11258,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6421,6 +11266,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "event".into(),
             unique_id: "semantic_model.fct_events".into(),
+            ..Default::default()
         });
         store.dimensions.push((
             "semantic_model.fct_events".into(),
@@ -6429,6 +11275,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "ds".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -6443,6 +11290,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB)
@@ -6476,6 +11324,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6484,6 +11333,7 @@ mod tests {
             description: String::new(),
             type_params: r#"{"expr": "count_nps", "metrics": [{"name": "count_nps"}]}"#.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.metrics.push(RawMetricRow {
@@ -6495,6 +11345,7 @@ mod tests {
                 {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'developer'"}
             ]}"#
             .into(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6502,6 +11353,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_nps\"", "alias": "fct_nps", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "nps_survey".into(),
             unique_id: "semantic_model.fct_nps".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_nps".into(),
@@ -6519,12 +11371,14 @@ mod tests {
                     dimension_type: "categorical".into(),
                     expr: "account_plan_tier".into(),
                     time_granularity: String::new(),
+                    is_partition: false,
                 },
                 RawDimensionRow {
                     name: "created_at".into(),
                     dimension_type: "time".into(),
                     expr: "created_at".into(),
                     time_granularity: "day".into(),
+                    is_partition: false,
                 },
             ],
         ));
@@ -6542,6 +11396,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -6574,6 +11429,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
         store.metrics.push(RawMetricRow {
             name: "nps".into(),
@@ -6581,6 +11437,7 @@ mod tests {
             description: String::new(),
             type_params: r#"{"expr": "count_nps", "metrics": [{"name": "count_nps"}]}"#.into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
         store.metrics.push(RawMetricRow {
             name: "nps_developer".into(),
@@ -6591,6 +11448,7 @@ mod tests {
                 {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'developer'"}
             ]}"#
             .into(),
+            time_granularity: None,
         });
         store.metrics.push(RawMetricRow {
             name: "nps_enterprise".into(),
@@ -6601,6 +11459,7 @@ mod tests {
                 {"where_sql_template": "{{ Dimension('nps_survey__account_plan_tier') }} = 'enterprise'"}
             ]}"#
             .into(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6608,6 +11467,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_nps\"", "alias": "fct_nps", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "nps_survey".into(),
             unique_id: "semantic_model.fct_nps".into(),
+            ..Default::default()
         });
         store.entities.push((
             "semantic_model.fct_nps".into(),
@@ -6625,12 +11485,14 @@ mod tests {
                     dimension_type: "categorical".into(),
                     expr: "account_plan_tier".into(),
                     time_granularity: String::new(),
+                    is_partition: false,
                 },
                 RawDimensionRow {
                     name: "created_at".into(),
                     dimension_type: "time".into(),
                     expr: "created_at".into(),
                     time_granularity: "day".into(),
+                    is_partition: false,
                 },
             ],
         ));
@@ -6648,6 +11510,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         let sql = compile(&mut store, &spec, Dialect::DuckDB).unwrap();
@@ -6698,6 +11561,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         // New-style cumulative: metrics array is empty, input lives in
@@ -6724,6 +11588,7 @@ mod tests {
             }"#
             .into(),
             metric_filter: String::new(),
+            time_granularity: None,
         });
 
         store.models.push(RawModelRow {
@@ -6731,6 +11596,7 @@ mod tests {
             node_relation: r#"{"relation_name": "\"db\".\"main\".\"fct_events\"", "alias": "fct_events", "schema_name": "main", "database": "db"}"#.into(),
             primary_entity: "event".into(),
             unique_id: "semantic_model.fct_events".into(),
+            ..Default::default()
         });
         store.dimensions.push((
             "semantic_model.fct_events".into(),
@@ -6739,6 +11605,7 @@ mod tests {
                 dimension_type: "time".into(),
                 expr: "ds".into(),
                 time_granularity: "day".into(),
+                is_partition: false,
             }],
         ));
 
@@ -6753,6 +11620,7 @@ mod tests {
             order_by: vec![],
             limit: None,
             time_constraint: None,
+            apply_group_by: true,
         };
 
         // Pre-fix: fails with "cumulative metric base_l7d has no aggregation params".

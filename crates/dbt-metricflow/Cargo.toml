@@ -25,4 +25,5 @@ dbt-auth = { workspace = true }
 dbt-profile = { workspace = true }
 dbt-xdbc = { workspace = true }
 dirs = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
