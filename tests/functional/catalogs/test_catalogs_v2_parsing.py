@@ -1,11 +1,19 @@
 """Functional tests for catalogs.yml v2 parsing and integration."""
 
+from dataclasses import dataclass
+from typing import Optional
 from unittest import mock
 
 import pytest
 
-from dbt.adapters.catalogs import CatalogIntegration, CatalogIntegrationConfig
+from dbt.adapters.catalogs import (
+    CatalogIntegration,
+    CatalogIntegrationConfig,
+    register_catalog_config,
+)
+from dbt.adapters.catalogs._v2_registry import _REGISTRY
 from dbt.tests.util import run_dbt, write_config_file
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtValidationError
 
 # ===== Stub integrations matching the v2-to-v1 bridge catalog_type strings =====
@@ -30,6 +38,32 @@ class IcebergRestStubIntegration(CatalogIntegration):
 
 
 V2_STUB_INTEGRATIONS = [BuiltInStubIntegration, IcebergRestStubIntegration]
+
+
+# ===== Stub schemas registered in the v2 catalog config registry =====
+# Real adapter packages register concrete schemas (HorizonSnowflakeConfig etc.); these
+# functional tests use permissive stubs to exercise the parse → validate → bridge flow
+# without depending on any specific adapter's installed version.
+
+
+@dataclass
+class _StubPlatformConfig(dbtClassMixin):
+    external_volume: Optional[str] = None
+    change_tracking: Optional[bool] = None
+    base_location_root: Optional[str] = None
+    catalog_database: Optional[str] = None
+    auto_refresh: Optional[bool] = None
+    target_file_size: Optional[str] = None
+
+
+@pytest.fixture(autouse=True)
+def _register_stub_v2_configs():
+    snapshot = dict(_REGISTRY)
+    for ct in ("horizon", "glue", "iceberg_rest", "unity"):
+        register_catalog_config(ct, "snowflake", _StubPlatformConfig)
+    yield
+    _REGISTRY.clear()
+    _REGISTRY.update(snapshot)
 
 
 def _mock_adapter_type(adapter_type):

@@ -1,15 +1,10 @@
 from dbt.artifacts.resources.base import BaseResource, Docs, FileHash, GraphResource
 from dbt.artifacts.resources.v1.analysis import Analysis
 from dbt.artifacts.resources.v1.catalog import (
-    BiglakeMetastoreBigqueryConfig,
     Catalog,
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
-    HiveMetastoreDatabricksConfig,
-    HorizonSnowflakeConfig,
-    LinkedSnowflakeConfig,
-    UnityDatabricksConfig,
     V2CatalogType,
     V2TableFormat,
 )

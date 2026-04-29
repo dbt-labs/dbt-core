@@ -1,17 +1,13 @@
 import os
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
+from dbt.adapters.catalogs import get_catalog_config
 from dbt.artifacts.resources import (
-    BiglakeMetastoreBigqueryConfig,
     Catalog,
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
-    HiveMetastoreDatabricksConfig,
-    HorizonSnowflakeConfig,
-    LinkedSnowflakeConfig,
-    UnityDatabricksConfig,
     V2CatalogType,
     V2TableFormat,
 )
@@ -21,7 +17,6 @@ from dbt.constants import CATALOGS_FILE_NAME
 from dbt.exceptions import YamlLoadError
 from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import ValidationError as SchemaValidationError
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
 
@@ -261,11 +256,30 @@ def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str,
     return getattr(catalog.config, platform, None)
 
 
-def _validate_platform_config(cls: Type[dbtClassMixin], block: Dict[str, Any], ctx: str) -> None:
-    """Validate a raw platform config dict against a dbtClassMixin dataclass."""
+def _validate_platform_block(catalog: CatalogV2, platform: str) -> None:
+    """Look up the registered v2 schema for (catalog_type, platform) and validate the block.
+
+    Returns silently if no block was provided for this platform — the caller is responsible
+    for enforcing required-platform rules. Raises if the block is present but no schema is
+    registered (the adapter does not yet support v2 catalogs of this type).
+    """
+    block = _get_platform_block(catalog, platform)
+    if block is None:
+        return
+
+    catalog_type = catalog.catalog_type.value
+    config_class = get_catalog_config(catalog_type, platform)
+    if config_class is None:
+        raise DbtValidationError(
+            f"Catalog '{catalog.name}' type '{catalog_type}' on platform '{platform}': "
+            f"no v2 catalog schema registered. The adapter may not yet support v2 catalogs "
+            f"of this type."
+        )
+
+    ctx = f"Catalog '{catalog.name}' {catalog_type}/{platform}"
     try:
-        cls.validate(block)
-        cls.from_dict(block)
+        config_class.validate(block)
+        config_class.from_dict(block)
     except SchemaValidationError as e:
         raise DbtValidationError(f"{ctx}: {e.message}")
     except DbtValidationError as e:
@@ -292,91 +306,23 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
         if block is not None and platform not in supported:
             raise DbtValidationError(f"dbt does not support {platform} on the {ct.value} 'type'")
 
-    # Type-specific validation
-    if ct == V2CatalogType.HORIZON:
-        _validate_horizon(catalog)
-    elif ct == V2CatalogType.GLUE:
-        _validate_glue(catalog)
-    elif ct == V2CatalogType.ICEBERG_REST:
-        _validate_iceberg_rest(catalog)
-    elif ct == V2CatalogType.UNITY:
-        _validate_unity(catalog)
-    elif ct == V2CatalogType.HIVE_METASTORE:
-        _validate_hive_metastore(catalog)
-    elif ct == V2CatalogType.BIGLAKE_METASTORE:
-        _validate_biglake_metastore(catalog)
+    # Required-platform rules: unity needs at least one supported platform; others need all of theirs
+    if ct == V2CatalogType.UNITY:
+        if all(_get_platform_block(catalog, p) is None for p in supported):
+            raise DbtValidationError(
+                f"Catalog '{name}' of type 'unity' requires at least one config block: "
+                f"{' or '.join(supported)}"
+            )
+    else:
+        for platform in supported:
+            if _get_platform_block(catalog, platform) is None:
+                raise DbtValidationError(
+                    f"Catalog '{name}' type '{ct.value}' requires config.{platform}"
+                )
 
-
-def _validate_horizon(catalog: CatalogV2) -> None:
-    snowflake = _get_platform_block(catalog, "snowflake")
-    if snowflake is None:
-        raise DbtValidationError(
-            f"Catalog '{catalog.name}' type 'horizon' requires config.snowflake"
-        )
-    _validate_platform_config(
-        HorizonSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' horizon/snowflake"
-    )
-
-
-def _validate_snowflake_linked(catalog: CatalogV2, type_name: str) -> None:
-    snowflake = _get_platform_block(catalog, "snowflake")
-    if snowflake is None:
-        raise DbtValidationError(
-            f"Catalog '{catalog.name}' type '{type_name}' requires config.snowflake"
-        )
-    _validate_platform_config(
-        LinkedSnowflakeConfig, snowflake, f"Catalog '{catalog.name}' {type_name}/snowflake"
-    )
-
-
-def _validate_glue(catalog: CatalogV2) -> None:
-    _validate_snowflake_linked(catalog, "glue")
-
-
-def _validate_iceberg_rest(catalog: CatalogV2) -> None:
-    _validate_snowflake_linked(catalog, "iceberg_rest")
-
-
-def _validate_unity(catalog: CatalogV2) -> None:
-    name = catalog.name
-    snowflake = _get_platform_block(catalog, "snowflake")
-    databricks = _get_platform_block(catalog, "databricks")
-
-    if snowflake is None and databricks is None:
-        raise DbtValidationError(
-            f"Catalog '{name}' of type 'unity' requires at least one config block: "
-            f"snowflake or databricks"
-        )
-    if snowflake is not None:
-        _validate_snowflake_linked(catalog, "unity")
-    if databricks is not None:
-        _validate_platform_config(
-            UnityDatabricksConfig, databricks, f"Catalog '{name}' unity/databricks"
-        )
-
-
-def _validate_hive_metastore(catalog: CatalogV2) -> None:
-    name = catalog.name
-    databricks = _get_platform_block(catalog, "databricks")
-    if databricks is None:
-        raise DbtValidationError(
-            f"Catalog '{name}' type 'hive_metastore' requires config.databricks"
-        )
-    _validate_platform_config(
-        HiveMetastoreDatabricksConfig, databricks, f"Catalog '{name}' hive_metastore/databricks"
-    )
-
-
-def _validate_biglake_metastore(catalog: CatalogV2) -> None:
-    name = catalog.name
-    bigquery = _get_platform_block(catalog, "bigquery")
-    if bigquery is None:
-        raise DbtValidationError(
-            f"Catalog '{name}' type 'biglake_metastore' requires config.bigquery"
-        )
-    _validate_platform_config(
-        BiglakeMetastoreBigqueryConfig, bigquery, f"Catalog '{name}' biglake_metastore/bigquery"
-    )
+    # Per-platform schema validation via the adapter-owned registry
+    for platform in supported:
+        _validate_platform_block(catalog, platform)
 
 
 # v2 field name → v1 adapter_properties field name translations.

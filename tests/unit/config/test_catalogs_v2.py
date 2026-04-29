@@ -1,5 +1,10 @@
+from dataclasses import dataclass
+from typing import Optional
+
 import pytest
 
+from dbt.adapters.catalogs import register_catalog_config
+from dbt.adapters.catalogs._v2_registry import _REGISTRY
 from dbt.artifacts.resources import (
     CatalogV2,
     CatalogV2PlatformConfig,
@@ -13,7 +18,47 @@ from dbt.config.catalogs import (
     validate_v2_catalog_for_platform,
 )
 from dbt.config.renderer import SecretRenderer
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtValidationError
+
+
+@dataclass
+class _FakePlatformConfig(dbtClassMixin):
+    """Permissive fake schema used in framework tests; accepts the field shapes that
+    real adapter schemas accept. Schema-content checks live in adapter test suites."""
+
+    # snowflake fields
+    external_volume: Optional[str] = None
+    change_tracking: Optional[bool] = None
+    data_retention_time_in_days: Optional[int] = None
+    max_data_extension_time_in_days: Optional[int] = None
+    storage_serialization_policy: Optional[str] = None
+    base_location_root: Optional[str] = None
+    catalog_database: Optional[str] = None
+    auto_refresh: Optional[bool] = None
+    target_file_size: Optional[str] = None
+    # databricks / bigquery fields
+    file_format: Optional[str] = None
+    location_root: Optional[str] = None
+    use_uniform: Optional[bool] = None
+
+
+@pytest.fixture(autouse=True)
+def _register_fake_platform_configs():
+    """Register permissive fakes for every (catalog_type, platform) the tests use.
+
+    Real adapter packages register concrete schemas with constraints; framework tests
+    here only care that validation is invoked correctly via the registry.
+    """
+    snapshot = dict(_REGISTRY)
+    for ct in ("horizon", "glue", "iceberg_rest", "unity"):
+        register_catalog_config(ct, "snowflake", _FakePlatformConfig)
+    register_catalog_config("unity", "databricks", _FakePlatformConfig)
+    register_catalog_config("hive_metastore", "databricks", _FakePlatformConfig)
+    register_catalog_config("biglake_metastore", "bigquery", _FakePlatformConfig)
+    yield
+    _REGISTRY.clear()
+    _REGISTRY.update(snapshot)
 
 
 @pytest.fixture
@@ -231,6 +276,17 @@ def _make_catalog(
 
 
 class TestValidateV2CatalogForPlatform:
+    # --- registry behavior ---
+    def test_no_schema_registered_raises_helpful_error(self):
+        # Drop the registered fake for (horizon, snowflake) only
+        _REGISTRY.pop(("horizon", "snowflake"), None)
+        cat = _make_catalog(
+            catalog_type=V2CatalogType.HORIZON,
+            snowflake={"external_volume": "vol"},
+        )
+        with pytest.raises(DbtValidationError, match="no v2 catalog schema registered"):
+            validate_v2_catalog_for_platform(cat, "snowflake")
+
     # --- horizon ---
     def test_horizon_valid(self):
         cat = _make_catalog(
@@ -251,14 +307,6 @@ class TestValidateV2CatalogForPlatform:
         with pytest.raises(DbtValidationError, match="requires config.snowflake"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
-    def test_horizon_missing_external_volume(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
-            snowflake={"change_tracking": True},
-        )
-        with pytest.raises(DbtValidationError, match="is a required property"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
-
     def test_horizon_wrong_table_format(self):
         cat = _make_catalog(
             catalog_type=V2CatalogType.HORIZON,
@@ -277,32 +325,6 @@ class TestValidateV2CatalogForPlatform:
         with pytest.raises(DbtValidationError, match="does not support databricks"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
-    def test_horizon_unknown_snowflake_key(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
-            snowflake={"external_volume": "vol", "unknown_key": "val"},
-        )
-        with pytest.raises(
-            DbtValidationError, match="unknown_key.*unexpected|Additional properties"
-        ):
-            validate_v2_catalog_for_platform(cat, "snowflake")
-
-    def test_horizon_retention_days_out_of_range(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
-            snowflake={"external_volume": "vol", "data_retention_time_in_days": 91},
-        )
-        with pytest.raises(DbtValidationError, match="must be in 0..=90"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
-
-    def test_horizon_invalid_storage_policy(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
-            snowflake={"external_volume": "vol", "storage_serialization_policy": "BAD"},
-        )
-        with pytest.raises(DbtValidationError, match="is invalid"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
-
     # --- glue ---
     def test_glue_valid(self):
         cat = _make_catalog(
@@ -314,22 +336,6 @@ class TestValidateV2CatalogForPlatform:
             },
         )
         validate_v2_catalog_for_platform(cat, "snowflake")
-
-    def test_glue_missing_catalog_database(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.GLUE,
-            snowflake={"auto_refresh": True},
-        )
-        with pytest.raises(DbtValidationError, match="is a required property"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
-
-    def test_glue_invalid_target_file_size(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.GLUE,
-            snowflake={"catalog_database": "DB", "target_file_size": "999MB"},
-        )
-        with pytest.raises(DbtValidationError, match="is invalid"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
 
     # --- iceberg_rest ---
     def test_iceberg_rest_valid(self):
@@ -375,22 +381,6 @@ class TestValidateV2CatalogForPlatform:
         with pytest.raises(DbtValidationError, match="requires at least one config block"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
-    def test_unity_databricks_wrong_file_format_no_uniform(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
-            databricks={"file_format": "delta"},
-        )
-        with pytest.raises(DbtValidationError, match="file_format must be 'parquet'"):
-            validate_v2_catalog_for_platform(cat, "databricks")
-
-    def test_unity_databricks_wrong_file_format_with_uniform(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
-            databricks={"file_format": "parquet", "use_uniform": True},
-        )
-        with pytest.raises(DbtValidationError, match="file_format must be 'delta'"):
-            validate_v2_catalog_for_platform(cat, "databricks")
-
     def test_unity_rejects_bigquery(self):
         cat = _make_catalog(
             catalog_type=V2CatalogType.UNITY,
@@ -409,29 +399,12 @@ class TestValidateV2CatalogForPlatform:
         )
         validate_v2_catalog_for_platform(cat, "databricks")
 
-    def test_hive_metastore_hudi(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.DEFAULT,
-            databricks={"file_format": "hudi"},
-        )
-        validate_v2_catalog_for_platform(cat, "databricks")
-
     def test_hive_metastore_missing_databricks(self):
         cat = _make_catalog(
             catalog_type=V2CatalogType.HIVE_METASTORE,
             table_format=V2TableFormat.DEFAULT,
         )
         with pytest.raises(DbtValidationError, match="requires config.databricks"):
-            validate_v2_catalog_for_platform(cat, "databricks")
-
-    def test_hive_metastore_invalid_file_format(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.DEFAULT,
-            databricks={"file_format": "avro"},
-        )
-        with pytest.raises(DbtValidationError, match="file_format must be one of"):
             validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_hive_metastore_wrong_table_format(self):
@@ -458,22 +431,6 @@ class TestValidateV2CatalogForPlatform:
     def test_biglake_missing_bigquery(self):
         cat = _make_catalog(catalog_type=V2CatalogType.BIGLAKE_METASTORE)
         with pytest.raises(DbtValidationError, match="requires config.bigquery"):
-            validate_v2_catalog_for_platform(cat, "bigquery")
-
-    def test_biglake_non_gs_external_volume(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.BIGLAKE_METASTORE,
-            bigquery={"external_volume": "s3://bucket", "file_format": "parquet"},
-        )
-        with pytest.raises(DbtValidationError, match="gs://"):
-            validate_v2_catalog_for_platform(cat, "bigquery")
-
-    def test_biglake_non_parquet_file_format(self):
-        cat = _make_catalog(
-            catalog_type=V2CatalogType.BIGLAKE_METASTORE,
-            bigquery={"external_volume": "gs://bucket", "file_format": "orc"},
-        )
-        with pytest.raises(DbtValidationError, match="file_format must be 'parquet'"):
             validate_v2_catalog_for_platform(cat, "bigquery")
 
 
