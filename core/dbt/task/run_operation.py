@@ -19,13 +19,17 @@ from dbt.events.types import (
 )
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.format import format_fancy_output_line
 from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+from dbt_common.ui import green, red
 
 if TYPE_CHECKING:
     import agate
 
 
-def _inline_has_jinja(sql: str) -> bool:
+def _sql_has_jinja(sql: str) -> bool:
     return "{{" in sql or "{%" in sql
 
 
@@ -52,17 +56,17 @@ class RunOperationTask(ConfiguredTask):
 
         return res
 
-    def _run_inline_unsafe(self):
+    def _run_sql_unsafe(self):
         adapter = get_adapter(self.config)
 
-        if _inline_has_jinja(self.args.inline):
+        if _sql_has_jinja(self.args.sql):
             from dbt.parser.manifest import process_node
             from dbt.parser.sql import SqlBlockParser
 
             block_parser = SqlBlockParser(
                 project=self.config, manifest=self.manifest, root_project=self.config
             )
-            sql_node = block_parser.parse_remote(self.args.inline, "inline_query")
+            sql_node = block_parser.parse_remote(self.args.sql, "inline_query")
             process_node(self.config, self.manifest, sql_node)
 
             compiled_node = self.compiler.compile_node(
@@ -70,37 +74,50 @@ class RunOperationTask(ConfiguredTask):
             )
             sql = compiled_node.compiled_code
         else:
-            sql = self.args.inline
+            sql = self.args.sql
+
+        fire_event(
+            Note(
+                msg=format_fancy_output_line(
+                    msg="START executing inline_query",
+                    status="RUN",
+                    index=1,
+                    total=1,
+                )
+            )
+        )
 
         with adapter.connection_named("inline_query"):
             adapter.clear_transaction()
-            adapter.execute(sql, auto_begin=True, fetch=False)
+            response, _ = adapter.execute(sql, auto_begin=True, fetch=False)
 
-    def _is_inline(self):
-        return bool(getattr(self.args, "inline", None))
+        return response
+
+    def _is_sql(self):
+        return bool(getattr(self.args, "sql", None))
 
     def run(self) -> RunResultsArtifact:
-        inline = self._is_inline()
+        sql_mode = self._is_sql()
         macro_name = getattr(self.args, "macro", None)
 
-        if not inline and not macro_name:
+        if not sql_mode and not macro_name:
             raise dbt_common.exceptions.DbtRuntimeError(
-                "Either a macro name or --inline must be passed to run-operation"
+                "Either a macro name or --sql must be passed to run-operation"
             )
-        if inline and macro_name:
+        if sql_mode and macro_name:
             raise dbt_common.exceptions.DbtRuntimeError(
-                "Cannot specify both a macro name and --inline for run-operation"
+                "Cannot specify both a macro name and --sql for run-operation"
             )
-        if inline and self.args.args:
+        if sql_mode and self.args.args:
             raise dbt_common.exceptions.DbtRuntimeError(
-                "--args cannot be used with --inline; pass arguments directly in the SQL"
+                "--args cannot be used with --sql; pass arguments directly in the SQL"
             )
 
         timing: List[TimingInfo] = []
 
-        # Skip manifest graph compilation for Jinja-free inline SQL — the
+        # Skip manifest graph compilation for Jinja-free SQL — the
         # manifest is not needed to execute plain SQL directly.
-        needs_manifest = not inline or _inline_has_jinja(self.args.inline)
+        needs_manifest = not sql_mode or _sql_has_jinja(self.args.sql)
 
         with collect_timing_info("compile", timing.append):
             if needs_manifest:
@@ -110,8 +127,9 @@ class RunOperationTask(ConfiguredTask):
 
         success = True
         error_message = None
+        adapter_response = {}
 
-        if inline:
+        if sql_mode:
             operation_name = "inline_query"
             unique_id = f"sqloperation.{self.config.project_name}.inline_query"
             fqn = unique_id.split(".")
@@ -120,8 +138,9 @@ class RunOperationTask(ConfiguredTask):
 
         with collect_timing_info("execute", timing.append):
             try:
-                if inline:
-                    self._run_inline_unsafe()
+                if sql_mode:
+                    response = self._run_sql_unsafe()
+                    adapter_response = response.to_dict() if response else {}
                 else:
                     self._run_unsafe(package_name, operation_name)
             except dbt_common.exceptions.DbtBaseException as exc:
@@ -136,8 +155,38 @@ class RunOperationTask(ConfiguredTask):
                 error_message = str(exc)
 
         end = timing[1].completed_at
+        execution_time = (end - start).total_seconds() if start and end else 0.0
 
-        if not inline:
+        if sql_mode:
+            if success:
+                status_msg = adapter_response.get("_message") or "OK"
+                fire_event(
+                    Note(
+                        msg=format_fancy_output_line(
+                            msg="OK executed inline_query",
+                            status=green(status_msg),
+                            index=1,
+                            total=1,
+                            execution_time=execution_time,
+                        )
+                    ),
+                    level=EventLevel.INFO,
+                )
+            else:
+                fire_event(
+                    Note(
+                        msg=format_fancy_output_line(
+                            msg="ERROR executing inline_query",
+                            status=red("ERROR"),
+                            index=1,
+                            total=1,
+                            execution_time=execution_time,
+                        )
+                    ),
+                    level=EventLevel.ERROR,
+                )
+
+        if not sql_mode:
             macro = (
                 self.manifest.find_macro_by_name(
                     operation_name, self.config.project_name, package_name
@@ -154,10 +203,8 @@ class RunOperationTask(ConfiguredTask):
                     f"dbt could not find a macro with the name '{operation_name}' in any package"
                 )
 
-        execution_time = (end - start).total_seconds() if start and end else 0.0
-
         run_result = RunResult(
-            adapter_response={},
+            adapter_response=adapter_response,
             status=RunStatus.Success if success else RunStatus.Error,
             execution_time=execution_time,
             failures=0 if success else 1,
@@ -171,7 +218,7 @@ class RunOperationTask(ConfiguredTask):
                 fqn=fqn,
                 name=operation_name,
                 unique_id=unique_id,
-                package_name=self.config.project_name if inline else package_name,
+                package_name=self.config.project_name if sql_mode else package_name,
                 path="",
                 original_file_path="",
             ),

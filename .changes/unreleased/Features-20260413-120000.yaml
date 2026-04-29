@@ -1,5 +1,5 @@
 kind: Features
-body: Add --inline flag to dbt run-operation for executing ad-hoc SQL/Jinja statements
+body: Add --sql flag to dbt run-operation for executing ad-hoc SQL/Jinja statements
 time: 2026-04-13T12:00:00.000000+00:00
 custom:
     Author: aahel

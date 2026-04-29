@@ -165,7 +165,7 @@ name: 'pkg'
         rm_file("packages.yml")
 
 
-class TestRunOperationInline:
+class TestRunOperationSql:
     @pytest.fixture(scope="class")
     def models(self):
         return {"model.sql": model_sql}
@@ -194,60 +194,74 @@ class TestRunOperationInline:
             },
         }
 
-    def test_inline_simple_select(self, project):
-        results = run_dbt(["run-operation", "--inline", "select 1 as id"])
+    def test_sql_simple_select(self, project):
+        results = run_dbt(["run-operation", "--sql", "select 1 as id"])
         assert results.results[0].status == RunStatus.Success
 
-    def test_inline_create_table(self, project):
+    def test_sql_create_table(self, project):
         schema = project.test_schema
         results = run_dbt(
-            ["run-operation", "--inline", f'create table "{schema}"."inline_table" (id int)']
+            ["run-operation", "--sql", f'create table "{schema}"."inline_table" (id int)']
         )
         assert results.results[0].status == RunStatus.Success
         check_table_does_exist(project.adapter, "inline_table")
 
-    def test_inline_with_ref(self, project):
+    def test_sql_with_ref(self, project):
         run_dbt(["run"])
-        results = run_dbt(["run-operation", "--inline", "select * from {{ ref('model') }}"])
+        results = run_dbt(["run-operation", "--sql", "select * from {{ ref('model') }}"])
         assert results.results[0].status == RunStatus.Success
 
-    def test_inline_with_jinja(self, project):
+    def test_sql_with_jinja(self, project):
         results = run_dbt(
-            ["run-operation", "--inline", "select '{{ target.schema }}' as schema_name"]
+            ["run-operation", "--sql", "select '{{ target.schema }}' as schema_name"]
         )
         assert results.results[0].status == RunStatus.Success
 
-    def test_inline_syntax_error(self, project):
+    def test_sql_syntax_error(self, project):
         results = run_dbt(
-            ["run-operation", "--inline", "select NOPE NOT A VALID QUERY"],
+            ["run-operation", "--sql", "select NOPE NOT A VALID QUERY"],
             expect_pass=False,
         )
         assert results.results[0].status == RunStatus.Error
 
-    def test_inline_no_args_error(self, project):
+    def test_sql_no_args_error(self, project):
         with pytest.raises(
             Exception,
-            match="Either a macro name or --inline must be passed",
+            match="Either a macro name or --sql must be passed",
         ):
             run_dbt(["run-operation"], expect_pass=False)
 
-    def test_inline_args_conflict_error(self, project):
+    def test_sql_args_conflict_error(self, project):
         with pytest.raises(
             Exception,
-            match="--args cannot be used with --inline",
+            match=r"--args cannot be used with --sql",
         ):
             run_dbt(
-                ["run-operation", "--inline", "select 1", "--args", "{foo: bar}"],
+                ["run-operation", "--sql", "select 1", "--args", "{foo: bar}"],
                 expect_pass=False,
             )
 
-    def test_inline_no_jinja_skips_compile(self, project):
+    def test_sql_no_jinja_skips_compile(self, project):
         # Plain SQL (no Jinja) should succeed without needing the manifest compiled.
         # We verify this by checking timing: compile phase should complete near-instantly.
-        results = run_dbt(["run-operation", "--inline", "select 42 as answer"])
+        results = run_dbt(["run-operation", "--sql", "select 42 as answer"])
         assert results.results[0].status == RunStatus.Success
         timing_keys = [t.name for t in results.results[0].timing]
         assert timing_keys == ["compile", "execute"]
+
+    def test_sql_logs_execution_status(self, project):
+        results, log_output = run_dbt_and_capture(["run-operation", "--sql", "select 1 as id"])
+        assert results.results[0].status == RunStatus.Success
+        assert "START executing inline_query" in log_output
+        assert "OK executed inline_query" in log_output
+
+    def test_sql_logs_error_status(self, project):
+        results, log_output = run_dbt_and_capture(
+            ["run-operation", "--sql", "select NOPE NOT VALID"],
+            expect_pass=False,
+        )
+        assert results.results[0].status == RunStatus.Error
+        assert "ERROR executing inline_query" in log_output
 
 
 class TestRunOperationRefPrivateModel:

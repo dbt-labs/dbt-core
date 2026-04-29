@@ -679,7 +679,7 @@ def clone(ctx, **kwargs):
 @global_flags
 @click.argument("macro", required=False, default=None)
 @p.args
-@p.inline
+@p.sql
 @p.profiles_dir
 @p.project_dir
 @p.target_path
