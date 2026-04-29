@@ -17,9 +17,9 @@ mod traits;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err, tokiofs};
+use reqwest_middleware::ClientWithMiddleware;
 use traits::GitHostClient as _;
 
 /// Whether host-specific fast paths (GitHub archive + GraphQL) are enabled.
@@ -40,6 +40,9 @@ fn fast_path_enabled() -> bool {
     }
 }
 
+use crate::context::DepsOperationContext;
+use crate::network_client::retrying_http_client;
+use crate::tarball_client::TarballClient;
 use crate::utils::sanitize_git_url;
 
 /// Per-run git deps state (cache + reusable host clients).
@@ -52,17 +55,22 @@ pub struct GitClientContext {
 
 impl Default for GitClientContext {
     fn default() -> Self {
-        Self {
-            resolve_cache: cache::ResolveCache::new(),
-            github_client: github::GitHubClient,
-            generic_client: generic::GenericClient,
-        }
+        Self::from_http_client(retrying_http_client())
     }
 }
 
 impl GitClientContext {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn from_http_client(http_client: ClientWithMiddleware) -> Self {
+        let tarball_client = TarballClient::from_client(http_client.clone());
+        Self::from_clients(http_client, tarball_client)
+    }
+
+    pub fn from_clients(http_client: ClientWithMiddleware, tarball_client: TarballClient) -> Self {
+        Self {
+            resolve_cache: cache::ResolveCache::new(),
+            github_client: github::GitHubClient::new(http_client, tarball_client),
+            generic_client: generic::GenericClient,
+        }
     }
 }
 
@@ -236,12 +244,11 @@ fn validate_subdirectory(subdir: &str) -> Result<&str, String> {
 ///
 /// Returns (checkout_path, commit_sha) where checkout_path == download_dir.
 pub async fn download_git_like_package(
-    context: &GitClientContext,
+    context: &DepsOperationContext<'_>,
     repo_url: &str,
     revisions: &[String],
     subdirectory: &Option<String>,
     warn_unpinned: bool,
-    io_args: Option<&IoArgs>,
     download_dir: &Path,
 ) -> FsResult<(PathBuf, String)> {
     if let Some(subdir) = subdirectory {
@@ -257,7 +264,7 @@ pub async fn download_git_like_package(
         .unwrap_or_else(|| "HEAD".to_string());
 
     let parsed = parse_git_url(repo_url);
-    let outcome = get_git_client(context, &parsed)
+    let outcome = get_git_client(&context.git_client, &parsed)
         .resolve_with_cache(&parsed, &revision, download_dir, subdirectory.as_deref())
         .await?;
 
@@ -269,7 +276,7 @@ pub async fn download_git_like_package(
                  Consider pinning to a specific commit SHA instead.",
                 sanitize_git_url(repo_url)
             ),
-            io_args.and_then(|io| io.status_reporter.as_ref()),
+            context.io.status_reporter.as_ref(),
         );
     }
 
@@ -284,7 +291,7 @@ pub async fn download_git_like_package(
 ///
 /// Returns (checkout_path, commit_sha) where checkout_path == download_dir.
 pub async fn install_git_like_package(
-    context: &GitClientContext,
+    context: &DepsOperationContext<'_>,
     repo_url: &str,
     sha: &str,
     subdirectory: &Option<String>,
@@ -298,7 +305,7 @@ pub async fn install_git_like_package(
     // a trailing newline that `git fetch` rejects as an invalid refspec.
     let sha = sha.trim();
     let parsed = parse_git_url(repo_url);
-    let outcome = get_git_client(context, &parsed)
+    let outcome = get_git_client(&context.git_client, &parsed)
         .install(&parsed, sha, download_dir, subdirectory.as_deref())
         .await?;
     Ok((outcome.download.checkout_path, sha.to_string()))
@@ -495,6 +502,12 @@ async fn reset_download_dir(download_dir: &Path) -> FsResult<()> {
 mod tests {
     use super::*;
 
+    fn test_github_client() -> github::GitHubClient {
+        let http = retrying_http_client();
+        let tb = TarballClient::from_client(http.clone());
+        github::GitHubClient::new(http, tb)
+    }
+
     fn parts_of(url: &str) -> GitUrlParts {
         parse_git_url(url)
             .parts
@@ -559,7 +572,7 @@ mod tests {
 
     #[test]
     fn github_client_can_handle_rejects_injection_attempts_and_non_github_hosts() {
-        let github = github::GitHubClient;
+        let github = test_github_client();
         // Unsafe owner/repo chars must not be eligible for the GitHub client.
         assert!(!github.can_handle(&parse_git_url(r#"https://github.com/evil"org/repo"#)));
         assert!(!github.can_handle(&parse_git_url(r#"https://github.com/owner/evil"repo"#)));
@@ -593,7 +606,7 @@ mod tests {
         assert_eq!(parts.owner, "dbt-labs");
         assert_eq!(parts.repo, "dbt-utils");
         assert_eq!(parts.token, None);
-        assert!(github::GitHubClient.can_handle(&parsed));
+        assert!(test_github_client().can_handle(&parsed));
     }
 
     #[test]
@@ -604,7 +617,7 @@ mod tests {
             .as_ref()
             .expect("expected recognized GitHub URL with token");
         assert_eq!(parts.token.as_deref(), Some("tok"));
-        assert!(github::GitHubClient.can_handle(&parsed));
+        assert!(test_github_client().can_handle(&parsed));
     }
 
     #[test]

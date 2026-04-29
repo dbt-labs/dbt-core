@@ -3,11 +3,8 @@ use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, io_args::IoArgs};
 use dbt_schemas::schemas::packages::DbtPackageEntry;
 use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
-use reqwest::{Client, StatusCode};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{
-    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
-};
+use reqwest::StatusCode;
+use reqwest_middleware::ClientWithMiddleware;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -15,9 +12,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
+use crate::network_client::retrying_http_client;
+
 pub const DBT_HUB_URL: &str = "https://hub.getdbt.com";
 pub const DBT_CORE_FIXED_VERSION: &str = "1.8.7";
-const MAX_CLIENT_RETRIES: u32 = 3;
 
 // tarball containing source code for version
 #[derive(Deserialize, Clone, Debug)]
@@ -149,12 +147,10 @@ pub struct HubClient {
 
 impl HubClient {
     pub fn new(base_url: &str) -> Self {
-        let retry_policy =
-            RetryExponentialBackoff::builder().build_with_max_retries(MAX_CLIENT_RETRIES);
-        let client = ClientBuilder::new(Client::new())
-            // Retry failed requests.
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+        Self::with_client(base_url, retrying_http_client())
+    }
+
+    pub fn with_client(base_url: &str, client: ClientWithMiddleware) -> Self {
         Self {
             inner: Arc::new(HubClientInner {
                 client,

@@ -4,6 +4,7 @@ mod add_package;
 mod context;
 pub(crate) mod git_client;
 mod hub_client;
+mod network_client;
 pub mod package_listing;
 pub mod private_package;
 pub mod semver;

@@ -25,7 +25,6 @@ use crate::context::DepsOperationContext;
 use crate::{
     git_client::install_git_like_package,
     package_listing::PackageListing,
-    tarball_client::TarballClient,
     utils::{ensure_dir, make_tempdir, move_dir, read_and_validate_dbt_project, sanitize_git_url},
 };
 
@@ -267,8 +266,8 @@ async fn install_package(
             let final_path = packages_install_path.join(&project_name);
             ensure_dir(&final_path).await?;
 
-            let tarball_client = TarballClient::new();
-            if let Err(e) = tarball_client
+            if let Err(e) = ctx
+                .tarball_client
                 .download_and_extract_tarball(&tarball_url, &final_path, true, None, &[])
                 .await
             {
@@ -295,7 +294,7 @@ async fn install_package(
                 .cloned()
                 .unwrap_or_default();
             let (checkout_path, commit_sha) = install_git_like_package(
-                &ctx.git_client,
+                ctx,
                 &git_unpinned_package.git,
                 &sha,
                 &git_unpinned_package.subdirectory,
@@ -363,7 +362,7 @@ async fn install_package(
                 .cloned()
                 .unwrap_or_default();
             let (checkout_path, commit_sha) = install_git_like_package(
-                &ctx.git_client,
+                ctx,
                 &private_unpinned_package.private,
                 &sha,
                 &private_unpinned_package.subdirectory,
@@ -411,8 +410,7 @@ async fn install_package(
             let extract_path = tmp_extract.path().join("package");
             ensure_dir(&extract_path).await?;
 
-            let tarball_client = TarballClient::new();
-            tarball_client
+            ctx.tarball_client
                 .download_and_extract_tarball(
                     &tarball_unpinned_package.tarball,
                     &extract_path,

@@ -9,7 +9,7 @@ use std::path::Path;
 use async_trait::async_trait;
 use dbt_common::tracing::emit::emit_debug_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use reqwest::Client;
+use reqwest_middleware::ClientWithMiddleware;
 
 use super::auth::github_token_for_request;
 use super::traits::GitHostClient;
@@ -29,7 +29,19 @@ pub(super) fn is_gh_repo_valid_name(name: &str) -> bool {
 }
 
 /// GitHub fast-path client (archive + GraphQL); repo/token come from `parsed`.
-pub struct GitHubClient;
+pub struct GitHubClient {
+    http_client: ClientWithMiddleware,
+    tarball_client: TarballClient,
+}
+
+impl GitHubClient {
+    pub fn new(http_client: ClientWithMiddleware, tarball_client: TarballClient) -> Self {
+        Self {
+            http_client,
+            tarball_client,
+        }
+    }
+}
 
 #[async_trait]
 impl GitHostClient for GitHubClient {
@@ -57,7 +69,7 @@ impl GitHostClient for GitHubClient {
         let owner = &parts.owner;
         let repo = &parts.repo;
         let auth_token = parts.token.as_deref();
-        graphql_resolve(owner, repo, revision, auth_token)
+        graphql_resolve(&self.http_client, owner, repo, revision, auth_token)
             .await
             .map(|sha| (sha, ResolveMethod::GithubGraphql))
     }
@@ -76,7 +88,16 @@ impl GitHostClient for GitHubClient {
         let owner = &parts.owner;
         let repo = &parts.repo;
         let auth_token = parts.token.as_deref();
-        download_archive(owner, repo, revision, target_dir, subdirectory, auth_token).await?;
+        download_archive(
+            &self.tarball_client,
+            owner,
+            repo,
+            revision,
+            target_dir,
+            subdirectory,
+            auth_token,
+        )
+        .await?;
         Ok(DownloadOutcome {
             checkout_path: target_dir.to_path_buf(),
             download_method: DownloadMethod::Archive,
@@ -101,6 +122,7 @@ fn require_parts(parsed: &ParsedGitUrl) -> FsResult<&super::GitUrlParts> {
 // ============================================================================
 
 async fn download_archive(
+    tarball_client: &TarballClient,
     owner: &str,
     repo: &str,
     revision: &str,
@@ -119,7 +141,7 @@ async fn download_archive(
         .map(|v| vec![("Authorization", v)])
         .unwrap_or_default();
 
-    TarballClient::new()
+    tarball_client
         .download_and_extract_tarball(&archive_url, target_dir, true, subdirectory, &headers)
         .await
         .map_err(|e| {
@@ -138,6 +160,7 @@ async fn download_archive(
 // ============================================================================
 
 async fn graphql_resolve(
+    http_client: &ClientWithMiddleware,
     owner: &str,
     repo: &str,
     revision: &str,
@@ -153,7 +176,7 @@ async fn graphql_resolve(
     );
 
     let effective_token = github_token_for_request(auth_token);
-    let json = fire_graphql(&query, effective_token.as_deref()).await?;
+    let json = fire_graphql(http_client, &query, effective_token.as_deref()).await?;
     let repo_data = &json["data"]["repository"];
     let sha = repo_data["tag_ref"]["target"]["oid"]
         .as_str()
@@ -168,10 +191,12 @@ async fn graphql_resolve(
     }
 }
 
-async fn fire_graphql(query: &str, auth_token: Option<&str>) -> FsResult<serde_json::Value> {
-    let client = Client::new();
-
-    let mut req = client
+async fn fire_graphql(
+    http_client: &ClientWithMiddleware,
+    query: &str,
+    auth_token: Option<&str>,
+) -> FsResult<serde_json::Value> {
+    let mut req = http_client
         .post("https://api.github.com/graphql")
         .header("Content-Type", "application/json")
         .header(

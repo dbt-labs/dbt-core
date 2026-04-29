@@ -8,32 +8,23 @@
 use async_compression::tokio::bufread::GzipDecoder;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use futures::StreamExt;
-use reqwest::{Client, StatusCode};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{
-    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
-};
+use reqwest::StatusCode;
+use reqwest_middleware::ClientWithMiddleware;
 use std::io;
 use std::path::{Path, PathBuf};
 use tokio_tar::Archive;
 use tokio_util::io::StreamReader;
 
-const MAX_CLIENT_RETRIES: u32 = 3;
+use crate::context::DepsOperationContext;
 
 /// Client for downloading and extracting tarball archives.
+#[derive(Clone)]
 pub struct TarballClient {
     pub client: ClientWithMiddleware,
 }
 
 impl TarballClient {
-    /// Create a new tarball client with retry logic configured.
-    pub fn new() -> Self {
-        let retry_policy =
-            RetryExponentialBackoff::builder().build_with_max_retries(MAX_CLIENT_RETRIES);
-        let client = ClientBuilder::new(Client::new())
-            // Retry failed requests.
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+    pub fn from_client(client: ClientWithMiddleware) -> Self {
         Self { client }
     }
 
@@ -229,9 +220,13 @@ impl TarballClient {
 ///
 /// `download_dir` must already exist and be writable; cleanup on error is the
 /// caller's responsibility.
-pub async fn download_tarball_package(tarball_url: &str, download_dir: &Path) -> FsResult<PathBuf> {
-    let client = TarballClient::new();
-    client
+pub async fn download_tarball_package(
+    context: &DepsOperationContext<'_>,
+    tarball_url: &str,
+    download_dir: &Path,
+) -> FsResult<PathBuf> {
+    context
+        .tarball_client
         .download_and_extract_tarball(tarball_url, download_dir, true, None, &[])
         .await
 }

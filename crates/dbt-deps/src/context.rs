@@ -6,6 +6,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
 use crate::git_client::GitClientContext;
 use crate::hub_client::{DBT_HUB_URL, HubClient};
+use crate::network_client::retrying_http_client;
+use crate::tarball_client::TarballClient;
 
 /// Shared runtime dependencies for deps resolve/install flows.
 pub struct DepsOperationContext<'a> {
@@ -14,6 +16,7 @@ pub struct DepsOperationContext<'a> {
     pub jinja_env: &'a JinjaEnv,
     pub cancellation: &'a CancellationToken,
     pub hub_registry: HubClient,
+    pub tarball_client: TarballClient,
     pub git_client: GitClientContext,
     pub skip_private_deps: bool,
     pub version_check: bool,
@@ -42,14 +45,17 @@ impl<'a> DepsOperationContext<'a> {
                 }
             })
             .unwrap_or(DBT_HUB_URL);
+        let http_client = retrying_http_client();
+        let tarball_client = TarballClient::from_client(http_client.clone());
 
         Self {
             io,
             vars,
             jinja_env,
             cancellation,
-            hub_registry: HubClient::new(hub_url),
-            git_client: GitClientContext::new(),
+            hub_registry: HubClient::with_client(hub_url, http_client.clone()),
+            tarball_client: tarball_client.clone(),
+            git_client: GitClientContext::from_clients(http_client, tarball_client),
             skip_private_deps,
             version_check,
             use_v2_compatible_package_downloads,

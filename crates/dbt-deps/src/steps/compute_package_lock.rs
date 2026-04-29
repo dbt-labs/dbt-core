@@ -177,12 +177,11 @@ async fn resolve_packages(
                 let download_dir = tmp_dir.path().join("git_pkg");
                 ensure_dir(&download_dir).await?;
                 let (checkout_path, commit_sha) = download_git_like_package(
-                    &ctx.git_client,
+                    ctx,
                     &git_unpinned_package.git,
                     &git_unpinned_package.revisions,
                     &git_unpinned_package.subdirectory,
                     git_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    Some(ctx.io),
                     &download_dir,
                 )
                 .await?;
@@ -212,12 +211,11 @@ async fn resolve_packages(
                 let download_dir = tmp_dir.path().join("git_pkg");
                 ensure_dir(&download_dir).await?;
                 let (checkout_path, commit_sha) = download_git_like_package(
-                    &ctx.git_client,
+                    ctx,
                     &private_unpinned_package.private,
                     &private_unpinned_package.revisions,
                     &private_unpinned_package.subdirectory,
                     private_unpinned_package.warn_unpinned.unwrap_or_default(),
-                    Some(ctx.io),
                     &download_dir,
                 )
                 .await?;
@@ -242,7 +240,7 @@ async fn resolve_packages(
                 ensure_dir(&download_dir).await?;
 
                 let checkout_path =
-                    download_tarball_package(&tarball_unpinned_package.tarball, &download_dir)
+                    download_tarball_package(ctx, &tarball_unpinned_package.tarball, &download_dir)
                         .await?;
                 let dbt_project = read_and_validate_dbt_project(
                     ctx.io,
