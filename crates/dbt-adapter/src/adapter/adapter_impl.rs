@@ -1461,11 +1461,35 @@ impl AdapterImpl {
         }
     }
 
+    fn get_columns_in_relation_via_adbc(
+        &self,
+        state: &State,
+        relation: &dyn BaseRelation,
+    ) -> AdapterResult<Vec<Column>> {
+        let conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let schema = conn
+            .get_table_schema(
+                relation.database(),
+                relation.schema(),
+                relation.identifier().ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::UnexpectedResult,
+                        "relation does not have identifier",
+                    )
+                })?,
+            )
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Driver, e.to_string()))?;
+        // NOTE: it's okay to skip conversion to an SDF-frontend since
+        // `schema_to_columns()` will first try to parse the type from the
+        // `PLATFORM:type` metadata key returned by the driver.
+        self.schema_to_columns(None, &Arc::new(schema))
+    }
+
     /// Get columns in relation
     ///
     /// SQLAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
     /// AthenaAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-athena/src/dbt/adapters/athena/impl.py#L1217
-    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L330
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/fe308ee83cfc200b6ff196f8662b9882d7cec505/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L330
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L216
     /// SparkAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-spark/src/dbt/adapters/spark/impl.py#L318
     /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L454
@@ -1509,7 +1533,13 @@ impl AdapterImpl {
             return Ok(columns);
         }
 
+        if self.adapter_type() == Bigquery {
+            return self.get_columns_in_relation_via_adbc(state, relation);
+        }
+
         let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
+            // Bigquery early returns from `get_columns_in_relation_via_adbc()`
+            Bigquery => unreachable!(),
             Databricks => {
                 // use DESCRIBE TABLE EXTENDED ... AS JSON for full type strings
                 // Plain DESCRIBE TABLE truncates long data types server-side
@@ -1552,7 +1582,7 @@ impl AdapterImpl {
                     "dbt_databricks",
                 )
             }
-            Postgres | Snowflake | Bigquery | Redshift | DuckDB | Fabric | Spark => execute_macro(
+            Postgres | Snowflake | Redshift | DuckDB | Fabric | Spark => execute_macro(
                 state,
                 &[RelationObject::new(relation.to_owned()).into_value()],
                 "get_columns_in_relation",
@@ -1564,6 +1594,8 @@ impl AdapterImpl {
         };
 
         match self.adapter_type() {
+            // Bigquery early returns from `get_columns_in_relation_via_adbc()`
+            Bigquery => unreachable!(),
             adapter_type @ (Postgres | Redshift | Fabric | DuckDB | Spark) => {
                 let result = macro_execution_result?;
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
@@ -1582,25 +1614,6 @@ impl AdapterImpl {
                 };
 
                 Ok(Column::vec_from_jinja_value(Snowflake, result)?)
-            }
-            Bigquery => {
-                // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
-                // from Column::vec_from_jinja_value for BigQuery
-                // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
-                let result = match macro_execution_result {
-                    Ok(result) => result,
-                    Err(err) => {
-                        // Handle NotFound errors
-                        // XXX(anna): since execute_macro passes up the original error kind, we can't rely on it being an UnexpectedResult anymore
-                        if err.kind() == AdapterErrorKind::NotFound
-                            || err.message().contains("Error 404: Not found")
-                        {
-                            return Ok(Vec::new());
-                        }
-                        return Err(err);
-                    }
-                };
-                Ok(Column::vec_from_jinja_value(Bigquery, result)?)
             }
             Databricks => {
                 // Databricks inherits the implementation from the Spark adapter.

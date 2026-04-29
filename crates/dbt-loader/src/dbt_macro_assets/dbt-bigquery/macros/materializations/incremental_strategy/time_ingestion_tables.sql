@@ -23,7 +23,6 @@
 
 {%- endmacro -%}
 
-
 {% macro bq_insert_into_ingestion_time_partitioned_table_sql(target_relation, sql) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
   {{ sql_header if sql_header is not none }}
@@ -32,11 +31,10 @@
   {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
   {%- set dest_columns_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
 
-  insert into {{ target_relation }} ({{ dest_columns_csv }}) {# DIVERGENCE: see FIXME at `adapter.get_columns_in_relation` #}
+  insert into {{ target_relation }} ({{ partition_by.insertable_time_partitioning_field() }}, {{ dest_columns_csv }})
     {{ wrap_with_time_ingestion_partitioning_sql(partition_by, sql, False) }}
 
 {%- endmacro -%}
-
 
 {% macro get_columns_with_types_in_query_sql(select_sql) %}
   {% set sql %}
@@ -45,10 +43,8 @@
     select * from (
       {{ select_sql }}
     ) as __dbt_sbq
-    {# DIVERGENCE BEGIN: see FIXME at `adapter.get_columns_in_select_sql` in `bridge_adapter.rs` #}
-    where true
-    limit 1
-    {# DIVERGENCE END #}
+    where false
+    limit 0
   {% endset %}
   {{ return(adapter.get_columns_in_select_sql(sql)) }}
 {% endmacro %}

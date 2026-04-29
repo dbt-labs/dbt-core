@@ -1397,8 +1397,6 @@ impl Adapter {
     ///
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L443-L444
     /// Shares the same input and output as get_column_schema_from_query.
-    /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
-    /// get_columns_in_select_sql returns a schema using the BigQuery Job and GetTable APIs
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn get_columns_in_select_sql(
         &self,
