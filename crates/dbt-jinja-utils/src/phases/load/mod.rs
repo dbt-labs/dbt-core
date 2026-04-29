@@ -15,6 +15,7 @@ pub mod secret_renderer;
 pub struct LoadContext {
     env_var: Value,
     var: Value,
+    target: Value,
 }
 
 impl LoadContext {
@@ -23,6 +24,7 @@ impl LoadContext {
         Self {
             env_var: Value::from_func_func("env_var", secret_context_env_var),
             var: Value::from_object(Var::new(vars)),
+            target: Value::from_serialize(BTreeMap::<String, Value>::new()),
         }
     }
 }
