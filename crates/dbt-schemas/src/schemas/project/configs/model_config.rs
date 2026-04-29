@@ -300,7 +300,7 @@ pub struct ProjectModelConfig {
     )]
     pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Verbatim<Option<IndexMap<String, YmlValue>>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -620,7 +620,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: (*config.meta).clone(),
+            meta: config.meta,
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
@@ -773,7 +773,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: Verbatim::from(config.meta),
+            meta: config.meta,
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
             python_job_config: config.python_job_config.clone(),
