@@ -2,15 +2,15 @@
 //!
 //! Two modes:
 //!
-//! - **Replay** (default): loads pre-recorded Arrow IPC results from
-//!   `tests/data/snowflake_recordings/`.  No Snowflake connection needed.
+//! - **Replay** (default): loads pre-recorded results from
+//!   `tests/data/snowflake_recordings.parquet`.  No Snowflake connection needed.
 //!   ```sh
 //!   cargo test -p dbt-metricflow --test snowflake_compat
 //!   ```
 //!
 //! - **Record** (`#[ignore]`, requires `fusion_tests/snowflake` profile):
 //!   executes compiled SQL on a live Snowflake cluster and writes results to
-//!   Arrow IPC files so replay tests stay up to date.
+//!   the parquet tome so replay tests stay up to date.
 //!   ```sh
 //!   cargo test -p dbt-metricflow --test snowflake_compat -- --ignored --nocapture
 //!   ```
@@ -19,59 +19,23 @@ mod common;
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
-use arrow_ipc::reader::StreamReader;
-use arrow_ipc::writer::StreamWriter;
 use dbt_auth::{AdapterConfig, auth_for_backend};
 use dbt_metricflow::{Dialect, InMemoryMetricStore};
 use dbt_profile::ProfileEnvironment;
 use dbt_xdbc::{Backend, LoadStrategy, connection, driver};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Lightweight Arrow IPC recorder
-// FIXME: Replace with the shared record/replay crate once it lands.
+// Tome path
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn recordings_dir() -> PathBuf {
+fn tome_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("data")
-        .join("snowflake_recordings")
-}
-
-fn write_recording(name: &str, batches: &[RecordBatch]) {
-    let dir = recordings_dir();
-    fs::create_dir_all(&dir).expect("failed to create recordings dir");
-    let path = dir.join(format!("{name}.arrow"));
-    let schema = if let Some(b) = batches.first() {
-        b.schema()
-    } else {
-        return;
-    };
-    let file = fs::File::create(&path).expect("failed to create recording file");
-    let mut writer = StreamWriter::try_new(file, &schema).expect("failed to create IPC writer");
-    for batch in batches {
-        writer.write(batch).expect("failed to write batch");
-    }
-    writer.finish().expect("failed to finish IPC stream");
-}
-
-fn read_recording(name: &str) -> Option<Vec<RecordBatch>> {
-    let path = recordings_dir().join(format!("{name}.arrow"));
-    if !path.exists() {
-        return None;
-    }
-    let data = fs::read(&path).expect("failed to read recording");
-    let reader = StreamReader::try_new(Cursor::new(data), None).expect("failed to open IPC stream");
-    Some(
-        reader
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .expect("failed to read batches"),
-    )
+        .join("snowflake_recordings.parquet")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -182,7 +146,7 @@ impl SnowflakeConn {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Record test — live Snowflake, writes Arrow IPC recordings
+// Record test — live Snowflake, writes parquet tome
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -219,6 +183,7 @@ fn snowflake_compat_record() {
     };
 
     let mut store = common::setup_metric_store(&database, &schema);
+    let mut tome = common::TomeWriter::new();
 
     common::run_scorecard(
         &mut store,
@@ -228,41 +193,43 @@ fn snowflake_compat_record() {
             sf.execute_query(sql)
         })) {
             Ok(batches) => {
-                write_recording(name, &batches);
+                tome.insert(name, &batches);
                 Ok(Some(batches))
             }
             Err(_) => Err(format!("execution panicked\n  SQL: {sql}")),
         },
     );
 
+    tome.write(&tome_path());
     eprintln!(
-        "snowflake_compat [record]: recordings written to {:?}",
-        recordings_dir()
+        "snowflake_compat [record]: tome written to {:?}",
+        tome_path()
     );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Replay test — reads Arrow IPC recordings, no Snowflake needed
+// Replay test — reads parquet tome, no Snowflake needed
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn snowflake_compat_replay() {
-    let dir = recordings_dir();
-    if !dir.exists() || fs::read_dir(&dir).map_or(true, |mut d| d.next().is_none()) {
+    let path = tome_path();
+    if !path.exists() {
         eprintln!(
-            "snowflake_compat [replay]: no recordings at {dir:?} — \
-             run snowflake_compat_record to generate them"
+            "snowflake_compat [replay]: no tome at {path:?} — \
+             run snowflake_compat_record to generate it"
         );
         return;
     }
 
+    let recordings = common::read_tome(&path);
     let mut store = common::setup_metric_store("RECORDED_DB", "RECORDED_SCHEMA");
 
     common::run_scorecard(
         &mut store,
         Dialect::Snowflake,
         "Snowflake",
-        &mut |name, _sql| Ok(read_recording(name)),
+        &mut |name, _sql| Ok(recordings.get(name).cloned()),
     );
 }
 
@@ -270,43 +237,11 @@ fn snowflake_compat_replay() {
 // Ported test record/replay — 266 ported MetricFlow tests on Snowflake
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn ported_recordings_dir() -> PathBuf {
+fn ported_tome_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("data")
-        .join("snowflake_ported_recordings")
-}
-
-fn write_ported_recording(name: &str, batches: &[RecordBatch]) {
-    let dir = ported_recordings_dir();
-    fs::create_dir_all(&dir).expect("failed to create ported recordings dir");
-    let path = dir.join(format!("{name}.arrow"));
-    let schema = if let Some(b) = batches.first() {
-        b.schema()
-    } else {
-        return;
-    };
-    let file = fs::File::create(&path).expect("failed to create recording file");
-    let mut writer = StreamWriter::try_new(file, &schema).expect("failed to create IPC writer");
-    for batch in batches {
-        writer.write(batch).expect("failed to write batch");
-    }
-    writer.finish().expect("failed to finish IPC stream");
-}
-
-fn read_ported_recording(name: &str) -> Option<Vec<RecordBatch>> {
-    let path = ported_recordings_dir().join(format!("{name}.arrow"));
-    if !path.exists() {
-        return None;
-    }
-    let data = fs::read(&path).expect("failed to read recording");
-    let reader = StreamReader::try_new(Cursor::new(data), None).expect("failed to open IPC stream");
-    Some(
-        reader
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .expect("failed to read batches"),
-    )
+        .join("snowflake_ported_recordings.parquet")
 }
 
 /// Build ported test stores from manifest JSON files, retargeted for Snowflake.
@@ -406,6 +341,7 @@ fn snowflake_ported_record() {
 
     let mut stores = setup_ported_stores(&database, &schema);
     let test_cases = common::load_ported_test_cases();
+    let mut tome = common::TomeWriter::new();
 
     let mut pass = 0u32;
     let mut fail = 0u32;
@@ -489,8 +425,8 @@ fn snowflake_ported_record() {
         // Compare results; only record if they match.
         match common::compare_results(&our_batches, &ref_batches, tc.check_order) {
             Ok(()) => {
-                write_ported_recording(&tc.name, &our_batches);
-                write_ported_recording(&format!("{}__ref", tc.name), &ref_batches);
+                tome.insert(&tc.name, &our_batches);
+                tome.insert(&format!("{}__ref", tc.name), &ref_batches);
                 let rows: usize = our_batches.iter().map(|b| b.num_rows()).sum();
                 pass += 1;
                 results.push((tc.name.clone(), "PASS", format!("{rows} rows")));
@@ -505,6 +441,8 @@ fn snowflake_ported_record() {
             }
         }
     }
+
+    tome.write(&ported_tome_path());
 
     let bar = "=".repeat(70);
     eprintln!("\n{bar}");
@@ -522,8 +460,8 @@ fn snowflake_ported_record() {
     eprintln!("{bar}\n");
 
     eprintln!(
-        "snowflake_ported [record]: recordings written to {:?}",
-        ported_recordings_dir()
+        "snowflake_ported [record]: tome written to {:?}",
+        ported_tome_path()
     );
 
     if fail > 0 {
@@ -536,15 +474,16 @@ fn snowflake_ported_record() {
 
 #[test]
 fn snowflake_ported_replay() {
-    let dir = ported_recordings_dir();
-    if !dir.exists() || fs::read_dir(&dir).map_or(true, |mut d| d.next().is_none()) {
+    let path = ported_tome_path();
+    if !path.exists() {
         eprintln!(
-            "snowflake_ported [replay]: no recordings at {dir:?} — \
-             run snowflake_ported_record to generate them"
+            "snowflake_ported [replay]: no tome at {path:?} — \
+             run snowflake_ported_record to generate it"
         );
         return;
     }
 
+    let recordings = common::read_tome(&path);
     let test_cases = common::load_ported_test_cases();
     let mut pass = 0u32;
     let mut fail = 0u32;
@@ -559,15 +498,16 @@ fn snowflake_ported_replay() {
             }
         }
 
-        let our_batches = match read_ported_recording(&tc.name) {
-            Some(b) => b,
+        let our_batches = match recordings.get(tc.name.as_str()) {
+            Some(b) => b.clone(),
             None => {
                 skip += 1;
                 continue;
             }
         };
-        let ref_batches = match read_ported_recording(&format!("{}__ref", tc.name)) {
-            Some(b) => b,
+        let ref_key = format!("{}__ref", tc.name);
+        let ref_batches = match recordings.get(ref_key.as_str()) {
+            Some(b) => b.clone(),
             None => {
                 skip += 1;
                 continue;

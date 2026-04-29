@@ -1,9 +1,16 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::path::Path;
+use std::sync::Arc;
+
 use arrow_array::RecordBatch;
+use arrow_ipc::reader::StreamReader;
+use arrow_ipc::writer::{IpcWriteOptions, StreamWriter};
+use arrow_schema::{ArrowError, Schema};
 use dbt_metricflow::{Dialect, InMemoryMetricStore, compile, parse_query_spec};
 use serde_json::json;
-use std::collections::HashMap;
 
 #[allow(clippy::too_many_arguments)]
 pub fn sm(
@@ -3559,4 +3566,131 @@ pub fn wrap_min_max_only(sql: &str, spec: &PortedSpec) -> String {
         min_max_cols.join("\n  , "),
         sql.replace('\n', "\n  ")
     )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Parquet "tome" — single file housing all recordings for one dialect
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn batches_to_ipc(batches: &[RecordBatch]) -> Vec<u8> {
+    let schema = batches
+        .first()
+        .map(|b| (*b.schema()).clone())
+        .unwrap_or_else(Schema::empty);
+    let opts = IpcWriteOptions::default()
+        .try_with_compression(Some(arrow_ipc::CompressionType::LZ4_FRAME))
+        .expect("lz4 compression");
+    let mut buf = Vec::new();
+    let mut w = StreamWriter::try_new_with_options(&mut buf, &schema, opts).expect("ipc writer");
+    for b in batches {
+        w.write(b).expect("ipc write");
+    }
+    w.finish().expect("ipc finish");
+    drop(w);
+    buf
+}
+
+fn ipc_to_batches(data: &[u8]) -> Vec<RecordBatch> {
+    let reader = StreamReader::try_new(Cursor::new(data), None).expect("ipc reader");
+    reader
+        .into_iter()
+        .collect::<Result<Vec<_>, ArrowError>>()
+        .expect("ipc read batches")
+}
+
+/// A tome writer collects recordings then flushes them to a single parquet file.
+pub struct TomeWriter {
+    entries: Vec<(String, Vec<u8>)>,
+}
+
+impl TomeWriter {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: &str, batches: &[RecordBatch]) {
+        if batches.is_empty() {
+            return;
+        }
+        self.entries
+            .push((name.to_string(), batches_to_ipc(batches)));
+    }
+
+    pub fn write(self, path: &Path) {
+        use arrow_array::{BinaryArray, StringArray};
+
+        let names: Vec<&str> = self.entries.iter().map(|(n, _)| n.as_str()).collect();
+        let blobs: Vec<&[u8]> = self.entries.iter().map(|(_, d)| d.as_slice()).collect();
+        let batch = RecordBatch::try_from_iter(vec![
+            ("name", Arc::new(StringArray::from(names)) as _),
+            ("ipc_data", Arc::new(BinaryArray::from(blobs)) as _),
+        ])
+        .expect("tome batch");
+
+        let file = std::fs::File::create(path).expect("create tome");
+        let props = parquet::file::properties::WriterProperties::builder()
+            .set_compression(parquet::basic::Compression::ZSTD(
+                parquet::basic::ZstdLevel::try_new(3).unwrap(),
+            ))
+            .build();
+        let mut writer = parquet::arrow::ArrowWriter::try_new(file, batch.schema(), Some(props))
+            .expect("parquet writer");
+        writer.write(&batch).expect("parquet write");
+        writer.close().expect("parquet close");
+    }
+}
+
+/// Migrate a directory of `.arrow` IPC files into a single parquet tome.
+pub fn migrate_arrow_dir_to_tome(arrow_dir: &Path, tome_path: &Path) {
+    let mut tome = TomeWriter::new();
+    let mut entries: Vec<_> = std::fs::read_dir(arrow_dir)
+        .expect("read arrow dir")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "arrow"))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let data = std::fs::read(&path).expect("read arrow file");
+        let batches = ipc_to_batches(&data);
+        if !batches.is_empty() {
+            tome.entries.push((name, batches_to_ipc(&batches)));
+        }
+    }
+    tome.write(tome_path);
+}
+
+/// Read all recordings from a parquet tome into a map.
+pub fn read_tome(path: &Path) -> HashMap<String, Vec<RecordBatch>> {
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+    let file = std::fs::File::open(path).expect("open tome");
+    let reader = ParquetRecordBatchReaderBuilder::try_new(file)
+        .expect("parquet reader builder")
+        .build()
+        .expect("parquet reader");
+
+    let mut map = HashMap::new();
+    for batch in reader {
+        let batch = batch.expect("read parquet batch");
+        let names = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<arrow_array::StringArray>()
+            .expect("name col");
+        let blobs = batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<arrow_array::BinaryArray>()
+            .expect("ipc_data col");
+        for i in 0..batch.num_rows() {
+            let name = names.value(i).to_string();
+            let ipc = blobs.value(i);
+            map.insert(name, ipc_to_batches(ipc));
+        }
+    }
+    map
 }

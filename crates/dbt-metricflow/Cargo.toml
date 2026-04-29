@@ -21,9 +21,11 @@ thiserror = { workspace = true }
 [dev-dependencies]
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true }
+arrow-schema = { workspace = true }
 dbt-auth = { workspace = true }
 dbt-profile = { workspace = true }
 dbt-xdbc = { workspace = true }
 dirs = { workspace = true }
+parquet = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }

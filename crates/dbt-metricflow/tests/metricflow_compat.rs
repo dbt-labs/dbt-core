@@ -16,11 +16,9 @@
 
 mod common;
 
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
-use arrow_ipc::reader::StreamReader;
 use dbt_metricflow::{Dialect, InMemoryMetricStore, compile, parse_query_spec};
 use dbt_xdbc::{Backend, Connection, Database, database, driver};
 use serde_json::json;
@@ -4305,26 +4303,11 @@ fn snowflake_saved_query_compile() {
 // Cross-backend comparison: DuckDB vs Snowflake recordings
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn snowflake_recordings_dir() -> PathBuf {
+fn snowflake_tome_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("data")
-        .join("snowflake_recordings")
-}
-
-fn load_snowflake_recording(name: &str) -> Option<Vec<RecordBatch>> {
-    let path = snowflake_recordings_dir().join(format!("{name}.arrow"));
-    if !path.exists() {
-        return None;
-    }
-    let data = std::fs::read(&path).expect("failed to read recording");
-    let reader = StreamReader::try_new(Cursor::new(data), None).expect("failed to open IPC stream");
-    Some(
-        reader
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .expect("failed to read IPC batches"),
-    )
+        .join("snowflake_recordings.parquet")
 }
 
 fn extract_all_metric_values(batches: &[RecordBatch]) -> Vec<f64> {
@@ -4428,12 +4411,13 @@ const KNOWN_CROSS_BACKEND_DISCREPANCIES: &[&str] = &[
 
 #[test]
 fn cross_backend_duckdb_vs_snowflake() {
-    let dir = snowflake_recordings_dir();
-    if !dir.exists() || std::fs::read_dir(&dir).map_or(true, |mut d| d.next().is_none()) {
-        eprintln!("cross_backend: no Snowflake recordings — skipping");
+    let tome = snowflake_tome_path();
+    if !tome.exists() {
+        eprintln!("cross_backend: no Snowflake tome — skipping");
         return;
     }
 
+    let sf_recordings = common::read_tome(&tome);
     let (mut store, mut db) = setup_mf_db();
 
     let mut compared = 0u32;
@@ -4443,8 +4427,8 @@ fn cross_backend_duckdb_vs_snowflake() {
 
     let mut known_skip = 0u32;
     for tc in TEST_CASES {
-        let sf_batches = match load_snowflake_recording(tc.name) {
-            Some(b) => b,
+        let sf_batches = match sf_recordings.get(tc.name) {
+            Some(b) => b.clone(),
             None => continue,
         };
 

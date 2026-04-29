@@ -2,15 +2,15 @@
 //!
 //! Two modes:
 //!
-//! - **Replay** (default): loads pre-recorded Arrow IPC results from
-//!   `tests/data/databricks_recordings/`.  No Databricks connection needed.
+//! - **Replay** (default): loads pre-recorded results from
+//!   `tests/data/databricks_recordings.parquet`.  No Databricks connection needed.
 //!   ```sh
 //!   cargo test -p dbt-metricflow --test databricks_compat
 //!   ```
 //!
 //! - **Record** (`#[ignore]`, requires `fusion_tests/databricks` profile):
 //!   executes compiled SQL on a live Databricks SQL warehouse and writes results
-//!   to Arrow IPC files so replay tests stay up to date.
+//!   to the parquet tome so replay tests stay up to date.
 //!   ```sh
 //!   cargo test -p dbt-metricflow --test databricks_compat -- --ignored --nocapture
 //!   ```
@@ -18,13 +18,9 @@
 mod common;
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use arrow_array::RecordBatch;
-use arrow_ipc::reader::StreamReader;
-use arrow_ipc::writer::StreamWriter;
 use dbt_auth::{AdapterConfig, auth_for_backend};
 use dbt_metricflow::Dialect;
 use dbt_profile::ProfileEnvironment;
@@ -32,6 +28,17 @@ use dbt_xdbc::{Backend, LoadStrategy, connection, driver};
 
 const PROFILE: &str = "fusion_tests";
 const TARGET: &str = "databricks";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tome path
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn tome_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("databricks_recordings.parquet")
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Databricks connection wrapper
@@ -139,50 +146,7 @@ impl DatabricksConn {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Arrow IPC recording
-// ═══════════════════════════════════════════════════════════════════════════
-
-fn recordings_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("data")
-        .join("databricks_recordings")
-}
-
-fn write_recording(name: &str, batches: &[RecordBatch]) {
-    let dir = recordings_dir();
-    fs::create_dir_all(&dir).expect("failed to create recordings dir");
-    let path = dir.join(format!("{name}.arrow"));
-    let schema = if let Some(b) = batches.first() {
-        b.schema()
-    } else {
-        return;
-    };
-    let file = fs::File::create(&path).expect("failed to create recording file");
-    let mut writer = StreamWriter::try_new(file, &schema).expect("failed to create IPC writer");
-    for batch in batches {
-        writer.write(batch).expect("failed to write batch");
-    }
-    writer.finish().expect("failed to finish IPC stream");
-}
-
-fn read_recording(name: &str) -> Option<Vec<RecordBatch>> {
-    let path = recordings_dir().join(format!("{name}.arrow"));
-    if !path.exists() {
-        return None;
-    }
-    let data = fs::read(&path).expect("failed to read recording");
-    let reader = StreamReader::try_new(Cursor::new(data), None).expect("failed to open IPC stream");
-    Some(
-        reader
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .expect("failed to read batches"),
-    )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Record test — live Databricks, writes Arrow IPC recordings
+// Record test — live Databricks, writes parquet tome
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -208,6 +172,7 @@ fn databricks_compat_record() {
     eprintln!("databricks_compat [record]: test data loaded");
 
     let mut store = common::setup_metric_store(catalog, &schema);
+    let mut tome = common::TomeWriter::new();
 
     common::run_scorecard(
         &mut store,
@@ -217,40 +182,42 @@ fn databricks_compat_record() {
             db.execute_query(sql)
         })) {
             Ok(batches) => {
-                write_recording(name, &batches);
+                tome.insert(name, &batches);
                 Ok(Some(batches))
             }
             Err(_) => Err(format!("execution panicked\n  SQL: {sql}")),
         },
     );
 
+    tome.write(&tome_path());
     eprintln!(
-        "databricks_compat [record]: recordings written to {:?}",
-        recordings_dir()
+        "databricks_compat [record]: tome written to {:?}",
+        tome_path()
     );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Replay test — reads Arrow IPC recordings, no Databricks needed
+// Replay test — reads parquet tome, no Databricks needed
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn databricks_compat_replay() {
-    let dir = recordings_dir();
-    if !dir.exists() || fs::read_dir(&dir).map_or(true, |mut d| d.next().is_none()) {
+    let path = tome_path();
+    if !path.exists() {
         eprintln!(
-            "databricks_compat [replay]: no recordings at {dir:?} — \
-             run databricks_compat_record to generate them"
+            "databricks_compat [replay]: no tome at {path:?} — \
+             run databricks_compat_record to generate it"
         );
         return;
     }
 
+    let recordings = common::read_tome(&path);
     let mut store = common::setup_metric_store("RECORDED_CATALOG", "RECORDED_SCHEMA");
 
     common::run_scorecard(
         &mut store,
         Dialect::Databricks,
         "Databricks",
-        &mut |name, _sql| Ok(read_recording(name)),
+        &mut |name, _sql| Ok(recordings.get(name).cloned()),
     );
 }
