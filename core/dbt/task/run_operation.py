@@ -8,6 +8,7 @@ import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.results import RunStatus, TimingInfo, collect_timing_info
 from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact
+from dbt.clients.jinja_static import statically_check_has_jinja
 from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
@@ -27,10 +28,6 @@ from dbt_common.ui import green, red
 
 if TYPE_CHECKING:
     import agate
-
-
-def _sql_has_jinja(sql: str) -> bool:
-    return "{{" in sql or "{%" in sql
 
 
 class RunOperationTask(ConfiguredTask):
@@ -56,10 +53,10 @@ class RunOperationTask(ConfiguredTask):
 
         return res
 
-    def _run_sql_unsafe(self):
+    def _run_unsafe_sql(self):
         adapter = get_adapter(self.config)
 
-        if _sql_has_jinja(self.args.sql):
+        if statically_check_has_jinja(self.args.sql):
             from dbt.parser.manifest import process_node
             from dbt.parser.sql import SqlBlockParser
 
@@ -117,7 +114,7 @@ class RunOperationTask(ConfiguredTask):
 
         # Skip manifest graph compilation for Jinja-free SQL — the
         # manifest is not needed to execute plain SQL directly.
-        needs_manifest = not sql_mode or _sql_has_jinja(self.args.sql)
+        needs_manifest = not sql_mode or statically_check_has_jinja(self.args.sql)
 
         with collect_timing_info("compile", timing.append):
             if needs_manifest:
@@ -130,16 +127,15 @@ class RunOperationTask(ConfiguredTask):
         adapter_response = {}
 
         if sql_mode:
+            package_name = self.config.project_name
             operation_name = "inline_query"
-            unique_id = f"sqloperation.{self.config.project_name}.inline_query"
-            fqn = unique_id.split(".")
         else:
             package_name, operation_name = self._get_macro_parts()
 
         with collect_timing_info("execute", timing.append):
             try:
                 if sql_mode:
-                    response = self._run_sql_unsafe()
+                    response = self._run_unsafe_sql()
                     adapter_response = response.to_dict() if response else {}
                 else:
                     self._run_unsafe(package_name, operation_name)
@@ -186,7 +182,10 @@ class RunOperationTask(ConfiguredTask):
                     level=EventLevel.ERROR,
                 )
 
-        if not sql_mode:
+        if sql_mode:
+            unique_id = f"sqloperation.{package_name}.{operation_name}"
+            fqn = unique_id.split(".")
+        else:
             macro = (
                 self.manifest.find_macro_by_name(
                     operation_name, self.config.project_name, package_name
@@ -218,7 +217,7 @@ class RunOperationTask(ConfiguredTask):
                 fqn=fqn,
                 name=operation_name,
                 unique_id=unique_id,
-                package_name=self.config.project_name if sql_mode else package_name,
+                package_name=package_name,
                 path="",
                 original_file_path="",
             ),
