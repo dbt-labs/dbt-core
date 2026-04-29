@@ -2,7 +2,7 @@ import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.catalogs import get_catalog_config
+from dbt.adapters.factory import FACTORY
 from dbt.artifacts.resources import (
     Catalog,
     CatalogV2,
@@ -256,27 +256,32 @@ def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str,
     return getattr(catalog.config, platform, None)
 
 
-def _validate_platform_block(catalog: CatalogV2, platform: str) -> None:
-    """Look up the registered v2 schema for (catalog_type, platform) and validate the block.
+def _validate_platform_block(catalog: CatalogV2, adapter_type: str) -> None:
+    """Validate the platform block for the running adapter against its registered v2 schema.
 
-    Returns silently if no block was provided for this platform — the caller is responsible
-    for enforcing required-platform rules. Raises if the block is present but no schema is
-    registered (the adapter does not yet support v2 catalogs of this type).
+    Looks up the schema via adapter_class.CATALOG_V2_CONFIGS — adapter packages own their
+    own platform-specific schemas (see CATALOG_V2_CONFIGS on SnowflakeAdapter, etc.).
+
+    Cross-platform blocks (e.g. a unity catalog's databricks block while running on
+    snowflake) are intentionally not validated here — those errors surface when the user
+    actually runs against that platform.
     """
-    block = _get_platform_block(catalog, platform)
+    block = _get_platform_block(catalog, adapter_type)
     if block is None:
         return
 
     catalog_type = catalog.catalog_type.value
-    config_class = get_catalog_config(catalog_type, platform)
+    adapter_class = FACTORY.get_adapter_class_by_name(adapter_type)
+    configs = getattr(adapter_class, "CATALOG_V2_CONFIGS", {})
+    config_class = configs.get(catalog_type)
     if config_class is None:
         raise DbtValidationError(
-            f"Catalog '{catalog.name}' type '{catalog_type}' on platform '{platform}': "
+            f"Catalog '{catalog.name}' type '{catalog_type}' on platform '{adapter_type}': "
             f"no v2 catalog schema registered. The adapter may not yet support v2 catalogs "
             f"of this type."
         )
 
-    ctx = f"Catalog '{catalog.name}' {catalog_type}/{platform}"
+    ctx = f"Catalog '{catalog.name}' {catalog_type}/{adapter_type}"
     try:
         config_class.validate(block)
         config_class.from_dict(block)
@@ -320,9 +325,9 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
                     f"Catalog '{name}' type '{ct.value}' requires config.{platform}"
                 )
 
-    # Per-platform schema validation via the adapter-owned registry
-    for platform in supported:
-        _validate_platform_block(catalog, platform)
+    # Validate the platform block matching the running adapter (only when supported by this type)
+    if adapter_type in supported:
+        _validate_platform_block(catalog, adapter_type)
 
 
 # v2 field name → v1 adapter_properties field name translations.

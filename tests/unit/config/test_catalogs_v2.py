@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
+from unittest import mock
 
 import pytest
 
-from dbt.adapters.catalogs import register_catalog_config
-from dbt.adapters.catalogs._v2_registry import _REGISTRY
 from dbt.artifacts.resources import (
     CatalogV2,
     CatalogV2PlatformConfig,
@@ -43,22 +42,32 @@ class _FakePlatformConfig(dbtClassMixin):
     use_uniform: Optional[bool] = None
 
 
-@pytest.fixture(autouse=True)
-def _register_fake_platform_configs():
-    """Register permissive fakes for every (catalog_type, platform) the tests use.
+class _FakeAdapter:
+    """Stub adapter class exposing CATALOG_V2_CONFIGS for framework tests."""
 
-    Real adapter packages register concrete schemas with constraints; framework tests
-    here only care that validation is invoked correctly via the registry.
+    CATALOG_V2_CONFIGS = {
+        "horizon": _FakePlatformConfig,
+        "glue": _FakePlatformConfig,
+        "iceberg_rest": _FakePlatformConfig,
+        "unity": _FakePlatformConfig,
+        "hive_metastore": _FakePlatformConfig,
+        "biglake_metastore": _FakePlatformConfig,
+    }
+
+
+@pytest.fixture(autouse=True)
+def _stub_adapter_lookup():
+    """Stub FACTORY.get_adapter_class_by_name so tests don't need real adapters loaded.
+
+    Real adapter packages declare CATALOG_V2_CONFIGS as a class attribute on their
+    adapter class (see SnowflakeAdapter etc.); framework tests here only care that
+    the lookup is invoked correctly.
     """
-    snapshot = dict(_REGISTRY)
-    for ct in ("horizon", "glue", "iceberg_rest", "unity"):
-        register_catalog_config(ct, "snowflake", _FakePlatformConfig)
-    register_catalog_config("unity", "databricks", _FakePlatformConfig)
-    register_catalog_config("hive_metastore", "databricks", _FakePlatformConfig)
-    register_catalog_config("biglake_metastore", "bigquery", _FakePlatformConfig)
-    yield
-    _REGISTRY.clear()
-    _REGISTRY.update(snapshot)
+    with mock.patch(
+        "dbt.config.catalogs.FACTORY.get_adapter_class_by_name",
+        return_value=_FakeAdapter,
+    ):
+        yield
 
 
 @pytest.fixture
@@ -278,14 +287,20 @@ def _make_catalog(
 class TestValidateV2CatalogForPlatform:
     # --- registry behavior ---
     def test_no_schema_registered_raises_helpful_error(self):
-        # Drop the registered fake for (horizon, snowflake) only
-        _REGISTRY.pop(("horizon", "snowflake"), None)
+        # Adapter class with empty CATALOG_V2_CONFIGS: no v2 support for any catalog type
+        class _NoConfigsAdapter:
+            CATALOG_V2_CONFIGS: dict = {}
+
         cat = _make_catalog(
             catalog_type=V2CatalogType.HORIZON,
             snowflake={"external_volume": "vol"},
         )
-        with pytest.raises(DbtValidationError, match="no v2 catalog schema registered"):
-            validate_v2_catalog_for_platform(cat, "snowflake")
+        with mock.patch(
+            "dbt.config.catalogs.FACTORY.get_adapter_class_by_name",
+            return_value=_NoConfigsAdapter,
+        ):
+            with pytest.raises(DbtValidationError, match="no v2 catalog schema registered"):
+                validate_v2_catalog_for_platform(cat, "snowflake")
 
     # --- horizon ---
     def test_horizon_valid(self):

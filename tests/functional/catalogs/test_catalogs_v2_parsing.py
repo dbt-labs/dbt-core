@@ -6,12 +6,7 @@ from unittest import mock
 
 import pytest
 
-from dbt.adapters.catalogs import (
-    CatalogIntegration,
-    CatalogIntegrationConfig,
-    register_catalog_config,
-)
-from dbt.adapters.catalogs._v2_registry import _REGISTRY
+from dbt.adapters.catalogs import CatalogIntegration, CatalogIntegrationConfig
 from dbt.tests.util import run_dbt, write_config_file
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtValidationError
@@ -40,10 +35,11 @@ class IcebergRestStubIntegration(CatalogIntegration):
 V2_STUB_INTEGRATIONS = [BuiltInStubIntegration, IcebergRestStubIntegration]
 
 
-# ===== Stub schemas registered in the v2 catalog config registry =====
-# Real adapter packages register concrete schemas (HorizonSnowflakeConfig etc.); these
-# functional tests use permissive stubs to exercise the parse → validate → bridge flow
-# without depending on any specific adapter's installed version.
+# ===== Stub schemas exposed via a fake adapter class =====
+# Real adapter packages declare CATALOG_V2_CONFIGS on their adapter class
+# (see SnowflakeAdapter etc.); these functional tests use a stub adapter so
+# the parse → validate → bridge flow can run without depending on any specific
+# adapter's installed version.
 
 
 @dataclass
@@ -56,14 +52,31 @@ class _StubPlatformConfig(dbtClassMixin):
     target_file_size: Optional[str] = None
 
 
+class _StubAdapterClass:
+    CATALOG_V2_CONFIGS = {
+        "horizon": _StubPlatformConfig,
+        "glue": _StubPlatformConfig,
+        "iceberg_rest": _StubPlatformConfig,
+        "unity": _StubPlatformConfig,
+    }
+
+
 @pytest.fixture(autouse=True)
-def _register_stub_v2_configs():
-    snapshot = dict(_REGISTRY)
-    for ct in ("horizon", "glue", "iceberg_rest", "unity"):
-        register_catalog_config(ct, "snowflake", _StubPlatformConfig)
-    yield
-    _REGISTRY.clear()
-    _REGISTRY.update(snapshot)
+def _stub_adapter_lookup():
+    """Pass through real adapter lookups (postgres) but return _StubAdapterClass
+    for the v2 platforms (snowflake/databricks/bigquery) that aren't installed
+    in this test environment."""
+    from dbt.adapters.factory import FACTORY
+
+    real = FACTORY.get_adapter_class_by_name
+
+    def lookup(name):
+        if name in ("snowflake", "databricks", "bigquery"):
+            return _StubAdapterClass
+        return real(name)
+
+    with mock.patch.object(FACTORY, "get_adapter_class_by_name", side_effect=lookup):
+        yield
 
 
 def _mock_adapter_type(adapter_type):
