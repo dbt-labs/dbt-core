@@ -7,8 +7,8 @@
 ))]
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::fs;
 use std::sync::Arc;
-use std::{env, fs};
 
 use insta::assert_snapshot;
 use minijinja::constants::{CURRENT_PATH, CURRENT_SPAN};

@@ -141,6 +141,7 @@ fn create_or_update_vscode_extensions(target_dir: &Path) -> FsResult<()> {
 
 pub fn init_project(
     project_name: &str,
+    profile_name: &str,
     target_dir: &Path,
     project_template: &assets::ProjectTemplateAsset,
 ) -> FsResult<()> {
@@ -163,9 +164,10 @@ pub fn init_project(
             fs::create_dir_all(parent)?;
         }
 
-        // Read the content as string and replace project name placeholder
+        // Replace template placeholders
         let content = String::from_utf8_lossy(&file_content.data);
         let content = content.replace(project_template.default_project_name(), project_name);
+        let content = content.replace("__PROFILE_NAME__", profile_name);
 
         // Write the file
         fs::write(&target_file_path, content)?;
@@ -363,7 +365,10 @@ pub async fn run_init_workflow(
 
         // Create the project
         let project_dir = Path::new(&project_name);
-        init_project(&project_name, project_dir, project_template)?;
+        let profile_name = existing_profile
+            .clone()
+            .unwrap_or_else(|| project_name.clone());
+        init_project(&project_name, &profile_name, project_dir, project_template)?;
 
         // Create or update .vscode/extensions.json in the new project
         create_or_update_vscode_extensions(project_dir)?;
@@ -388,11 +393,6 @@ pub async fn run_init_workflow(
 
         // Setup profile if not skipped
         if !skip_profile_setup {
-            let profile_name = existing_profile
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| project_name.clone());
-
             // Only run profile setup if we don't have an existing profile specified
             if existing_profile.is_none() {
                 profile_setup.setup_profile(&profile_name).await?;

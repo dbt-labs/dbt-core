@@ -1,6 +1,6 @@
 name: jaffle_shop
 
-profile: jaffle_shop
+profile: __PROFILE_NAME__
 
 seed-paths: ["seeds"]
 model-paths: ["models"]
