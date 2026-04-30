@@ -9,6 +9,7 @@ use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::TracingFeaturesHandle;
 use dbt_dag::schedule::Schedule;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
@@ -119,6 +120,18 @@ pub trait CliExtensionHooks: Send + Sync {
         _cli: &Cli,
         // _run_tasks_ok: &RunTasksOk,
         _resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_handle_defer(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _jinja_env: Cow<'_, JinjaEnv>,
+        _augmented_resolved_state: &ResolverState,
         _schedule: &Schedule<String>,
         _token: &CancellationToken,
     ) -> FsResult<()> {

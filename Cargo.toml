@@ -51,7 +51,6 @@ members = [
   "crates/dbt-test-utils",
   "crates/dbt-tui-progress",
   "crates/dbt-metricflow",
-  "crates/dbt-sample",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
   "crates/dbt-sql/dbt-lexer-databricks",
@@ -216,7 +215,6 @@ dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
 
-dbt-sample = { path = "crates/dbt-sample" }
 dbt-schema-store = { path = "crates/dbt-schema-store" }
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
