@@ -70,3 +70,28 @@ sad_macros_sql = """
 model_sql = """
 select 1 as id
 """
+
+private_model_sql = """
+select 1 as id
+"""
+
+groups_yml = """
+groups:
+  - name: analytics
+    owner:
+      name: analytics_owner
+"""
+
+private_model_schema_yml = """
+models:
+  - name: private_model
+    access: private
+    group: analytics
+"""
+
+ref_private_model_macro_sql = """
+{% macro ref_private_model() %}
+  {% set result = run_query("select * from " ~ ref('private_model')) %}
+  {{ log("Successfully referenced private model", info=true) }}
+{% endmacro %}
+"""

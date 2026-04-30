@@ -1,0 +1,6 @@
+kind: Features
+body: dbt seed now supports --empty to create the tables without loading data
+time: 2026-03-26T18:50:34.549546+05:30
+custom:
+    Author: sriramr98
+    Issue: "8981"

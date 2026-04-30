@@ -3,6 +3,7 @@ import pytest
 from dbt.events.types import InvalidMacroAnnotation
 from dbt.tests.util import run_dbt
 from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.ui import warning_tag
 
 macros_sql = """
 {% macro my_macro(my_arg_1, my_arg_2, my_arg_3) %}
@@ -86,9 +87,13 @@ class TestMacroNameWarnings:
         run_dbt(["parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 2
         msg = "Argument my_misnamed_arg_2 in yaml for macro my_macro does not match the jinja"
-        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
+        assert any(
+            [e for e in event_catcher.caught_events if e.info.msg.startswith(warning_tag(msg))]
+        )
         msg = "Argument my_misnamed_arg_3 in yaml for macro my_macro does not match the jinja"
-        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
+        assert any(
+            [e for e in event_catcher.caught_events if e.info.msg.startswith(warning_tag(msg))]
+        )
 
 
 class TestMacroTypeWarnings:
@@ -105,15 +110,23 @@ class TestMacroTypeWarnings:
         run_dbt(["parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 2
         msg = "Argument my_arg_2 in the yaml for macro my_macro has an invalid type"
-        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
+        assert any(
+            [e for e in event_catcher.caught_events if e.info.msg.startswith(warning_tag(msg))]
+        )
         msg = "Argument my_arg_3 in the yaml for macro my_macro has an invalid type"
-        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
+        assert any(
+            [e for e in event_catcher.caught_events if e.info.msg.startswith(warning_tag(msg))]
+        )
 
 
 class TestMacroNonEnforcement:
     @pytest.fixture(scope="class")
     def macros(self):
         return {"macros.yml": bad_everything_types_macros_yml, "macros.sql": macros_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"flags": {"validate_macro_args": False}}
 
     def test_macro_non_enforcement(self, project) -> None:
         event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)

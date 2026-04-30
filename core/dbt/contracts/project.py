@@ -353,22 +353,27 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     write_json: Optional[bool] = None
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
-    require_batched_execution_for_custom_microbatch_strategy: bool = False
+    require_batched_execution_for_custom_microbatch_strategy: bool = True
     require_event_names_in_deprecations: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = True
     source_freshness_run_project_hooks: bool = True
-    skip_nodes_if_on_run_start_fails: bool = False
-    state_modified_compare_more_unrendered_values: bool = False
+    skip_nodes_if_on_run_start_fails: bool = True
+    state_modified_compare_more_unrendered_values: bool = True
     state_modified_compare_vars: bool = False
-    require_yaml_configuration_for_mf_time_spines: bool = False
-    require_nested_cumulative_type_params: bool = False
-    validate_macro_args: bool = False
-    require_all_warnings_handled_by_warn_error: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = True
+    require_nested_cumulative_type_params: bool = True
+    validate_macro_args: bool = True
+    require_all_warnings_handled_by_warn_error: bool = True
     require_generic_test_arguments_property: bool = True
     require_unique_project_resource_names: bool = False
     require_ref_searches_node_package_before_root: bool = False
     require_valid_schema_from_generate_schema_name: bool = False
+    require_sql_header_in_test_configs: bool = False
+    support_custom_ref_kwargs: bool = False
+    require_corrected_analysis_fqns: bool = False
+    require_source_and_semantic_model_names_without_spaces: bool = False
+    enable_grouped_warn_error_parser_logs: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -388,6 +393,11 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_unique_project_resource_names": self.require_unique_project_resource_names,
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
             "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
+            "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
+            "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
+            "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
+            "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
         }
 
 

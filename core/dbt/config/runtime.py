@@ -24,7 +24,11 @@ from dbt.adapters.contracts.connection import (
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.artifacts.resources import Quoting
-from dbt.config.project import load_package_lock_config, load_raw_project
+from dbt.config.project import (
+    load_package_lock_config,
+    load_raw_project,
+    vars_data_from_root,
+)
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
 from dbt.events.types import UnusedResourceConfigPath
@@ -37,7 +41,8 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_or_defer_event
 from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
 
 from .profile import Profile
@@ -54,10 +59,24 @@ def load_project(
     validate: bool = False,
     require_vars: bool = True,
 ) -> Project:
-    # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars, require_vars=require_vars)
+
+    if cli_vars is None:
+        cli_vars = {}
+
+    # Load vars.yml first (before rendering dbt_project.yml)
+    vars_from_file = vars_data_from_root(project_root)
+
+    # Merge: CLI vars take precedence over file vars
+    merged_vars = {**vars_from_file, **cli_vars}
+
+    # Renderer receives merged vars for Jinja in dbt_project.yml
+    project_renderer = DbtProjectYamlRenderer(profile, merged_vars, require_vars=require_vars)
     project = Project.from_project_root(
-        project_root, project_renderer, verify_version=version_check, validate=validate
+        project_root,
+        project_renderer,
+        verify_version=version_check,
+        validate=validate,
+        vars_from_file=vars_from_file,
     )
 
     # Save env_vars encountered in rendering for partial parsing
@@ -181,6 +200,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             metrics=project.metrics,
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
+            analyses=project.analyses,
             exposures=project.exposures,
             functions=project.functions,
             vars=project.vars,
@@ -199,6 +219,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
             flags=project.flags,
+            vars_from_file=project.vars_from_file,
         )
 
     # Called by 'load_projects' in this class
@@ -390,7 +411,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if len(unused_resource_config_paths) == 0:
             return
 
-        warn_or_error(UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths))
+        fire_or_defer_event(
+            UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
+        )
 
     def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:

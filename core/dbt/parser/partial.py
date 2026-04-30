@@ -23,6 +23,7 @@ from dbt.node_types import NodeType
 from dbt_common.context import get_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 
 mssat_files = (
     ParseFileType.Model,
@@ -135,7 +136,7 @@ class PartialParsing:
                 if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                     sf = self.saved_files[file_id]
                     if type(sf).__name__ != "SchemaSourceFile":
-                        raise Exception(f"Serialization failure for {file_id}")
+                        raise DbtInternalError(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
                     if self.saved_files[file_id].parse_file_type in mg_files:
@@ -210,7 +211,7 @@ class PartialParsing:
         parser_name = parse_file_type_to_parser[source_file.parse_file_type]
         project_name = source_file.project_name
         if not parser_name or not project_name:
-            raise Exception(
+            raise DbtInternalError(
                 f"Did not find parse_file_type or project_name "
                 f"in SourceFile for {source_file.file_id}"
             )
@@ -324,7 +325,7 @@ class PartialParsing:
         elif new_source_file.parse_file_type == ParseFileType.Function:
             self.update_function_in_saved(new_source_file, old_source_file)
         else:
-            raise Exception(f"Invalid parse_file_type in source_file {file_id}")
+            raise DbtInternalError(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
@@ -589,7 +590,7 @@ class PartialParsing:
                 if node.resource_type == NodeType.Test and node.test_node_type == "generic":
                     schema_file_id = node.file_id
                     schema_file = self.saved_manifest.files[schema_file_id]
-                    (key, name) = schema_file.get_key_and_name_for_test(node.unique_id)
+                    key, name = schema_file.get_key_and_name_for_test(node.unique_id)
                     if key and name:
                         patch_list = []
                         if key in schema_file.dict_from_yaml:
@@ -963,6 +964,14 @@ class PartialParsing:
             # find related tests and remove them
             self.remove_tests(schema_file, dict_key, elem["name"])
 
+        # v2 inline semantic models are created as a side effect of patching a model node.
+        # They live in schema_file.semantic_models / saved_manifest.semantic_models but are NOT
+        # represented under dict_from_yaml["semantic_models"] — so the usual semantic_models key
+        # diff path never cleans them up.  We must clean them up here whenever the model entry
+        # changes or is deleted, otherwise the re-patch creates a duplicate.
+        if dict_key == "models":
+            self._delete_v2_semantic_model_for_model(schema_file, elem)
+
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
@@ -1101,6 +1110,50 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
+    def _delete_v2_semantic_model_for_model(self, schema_file, elem):
+        """Clean up a v2 inline semantic model (and its metrics) that was created as a
+        side effect of patching a model node.  v2 semantic models are not represented
+        under dict_from_yaml["semantic_models"], so the normal semantic_models diff path
+        never removes them.  This method looks in the saved manifest directly rather than
+        relying on elem["semantic_model"] (which is the *new* value for changed elements
+        and may no longer reflect what was previously parsed).
+        """
+        model_name = elem["name"]
+        # parse_v2_semantic_model_from_dbt_model_patch always sets sm.model to this string.
+        model_ref = f"ref('{model_name}')"
+
+        # v1 semantic models are declared under the "semantic_models:" top-level YAML key.
+        # They are handled by the normal semantic_models diff path — never touch them here.
+        v1_sm_names = {e["name"] for e in schema_file.dict_from_yaml.get("semantic_models", [])}
+
+        sm_names_to_clean = []
+        for unique_id in schema_file.semantic_models.copy():
+            if unique_id in self.saved_manifest.semantic_models:
+                sm = self.saved_manifest.semantic_models[unique_id]
+                if sm.model == model_ref and sm.name not in v1_sm_names:
+                    sm_names_to_clean.append(sm.name)
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
+                    self.saved_manifest.semantic_models.pop(unique_id)
+                    schema_file.semantic_models.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
+        if not sm_names_to_clean:
+            return
+
+        # Clean up create_metric-style auto-generated metrics (stored in metrics_from_measures).
+        if schema_file.generated_metrics:
+            schema_file.fix_metrics_from_measures()
+        for sm_name in sm_names_to_clean:
+            if sm_name in schema_file.metrics_from_measures:
+                for unique_id in schema_file.metrics_from_measures[sm_name]:
+                    if unique_id in self.saved_manifest.metrics:
+                        self.saved_manifest.metrics.pop(unique_id)
+                    elif unique_id in self.saved_manifest.disabled:
+                        self.delete_disabled(unique_id, schema_file.file_id)
+                del schema_file.metrics_from_measures[sm_name]
+
     def delete_schema_semantic_model(self, schema_file, semantic_model_dict):
         semantic_model_name = semantic_model_dict["name"]
         semantic_models = schema_file.semantic_models.copy()
@@ -1182,7 +1235,7 @@ class PartialParsing:
         return (orig_source_schema_file, orig_source)
 
     def remove_source_override_target(self, source_dict):
-        (orig_file, orig_source) = self.get_source_override_file_and_dict(source_dict)
+        orig_file, orig_source = self.get_source_override_file_and_dict(source_dict)
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
             self.merge_patch(orig_file, "sources", orig_source)

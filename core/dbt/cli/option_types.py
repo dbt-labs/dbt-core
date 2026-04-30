@@ -65,6 +65,49 @@ class WarnErrorOptionsType(YAML):
         )
 
 
+class SqlParseOptionsType(YAML):
+    """The Click SqlParseOptions type. Parses YAML and applies sqlparse engine settings."""
+
+    name = "SqlParseOptionsType"
+
+    # Permissive defaults by default
+    # https://sqlparse.readthedocs.io/en/latest/api.html#security-and-performance-considerations
+    VALID_KEYS_TO_DEFAULTS = {"MAX_GROUPING_DEPTH": None, "MAX_GROUPING_TOKENS": None}
+
+    def convert(self, value, param, ctx):
+        if value is None:
+            return None
+
+        import sqlparse
+
+        options = super().convert(value, param, ctx)
+
+        # First, apply defaults
+        for key, value in self.VALID_KEYS_TO_DEFAULTS.items():
+            setattr(sqlparse.engine.grouping, key, value)
+
+        # Then, apply user-provided settings
+        for key, val in options.items():
+            if key not in self.VALID_KEYS_TO_DEFAULTS:
+                self.fail(
+                    f"Unknown sqlparse option: {key}. "
+                    f"Valid options: {', '.join(sorted(self.VALID_KEYS))}",
+                    param,
+                    ctx,
+                )
+            # None params may get stringified during `dbt retry`
+            if val is None or (isinstance(val, str) and val.lower() == "none"):
+                setattr(sqlparse.engine.grouping, key, None)
+            else:
+                try:
+                    int_val = int(val)
+                except (TypeError, ValueError):
+                    self.fail(f"Value for {key} must be an integer, got: {val}", param, ctx)
+                setattr(sqlparse.engine.grouping, key, int_val)
+
+        return options
+
+
 class Truthy(ParamType):
     """The Click Truthy type.  Converts strings into a "truthy" type"""
 

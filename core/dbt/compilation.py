@@ -3,7 +3,18 @@ import json
 import os
 import pickle
 from collections import defaultdict, deque
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import networkx as nx  # type: ignore
 import sqlparse
@@ -45,15 +56,23 @@ from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
+from dbt_common.exceptions import CompilationError
 from dbt_common.invocation import get_invocation_id
 
 graph_file_name = "graph.gpickle"
 
+StatsKeyType = Union[NodeType, Literal["catalogs"]]
 
-def print_compile_stats(stats: Dict[NodeType, int]):
+
+def print_compile_stats(stats: Dict[StatsKeyType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
-        resource_counts = {k.pluralize(): v for k, v in stats.items()}
+        resource_counts = {}
+        for k, v in stats.items():
+            if isinstance(k, NodeType):
+                resource_counts[k.pluralize()] = v
+            else:
+                resource_counts[k] = v
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
@@ -71,8 +90,10 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
-    stats: Dict[NodeType, int] = defaultdict(int)
+def _generate_stats(
+    manifest: Manifest, catalogs: Optional[Sequence[Any]] = None
+) -> Dict[StatsKeyType, int]:
+    stats: Dict[StatsKeyType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):
             stats[node.resource_type] += 1
@@ -86,6 +107,8 @@ def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
     stats[NodeType.SavedQuery] += len(manifest.saved_queries)
     stats[NodeType.Unit] += len(manifest.unit_tests)
+    if catalogs is not None:
+        stats["catalogs"] = len(catalogs)
 
     # TODO: should we be counting dimensions + entities?
 
@@ -208,7 +231,7 @@ class Linker:
         cycle = self.find_cycles()
 
         if cycle:
-            raise RuntimeError("Found a cycle: {}".format(cycle))
+            raise CompilationError("Found a cycle: {}".format(cycle))
 
     def add_test_edges(self, manifest: Manifest) -> None:
         if not get_flags().USE_FAST_TEST_EDGES:
@@ -551,17 +574,31 @@ class Compiler:
             if not cte_model.is_ephemeral_model:
                 raise DbtInternalError(f"{cte.id} is not ephemeral")
 
-            # This model has already been compiled and extra_ctes_injected, so it's been
-            # through here before. We already checked above for extra_ctes_injected, but
-            # checking again because updates maybe have happened in another thread.
-            if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
-                new_prepended_ctes = cte_model.extra_ctes
+            # Lock the ephemeral cte_model to ensure only one thread compiles it.
+            # The lock is scoped to just the compilation step; the recursive
+            # _recursively_prepend_ctes call happens outside the lock to avoid
+            # deadlock (it will re-acquire this node's lock at CTE injection).
+            new_prepended_ctes = None
+            needs_recursion = False
+            with cte_model._lock:
+                # This model has already been compiled and extra_ctes_injected,
+                # so it's been through here before. We already checked above for
+                # extra_ctes_injected, but checking again because updates may
+                # have happened in another thread.
+                if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
+                    new_prepended_ctes = cte_model.extra_ctes
+                elif not cte_model.compiled:
+                    # This is an ephemeral parsed model that we can compile.
+                    # Render the raw_code and set compiled to True
+                    cte_model = self._compile_code(cte_model, manifest, extra_context)
+                    needs_recursion = True
+                else:
+                    # compiled=True but extra_ctes not yet injected; another
+                    # thread compiled it but hasn't finished recursion yet.
+                    # We still need to recurse to get the prepended CTEs.
+                    needs_recursion = True
 
-            # if the cte_model isn't compiled, i.e. first time here
-            else:
-                # This is an ephemeral parsed model that we can compile.
-                # Render the raw_code and set compiled to True
-                cte_model = self._compile_code(cte_model, manifest, extra_context)
+            if needs_recursion:
                 # recursively call this method, sets extra_ctes_injected to True
                 cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
                     cte_model, manifest, extra_context
@@ -569,6 +606,10 @@ class Compiler:
                 # Write compiled SQL file
                 self._write_node(cte_model)
 
+            if new_prepended_ctes is None:
+                raise DbtInternalError(
+                    f"Expected extra_ctes to be set for ephemeral model {cte.id}"
+                )
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
             cte_name = (
@@ -582,16 +623,17 @@ class Compiler:
 
             _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte.id, sql=sql))
 
-        # Check again before updating for multi-threading
-        if not model.extra_ctes_injected:
-            injected_sql = inject_ctes_into_sql(
-                model.compiled_code,
-                prepended_ctes,
-            )
-            model.extra_ctes_injected = True
-            model._pre_injected_sql = model.compiled_code
-            model.compiled_code = injected_sql
-            model.extra_ctes = prepended_ctes
+        # Lock the consuming model to prevent duplicate CTE injection
+        with model._lock:
+            if not model.extra_ctes_injected:
+                injected_sql = inject_ctes_into_sql(
+                    model.compiled_code,
+                    prepended_ctes,
+                )
+                model.extra_ctes_injected = True
+                model._pre_injected_sql = model.compiled_code
+                model.compiled_code = injected_sql
+                model.extra_ctes = prepended_ctes
 
         # if model.extra_ctes is not set to prepended ctes, something went wrong
         return model, model.extra_ctes
@@ -685,7 +727,13 @@ class Compiler:
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,
     # writes out the graph.gpickle file, and prints the stats, returning a Graph object.
-    def compile(self, manifest: Manifest, write=True, add_test_edges=False) -> Graph:
+    def compile(
+        self,
+        manifest: Manifest,
+        write=True,
+        add_test_edges=False,
+        catalogs: Optional[Sequence[Any]] = None,
+    ) -> Graph:
         self.initialize()
         linker = Linker()
         linker.link_graph(manifest)
@@ -717,14 +765,12 @@ class Compiler:
                     )
                 )
 
-        stats = _generate_stats(manifest)
-
         if write:
             self.write_graph_file(linker, manifest)
 
         # Do not print these for list command
         if self.config.args.which != "list":
-            stats = _generate_stats(manifest)
+            stats = _generate_stats(manifest, catalogs)
             print_compile_stats(stats)
 
         return Graph(linker.graph)
@@ -740,10 +786,7 @@ class Compiler:
     def _write_node(
         self, node: ManifestSQLNode, split_suffix: Optional[str] = None
     ) -> ManifestSQLNode:
-        if not node.extra_ctes_injected or node.resource_type in (
-            NodeType.Snapshot,
-            NodeType.Seed,
-        ):
+        if not node.extra_ctes_injected or node.resource_type in (NodeType.Seed,):
             return node
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
@@ -819,7 +862,22 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     if len(ctes) == 0:
         return sql
 
-    parsed_stmts = sqlparse.parse(sql)
+    try:
+        parsed_stmts = sqlparse.parse(sql)
+    except Exception as e:
+        compilation_exception_msg = str(e)
+        if "grouping depth exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = (
+                f"{compilation_exception_msg} You may raise the limit via "
+                f'--sqlparse \'{{"MAX_GROUPING_DEPTH": "<value>"}}\'.'
+            )
+        if "number of tokens exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = (
+                f"{compilation_exception_msg} You may raise the limit via "
+                f'--sqlparse \'{{"MAX_GROUPING_TOKENS": "<value>"}}\'.'
+            )
+        raise CompilationError(compilation_exception_msg)
+
     parsed = parsed_stmts[0]
 
     with_stmt = None

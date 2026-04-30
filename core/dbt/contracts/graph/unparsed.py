@@ -551,6 +551,19 @@ class UnparsedSemanticModelConfig(dbtClassMixin):
     group: Optional[str] = None
     config: Optional[UnparsedSemanticResourceConfig] = None
 
+    @classmethod
+    @override
+    def validate(cls, data: Any) -> None:
+        if isinstance(data, dict):
+            allowed = set(cls.__dataclass_fields__.keys())
+            extra = set(data.keys()) - allowed
+            if extra:
+                raise ValidationError(
+                    f"Unknown field(s) in semantic_model config: {', '.join(sorted(extra))}. "
+                    f"Valid fields are: {', '.join(sorted(allowed))}."
+                )
+        super().validate(data)
+
 
 @dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):

@@ -1,14 +1,19 @@
 from dataclasses import dataclass, field
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility, NodeType
-from dbt.artifacts.resources.v1.components import CompiledResource
+from dbt.artifacts.resources.v1.components import CompiledResource, HasRelationMetadata
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.dataclass_schema import dbtClassMixin
 
 # =============
 # Function config, and supporting classes
 # =============
+
+
+@dataclass
+class SnowflakeFunctionConfig(dbtClassMixin):
+    quote_args: bool = True
 
 
 @dataclass
@@ -20,6 +25,7 @@ class FunctionConfig(NodeConfig):
     volatility: Optional[FunctionVolatility] = None
     runtime_version: Optional[str] = None
     entry_point: Optional[str] = None
+    snowflake: SnowflakeFunctionConfig = field(default_factory=SnowflakeFunctionConfig)
 
 
 # =============
@@ -47,7 +53,32 @@ class FunctionMandatory(dbtClassMixin):
 
 
 @dataclass
+class DeferFunction(HasRelationMetadata):
+    alias: str
+    resource_type: NodeType
+    name: str
+    description: str
+    compiled_code: Optional[str]
+    meta: Dict[str, Any]
+    tags: List[str]
+    config: Optional[FunctionConfig]
+    arguments: List[FunctionArgument]
+    returns: FunctionReturns
+
+    @property
+    def identifier(self):
+        return self.name
+
+
+@dataclass
 class Function(CompiledResource, FunctionMandatory):
     resource_type: Literal[NodeType.Function]
     config: FunctionConfig
     arguments: List[FunctionArgument] = field(default_factory=list)
+    defer_function: Optional[DeferFunction] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if context and context.get("artifact") and "defer_function" in dct:
+            del dct["defer_function"]
+        return dct

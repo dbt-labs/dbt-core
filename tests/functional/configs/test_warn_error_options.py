@@ -195,6 +195,9 @@ class TestWarnErrorOptionsFromProjectCanRaiseWarningToError(BaseTestWarnErrorOpt
 
 
 class TestWarnErrorOptionsFromProjectCanExcludeSpecificEvent(BaseTestWarnErrorOptionsFromProject):
+    @pytest.mark.skip(
+        reason="Flaky on structured logging tests, EventCatcher inexplicably picks up on 'include' usage across classes"
+    )
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:

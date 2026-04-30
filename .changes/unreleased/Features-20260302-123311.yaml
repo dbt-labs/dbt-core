@@ -1,0 +1,6 @@
+kind: Features
+body: Write compiled SQL for snapshots to target/compiled/ during dbt compile
+time: 2026-03-02T12:33:11.456829+05:30
+custom:
+    Author: aahel
+    Issue: "7867"

@@ -202,9 +202,17 @@
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "group": {
@@ -278,6 +286,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -292,6 +311,10 @@
         },
         {
           "$ref": "#/definitions/TimeConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ],
       "required": [
@@ -299,8 +322,16 @@
       ],
       "properties": {
         "copy_partitions": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "data_type": {
           "default": "date",
@@ -323,6 +354,10 @@
           "items": {
             "type": "string"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -360,12 +395,40 @@
       },
       "additionalProperties": false
     },
+    "ColumnMask": {
+      "type": "object",
+      "required": [
+        "function"
+      ],
+      "properties": {
+        "function": {
+          "type": "string"
+        },
+        "using_columns": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ColumnProperties": {
       "type": "object",
       "required": [
         "name"
       ],
       "properties": {
+        "column_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnMask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -458,9 +521,17 @@
           }
         },
         "quote": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "tests": {
@@ -482,6 +553,10 @@
         },
         {
           "$ref": "#/definitions/ColumnPropertiesDimensionType"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -508,9 +583,17 @@
           ]
         },
         "is_partition": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -612,15 +695,31 @@
           "$ref": "#/definitions/ConstraintType"
         },
         "warn_unenforced": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_unsupported": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -654,6 +753,10 @@
           "additionalProperties": {
             "$ref": "#/definitions/CustomTestInner"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -782,33 +885,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -830,17 +973,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -861,6 +1020,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -891,9 +1064,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -936,22 +1133,46 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "error_if": {
@@ -979,10 +1200,18 @@
           ]
         },
         "full_refresh": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -1001,17 +1230,55 @@
           ]
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -1040,6 +1307,22 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -1056,17 +1339,33 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "limit": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "liquid_clustered_by": {
           "anyOf": [
@@ -1100,6 +1399,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -1107,9 +1422,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -1140,12 +1463,20 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partition_by": {
           "anyOf": [
@@ -1158,12 +1489,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -1203,11 +1542,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -1216,9 +1563,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -1246,6 +1601,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -1253,9 +1614,17 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "severity": {
@@ -1269,14 +1638,36 @@
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -1308,6 +1699,12 @@
             "null"
           ]
         },
+        "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
@@ -1318,11 +1715,31 @@
             }
           ]
         },
-        "store_failures": {
-          "default": null,
+        "storage_serialization_policy": {
           "type": [
-            "boolean",
+            "string",
             "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "store_failures": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "store_failures_as": {
@@ -1364,6 +1781,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -1380,12 +1803,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -1394,9 +1825,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_if": {
@@ -1438,6 +1891,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1449,6 +1913,10 @@
         },
         {
           "$ref": "#/definitions/CustomTest"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1465,8 +1933,16 @@
       "type": "object",
       "properties": {
         "alias_types": {
-          "default": true,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": true,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "checksum": {
           "anyOf": [
@@ -1479,8 +1955,16 @@
           ]
         },
         "enforced": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1598,30 +2082,62 @@
       "type": "object",
       "properties": {
         "database": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "identifier": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "schema": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "snowflake_ignore_case": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -1637,6 +2153,10 @@
           "items": {
             "type": "string"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1678,9 +2198,17 @@
           ]
         },
         "is_partition": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -1778,12 +2306,28 @@
       "type": "object",
       "properties": {
         "is_end": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "is_start": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1798,8 +2342,16 @@
           ]
         },
         "show": {
-          "default": true,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": true,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1811,6 +2363,10 @@
         },
         {
           "$ref": "#/definitions/ColumnPropertiesEntityType"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1946,10 +2502,18 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -2056,6 +2620,10 @@
         },
         {
           "type": "string"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -2119,13 +2687,23 @@
       "type": "object",
       "properties": {
         "count": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "period": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessPeriod"
@@ -2198,33 +2776,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -2246,17 +2864,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -2277,6 +2911,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -2307,9 +2955,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -2362,21 +3034,45 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "entry_point": {
@@ -2416,17 +3112,55 @@
           ]
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -2455,6 +3189,22 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -2471,9 +3221,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -2498,6 +3256,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -2505,9 +3279,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -2538,17 +3320,35 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "on_configuration_change": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "partition_by": {
@@ -2562,12 +3362,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -2607,11 +3415,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -2620,9 +3436,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -2656,6 +3480,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -2663,20 +3493,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -2718,6 +3578,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -2746,6 +3618,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -2762,12 +3640,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -2776,9 +3662,17 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "type": {
@@ -2789,6 +3683,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -2874,6 +3782,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
             },
             {
               "type": "null"
@@ -3058,9 +3977,17 @@
           ]
         },
         "transaction": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -3085,6 +4012,10 @@
           "items": {
             "$ref": "#/definitions/HookConfig"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -3122,6 +4053,31 @@
       },
       "additionalProperties": false
     },
+    "MacrosConfig": {
+      "type": "object",
+      "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "MacrosProperties": {
       "type": "object",
       "required": [
@@ -3136,6 +4092,16 @@
           "items": {
             "$ref": "#/definitions/MacrosArguments"
           }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MacrosConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "description": {
           "type": [
@@ -3172,10 +4138,18 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "group": {
@@ -3215,6 +4189,10 @@
         {
           "type": "integer",
           "format": "int32"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -3393,11 +4371,19 @@
           ]
         },
         "fill_nulls_with": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "filter": {
           "type": [
@@ -3416,10 +4402,18 @@
           ]
         },
         "hidden": {
-          "default": false,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": false,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "input_metric": {
@@ -3442,9 +4436,17 @@
           }
         },
         "join_to_timespine": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -3477,11 +4479,19 @@
           ]
         },
         "percentile": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "percentile_type": {
           "anyOf": [
@@ -3571,33 +4581,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -3635,17 +4685,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -3666,6 +4732,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -3711,10 +4791,18 @@
           ]
         },
         "concurrent_batches": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "contract": {
@@ -3728,15 +4816,47 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "create_notebook": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -3789,22 +4909,46 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -3846,10 +4990,18 @@
           ]
         },
         "full_refresh": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -3871,14 +5023,44 @@
           ]
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "http_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
             "string",
             "null"
@@ -3895,9 +5077,17 @@
           ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "incremental_predicates": {
@@ -3960,6 +5150,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -3976,9 +5182,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -4004,11 +5218,19 @@
           ]
         },
         "lookback": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "matched_condition": {
           "type": [
@@ -4023,6 +5245,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -4053,9 +5291,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -4087,17 +5333,35 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "on_configuration_change": {
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"
@@ -4135,12 +5399,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -4234,11 +5506,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -4247,9 +5527,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -4277,6 +5565,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -4293,20 +5587,50 @@
           }
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -4352,6 +5676,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "submission_method": {
@@ -4406,6 +5742,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -4422,12 +5764,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -4436,9 +5786,17 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "unique_key": {
@@ -4452,16 +5810,46 @@
           ]
         },
         "use_anonymous_sproc": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "user_folder_for_python": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4517,15 +5905,31 @@
           "$ref": "#/definitions/ConstraintType"
         },
         "warn_unenforced": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_unsupported": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4551,11 +5955,19 @@
       "type": "object",
       "properties": {
         "count": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "period": {
           "anyOf": [
@@ -4695,6 +6107,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -4743,7 +6166,15 @@
           ]
         },
         "enabled": {
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "group": {
           "type": [
@@ -4790,6 +6221,13 @@
         "unknown"
       ]
     },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
+      ]
+    },
     "OnSchemaChange": {
       "type": "string",
       "enum": [
@@ -4814,6 +6252,10 @@
         },
         {
           "$ref": "#/definitions/BigqueryPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -4836,15 +6278,31 @@
       "type": "object",
       "properties": {
         "columns": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "relation": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4869,9 +6327,17 @@
           ]
         },
         "unique": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4885,6 +6351,10 @@
         },
         {
           "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -4901,16 +6371,40 @@
       ],
       "properties": {
         "end": {
-          "type": "integer",
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "interval": {
-          "type": "integer",
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "start": {
-          "type": "integer",
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -4940,6 +6434,10 @@
               "$ref": "#/definitions/AnyValue"
             }
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -5027,9 +6525,17 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -5049,10 +6555,18 @@
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "export_as": {
@@ -5108,6 +6622,10 @@
         },
         {
           "$ref": "#/definitions/ScheduleConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -5149,7 +6667,7 @@
       ]
     },
     "SchemaRefreshInterval": {
-      "description": "Schema refresh interval: 'duration', 'duration', '1d', or 'never'",
+      "description": "Schema refresh interval: '30m', '2h', '1d', or 'never'",
       "type": "string"
     },
     "SeedConfig": {
@@ -5172,33 +6690,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -5220,17 +6778,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -5251,6 +6825,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -5290,9 +6878,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -5351,22 +6963,46 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -5388,9 +7024,17 @@
           ]
         },
         "full_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -5417,17 +7061,55 @@
           ]
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -5456,6 +7138,22 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -5472,9 +7170,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -5509,6 +7215,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -5516,9 +7238,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -5549,12 +7279,20 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partition_by": {
           "anyOf": [
@@ -5567,12 +7305,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -5632,10 +7378,18 @@
           ]
         },
         "quote_columns": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "quoting": {
@@ -5649,11 +7403,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -5662,9 +7424,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -5692,6 +7462,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -5699,20 +7475,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -5754,6 +7560,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -5783,6 +7601,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -5799,12 +7623,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -5813,9 +7645,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -5864,6 +7718,17 @@
         "name": {
           "type": "string"
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -5894,8 +7759,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotConfig": {
@@ -5918,33 +7783,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -5966,17 +7871,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -5997,6 +7918,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -6037,9 +7972,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -6098,22 +8057,46 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -6135,10 +8118,18 @@
           ]
         },
         "full_refresh": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -6175,17 +8166,55 @@
           ]
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -6209,16 +8238,40 @@
           ]
         },
         "invalidate_hard_deletes": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "jar_file_uri": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -6237,9 +8290,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -6274,6 +8335,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -6281,9 +8358,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -6314,12 +8399,20 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partition_by": {
           "anyOf": [
@@ -6332,12 +8425,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -6397,10 +8498,18 @@
           ]
         },
         "quote_columns": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "quoting": {
@@ -6414,11 +8523,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -6427,9 +8544,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -6457,6 +8582,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -6464,21 +8595,45 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "snapshot_meta_column_names": {
@@ -6489,6 +8644,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {
@@ -6527,6 +8688,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "strategy": {
@@ -6581,6 +8754,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -6603,12 +8782,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -6617,9 +8804,17 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "unique_key": {
@@ -6636,6 +8831,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -6726,6 +8935,17 @@
             "null"
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -6752,33 +8972,73 @@
           }
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -6800,17 +9060,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -6831,6 +9107,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -6861,9 +9151,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "databricks_compute": {
@@ -6900,22 +9214,46 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -6956,17 +9294,55 @@
           }
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -6995,6 +9371,22 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -7011,9 +9403,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -7050,6 +9450,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -7057,9 +9473,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -7090,12 +9514,20 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partition_by": {
           "anyOf": [
@@ -7108,12 +9540,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -7153,11 +9593,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -7166,9 +9614,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -7196,6 +9652,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema_origin": {
           "description": "Specifies where the schema metadata originates: 'remote' (default) or 'local'",
           "anyOf": [
@@ -7208,20 +9670,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -7261,6 +9753,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "sync": {
@@ -7303,6 +9807,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -7319,12 +9829,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -7333,9 +9851,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -7417,9 +9957,17 @@
       "enum": [
         "unsafe",
         "off",
-        "baseline",
         "strict",
+        "baseline",
         "on"
+      ]
+    },
+    "StaticAnalysisOffReason": {
+      "type": "string",
+      "enum": [
+        "configuredoff",
+        "unabletofetchschema",
+        "nodownstream"
       ]
     },
     "StoreFailuresAs": {
@@ -7440,6 +9988,10 @@
           "items": {
             "type": "string"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -7450,6 +10002,10 @@
         },
         {
           "$ref": "#/definitions/MetricPropertiesMetricInput"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -7458,7 +10014,7 @@
       "type": "object",
       "properties": {
         "schema_refresh_interval": {
-          "description": "How often to refresh the schema from the warehouse. Examples: \"duration\", \"duration\", \"1d\", \"never\"",
+          "description": "How often to refresh the schema from the warehouse. Examples: \"30m\", \"2h\", \"1d\", \"never\"",
           "anyOf": [
             {
               "$ref": "#/definitions/SchemaRefreshInterval"
@@ -7562,9 +10118,17 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -7645,9 +10209,17 @@
           "type": "string"
         },
         "time_ingestion_partitioning": {
-          "description": "When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp",
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "description": "When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp",
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -7684,33 +10256,73 @@
           }
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -7732,17 +10344,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -7763,6 +10391,20 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -7793,9 +10435,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "databricks_compute": {
@@ -7832,21 +10498,45 @@
           ]
         },
         "enable_list_inference": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "external_volume": {
@@ -7871,17 +10561,55 @@
           }
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "indexes": {
@@ -7910,6 +10638,22 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -7926,9 +10670,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -7953,6 +10705,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -7960,9 +10728,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -7993,12 +10769,20 @@
           ]
         },
         "notebook_template_id": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partition_by": {
           "anyOf": [
@@ -8011,12 +10795,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -8046,11 +10838,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -8059,9 +10859,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -8089,21 +10897,57 @@
             }
           ]
         },
-        "secure": {
+        "scheduler": {
           "type": [
-            "boolean",
+            "string",
             "null"
+          ]
+        },
+        "secure": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -8145,6 +10989,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -8173,6 +11029,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -8189,12 +11051,20 @@
           }
         },
         "timeout": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "tmp_relation_type": {
           "type": [
@@ -8203,9 +11073,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -8296,6 +11188,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "versions": {
           "anyOf": [
             {
@@ -8330,6 +11233,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "deprecation_date": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "v": {

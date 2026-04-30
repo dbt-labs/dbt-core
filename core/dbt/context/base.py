@@ -196,6 +196,24 @@ class Var:
             return self.get_missing_var(var_name)
 
 
+def _get_env_var(env: Mapping[str, str], var: str) -> tuple[Optional[str], bool]:
+    """Look up an environment variable, with case-insensitive fallback on Windows.
+
+    Returns (value, found_in_env) where found_in_env indicates whether the
+    variable was found in the environment (vs needing a default).
+    """
+    if var in env:
+        return env[var], True
+    if os.name == "nt":
+        # On Windows, env var names are case-insensitive at the OS level,
+        # but the cached env dict uses plain case-sensitive keys. Fall back
+        # to os.environ which preserves Windows' native case-insensitive lookup.
+        value = os.environ.get(var)
+        if value is not None:
+            return value, True
+    return None, False
+
+
 class BaseContext(metaclass=ContextMeta):
     # Set by ContextMeta
     _context_members_: Dict[str, Any]
@@ -325,9 +343,8 @@ class BaseContext(metaclass=ContextMeta):
         if var.startswith(SECRET_ENV_PREFIX):
             raise SecretEnvVarLocationError(var)
         env = get_invocation_context().env
-        if var in env:
-            return_value = env[var]
-        elif default is not None:
+        return_value, found_in_env = _get_env_var(env, var)
+        if return_value is None and default is not None:
             return_value = default
 
         if return_value is not None:
@@ -335,7 +352,7 @@ class BaseContext(metaclass=ContextMeta):
             # that so we can skip partial parsing.  Otherwise the file will be scheduled for
             # reparsing. If the default changes, the file will have been updated and therefore
             # will be scheduled for reparsing anyways.
-            self.env_vars[var] = return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+            self.env_vars[var] = return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
 
             return return_value
         else:
