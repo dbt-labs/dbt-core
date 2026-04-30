@@ -34,6 +34,7 @@ check-sdist = "echo '⚠️  Error: hatch must be run from the core/ directory, 
 skip-install = true
 dependencies = []
 
+
 [envs.ci.scripts]
 unit-tests = "echo '⚠️  Error: hatch must be run from the core/ directory, not the repo root.\n\nRun:\n  cd core && hatch run ci:unit-tests' && exit 1"
 code-quality = "echo '⚠️  Error: hatch must be run from the core/ directory, not the repo root.\n\nRun:\n  cd core && hatch run ci:code-quality' && exit 1"
