@@ -1,0 +1,6 @@
+kind: Features
+body: Git package version range support
+time: 2026-04-30T15:40:05.681281+02:00
+custom:
+    Author: kverburg
+    Issue: n/a
