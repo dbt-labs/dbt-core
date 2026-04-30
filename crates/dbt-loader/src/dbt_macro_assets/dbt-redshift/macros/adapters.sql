@@ -96,12 +96,24 @@
 
 
 {% macro redshift__create_schema(relation) -%}
-  {{ postgres__create_schema(relation) }}
+  {%- if adapter.has_feature("datasharing") -%}
+    {%- call statement('create_schema') -%}
+      create schema if not exists {{ relation.without_identifier() }}
+    {%- endcall -%}
+  {%- else -%}
+    {{ postgres__create_schema(relation) }}
+  {%- endif -%}
 {% endmacro %}
 
 
 {% macro redshift__drop_schema(relation) -%}
-  {{ postgres__drop_schema(relation) }}
+  {%- if adapter.has_feature("datasharing") -%}
+    {%- call statement('drop_schema') -%}
+      drop schema if exists {{ relation.without_identifier() }} cascade
+    {%- endcall -%}
+  {%- else -%}
+    {{ postgres__drop_schema(relation) }}
+  {%- endif -%}
 {% endmacro %}
 
 {% macro redshift__get_columns_in_relation(relation) -%}
