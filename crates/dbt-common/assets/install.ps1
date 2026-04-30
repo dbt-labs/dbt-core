@@ -4,7 +4,7 @@ param(
     [string]$Version,
     [string]$Target,
     [string]$To = "$env:USERPROFILE\.local\bin",
-    [ValidateSet('dbt', 'dbt-lsp', 'all')]
+    [ValidateSet('dbt', 'all')]
     [string]$Package = 'dbt'
 )
 
@@ -13,7 +13,7 @@ param(
 Install the dbt CLI Binary for Windows.
 
 .DESCRIPTION
-This script installs the dbt CLI Binary and/or dbt-lsp. It allows specifying the version, target platform, and installation location.
+This script installs the dbt CLI Binary. It allows specifying the version, target platform, and installation location.
 
 .PARAMETER Update
 Updates to latest or specified version.
@@ -28,7 +28,7 @@ Install the release compiled for the specified target OS.
 Location to install the binary. Default is $env:USERPROFILE\.local\bin.
 
 .PARAMETER Package
-Package to install: 'dbt', 'dbt-lsp', or 'all'. Default is 'dbt'.
+Package to install: 'dbt' or 'all'. Default is 'dbt'. The 'all' option is retained for compatibility and installs dbt.
 
 .EXAMPLE
 .\install.ps1 -Update
@@ -36,10 +36,6 @@ Package to install: 'dbt', 'dbt-lsp', or 'all'. Default is 'dbt'.
 .EXAMPLE
 .\install.ps1 -Version "1.2.3" -Target "Windows" -To "C:\MyFolder"
 
-.EXAMPLE
-.\install.ps1 -Package "dbt-lsp" -Version "1.2.3"
-
-.EXAMPLE
 .\install.ps1 -Package "all" -Update
 #>
 
@@ -222,9 +218,6 @@ function Get-PackageUrl {
     switch ($PackageName) {
         'dbt' {
             return "https://$script:HOSTNAME/fs/cli/fs-v$Version-$Target.zip"
-        }
-        'dbt-lsp' {
-            return "https://$script:HOSTNAME/fs/lsp/fs-lsp-v$Version-$Target.zip"
         }
         default {
             Write-ErrorAndExit "Invalid package name: $PackageName"
@@ -571,7 +564,7 @@ function Install-Package {
         [string]$Destination,
 
         [Parameter(Mandatory=$true)]
-        [ValidateSet('dbt', 'dbt-lsp')]
+        [ValidateSet('dbt')]
         [string]$PackageName,
 
         [switch]$Update
@@ -706,7 +699,7 @@ function Install-SelectedPackages {
     
     switch ($PackageSelection) {
         'all' {
-            $packagesToInstall = @('dbt', 'dbt-lsp')
+            $packagesToInstall = @('dbt')
         }
         default {
             $packagesToInstall = @($PackageSelection)
