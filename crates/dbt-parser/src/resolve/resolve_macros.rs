@@ -446,8 +446,9 @@ pub fn apply_macro_patches(
                             emit_warn_log_message(
                                 ErrorCode::ValidateMacroArgs,
                                 format!(
-                                    "Macro \"{macro_name}\": documented argument \"{}\" not found \
+                                    "{}: Macro \"{macro_name}\": documented argument \"{}\" not found \
                                      in macro definition",
+                                    props_entry.relative_path.display(),
                                     yml_arg.name
                                 ),
                                 io.status_reporter.as_ref(),
@@ -462,10 +463,11 @@ pub fn apply_macro_patches(
                                 emit_warn_log_message(
                                     ErrorCode::ValidateMacroArgs,
                                     format!(
-                                        "Macro \"{macro_name}\": argument \"{}\" has unsupported \
+                                        "{}: Macro \"{macro_name}\": argument \"{}\" has unsupported \
                                          type \"{type_str}\". Supported types are: string, str, \
                                          boolean, bool, integer, int, float, any, relation, \
                                          column, list[T], dict[K,V], optional[T], T1|T2|...",
+                                        props_entry.relative_path.display(),
                                         yml_arg.name
                                     ),
                                     io.status_reporter.as_ref(),
