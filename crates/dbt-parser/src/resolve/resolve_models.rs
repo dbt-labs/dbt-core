@@ -19,6 +19,7 @@ use crate::utils::get_unique_id;
 use crate::utils::update_node_relation_components;
 
 use dbt_adapter_core::AdapterType;
+use dbt_common::CodeLocationWithFile;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -65,6 +66,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
+use dbt_schemas::schemas::serde::StringOrInteger;
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
@@ -83,6 +85,58 @@ use super::validate_models::validate_model;
 #[derive(serde::Deserialize)]
 struct DbtProjectModelsOnly {
     models: Option<dbt_schemas::schemas::project::ProjectModelConfig>,
+}
+
+/// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
+/// `ref('pkg', 'name', version=N)` from a constraint `to:` string (also accepts `v=` alias).
+/// Returns `(package, name, version)`. Mirrors dbt-core's `statically_parse_ref_or_source`.
+fn parse_ref_from_constraint(
+    to: &str,
+) -> Option<(Option<String>, String, Option<StringOrInteger>)> {
+    let s = to.trim();
+    if !s.starts_with("ref(") || !s.ends_with(')') {
+        return None;
+    }
+    let inner = s[4..s.len() - 1].trim();
+
+    let mut positional: Vec<&str> = Vec::new();
+    let mut version: Option<StringOrInteger> = None;
+
+    for part in inner.split(',') {
+        let part = part.trim();
+        if let Some(v) = part
+            .strip_prefix("version=")
+            .or_else(|| part.strip_prefix("v="))
+        {
+            let v = v.trim().trim_matches(|c| c == '\'' || c == '"');
+            version = Some(if let Ok(n) = v.parse::<i64>() {
+                StringOrInteger::Integer(n)
+            } else {
+                StringOrInteger::String(v.to_string())
+            });
+        } else {
+            positional.push(part.trim_matches(|c| c == '\'' || c == '"'));
+        }
+    }
+
+    match positional.as_slice() {
+        [name] => Some((None, (*name).to_string(), version)),
+        [pkg, name] => Some((Some((*pkg).to_string()), (*name).to_string(), version)),
+        _ => None,
+    }
+}
+
+/// Parses `source('source_name', 'table_name')` from a constraint `to:` string.
+fn parse_source_from_constraint(to: &str) -> Option<(String, String)> {
+    let s = to.trim();
+    if !s.starts_with("source(") || !s.ends_with(')') {
+        return None;
+    }
+    let inner = s[7..s.len() - 1].trim();
+    let mut parts = inner.splitn(2, ',');
+    let src = parts.next()?.trim().trim_matches(|c| c == '\'' || c == '"');
+    let tbl = parts.next()?.trim().trim_matches(|c| c == '\'' || c == '"');
+    Some((src.to_string(), tbl.to_string()))
 }
 
 /// Build an *unrendered* project config tree from the raw `dbt_project.yml`.
@@ -898,6 +952,43 @@ pub async fn resolve_models(
                         version: version.clone().map(|v| v.into()),
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
+                    .chain(
+                        model_constraints
+                            .iter()
+                            .filter_map(|c| c.to.as_ref())
+                            .filter_map(|spanned| {
+                                parse_ref_from_constraint(spanned).map(|(pkg, name, version)| {
+                                    DbtRef {
+                                        name,
+                                        package: pkg,
+                                        version,
+                                        location: Some(CodeLocationWithFile::from(
+                                            spanned.span().clone(),
+                                        )),
+                                    }
+                                })
+                            }),
+                    )
+                    .chain(
+                        properties
+                            .columns
+                            .iter()
+                            .flatten()
+                            .flat_map(|col| col.constraints.iter().flatten())
+                            .filter_map(|c| c.to.as_ref())
+                            .filter_map(|spanned| {
+                                parse_ref_from_constraint(spanned).map(|(pkg, name, version)| {
+                                    DbtRef {
+                                        name,
+                                        package: pkg,
+                                        version,
+                                        location: Some(CodeLocationWithFile::from(
+                                            spanned.span().clone(),
+                                        )),
+                                    }
+                                })
+                            }),
+                    )
                     .collect(),
                 functions: sql_file_info
                     .functions
@@ -916,6 +1007,39 @@ pub async fn resolve_models(
                         source: vec![source.to_owned(), table.to_owned()],
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
+                    .chain(
+                        model_constraints
+                            .iter()
+                            .filter_map(|c| c.to.as_ref())
+                            .filter_map(|spanned| {
+                                parse_source_from_constraint(spanned).map(|(src, tbl)| {
+                                    DbtSourceWrapper {
+                                        source: vec![src, tbl],
+                                        location: Some(CodeLocationWithFile::from(
+                                            spanned.span().clone(),
+                                        )),
+                                    }
+                                })
+                            }),
+                    )
+                    .chain(
+                        properties
+                            .columns
+                            .iter()
+                            .flatten()
+                            .flat_map(|col| col.constraints.iter().flatten())
+                            .filter_map(|c| c.to.as_ref())
+                            .filter_map(|spanned| {
+                                parse_source_from_constraint(spanned).map(|(src, tbl)| {
+                                    DbtSourceWrapper {
+                                        source: vec![src, tbl],
+                                        location: Some(CodeLocationWithFile::from(
+                                            spanned.span().clone(),
+                                        )),
+                                    }
+                                })
+                            }),
+                    )
                     .collect(),
                 metrics,
                 materialized,
@@ -1486,4 +1610,139 @@ fn is_python_model(asset: &dbt_schemas::state::DbtAsset) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext == "py")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_ref_from_constraint, parse_source_from_constraint};
+    use dbt_schemas::schemas::serde::StringOrInteger;
+
+    #[test]
+    fn test_parse_ref_single_arg() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model')"),
+            Some((None, "my_model".to_string(), None))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_double_quoted() {
+        assert_eq!(
+            parse_ref_from_constraint(r#"ref("my_model")"#),
+            Some((None, "my_model".to_string(), None))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_two_args() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_pkg', 'my_model')"),
+            Some((Some("my_pkg".to_string()), "my_model".to_string(), None))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_with_whitespace() {
+        assert_eq!(
+            parse_ref_from_constraint("  ref( 'my_model' )  "),
+            Some((None, "my_model".to_string(), None))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_version_kwarg_integer() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model', version=2)"),
+            Some((
+                None,
+                "my_model".to_string(),
+                Some(StringOrInteger::Integer(2))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_v_kwarg_alias() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model', v=1)"),
+            Some((
+                None,
+                "my_model".to_string(),
+                Some(StringOrInteger::Integer(1))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_version_kwarg_string() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_model', version='1.0')"),
+            Some((
+                None,
+                "my_model".to_string(),
+                Some(StringOrInteger::String("1.0".to_string()))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_two_args_with_version() {
+        assert_eq!(
+            parse_ref_from_constraint("ref('my_pkg', 'my_model', version=3)"),
+            Some((
+                Some("my_pkg".to_string()),
+                "my_model".to_string(),
+                Some(StringOrInteger::Integer(3))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_ref_not_a_ref() {
+        assert_eq!(parse_ref_from_constraint("some_schema.some_table"), None);
+    }
+
+    #[test]
+    fn test_parse_ref_source_call_not_a_ref() {
+        assert_eq!(parse_ref_from_constraint("source('src', 'tbl')"), None);
+    }
+
+    #[test]
+    fn test_parse_source_basic() {
+        assert_eq!(
+            parse_source_from_constraint("source('my_source', 'my_table')"),
+            Some(("my_source".to_string(), "my_table".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_source_double_quoted() {
+        assert_eq!(
+            parse_source_from_constraint(r#"source("my_source", "my_table")"#),
+            Some(("my_source".to_string(), "my_table".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_source_with_whitespace() {
+        assert_eq!(
+            parse_source_from_constraint("  source( 'my_source' , 'my_table' )  "),
+            Some(("my_source".to_string(), "my_table".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_source_not_a_source() {
+        assert_eq!(parse_source_from_constraint("some_schema.some_table"), None);
+    }
+
+    #[test]
+    fn test_parse_source_ref_call_not_a_source() {
+        assert_eq!(parse_source_from_constraint("ref('my_model')"), None);
+    }
+
+    #[test]
+    fn test_parse_source_missing_second_arg() {
+        assert_eq!(parse_source_from_constraint("source('my_source')"), None);
+    }
 }

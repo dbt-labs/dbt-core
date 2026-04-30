@@ -18,7 +18,7 @@ use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfi
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::string_or_array;
 use dbt_common::io_args::StaticAnalysisOffReason;
-use dbt_yaml::DbtSchema;
+use dbt_yaml::{DbtSchema, Spanned};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -32,7 +32,7 @@ pub struct ModelConstraint {
     pub name: Option<String>,
     // Only ForeignKey constraints accept: a relation input
     // ref(), source() etc
-    pub to: Option<String>,
+    pub to: Option<Spanned<String>>,
     /// Only ForeignKey constraints accept: a list columns in that table
     /// containing the corresponding primary or unique key.
     #[serde(default, deserialize_with = "string_or_array")]
@@ -265,7 +265,10 @@ to_columns: id
         let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(constraint.columns, Some(vec!["order_id".to_string()]));
         assert_eq!(constraint.to_columns, Some(vec!["id".to_string()]));
-        assert_eq!(constraint.to, Some("ref('orders')".to_string()));
+        assert_eq!(
+            constraint.to.as_ref().map(|s| s.as_str()),
+            Some("ref('orders')")
+        );
         assert_eq!(constraint.type_, ConstraintType::ForeignKey);
     }
 
@@ -308,5 +311,25 @@ warn_unenforced: false
         assert_eq!(constraint.columns, Some(vec!["order_id".to_string()]));
         assert_eq!(constraint.warn_unsupported, Some(true));
         assert_eq!(constraint.warn_unenforced, Some(false));
+    }
+
+    #[test]
+    fn test_model_constraint_to_span_ref_captures_line() {
+        let yaml = "type: foreign_key\nto: ref('primary_model')\nto_columns: [id]\n";
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
+        let spanned = constraint.to.as_ref().expect("to should be Some");
+        assert_eq!(spanned.as_str(), "ref('primary_model')");
+        assert!(spanned.span().is_valid(), "span should be valid");
+        assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
+    }
+
+    #[test]
+    fn test_model_constraint_to_span_source_captures_line() {
+        let yaml = "type: foreign_key\nto: source('raw', 'users')\nto_columns: [id]\n";
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
+        let spanned = constraint.to.as_ref().expect("to should be Some");
+        assert_eq!(spanned.as_str(), "source('raw', 'users')");
+        assert!(spanned.span().is_valid(), "span should be valid");
+        assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
     }
 }

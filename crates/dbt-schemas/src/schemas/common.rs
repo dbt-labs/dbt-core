@@ -756,7 +756,7 @@ pub struct Constraint {
     pub name: Option<String>,
     // Only ForeignKey constraints accept: a relation input
     // ref(), source() etc
-    pub to: Option<String>,
+    pub to: Option<Spanned<String>>,
     /// Only ForeignKey constraints accept: a list columns in that table
     /// containing the corresponding primary or unique key.
     pub to_columns: Option<Vec<String>>,
@@ -2062,5 +2062,25 @@ period: hour
         } else {
             panic!("Expected BigqueryPartitionConfig variant");
         }
+    }
+
+    #[test]
+    fn test_constraint_to_span_ref_captures_line() {
+        let yaml = "type: foreign_key\nto: ref('orders')\nto_columns: [id]\n";
+        let constraint: Constraint = dbt_yaml::from_str(yaml).unwrap();
+        let spanned = constraint.to.as_ref().expect("to should be Some");
+        assert_eq!(spanned.as_str(), "ref('orders')");
+        assert!(spanned.span().is_valid(), "span should be valid");
+        assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
+    }
+
+    #[test]
+    fn test_constraint_to_span_source_captures_line() {
+        let yaml = "type: foreign_key\nto: source('raw', 'orders')\nto_columns: [id]\n";
+        let constraint: Constraint = dbt_yaml::from_str(yaml).unwrap();
+        let spanned = constraint.to.as_ref().expect("to should be Some");
+        assert_eq!(spanned.as_str(), "source('raw', 'orders')");
+        assert!(spanned.span().is_valid(), "span should be valid");
+        assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
     }
 }

@@ -6,6 +6,7 @@
 //! Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py
 
 use dbt_schemas::schemas::{common::ConstraintType, properties::ModelConstraint};
+use dbt_yaml::Spanned;
 use serde::{Deserialize, Serialize};
 
 /// Database constraint representation with validation and DDL rendering capabilities
@@ -230,7 +231,7 @@ impl TryFrom<&ModelConstraint> for TypedConstraint {
                     TypedConstraint::ForeignKey {
                         name: constraint.name.clone(),
                         columns: columns.clone(),
-                        to: constraint.to.clone(),
+                        to: constraint.to.as_deref().map(|s| s.to_string()),
                         to_columns: constraint.to_columns.clone(),
                         expression: constraint.expression.clone(),
                     }
@@ -312,7 +313,7 @@ impl From<&TypedConstraint> for ModelConstraint {
                 name: name.clone(),
                 expression: expression.clone(),
                 columns: Some(columns.clone()),
-                to: to.clone(),
+                to: to.clone().map(Spanned::new),
                 to_columns: to_columns.clone(),
                 warn_unsupported: None,
                 warn_unenforced: None,
@@ -461,7 +462,7 @@ fn parse_constraint_from_column(
             Ok(TypedConstraint::ForeignKey {
                 name: constraint.name.clone(),
                 columns: vec![column_name],
-                to: constraint.to.clone(),
+                to: constraint.to.as_deref().map(|s| s.to_string()),
                 to_columns: constraint.to_columns.clone(),
                 expression: constraint.expression.clone(),
             })
@@ -746,7 +747,7 @@ mod tests {
             name: Some("fk_user_org".to_string()),
             expression: None,
             columns: Some(vec!["org_id".to_string()]),
-            to: Some("organizations".to_string()),
+            to: Some(Spanned::new("organizations".to_string())),
             to_columns: Some(vec!["id".to_string()]),
             warn_unsupported: None,
             warn_unenforced: None,
