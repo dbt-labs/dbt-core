@@ -183,7 +183,7 @@ class RunOperationTask(ConfiguredTask):
                 )
 
         if sql_mode:
-            unique_id = f"sqloperation.{package_name}.{operation_name}"
+            unique_id = f"{NodeType.SqlOperation}.{package_name}.{operation_name}"
             fqn = unique_id.split(".")
         else:
             macro = (
