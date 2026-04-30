@@ -737,15 +737,10 @@ pub fn collect_model_version_info(
 
                 let versioned_name = format!("{}_v{}", model.name, version);
 
-                let defined_in = v.__additional_properties__.get("defined_in").and_then(|d| {
-                    d.as_str().map(|s| {
-                        if s.ends_with(".sql") {
-                            s.strip_suffix(".sql").unwrap().to_string()
-                        } else {
-                            s.to_string()
-                        }
-                    })
-                });
+                let defined_in = v
+                    .defined_in
+                    .as_deref()
+                    .map(|s| s.strip_suffix(".sql").unwrap_or(s).to_string());
 
                 let version_config = v.config.clone();
 

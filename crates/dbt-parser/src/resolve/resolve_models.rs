@@ -774,7 +774,20 @@ pub async fn resolve_models(
             }
         }
 
-        let model_constraints = properties.constraints.clone().unwrap_or_default();
+        let model_constraints = if let Some(versions) = &properties.versions {
+            versions
+                .iter()
+                .find(|v| {
+                    maybe_version
+                        .as_ref()
+                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
+                })
+                .and_then(|v| v.constraints.as_ref().filter(|c| !c.is_empty()).cloned())
+                .or_else(|| properties.constraints.clone())
+                .unwrap_or_default()
+        } else {
+            properties.constraints.clone().unwrap_or_default()
+        };
 
         // Iterate over metrics and construct the dependencies
         let mut metrics = Vec::new();

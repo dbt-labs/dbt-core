@@ -1239,12 +1239,7 @@ fn collect_versioned_model_tests(
 
         // Override with version-specific tests if they exist
         // Base model level tests are exclusive or with versioned model level tests
-        if let Some(tests) = version
-            .__additional_properties__
-            .get("tests")
-            .or_else(|| version.__additional_properties__.get("data_tests"))
-            && let Ok(version_tests) = dbt_yaml::from_value::<Vec<DataTests>>(tests.clone())
-        {
+        if let Some(version_tests) = version.data_tests.clone() {
             version_config.model_tests = Some(version_tests);
         }
 
