@@ -77,6 +77,26 @@ def list_tags(cwd):
     return tags
 
 
+def list_remote_tags(repo, cwd):
+    out, err = run_cmd(cwd, ["git", "ls-remote", "--tags", repo], env={"LC_ALL": "C"})
+    tags = []
+    for line in out.decode("utf-8").splitlines():
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        ref = parts[1]
+        if not ref.startswith("refs/tags/"):
+            continue
+        tag = ref[len("refs/tags/") :]
+        if tag.endswith("^{}"):
+            tag = tag[:-3]
+        if tag not in tags:
+            tags.append(tag)
+    return tags
+
+
 def _checkout(cwd, repo, revision):
     fire_event(GitProgressCheckoutRevision(revision=revision))
 
