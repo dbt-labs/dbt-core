@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 109] = [
+); 114] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -417,12 +417,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "bae99943762c0a0ee9bc615b49aff22668ec5cb3d4f3447ebb738abda7d0f0e5",
     ),
     (
+        ("spark", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.1.2"),
+        "c67f0438c19ad463bc9eb0792f504fb14105e6470cde1974651ea30e08abfacb",
+    ),
+    (
         ("spark", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "347b18c1cc2fb82a22e3b51cb5d8f1165991cfc5eccf147f1baea3e1ddb7fb67",
     ),
     (
         ("spark", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.1"),
         "48298834a061ab3809189a6bbab828b502e0fcc3a3a836e90a27e3ed62a7c044",
+    ),
+    (
+        ("spark", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.2"),
+        "70a74705e224a1cd777fbd8453ee3ae631ff7c68bcbbd2a1282cacf49f8e29e6",
     ),
     (
         ("spark", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.1.0"),
@@ -433,6 +441,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "7212f821c41131c9bd229875f3546e6a9da26f4a855faf18c8788a447de5b2fa",
     ),
     (
+        ("spark", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.1.2"),
+        "b75b2da9fad45d4762be3df198d647fa5cb268fe9197a0a5d6b8be4e9b429235",
+    ),
+    (
         ("spark", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "3712e4d8dd9938c22e070f66bafb7757e67ce8a29c13de57bf17c214013a13dc",
     ),
@@ -441,11 +453,19 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "09f3477242f0a1741954567b39e7bad1493e89b6c82b7f28e73ca2a88645745e",
     ),
     (
+        ("spark", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.1.2"),
+        "396d683d0db0dcd3f8a4eb72981663d32ed45e7d191b4db9f72a0c8615c65897",
+    ),
+    (
         ("spark", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "ee8d81104889a3e7a0324e108bc41a0a38e724806b92136e2c38f96e5ee7ca93",
     ),
     (
         ("spark", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.1"),
         "7530ed9212418205bfa5196b40541ccff8e83137852d2b3c732873abdea9e747",
+    ),
+    (
+        ("spark", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.2"),
+        "2c8185419f355e233fb77b68221bde0b361a5efe9d4bdb14198c56eb1c81aa07",
     ),
 ];

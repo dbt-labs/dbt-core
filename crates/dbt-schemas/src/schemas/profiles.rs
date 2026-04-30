@@ -962,12 +962,16 @@ pub struct DuckDbConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
-#[serde(rename_all = "snake_case")]
 pub enum SparkMethod {
-    Thrift,
-    Http,
+    #[serde(rename = "thrift")]
+    ThriftBinary,
+    #[serde(rename = "http")]
+    ThriftHttp,
+    #[serde(rename = "livy")]
     Livy,
-    // TODO: HTTP, Spark Connect, EMR StartJob, Session (?)
+    #[serde(rename = "spark-connect")]
+    SparkConnect,
+    // TODO: EMR StartJob (?)
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
@@ -987,6 +991,8 @@ pub enum SparkAuth {
     SaslPlain,
     #[serde(rename = "BASIC")]
     Basic,
+    #[serde(rename = "TOKEN")]
+    Token,
     #[serde(rename = "AWS_SIGV4")]
     AwsSigV4,
 }
@@ -1002,6 +1008,7 @@ impl Display for SparkAuth {
             Self::SaslPlain => write!(f, "PLAIN"),
             Self::Basic => write!(f, "BASIC"),
             Self::AwsSigV4 => write!(f, "AWS_SIGV4"),
+            Self::Token => write!(f, "TOKEN"),
         }
     }
 }
@@ -1018,6 +1025,7 @@ impl std::str::FromStr for SparkAuth {
             "NOSASL" => Ok(Self::NoSasl),
             "PLAIN" => Ok(Self::SaslPlain),
             "BASIC" => Ok(Self::Basic),
+            "TOKEN" => Ok(Self::Token),
             "AWS_SIGV4" => Ok(Self::AwsSigV4),
             _ => Err(format!("Invalid Spark auth mode: {s}")),
         }
@@ -1042,6 +1050,8 @@ pub struct SparkDbConfig {
     pub port: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "token")]
+    pub password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kerberos_service_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1304,6 +1314,7 @@ pub struct SparkTargetEnv {
     pub host: String,
     pub port: u16,
     pub user: String,
+    pub password: String,
     pub auth: SparkAuth,
     pub use_ssl: bool,
     pub kerberos_service_name: String,
@@ -1642,6 +1653,7 @@ impl TryFrom<DbConfig> for TargetContext {
                 host: config.host.ok_or_else(|| missing("host"))?,
                 port: config.port.unwrap_or(10000),
                 user: config.user.unwrap_or_default(),
+                password: config.password.unwrap_or_default(),
 
                 kerberos_service_name: config.kerberos_service_name.unwrap_or_default(),
                 use_ssl: config.use_ssl.unwrap_or(false),

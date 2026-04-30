@@ -8,6 +8,7 @@ pub mod transport_api {
     pub const THRIFT_BINARY: &str = "thrift+binary";
     pub const THRIFT_HTTP: &str = "thrift+http";
     pub const LIVY: &str = "livy";
+    pub const CONNECT: &str = "connect";
 }
 
 pub const AUTH_TYPE: &str = "spark.auth_type";
@@ -21,6 +22,10 @@ pub mod auth_type {
     // Livy
     pub const BASIC: &str = "basic";
     pub const AWS_SIGV4: &str = "aws_sigv4";
+
+    // Spark Connect
+    pub const NONE: &str = "none";
+    pub const TOKEN: &str = "token";
 }
 
 pub const USERNAME: &str = "username";

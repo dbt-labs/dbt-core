@@ -47,6 +47,13 @@ enum SparkAuthIR<'a> {
         session_ttl: Option<String>,
         session_params: HashMap<&'a str, String>,
     },
+    Connect {
+        host: &'a str,
+        port: Option<u64>,
+        auth_username: &'a str,
+        auth_token: &'a str,
+        session_params: HashMap<&'a str, String>,
+    },
 }
 
 fn apply_session_params(
@@ -122,6 +129,31 @@ impl<'a> SparkAuthIR<'a> {
                 if let Some(ttl) = session_ttl {
                     builder.with_named_option(spark::livy::SESSION_TTL, ttl)?;
                 }
+
+                apply_session_params(&session_params, &mut builder)?;
+            }
+
+            SparkAuthIR::Connect {
+                host,
+                port,
+                auth_username,
+                auth_token,
+                session_params,
+            } => {
+                builder.with_named_option(spark::TRANSPORT_API, spark::transport_api::CONNECT)?;
+
+                builder.with_named_option(spark::HOST, host)?;
+                if let Some(port) = port {
+                    builder.with_named_option(spark::PORT, port.to_string())?;
+                }
+
+                if auth_token.is_empty() {
+                    builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::NONE)?;
+                } else {
+                    builder.with_named_option(spark::AUTH_TYPE, spark::auth_type::TOKEN)?;
+                    builder.with_named_option(spark::PASSWORD, auth_token)?;
+                };
+                builder.with_named_option(spark::USERNAME, auth_username)?;
 
                 apply_session_params(&session_params, &mut builder)?;
             }
@@ -271,6 +303,26 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthErro
                 session_params,
             }
         }
+        "spark-connect" | "sc" | "connect" => SparkAuthIR::Connect {
+            host,
+            port,
+            session_params,
+            auth_username: config
+                .get_str("user")
+                .ok_or_else(|| AuthError::config("'user' is required for Spark Connect"))?,
+            auth_token: {
+                match auth {
+                    None | Some("NONE") | Some("PLAIN") => Ok(""),
+                    Some("TOKEN") => config
+                        .get_str("password")
+                        .or_else(|| config.get_str("token"))
+                        .ok_or_else(|| {
+                            AuthError::config("'token' or 'password' required when auth is 'TOKEN'")
+                        }),
+                    Some(_) => Err(AuthError::config("invalid 'auth' for Spark Connect")),
+                }
+            }?,
+        },
         _ => return Err(AuthError::config("unsupported Spark method")),
     };
 
@@ -417,6 +469,44 @@ mod tests {
             other_option_value(&builder, spark::livy::SESSION_TTL),
             Some("1h")
         );
+    }
+
+    #[test]
+    fn connect_auth_ok() {
+        let cases = [
+            ("NONE", spark::auth_type::NONE, [].as_slice()),
+            (
+                "TOKEN",
+                spark::auth_type::TOKEN,
+                [("password", spark::PASSWORD, "mypass")].as_slice(),
+            ),
+        ];
+
+        for (auth, option, extra_keys) in cases {
+            let mut config = Mapping::from_iter([
+                ("host".into(), "myhost".into()),
+                ("method".into(), "spark-connect".into()),
+                ("auth".into(), auth.into()),
+                ("user".into(), "myuser".into()),
+            ]);
+            for (key, _, value) in extra_keys {
+                config.insert((*key).into(), (*value).into());
+            }
+
+            let builder = SparkAuth {}
+                .configure(&AdapterConfig::new(config))
+                .expect("configure")
+                .builder;
+
+            assert_eq!(other_option_value(&builder, spark::AUTH_TYPE), Some(option));
+            assert_eq!(
+                other_option_value(&builder, spark::USERNAME),
+                Some("myuser")
+            );
+            for (_, driver_key, value) in extra_keys {
+                assert_eq!(other_option_value(&builder, driver_key), Some(*value));
+            }
+        }
     }
 
     #[test]
