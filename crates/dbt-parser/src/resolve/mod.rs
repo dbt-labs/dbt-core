@@ -40,3 +40,5 @@ pub(crate) mod resolve_utils;
 pub(crate) mod validate_metrics;
 /// Functions for validating models
 pub(crate) mod validate_models;
+/// Utilities for pre-processing raw `yaml::Value` before Jinja rendering
+pub(crate) mod yaml_field_utils;

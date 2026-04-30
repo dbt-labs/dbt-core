@@ -10,6 +10,7 @@ use crate::renderer::{
 };
 use crate::resolve::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
     RelationComponents, get_node_fqn, get_original_file_path, update_node_relation_components,
@@ -147,8 +148,18 @@ pub async fn resolve_snapshots(
     for (snapshot_name, mpe) in snapshot_properties.iter_mut() {
         // if mpe.schema_value
         if !mpe.schema_value.is_null() {
-            let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
-            let snapshot: SnapshotProperties = into_typed_with_jinja(
+            let mut schema_value =
+                std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
+            // `description:` is documentation text and may contain Jinja-like
+            // doc snippets the renderer cannot evaluate at parse time
+            // (e.g. `{% raw %}{{ ref('x') }}{% endraw %}`). dbt-core never
+            // renders descriptions; detach before `into_typed_with_jinja`
+            // so the renderer doesn't see the string, then reattach the raw
+            // value to the typed struct. Other fields (config, meta, …)
+            // still go through Jinja as before.
+            let raw_description =
+                yaml_field_utils::detach_field_from_mapping(&mut schema_value, "description");
+            let mut snapshot: SnapshotProperties = into_typed_with_jinja(
                 &arg.io,
                 schema_value,
                 false,
@@ -158,6 +169,11 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
                 true,
             )?;
+            if let Some(desc_value) = raw_description
+                && let Some(s) = desc_value.as_str()
+            {
+                snapshot.description = Some(s.to_string());
+            }
 
             if let Some(relation) = &snapshot.relation {
                 // check if the relation matches the pattern of ref(...)

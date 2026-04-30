@@ -6,7 +6,7 @@ use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::serde::value_from_file;
 use dbt_schemas::schemas::{
     manifest::DbtSelector,
-    selectors::{SelectorEntry, SelectorFile},
+    selectors::{SelectorDefaultSpec, SelectorEntry, SelectorFile},
 };
 use dbt_selector_parser::{ResolvedSelector, SelectorParser};
 use dbt_yaml::Value as YmlValue;
@@ -21,7 +21,7 @@ pub fn resolve_selectors_from_yaml(
     jinja_env: &JinjaEnv,
 ) -> FsResult<HashMap<String, SelectorEntry>> {
     match load_and_parse_selectors_file(arg, root_package_name, jinja_env)? {
-        Some(yaml) => resolve_selector_definitions(yaml, arg),
+        Some(yaml) => resolve_selector_definitions(yaml, arg, jinja_env, root_package_name),
         None => Ok(HashMap::new()), // No selectors.yml file found
     }
 }
@@ -187,6 +187,8 @@ fn load_and_parse_selectors_file(
 fn resolve_selector_definitions(
     yaml: SelectorFile,
     arg: &ResolveArgs,
+    jinja_env: &JinjaEnv,
+    root_package_name: &str,
 ) -> FsResult<HashMap<String, SelectorEntry>> {
     let defs = yaml
         .selectors
@@ -196,19 +198,71 @@ fn resolve_selector_definitions(
     let parser = SelectorParser::new(defs, &arg.io);
     let mut resolved_selectors = HashMap::new();
 
+    // The selector `default:` expression is only consulted when the user
+    // did not supply a CLI selection. Skipping Jinja rendering in that
+    // case mirrors dbt-core and keeps unused selectors from failing a
+    // run with broken Jinja (see `SelectorDefinition::default` docs).
+    let default_needed = arg.selector.is_none() && arg.select.is_none() && arg.exclude.is_none();
+
     for def in yaml.selectors {
         let resolved = parser.parse_definition(&def.definition)?;
+        let is_default = match def.default.0 {
+            None => false,
+            Some(SelectorDefaultSpec::Bool(b)) => b,
+            Some(SelectorDefaultSpec::Template(tmpl)) => {
+                if default_needed {
+                    render_default_template(&tmpl, jinja_env, root_package_name)?
+                } else {
+                    false
+                }
+            }
+        };
         resolved_selectors.insert(
             def.name.clone(),
             SelectorEntry {
                 include: resolved,
-                is_default: def.default.unwrap_or(false),
+                is_default,
                 description: def.description,
             },
         );
     }
 
     Ok(resolved_selectors)
+}
+
+/// Render a selector `default:` Jinja template against the resolve
+/// context and coerce the result to a bool using dbt's `as_bool`-style
+/// truthiness rules.
+fn render_default_template(
+    template: &str,
+    jinja_env: &JinjaEnv,
+    root_package_name: &str,
+) -> FsResult<bool> {
+    let namespace_keys: Vec<String> = jinja_env
+        .env
+        .get_macro_namespace_registry()
+        .map(|r| r.keys().map(|k| k.to_string()).collect())
+        .unwrap_or_default();
+    let context = build_resolve_context(
+        root_package_name,
+        root_package_name,
+        &BTreeMap::new(),
+        DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
+        namespace_keys,
+    );
+    let rendered = jinja_env.render_str(template, &context, &[]).map_err(|e| {
+        fs_err!(
+            ErrorCode::SelectorError,
+            "Error parsing selectors.yml: failed to evaluate `default` expression: {}",
+            e
+        )
+    })?;
+    let trimmed = rendered.trim();
+    Ok(match trimmed.to_ascii_lowercase().as_str() {
+        "" | "false" | "0" | "none" => false,
+        "true" | "1" => true,
+        _ => !trimmed.is_empty(),
+    })
 }
 
 /// Converts a SelectExpression to the normalized YAML format expected by the manifest.

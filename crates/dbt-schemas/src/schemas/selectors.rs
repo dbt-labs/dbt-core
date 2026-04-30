@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
-use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize, Verbatim};
 use serde::de::{self, IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -151,11 +151,27 @@ pub struct SelectorDefinition {
 
     /// Whether this selector should be used when the user does *not*
     /// pass `--select` / `--selector`.
+    ///
+    /// Wrapped in [`Verbatim`] so the Jinja string form is captured
+    /// unrendered at parse time; rendering happens lazily in
+    /// `resolve_selectors_from_yaml`, and only when the default is
+    /// actually needed (no CLI selection was provided). This matches
+    /// dbt-core behavior: a buggy Jinja expression in a selector the
+    /// user didn't ask to use must not fail the run.
     #[serde(default)]
-    pub default: Option<bool>,
+    pub default: Verbatim<Option<SelectorDefaultSpec>>,
 
     /// Either a bare CLI string or a full YAML expression tree.
     pub definition: SelectorDefinitionValue,
+}
+
+/// Parsed form of the selector `default:` field: either a literal bool
+/// or a still-unrendered Jinja template string.
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, DbtSchema)]
+#[serde(untagged)]
+pub enum SelectorDefaultSpec {
+    Bool(bool),
+    Template(String),
 }
 
 //

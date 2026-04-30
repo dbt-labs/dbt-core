@@ -1072,7 +1072,7 @@ mod tests {
             SelectorDefinition {
                 name: "foo_and_bar".to_string(),
                 description: None,
-                default: None,
+                default: None.into(),
                 definition: SelectorDefinitionValue::Full(SelectorExpr::Composite(CompositeExpr {
                     kind: {
                         let mut m = BTreeMap::new();
@@ -1136,7 +1136,7 @@ mod tests {
             SelectorDefinition {
                 name: "base_with_exclude".to_string(),
                 description: None,
-                default: None,
+                default: None.into(),
                 definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
                     MethodAtomExpr {
                         method: "tag".to_string(),
@@ -1209,7 +1209,7 @@ mod tests {
             SelectorDefinition {
                 name: "nightly_models".to_string(),
                 description: None,
-                default: None,
+                default: None.into(),
                 definition: SelectorDefinitionValue::String("tag:nightly".to_string()),
             },
         );

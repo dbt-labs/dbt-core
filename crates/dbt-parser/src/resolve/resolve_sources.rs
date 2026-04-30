@@ -139,29 +139,33 @@ pub fn resolve_sources(
             &package_name, source_name, &normalized_table_name
         );
 
-        let merged_loaded_at_field = Some(
-            table_config
-                .loaded_at_field
-                .clone()
-                .or_else(|| source_properties_config.loaded_at_field.clone())
-                .unwrap_or_default(),
-        );
-        let merged_loaded_at_query = Some(
-            table_config
-                .loaded_at_query
-                .0
-                .clone()
-                .or_else(|| source_properties_config.loaded_at_query.0.clone())
-                .unwrap_or_default(),
-        );
-        if !merged_loaded_at_field.as_ref().unwrap().is_empty()
-            && !merged_loaded_at_query.as_ref().unwrap().is_empty()
-        {
-            return err!(
+        // Merge `loaded_at_field` / `loaded_at_query` across source and
+        // table levels. The override semantics, the inheritance rules, and
+        // the same-block validation are unit-tested directly via
+        // [`merge_loaded_at_pair`] in this file's `mod tests` block — those
+        // unit tests pin the RIGHT (`field`, `query`) pair for every input
+        // combination, addressing the e2e tests' inherent inability to
+        // assert resolved per-row values.
+        let merged = merge_loaded_at_pair(
+            source_properties_config.loaded_at_field.as_deref(),
+            source_properties_config.loaded_at_query.0.as_deref(),
+            table_config.loaded_at_field.as_deref(),
+            table_config.loaded_at_query.0.as_deref(),
+        )
+        .map_err(|msg| {
+            // Annotate with `source.table` so the error pins the offending
+            // row rather than just observing that "an error fired
+            // somewhere" inside the per-table merge loop.
+            dbt_common::fs_err!(
                 ErrorCode::Unexpected,
-                "loaded_at_field and loaded_at_query cannot be set at the same time"
-            );
-        }
+                "{} on source `{}.{}`",
+                msg,
+                source_name,
+                table_name
+            )
+        })?;
+        let merged_loaded_at_field = Some(merged.field);
+        let merged_loaded_at_query = Some(merged.query);
 
         let merged_schema_origin = table_config
             .schema_origin
@@ -450,6 +454,65 @@ fn merge_event_time(
     table_event_time.or(source_event_time)
 }
 
+/// Resolved (`loaded_at_field`, `loaded_at_query`) pair after merging
+/// table-level config over source-level config. Either value may be empty
+/// (downstream treats `""` and `None` as "no freshness on this dimension").
+#[derive(Debug)]
+pub(crate) struct MergedLoadedAt {
+    pub field: String,
+    pub query: String,
+}
+
+/// Merge `loaded_at_field` and `loaded_at_query` across source-level and
+/// table-level config.
+///
+/// `loaded_at_field` and `loaded_at_query` are mutually exclusive peers.
+/// dbt-core treats a table-level override of either as implicitly clearing
+/// the inherited *other* — that's how patterns like a source-wide
+/// `loaded_at_query` plus a per-table `loaded_at_field` override (e.g. the
+/// merge-log table the query references) resolve cleanly. Without this,
+/// the per-key `or_else` chain would leak the source-level value of the
+/// un-overridden key and falsely trip the same-block validation.
+///
+/// Returns `Err` only when, after merging, BOTH peers are non-empty —
+/// which happens in two cases:
+///   1. Both peers set in the same `config:` block at table level, OR
+///   2. Both peers set at the source level with no table-level override
+///      to clear them.
+fn merge_loaded_at_pair(
+    source_field: Option<&str>,
+    source_query: Option<&str>,
+    table_field: Option<&str>,
+    table_query: Option<&str>,
+) -> Result<MergedLoadedAt, &'static str> {
+    let table_has_field = table_field.is_some();
+    let table_has_query = table_query.is_some();
+
+    let merged_field = if table_has_query {
+        // Table override of `loaded_at_query` clears any inherited
+        // `loaded_at_field` from the source level.
+        table_field.unwrap_or("").to_string()
+    } else {
+        table_field.or(source_field).unwrap_or("").to_string()
+    };
+
+    let merged_query = if table_has_field {
+        // Table override of `loaded_at_field` clears any inherited
+        // `loaded_at_query` from the source level.
+        table_query.unwrap_or("").to_string()
+    } else {
+        table_query.or(source_query).unwrap_or("").to_string()
+    };
+
+    if !merged_field.is_empty() && !merged_query.is_empty() {
+        return Err("loaded_at_field and loaded_at_query cannot be set at the same time");
+    }
+    Ok(MergedLoadedAt {
+        field: merged_field,
+        query: merged_query,
+    })
+}
+
 fn merge_freshness(
     base: Option<&FreshnessDefinition>,
     update: &Omissible<Option<FreshnessDefinition>>,
@@ -698,5 +761,125 @@ mod tests {
         // Specifically verify that warn_after and filter are None, not inherited from base
         assert!(result.as_ref().unwrap().warn_after.is_none());
         assert!(result.as_ref().unwrap().filter.is_none());
+    }
+
+    // ── merge_loaded_at_pair ──────────────────────────────────────────────
+    //
+    // These unit tests pin the RIGHT (`field`, `query`) pair after merge for
+    // every state-relevant input combination. The e2e tests in
+    // `crates/dbt-cli/tests/dbt_conformance/regression.rs` cannot make this
+    // assertion because parse-success/parse-failure goldens only see the CLI
+    // summary, not the per-row resolved config. This block addresses that
+    // exactly: any merge-logic regression that produces a different result
+    // for any of these inputs trips one or more of these tests.
+
+    /// Table-level `loaded_at_field` overrides source-level `loaded_at_query`.
+    /// The *inherited* peer must be cleared on the override row.
+    #[test]
+    fn test_merge_loaded_at_pair_table_field_clears_inherited_query() {
+        let result = merge_loaded_at_pair(
+            None,                               // source_field
+            Some("select max(load_ts) from x"), // source_query
+            Some("LOAD_TIMESTAMP"),             // table_field — override
+            None,                               // table_query
+        )
+        .expect("must not error: cross-level peer-clearing is valid");
+        assert_eq!(
+            result.field, "LOAD_TIMESTAMP",
+            "table-level loaded_at_field override must survive the merge"
+        );
+        assert_eq!(
+            result.query, "",
+            "inherited source-level loaded_at_query must be cleared by table-level field override"
+        );
+    }
+
+    /// Mirror direction: table-level `loaded_at_query` overrides source-level
+    /// `loaded_at_field`. Guards against an asymmetric fix that handles only
+    /// one direction.
+    #[test]
+    fn test_merge_loaded_at_pair_table_query_clears_inherited_field() {
+        let result = merge_loaded_at_pair(
+            Some("SRC_LOADED_AT"),                // source_field
+            None,                                 // source_query
+            None,                                 // table_field
+            Some("select max(custom_ts) from y"), // table_query — override
+        )
+        .expect("must not error: cross-level peer-clearing is valid");
+        assert_eq!(
+            result.field, "",
+            "inherited source-level loaded_at_field must be cleared by table-level query override"
+        );
+        assert_eq!(
+            result.query, "select max(custom_ts) from y",
+            "table-level loaded_at_query override must survive the merge"
+        );
+    }
+
+    /// Sibling table with NO table-level override on the SAME source: must
+    /// inherit source-level values untouched. Together with the override
+    /// tests above, proves the peer-clearing is selective to override rows
+    /// rather than a broad clear.
+    #[test]
+    fn test_merge_loaded_at_pair_no_table_override_inherits_source() {
+        let result = merge_loaded_at_pair(
+            Some("SRC_LOADED_AT"), // source_field
+            None,                  // source_query
+            None,                  // table_field
+            None,                  // table_query
+        )
+        .expect("must not error: only source-level field is set");
+        assert_eq!(
+            result.field, "SRC_LOADED_AT",
+            "non-override table must inherit source-level loaded_at_field"
+        );
+        assert_eq!(result.query, "", "no query anywhere → empty");
+    }
+
+    /// Genuine misuse — both peers set in the SAME (table) `config:` block.
+    /// Must error with the exact validation message; the merge cannot
+    /// silently swallow the conflict.
+    #[test]
+    fn test_merge_loaded_at_pair_both_in_same_table_block_errors() {
+        let err = merge_loaded_at_pair(
+            None,
+            None,
+            Some("TS"),                             // table_field
+            Some("select max(ts) from {{ this }}"), // table_query — same block!
+        )
+        .expect_err("both peers in the same table block must error");
+        assert!(
+            err.contains("loaded_at_field and loaded_at_query cannot be set at the same time"),
+            "error must name the conflict; got: {err}"
+        );
+    }
+
+    /// Same-block conflict at the SOURCE level (no table-level override).
+    /// Even without table-level config the validation must fire if the
+    /// inherited pair conflicts. Discriminates against a buggy fix that
+    /// only checks for table-level conflicts.
+    #[test]
+    fn test_merge_loaded_at_pair_both_at_source_level_errors() {
+        let err = merge_loaded_at_pair(
+            Some("SRC_LOADED_AT"),         // source_field
+            Some("select max(ts) from x"), // source_query
+            None,
+            None,
+        )
+        .expect_err("both peers inherited at the source level must error");
+        assert!(
+            err.contains("loaded_at_field and loaded_at_query cannot be set at the same time"),
+            "error must name the conflict; got: {err}"
+        );
+    }
+
+    /// Empty everywhere → both empty, no error. Pin the no-op case so a
+    /// future bug that spuriously errors on absent freshness is caught.
+    #[test]
+    fn test_merge_loaded_at_pair_all_none() {
+        let result =
+            merge_loaded_at_pair(None, None, None, None).expect("absent peers must not error");
+        assert_eq!(result.field, "");
+        assert_eq!(result.query, "");
     }
 }
