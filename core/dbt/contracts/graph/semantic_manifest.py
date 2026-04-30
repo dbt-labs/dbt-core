@@ -215,7 +215,7 @@ class SemanticManifest:
 
         legacy_time_spine_model: Optional[ModelNode] = None
         if self.manifest.semantic_models:
-            legacy_time_spine_model = self.manifest.ref_lookup.find(
+            legacy_time_spine_model = self.manifest.ref_lookup.find(  # type: ignore[assignment]
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
             )
             if legacy_time_spine_model:

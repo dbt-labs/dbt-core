@@ -381,11 +381,7 @@ def test_parse_selection():
         == parsed["default"]["definition"]
     )
     assert (
-        Union(
-            Criteria(method=MethodName.Tag, value="foo"),
-            Criteria(method=MethodName.Tag, value="bar"),
-        )
-        == parsed["inherited"]["definition"]
+        Criteria(method=MethodName.Selector, value="default") == parsed["inherited"]["definition"]
     )
 
 
@@ -421,10 +417,7 @@ def test_parse_selection_with_exclusion():
     assert (
         Difference(
             Union(
-                Union(
-                    Criteria(method=MethodName.Tag, value="foo"),
-                    Criteria(method=MethodName.Tag, value="bar"),
-                )
+                Criteria(method=MethodName.Selector, value="default"),
             ),
             Criteria(method=MethodName.Tag, value="bar"),
         )

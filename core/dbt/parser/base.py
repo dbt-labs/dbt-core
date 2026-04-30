@@ -1,11 +1,12 @@
 import abc
 import itertools
 import os
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
 from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract, Export
+from dbt.artifacts.resources.types import FunctionLanguage
 from dbt.clients.jinja import MacroGenerator, get_rendered
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -226,8 +227,11 @@ class ConfiguredParser(
         """
         if name is None:
             name = block.name
+        language: Union[ModelLanguage, FunctionLanguage]
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
+        elif block.path.relative_path.endswith(".js"):
+            language = FunctionLanguage.javascript
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql

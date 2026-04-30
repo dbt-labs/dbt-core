@@ -54,9 +54,7 @@ def project_schema() -> Dict[str, Any]:
     global _PROJECT_SCHEMA
 
     if _PROJECT_SCHEMA is None:
-        _PROJECT_SCHEMA = load_json_from_package(
-            jsonschema_type="project", filename="0.0.110.json"
-        )
+        _PROJECT_SCHEMA = load_json_from_package(jsonschema_type="project", filename="latest.json")
     return _PROJECT_SCHEMA
 
 
@@ -118,6 +116,24 @@ def _get_allowed_config_key_aliases() -> List[str]:
             config_aliases.extend(_ADAPTER_TO_CONFIG_ALIASES[adapter])
 
     return config_aliases
+
+
+def _get_allowed_config_fields_for_project_property(schema, property_field_name) -> List[str]:
+    property_defn = schema["properties"].get(property_field_name)
+    property_defn_name = None
+    if property_defn and "anyOf" in property_defn:
+        for any_of_item in property_defn["anyOf"]:
+            if "$ref" in any_of_item:
+                property_defn_name = any_of_item["$ref"].split("/")[-1]
+                break
+
+    if property_defn_name is None:
+        return []
+
+    allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
+    # in dbt_project.yml keys should have a + prefix
+    allowed_config_fields.update([f"+{key}" for key in _get_allowed_config_key_aliases()])
+    return list(allowed_config_fields)
 
 
 def _get_allowed_config_fields_from_error_path(
@@ -239,20 +255,33 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             )
             # dbt_project.yml configs
             elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
+                allowed_config_fields = _get_allowed_config_fields_for_project_property(
+                    schema, property_field_name=error_path[0]
+                )
                 for sub_error in sub_errors:
-                    if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
-                        # Only raise type-errors if they are indicating leaf config without a plus prefix
-                        if (
-                            len(sub_error.path) > 0
-                            and isinstance(sub_error.path[-1], str)
-                            and not sub_error.path[-1].startswith("+")
-                        ):
-                            deprecations.warn(
-                                "missing-plus-prefix-in-config-deprecation",
-                                key=sub_error.path[-1],
-                                file=file_path,
-                                key_path=error_path_to_string(sub_error),
-                            )
+                    if not isinstance(sub_error, ValidationError) or sub_error.validator != "type":
+                        continue
+                    if not sub_error.path or not isinstance(sub_error.path[-1], str):
+                        continue
+
+                    key = sub_error.path[-1]
+                    had_valid_config_key_in_path = any(
+                        k in allowed_config_fields for k in sub_error.path
+                    )
+                    if f"+{key}" in allowed_config_fields and not had_valid_config_key_in_path:
+                        deprecations.warn(
+                            "missing-plus-prefix-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
+                    elif key not in allowed_config_fields:
+                        deprecations.warn(
+                            "custom-key-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
         elif error.validator == "type":
             # Not deprecating invalid types yet
             pass

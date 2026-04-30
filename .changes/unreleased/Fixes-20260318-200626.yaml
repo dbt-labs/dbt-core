@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix inheritance for defaults.agg_time_dimension in semantic models.
+time: 2026-03-18T20:06:26.155408-07:00
+custom:
+    Author: theyostalservice
+    Issue: "12678"

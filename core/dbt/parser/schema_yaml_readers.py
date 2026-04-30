@@ -140,7 +140,10 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
-        tags = sorted(set(self.project.exposures.get("tags", []) + unparsed.tags + config.tags))
+        # Null tags caught during deserialization, but guard here defensively.
+        tags = sorted(
+            set((self.project.exposures.get("tags") or []) + unparsed.tags + config.tags)
+        )
         meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
 
         config.tags = tags
@@ -439,6 +442,7 @@ class MetricParser(YamlReader):
         self,
         unparsed_metric: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> MetricTypeParams:
         if isinstance(unparsed_metric, UnparsedMetric):
             type_params = unparsed_metric.type_params
@@ -487,7 +491,8 @@ class MetricParser(YamlReader):
                         use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
                         == PercentileType.CONTINUOUS,
                     ),
-                    agg_time_dimension=unparsed_metric.agg_time_dimension,
+                    agg_time_dimension=unparsed_metric.agg_time_dimension
+                    or default_agg_time_dimension,
                     non_additive_dimension=self._get_v2_non_additive_dimension(
                         unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
                     ),
@@ -508,6 +513,7 @@ class MetricParser(YamlReader):
                 ),
                 metric_aggregation_params=metric_aggregation_params,
                 join_to_timespine=unparsed_metric.join_to_timespine or False,
+                is_private=unparsed_metric.hidden,
             )
         else:
             raise DbtInternalError(
@@ -519,6 +525,7 @@ class MetricParser(YamlReader):
         self,
         unparsed: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
@@ -577,7 +584,11 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed, generated_from=generated_from),
+            type_params=self._get_metric_type_params(
+                unparsed,
+                generated_from=generated_from,
+                default_agg_time_dimension=default_agg_time_dimension,
+            ),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=meta,
@@ -631,11 +642,19 @@ class MetricParser(YamlReader):
     def parse_v2_metrics_from_dbt_model_patch(self, model_patch: ParsedNodePatch) -> None:
         if model_patch.metrics is None:
             return
+        # Resolve the semantic model name, respecting custom name overrides
+        semantic_model_name = model_patch.name
+        if isinstance(model_patch.semantic_model, UnparsedSemanticModelConfig):
+            if model_patch.semantic_model.name is not None:
+                semantic_model_name = model_patch.semantic_model.name
         for metric in model_patch.metrics:
-            semantic_model = (
-                model_patch.name if MetricType(metric.type) == MetricType.SIMPLE else None
+            is_simple = MetricType(metric.type) == MetricType.SIMPLE
+            semantic_model = semantic_model_name if is_simple else None
+            self.parse_metric(
+                metric,
+                generated_from=semantic_model,
+                default_agg_time_dimension=model_patch.agg_time_dimension if is_simple else None,
             )
-            self.parse_metric(metric, generated_from=semantic_model)
 
     def parse(self) -> None:
         for data in self.get_key_dicts():
@@ -912,12 +931,13 @@ class SemanticModelParser(YamlReader):
                 meta = dict(column.config.get("meta", {}))
                 meta.update((column.dimension.config or {}).get("meta", {}))
                 config = SemanticLayerElementConfig(meta=meta)
+                dimension_name = column.dimension.name or column.name
                 dimensions.append(
                     Dimension(
                         # required
                         type=DimensionType(column.dimension.type),
                         # fields that use column's values as fallback values
-                        name=column.dimension.name or column.name,
+                        name=dimension_name,
                         description=column.dimension.description or column.description,
                         config=config,
                         # optional fields
@@ -925,7 +945,9 @@ class SemanticModelParser(YamlReader):
                         is_partition=column.dimension.is_partition,
                         type_params=type_params,
                         metadata=None,  # Not yet supported in v1 or v2 YAML
-                        # expr argument is not supported for column-based dimensions
+                        # When the dimension name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if dimension_name != column.name else None,
                     )
                 )
         return dimensions
@@ -978,6 +1000,9 @@ class SemanticModelParser(YamlReader):
                         type=column.entity.type,
                         description=column.entity.description,
                         label=column.entity.label,
+                        # When the entity name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if column.entity.name != column.name else None,
                         config=SemanticLayerElementConfig(
                             meta=column.entity.config.get("meta", column.config.get("meta", {}))
                         ),
@@ -1051,7 +1076,7 @@ class SemanticModelParser(YamlReader):
             pass
         else:
             # this should be unreachable, but just in case
-            raise ValueError(f"Invalid semantic model config: {patch.semantic_model}")
+            raise DbtInternalError(f"Invalid semantic model config: {patch.semantic_model}")
 
         self._parse_semantic_model_helper(
             semantic_model_name=name,

@@ -57,6 +57,7 @@ class RunOperationTask(ConfiguredTask):
         start = timing[0].started_at
 
         success = True
+        error_message = None
         package_name, macro_name = self._get_macro_parts()
 
         with collect_timing_info("execute", timing.append):
@@ -66,10 +67,12 @@ class RunOperationTask(ConfiguredTask):
                 fire_event(RunningOperationCaughtError(exc=str(exc)))
                 fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
                 success = False
+                error_message = str(exc)
             except Exception as exc:
                 fire_event(RunningOperationUncaughtError(exc=str(exc)))
                 fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
                 success = False
+                error_message = str(exc)
 
         end = timing[1].completed_at
 
@@ -94,7 +97,7 @@ class RunOperationTask(ConfiguredTask):
             status=RunStatus.Success if success else RunStatus.Error,
             execution_time=execution_time,
             failures=0 if success else 1,
-            message=None,
+            message=error_message,
             node=HookNode(
                 alias=macro_name,
                 checksum=FileHash.from_contents(unique_id),

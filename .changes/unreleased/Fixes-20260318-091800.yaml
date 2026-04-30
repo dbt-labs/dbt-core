@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support custom ref kwargs in unit tests and generic data tests, behind behavior flag `support_custom_ref_kwargs`
+time: 2026-03-18T09:18:00.000000-05:00
+custom:
+    Author: aahel
+    Issue: 12148

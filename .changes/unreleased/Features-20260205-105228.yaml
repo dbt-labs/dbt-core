@@ -1,0 +1,6 @@
+kind: Features
+body: add config.meta_get to python model parsing
+time: 2026-02-05T10:52:28.269954-08:00
+custom:
+    Author: venkaa28
+    Issue: "12458"

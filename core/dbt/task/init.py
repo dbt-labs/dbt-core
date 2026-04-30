@@ -29,7 +29,9 @@ from dbt.flags import get_flags
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt.version import _get_adapter_plugin_names
 from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
+from dbt_common.ui import red
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
 SLACK_URL = "https://community.getdbt.com/"
@@ -279,6 +281,23 @@ class InitTask(BaseTask):
 
         return name
 
+    def _run_debug(self) -> Optional[bool]:
+        if self.args.skip_debug:
+            return None
+
+        from dbt.task.debug import DebugTask
+
+        fire_event(Note(msg="Running dbt debug to validate the project..."))
+
+        try:
+            debug_task = DebugTask(self.args)
+            debug_task.project_dir = Path.cwd()
+            debug_task.project_path = os.path.join(Path.cwd(), "dbt_project.yml")
+            return debug_task.run()
+        except Exception:
+            fire_event(Note(msg="Debug validation encountered an error"))
+            return False
+
     def create_new_project(self, project_name: str, profile_name: str):
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
@@ -286,13 +305,6 @@ class InitTask(BaseTask):
             content = f"{f.read()}".format(project_name=project_name, profile_name=profile_name)
         with open("dbt_project.yml", "w") as f:
             f.write(content)
-        fire_event(
-            ProjectCreated(
-                project_name=project_name,
-                docs_url=DOCS_URL,
-                slack_url=SLACK_URL,
-            )
-        )
 
     def run(self):
         """Entry point for the init task."""
@@ -318,6 +330,7 @@ class InitTask(BaseTask):
             if not self.args.skip_profile_setup:
                 profile_name = self.get_profile_name_from_current_project()
                 self.setup_profile(profile_name)
+                self._run_debug()
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
@@ -335,6 +348,7 @@ class InitTask(BaseTask):
                         msg="Could not find profile named '{}'".format(user_profile_name)
                     )
                 self.create_new_project(project_name, user_profile_name)
+                debug_success = self._run_debug()
             else:
                 profile_name = project_name
                 # Create the profile after creating the project to avoid leaving a random profile
@@ -344,3 +358,22 @@ class InitTask(BaseTask):
                 # Ask for adapter only if skip_profile_setup flag is not provided
                 if not self.args.skip_profile_setup:
                     self.setup_profile(profile_name)
+                    debug_success = self._run_debug()
+                else:
+                    debug_success = None
+
+            fire_event(
+                ProjectCreated(
+                    project_name=project_name,
+                    docs_url=DOCS_URL,
+                    slack_url=SLACK_URL,
+                )
+            )
+            if debug_success is False:
+                fire_event(
+                    Note(
+                        msg=red(
+                            "Your profile may need adjustments. You can find the logs of `dbt debug` above"
+                        )
+                    )
+                )

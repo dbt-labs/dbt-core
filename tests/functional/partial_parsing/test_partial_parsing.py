@@ -9,6 +9,7 @@ import yaml
 import dbt.flags as flags
 from dbt.contracts.files import ParseFileType
 from dbt.contracts.results import TestStatus
+from dbt.events.types import UnableToPartialParse
 from dbt.exceptions import CompilationError
 from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 from dbt.tests.fixtures.project import write_project_files
@@ -20,6 +21,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from dbt_common.events.event_catcher import EventCatcher
 from tests.functional.partial_parsing.fixtures import (
     custom_schema_tests1_sql,
     custom_schema_tests2_sql,
@@ -996,3 +998,17 @@ class TestProfileChanges:
         write_file(yaml.safe_dump(dbt_profile_data), project.profiles_dir, "profiles.yml")
         _, stdout = run_dbt_and_capture(["parse"])
         assert "Unable to do partial parsing" not in stdout
+
+
+class TestExplicitDefaultProfileAndTarget:
+    def test_explicit_default_profile_allows_partial_parse(self, project):
+        event_catcher = EventCatcher(UnableToPartialParse)
+        run_dbt(["parse"])
+        run_dbt(["parse", "--profile", "test"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
+
+    def test_explicit_default_target_allows_partial_parse(self, project):
+        event_catcher = EventCatcher(UnableToPartialParse)
+        run_dbt(["parse"])
+        run_dbt(["parse", "--target", "default"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0

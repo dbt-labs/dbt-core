@@ -23,7 +23,7 @@ permissions:
     issues: write # comments on issues
 
 jobs:
-  open_issues:
+  get_pr_info:
     # we only want to run this when the issue is closed as completed and the label `user docs` has been assigned.
     # If this logic does not exist in this workflow, it runs the
     # risk of duplicaton of issues being created due to merge and label both triggering this workflow to run and neither having
@@ -33,9 +33,48 @@ jobs:
       (github.event.issue.state == 'closed' &&
        github.event.issue.state_reason == 'completed' &&
        contains( github.event.issue.labels.*.name, 'user docs'))
+    runs-on: ubuntu-latest
+    outputs:
+      pr_url: ${{ steps.find_pr.outputs.pr_url }}
+      pr_title: ${{ steps.find_pr.outputs.pr_title }}
+    steps:
+      - name: Find closing PR via timeline
+        id: find_pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const result = await github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {
+                      nodes {
+                        ... on ClosedEvent {
+                          closer {
+                            ... on PullRequest {
+                              title
+                              url
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.issue.number,
+            });
+            const closer = result.repository.issue.timelineItems.nodes[0]?.closer;
+            core.setOutput('pr_url', closer?.url || 'No linked PR found');
+            core.setOutput('pr_title', closer?.title || 'N/A');
+
+  open_issues:
+    needs: get_pr_info
     uses: dbt-labs/actions/.github/workflows/open-issue-in-repo.yml@main
     with:
         issue_repository: "dbt-labs/docs.getdbt.com"
         issue_title: "[Core] Docs Changes Needed from ${{ github.event.repository.name }} Issue #${{ github.event.issue.number }}"
-        issue_body: "At a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page you would like to see updated.\n Originating from this issue: https://github.com/dbt-labs/dbt-core/issues/${{ github.event.issue.number }}"
+        issue_body: "Originating from this issue: https://github.com/dbt-labs/dbt-core/issues/${{ github.event.issue.number }}\nRelated PR: ${{ needs.get_pr_info.outputs.pr_url }}\nPR title: ${{ needs.get_pr_info.outputs.pr_title }}\n\nAt a minimum, update body to include a link to the page on docs.getdbt.com requiring updates and what part(s) of the page you would like to see updated."
     secrets: inherit

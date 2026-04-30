@@ -10,6 +10,7 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
+from dbt.artifacts.resources.types import FunctionLanguage
 from dbt.contracts.graph.nodes import GenericTestNode
 from dbt.exceptions import (
     DbtInternalError,
@@ -188,7 +189,7 @@ def add_rendered_test_kwargs(
     context[GENERIC_TEST_KWARGS_NAME] = kwargs
 
 
-def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
+def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage | FunctionLanguage]:
     if "materialization" not in node.name:
         raise MaterializtionMacroNotUsedError(node=node)
 
@@ -202,5 +203,10 @@ def get_supported_languages(node: jinja2.nodes.Macro) -> List[ModelLanguage]:
     # indexing defaults from the end
     # since supported_languages is a kwarg, and kwargs are at always after args
     return [
-        ModelLanguage[item.value] for item in node.defaults[-(len(node.args) - lang_idx)].items
+        (
+            ModelLanguage(item.value)
+            if item.value in ModelLanguage._value2member_map_
+            else FunctionLanguage(item.value)
+        )
+        for item in node.defaults[-(len(node.args) - lang_idx)].items
     ]

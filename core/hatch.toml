@@ -36,9 +36,6 @@ include = [
 "dbt/task/docs/index.html" = "dbt/task/docs/index.html"
 
 [envs.default]
-# Python 3.10-3.11 required locally due to flake8==4.0.1 compatibility
-# CI uses [envs.ci] which doesn't set python, allowing matrix testing
-python = "3.11"
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
@@ -57,6 +54,7 @@ dependencies = [
     "pytest-csv~=3.0",
     "pytest-cov",
     "pytest-dotenv",
+    "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
     "pytest-logbook~=1.2",
@@ -153,18 +151,19 @@ dependencies = [
 
 [envs.build.scripts]
 check-all = [
-    "- check-wheel",
-    "- check-sdist",
+    # Run check-wheel-contents first, before any installation overwrites dependencies
+    "check-wheel-contents ./dist/*.whl --ignore W007,W008",
+    "check-wheel",
+    "check-sdist",
 ]
 check-wheel = [
-    "twine check dist/*",
-    "find ./dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "twine check ./dist/*",
+    "find ./dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=./dist/",
     "pip freeze | grep dbt-core",
     "dbt --version",
 ]
 check-sdist = [
-    "check-wheel-contents dist/*.whl --ignore W007,W008",
-    "find ./dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "find ./dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=./dist/",
     "pip freeze | grep dbt-core",
     "dbt --version",
 ]
@@ -184,6 +183,7 @@ dependencies = [
     "pytest-xdist~=3.6",
     "pytest-csv~=3.0",
     "pytest-dotenv",
+    "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
     "ddtrace==2.21.3",
@@ -200,14 +200,23 @@ pre-install-commands = [
 DBT_TEST_USER_1 = "dbt_test_user_1"
 DBT_TEST_USER_2 = "dbt_test_user_2"
 DBT_TEST_USER_3 = "dbt_test_user_3"
+# Use new ddtrace pytest plugin to avoid deprecation warnings (old plugin removed in 3.0.0)
+DD_PYTEST_USE_NEW_PLUGIN_BETA = "true"
+
+
 
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
 code-quality = "pre-commit run --all-files"
-integration-tests = """
-python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
-python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection
-"""
+# pytest-split algorithm: we use 'least_duration' instead of the default 'duration_based_chunks'
+# because duration_based_chunks maintains alphabetical order and can create very uneven test
+# counts per group (e.g., 294 tests in group 1 vs 90 in others). Even with equal total duration,
+# more tests means more per-test overhead (fixture setup/teardown, DB connections, temp files)
+# which causes timeouts. least_duration distributes tests evenly across groups by count while
+# still balancing duration, avoiding the overhead problem.
+integration-tests = "python -m pytest --cov=dbt --cov-report=xml -nauto --durations-path .test_durations --splitting-algorithm least_duration {args} ../tests/functional"
+# Used by update-test-durations.yml to generate duration data (runs in parallel split groups)
+integration-tests-generate-durations = "python -m pytest -nauto --durations-path .test_durations --splitting-algorithm least_duration --store-durations {args} ../tests/functional"
 
 # Note: Python version matrix is handled by GitHub Actions CI, not hatch.
 # This avoids running tests 4x per job. The CI sets up the Python version

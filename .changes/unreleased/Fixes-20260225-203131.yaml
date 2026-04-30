@@ -1,0 +1,6 @@
+kind: Fixes
+body: Enable sql_header config for data tests gated behind require_sql_header_in_test_configs behavior change flag.
+time: 2026-02-25T20:31:31.854988+05:30
+custom:
+    Author: aahel
+    Issue: "9775"

@@ -225,6 +225,38 @@ semantic_models:
 """
 
 
+semantic_model_with_disabled_ref_yml = """
+version: 2
+
+models:
+  - name: people
+    config:
+      enabled: false
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+
 base_schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
@@ -846,6 +878,24 @@ schema_yml_v2_simple_metric_on_model_1 = """
         conversion_metric: simple_metric_2
 """
 
+schema_yml_v2_metrics_with_hidden = """
+    metrics:
+      - name: public_metric
+        description: A metric that is not hidden.
+        label: Public Metric
+        type: simple
+        agg: count
+        expr: id
+        hidden: false
+      - name: private_metric
+        description: A metric that is hidden.
+        label: Private Metric
+        type: simple
+        agg: count
+        expr: id
+        hidden: true
+"""
+
 schema_yml_v2_metric_with_doc_jinja = """
       - name: simple_metric_with_doc_jinja
         description: "{{ doc('simple_metric_description') }}"
@@ -863,7 +913,54 @@ schema_yml_v2_metric_with_filter_dimension_jinja = """
         agg: count
         expr: id
         filter: |
-          {{ Dimension('id_entity__id_dim') }} > 0
+          {{ Dimension('id_entity__id_dim') }} > 0 and {{ TimeDimension('id_entity__id_dim', 'day') }} > '2020-01-01'
+"""
+
+schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: derived_metric_with_jinja_filter
+        description: This is a derived metric with a jinja filter on an input metric.
+        label: Derived Metric With Jinja Filter
+        type: derived
+        expr: simple_metric - offset_metric
+        input_metrics:
+          - name: simple_metric
+          - name: simple_metric
+            alias: offset_metric
+            filter: |
+              {{ Dimension('id_entity__id_dim') }} > 0
+            offset_window: 1 week
+"""
+
+schema_yml_v2_metric_with_numerator_filter_dimension_jinja = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: ratio_metric_with_jinja_filter
+        description: This is a ratio metric with a jinja filter on the numerator.
+        label: Ratio Metric With Jinja Filter
+        type: ratio
+        numerator:
+          name: simple_metric
+          filter: |
+            {{ Dimension('id_entity__id_dim') }} > 0
+        denominator: simple_metric_2
 """
 
 schema_yml_v2_cumulative_metric_missing_input_metric = """
@@ -919,6 +1016,55 @@ schema_yml_v2_standalone_metrics_with_doc_jinja = schema_yml_v2_standalone_metri
       {{ Dimension('id_entity__id_dim') }} > 0""",
 )
 
+base_schema_yml_v2_with_custom_sm_name = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model:
+      name: custom_semantic_model
+    agg_time_dimension: second_dim
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: created_at
+        description: This is the time the entry was created.
+        granularity: day
+        dimension:
+          name: ds
+          description: the ds column
+          label: DS Column
+          type: time
+"""
+
 derived_semantics_yml = """
     derived_semantics:
       entities:
@@ -941,4 +1087,18 @@ derived_semantics_yml = """
           validity_params:
             is_start: true
             is_end: true
+"""
+
+derived_semantics_with_doc_jinja_yml = """
+    derived_semantics:
+      entities:
+        - name: derived_id_entity
+          description: "{{ doc('entity_description') }}"
+          type: foreign
+          expr: "id + foreign_id_col"
+      dimensions:
+        - name: derived_id_dimension
+          description: "{{ doc('dimension_description') }}"
+          type: categorical
+          expr: id
 """

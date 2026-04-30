@@ -455,7 +455,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Function: {
             "paths": project.function_paths,
-            "extensions": [".py"] + _get_extensions(".sql"),
+            "extensions": [".py", ".js"] + _get_extensions(".sql"),
             "parser": "FunctionParser",
         },
     }

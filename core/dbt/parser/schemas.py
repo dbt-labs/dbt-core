@@ -1,5 +1,4 @@
 import datetime
-import pathlib
 import re
 import time
 from abc import ABCMeta, abstractmethod
@@ -17,7 +16,7 @@ from typing import (
     TypeVar,
 )
 
-from dbt.artifacts.resources import CustomGranularity, RefArgs, TimeSpine
+from dbt.artifacts.resources import CustomGranularity, Docs, RefArgs, TimeSpine
 from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
@@ -90,7 +89,8 @@ from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events import EventLevel
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_event, fire_or_defer_event
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
@@ -165,7 +165,9 @@ def yaml_from_file(
         # When loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
-        for source in contents.get("sources", []):
+        for source in contents.get("sources") or []:
+            if source.get("tables") is None:
+                source["tables"] = []
             for table in source.get("tables", []):
                 if "loaded_at_field" in table or (
                     "config" in table
@@ -343,11 +345,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 fqn = parser.get_fqn_prefix(block.path.relative_path)
                 fqn.append(snapshot["name"])
 
-                compiled_path = str(
-                    pathlib.PurePath("").joinpath(
-                        block.path.relative_path, snapshot["name"] + ".sql"
-                    )
-                )
+                compiled_path = snapshot["name"] + ".sql"
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     compiled_path,
@@ -846,14 +844,16 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_or_error(
+                    fire_or_defer_event(
                         WrongResourceSchemaFile(
                             patch_name=patch.name,
                             resource_type=resource_type,
                             plural_resource_type=resource_type.pluralize(),
                             yaml_key=patch.yaml_key,
                             file_path=patch.original_file_path,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                     return
         elif patch.yaml_key == "functions":
@@ -897,19 +897,21 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
                     self.patch_node_properties(node, patch)
             else:
-                warn_or_error(
+                fire_or_defer_event(
                     NoNodeForYamlKey(
                         patch_name=patch.name,
                         yaml_key=patch.yaml_key,
                         file_path=source_file.path.original_file_path,
-                    )
+                    ),
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
         if patch.yaml_key == "functions":
-            node = self.manifest.functions.get(unique_id)
+            node = self.manifest.functions.get(unique_id)  # type: ignore[arg-type]
         else:
-            node = self.manifest.nodes.get(unique_id)
+            node = self.manifest.nodes.get(unique_id)  # type: ignore[arg-type]
 
         if node:
             # patches can't be overwritten
@@ -940,12 +942,14 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         if not isinstance(node, ModelNode):
             for attr in ["latest_version", "access", "version", "constraints"]:
                 if getattr(patch, attr):
-                    warn_or_error(
+                    fire_or_defer_event(
                         ValidationWarning(
                             field_name=attr,
                             resource_type=node.resource_type.value,
                             node_name=patch.name,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
 
@@ -967,14 +971,16 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
     def parse_patch(self, block: TargetBlock[UnparsedModelUpdate], refs: ParserRef) -> None:
         target = block.target
         if NodeType.Model.pluralize() != target.yaml_key:
-            warn_or_error(
+            fire_or_defer_event(
                 WrongResourceSchemaFile(
                     patch_name=target.name,
                     resource_type=NodeType.Model,
                     plural_resource_type=NodeType.Model.pluralize(),
                     yaml_key=target.yaml_key,
                     file_path=target.original_file_path,
-                )
+                ),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1036,12 +1042,14 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     add_node_nofile_fn = self.manifest.add_node_nofile
 
                 if versioned_model_node is None:
-                    warn_or_error(
+                    fire_or_defer_event(
                         NoNodeForYamlKey(
                             patch_name=versioned_model_name,
                             yaml_key=target.yaml_key,
                             file_path=source_file.path.original_file_path,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                     continue
 
@@ -1239,9 +1247,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         # if any constraint has `warn_unsupported` as True then send the warning
         if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
-            warn_or_error(
+            fire_or_defer_event(
                 UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
                 node=model_node,
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
 
         errors = []
@@ -1294,12 +1304,14 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
             block.name, block.target.package_name
         )
         if not unique_id:
-            warn_or_error(
+            fire_or_defer_event(
                 NoNodeForYamlKey(
                     patch_name=patch.name,
                     yaml_key=patch.yaml_key,
                     file_path=source_file.path.original_file_path,
-                )
+                ),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1381,7 +1393,11 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            warn_or_error(MacroNotFoundForPatch(patch_name=patch.name))
+            fire_or_defer_event(
+                MacroNotFoundForPatch(patch_name=patch.name),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
+            )
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")
@@ -1392,10 +1408,20 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.patch_path = patch.file_id
         macro.description = patch.description
         macro.created_at = time.time()
-        macro.meta = patch.meta
-        macro.docs = patch.docs
 
-        if getattr(get_flags(), "validate_macro_args", False):
+        meta = {**(patch.meta or {}), **(patch.config.get("meta") or {})}
+        docs = patch.config.get("docs") or patch.docs
+
+        # config inherits from HasConfig which is a dict so we need to cast it to Docs
+        if isinstance(docs, dict):
+            docs = Docs(**docs)
+
+        macro.meta = meta
+        macro.docs = docs
+        macro.config.meta = meta
+        macro.config.docs = docs
+
+        if getattr(get_flags(), "validate_macro_args", True):
             self._check_patch_arguments(macro, patch)
             macro.arguments = patch.arguments if patch.arguments else macro.arguments
         else:
@@ -1421,10 +1447,12 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
                 self._fire_macro_arg_warning(msg, macro)
 
     def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
-        warn_or_error(
+        fire_or_defer_event(
             InvalidMacroAnnotation(
                 msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
-            )
+            ),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
         )
 
 

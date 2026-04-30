@@ -45,6 +45,8 @@ def get_rendered_model_config(**updates):
         "begin": None,
         "concurrent_batches": None,
         "freshness": None,
+        "on_error": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -85,6 +87,7 @@ def get_rendered_seed_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -138,13 +141,19 @@ def get_rendered_snapshot_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
 
 
 def get_unrendered_snapshot_config(**updates):
-    result = {"check_cols": "all", "strategy": "check", "target_schema": None, "unique_key": "id"}
+    result = {
+        "check_cols": "Keyword(key='check_cols', value=Const(value='all'))",
+        "strategy": "Keyword(key='strategy', value=Const(value='check'))",
+        "target_schema": "Keyword(key='target_schema', value=Call(node=Name(name='var', ctx='load'), args=[Const(value='alternate_schema')], kwargs=[], dyn_args=None, dyn_kwargs=None))",
+        "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
+    }
     result.update(updates)
     return result
 
@@ -158,6 +167,7 @@ def get_rendered_tst_config(**updates):
         "severity": "ERROR",
         "store_failures": None,
         "store_failures_as": None,
+        "sql_header": None,
         "warn_if": "!= 0",
         "error_if": "!= 0",
         "fail_calc": "count(*)",
@@ -167,6 +177,7 @@ def get_rendered_tst_config(**updates):
         "schema": "dbt_test__audit",
         "alias": None,
         "meta": {},
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -269,7 +280,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
     unrendered_test_config = get_unrendered_tst_config()
 
     snapshot_config = get_rendered_snapshot_config(target_schema=alternate_schema)
-    unrendered_snapshot_config = get_unrendered_snapshot_config(target_schema=alternate_schema)
+    unrendered_snapshot_config = get_unrendered_snapshot_config()
 
     quote_database = quote_schema = True
     relation_name_node_format = relation_name_format(quote_database, quote_schema, quote_model)
@@ -684,7 +695,14 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
-                "compiled_path": None,
+                "compiled_path": os.path.join(
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
+                ),
                 "build_path": None,
                 "created_at": ANY,
                 "checksum": checksum_file(snapshot_path),
@@ -870,6 +888,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "loaded_at_query": None,
                     "loaded_at_field": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {
@@ -1374,7 +1393,14 @@ def expected_references_manifest(project):
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
-                "compiled_path": None,
+                "compiled_path": os.path.join(
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
+                ),
                 "build_path": None,
                 "created_at": ANY,
                 "checksum": checksum_file(snapshot_path),
@@ -1410,9 +1436,7 @@ def expected_references_manifest(project):
                 "sources": [],
                 "tags": [],
                 "unique_id": "snapshot.test.snapshot_seed",
-                "unrendered_config": get_unrendered_snapshot_config(
-                    target_schema=alternate_schema
-                ),
+                "unrendered_config": get_unrendered_snapshot_config(),
                 "doc_blocks": [],
             },
         },
@@ -1445,6 +1469,7 @@ def expected_references_manifest(project):
                     "loaded_at_field": None,
                     "loaded_at_query": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {
@@ -1666,6 +1691,12 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "meta": {
                     "some_key": 100,
+                },
+                "config": {
+                    "meta": {
+                        "some_key": 100,
+                    },
+                    "docs": {"node_color": None, "show": True},
                 },
                 "patch_path": "test://" + os.path.join("macros", "schema.yml"),
                 "resource_type": "macro",

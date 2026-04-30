@@ -1,5 +1,7 @@
 import hashlib
 import os
+import sys
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +11,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    NoReturn,
     Optional,
     Sequence,
     Tuple,
@@ -16,6 +19,12 @@ from typing import (
     Union,
     get_args,
 )
+
+# TODO: Collapse into just using the >3.11 case once we drop support for python 3.10
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 from mashumaro.types import SerializableType
 
@@ -100,8 +109,9 @@ from dbt_common.contracts.constraints import (
     ModelLevelConstraint,
 )
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.base_types import EventGroupType
 from dbt_common.events.contextvars import set_log_contextvars
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import fire_or_defer_event
 
 # =====================================================================
 # This contains the classes for all of the nodes and node-like objects
@@ -140,47 +150,50 @@ class BaseNode(BaseResource):
         raise NotImplementedError
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @property
-    def file_id(self):
+    def file_id(self) -> str:
         return f"{self.package_name}://{self.original_file_path}"
 
     @property
-    def is_refable(self):
+    def is_refable(self) -> bool:
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
-    def should_store_failures(self):
+    def should_store_failures(self) -> bool:
         return False
 
     # will this node map to an object in the database?
     @property
-    def is_relational(self):
+    def is_relational(self) -> bool:
         return self.resource_type in REFABLE_NODE_TYPES
 
     @property
-    def is_versioned(self):
-        return self.resource_type in VERSIONED_NODE_TYPES and self.version is not None
+    def is_versioned(self) -> bool:
+        return (
+            self.resource_type in VERSIONED_NODE_TYPES
+            and getattr(self, "version", None) is not None
+        )
 
     @property
-    def is_ephemeral(self):
-        return self.config.materialized == "ephemeral"
+    def is_ephemeral(self) -> bool:
+        return self.config.materialized == "ephemeral"  # type: ignore[attr-defined]
 
     @property
-    def is_ephemeral_model(self):
+    def is_ephemeral_model(self) -> bool:
         return self.is_refable and self.is_ephemeral
 
-    def get_materialization(self):
-        return self.config.materialized
+    def get_materialization(self) -> str:
+        return self.config.materialized  # type: ignore[attr-defined]
 
     @classmethod
-    def from_resource(cls, resource_instance: BaseResource):
+    def from_resource(cls, resource_instance: BaseResource) -> Self:
         assert isinstance(resource_instance, cls.resource_class())
         return cls.from_dict(resource_instance.to_dict())
 
-    def to_resource(self):
+    def to_resource(self) -> BaseResource:
         return self.resource_class().from_dict(self.to_dict())
 
 
@@ -195,7 +208,7 @@ class GraphNode(GraphResource, BaseNode):
 @dataclass
 class HasRelationMetadata(HasRelationMetadataResource):
     @classmethod
-    def __pre_deserialize__(cls, data):
+    def __pre_deserialize__(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         data = super().__pre_deserialize__(data)
         if "database" not in data:
             data["database"] = None
@@ -222,13 +235,14 @@ class NodeInfoMixin:
     _event_status: Dict[str, Any] = field(default_factory=dict)
 
     @property
-    def node_info(self):
+    def node_info(self) -> Dict[str, Any]:
+        _config = getattr(self, "config", None)
         node_info = {
             "node_path": getattr(self, "path", None),
             "node_name": getattr(self, "name", None),
             "unique_id": getattr(self, "unique_id", None),
             "resource_type": str(getattr(self, "resource_type", "")),
-            "materialized": self.config.get("materialized"),
+            "materialized": _config.get("materialized") if _config is not None else None,
             "node_status": str(self._event_status.get("node_status")),
             "node_started_at": self._event_status.get("started_at"),
             "node_finished_at": self._event_status.get("finished_at"),
@@ -243,12 +257,12 @@ class NodeInfoMixin:
         }
         return node_info
 
-    def update_event_status(self, **kwargs):
+    def update_event_status(self, **kwargs: Any) -> None:
         for k, v in kwargs.items():
             self._event_status[k] = v
         set_log_contextvars(node_info=self.node_info)
 
-    def clear_event_status(self):
+    def clear_event_status(self) -> None:
         self._event_status = dict()
 
 
@@ -256,7 +270,7 @@ class NodeInfoMixin:
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
     def get_target_write_path(
         self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
-    ):
+    ) -> str:
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -276,24 +290,26 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
-    def write_node(self, project_root: str, compiled_path, compiled_code: str):
+    def write_node(self, project_root: str, compiled_path: str, compiled_code: str) -> None:
         if os.path.isabs(compiled_path):
             full_path = compiled_path
         else:
             full_path = os.path.join(project_root, compiled_path)
         write_file(full_path, compiled_code)
 
-    def _serialize(self):
+    def _serialize(self) -> Dict[str, Any]:
         return self.to_dict()
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
         return dct
 
     @classmethod
-    def _deserialize(cls, dct: Dict[str, int]):
+    def _deserialize(cls, dct: Dict[str, Any]) -> "ParsedNode":
         # The serialized ParsedNodes do not differ from each other
         # in fields that would allow 'from_dict' to distinguis
         # between them.
@@ -332,7 +348,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
             return bool(self.config.persist_docs.get("relation"))
         return False
 
-    def same_persisted_description(self, other) -> bool:
+    def same_persisted_description(self, other: "ParsedNode") -> bool:
         # the check on configs will handle the case where we have different
         # persist settings, so we only have to care about the cases where they
         # are the same..
@@ -349,10 +365,10 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
 
         return True
 
-    def same_body(self, other) -> bool:
+    def same_body(self, other: "ParsedNode") -> bool:
         return self.raw_code == other.raw_code
 
-    def same_database_representation(self, other) -> bool:
+    def same_database_representation(self, other: "ParsedNode") -> bool:
         # compare the config representation, not the node's config value. This
         # compares the configured value, rather than the ultimate value (so
         # generate_*_name and unset values derived from the target are
@@ -365,20 +381,20 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
                 return False
         return True
 
-    def same_config(self, old) -> bool:
+    def same_config(self, old: "ParsedNode") -> bool:
         return self.config.same_contents(
             self.unrendered_config,
             old.unrendered_config,
         )
 
-    def build_contract_checksum(self):
+    def build_contract_checksum(self) -> None:
         pass
 
-    def same_contract(self, old, adapter_type=None) -> bool:
+    def same_contract(self, old: "ParsedNode", adapter_type: Optional[str] = None) -> bool:
         # This would only apply to seeds
         return True
 
-    def same_contents(self, old, adapter_type) -> bool:
+    def same_contents(self, old: Optional["ParsedNode"], adapter_type: Optional[str]) -> bool:
         if old is None:
             return False
 
@@ -396,7 +412,7 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         )
 
     @property
-    def is_external_node(self):
+    def is_external_node(self) -> bool:
         return False
 
 
@@ -405,11 +421,23 @@ class CompiledNode(CompiledResource, ParsedNode):
     """Contains attributes necessary for SQL files and nodes with refs, sources, etc,
     so all ManifestNodes except SeedNode."""
 
+    def __post_init__(self) -> None:
+        self._lock = threading.Lock()
+
+    def __getstate__(self) -> Dict[str, Any]:
+        state = self.__dict__.copy()
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
+
     @property
-    def empty(self):
+    def empty(self) -> bool:
         return not self.raw_code.strip()
 
-    def set_cte(self, cte_id: str, sql: str):
+    def set_cte(self, cte_id: str, sql: str) -> None:
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
         do if extra_ctes were an OrderedDict
         """
@@ -423,11 +451,11 @@ class CompiledNode(CompiledResource, ParsedNode):
             self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
 
@@ -456,7 +484,9 @@ class BatchContext(dbtClassMixin):
     event_time_start: datetime
     event_time_end: datetime
 
-    def __post_serialize__(self, data, context):
+    def __post_serialize__(
+        self, data: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         # This is insane, but necessary, I apologize. Mashumaro handles the
         # dictification of this class via a compile time generated `to_dict`
         # method based off of the _typing_ of th class. By default `datetime`
@@ -476,7 +506,9 @@ class ModelNode(ModelResource, CompiledNode):
     batch: Optional[BatchContext] = None
     _has_this: Optional[bool] = None
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_has_this" in dct:
             del dct["_has_this"]
@@ -537,7 +569,7 @@ class ModelNode(ModelResource, CompiledNode):
         )
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         if self.version is None:
             return self.name
         else:
@@ -628,10 +660,14 @@ class ModelNode(ModelResource, CompiledNode):
 
         return []
 
-    def same_contents(self, old, adapter_type) -> bool:
-        return super().same_contents(old, adapter_type) and self.same_ref_representation(old)
+    def same_contents(self, old: Optional["ModelNode"], adapter_type: Optional[str]) -> bool:  # type: ignore[override]
+        return (
+            old is not None
+            and super().same_contents(old, adapter_type)
+            and self.same_ref_representation(old)
+        )
 
-    def same_ref_representation(self, old) -> bool:
+    def same_ref_representation(self, old: "ModelNode") -> bool:
         return (
             # Changing the latest_version may break downstream unpinned refs
             self.latest_version == old.latest_version
@@ -640,7 +676,7 @@ class ModelNode(ModelResource, CompiledNode):
             and self.deprecation_date == old.deprecation_date
         )
 
-    def build_contract_checksum(self):
+    def build_contract_checksum(self) -> None:
         # We don't need to construct the checksum if the model does not
         # have contract enforced, because it won't be used.
         # This needs to be executed after contract config is set
@@ -683,13 +719,15 @@ class ModelNode(ModelResource, CompiledNode):
             breaking_change = f"Contracted model '{self.unique_id}' was deleted or renamed."
 
         if self.version is None:
-            warn_or_error(
+            fire_or_defer_event(
                 UnversionedBreakingChange(
                     breaking_changes=[breaking_change],
                     model_name=self.name,
                     model_file_path=self.original_file_path,
                 ),
                 node=self,
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return False
         else:
@@ -730,7 +768,7 @@ class ModelNode(ModelResource, CompiledNode):
         base_type, _, _ = data_type.partition("(")
         return base_type.strip().lower()
 
-    def same_contract(self, old, adapter_type=None) -> bool:
+    def same_contract(self, old: "ModelNode", adapter_type: Optional[str] = None) -> bool:  # type: ignore[override]
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
             # No change -- same_contract: True
@@ -751,7 +789,7 @@ class ModelNode(ModelResource, CompiledNode):
         contract_enforced_disabled: bool = False
         columns_removed: List[str] = []
         column_type_changes: List[Dict[str, str]] = []
-        enforced_column_constraint_removed: List[Dict[str, str]] = (
+        enforced_column_constraint_removed: List[Dict[str, Optional[str]]] = (
             []
         )  # column_name, constraint_type
         enforced_model_constraint_removed: List[Dict[str, Any]] = []  # constraint_type, columns
@@ -804,7 +842,8 @@ class ModelNode(ModelResource, CompiledNode):
                 for old_constraint in old_value.constraints:
                     if (
                         old_constraint not in self.columns[old_key].constraints
-                        and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                        and constraint_support.get(old_constraint.type)
+                        == ConstraintSupport.ENFORCED
                     ):
                         enforced_column_constraint_removed.append(
                             {
@@ -819,7 +858,7 @@ class ModelNode(ModelResource, CompiledNode):
             for old_constraint in old.constraints:
                 if (
                     old_constraint not in self.constraints
-                    and constraint_support[old_constraint.type] == ConstraintSupport.ENFORCED
+                    and constraint_support.get(old_constraint.type) == ConstraintSupport.ENFORCED
                 ):
                     enforced_model_constraint_removed.append(
                         {
@@ -899,7 +938,7 @@ class ModelNode(ModelResource, CompiledNode):
                 )
 
             if self.version is None:
-                warn_or_error(
+                fire_or_defer_event(
                     UnversionedBreakingChange(
                         contract_enforced_disabled=contract_enforced_disabled,
                         columns_removed=columns_removed,
@@ -911,6 +950,8 @@ class ModelNode(ModelResource, CompiledNode):
                         model_file_path=self.original_file_path,
                     ),
                     node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
                 raise (
@@ -952,37 +993,46 @@ class SeedNode(SeedResource, ParsedNode):  # No SQLDefaults!
         if self.checksum.name == "path":
             msg: str
             if other.checksum.name != "path":
-                warn_or_error(
-                    SeedIncreased(package_name=self.package_name, name=self.name), node=self
+                fire_or_defer_event(
+                    SeedIncreased(package_name=self.package_name, name=self.name),
+                    node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif result:
-                warn_or_error(
+                fire_or_defer_event(
                     SeedExceedsLimitSamePath(package_name=self.package_name, name=self.name),
                     node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             elif not result:
-                warn_or_error(
+                fire_or_defer_event(
                     SeedExceedsLimitAndPathChanged(package_name=self.package_name, name=self.name),
                     node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
-                warn_or_error(
+                fire_or_defer_event(
                     SeedExceedsLimitChecksumChanged(
                         package_name=self.package_name,
                         name=self.name,
                         checksum_name=other.checksum.name,
                     ),
                     node=self,
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
 
         return result
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         """Seeds are never empty"""
         return False
 
-    def _disallow_implicit_dependencies(self):
+    def _disallow_implicit_dependencies(self) -> NoReturn:
         """Disallow seeds to take implicit upstream dependencies via pre/post hooks"""
         # Seeds are root nodes in the DAG. They cannot depend on other nodes.
         # However, it's possible to define pre- and post-hooks on seeds, and for those
@@ -1004,22 +1054,22 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         raise ParsingError(message)
 
     @property
-    def refs(self):
+    def refs(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
     @property
-    def sources(self):
+    def sources(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
     @property
-    def metrics(self):
+    def metrics(self) -> List[str]:
         self._disallow_implicit_dependencies()
 
-    def same_body(self, other) -> bool:
+    def same_body(self, other: "SeedNode") -> bool:  # type: ignore[override]
         return self.same_seeds(other)
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return []
 
     @property
@@ -1027,15 +1077,15 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
         return self.depends_on.macros
 
     @property
-    def extra_ctes(self):
+    def extra_ctes(self) -> List[InjectedCTE]:
         return []
 
     @property
-    def extra_ctes_injected(self):
+    def extra_ctes_injected(self) -> bool:
         return False
 
     @property
-    def language(self):
+    def language(self) -> str:
         return "sql"
 
 
@@ -1051,13 +1101,13 @@ Error raised for '{self.unique_id}', which has these hooks defined: \n{hook_list
 
 class TestShouldStoreFailures:
     @property
-    def should_store_failures(self):
-        if self.config.store_failures:
-            return self.config.store_failures
+    def should_store_failures(self) -> bool:
+        if self.config.store_failures:  # type: ignore[attr-defined]
+            return self.config.store_failures  # type: ignore[attr-defined]
         return get_flags().STORE_FAILURES
 
     @property
-    def is_relational(self):
+    def is_relational(self) -> bool:
         if self.should_store_failures:
             return True
         return False
@@ -1070,7 +1120,7 @@ class SingularTestNode(SingularTestResource, TestShouldStoreFailures, CompiledNo
         return SingularTestResource
 
     @property
-    def test_node_type(self):
+    def test_node_type(self) -> str:
         return "singular"
 
 
@@ -1085,14 +1135,14 @@ class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode
     def resource_class(cls) -> Type[GenericTestResource]:
         return GenericTestResource
 
-    def same_contents(self, other, adapter_type: Optional[str]) -> bool:
+    def same_contents(self, other: Optional["GenericTestNode"], adapter_type: Optional[str]) -> bool:  # type: ignore[override]
         if other is None:
             return False
 
         return self.same_config(other) and self.same_fqn(other) and True
 
     @property
-    def test_node_type(self):
+    def test_node_type(self) -> str:
         return "generic"
 
 
@@ -1102,11 +1152,11 @@ class UnitTestSourceDefinition(ModelNode):
     quoting: QuotingResource = field(default_factory=QuotingResource)
 
     @property
-    def cte_name(self):
+    def cte_name(self) -> str:
         return self.unique_id.split(".")[-1]
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return f"{self.source_name}.{self.name}"
 
 
@@ -1126,7 +1176,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
         return UnitTestDefinitionResource
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
@@ -1141,7 +1191,7 @@ class UnitTestDefinition(NodeInfoMixin, GraphNode, UnitTestDefinitionResource):
             versioned_name += f"_v{self.version}"
         return versioned_name
 
-    def build_unit_test_checksum(self):
+    def build_unit_test_checksum(self) -> None:
         # everything except 'description'
         data = f"{self.model}-{self.versions}-{self.given}-{self.expect}-{self.overrides}"
 
@@ -1176,6 +1226,28 @@ class SnapshotNode(SnapshotResource, CompiledNode):
     def resource_class(cls) -> Type[SnapshotResource]:
         return SnapshotResource
 
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ) -> str:
+        # Always use many-to-one path for snapshots. Multiple snapshot blocks
+        # can share a single file, and the basename heuristic in the base class
+        # fails when one snapshot's name matches the source filename — producing
+        # both a file and a directory at the same path (EISDIR).
+        # Use self.name + ".sql" rather than self.path: node.path reflects the
+        # file's subdirectory structure (e.g. "mart/snappy.sql"), not the
+        # compiled output filename.
+        path = os.path.join(self.original_file_path, self.name + ".sql")
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
+        return os.path.join(target_path, subdirectory, self.package_name, path)
+
 
 # ====================================
 # Macro
@@ -1196,7 +1268,7 @@ class Macro(MacroResource, BaseNode):
         return self.macro_sql == other.macro_sql
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
 
@@ -1212,7 +1284,7 @@ class Documentation(DocumentationResource, BaseNode):
         return DocumentationResource
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     def same_contents(self, other: Optional["Documentation"]) -> bool:
@@ -1243,13 +1315,13 @@ class UnpatchedSourceDefinition(BaseNode):
     resource_type: Literal[NodeType.Source]
     patch_path: Optional[str] = None
 
-    def get_full_source_name(self):
+    def get_full_source_name(self) -> str:
         return f"{self.source.name}_{self.table.name}"
 
-    def get_source_representation(self):
+    def get_source_representation(self) -> str:
         return f'source("{self.source.name}", "{self.table.name}")'
 
-    def validate_data_tests(self, is_root_project: bool):
+    def validate_data_tests(self, is_root_project: bool) -> None:
         """
         sources parse tests differently than models, so we need to do some validation
         here where it's done in the PatchParser for other nodes
@@ -1376,38 +1448,38 @@ class SourceDefinition(
             and True
         )
 
-    def get_full_source_name(self):
+    def get_full_source_name(self) -> str:
         return f"{self.source_name}_{self.name}"
 
-    def get_source_representation(self):
-        return f'source("{self.source.name}", "{self.table.name}")'
+    def get_source_representation(self) -> str:
+        return f'source("{self.source_name}", "{self.name}")'
 
     @property
-    def is_refable(self):
+    def is_refable(self) -> bool:
         return False
 
     @property
-    def is_ephemeral(self):
+    def is_ephemeral(self) -> bool:
         return False
 
     @property
-    def is_ephemeral_model(self):
+    def is_ephemeral_model(self) -> bool:
         return False
 
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return []
 
     @property
-    def depends_on(self):
+    def depends_on(self) -> DependsOn:
         return DependsOn(macros=[], nodes=[])
 
     @property
-    def refs(self):
+    def refs(self) -> List[str]:
         return []
 
     @property
-    def sources(self):
+    def sources(self) -> List[str]:
         return []
 
     @property
@@ -1415,11 +1487,11 @@ class SourceDefinition(
         return bool(self.freshness)
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return f"{self.source_name}.{self.name}"
 
     @property
-    def group(self):
+    def group(self) -> None:
         return None
 
 
@@ -1431,11 +1503,11 @@ class SourceDefinition(
 @dataclass
 class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @classmethod
@@ -1489,10 +1561,12 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
         )
 
     @property
-    def group(self):
+    def group(self) -> None:
         return None
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
@@ -1507,11 +1581,11 @@ class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
 @dataclass
 class Metric(GraphNode, MetricResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def search_name(self):
+    def search_name(self) -> str:
         return self.name
 
     @classmethod
@@ -1593,9 +1667,26 @@ class Group(GroupResource, BaseNode):
 @dataclass
 class FunctionNode(CompiledNode, FunctionResource):
 
+    @property
+    def is_relational(self) -> bool:
+        return True
+
     @classmethod
     def resource_class(cls) -> Type[FunctionResource]:
         return FunctionResource
+
+    def same_arguments(self, old: "FunctionNode") -> bool:
+        return self.arguments == old.arguments
+
+    def same_returns(self, old: "FunctionNode") -> bool:
+        return self.returns == old.returns
+
+    def same_contents(self, old, adapter_type) -> bool:
+        return (
+            super().same_contents(old, adapter_type)
+            and self.same_arguments(old)
+            and self.same_returns(old)
+        )
 
 
 # ====================================
@@ -1606,11 +1697,11 @@ class FunctionNode(CompiledNode, FunctionResource):
 @dataclass
 class SemanticModel(GraphNode, SemanticModelResource):
     @property
-    def depends_on_nodes(self):
+    def depends_on_nodes(self) -> List[str]:
         return self.depends_on.nodes
 
     @property
-    def depends_on_macros(self):
+    def depends_on_macros(self) -> List[str]:
         return self.depends_on.macros
 
     @classmethod
@@ -1733,7 +1824,9 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and True
         )
 
-    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         dct = super().__post_serialize__(dct, context)
         if "_event_status" in dct:
             del dct["_event_status"]
