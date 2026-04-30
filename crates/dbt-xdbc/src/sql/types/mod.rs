@@ -325,6 +325,20 @@ impl StructField {
     }
 }
 
+/// Encodes an entry in an enum type.
+///
+/// The enum label and an optional integer value.
+///
+/// Example of entries: `'small' = 1`, `'medium'`, `'large' = 3`
+#[derive(Debug, Clone)]
+pub struct EnumEntry(pub Ident, pub Option<i64>);
+
+#[derive(Debug, Clone, Default)]
+pub struct EnumAttrs {
+    /// Useful for encoding Enum, Enum8, Enum16 on ClickHouse.
+    pub bit_width: Option<u8>,
+}
+
 /// Syntactic representation of SQL types.
 ///
 /// The string representation and semantics of each SQL type can only be
@@ -345,6 +359,8 @@ pub enum SqlType {
     BigInt,
     /// HUGEINT (128-bit signed integer, DuckDB)
     HugeInt,
+    /// INT256 (256-bit signed integer, ClickHouse)
+    Int256,
     /// UTINYINT (unsigned 8-bit integer, DuckDB)
     UTinyInt,
     /// USMALLINT (unsigned 16-bit integer, DuckDB)
@@ -355,6 +371,10 @@ pub enum SqlType {
     UBigInt,
     /// UHUGEINT (unsigned 128-bit integer, DuckDB)
     UHugeInt,
+    /// UINT256 (unsigned 256-bit integer, ClickHouse)
+    UInt256,
+    /// Half-precision float (BFloat16 on ClickHouse)
+    HalfFloat,
     /// REAL
     Real,
     /// FLOAT [ '(' precision ')' ]
@@ -379,8 +399,8 @@ pub enum SqlType {
     Blob,
     /// BINARY / VARBINARY [ '(' length ')' ]
     Binary(Option<usize>),
-    /// DATE
-    Date,
+    /// DATE, Date, Date32
+    Date(Option<u8>),
     /// TIME [ '(' precision ')' ] [ WITH TIME ZONE | WITH LOCAL | WITHOUT TIME ZONE ]
     Time {
         precision: Option<u8>,
@@ -404,6 +424,10 @@ pub enum SqlType {
     Jsonb,
     /// UUID (universally unique identifier)
     Uuid,
+    /// IPv4 (ClickHouse)
+    IPv4,
+    /// IPv6 (ClickHouse)
+    IPv6,
     /// GEOMETRY [ '(' srid | 'ANY' ')' ]
     Geometry(Option<String>),
     /// GEOGRAPHY [ '(' srid | 'ANY' ')' ]
@@ -414,6 +438,8 @@ pub enum SqlType {
     Struct(Option<Vec<StructField>>),
     /// MAP <key type, value type>
     Map(Option<(Box<SqlType>, Box<SqlType>)>),
+    /// Enum (ClickHouse, MySQL...)
+    Enum(Option<Vec<EnumEntry>>, EnumAttrs),
     /// VARIANT
     Variant,
     /// VOID
@@ -633,6 +659,83 @@ impl SqlType {
             }
             // }}}
 
+            // ClickHouse {{{
+            (ClickHouse, Boolean) => write!(out, "Boolean"),
+            (ClickHouse, TinyInt) => write!(out, "Int8"),
+            (ClickHouse, SmallInt) => write!(out, "Int16"),
+            (ClickHouse, Integer) => write!(out, "Int32"),
+            (ClickHouse, BigInt) => write!(out, "Int64"),
+            (ClickHouse, HugeInt) => write!(out, "Int128"),
+            (ClickHouse, Int256) => write!(out, "Int256"),
+            (ClickHouse, UTinyInt) => write!(out, "UInt8"),
+            (ClickHouse, USmallInt) => write!(out, "UInt16"),
+            (ClickHouse, UInteger) => write!(out, "UInt32"),
+            (ClickHouse, UBigInt) => write!(out, "UInt64"),
+            (ClickHouse, UHugeInt) => write!(out, "UInt128"),
+            (ClickHouse, UInt256) => write!(out, "UInt256"),
+            (ClickHouse, HalfFloat) => write!(out, "BFloat16"),
+            (ClickHouse, Real) => write!(out, "Float32"),
+            (ClickHouse, Float(_)) => write!(out, "Float32"),
+            (ClickHouse, Double) => write!(out, "Float64"),
+            (ClickHouse, Char(None)) => write!(out, "String"),
+            (ClickHouse, Char(Some(n))) => write!(out, "FixedString({n})"),
+            (ClickHouse, Varchar(..) | Text | Clob) => write!(out, "String"),
+            (ClickHouse, Date(Some(32))) => write!(out, "Date32"),
+            (ClickHouse, Date(_)) => write!(out, "Date"),
+            (
+                ClickHouse,
+                Time {
+                    precision: None, ..
+                },
+            ) => write!(out, "Time"),
+            (
+                ClickHouse,
+                Time {
+                    precision: Some(p), ..
+                },
+            ) => write!(out, "Time64({p})"),
+            (
+                ClickHouse,
+                Timestamp {
+                    precision,
+                    time_zone_spec,
+                },
+            ) => match time_zone_spec {
+                TimeZoneSpec::Fixed(tz) => {
+                    if let Some(p) = precision {
+                        write!(out, "DateTime64({}, {})", p, tz.display(backend))
+                    } else {
+                        write!(out, "DateTime({})", tz.display(backend))
+                    }
+                }
+                _ => {
+                    if let Some(p) = precision {
+                        write!(out, "DateTime64({p})")
+                    } else {
+                        write!(out, "DateTime")
+                    }
+                }
+            },
+            (ClickHouse, DateTime) => write!(out, "DateTime"),
+            (ClickHouse, Binary(_) | Blob) => write!(out, "String"),
+            (ClickHouse, Numeric(None) | BigNumeric(None)) => write!(out, "Decimal"),
+            (ClickHouse, Numeric(Some((p, None))) | BigNumeric(Some((p, None)))) => {
+                write!(out, "Decimal({p})")
+            }
+            (ClickHouse, Numeric(Some((p, Some(s)))) | BigNumeric(Some((p, Some(s))))) => {
+                write!(out, "Decimal({p}, {s})")
+            }
+            (ClickHouse, Map(Some((key, value)))) => {
+                write!(out, "Map(")?;
+                key.write(backend, out)?;
+                write!(out, ", ")?;
+                value.write(backend, out)?;
+                write!(out, ")")
+            }
+            (ClickHouse, IPv4) => write!(out, "IPv4"),
+            (ClickHouse, IPv6) => write!(out, "IPv6"),
+            // }}}
+
             // Generic SQL / Fallback logic {{{
             (_, Boolean) => write!(out, "BOOLEAN"),
             (_, TinyInt) => write!(out, "TINYINT"),
@@ -641,12 +744,15 @@ impl SqlType {
             (_, BigInt) => write!(out, "BIGINT"),
             // DuckDB-specific integer types
             (_, HugeInt) => write!(out, "HUGEINT"),
+            (_, Int256) => write!(out, "INT256"),
             (_, UTinyInt) => write!(out, "UTINYINT"),
             (_, USmallInt) => write!(out, "USMALLINT"),
             (_, UInteger) => write!(out, "UINTEGER"),
             (_, UBigInt) => write!(out, "UBIGINT"),
             (_, UHugeInt) => write!(out, "UHUGEINT"),
+            (_, UInt256) => write!(out, "UINT256"),
 
+            (_, HalfFloat) => write!(out, "FLOAT16"),
             (_, Real) => write!(out, "REAL"),
             (_, Float(Some(p))) => write!(out, "FLOAT({p})"),
             (_, Float(None)) => write!(out, "FLOAT"),
@@ -690,7 +796,7 @@ impl SqlType {
                 Ok(())
             }
 
-            (_, Date) => write!(out, "DATE"),
+            (_, Date(_)) => write!(out, "DATE"),
             (
                 _,
                 Time {
@@ -738,6 +844,8 @@ impl SqlType {
             (_, Json) => write!(out, "JSON"),
             (_, Jsonb) => write!(out, "JSONB"),
             (_, Uuid) => write!(out, "UUID"),
+            (_, IPv4) => write!(out, "IPV4"),
+            (_, IPv6) => write!(out, "IPV6"),
             (_, Geometry(srid)) => {
                 write!(out, "GEOMETRY")?;
                 if let Some(srid) = srid {
@@ -756,11 +864,12 @@ impl SqlType {
             (backend, Array(Some(inner))) => {
                 match backend {
                     Snowflake => write!(out, "ARRAY(")?,
+                    ClickHouse => write!(out, "Array(")?,
                     _ => write!(out, "ARRAY<")?,
                 }
                 inner.write(backend, out)?;
                 match backend {
-                    Snowflake => write!(out, ")"),
+                    Snowflake | ClickHouse => write!(out, ")"),
                     _ => write!(out, ">"),
                 }
             }
@@ -826,7 +935,29 @@ impl SqlType {
                 value.write(backend, out)?;
                 write!(out, ">")
             }
+            (_, Enum(entries, attrs)) => {
+                match (backend, attrs.bit_width) {
+                    (ClickHouse, Some(8)) => write!(out, "Enum8")?,
+                    (ClickHouse, Some(16)) => write!(out, "Enum16")?,
+                    _ => write!(out, "ENUM")?,
+                }
+                if let Some(entries) = entries {
+                    write!(out, "(")?;
+                    for (i, EnumEntry(label, value)) in entries.iter().enumerate() {
+                        if i > 0 {
+                            write!(out, ", ")?;
+                        }
+                        write!(out, "{}", label.display(backend))?;
+                        if let Some(v) = value {
+                            write!(out, " = {v}")?;
+                        }
+                    }
+                    write!(out, ")")?;
+                }
+                Ok(())
+            }
             (Redshift | RedshiftODBC, Variant) => write!(out, "SUPER"),
+            (ClickHouse, Variant) => write!(out, "Dynamic"),
             (_, Variant) => write!(out, "VARIANT"),
             (_, Void) => write!(out, "VOID"),
             (_, Other(s)) => write!(out, "{s}"),
@@ -867,7 +998,8 @@ impl SqlType {
             | DataType::LargeBinary
             | DataType::BinaryView
             | DataType::FixedSizeBinary(_) => SqlType::Binary(None),
-            DataType::Date32 | DataType::Date64 => SqlType::Date,
+            DataType::Date32 => SqlType::Date(Some(32)),
+            DataType::Date64 => SqlType::Date(Some(64)),
             DataType::Time32(TimeUnit::Second) => SqlType::Time {
                 precision: None,
                 time_zone_spec: TimeZoneSpec::Without,
@@ -1228,6 +1360,25 @@ impl SqlType {
                 // https://clickhouse.com/docs/sql-reference/data-types/decimal#parameters
                 DataType::Decimal128(10, 0)
             }
+            // https://github.com/ClickHouse/ClickHouse/blob/3196ab525aa/src/Processors/Formats/Impl/CHColumnToArrowColumn.cpp#L93-L96
+            (ClickHouse, HugeInt) => DataType::FixedSizeBinary(16),
+            (ClickHouse, Int256) => DataType::FixedSizeBinary(32),
+            (ClickHouse, UHugeInt) => DataType::FixedSizeBinary(16),
+            (ClickHouse, UInt256) => DataType::FixedSizeBinary(32),
+            // https://github.com/ClickHouse/ClickHouse/blob/3196ab525aa/src/Processors/Formats/Impl/CHColumnToArrowColumn.cpp#L86
+            (ClickHouse, Date(None)) => DataType::UInt16,
+            // https://github.com/ClickHouse/ClickHouse/blob/3196ab525aa/src/Processors/Formats/Impl/CHColumnToArrowColumn.cpp#L87
+            (ClickHouse, DateTime) => DataType::UInt32,
+            (
+                ClickHouse,
+                Timestamp {
+                    precision: None,
+                    time_zone_spec: Without,
+                },
+            ) => DataType::UInt32,
+            // }}}
+
+            // Exasol {{{
             (Exasol, Numeric(None) | BigNumeric(None)) => {
                 // Exasol default: DECIMAL(18, 0)
                 DataType::Decimal128(18, 0)
@@ -1255,13 +1406,18 @@ impl SqlType {
             // DuckDB-specific integer types
             // Arrow doesn't have native Int128, so we use Decimal128 for HugeInt
             (_, HugeInt) => DataType::Decimal128(38, 0),
+            // Arrow doesn't have native Int256, so we use Decimal256 for Int256
+            (_, Int256) => DataType::Decimal256(76, 0),
             (_, UTinyInt) => DataType::UInt8,
             (_, USmallInt) => DataType::UInt16,
             (_, UInteger) => DataType::UInt32,
             (_, UBigInt) => DataType::UInt64,
             // Arrow doesn't have native UInt128, so we use Decimal256 for UHugeInt
             (_, UHugeInt) => DataType::Decimal256(39, 0),
+            // Arrow doesn't have native UInt256, so we use Decimal256 for UInt256
+            (_, UInt256) => DataType::Decimal256(78, 0),
 
+            (_, HalfFloat) => DataType::Float16,
             (_, Real) => DataType::Float32,
             (_, Float(_)) => DataType::Float32,
             (_, Double) => DataType::Float64,
@@ -1281,7 +1437,8 @@ impl SqlType {
             (_, Clob) => DataType::Utf8,
             (_, Blob) => DataType::Binary,
             (_, Binary(_)) => DataType::Binary,
-            (_, Date) => DataType::Date32,
+            (_, Date(Some(bit_width))) if *bit_width > 32 => DataType::Date64,
+            (_, Date(_)) => DataType::Date32,
             (
                 backend,
                 Time {
@@ -1495,6 +1652,19 @@ impl SqlType {
             }
             // UUID is 16 bytes, we represent it as FixedSizeBinary(16)
             (_, Uuid) => DataType::FixedSizeBinary(16),
+            (_, IPv4) => DataType::UInt32,
+            (_, IPv6) => DataType::FixedSizeBinary(16),
+            (_, Enum(_, EnumAttrs { bit_width: Some(8) })) => DataType::Int8,
+            (
+                _,
+                Enum(
+                    _,
+                    EnumAttrs {
+                        bit_width: Some(16),
+                    },
+                ),
+            ) => DataType::Int16,
+            (_, Enum(..)) => DataType::Utf8,
             (Snowflake, Variant) => DataType::Binary,
             (_, Variant) => DataType::Utf8,
             (_, Geometry(_)) => DataType::Utf8,
@@ -2079,6 +2249,47 @@ impl<'source> Parser<'source> {
         Ok(fields)
     }
 
+    /// Parse the (optional) entries of an enum type including the `(` and `)` delimiters.
+    fn enum_entries(&mut self) -> Result<Option<Vec<EnumEntry>>, ParseError<'source>> {
+        let entries = if self.match_(Token::LParen) {
+            let mut entries = Vec::new();
+            if !self.match_(Token::RParen) {
+                loop {
+                    let label_tok = self.next()?;
+                    let Token::Word(label) = label_tok else {
+                        return Err(ParseError::Unexpected(label_tok));
+                    };
+                    let label = Ident::Plain(label.to_string());
+                    // Parse optional `= <value>`. The tokenizer may produce
+                    // `Word("=1")` (no space) or `Word("=")` + `Word("1")`
+                    // (with space).
+                    let eq_rest = self.tokenizer.peek_and_then(|tok| {
+                        if let Token::Word(w) = tok {
+                            if let Some(rest) = w.strip_prefix('=') {
+                                return Some(rest.to_string());
+                            }
+                        }
+                        None
+                    });
+                    let value = match eq_rest {
+                        Some(rest) if rest.is_empty() => Some(self.next_int::<i64>()?),
+                        Some(rest) => Some(rest.trim().parse::<i64>().map_err(ParseError::from)?),
+                        None => None,
+                    };
+                    entries.push(EnumEntry(label, value));
+                    if !self.match_(Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect(Token::RParen)?;
+            }
+            Some(entries)
+        } else {
+            None
+        };
+        Ok(entries)
+    }
+
     /// Parse a SQL type that might have a NOT NULL constraint.
     fn parse_constrained_type(
         &mut self,
@@ -2133,13 +2344,16 @@ impl<'source> Parser<'source> {
         let tok = self.next()?;
         let sql_type = match tok {
             Token::LParen => {
-                // Structs in Postgres are defined by enclosing the fields in parentheses:
+                // Structs in Postgres and ClickHouse are defined by enclosing the fields in parentheses:
                 //
                 //     CREATE TYPE item_info AS (
                 //         product_id INT,
                 //         qty        INT
                 //     );
-                if matches!(backend, Postgres | Redshift | RedshiftODBC | Generic { .. }) {
+                if matches!(
+                    backend,
+                    Postgres | Redshift | RedshiftODBC | ClickHouse | Generic { .. }
+                ) {
                     let fields = self.struct_fields(backend, Token::RParen)?;
                     SqlType::Struct(Some(fields))
                 } else {
@@ -2171,31 +2385,57 @@ impl<'source> Parser<'source> {
                     || eqi(w, "SERIAL4")
                 {
                     SqlType::Integer
+                } else if eqi(w, "INT8") {
+                    if backend == ClickHouse {
+                        SqlType::TinyInt // ClickHouse: Int8 = 8-bits
+                    } else {
+                        // In standard SQL, INT8 = 8 bytes (64 bits)
+                        SqlType::BigInt
+                    }
                 } else if eqi(w, "BIGINT")
-                    || eqi(w, "INT64")
-                    || eqi(w, "INT8")
+                    || eqi(w, "INT64") // DuckDB, ClickHouse...
                     || eqi(w, "BIGSERIAL")
                     || eqi(w, "SERIAL8")
                 {
-                    SqlType::BigInt
+                    SqlType::BigInt // 64 bits
                 } else if eqi(w, "HUGEINT") || eqi(w, "INT128") {
-                    // DuckDB: 128-bit signed integer
-                    SqlType::HugeInt
+                    SqlType::HugeInt // DuckDB: 128-bit signed integer
+                } else if eqi(w, "UINT8") {
+                    if backend == ClickHouse {
+                        SqlType::UTinyInt // ClickHouse: UInt8 = 8-bits
+                    } else {
+                        SqlType::UBigInt // DuckDB: UINT8 = 8 bytes (64 bits)
+                    }
+                } else if eqi(w, "UINT16") && backend == ClickHouse {
+                    SqlType::USmallInt // ClickHouse: UInt16 (16-bit unsigned integer)
+                } else if eqi(w, "UINT32") && backend == ClickHouse {
+                    SqlType::UInteger // ClickHouse: UInt32 (32-bit unsigned integer)
+                } else if eqi(w, "UINT64") && backend == ClickHouse {
+                    SqlType::UBigInt // ClickHouse: UInt64 (64-bit unsigned integer)
+                } else if eqi(w, "UINT128") && backend == ClickHouse {
+                    SqlType::UHugeInt // ClickHouse: UInt128 (128-bit unsigned integer)
+                } else if eqi(w, "UINT256") {
+                    SqlType::UInt256
                 } else if eqi(w, "UTINYINT") || eqi(w, "UINT1") {
-                    // DuckDB: unsigned 8-bit integer
-                    SqlType::UTinyInt
+                    SqlType::UTinyInt // DuckDB: unsigned 8-bit integer
                 } else if eqi(w, "USMALLINT") || eqi(w, "UINT2") {
-                    // DuckDB: unsigned 16-bit integer
-                    SqlType::USmallInt
+                    SqlType::USmallInt // DuckDB: unsigned 16-bit integer
                 } else if eqi(w, "UINTEGER") || eqi(w, "UINT4") || eqi(w, "UINT") {
-                    // DuckDB: unsigned 32-bit integer
-                    SqlType::UInteger
-                } else if eqi(w, "UBIGINT") || eqi(w, "UINT8") || eqi(w, "UINT64") {
-                    // DuckDB: unsigned 64-bit integer
-                    SqlType::UBigInt
+                    SqlType::UInteger // DuckDB: unsigned 32-bit integer
+                } else if eqi(w, "UBIGINT") || eqi(w, "UINT64") {
+                    // UINT8 handled before
+                    SqlType::UBigInt // DuckDB: unsigned 64-bit integer
                 } else if eqi(w, "UHUGEINT") || eqi(w, "UINT128") {
                     // DuckDB: unsigned 128-bit integer
                     SqlType::UHugeInt
+                } else if eqi(w, "INT16") && backend == ClickHouse {
+                    // ClickHouse: Int16 (16-bit signed integer)
+                    SqlType::SmallInt
+                } else if eqi(w, "INT32") && backend == ClickHouse {
+                    // ClickHouse: Int32 (32-bit signed integer)
+                    SqlType::Integer
+                } else if eqi(w, "INT256") {
+                    SqlType::Int256
                 } else if eqi(w, "REAL") {
                     SqlType::Real
                 } else if eqi(w, "FLOAT") {
@@ -2212,6 +2452,14 @@ impl<'source> Parser<'source> {
                     } else {
                         SqlType::Float(None)
                     }
+                } else if eqi(w, "FLOAT32") {
+                    // ClickHouse: Float32 (32-bit IEEE 754 floating-point)
+                    SqlType::Real
+                } else if eqi(w, "FLOAT64") && backend == ClickHouse {
+                    // ClickHouse: Float64 (64-bit IEEE 754 floating-point)
+                    SqlType::Double
+                } else if eqi(w, "BFLOAT16") || eqi(w, "FLOAT16") {
+                    SqlType::HalfFloat
                 } else if eqi(w, "FLOAT8") || eqi(w, "FLOAT64") {
                     // Postgres has FLOAT8 as an alias for DOUBLE PRECISION.
                     // BigQuery uses FLOAT64 as an alias for DOUBLE PRECISION.
@@ -2264,6 +2512,10 @@ impl<'source> Parser<'source> {
                     // BigQuery uses STRING as an alias for VARCHAR
                     let attrs = self.string_attrs(backend)?;
                     SqlType::Varchar(None, attrs)
+                } else if eqi(w, "FIXEDSTRING") {
+                    // ClickHouse: FixedString(N) - fixed-length string
+                    let len = self.precision()?;
+                    SqlType::Char(len)
                 } else if eqi(w, "TEXT") {
                     SqlType::Text
                 } else if eqi(w, "CLOB") {
@@ -2293,7 +2545,13 @@ impl<'source> Parser<'source> {
                     let len = self.precision()?;
                     SqlType::Binary(len)
                 } else if eqi(w, "DATE") {
-                    SqlType::Date
+                    let bit_width = match backend {
+                        ClickHouse => Some(16),
+                        _ => None,
+                    };
+                    SqlType::Date(bit_width)
+                } else if eqi(w, "DATE32") {
+                    SqlType::Date(Some(32)) // ClickHouse: Date32
                 } else if eqi(w, "TIME") {
                     let precision = self.precision()?;
                     let time_zone_spec = self.time_zone_spec()?;
@@ -2342,17 +2600,76 @@ impl<'source> Parser<'source> {
                 } else if eqi(w, "DATETIME") {
                     // In Snowflake DATETIME is an alias for TIMESTAMP_NTZ,
                     // but in BigQuery it's not the same as the TIMESTAMP type.
-                    let precision = self.precision()?;
+                    // In ClickHouse, DateTime can have a timezone parameter: DateTime('Europe/Berlin')
+                    let (precision, time_zone_spec) =
+                        if backend == ClickHouse && self.match_(Token::LParen) {
+                            let tz_tok = self.next()?;
+                            if let Token::Word(tz_str) = tz_tok {
+                                let tz_name = tz_str.trim_matches('\'').to_string();
+                                self.expect(Token::RParen)?;
+                                (None, TimeZoneSpec::Fixed(TimeZone::Named(tz_name)))
+                            } else {
+                                return Err(ParseError::Unexpected(tz_tok));
+                            }
+                        } else {
+                            (self.precision()?, TimeZoneSpec::Without)
+                        };
+
                     if backend == Snowflake {
                         SqlType::Timestamp {
                             precision,
                             time_zone_spec: TimeZoneSpec::Without,
+                        }
+                    } else if backend == ClickHouse {
+                        SqlType::Timestamp {
+                            precision,
+                            time_zone_spec,
                         }
                     } else {
                         SqlType::DateTime
                     }
                 } else if eqi(w, "DATETIME2") {
                     SqlType::DateTime
+                } else if eqi(w, "DATETIME64") {
+                    // ClickHouse: DateTime64(precision) or DateTime64(precision, 'timezone')
+                    // Note: We need to manually parse precision and timezone because
+                    // the timezone comes after a comma inside the same parentheses
+                    if !self.match_(Token::LParen) {
+                        // DATETIME64 without precision or timezone is invalid,
+                        // but we'll allow it and return no precision
+                        SqlType::Timestamp {
+                            precision: None,
+                            time_zone_spec: TimeZoneSpec::Without,
+                        }
+                    } else {
+                        // Parse precision
+                        let precision = Some(self.next_int::<u8>()?);
+                        // Check for timezone after comma
+                        let time_zone_spec = if self.match_(Token::Comma) {
+                            let tz_tok = self.next()?;
+                            if let Token::Word(tz_str) = tz_tok {
+                                let tz_name = tz_str.trim_matches('\'').to_string();
+                                self.expect(Token::RParen)?;
+                                TimeZoneSpec::Fixed(TimeZone::Named(tz_name))
+                            } else {
+                                return Err(ParseError::Unexpected(tz_tok));
+                            }
+                        } else {
+                            self.expect(Token::RParen)?;
+                            TimeZoneSpec::Without
+                        };
+                        SqlType::Timestamp {
+                            precision,
+                            time_zone_spec,
+                        }
+                    }
+                } else if eqi(w, "TIME64") {
+                    // ClickHouse: Time64(precision) - high-precision time
+                    let precision = self.precision()?;
+                    SqlType::Time {
+                        precision,
+                        time_zone_spec: TimeZoneSpec::Without,
+                    }
                 } else if eqi(w, "BIT") {
                     SqlType::TinyInt
                 } else if eqi(w, "TIMESTAMP_TZ") {
@@ -2416,7 +2733,7 @@ impl<'source> Parser<'source> {
                     SqlType::Geography(srid.map(str::to_string))
                 } else if eqi(w, "ARRAY") {
                     let (left, right) = match backend {
-                        Snowflake => (Token::LParen, Token::RParen),
+                        Snowflake | ClickHouse => (Token::LParen, Token::RParen),
                         _ => (Token::LAngle, Token::RAngle),
                     };
                     if self.match_(left) {
@@ -2443,11 +2760,16 @@ impl<'source> Parser<'source> {
                     };
                     SqlType::Struct(inner_fields)
                 } else if eqi(w, "MAP") {
-                    let kv = if self.match_(Token::LAngle) {
+                    let (left, right) = if backend == ClickHouse {
+                        (Token::LParen, Token::RParen)
+                    } else {
+                        (Token::LAngle, Token::RAngle)
+                    };
+                    let kv = if self.match_(left) {
                         let key_type = self.parse_unconstrained_type(backend)?;
                         self.expect(Token::Comma)?;
                         let value_type = self.parse_unconstrained_type(backend)?;
-                        self.expect(Token::RAngle)?;
+                        self.expect(right)?;
                         Some((Box::new(key_type), Box::new(value_type)))
                     } else {
                         None
@@ -2455,6 +2777,37 @@ impl<'source> Parser<'source> {
                     SqlType::Map(kv)
                 } else if eqi(w, "VARIANT") || eqi(w, "SUPER") {
                     // Redshift uses "SUPER"
+                    SqlType::Variant
+                } else if eqi(w, "NULLABLE") {
+                    // ClickHouse: Nullable(T) - allows NULL values
+                    // The nullable flag is handled by parse(), so we just return the inner type
+                    self.expect(Token::LParen)?;
+                    let inner = self.parse_unconstrained_type(backend)?;
+                    self.expect(Token::RParen)?;
+                    inner
+                } else if eqi(w, "LOWCARDINALITY") {
+                    // ClickHouse: LowCardinality(T) - compression wrapper
+                    // This is a storage optimization hint, we parse the inner type
+                    self.expect(Token::LParen)?;
+                    let inner = self.parse_unconstrained_type(backend)?;
+                    self.expect(Token::RParen)?;
+                    inner
+                } else if eqi(w, "ENUM") {
+                    let entries = self.enum_entries()?;
+                    SqlType::Enum(entries, EnumAttrs { bit_width: None })
+                } else if eqi(w, "ENUM8") {
+                    let entries = self.enum_entries()?;
+                    let bit_width = Some(8);
+                    SqlType::Enum(entries, EnumAttrs { bit_width })
+                } else if eqi(w, "ENUM16") {
+                    let entries = self.enum_entries()?;
+                    let bit_width = Some(16);
+                    SqlType::Enum(entries, EnumAttrs { bit_width })
+                } else if eqi(w, "IPV4") {
+                    SqlType::IPv4
+                } else if eqi(w, "IPV6") {
+                    SqlType::IPv6
+                } else if eqi(w, "DYNAMIC") {
                     SqlType::Variant
                 } else if eqi(w, "VOID") {
                     SqlType::Void
