@@ -99,7 +99,7 @@ pub mod schemas {
         pub use v11::DbtManifestV11;
         pub use v12::DbtManifestV12;
     }
-    mod dbt_cloud;
+    pub mod dbt_cloud;
     pub use dbt_cloud::{
         CloudCredentials, DbtCloudConfig, DbtCloudContext, DbtCloudProject, DbtCloudProjectConfig,
         ResolvedCloudConfig,

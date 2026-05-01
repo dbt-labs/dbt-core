@@ -1,3 +1,4 @@
+use crate::schemas::dbt_cloud::DbtCloudConfig;
 use crate::schemas::profiles::DbtProfiles;
 use crate::schemas::project::DbtProject;
 use crate::schemas::properties::DbtPropertiesFile;
@@ -50,6 +51,11 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<()> {
             }
             JsonSchemaTypes::Schema(_) => {
                 let mut schema = generator.into_root_schema_for::<DbtPropertiesFile>();
+                deny_additional_properties_in_root(&mut schema);
+                println(to_string_pretty(&schema)?);
+            }
+            JsonSchemaTypes::DbtCloud(_) => {
+                let mut schema = generator.into_root_schema_for::<DbtCloudConfig>();
                 deny_additional_properties_in_root(&mut schema);
                 println(to_string_pretty(&schema)?);
             }

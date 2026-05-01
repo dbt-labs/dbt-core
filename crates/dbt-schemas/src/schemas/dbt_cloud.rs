@@ -1,9 +1,10 @@
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 /// Represents a dbt Cloud project configuration
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct DbtCloudProject {
     #[serde(rename = "project-name")]
     pub project_name: String,
@@ -23,7 +24,7 @@ pub struct DbtCloudProject {
 
 /// Represents the context section of the dbt Cloud configuration
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct DbtCloudContext {
     #[serde(rename = "active-project")]
     pub active_project: String,
@@ -35,7 +36,7 @@ pub struct DbtCloudContext {
 
 /// Represents the top-level dbt Cloud configuration file
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct DbtCloudConfig {
     pub version: String,
     pub context: DbtCloudContext,
