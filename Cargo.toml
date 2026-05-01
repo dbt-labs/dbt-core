@@ -51,6 +51,7 @@ members = [
   "crates/dbt-test-utils",
   "crates/dbt-tui-progress",
   "crates/dbt-metricflow",
+  "crates/dbt-sql-keywords",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
   "crates/dbt-sql/dbt-lexer-databricks",
@@ -234,6 +235,7 @@ dbt-lexer-duckdb = { path = "crates/dbt-sql/dbt-lexer-duckdb" }
 dbt-lexer-redshift = { path = "crates/dbt-sql/dbt-lexer-redshift" }
 dbt-lexer-snowflake = { path = "crates/dbt-sql/dbt-lexer-snowflake" }
 dbt-lexer-trino = { path = "crates/dbt-sql/dbt-lexer-trino" }
+dbt-sql-keywords = { path = "crates/dbt-sql-keywords" }
 dbt-sql-utils = { path = "crates/dbt-sql/dbt-sql-utils" }
 
 # jinja dependencies
