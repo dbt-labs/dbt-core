@@ -156,24 +156,30 @@ fn build_test_metadata_repr(asset: &GenericTestAsset) -> String {
 
 fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
     if let Some(name) = &asset.test_metadata_name {
-        let mut kwargs = BTreeMap::new();
-        if let Some(col) = &asset.test_metadata_column_name {
-            kwargs.insert("column_name".to_string(), YmlValue::string(col.clone()));
-        }
-        if let Some(cols) = &asset.test_metadata_combination_of_columns {
-            let seq = cols
-                .iter()
-                .cloned()
-                .map(YmlValue::string)
-                .collect::<Vec<_>>();
-            kwargs.insert(
-                "combination_of_columns".to_string(),
-                YmlValue::Sequence(seq, Default::default()),
-            );
-        }
-        if let Some(model) = &asset.test_metadata_model {
-            kwargs.insert("model".to_string(), YmlValue::string(model.clone()));
-        }
+        let kwargs = if !asset.test_metadata_kwargs.is_empty() {
+            asset.test_metadata_kwargs.clone()
+        } else {
+            // Fallback for assets constructed without test_metadata_kwargs (e.g. unit tests).
+            let mut kwargs = BTreeMap::new();
+            if let Some(col) = &asset.test_metadata_column_name {
+                kwargs.insert("column_name".to_string(), YmlValue::string(col.clone()));
+            }
+            if let Some(cols) = &asset.test_metadata_combination_of_columns {
+                let seq = cols
+                    .iter()
+                    .cloned()
+                    .map(YmlValue::string)
+                    .collect::<Vec<_>>();
+                kwargs.insert(
+                    "combination_of_columns".to_string(),
+                    YmlValue::Sequence(seq, Default::default()),
+                );
+            }
+            if let Some(model) = &asset.test_metadata_model {
+                kwargs.insert("model".to_string(), YmlValue::string(model.clone()));
+            }
+            kwargs
+        };
         return Some(TestMetadata {
             name: name.clone(),
             kwargs,
@@ -669,6 +675,7 @@ mod tests {
             test_metadata_column_name: Some("id".to_string()),
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
+            test_metadata_kwargs: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
         };
@@ -717,6 +724,7 @@ mod tests {
             ),
             test_metadata_combination_of_columns: None,
             test_metadata_model: Some("ref('my_model')".to_string()),
+            test_metadata_kwargs: BTreeMap::new(),
             original_name: Some(full_name.to_string()),
             unique_id_hash: None,
         };
@@ -753,6 +761,7 @@ mod tests {
             test_metadata_column_name: None,
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
             test_metadata_model: None,
+            test_metadata_kwargs: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
         };

@@ -242,6 +242,19 @@ fn persist_inner(
     // If the test name was truncated, get the original name from the truncations map
     let original_name = test_name_truncations.get(&full_name).cloned();
 
+    // Convert full kwargs to dbt_yaml::Value for storage in the manifest.
+    // Excludes "config" and "_config_raw" which are FS-internal config representations,
+    // not macro arguments (mirrors dbt-core which pops config keys before storing kwargs).
+    let test_metadata_kwargs: BTreeMap<String, dbt_yaml::Value> = kwargs
+        .into_iter()
+        .filter(|(k, _)| k.as_str() != "config" && k.as_str() != "_config_raw")
+        .filter_map(|(k, v)| {
+            serde_json::from_value::<dbt_yaml::Value>(v)
+                .ok()
+                .map(|yml_v| (k, yml_v))
+        })
+        .collect();
+
     Ok(GenericTestAsset {
         dbt_asset,
         resource_name: test_config.resource_name.clone(),
@@ -253,6 +266,7 @@ fn persist_inner(
         test_metadata_column_name: column_name,
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
+        test_metadata_kwargs,
         original_name,
         unique_id_hash: Some(test_hash),
     })
