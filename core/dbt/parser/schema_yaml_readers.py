@@ -1,6 +1,16 @@
 from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    ConversionCalculationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    PeriodAggregation,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources import (
     ColumnDimension,
     ColumnEntity,
@@ -83,15 +93,6 @@ from dbt.parser.common import YamlBlock
 from dbt.parser.schemas import ParseResult, SchemaParser, YamlReader
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    ConversionCalculationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    PeriodAggregation,
-    TimeGranularity,
-)
 
 
 def parse_where_filter(
