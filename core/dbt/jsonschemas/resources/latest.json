@@ -11225,6 +11225,12 @@
         "v"
       ],
       "properties": {
+        "access": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -11235,7 +11241,37 @@
             }
           ]
         },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "defined_in": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "deprecation_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
           "type": [
             "string",
             "null"
