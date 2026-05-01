@@ -777,6 +777,8 @@ pub enum JsonSchemaTypes {
     #[serde(rename = "dbt_cloud")]
     #[strum(serialize = "dbt_cloud")]
     DbtCloud(bool),
+    Packages(bool),
+    Dependencies(bool),
     Telemetry(bool),
 }
 
@@ -788,6 +790,8 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::Project(is_pre)
             | JsonSchemaTypes::Profile(is_pre)
             | JsonSchemaTypes::DbtCloud(is_pre)
+            | JsonSchemaTypes::Packages(is_pre)
+            | JsonSchemaTypes::Dependencies(is_pre)
             | JsonSchemaTypes::Telemetry(is_pre) => *is_pre,
         }
     }
@@ -798,7 +802,9 @@ impl JsonSchemaTypes {
             | JsonSchemaTypes::Schema(_)
             | JsonSchemaTypes::Project(_)
             | JsonSchemaTypes::Profile(_)
-            | JsonSchemaTypes::DbtCloud(_) => schemars::r#gen::SchemaSettings::default(),
+            | JsonSchemaTypes::DbtCloud(_)
+            | JsonSchemaTypes::Packages(_)
+            | JsonSchemaTypes::Dependencies(_) => schemars::r#gen::SchemaSettings::default(),
             JsonSchemaTypes::Telemetry(_) => schemars::r#gen::SchemaSettings::draft07(),
         }
     }
@@ -813,6 +819,8 @@ pub enum ClapSchemaTypes {
     Profile,
     #[value(name = "dbt_cloud")]
     DbtCloud,
+    Packages,
+    Dependencies,
     Telemetry,
 }
 
@@ -824,6 +832,8 @@ impl ClapSchemaTypes {
             ClapSchemaTypes::Project => JsonSchemaTypes::Project(is_pre),
             ClapSchemaTypes::Profile => JsonSchemaTypes::Profile(is_pre),
             ClapSchemaTypes::DbtCloud => JsonSchemaTypes::DbtCloud(is_pre),
+            ClapSchemaTypes::Packages => JsonSchemaTypes::Packages(is_pre),
+            ClapSchemaTypes::Dependencies => JsonSchemaTypes::Dependencies(is_pre),
             ClapSchemaTypes::Telemetry => JsonSchemaTypes::Telemetry(is_pre),
         }
     }

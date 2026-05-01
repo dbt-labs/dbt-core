@@ -4,18 +4,18 @@ use std::{
     path::PathBuf,
 };
 
-use dbt_yaml::{UntaggedEnumDeserialize, Verbatim};
+use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct UpstreamProject {
     pub name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, DbtSchema)]
 pub struct DbtPackages {
     #[serde(default)]
     pub projects: Vec<UpstreamProject>,
@@ -23,7 +23,7 @@ pub struct DbtPackages {
     pub packages: Vec<DbtPackageEntry>,
 }
 
-#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum DbtPackageEntry {
     Hub(HubPackage),
@@ -55,11 +55,14 @@ impl From<DbtPackageLock> for DbtPackageEntry {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct HubPackage {
+    /// Package identifier on the dbt package hub, in `org/name` form (e.g. `dbt-labs/dbt_utils`).
     pub package: String,
+    /// Version pin. Accepts a single version string, a list of constraints (e.g. `[">=1.0.0", "<2.0.0"]`), or a number.
     #[serde(rename = "version", skip_serializing_if = "Option::is_none")]
     pub version: Option<PackageVersion>,
+    /// Allow installation of pre-release versions when resolving `version`.
     #[serde(rename = "install-prerelease", skip_serializing_if = "Option::is_none")]
     pub install_prerelease: Option<bool>,
 }
@@ -74,15 +77,20 @@ impl From<HubPackageLock> for HubPackage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct GitPackage {
+    /// Git clone URL of the package repository (e.g. `https://github.com/dbt-labs/dbt_utils.git`).
     pub git: Verbatim<String>,
+    /// Revision to check out: a tag, branch, or commit SHA.
     #[serde(rename = "revision", skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// Suppress the warning emitted when `revision` is unpinned (i.e. a branch name like `main`).
     #[serde(rename = "warn-unpinned", skip_serializing_if = "Option::is_none")]
     pub warn_unpinned: Option<bool>,
+    /// Subdirectory of the repo where the dbt package is located.
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[schemars(skip)]
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
@@ -99,17 +107,28 @@ impl From<GitPackageLock> for GitPackage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct PrivatePackage {
+    /// Private package identifier. Two-segment `org/repo` for GitHub or 2-part Azure DevOps
+    /// (`azure_active_directory`); three-or-more-segment `org/group/repo` for GitLab subgroups
+    /// or Azure DevOps `org/project/repo` (`ado` / `azure_devops`).
+    #[schemars(regex(pattern = r"^[\w\-\.]+(/[\w\-\.]+){1,}$"))]
     pub private: Verbatim<String>,
+    /// Git provider. One of `github` (default), `gitlab`, `ado`, `azure_devops`,
+    /// or `azure_active_directory`. `ado` / `azure_devops` require an `org/project/repo`
+    /// path; `azure_active_directory` is hosted-only and uses `org/repo`.
     #[serde(rename = "provider", skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
+    /// Revision to check out: a tag, branch, or commit SHA.
     #[serde(rename = "revision", skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// Suppress the warning emitted when `revision` is unpinned (i.e. a branch name like `main`).
     #[serde(rename = "warn-unpinned", skip_serializing_if = "Option::is_none")]
     pub warn_unpinned: Option<bool>,
+    /// Subdirectory of the repo where the dbt package is located.
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[schemars(skip)]
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
@@ -127,8 +146,9 @@ impl From<PrivatePackageLock> for PrivatePackage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct LocalPackage {
+    /// Filesystem path to the local dbt package, relative to the project root.
     pub local: PathBuf,
 }
 
@@ -140,7 +160,7 @@ impl From<LocalPackageLock> for LocalPackage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum PackageVersion {
     Number(f64),
@@ -292,9 +312,11 @@ pub struct TarballPackageLock {
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct TarballPackage {
+    /// HTTPS URL of a `.tar.gz` archive containing the dbt package.
     pub tarball: Verbatim<String>,
+    #[schemars(skip)]
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
