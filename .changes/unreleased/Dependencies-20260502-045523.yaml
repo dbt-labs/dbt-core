@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Update pathspec version constraint upper bound in pyproject.toml
+time: 2026-05-02T04:55:23.25202471Z
+custom:
+    Author: aebrahim
+    Issue: "12702"
