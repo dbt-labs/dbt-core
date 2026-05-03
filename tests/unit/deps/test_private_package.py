@@ -1151,3 +1151,78 @@ class TestSshFallbackUrl:
             == "git@github.com:dbt-labs/repo.git"
         )
 
+    def test_explicit_github(self):
+        assert (
+            _get_ssh_fallback_url("dbt-labs/repo", "github")
+            == "git@github.com:dbt-labs/repo.git"
+        )
+
+    def test_gitlab_flat(self):
+        assert (
+            _get_ssh_fallback_url("org/repo", "gitlab")
+            == "git@gitlab.com:org/repo.git"
+        )
+
+    def test_gitlab_nested_groups(self):
+        assert (
+            _get_ssh_fallback_url("org/group/sub/repo", "gitlab")
+            == "git@gitlab.com:org/group/sub/repo.git"
+        )
+
+    def test_ado_three_part(self):
+        assert (
+            _get_ssh_fallback_url("org/project/repo", "ado")
+            == "git@ssh.dev.azure.com:v3/org/project/repo"
+        )
+
+    def test_azure_devops_three_part(self):
+        assert (
+            _get_ssh_fallback_url("org/project/repo", "azure_devops")
+            == "git@ssh.dev.azure.com:v3/org/project/repo"
+        )
+
+    def test_ado_two_part_raises(self):
+        with pytest.raises(
+            PrivatePackageResolutionError,
+            match="requires org/project/repo format \\(3 parts\\)",
+        ):
+            _get_ssh_fallback_url("org/repo", "ado")
+
+    def test_azure_active_directory_raises(self):
+        with pytest.raises(
+            PrivatePackageResolutionError,
+            match="Valid providers are:",
+        ):
+            _get_ssh_fallback_url("org/repo", "azure_active_directory")
+
+    def test_unknown_provider_raises(self):
+        with pytest.raises(
+            PrivatePackageResolutionError,
+            match="Valid providers are:",
+        ):
+            _get_ssh_fallback_url("org/repo", "bitbucket")
+
+
+class TestPrivatePackageHelperDispatch:
+    def test_empty_env_var_uses_ssh_path(self):
+        from dbt.deps.private_package import PrivatePackageHelper
+
+        helper = PrivatePackageHelper("[]")
+        assert helper.get_resolved_url("dbt-labs/repo", "github") == (
+            "git@github.com:dbt-labs/repo.git"
+        )
+
+    def test_populated_env_var_uses_https_path(self):
+        from dbt.deps.private_package import PrivatePackageHelper
+
+        config = (
+            '[{"org": "dbt-labs", '
+            '"url": "https://{token}@github.com/dbt-labs/{repo}.git", '
+            '"token": "abc123", '
+            '"provider": "github"}]'
+        )
+        helper = PrivatePackageHelper(config)
+        url = helper.get_resolved_url("dbt-labs/repo", "github")
+        assert url == "https://abc123@github.com/dbt-labs/repo.git"
+        assert "git@" not in url
+
