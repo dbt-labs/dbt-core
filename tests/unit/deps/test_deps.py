@@ -845,13 +845,18 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[1].name, "dbt-labs-test/b")
         self.assertEqual(resolved[1].version, "0.2.1")
 
-    @unittest.expectedFailure  # passes after commit 3 (SSH fallback)
     def test_private_package_resolves(self):
-        # Regression sentinel: a private: package must dispatch to PrivateUnpinnedPackage,
+        # Regression sentinel: private: package must dispatch to PrivateUnpinnedPackage,
         # not raise a "git provider integration is missing" stub error.
+        import dbt.deps.private_package as _pp_mod
         from dbt.deps.private_package import PrivateUnpinnedPackage
+        from dbt.deps.resolver import PackageListing
+        from dbt_common.context import set_invocation_context
 
+        old_helper = _pp_mod.PRIVATE_PACKAGE_HELPER
+        _pp_mod.PRIVATE_PACKAGE_HELPER = None
         os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"] = "[]"
+        set_invocation_context(os.environ)
         try:
             package_config = PackageConfig.from_dict(
                 {
@@ -860,14 +865,15 @@ class TestPackageSpec(unittest.TestCase):
                     ],
                 }
             )
-            resolved = resolve_packages(
-                package_config.packages, mock.MagicMock(project_name="test"), {}
-            )
-            self.assertEqual(len(resolved), 1)
-            # SSH fallback is exercised because env var is empty; URL is constructed but
-            # we don't assert the form here — that's covered in test_private_package.py.
+            listing = PackageListing.from_contracts(package_config.packages)
+            self.assertEqual(len(listing.packages), 1)
+            pkg = next(iter(listing.packages.values()))
+            self.assertIsInstance(pkg, PrivateUnpinnedPackage)
+            self.assertEqual(pkg.git, "git@github.com:dbt-labs-test/a.git")
         finally:
             del os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"]
+            set_invocation_context(os.environ)
+            _pp_mod.PRIVATE_PACKAGE_HELPER = old_helper
 
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(

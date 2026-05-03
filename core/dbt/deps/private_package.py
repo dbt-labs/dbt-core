@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from dbt_common.dataclass_schema import StrEnum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from dbt.contracts.project import PrivatePackage
@@ -331,6 +331,11 @@ class PrivatePackageHelper:
         """Resolve a private package name to a Git URL with token.
         When multiple repositories could match, the first in the config list wins.
         """
+        # If no providers were configured via DBT_ENV_PRIVATE_GIT_PROVIDER_INFO,
+        # fall back to constructing an SSH URL.
+        if not self.git_repositories:
+            return _get_ssh_fallback_url(private_def, provider)
+
         private_package = PrivatePackageDefinition.build(name=private_def, provider=provider)
 
         for git_repository in self.git_repositories:
@@ -341,6 +346,27 @@ class PrivatePackageHelper:
         raise PrivatePackageResolutionError(
             f"No matching Git URLs for private definition {private_def} with provider {provider}"
         )
+
+
+def _get_ssh_fallback_url(private_def: str, provider: Optional[str]) -> str:
+    """SSH URL fallback when DBT_ENV_PRIVATE_GIT_PROVIDER_INFO is unset/empty.
+    Matches the behavior of Fusion's get_local_resolved_url()."""
+    resolved_provider = provider or "github"
+    if resolved_provider == "github":
+        return f"git@github.com:{private_def}.git"
+    if resolved_provider == "gitlab":
+        return f"git@gitlab.com:{private_def}.git"
+    if resolved_provider in ("ado", "azure_devops"):
+        if len(private_def.split("/")) < 3:
+            raise PrivatePackageResolutionError(
+                f"The '{resolved_provider}' provider requires org/project/repo format (3 parts), "
+                f"got: '{private_def}'"
+            )
+        return f"git@ssh.dev.azure.com:v3/{private_def}"
+    raise PrivatePackageResolutionError(
+        f"Invalid private package configuration: '{private_def}' provider: "
+        f"'{provider or ''}'. Valid providers are: github, gitlab, ado, azure_devops"
+    )
 
 
 def get_private_package_helper():

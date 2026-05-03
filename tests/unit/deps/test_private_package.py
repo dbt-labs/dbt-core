@@ -12,6 +12,7 @@ from dbt.deps.private_package import (
     PrivatePackageName,
     PrivatePackageResolutionError,
     RepoName,
+    _get_ssh_fallback_url,
 )
 
 
@@ -1141,4 +1142,12 @@ class TestPrivatePackageHelperMultiProvider(BasePrivatePackageHelperResolution):
                 package_name="gitlab-labs/gitlab-project/test",
                 provider="github",
             )
+
+
+class TestSshFallbackUrl:
+    def test_default_provider_yields_github_ssh(self):
+        assert (
+            _get_ssh_fallback_url("dbt-labs/repo", None)
+            == "git@github.com:dbt-labs/repo.git"
+        )
 
