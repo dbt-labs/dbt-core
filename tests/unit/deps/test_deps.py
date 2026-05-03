@@ -1,3 +1,4 @@
+import os
 import unittest
 from argparse import Namespace
 from copy import deepcopy
@@ -844,18 +845,29 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[1].name, "dbt-labs-test/b")
         self.assertEqual(resolved[1].version, "0.2.1")
 
-    def test_private_package_raise_error(self):
-        package_config = PackageConfig.from_dict(
-            {
-                "packages": [
-                    {"private": "dbt-labs-test/a", "subdirectory": "foo-bar"},
-                ],
-            }
-        )
-        with self.assertRaisesRegex(
-            dbt.exceptions.DependencyError, "Cannot resolve private package"
-        ):
-            resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
+    @unittest.expectedFailure  # passes after commit 3 (SSH fallback)
+    def test_private_package_resolves(self):
+        # Regression sentinel: a private: package must dispatch to PrivateUnpinnedPackage,
+        # not raise a "git provider integration is missing" stub error.
+        from dbt.deps.private_package import PrivateUnpinnedPackage
+
+        os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"] = "[]"
+        try:
+            package_config = PackageConfig.from_dict(
+                {
+                    "packages": [
+                        {"private": "dbt-labs-test/a", "subdirectory": "foo-bar"},
+                    ],
+                }
+            )
+            resolved = resolve_packages(
+                package_config.packages, mock.MagicMock(project_name="test"), {}
+            )
+            self.assertEqual(len(resolved), 1)
+            # SSH fallback is exercised because env var is empty; URL is constructed but
+            # we don't assert the form here — that's covered in test_private_package.py.
+        finally:
+            del os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"]
 
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(

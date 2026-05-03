@@ -14,6 +14,7 @@ from dbt.contracts.project import (
 from dbt.deps.base import BasePackage, PinnedPackage, UnpinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.local import LocalUnpinnedPackage
+from dbt.deps.private_package import PrivateUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.exceptions import (
@@ -76,9 +77,7 @@ class PackageListing:
             elif isinstance(contract, GitPackage):
                 pkg = GitUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, PrivatePackage):
-                raise DependencyError(
-                    f'Cannot resolve private package {contract.private} because git provider integration is missing. Please use a "git" package instead.'
-                )
+                pkg = PrivateUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, RegistryPackage):
                 pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
