@@ -3,26 +3,17 @@
 // All keywords are in uppercase and sorted so that binary search can be used
 // to check for membership.
 
-use crate::Backend;
+use dbt_adapter_core::AdapterType;
 
-pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
-    use Backend::*;
+pub fn sorted_keywords_for(backend: AdapterType) -> &'static [&'static str] {
+    use AdapterType::*;
     match backend {
         Snowflake => SNOWFLAKE_RESERVED_KEYWORDS,
-        BigQuery => BIGQUERY_RESERVED_KEYWORDS,
-        Redshift | RedshiftODBC => REDSHIFT_RESERVED_KEYWORDS,
+        Bigquery => BIGQUERY_RESERVED_KEYWORDS,
+        Redshift => REDSHIFT_RESERVED_KEYWORDS,
         DuckDB => DUCKDB_RESERVED_KEYWORDS,
         // TODO: fill in other dialects' keywords and define a default fallback
-        Databricks
-        | DatabricksODBC
-        | Postgres
-        | Spark
-        | Athena
-        | Salesforce
-        | SQLServer
-        | ClickHouse
-        | Exasol
-        | Generic { .. } => &[],
+        _ => &[],
     }
 }
 
@@ -51,7 +42,7 @@ fn keyword_cmp_ignore_ascii_case(kw: &str, token: &str) -> std::cmp::Ordering {
 }
 
 /// Returns the uppercase version of the given token if it is a reserved keyword.
-pub fn is_keyword_ignore_ascii_case(token: &str, backend: Backend) -> Option<&'static str> {
+pub fn is_keyword_ignore_ascii_case(token: &str, backend: AdapterType) -> Option<&'static str> {
     let sorted_keywords = sorted_keywords_for(backend);
     sorted_keywords
         .binary_search_by(|kw| keyword_cmp_ignore_ascii_case(kw, token))
@@ -452,7 +443,7 @@ mod tests {
     }
 
     fn is_kw(ident: &str) -> Option<&'static str> {
-        is_keyword_ignore_ascii_case(ident, Backend::BigQuery)
+        is_keyword_ignore_ascii_case(ident, AdapterType::Bigquery)
     }
 
     #[test]

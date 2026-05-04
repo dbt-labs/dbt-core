@@ -7,7 +7,7 @@ use crate::metadata;
 use crate::sql_types::{self, TypeOps, original_type_string};
 use arrow_schema::{DataType, FieldRef};
 use dbt_adapter_core::AdapterType;
-use dbt_xdbc::{Backend, sql::types::SqlType};
+use dbt_adapter_sql::types::SqlType;
 use regex::Regex;
 
 pub struct ColumnBuilder {
@@ -263,7 +263,7 @@ impl ColumnBuilder {
             // FIXME: whats a good fallback here? This should technically never fail unless the
             // warehouse produces a very weird arrow type.
             .unwrap_or_else(|_| Cow::Owned(field.data_type().to_string()));
-        let sql_type = SqlType::parse(Backend::BigQuery, original_type_str.as_ref()).ok();
+        let sql_type = SqlType::parse(AdapterType::Bigquery, original_type_str.as_ref()).ok();
 
         // NOTE: In dbt Core, if a column is both REPEATED and NULLABLE,
         // REPEATED takes precedence.

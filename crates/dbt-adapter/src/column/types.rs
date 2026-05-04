@@ -1,5 +1,5 @@
+use dbt_adapter_sql::types::{SqlType, StructField};
 use dbt_common::current_function_name;
-use dbt_xdbc::sql::types::{SqlType, StructField};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
@@ -15,8 +15,6 @@ use minijinja::{
 };
 
 use dbt_schemas::schemas::dbt_column::DbtColumn;
-
-use crate::adapter::adapter_factory::backend_of;
 
 static LOG_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex"));
@@ -439,14 +437,12 @@ impl Column {
         adapter_type: AdapterType,
         fields: &[StructField],
     ) -> String {
-        let backend = backend_of(adapter_type);
-
         let fields_str = fields
             .iter()
             .map(|f| {
                 let (_, inner_data_type) =
                     Self::make_degenerate_types_from_parsed_sqltype(adapter_type, &f.sql_type);
-                format!("{} {inner_data_type}", f.name.display(backend))
+                format!("{} {inner_data_type}", f.name.display(adapter_type))
             })
             .collect::<Vec<_>>()
             .join(", ");
@@ -458,8 +454,6 @@ impl Column {
         adapter_type: AdapterType,
         sql_type: &SqlType,
     ) -> (String, String) {
-        let backend = backend_of(adapter_type);
-
         match (adapter_type, sql_type) {
             (AdapterType::Bigquery, SqlType::Boolean) => {
                 ("BOOLEAN".to_string(), "BOOLEAN".to_string())
@@ -499,13 +493,13 @@ impl Column {
                     ),
                     // TODO: is Array(None) possible? How does Core represent that?
                     _ => {
-                        let s = sql_type.to_string(backend);
+                        let s = sql_type.to_string(adapter_type);
                         (s.clone(), s)
                     }
                 }
             }
             _ => {
-                let dtype = sql_type.to_string(backend);
+                let dtype = sql_type.to_string(adapter_type);
 
                 // FIXME: the implementation of data_type() is wrong anyways
                 (dtype.clone(), dtype)
@@ -529,7 +523,7 @@ impl Column {
         match adapter_type {
             AdapterType::Bigquery => {
                 let Ok((sql_type, _nullable)) =
-                    SqlType::parse(dbt_xdbc::Backend::BigQuery, original_sql_str)
+                    SqlType::parse(AdapterType::Bigquery, original_sql_str)
                 else {
                     return (original_sql_str.to_string(), original_sql_str.to_string());
                 };
@@ -545,7 +539,7 @@ impl Column {
 
                 debug_assert!(
                     {
-                        let parsed = SqlType::parse(backend_of(adapter_type), original_sql_str);
+                        let parsed = SqlType::parse(adapter_type, original_sql_str);
                         match parsed {
                             Ok((_, nullable)) => was_nullable == nullable,
                             Err(_) => true, // TODO(felipecrv): assert here so we discover bad inputs
@@ -971,13 +965,13 @@ impl Column {
                         // for repeated columns due to how BigQuery models arrays via `mode=REPEATED`.
                         // Render the element type as the base and then re-apply `mode` uniformly.
                         if matches!(col.mode(), BigqueryColumnMode::Repeated) {
-                            let backend = backend_of(AdapterType::Bigquery);
-                            let inner = SqlType::parse(backend, col.core_data_type.as_str())
-                                .ok()
-                                .and_then(|(sql_type, _nullable)| match sql_type {
-                                    SqlType::Array(Some(inner)) => Some(inner),
-                                    _ => None,
-                                });
+                            let inner =
+                                SqlType::parse(AdapterType::Bigquery, col.core_data_type.as_str())
+                                    .ok()
+                                    .and_then(|(sql_type, _nullable)| match sql_type {
+                                        SqlType::Array(Some(inner)) => Some(inner),
+                                        _ => None,
+                                    });
 
                             if let Some(inner) = inner {
                                 Column::make_degenerate_types_from_parsed_sqltype(

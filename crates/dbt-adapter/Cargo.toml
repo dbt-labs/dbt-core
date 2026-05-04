@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 dbt-adapter-core = { workspace = true }
+dbt-adapter-sql = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-auth = { workspace = true }
 dbt-cloud-config = { workspace = true }

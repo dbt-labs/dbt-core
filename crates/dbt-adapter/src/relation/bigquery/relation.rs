@@ -14,7 +14,6 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
-use dbt_xdbc::Backend;
 use minijinja::Value;
 
 use std::any::Any;
@@ -278,7 +277,7 @@ impl BaseRelation for BigqueryRelation {
             InformationSchema::try_from_relation(self.adapter_type(), database.clone(), view_name)?;
 
         let quote_if_needed = |identifier: &str| -> String {
-            if need_quotes(Backend::BigQuery, identifier) {
+            if need_quotes(AdapterType::Bigquery, identifier) {
                 self.quoted(identifier)
             } else {
                 identifier.to_string()

@@ -9,7 +9,6 @@
 #![allow(clippy::if_same_then_else)]
 #![allow(clippy::let_and_return)]
 #![allow(clippy::needless_bool)]
-#![allow(clippy::only_used_in_recursion)]
 #![allow(clippy::should_implement_trait)]
 
 use dbt_base::cancel::{Cancellable, CancellationToken, CancelledError};
@@ -49,7 +48,6 @@ pub mod query_ctx;
 pub use query_ctx::QueryCtx;
 
 pub mod semaphore;
-pub mod sql;
 
 #[cfg(feature = "odbc")]
 pub(crate) mod odbc;

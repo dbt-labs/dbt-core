@@ -2,18 +2,17 @@ use std::sync::Arc;
 
 use arrow_schema::{FieldRef, Schema};
 use dbt_adapter_core::AdapterType;
-use dbt_xdbc::sql::types::metadata_sql_type_key;
+use dbt_adapter_sql::types::metadata_sql_type_key;
 use indexmap::IndexMap;
 
 use crate::AdapterResult;
-use crate::adapter::adapter_factory::backend_of;
 
 pub(crate) fn ingest_schema_with_column_overrides(
     arrow_schema: &Schema,
     column_overrides: &IndexMap<String, String>,
     adapter_type: AdapterType,
 ) -> AdapterResult<Schema> {
-    let sql_type_key = metadata_sql_type_key(backend_of(adapter_type));
+    let sql_type_key = metadata_sql_type_key(adapter_type);
 
     let new_fields = arrow_schema
         .fields()
@@ -66,7 +65,7 @@ mod tests {
         assert_eq!(id.metadata().get("existing"), Some(&"value".to_string()));
         assert_eq!(
             id.metadata()
-                .get(metadata_sql_type_key(backend_of(AdapterType::Bigquery))),
+                .get(metadata_sql_type_key(AdapterType::Bigquery)),
             Some(&"int64".to_string())
         );
 

@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::Backend;
+use dbt_adapter_core::AdapterType;
 
 use super::is_keyword_ignore_ascii_case;
 use super::tokenizer::QuotingStyle;
@@ -13,7 +13,7 @@ use super::tokenizer::QuotingStyle;
 ///
 /// This makes manipulating identifiers easier, because we don't have to
 /// worry about escaping and quoting until we want to format the identifier
-/// using the [Ident::display] method that takes a [Backend] and quotes the
+/// using the [Ident::display] method that takes a [AdapterType] and quotes the
 /// identifier if necessary according to the specific dialect rules.
 ///
 /// This also lets us preserve intentional quoting in the input source, even
@@ -41,7 +41,7 @@ impl AsRef<str> for Ident {
 }
 
 impl Ident {
-    pub fn new(s: impl Into<String>, backend: Backend) -> Self {
+    pub fn new(s: impl Into<String>, backend: AdapterType) -> Self {
         let s: String = s.into();
         if must_be_quoted(&s, backend) {
             Ident::Unquoted(canonical_quote(backend), s)
@@ -58,7 +58,7 @@ impl Ident {
         Ident::Unquoted(quote, s.into())
     }
 
-    pub fn display(&self, backend: Backend) -> IdentDisplay<'_> {
+    pub fn display(&self, backend: AdapterType) -> IdentDisplay<'_> {
         IdentDisplay(self, backend)
     }
 
@@ -76,7 +76,7 @@ impl Ident {
     }
 }
 
-pub struct IdentDisplay<'a>(&'a Ident, Backend);
+pub struct IdentDisplay<'a>(&'a Ident, AdapterType);
 
 impl fmt::Display for IdentDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -90,7 +90,7 @@ impl fmt::Display for IdentDisplay<'_> {
 fn _render_ident_in_quotes(
     quote: QuotingStyle,
     s: &str,
-    _backend: Backend,
+    _backend: AdapterType,
     f: &mut fmt::Formatter<'_>,
 ) -> fmt::Result {
     // TODO: use backend to determine how to escape the quote character
@@ -119,58 +119,60 @@ fn _render_ident_in_quotes(
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
 
 /// The character used to quote identifiers in this backend's dialect.
-pub const fn quote_char(backend: Backend) -> char {
-    use Backend::*;
+pub const fn quote_char(backend: AdapterType) -> char {
+    use AdapterType::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC | Spark | Athena => '`',
+        Bigquery | Databricks | Spark | Athena => '`',
         Snowflake => '"',
-        ClickHouse | Exasol | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => '"',
+        ClickHouse | Exasol | Redshift | Postgres | Salesforce | DuckDB => '"',
         // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
-        SQLServer => '"',
-        Generic { .. } => '"',
+        Fabric => '"',
+        _ => '"',
     }
 }
 
 /// The canonical quoting style used to quote identifiers in this backend's dialect.
-pub const fn canonical_quote(backend: Backend) -> QuotingStyle {
-    use Backend::*;
+pub const fn canonical_quote(backend: AdapterType) -> QuotingStyle {
+    use AdapterType::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC | Spark | Athena => QuotingStyle::Backtick,
-        ClickHouse | Exasol | Snowflake | Redshift | RedshiftODBC | Postgres | Salesforce
-        | DuckDB => QuotingStyle::Double,
+        Bigquery | Databricks | Spark | Athena => QuotingStyle::Backtick,
+        ClickHouse | Exasol | Snowflake | Redshift | Postgres | Salesforce | DuckDB => {
+            QuotingStyle::Double
+        }
         // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
-        SQLServer => QuotingStyle::Double,
-        // SQLServer => QuotingStyle::Bracketed,
-        Generic { .. } => QuotingStyle::Double,
+        Fabric => QuotingStyle::Double,
+        // Fabric => QuotingStyle::Bracketed,
+        _ => QuotingStyle::Double,
     }
 }
 
 /// Returns true if the given character is a valid character for an
 /// unquoted identifier in this backend's dialect.
-pub fn is_valid_ident_char(c: char, backend: Backend) -> bool {
-    use Backend::*;
+pub fn is_valid_ident_char(c: char, backend: AdapterType) -> bool {
+    use AdapterType::*;
     match backend {
-        BigQuery => c.is_alphanumeric() || ['_', '-', '$'].contains(&c),
+        Bigquery => c.is_alphanumeric() || ['_', '-', '$'].contains(&c),
         Snowflake => {
             // TODO: revert this once
             // https://github.com/sdf-labs/sdf/issues/3328 is fixed:
             // c.is_alphanumeric() || ['_', '`', '@'].contains(&c)
             c != '.' && c != quote_char(backend) && !c.is_whitespace() && c != '/' && c != ';'
         }
-        // TODO: check these fallbacks against documentation of these dialects
-        Athena
-        | Postgres
-        | Databricks
-        | DatabricksODBC
-        | Spark
-        | Redshift
-        | RedshiftODBC
-        | Salesforce
-        | DuckDB
-        | SQLServer // TODO
-        | ClickHouse
-        | Exasol
-        | Generic { .. } => c.is_alphanumeric() || c == '_',
+        Athena // TODO: check these fallbacks against documentation of these dialects
+            | Postgres
+            | Databricks
+            | Spark
+            | Redshift
+            | Salesforce
+            | DuckDB
+            | Fabric
+            | ClickHouse
+            | Starburst
+            | Trino
+            | Datafusion
+            | Dremio
+            | Oracle
+            | Exasol => c.is_alphanumeric() || c == '_',
     }
 }
 
@@ -191,7 +193,7 @@ pub fn is_valid_ident_char(c: char, backend: Backend) -> bool {
 /// If the user wrote `"MyTable"` (with quotes) in the input source, we should carry
 /// that intention in a `Indent::Unquoted(Double, "MyTable")` value, even though
 /// `must_be_quoted("MyTable", _)` returns false for all backends.
-pub fn must_be_quoted(id: &str, backend: Backend) -> bool {
+pub fn must_be_quoted(id: &str, backend: AdapterType) -> bool {
     let mut chars = id.chars();
     let first = match chars.next() {
         Some(c) => c,
@@ -209,7 +211,7 @@ pub fn must_be_quoted(id: &str, backend: Backend) -> bool {
         !is_valid_ident_char(c, backend)
             // BigQuery allows hyphens in unquoted identifiers in certain
             // contexts (e.g. table names), but we still quote them here
-            || (matches!(backend, Backend::BigQuery) && c == '-')
+            || (matches!(backend, AdapterType::Bigquery) && c == '-')
     });
     // Invalid characters MUST be in a quoted identifier (sometimes escaped)
     if has_invalid_char {

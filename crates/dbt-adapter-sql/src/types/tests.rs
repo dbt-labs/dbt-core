@@ -1,12 +1,13 @@
-use crate::Backend;
-use crate::sql::ident::*;
-use crate::sql::types::*;
+use crate::ident::*;
+use crate::types::*;
 
-use Backend::*;
+use dbt_adapter_core::AdapterType;
+
+use AdapterType::*;
 use DateTimeField::*;
 use SqlType::*;
 
-fn assert_parses_to(line: u32, input: &str, expected: &SqlType, backend: Backend) {
+fn assert_parses_to(line: u32, input: &str, expected: &SqlType, backend: AdapterType) {
     let (parsed, _nullable) = SqlType::parse(backend, input).unwrap();
     let rendered = parsed.to_string(backend);
     let expected_rendered = expected.to_string(backend);
@@ -23,7 +24,7 @@ fn assert_parses_to(line: u32, input: &str, expected: &SqlType, backend: Backend
 /// Uses [assert_parses_to] for every pair.
 #[test]
 fn test_parser() {
-    let data_for_backend = |backend: Backend| {
+    let data_for_backend = |backend: AdapterType| {
         vec![
             (line!(), "   boOL ", Boolean),
             (line!(), "boOLEan ", Boolean),
@@ -341,7 +342,7 @@ fn test_parser() {
     }
 }
 
-/// Test parsing of strings that might only be recognized by BigQuery.
+/// Test parsing of strings that might only be recognized by Bigquery.
 #[test]
 fn test_bigquery_types() {
     let table = vec![
@@ -363,7 +364,7 @@ fn test_bigquery_types() {
         ),
     ];
     for (line, input, expected) in table {
-        assert_parses_to(line, input, &expected, BigQuery);
+        assert_parses_to(line, input, &expected, Bigquery);
     }
 }
 
@@ -500,26 +501,15 @@ fn test_clickhouse_types() {
     }
 }
 
-fn backends() -> Vec<Backend> {
+fn backends() -> Vec<AdapterType> {
     vec![
-        Postgres,
-        Snowflake,
-        BigQuery,
-        Databricks,
-        DatabricksODBC,
-        RedshiftODBC,
-        Athena,
-        ClickHouse,
-        Generic {
-            library_name: "generic",
-            entrypoint: None,
-        },
+        Postgres, Snowflake, Bigquery, Databricks, Redshift, Athena, ClickHouse,
     ]
 }
 
 /// Assert that `ty` renders to `s` on the given backend, and that parsing `s` back
 /// to a [SqlType] results in the same type.
-fn assert_roundtrip(line: u32, ty: &SqlType, s: &str, backend: Backend) {
+fn assert_roundtrip(line: u32, ty: &SqlType, s: &str, backend: AdapterType) {
     let rendered = format!("{} ({backend})", ty.to_string(backend));
     let expected = format!("{s} ({backend})");
     assert_eq!(
@@ -535,8 +525,8 @@ fn assert_roundtrip(line: u32, ty: &SqlType, s: &str, backend: Backend) {
 }
 
 /// Returns a vector of triplets with a line number, SQL type, and its rendering for a given backend.
-fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static str)> {
-    // | # | SQLType | - | BigQuery | Snowflake | Postgres | Redshift | Databricks | ClickHouse | generic |
+fn expected_type_rendering_for(backend: AdapterType) -> Vec<(u32, SqlType, &'static str)> {
+    // | # | SQLType | - | Bigquery | Snowflake | Postgres | Redshift | Databricks | ClickHouse | generic |
     let sqltype_bg_generic_snow_table = vec![
         (
             line!(),
@@ -1295,19 +1285,17 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
         .into_iter()
         .map(|(line, t, bq, snow, pq, rs, dbx, ch, generic)| {
             let s = match backend {
-                BigQuery => bq,
+                Bigquery => bq,
                 Snowflake => snow,
                 Postgres | Salesforce => pq,
-                Redshift | RedshiftODBC => rs,
-                Databricks | DatabricksODBC => dbx,
+                Redshift => rs,
+                Databricks => dbx,
                 DuckDB => todo!("DuckDB tests not implemented yet"),
                 ClickHouse => ch,
                 Exasol => todo!("Exasol tests not implemented yet"),
                 Spark => todo!("Spark tests not implemented yet"),
-                SQLServer => todo!("SQL Server tests not implemented yet"),
-                // Athena (Presto/Trino-based) renders the same as generic for all types in
-                // this matrix; Athena-specific Arrow mappings are tested separately below.
-                Athena | Generic { .. } => generic,
+                Fabric => todo!("Fabric tests not implemented yet"),
+                _ => generic,
             };
             (line, t, s)
         })
@@ -1338,7 +1326,7 @@ fn test_roundtrip_struct_with_quoted_field() {
         ]))
     };
     let table = vec![
-        (line!(), BigQuery, r#"STRUCT<name VARCHAR, `age` INT>"#),
+        (line!(), Bigquery, r#"STRUCT<name VARCHAR, `age` INT>"#),
         (line!(), Snowflake, r#"OBJECT(name VARCHAR, "age" INT)"#),
         (line!(), Postgres, r#"STRUCT<name VARCHAR, "age" INT>"#),
         (line!(), Databricks, r#"STRUCT<name VARCHAR, `age` INT>"#),
