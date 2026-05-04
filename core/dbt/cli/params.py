@@ -328,6 +328,14 @@ inline = _create_option_and_track_env_var(
     help="Pass SQL inline to dbt compile and show",
 )
 
+sql = _create_option_and_track_env_var(
+    "--sql",
+    envvar=None,
+    help="Execute ad-hoc SQL/Jinja directly via dbt run-operation, without requiring a macro definition.",
+    type=click.STRING,
+    default=None,
+)
+
 inline_direct = _create_option_and_track_env_var(
     "--inline-direct",
     envvar=None,
