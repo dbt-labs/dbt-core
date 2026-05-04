@@ -102,6 +102,18 @@ metricflow_time_spine_sql = """
 SELECT to_date('02/20/2023, 'mm/dd/yyyy') as date_day
 """
 
+metricflow_time_spine_yml = """
+version: 2
+
+models:
+  - name: metricflow_time_spine
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        granularity: day
+"""
+
 models_people_metrics_yml = """
 version: 2
 
@@ -128,16 +140,6 @@ metrics:
         filter: "{{ Dimension('id__loves_dbt') }} is true"
         join_to_timespine: true
         fill_nulls_with: 0
-
-  - name: collective_window
-    label: "Collective window"
-    description: Testing window
-    type: simple
-    type_params:
-      measure:
-        name: years_tenure
-        filter: "{{ Dimension('id__loves_dbt') }} is true"
-      window: 14 days
 
   - name: average_tenure
     label: Average Tenure
@@ -183,16 +185,6 @@ metrics:
         filter: "{{ Dimension('id__loves_dbt') }} is true"
         join_to_timespine: true
         fill_nulls_with: 0
-
-  - name: collective_window
-    label: "Collective window"
-    description: Testing window
-    type: simple
-    type_params:
-      measure:
-        name: years_tenure
-        filter: "{{ Dimension('id__loves_dbt') }} is true"
-      window: 14 days
 
   - name: average_tenure
     label: Average Tenure
@@ -790,26 +782,32 @@ metrics:
       type: cumulative
       type_params:
         measure: num_orders
-        window: 1 month
         cumulative_type_params:
+          window: 1 month
           period_agg: average
     - name: yearly_orders
       label: Orders in the past year
       type: cumulative
       type_params:
         measure: num_orders
-        window: 1 year
+        cumulative_type_params:
+          window: 1 year
+          period_agg: first
     - name: visits_mtd
       label: Visits since start of month
       type: cumulative
       type_params:
         measure: num_visits
-        grain_to_date: month
+        cumulative_type_params:
+          grain_to_date: month
+          period_agg: first
     - name: cumulative_visits
       label: Rolling total of visits (all time)
       type: cumulative
       type_params:
         measure: num_visits
+        cumulative_type_params:
+          period_agg: first
     # TODO: Re-enable this when custom grain is supported for this type
     # - name: visits_martian_day
     #   label: Visits since start of martian_day

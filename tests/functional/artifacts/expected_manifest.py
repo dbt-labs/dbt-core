@@ -45,6 +45,7 @@ def get_rendered_model_config(**updates):
         "begin": None,
         "concurrent_batches": None,
         "freshness": None,
+        "on_error": None,
         "static_analysis": None,
     }
     result.update(updates)
@@ -147,7 +148,12 @@ def get_rendered_snapshot_config(**updates):
 
 
 def get_unrendered_snapshot_config(**updates):
-    result = {"check_cols": "all", "strategy": "check", "target_schema": None, "unique_key": "id"}
+    result = {
+        "check_cols": "Keyword(key='check_cols', value=Const(value='all'))",
+        "strategy": "Keyword(key='strategy', value=Const(value='check'))",
+        "target_schema": "Keyword(key='target_schema', value=Call(node=Name(name='var', ctx='load'), args=[Const(value='alternate_schema')], kwargs=[], dyn_args=None, dyn_kwargs=None))",
+        "unique_key": "Keyword(key='unique_key', value=Const(value='id'))",
+    }
     result.update(updates)
     return result
 
@@ -274,7 +280,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
     unrendered_test_config = get_unrendered_tst_config()
 
     snapshot_config = get_rendered_snapshot_config(target_schema=alternate_schema)
-    unrendered_snapshot_config = get_unrendered_snapshot_config(target_schema=alternate_schema)
+    unrendered_snapshot_config = get_unrendered_snapshot_config()
 
     quote_database = quote_schema = True
     relation_name_node_format = relation_name_format(quote_database, quote_schema, quote_model)
@@ -1430,9 +1436,7 @@ def expected_references_manifest(project):
                 "sources": [],
                 "tags": [],
                 "unique_id": "snapshot.test.snapshot_seed",
-                "unrendered_config": get_unrendered_snapshot_config(
-                    target_schema=alternate_schema
-                ),
+                "unrendered_config": get_unrendered_snapshot_config(),
                 "doc_blocks": [],
             },
         },
