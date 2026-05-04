@@ -3854,15 +3854,6 @@
           "items": {
             "$ref": "#/definitions/DataTests"
           }
-        },
-        "overloads": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/FunctionOverload"
-          }
         }
       },
       "additionalProperties": false
