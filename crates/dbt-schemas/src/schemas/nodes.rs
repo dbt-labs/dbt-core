@@ -300,11 +300,13 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// Callers that have an [`ExecutionPhase`] can convert it via `.into()`.
     ///
-    /// For models the path changes depending on the requested kind:
+    /// For models, generic tests, and unit tests the path varies by kind:
     ///
-    ///   - `Compiled`   — `target/compiled/{package}/{path_segment}` (via `get_target_write_path`)
-    ///   - `Executable` — `target/run/{package}/{path_segment}/{alias}.sql` (mirrors `write_file()`)
-    ///   - `Definition` — original source path
+    ///   - `Compiled`   - `target/compiled/{package}/{path_segment}` (via `get_target_write_path`)
+    ///   - `Executable` - `target/run/{package}/{path_segment}/{alias}.sql`
+    ///     (mirrors `write_file()` in `run_node_context.rs`; uses `alias` to
+    ///     avoid ENAMETOOLONG on Linux for long generic test names)
+    ///   - `Definition` - see `get_node_definition_path`
     ///
     /// For all other node types the definition path is always returned.
     fn get_node_path(
@@ -313,35 +315,54 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         in_dir: &Path,
         out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
-        if path_kind != NodePathKind::Definition && self.resource_type() == NodeType::Model {
-            match path_kind {
-                NodePathKind::Compiled => {
-                    let common = self.common();
-                    let abs = get_target_write_path(
-                        in_dir,
-                        &out_dir.join(DBT_COMPILED_DIR_NAME),
-                        &common.package_name,
-                        &common.path,
-                        &common.original_file_path,
-                    );
-                    pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
-                }
-                NodePathKind::Executable => {
-                    let common = self.common();
-                    let abs = get_target_write_path(
-                        in_dir,
-                        &out_dir.join(DBT_RUN_DIR_NAME),
-                        &common.package_name,
-                        &common.path,
-                        &common.original_file_path,
-                    )
-                    .with_file_name(format!("{}.sql", self.base().alias));
-                    pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
-                }
-                NodePathKind::Definition => unreachable!(),
+        match (path_kind, self.resource_type()) {
+            (NodePathKind::Compiled, NodeType::Model | NodeType::Test | NodeType::UnitTest)
+            | (NodePathKind::Executable, NodeType::Model | NodeType::Test | NodeType::UnitTest) => {
+                let abs = self.get_node_path_abs(path_kind, in_dir, out_dir);
+                pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
             }
-        } else {
-            self.get_node_definition_path(in_dir, out_dir)
+            _ => self.get_node_definition_path(in_dir, out_dir),
+        }
+    }
+
+    /// Absolute counterpart to `get_node_path` for the `Compiled` and `Executable` kinds.
+    /// Useful when the caller needs to pass the path to filesystem APIs directly.
+    fn get_node_path_abs(&self, path_kind: NodePathKind, in_dir: &Path, out_dir: &Path) -> PathBuf {
+        let common = self.common();
+        let executable_filename = || {
+            // Mirror write_file's filename rule: alias if non-empty, else name. This avoids
+            // ENAMETOOLONG on Linux for generic tests with names exceeding 255 bytes.
+            let alias = &self.base().alias;
+            if alias.is_empty() {
+                common.name.clone()
+            } else {
+                alias.clone()
+            }
+        };
+        match path_kind {
+            NodePathKind::Compiled => {
+                let mut abs = get_target_write_path(
+                    in_dir,
+                    &out_dir.join(DBT_COMPILED_DIR_NAME),
+                    &common.package_name,
+                    &common.path,
+                    &common.original_file_path,
+                );
+                if self.resource_type() == NodeType::UnitTest {
+                    // Unit test SQL is synthesized at <alias>.sql, not at original_file_path (the YAML).
+                    abs = abs.with_file_name(format!("{}.sql", executable_filename()));
+                }
+                abs
+            }
+            NodePathKind::Executable => get_target_write_path(
+                in_dir,
+                &out_dir.join(DBT_RUN_DIR_NAME),
+                &common.package_name,
+                &common.path,
+                &common.original_file_path,
+            )
+            .with_file_name(format!("{}.sql", executable_filename())),
+            NodePathKind::Definition => self.get_node_definition_path(in_dir, out_dir).into_owned(),
         }
     }
 
@@ -349,24 +370,33 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ///
     /// This is where the node is defined in the project — independent of execution phase.
     ///
-    /// - For snapshots this is the relative path to the generated snapshot file in the target directory.
-    /// - For generic tests this is also the path to the generated sql file.
+    /// - Snapshots: relative path to the generated snapshot file in the target directory.
+    /// - Generic tests: the YAML file where the test is declared (via `defined_at.file`).
+    ///   `original_file_path` is a misnomer for tests — it points at the generated SQL —
+    ///   so we prefer `defined_at` when available and fall back to it only if missing.
+    /// - Models / unit tests / others: `original_file_path` (already correct).
     fn get_node_definition_path(
         &self,
         in_dir: &Path,
         out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
-        // For snapshots, use path (generated file) since it's unique per snapshot.
-        // For other types, use original_file_path - as of today this field already incorporates
-        // the correct path for generic tests.
-        // TODO: the original_file_path should be fixed and the logic moved here
         if self.resource_type() == NodeType::Snapshot {
             let out_dir_relative =
                 pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
-            out_dir_relative.join(&self.common().path).into()
-        } else {
-            self.common().original_file_path.as_path().into()
+            return out_dir_relative.join(&self.common().path).into();
         }
+        if self.resource_type() == NodeType::Test
+            && let Some(defined_at) = self.defined_at()
+        {
+            // defined_at.file is the YAML file where the test is declared. It's stored
+            // relative to project root in the YAML span; if it ever comes through absolute
+            // (e.g. a different parser path), strip in_dir so callers get a consistent
+            // relative form.
+            let file = defined_at.file.as_path();
+            let relative = pathdiff::diff_paths(file, in_dir).unwrap_or_else(|| file.to_owned());
+            return relative.into();
+        }
+        self.common().original_file_path.as_path().into()
     }
 
     fn get_node_evaluated_event(
@@ -1799,6 +1829,10 @@ impl InternalDbtNode for DbtUnitTest {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocationWithFile> {
+        self.defined_at.as_ref()
     }
 
     fn serialize_inner(
@@ -4543,6 +4577,11 @@ pub struct DbtUnitTest {
     pub field_pre_injected_sql: Option<String>,
     pub tested_node_unique_id: Option<String>,
     pub this_input_node_unique_id: Option<String>,
+
+    /// YAML span of the unit test's `name:` declaration. Used by the analyzer
+    /// to anchor error locations at the unit-test entry in the source YAML.
+    /// `None` on warm-start parquet reload (not yet persisted across sessions).
+    pub defined_at: Option<dbt_common::CodeLocationWithFile>,
 
     // To be deprecated
     #[serde(rename = "config")]

@@ -424,16 +424,16 @@ impl MinimalProperties {
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
                     true,
                 )?;
-                if let Some(existing_unit_test) = self.unit_tests.get_mut(&unit_test.name) {
+                if let Some(existing_unit_test) = self.unit_tests.get_mut(unit_test.name.as_ref()) {
                     existing_unit_test
                         .duplicate_paths
                         .push(properties_path.to_path_buf());
                 } else {
                     self.unit_tests.insert(
-                        unit_test.name.clone(),
+                        unit_test.name.clone().into_inner(),
                         MinimalPropertiesEntry {
-                            name: validate_resource_name(&unit_test.name)?,
-                            name_span: Span::default(),
+                            name: validate_resource_name(unit_test.name.as_ref())?,
+                            name_span: unit_test.name.span().clone(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: unit_test_value,
                             table_value: None,

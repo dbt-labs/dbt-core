@@ -88,6 +88,18 @@ pub fn resolve_unit_tests(
     )?;
 
     for (unit_test_name, mpe) in unit_test_properties.into_iter() {
+        // Capture YAML span of the unit-test `name:` declaration for error reporting.
+        // The analyzer uses this as `start_location` so messages anchor at the unit
+        // test's entry in the source YAML rather than at line 1 col 1.
+        let defined_at = mpe.name_span.is_valid().then(|| {
+            CodeLocationWithFile::new(
+                mpe.name_span.start.line as u32,
+                mpe.name_span.start.column as u32,
+                mpe.name_span.start.index as u32,
+                mpe.relative_path.clone(),
+            )
+        });
+
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
             io_args,
             mpe.schema_value,
@@ -106,14 +118,16 @@ pub fn resolve_unit_tests(
 
         let location = CodeLocationWithFile::default(); // TODO
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
-        let (database, schema, _, model_found) = match models.get(&model_name) {
+        // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
+        // Versioned cases below override it with the version-specific id.
+        let (database, schema, _, tested_node_unique_id) = match models.get(&model_name) {
             Some(model) => (
                 model.__base_attr__.database.clone(),
                 model.__base_attr__.schema.clone(),
                 model.__base_attr__.alias.clone(),
-                true,
+                Some(model_name.clone()),
             ),
-            None => (String::new(), String::new(), unit_test.model.clone(), false),
+            None => (String::new(), String::new(), unit_test.model.clone(), None),
         };
 
         // Create base unit test node
@@ -281,6 +295,8 @@ pub fn resolve_unit_tests(
                 version: None,
                 overrides: unit_test.overrides.clone(),
             },
+            tested_node_unique_id: tested_node_unique_id.clone(),
+            defined_at,
             deprecated_config: properties_config,
             ..Default::default()
         };
@@ -355,6 +371,7 @@ pub fn resolve_unit_tests(
                     .depends_on
                     .nodes_with_ref_location =
                     vec![(versioned_model_unique_id.clone(), location.clone())];
+                versioned_test.tested_node_unique_id = Some(versioned_model_unique_id.clone());
 
                 unit_tests.insert(
                     versioned_test.__common_attr__.unique_id.clone(),
@@ -363,7 +380,7 @@ pub fn resolve_unit_tests(
             }
         } else {
             // Non-versioned case
-            if !model_found || !enabled {
+            if tested_node_unique_id.is_none() || !enabled {
                 disabled_unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
             } else {
                 unit_tests.insert(base_unique_id, Arc::new(base_unit_test));

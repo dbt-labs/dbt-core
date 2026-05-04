@@ -11,7 +11,6 @@ use std::sync::Arc;
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
-use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::get_target_write_path;
@@ -20,8 +19,8 @@ use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_adapter::load_store::ResultStore;
 use dbt_common::stdfs;
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_schemas::schemas::CommonAttributes;
-use dbt_schemas::schemas::NodeBaseAttributes;
+use dbt_schemas::schemas::InternalDbtNode;
+use dbt_schemas::schemas::NodePathKind;
 use dbt_schemas::schemas::telemetry::NodeType;
 use minijinja::State;
 use minijinja::constants::CURRENT_PATH;
@@ -44,15 +43,16 @@ type YmlValue = dbt_yaml::Value;
 #[allow(clippy::too_many_arguments)]
 fn extend_with_model_context<S: Serialize>(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
-    model: YmlValue,
-    common_attr: &CommonAttributes,
-    base_attr: &NodeBaseAttributes,
+    node: &dyn InternalDbtNode,
     deprecated_config: &S,
     adapter_type: AdapterType,
     io_args: &IoArgs,
-    resource_type: NodeType,
     sql_header: Option<MinijinjaValue>,
 ) {
+    let model = node.serialize();
+    let common_attr = node.common();
+    let base_attr = node.base();
+    let resource_type = node.resource_type();
     // Create a relation for 'this' using config values
     let this_relation = dbt_adapter::relation::RelationObject::new(Arc::from(
         dbt_adapter::relation::do_create_relation(
@@ -185,16 +185,12 @@ fn extend_with_model_context<S: Serialize>(
     );
 
     // Create the lazy wrapper for the model with the compiled path
-    let compiled_path = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &common_attr.package_name,
-        &common_attr.path,
-        &common_attr.original_file_path,
-    );
+    let compiled_path =
+        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
     let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
 
     base_context.insert("model".to_owned(), MinijinjaValue::from_object(lazy_model));
+    // For "node", we'll use the same lazy model wrapper
     let lazy_node = LazyModelWrapper::new(model_map, compiled_path);
 
     base_context.insert("node".to_owned(), MinijinjaValue::from_object(lazy_node));
@@ -243,31 +239,29 @@ pub fn extend_base_context_stateful_fn(
 /// Build a run context - parent function that orchestrates the context building
 #[allow(clippy::too_many_arguments)]
 pub fn build_run_node_context<S: Serialize>(
-    model: YmlValue,
-    common_attr: &CommonAttributes,
-    base_attr: &NodeBaseAttributes,
+    node: &dyn InternalDbtNode,
     deprecated_config: &S,
     adapter_type: AdapterType,
     agate_table: Option<AgateTable>,
     base_context: &BTreeMap<String, MinijinjaValue>,
     io_args: &IoArgs,
-    resource_type: NodeType,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
+    let common_attr = node.common();
+    let base_attr = node.base();
+    let resource_type = node.resource_type();
+
     // Build model-specific context
     let mut context = base_context.clone();
     extend_base_context_stateful_fn(&mut context, &common_attr.package_name, packages);
 
     extend_with_model_context(
         &mut context,
-        model,
-        common_attr,
-        base_attr,
+        node,
         deprecated_config,
         adapter_type,
         io_args,
-        resource_type,
         sql_header,
     );
 
@@ -339,13 +333,8 @@ pub fn build_run_node_context<S: Serialize>(
         MinijinjaValue::from(&common_attr.package_name),
     );
 
-    let abs_compiled = get_target_write_path(
-        &io_args.in_dir,
-        &io_args.out_dir.join(DBT_COMPILED_DIR_NAME),
-        &common_attr.package_name,
-        &common_attr.path,
-        &common_attr.original_file_path,
-    );
+    let abs_compiled =
+        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
     let relative_path = abs_compiled
         .strip_prefix(&io_args.out_dir)
         .map(|p| p.to_path_buf())

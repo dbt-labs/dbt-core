@@ -69,7 +69,7 @@ pub struct MinimalTableValue {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MinimalUnitTestValue {
-    pub name: String,
+    pub name: Spanned<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
