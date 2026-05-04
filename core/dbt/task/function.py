@@ -1,7 +1,9 @@
 import threading
+from dataclasses import replace
 from typing import Any, Dict
 
 from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.schemas.overload_results import OverloadResults
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.clients.jinja import MacroGenerator
@@ -83,16 +85,70 @@ class FunctionRunner(CompileRunner[FunctionNode]):
     def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
-        context = generate_runtime_function_context(compiled_node, self.config, manifest)
 
+        # Skip overloads that already succeeded on a previous run (used by `dbt retry`).
+        previous = compiled_node.previous_overload_results
+        already_successful = set(previous.successful) if previous else set()
+
+        # Execute the root function
+        context = generate_runtime_function_context(compiled_node, self.config, manifest)
         MacroGenerator(materialization_macro, context=context)()
 
-        return self.build_result(compiled_node, context)
+        # Execute each overload with the same database name but different
+        # arguments/returns/body. We attempt every overload regardless of
+        # earlier failures; the order in which overloads are created does not
+        # affect database-side dispatch.
+        overload_results = OverloadResults()
+        overload_errors: list[str] = []
+        for overload in compiled_node.overloads:
+            if overload.defined_in in already_successful:
+                overload_results.successful.append(overload.defined_in)
+                continue
+
+            overload_node = replace(
+                compiled_node,
+                arguments=overload.arguments,
+                returns=overload.returns or compiled_node.returns,
+                compiled_code=overload.compiled_body or "",
+            )
+            overload_ctx = generate_runtime_function_context(overload_node, self.config, manifest)
+            try:
+                MacroGenerator(materialization_macro, context=overload_ctx)()
+                overload_results.successful.append(overload.defined_in)
+            except Exception as e:
+                overload_results.failed.append(overload.defined_in)
+                overload_errors.append(f"{overload.defined_in}: {e}")
+
+        result = self.build_result(compiled_node, context)
+        result.overload_results = overload_results
+
+        if overload_results.failed:
+            result.status = RunStatus.PartialSuccess
+            result.message = f"PARTIAL SUCCESS {compiled_node.name}"
+            # Surface the per-overload errors so users see what failed.
+            for err in overload_errors:
+                fire_event(
+                    LogFunctionResult(
+                        description=f"function {compiled_node.name} overload {err}",
+                        status=str(RunStatus.Error),
+                        index=self.node_index,
+                        total=self.num_nodes,
+                        execution_time=0.0,
+                        node_info=self.node.node_info,
+                        group=group_lookup.get(compiled_node.unique_id),
+                    ),
+                    level=EventLevel.ERROR,
+                )
+
+        return result
+
+    def from_run_result(self, result, start_time, timing_info):
+        run_result = super().from_run_result(result, start_time, timing_info)
+        run_result.overload_results = result.overload_results
+        return run_result
 
     def after_execute(self, result: RunResult) -> None:
         self.print_result_line(result)
-
-    # def compile() defined on CompileRunner
 
     def print_result_line(self, result: RunResult) -> None:
         node = result.node

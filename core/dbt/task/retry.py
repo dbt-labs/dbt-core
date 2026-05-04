@@ -157,6 +157,14 @@ class RetryTask(ConfiguredTask):
             )
         }
 
+        # Re-running an overloaded function should only re-attempt overloads
+        # that previously failed; carry forward already-successful overloads.
+        overload_map = {
+            result.unique_id: result.overload_results
+            for result in self.previous_results.results
+            if result.overload_results is not None and len(result.overload_results.failed) > 0
+        }
+
         # Tasks without get_graph_queue (e.g. run-operation) and no failed nodes to retry.
         if not unique_ids and not hasattr(self.task_class, "get_graph_queue"):
             # Return early with the previous results as the past invocation was successful
@@ -184,6 +192,8 @@ class RetryTask(ConfiguredTask):
                 self.previous_results.metadata.invocation_started_at
                 or self.previous_results.metadata.generated_at
             )
+
+        task.overload_map = overload_map
 
         return_value = task.run()
         return return_value

@@ -1343,9 +1343,92 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         node.arguments = patch.arguments
         node.returns = patch.returns
 
+        # Process overloads: absorb overload SQL files into the root node
+        if patch.overloads:
+            self._absorb_overloads(node, patch.overloads)
+
+    def _absorb_overloads(self, root_node: "FunctionNode", overloads: list) -> None:
+        """Look up overload SQL files, store their code on the root node,
+        and remove them from the manifest so they don't appear as separate
+        DAG nodes."""
+        from dbt.artifacts.resources import FunctionOverload
+
+        absorbed: list[FunctionOverload] = []
+        for overload in overloads:
+            overload_name = overload.defined_in
+
+            # Prevent self-reference
+            if overload_name == root_node.name:
+                raise ParsingError(
+                    f"Function '{root_node.name}' cannot list itself in overloads "
+                    f"(defined_in: '{overload_name}')."
+                )
+
+            # Find the overload node in the manifest by name
+            overload_unique_id = f"function.{root_node.package_name}.{overload_name}"
+            overload_node = self.manifest.functions.get(overload_unique_id)
+
+            if overload_node is None:
+                # Check if this overload was already claimed by another root function
+                claimed_by = next(
+                    (
+                        root_uid
+                        for fid, root_uid in self.manifest.function_overload_owners.items()
+                        if fid.endswith(f"/{overload_name}.sql")
+                    ),
+                    None,
+                )
+                if claimed_by:
+                    raise ParsingError(
+                        f"Function overload '{overload_name}' (defined_in) is already "
+                        f"used by '{claimed_by}'. Each overload file can only belong "
+                        f"to one root function."
+                    )
+                raise ParsingError(
+                    f"Function overload '{overload_name}' (defined_in) not found. "
+                    f"Expected a SQL file at functions/{overload_name}.sql"
+                )
+
+            absorbed.append(
+                FunctionOverload(
+                    defined_in=overload.defined_in,
+                    arguments=overload.arguments,
+                    returns=overload.returns,
+                    description=overload.description,
+                    raw_body=overload_node.raw_code,
+                )
+            )
+
+            # Track the overload→root relationship for partial parsing
+            self.manifest.function_overload_owners[overload_node.file_id] = root_node.unique_id
+
+            # Clear the source file's function list so partial parsing knows
+            # this file no longer owns a standalone function node.
+            overload_file = self.manifest.files.get(overload_node.file_id)
+            if overload_file is not None and hasattr(overload_file, "functions"):
+                overload_file.functions = []
+
+            # Remove the overload node from the manifest — it's now part of the root
+            del self.manifest.functions[overload_unique_id]
+
+        root_node.overloads = absorbed
+
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
+
+        # Convert unparsed overloads to FunctionOverload objects (without body yet)
+        from dbt.artifacts.resources import FunctionOverload
+
+        overloads = [
+            FunctionOverload(
+                defined_in=o.defined_in,
+                arguments=o.arguments,
+                returns=o.returns,
+                description=o.description,
+            )
+            for o in target.overloads
+        ]
 
         return ParsedFunctionPatch(
             name=target.name,
@@ -1365,6 +1448,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
+            overloads=overloads,
         )
 
 

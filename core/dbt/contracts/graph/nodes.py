@@ -42,7 +42,7 @@ from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
 from dbt.artifacts.resources import Function as FunctionResource
-from dbt.artifacts.resources import FunctionArgument, FunctionReturns
+from dbt.artifacts.resources import FunctionArgument, FunctionOverload, FunctionReturns
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -73,6 +73,7 @@ from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.artifacts.schemas.batch_results import BatchResults
+from dbt.artifacts.schemas.overload_results import OverloadResults
 from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
@@ -1666,6 +1667,15 @@ class Group(GroupResource, BaseNode):
 
 @dataclass
 class FunctionNode(CompiledNode, FunctionResource):
+    previous_overload_results: Optional[OverloadResults] = None
+
+    def __post_serialize__(
+        self, dct: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        dct = super().__post_serialize__(dct, context)
+        if "previous_overload_results" in dct:
+            del dct["previous_overload_results"]
+        return dct
 
     @property
     def is_relational(self) -> bool:
@@ -1681,11 +1691,19 @@ class FunctionNode(CompiledNode, FunctionResource):
     def same_returns(self, old: "FunctionNode") -> bool:
         return self.returns == old.returns
 
+    def same_overloads(self, old: "FunctionNode") -> bool:
+        # Compare on signature + body only; descriptions don't affect SQL.
+        def key(o):
+            return (o.defined_in, o.arguments, o.returns, o.raw_body)
+
+        return [key(o) for o in self.overloads] == [key(o) for o in old.overloads]
+
     def same_contents(self, old, adapter_type) -> bool:
         return (
             super().same_contents(old, adapter_type)
             and self.same_arguments(old)
             and self.same_returns(old)
+            and self.same_overloads(old)
         )
 
 
@@ -1879,6 +1897,7 @@ class ParsedFunctionPatchRequired:
 @dataclass
 class ParsedFunctionPatch(ParsedNodePatch, ParsedFunctionPatchRequired):
     arguments: List[FunctionArgument] = field(default_factory=list)
+    overloads: List[FunctionOverload] = field(default_factory=list)
 
 
 @dataclass
