@@ -54,6 +54,18 @@ fn default_language() -> Option<String> {
     Some("sql".to_string())
 }
 
+/// An overload of a function with different argument signatures.
+/// Each overload references a separate SQL file (via `defined_in`) that
+/// contains the function body for this overload.
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct FunctionOverload {
+    pub defined_in: String,
+    pub arguments: Option<Vec<FunctionArgument>>,
+    pub returns: Option<FunctionReturnType>,
+    pub description: Option<String>,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct FunctionProperties {
@@ -69,6 +81,7 @@ pub struct FunctionProperties {
     pub language: Option<String>,
     pub returns: Option<FunctionReturnType>,
     pub arguments: Option<Vec<FunctionArgument>>,
+    pub overloads: Option<Vec<FunctionOverload>>,
 }
 
 impl FunctionProperties {
@@ -84,6 +97,7 @@ impl FunctionProperties {
             language: default_language(),
             returns: None,
             arguments: None,
+            overloads: None,
         }
     }
 }
