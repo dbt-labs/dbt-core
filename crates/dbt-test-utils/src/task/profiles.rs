@@ -7,6 +7,7 @@ use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
 
 use async_trait::async_trait;
 use dbt_schemas::schemas::profiles::DbConfig;
+use merge::Merge;
 
 /// Used to load a fully resolved profiles.yml from the default directory (~/.dbt)
 /// and write it to the project env.
@@ -53,12 +54,14 @@ impl Task for HydrateProfilesTask {
 fn override_with(original: &mut DbConfig, override_: DbConfig) {
     match (original, override_) {
         (DbConfig::Bigquery(self_bigquery), DbConfig::Bigquery(other_bigquery)) => {
-            use merge::Merge;
             self_bigquery.merge(*other_bigquery);
         }
         (DbConfig::DuckDB(self_duckdb), DbConfig::DuckDB(other_duckdb)) => {
             *self_duckdb = other_duckdb;
         }
-        _ => unimplemented!("database config override for non-BigQuery/DuckDB adapters"),
+        (DbConfig::Redshift(self_redshift), DbConfig::Redshift(other_redshift)) => {
+            self_redshift.merge(*other_redshift);
+        }
+        _ => unimplemented!("database config override for non-BigQuery/DuckDB/Redshift adapters"),
     }
 }

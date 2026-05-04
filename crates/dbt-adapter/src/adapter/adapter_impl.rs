@@ -139,7 +139,7 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
 /// Read a boolean adapter config, tolerating the casing variants
 /// dbt-core users may write in `profiles.yml`. Missing keys default to
 /// `false`; unparseable values return a `Configuration` error.
-fn get_bool_config(engine: &dyn AdapterEngine, key: &str) -> AdapterResult<bool> {
+pub(crate) fn get_bool_config(engine: &dyn AdapterEngine, key: &str) -> AdapterResult<bool> {
     crate::try_parse_bool_str(engine.config(key).as_deref(), key).map(|o| o.unwrap_or(false))
 }
 

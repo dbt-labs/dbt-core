@@ -1,4 +1,4 @@
-use crate::adapter::adapter_impl::AdapterImpl;
+use crate::adapter::adapter_impl::{AdapterImpl, get_bool_config};
 use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::*;
@@ -13,6 +13,7 @@ use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::RelationPattern;
 use dbt_xdbc::*;
@@ -26,6 +27,37 @@ use crate::metadata::list_objects::*;
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226
 pub fn list_relations(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    if get_bool_config(engine, "datasharing")? {
+        list_relations_via_show_tables(engine, ctx, conn, db_schema, token)
+    } else {
+        list_relations_via_information_schema(engine, ctx, conn, db_schema, token)
+    }
+}
+
+fn build_redshift_relation(
+    database: String,
+    schema: String,
+    name: String,
+    relation_type: RelationType,
+    quoting: ResolvedQuoting,
+) -> Arc<dyn BaseRelation> {
+    Arc::new(RedshiftRelation::new(
+        Some(database),
+        Some(schema),
+        Some(name),
+        Some(relation_type),
+        None,
+        quoting,
+    )) as Arc<dyn BaseRelation>
+}
+
+fn list_relations_via_information_schema(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -62,28 +94,84 @@ where table_schema ilike '{}'",
         return Ok(Vec::new());
     }
 
-    let mut relations = Vec::new();
-
     let table_name = get_column_values::<StringArray>(&batch, "name")?;
     let database_name = get_column_values::<StringArray>(&batch, "database")?;
     let schema_name = get_column_values::<StringArray>(&batch, "schema")?;
     let table_type = get_column_values::<StringArray>(&batch, "type")?;
 
+    let mut relations = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
-        let table_name = table_name.value(i);
-        let database_name = database_name.value(i);
-        let schema_name = schema_name.value(i);
-        let table_type = table_type.value(i);
-
-        let relation = Arc::new(RedshiftRelation::new(
-            Some(database_name.to_string()),
-            Some(schema_name.to_string()),
-            Some(table_name.to_string()),
-            Some(RelationType::from(table_type)),
-            None,
+        relations.push(build_redshift_relation(
+            database_name.value(i).to_string(),
+            schema_name.value(i).to_string(),
+            table_name.value(i).to_string(),
+            RelationType::from(table_type.value(i)),
             engine.quoting(),
-        )) as Arc<dyn BaseRelation>;
-        relations.push(relation);
+        ));
+    }
+
+    Ok(relations)
+}
+
+/// `SHOW TABLES FROM SCHEMA <db>.<schema>` (datasharing path) — required for
+/// cross-database listing. Mirrors the upstream macro introduced in
+/// dbt-labs/dbt-adapters#1671.
+fn list_relations_via_show_tables(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let sql = format!(
+        "SHOW TABLES FROM SCHEMA {}.{}",
+        db_schema.rendered_catalog, db_schema.rendered_schema
+    );
+
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
+    parse_show_tables_batch(&batch, engine.quoting())
+}
+
+/// Parse a `SHOW TABLES FROM SCHEMA` result batch into [BaseRelation]s.
+///
+/// Mirrors `transform_show_tables_for_list_relations` from
+/// dbt-labs/dbt-adapters#1671. The defensive fallback for a missing
+/// `table_subtype` column was added in dbt-labs/dbt-adapters#1745: that
+/// column only exists on Redshift Patch 197+ (rolling out Nov 2025), so on
+/// older clusters every VIEW is treated as a plain view.
+fn parse_show_tables_batch(
+    batch: &RecordBatch,
+    quoting: ResolvedQuoting,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    if batch.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+
+    let table_name = get_column_values::<StringArray>(batch, "table_name")?;
+    let database_name = get_column_values::<StringArray>(batch, "database_name")?;
+    let schema_name = get_column_values::<StringArray>(batch, "schema_name")?;
+    let table_type = get_column_values::<StringArray>(batch, "table_type")?;
+    let table_subtype = batch
+        .column_by_name("table_subtype")
+        .and_then(|col| col.as_any().downcast_ref::<StringArray>());
+
+    let mut relations = Vec::with_capacity(batch.num_rows());
+    for i in 0..batch.num_rows() {
+        let kind = table_type.value(i).trim().to_uppercase();
+        let subtype = table_subtype.map(|arr| arr.value(i).trim().to_uppercase());
+        let relation_type = match (kind.as_str(), subtype.as_deref()) {
+            ("VIEW", Some("MATERIALIZED VIEW")) => RelationType::MaterializedView,
+            ("VIEW", _) => RelationType::View,
+            _ => RelationType::Table,
+        };
+
+        relations.push(build_redshift_relation(
+            database_name.value(i).to_string(),
+            schema_name.value(i).to_string(),
+            table_name.value(i).to_string(),
+            relation_type,
+            quoting,
+        ));
     }
 
     Ok(relations)
@@ -1009,4 +1097,136 @@ fn build_schema_from_stats_sql_without_stats(
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_schema::Schema as ArrowSchema;
+
+    fn quoting() -> ResolvedQuoting {
+        ResolvedQuoting::default()
+    }
+
+    fn show_tables_batch_with_subtype(rows: &[(&str, &str, &str, &str, &str)]) -> Arc<RecordBatch> {
+        let database: Vec<&str> = rows.iter().map(|r| r.0).collect();
+        let schema: Vec<&str> = rows.iter().map(|r| r.1).collect();
+        let name: Vec<&str> = rows.iter().map(|r| r.2).collect();
+        let typ: Vec<&str> = rows.iter().map(|r| r.3).collect();
+        let subtype: Vec<&str> = rows.iter().map(|r| r.4).collect();
+
+        let arrow_schema = Arc::new(ArrowSchema::new(vec![
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+            Field::new("table_subtype", DataType::Utf8, false),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                arrow_schema,
+                vec![
+                    Arc::new(StringArray::from(database)),
+                    Arc::new(StringArray::from(schema)),
+                    Arc::new(StringArray::from(name)),
+                    Arc::new(StringArray::from(typ)),
+                    Arc::new(StringArray::from(subtype)),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn show_tables_batch_without_subtype(rows: &[(&str, &str, &str, &str)]) -> Arc<RecordBatch> {
+        let database: Vec<&str> = rows.iter().map(|r| r.0).collect();
+        let schema: Vec<&str> = rows.iter().map(|r| r.1).collect();
+        let name: Vec<&str> = rows.iter().map(|r| r.2).collect();
+        let typ: Vec<&str> = rows.iter().map(|r| r.3).collect();
+
+        let arrow_schema = Arc::new(ArrowSchema::new(vec![
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                arrow_schema,
+                vec![
+                    Arc::new(StringArray::from(database)),
+                    Arc::new(StringArray::from(schema)),
+                    Arc::new(StringArray::from(name)),
+                    Arc::new(StringArray::from(typ)),
+                ],
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_parse_show_tables_mixed_types() {
+        let batch = show_tables_batch_with_subtype(&[
+            ("dev", "s1", "test_table", "TABLE", "REGULAR TABLE"),
+            ("dev", "s1", "regular_view", "VIEW", "REGULAR VIEW"),
+            (
+                "dev",
+                "s1",
+                "late_binding_view",
+                "VIEW",
+                "LATE BINDING VIEW",
+            ),
+            ("dev", "s1", "manual_mv", "VIEW", "MATERIALIZED VIEW"),
+        ]);
+
+        let relations = parse_show_tables_batch(&batch, quoting()).unwrap();
+        assert_eq!(relations.len(), 4);
+        assert_eq!(relations[0].relation_type(), Some(RelationType::Table));
+        assert_eq!(relations[1].relation_type(), Some(RelationType::View));
+        assert_eq!(relations[2].relation_type(), Some(RelationType::View));
+        assert_eq!(
+            relations[3].relation_type(),
+            Some(RelationType::MaterializedView)
+        );
+        assert_eq!(relations[0].identifier_as_str().unwrap(), "test_table");
+        assert_eq!(relations[3].identifier_as_str().unwrap(), "manual_mv");
+    }
+
+    #[test]
+    fn test_parse_show_tables_empty_batch() {
+        let batch = show_tables_batch_with_subtype(&[]);
+        let relations = parse_show_tables_batch(&batch, quoting()).unwrap();
+        assert!(relations.is_empty());
+    }
+
+    #[test]
+    fn test_parse_show_tables_missing_subtype_treats_views_as_view() {
+        // Pre-Patch-197 Redshift omits the table_subtype column.
+        // Without it, every VIEW must be treated as a plain view.
+        let batch = show_tables_batch_without_subtype(&[
+            ("dev", "s1", "t1", "TABLE"),
+            ("dev", "s1", "v1", "VIEW"),
+            ("dev", "s1", "v2", "VIEW"),
+        ]);
+
+        let relations = parse_show_tables_batch(&batch, quoting()).unwrap();
+        assert_eq!(relations.len(), 3);
+        assert_eq!(relations[0].relation_type(), Some(RelationType::Table));
+        assert_eq!(relations[1].relation_type(), Some(RelationType::View));
+        assert_eq!(relations[2].relation_type(), Some(RelationType::View));
+    }
+
+    #[test]
+    fn test_parse_show_tables_handles_lowercase_and_padding() {
+        let batch = show_tables_batch_with_subtype(&[
+            ("dev", "s1", "padded", " view ", " materialized view "),
+            ("dev", "s1", "lower", "view", "regular view"),
+        ]);
+
+        let relations = parse_show_tables_batch(&batch, quoting()).unwrap();
+        assert_eq!(
+            relations[0].relation_type(),
+            Some(RelationType::MaterializedView)
+        );
+        assert_eq!(relations[1].relation_type(), Some(RelationType::View));
+    }
 }
