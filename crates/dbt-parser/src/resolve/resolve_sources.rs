@@ -22,6 +22,7 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
 use dbt_schemas::schemas::relations::default_dbt_quoting_for;
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, NodeResolverTracker};
 use minijinja::Value as MinijinjaValue;
@@ -331,6 +332,12 @@ pub fn resolve_sources(
         merged_configs.event_time = merged_event_time.clone();
         merged_configs.schema_origin = Some(merged_schema_origin);
         merged_configs.sync = merged_sync.clone();
+        // node.meta and node.tags receive the merged values via __common_attr__ below;
+        // node.config.meta and node.config.tags need them too to match dbt-core. (#1393)
+        merged_configs.meta = merged_meta.clone();
+        merged_configs.tags = merged_tags
+            .clone()
+            .map(StringOrArrayOfStrings::ArrayOfStrings);
 
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
