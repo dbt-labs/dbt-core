@@ -9,13 +9,13 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::{
     ErrorCode, FsResult, fs_err, io_args::IoArgs, warn_error_options::WarnErrorOptions,
 };
+use dbt_jinja_ctx::{LoadCtx, to_jinja_globals_btreemap};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::dbt_catalogs::DbtCatalogs,
     schemas::profiles::{DbConfig, TargetContext},
 };
 use minijinja::value::Value as MinijinjaValue;
-use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
 use crate::{
     environment_builder::JinjaEnvBuilder, jinja_environment::JinjaEnv,
@@ -35,7 +35,7 @@ pub fn initialize_load_jinja_environment(
     adapter_type: AdapterType,
     db_config: DbConfig,
     run_started_at: DateTime<Tz>,
-    flags: &BTreeMap<String, minijinja::Value>,
+    flags: &BTreeMap<String, MinijinjaValue>,
     warn_error_options: WarnErrorOptions,
     io_args: IoArgs,
     catalogs: Option<Arc<DbtCatalogs>>,
@@ -44,20 +44,6 @@ pub fn initialize_load_jinja_environment(
     let target_context = TargetContext::try_from(db_config)
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
-    let globals = BTreeMap::from([
-        (
-            "run_started_at".to_string(),
-            MinijinjaValue::from_object(PyDateTime::new_aware(
-                run_started_at,
-                Some(PytzTimezone::new(Tz::UTC)),
-            )),
-        ),
-        (
-            "target".to_string(),
-            MinijinjaValue::from_serialize(target_context),
-        ),
-        ("flags".to_string(), MinijinjaValue::from_serialize(flags)),
-    ]);
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
     let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
@@ -69,11 +55,14 @@ pub fn initialize_load_jinja_environment(
         type_formatter,
         catalogs,
     );
+
+    let load_ctx = LoadCtx::new(run_started_at, target_context, flags.clone());
+
     Ok(JinjaEnvBuilder::new()
         .with_adapter(Arc::new(adapter))
         .with_root_package("dbt".to_string())
+        .with_globals(to_jinja_globals_btreemap(&load_ctx))
         .with_warn_error_options(warn_error_options)
         .with_io_args(io_args)
-        .with_globals(globals)
         .build())
 }

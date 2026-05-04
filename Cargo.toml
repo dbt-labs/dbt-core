@@ -27,6 +27,8 @@ members = [
   "crates/dbt-loader",
   "crates/dbt-test-containers",
   "crates/dbt-parser",
+  "crates/dbt-handles",
+  "crates/dbt-jinja-ctx",
   "crates/dbt-jinja-filters",
   "crates/dbt-jinja-vars",
   "crates/dbt-profile",
@@ -204,8 +206,10 @@ dbt-env = { path = "crates/dbt-env" }
 dbt-error = { path = "crates/dbt-error" }
 dbt-features = { path = "crates/dbt-features" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
+dbt-handles = { path = "crates/dbt-handles" }
 dbt-ident = { path = "crates/dbt-ident" }
 dbt-init = { path = "crates/dbt-init" }
+dbt-jinja-ctx = { path = "crates/dbt-jinja-ctx" }
 dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }

@@ -1,0 +1,44 @@
+//! Typed Jinja contexts for dbt-fusion phase environments.
+//!
+//! This crate defines the typed shape of every value that becomes available to
+//! Jinja templates across the load, resolve (parse), render (compile), and run
+//! phases. It replaces the historical pattern of constructing per-phase
+//! `BTreeMap<String, MinijinjaValue>` maps with composable typed structs whose
+//! field names — driven by plain `serde::Serialize` — are the Jinja keys.
+//!
+//! Two flavours of context exist:
+//!
+//! * **Env globals** — set once at `JinjaEnv` construction (load and parse only).
+//!   These structs go through [`register::to_jinja_globals_btreemap`] before
+//!   `JinjaEnvBuilder.with_globals(...)` so the registered map is visible to
+//!   downstream builder hooks (notably `try_with_macros`'s replay-mode
+//!   detection). [`register::register_globals_from_serialize`] is the
+//!   already-built-env equivalent for tests and callers that don't go through
+//!   the builder.
+//! * **Per-render contexts** — passed at every `render_named_str<S: Serialize>`
+//!   call. These flow directly into minijinja's existing render API; no helper
+//!   needed.
+//!
+//! Object identity for callable Jinja values (`ref`, `source`, `config`, `var`,
+//! `this`, …) is preserved through serde via the [`JinjaObject`] wrapper, which
+//! relies on minijinja's built-in `VALUE_HANDLES` round-trip.
+//!
+//! Dyn-trait handles (e.g. [`AdapterHandle`]) live in the lightweight
+//! `dbt-handles` crate so that downstream crates like `dbt-adapter` can
+//! implement them without depending on this crate (or on the heavier
+//! `dbt-common`). They are re-exported here for ergonomics.
+
+pub mod core;
+pub mod jinja_object;
+pub mod load;
+pub mod register;
+
+pub use core::GlobalCore;
+pub use dbt_handles::AdapterHandle;
+pub use jinja_object::JinjaObject;
+pub use load::LoadCtx;
+pub use register::{register_globals_from_serialize, to_jinja_globals_btreemap};
+
+/// Shape used by the `target` Jinja global. Cheap-cloned (`Arc`) across the
+/// resolve / model loop.
+pub type TargetContextMap = std::sync::Arc<std::collections::BTreeMap<String, minijinja::Value>>;

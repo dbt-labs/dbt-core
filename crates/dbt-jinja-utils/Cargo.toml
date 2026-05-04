@@ -26,6 +26,7 @@ dbt-adapter-core = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
+dbt-jinja-ctx = { workspace = true }
 dbt-jinja-filters = { workspace = true }
 dbt-jinja-vars = { workspace = true }
 dbt-schemas = { workspace = true }

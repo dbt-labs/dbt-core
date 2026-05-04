@@ -1,0 +1,104 @@
+# Cross-phase key-set documentation.
+#
+# This file is the living source-of-truth for "which Jinja key appears in
+# which phase, and with what concrete value." At PR 1 only the `load` phase
+# has a fixture; rows for other phases are intentionally listed so that
+# future PRs (resolve, compile, run) flip the `<skip>` placeholders to real
+# expectations as the corresponding ctx structs land.
+
+key target.name
+----
+load              dev
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key flags.FULL_REFRESH
+----
+load              false
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key run_started_at
+----
+load              <object>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# Project-name only appears starting at the resolve (parse) phase — at load
+# this key MUST be absent. Once PR 2 lands, the `resolve_*` rows below get
+# real expectations.
+key project_name
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# `execute` is unset at load (load env has no `execute` global), false at
+# resolve, true at compile + run. Future PRs will fill this in.
+key execute
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# Callable Jinja values: ref/source/config/this only appear once we have a
+# resolve-model or compile-node ctx. Until then, future-PR rows are skipped.
+key ref
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key source
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key config
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key this
+----
+load              <absent>
+resolve_globals   <skip>
+resolve_base      <skip>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>

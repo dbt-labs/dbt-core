@@ -124,6 +124,12 @@ impl fmt::Debug for Adapter {
     }
 }
 
+impl dbt_handles::AdapterHandle for Adapter {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 impl fmt::Display for Adapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match &self.inner {
