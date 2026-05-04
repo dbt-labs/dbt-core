@@ -19,6 +19,7 @@ pub struct BigqueryPartitionConfig {
     pub field: String,
     #[serde(default = "BigqueryPartitionConfig::default_data_type")]
     pub data_type: String,
+    #[serde(flatten)]
     pub __inner__: BigqueryPartitionConfigInner,
     #[serde(default)]
     pub copy_partitions: bool,
@@ -583,5 +584,70 @@ mod tests {
                 .get_value(&MinijinjaValue::from("invalid_field"))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_deserialize_inner() {
+        let inner_time_json = dbt_yaml::from_str(
+            r#"
+                {
+                    "granularity": "day",
+                    "time_ingestion_partitioning": false
+                }
+            "#,
+        )
+        .unwrap();
+        let inner_time_config: BigqueryPartitionConfigInner =
+            dbt_yaml::from_value(inner_time_json).unwrap();
+        assert!(
+            matches!(inner_time_config, BigqueryPartitionConfigInner::Time(TimeConfig { granularity, time_ingestion_partitioning: false }) if granularity == "day")
+        );
+
+        let inner_range_json = dbt_yaml::from_str(
+            r#"
+            {
+                "range":
+                {
+                    "start": 0,
+                    "end": 2,
+                    "interval": 1
+                }
+            }
+            "#,
+        )
+        .unwrap();
+        let inner_range_config: BigqueryPartitionConfigInner =
+            dbt_yaml::from_value(inner_range_json).unwrap();
+        assert!(matches!(
+            inner_range_config,
+            BigqueryPartitionConfigInner::Range(RangeConfig {
+                range: Range {
+                    start: 0,
+                    end: 2,
+                    interval: 1,
+                }
+            })
+        ));
+    }
+
+    #[test]
+    fn test_serde_json_round_trip() {
+        let original = BigqueryPartitionConfig {
+            field: "valid_starting_at_week".to_string(),
+            data_type: "date".to_string(),
+            __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
+                granularity: "day".to_string(),
+                time_ingestion_partitioning: false,
+            }),
+            copy_partitions: false,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        println!("{json}");
+
+        let value = dbt_yaml::from_str(&json).unwrap();
+        let roundtripped: BigqueryPartitionConfig = dbt_yaml::from_value(value).unwrap();
+
+        assert_eq!(original, roundtripped);
     }
 }
