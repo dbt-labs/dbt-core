@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 from hypothesis import given
 from hypothesis.strategies import builds, lists
+from metricflow_semantic_interfaces.type_enums import MetricType
 
 from dbt.artifacts.resources import (
     ColumnInfo,
@@ -53,7 +54,6 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.node_types import AccessType, NodeType
 from dbt_common.dataclass_schema import ValidationError
-from dbt_semantic_interfaces.type_enums import MetricType
 from tests.unit.utils import (
     ContractTestCase,
     assert_fails_validation,
@@ -151,6 +151,47 @@ def test_config_same(unrendered_node_config_dict, func):
     value = func(unrendered_node_config_dict)
     assert unrendered_node_config_dict != value
     assert ModelConfig.same_contents(unrendered_node_config_dict, value)
+
+
+class TestStaticAnalysisBoolCoercion:
+    """YAML interprets unquoted on/off as booleans. Ensure static_analysis
+    is always coerced to a string so manifest.json contains "off"/"on"
+    rather than false/true. See: https://github.com/dbt-labs/dbt-core/issues/12015"""
+
+    def test_false_coerced_to_off(self):
+        cfg = ModelConfig(static_analysis=False)
+        assert cfg.static_analysis == "off"
+
+    def test_true_coerced_to_on(self):
+        cfg = ModelConfig(static_analysis=True)
+        assert cfg.static_analysis == "on"
+
+    def test_string_off_unchanged(self):
+        cfg = ModelConfig(static_analysis="off")
+        assert cfg.static_analysis == "off"
+
+    def test_string_on_unchanged(self):
+        cfg = ModelConfig(static_analysis="on")
+        assert cfg.static_analysis == "on"
+
+    def test_string_unsafe_unchanged(self):
+        cfg = ModelConfig(static_analysis="unsafe")
+        assert cfg.static_analysis == "unsafe"
+
+    def test_none_default(self):
+        cfg = ModelConfig()
+        assert cfg.static_analysis is None
+
+    def test_serializes_as_string(self):
+        cfg = ModelConfig(static_analysis=False)
+        d = cfg.to_dict(omit_none=True)
+        assert d["static_analysis"] == "off"
+
+    def test_source_config_coercion(self):
+        cfg = SourceConfig(static_analysis=False)
+        assert cfg.static_analysis == "off"
+        cfg2 = SourceConfig(static_analysis=True)
+        assert cfg2.static_analysis == "on"
 
 
 @pytest.fixture

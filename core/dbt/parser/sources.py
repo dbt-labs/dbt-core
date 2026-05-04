@@ -30,7 +30,8 @@ from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.common import ParserRef
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_event, fire_or_defer_event
 from dbt_common.exceptions import DbtInternalError
 
 
@@ -354,7 +355,11 @@ class SourcePatcher:
 
         if unused_tables:
             unused_tables_formatted = self.get_unused_msg(unused_tables)
-            warn_or_error(UnusedTables(unused_tables=unused_tables_formatted))
+            fire_or_defer_event(
+                UnusedTables(unused_tables=unused_tables_formatted),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
+            )
 
         self.manifest.source_patches = {}
 
@@ -495,12 +500,14 @@ class SourcePatcher:
         config_tags_valid: List[str] = []
         for tag in config_tags:
             if not isinstance(tag, str):
-                warn_or_error(
+                fire_or_defer_event(
                     ValidationWarning(
                         field_name=f"`config.tags`: {tags}",
                         resource_type=NodeType.Source.value,
                         node_name=source_name,
-                    )
+                    ),
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
             else:
                 config_tags_valid.append(tag)

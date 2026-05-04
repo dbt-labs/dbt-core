@@ -8,9 +8,10 @@ column name so that MetricFlow generates SQL against the correct warehouse colum
 
 from collections import OrderedDict
 
+from metricflow_semantic_interfaces.type_enums import DimensionType, EntityType
+
 from dbt.artifacts.resources import ColumnDimension, ColumnEntity, ColumnInfo
 from dbt.parser.schema_yaml_readers import SemanticModelParser
-from dbt_semantic_interfaces.type_enums import DimensionType, EntityType
 
 
 def _make_column(name, description="", dimension=None, entity=None, granularity=None, config=None):

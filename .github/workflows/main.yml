@@ -46,6 +46,8 @@ jobs:
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      HATCH_PYTHON: "3.11"
 
     steps:
       - name: Check out the repository
@@ -54,7 +56,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: "Install hatch"
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
@@ -84,6 +86,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Check out the repository
@@ -168,6 +172,7 @@ jobs:
         os: ["ubuntu-latest"]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -258,6 +263,7 @@ jobs:
         # already includes split group and runs mac + windows
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -351,7 +357,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: "Install hatch"
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install

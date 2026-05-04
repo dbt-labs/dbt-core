@@ -134,6 +134,63 @@ sum_numbers_function_from_source_sql = """
 SELECT sum(number) as sum_numbers FROM {{ source('test_source', 'numbers_seed') }}
 """
 
+double_it_js = """
+return value * 2;
+"""
+
+double_it_deterministic_js = """
+{{ config(volatility='deterministic') }}
+return value * 2;
+"""
+
+double_it_js_with_jinja = """
+{% if 1 == 1 %}
+return value * 2;
+{% else %}
+return value * 3;
+{% endif %}
+"""
+
+double_it_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+double_it_non_deterministic_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      volatility: non-deterministic
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+double_it_stable_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      volatility: stable
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
 
 class BasicUDFSetup:
     @pytest.fixture(scope="class")
@@ -703,3 +760,82 @@ class TestFunctionSchemasInOnRunEnd:
         assert (
             expected_fn_schema in schemas
         ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"
+
+
+class TestJavaScriptUDFUnsupportedAdapter:
+    """Test that JS UDFs fail at parse time on unsupported adapters (e.g. postgres)."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.js": double_it_js,
+            "double_it.yml": double_it_js_yml,
+        }
+
+    def test_js_udf_fails_on_unsupported_adapter(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert "Function 'double_it' uses JavaScript, which is not supported on 'postgres'" in str(
+            excinfo.value
+        )
+
+
+aggregate_js = """
+export function initialState() {
+  return {sum: 0}
+}
+export function aggregate(state, x) {
+  if (x > 0) { state.sum += x; }
+}
+export function merge(state, partialState) {
+  state.sum += partialState.sum;
+}
+export function finalize(state) {
+  return state.sum;
+}
+"""
+
+aggregate_js_yml = """
+functions:
+  - name: sum_positive
+    config:
+      type: aggregate
+    arguments:
+      - name: x
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+quote_args_js = """
+return price * quantity;
+"""
+
+quote_args_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    config:
+      snowflake:
+        quote_args: false
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+quote_args_default_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""

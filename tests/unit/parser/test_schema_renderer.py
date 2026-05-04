@@ -353,6 +353,87 @@ class TestYamlRendering(unittest.TestCase):
             ["{{ Dimension('my_entity__is_fraud') }} = false"],
         )
 
+    def test__versioned_model_data_tests(self):
+        """Test that data_tests inside version blocks are not rendered.
+
+        Version-level data_tests may contain Jinja expressions like {{ ref() }}
+        that are not available in the schema rendering context. These must be
+        skipped and rendered later in the test compilation phase.
+        """
+        context = {"test_var": "1234"}
+        renderer = SchemaYamlRenderer(context, "models")
+
+        # Version-level data_tests should not be rendered
+        dct = {
+            "name": "my_model",
+            "attribute": "{{ test_var }}",
+            "versions": [
+                {
+                    "v": 1,
+                    "data_tests": [
+                        {
+                            "compare_datasets": {
+                                "source_query": "select * from {{ ref('other_model') }}",
+                                "target_query": "select * from {{ ref('my_model') }}",
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+        expected = {
+            "name": "my_model",
+            "attribute": "1234",
+            "versions": [
+                {
+                    "v": 1,
+                    "data_tests": [
+                        {
+                            "compare_datasets": {
+                                "source_query": "select * from {{ ref('other_model') }}",
+                                "target_query": "select * from {{ ref('my_model') }}",
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+        dct = renderer.render_data(dct)
+        self.assertEqual(expected, dct)
+
+        # Version-level descriptions should not be rendered
+        dct = {
+            "name": "my_model",
+            "versions": [
+                {
+                    "v": 1,
+                    "description": "{{ test_var }}",
+                }
+            ],
+        }
+        rendered = renderer.render_data(dct)
+        self.assertEqual(rendered["versions"][0]["description"], "{{ test_var }}")
+
+        # Version-level column data_tests and descriptions should not be rendered
+        dct = {
+            "name": "my_model",
+            "versions": [
+                {
+                    "v": 1,
+                    "columns": [
+                        {
+                            "name": "id",
+                            "description": "{{ test_var }}",
+                            "data_tests": [{"not_null": {}}],
+                        }
+                    ],
+                }
+            ],
+        }
+        rendered = renderer.render_data(dct)
+        self.assertEqual(rendered["versions"][0]["columns"][0]["description"], "{{ test_var }}")
+        self.assertEqual(rendered["versions"][0]["columns"][0]["data_tests"], [{"not_null": {}}])
+
     def test__derived_semantics_descriptions(self):
         context = {
             "test_var": "1234",

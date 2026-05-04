@@ -12,6 +12,11 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
+class SnowflakeFunctionConfig(dbtClassMixin):
+    quote_args: bool = True
+
+
+@dataclass
 class FunctionConfig(NodeConfig):
     # The fact that this is a property, that can be changed, seems wrong.
     # A function's materialization should never be changed, so why allow for it?
@@ -20,6 +25,7 @@ class FunctionConfig(NodeConfig):
     volatility: Optional[FunctionVolatility] = None
     runtime_version: Optional[str] = None
     entry_point: Optional[str] = None
+    snowflake: SnowflakeFunctionConfig = field(default_factory=SnowflakeFunctionConfig)
 
 
 # =============
