@@ -765,6 +765,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
         node_resolver.clone(),
         &package_name,
         &Nodes::default(),
+        None,
         runtime_config.clone(),
         namespace_keys,
     );

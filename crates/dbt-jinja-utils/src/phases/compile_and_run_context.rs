@@ -66,10 +66,14 @@ impl Object for DummyConfig {
 }
 
 /// Configure the Jinja environment for the compile phase.
+///
+/// `defer_nodes`, when supplied (compile/run with `--defer --state`), drives
+/// the `defer_relation` field on each deferrable graph node. (#1366)
 pub fn build_compile_and_run_base_context(
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: &str,
     nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
     runtime_config: Arc<DbtRuntimeConfig>,
     namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
@@ -162,7 +166,7 @@ pub fn build_compile_and_run_base_context(
     // Register graph as a global
     ctx.insert(
         "graph".to_string(),
-        MinijinjaValue::from_object(LazyFlatGraph::new(nodes)),
+        MinijinjaValue::from_object(LazyFlatGraph::new(nodes, defer_nodes)),
     );
     let result_store = ResultStore::default();
     ctx.insert(
@@ -1038,26 +1042,30 @@ impl Object for MacroLookupContext {
 }
 
 /// This is a lazy-loaded flat graph object that builds the flat graph from
-/// `nodes` on first access.
+/// `nodes` on first access. `defer_nodes`, when present, is used to populate
+/// each deferrable node's `defer_relation` key (#1366).
 #[derive(Debug)]
 struct LazyFlatGraph {
     nodes: Nodes,
+    defer_nodes: Option<Nodes>,
     graph: OnceLock<MinijinjaValue>,
 }
 
 impl LazyFlatGraph {
-    pub fn new(nodes: &Nodes) -> Self {
+    pub fn new(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> Self {
         // TODO: We don't want to clone the top level maps either -- make the
         // caller pass in Arc<Nodes> instead
         Self {
             nodes: nodes.clone(),
+            defer_nodes: defer_nodes.cloned(),
             graph: OnceLock::new(),
         }
     }
 
     fn get_graph(&self) -> &MinijinjaValue {
-        self.graph
-            .get_or_init(|| MinijinjaValue::from(build_flat_graph(&self.nodes)))
+        self.graph.get_or_init(|| {
+            MinijinjaValue::from(build_flat_graph(&self.nodes, self.defer_nodes.as_ref()))
+        })
     }
 }
 
@@ -1150,6 +1158,7 @@ mod tests {
             node_resolver,
             "test_pkg",
             &nodes,
+            None,
             runtime_config,
             vec![],
         );

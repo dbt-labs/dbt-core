@@ -1286,9 +1286,64 @@ impl Object for Exceptions {
     }
 }
 
+/// `defer_relation` shape emitted for each deferrable graph node so Jinja
+/// expressions like `node.defer_relation.relation_name` (which dbt-core
+/// supports out of the box) work in fusion. Mirrors the dbt-core manifest
+/// representation. (#1366)
+#[derive(Serialize)]
+struct DeferRelation<'a> {
+    database: Option<&'a str>,
+    schema: &'a str,
+    alias: &'a str,
+    relation_name: Option<&'a str>,
+    resource_type: &'static str,
+    name: &'a str,
+    unique_id: &'a str,
+}
+
+impl<'a> DeferRelation<'a> {
+    fn from_node(node: &'a dyn InternalDbtNode, resource_type: &'static str) -> Self {
+        let common = node.common();
+        let base = node.base();
+        Self {
+            database: if base.database.is_empty() {
+                None
+            } else {
+                Some(base.database.as_str())
+            },
+            schema: base.schema.as_str(),
+            alias: base.alias.as_str(),
+            relation_name: base.relation_name.as_deref(),
+            resource_type,
+            name: common.name.as_str(),
+            unique_id: common.unique_id.as_str(),
+        }
+    }
+}
+
+/// Insert `defer_relation` into a serialized graph node's mapping. When
+/// `defer_nodes` has a matching entry the value is the deferred relation
+/// dict; otherwise it's null. The key is always present so users can do
+/// `node.defer_relation is not none` without hitting "undefined value".
+fn inject_defer_relation<F>(
+    map: &mut dbt_yaml::Mapping,
+    unique_id: &str,
+    defer_nodes: Option<&Nodes>,
+    resource_type: &'static str,
+    lookup: F,
+) where
+    F: Fn(&Nodes, &str) -> Option<Arc<dyn InternalDbtNode>>,
+{
+    let defer_value = defer_nodes
+        .and_then(|dn| lookup(dn, unique_id))
+        .and_then(|d| dbt_yaml::to_value(DeferRelation::from_node(d.as_ref(), resource_type)).ok())
+        .unwrap_or_else(YmlValue::null);
+    map.insert(YmlValue::string("defer_relation".to_string()), defer_value);
+}
+
 /// Builds a flat graph for use in a compile context, using
 /// a serialized manifest and restricting to particular keys
-pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
+pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMap {
     let mut graph = ValueMap::new();
     let nodes_insert: BTreeMap<String, Value> = nodes
         .models
@@ -1314,6 +1369,11 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
+                inject_defer_relation(map, unique_id, defer_nodes, "model", |dn, uid| {
+                    dn.models
+                        .get(uid)
+                        .map(|m| Arc::clone(m) as Arc<dyn InternalDbtNode>)
+                });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
         })
@@ -1329,6 +1389,11 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
+                inject_defer_relation(map, unique_id, defer_nodes, "snapshot", |dn, uid| {
+                    dn.snapshots
+                        .get(uid)
+                        .map(|s| Arc::clone(s) as Arc<dyn InternalDbtNode>)
+                });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
         }))
@@ -1382,6 +1447,11 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
+                inject_defer_relation(map, unique_id, defer_nodes, "seed", |dn, uid| {
+                    dn.seeds
+                        .get(uid)
+                        .map(|s| Arc::clone(s) as Arc<dyn InternalDbtNode>)
+                });
             }
             (unique_id.clone(), Value::from_serialize(serialized))
         }))
@@ -1776,7 +1846,7 @@ mod tests {
             .groups
             .insert("group.pkg.g1".to_string(), Arc::new(DbtGroup::default()));
 
-        let graph = build_flat_graph(&nodes);
+        let graph = build_flat_graph(&nodes, None);
         let graph_val = Value::from_object(graph);
 
         // Each key should contain exactly one entry
@@ -1788,6 +1858,138 @@ mod tests {
                 "expected graph.{key} to be non-empty"
             );
         }
+    }
+
+    /// Regression test for https://github.com/dbt-labs/dbt-fusion/issues/1366:
+    /// Each model/snapshot/seed in `graph.nodes` must carry a `defer_relation`
+    /// key — populated when `defer_nodes` provides a match, otherwise null.
+    #[test]
+    fn build_flat_graph_populates_defer_relation_for_deferrable_nodes() {
+        use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
+        use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot};
+        use std::path::PathBuf;
+
+        fn make_model(unique_id: &str, name: &str, alias: &str, schema: &str) -> Arc<DbtModel> {
+            Arc::new(DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: unique_id.to_string(),
+                    name: name.to_string(),
+                    package_name: "pkg".to_string(),
+                    fqn: vec!["pkg".to_string(), name.to_string()],
+                    path: PathBuf::from(format!("{name}.sql")),
+                    original_file_path: PathBuf::from(format!("models/{name}.sql")),
+                    ..Default::default()
+                },
+                __base_attr__: NodeBaseAttributes {
+                    database: "prod_db".to_string(),
+                    schema: schema.to_string(),
+                    alias: alias.to_string(),
+                    relation_name: Some(format!("\"prod_db\".\"{schema}\".\"{alias}\"")),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+        }
+
+        // Current state: model.pkg.foo, model.pkg.bar
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.pkg.foo".to_string(),
+            make_model("model.pkg.foo", "foo", "foo", "dev"),
+        );
+        nodes.models.insert(
+            "model.pkg.bar".to_string(),
+            make_model("model.pkg.bar", "bar", "bar", "dev"),
+        );
+        nodes.snapshots.insert(
+            "snapshot.pkg.snap".to_string(),
+            Arc::new(DbtSnapshot::default()),
+        );
+        nodes
+            .seeds
+            .insert("seed.pkg.seed".to_string(), Arc::new(DbtSeed::default()));
+
+        // Defer state has only model.pkg.foo, with prod schema/alias
+        let mut defer_nodes = Nodes::default();
+        defer_nodes.models.insert(
+            "model.pkg.foo".to_string(),
+            make_model("model.pkg.foo", "foo", "foo", "prod"),
+        );
+
+        let graph = build_flat_graph(&nodes, Some(&defer_nodes));
+        let graph_val = Value::from_object(graph);
+        let nodes_val = graph_val.get_attr("nodes").unwrap();
+
+        // model.pkg.foo: defer_relation populated from defer_nodes
+        let foo = nodes_val.get_attr("model.pkg.foo").unwrap();
+        let foo_defer = foo.get_attr("defer_relation").unwrap();
+        assert!(
+            !foo_defer.is_none(),
+            "model.pkg.foo defer_relation must not be null when present in defer_nodes"
+        );
+        assert_eq!(
+            foo_defer.get_attr("schema").unwrap().to_string(),
+            "prod",
+            "defer_relation.schema should reflect the deferred (prior) schema"
+        );
+        assert_eq!(
+            foo_defer.get_attr("resource_type").unwrap().to_string(),
+            "model",
+        );
+        assert_eq!(
+            foo_defer.get_attr("relation_name").unwrap().to_string(),
+            "\"prod_db\".\"prod\".\"foo\"",
+        );
+
+        // model.pkg.bar: not in defer_nodes, key must still exist as null
+        let bar = nodes_val.get_attr("model.pkg.bar").unwrap();
+        let bar_defer = bar.get_attr("defer_relation").unwrap();
+        assert!(
+            bar_defer.is_none(),
+            "defer_relation must be null (not missing) for nodes absent from defer_nodes"
+        );
+
+        // Snapshots and seeds also get the key (always null when not in defer_nodes)
+        let snap = nodes_val.get_attr("snapshot.pkg.snap").unwrap();
+        assert!(snap.get_attr("defer_relation").unwrap().is_none());
+        let seed = nodes_val.get_attr("seed.pkg.seed").unwrap();
+        assert!(seed.get_attr("defer_relation").unwrap().is_none());
+    }
+
+    /// When called without defer_nodes (parse phase, or non-defer runs),
+    /// defer_relation is still emitted as null on every deferrable node so
+    /// `node.defer_relation is not none` doesn't error.
+    #[test]
+    fn build_flat_graph_emits_null_defer_relation_when_no_defer_nodes() {
+        use dbt_schemas::schemas::DbtModel;
+        use dbt_schemas::schemas::nodes::CommonAttributes;
+
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.pkg.foo".to_string(),
+            Arc::new(DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: "model.pkg.foo".to_string(),
+                    name: "foo".to_string(),
+                    package_name: "pkg".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        );
+
+        let graph = build_flat_graph(&nodes, None);
+        let graph_val = Value::from_object(graph);
+        let foo = graph_val
+            .get_attr("nodes")
+            .unwrap()
+            .get_attr("model.pkg.foo")
+            .unwrap();
+        let defer_rel = foo.get_attr("defer_relation").unwrap();
+        assert!(
+            defer_rel.is_none(),
+            "defer_relation key must be present and null when defer_nodes is None"
+        );
     }
 
     #[test]
