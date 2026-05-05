@@ -376,7 +376,7 @@ def get_private_package_helper():
     if PRIVATE_PACKAGE_HELPER is None:
         # DBT_ENV_PRIVATE_GIT_PROVIDER_INFO is set by dbt platform; its shape is not a stable public interface.
         PRIVATE_PACKAGE_HELPER = PrivatePackageHelper(
-            get_invocation_context().env_private.get("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO", "[]")
+            os.environ.get("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO", "[]")
         )
     return PRIVATE_PACKAGE_HELPER
 

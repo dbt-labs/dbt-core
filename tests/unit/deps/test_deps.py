@@ -851,12 +851,10 @@ class TestPackageSpec(unittest.TestCase):
         import dbt.deps.private_package as _pp_mod
         from dbt.deps.private_package import PrivateUnpinnedPackage
         from dbt.deps.resolver import PackageListing
-        from dbt_common.context import set_invocation_context
 
         old_helper = _pp_mod.PRIVATE_PACKAGE_HELPER
         _pp_mod.PRIVATE_PACKAGE_HELPER = None
         os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"] = "[]"
-        set_invocation_context(os.environ)
         try:
             package_config = PackageConfig.from_dict(
                 {
@@ -872,7 +870,6 @@ class TestPackageSpec(unittest.TestCase):
             self.assertEqual(pkg.git, "git@github.com:dbt-labs-test/a.git")
         finally:
             del os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"]
-            set_invocation_context(os.environ)
             _pp_mod.PRIVATE_PACKAGE_HELPER = old_helper
 
     def test_dependency_resolution_allow_prerelease(self):

@@ -81,13 +81,10 @@ def preflight(func):
         setup_record_replay()
 
         # Must be set after record/replay is set up so that the env can be
-        # recorded or replayed if needed. Preserve the recorder set by
-        # setup_record_replay() across the context reset below.
-        recorder = get_invocation_context().recorder
+        # recorded or replayed if needed.
         env_dict = get_env()
         _cross_propagate_engine_env_vars(env_dict)
-        set_invocation_context(env_dict)
-        get_invocation_context().recorder = recorder
+        get_invocation_context()._env = env_dict
 
         # Flags
         flags = Flags(ctx)
