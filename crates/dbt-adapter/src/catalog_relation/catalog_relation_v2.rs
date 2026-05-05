@@ -260,7 +260,7 @@ fn find_v2_catalog<'a>(
 ) -> AdapterResult<&'a CatalogSpecV2View<'a>> {
     spec.catalogs
         .iter()
-        .find(|catalog| catalog.name.eq_ignore_ascii_case(catalog_name))
+        .find(|catalog| catalog.name == catalog_name)
         .ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,

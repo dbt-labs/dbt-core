@@ -443,7 +443,6 @@ pub struct CatalogSpecV2View<'a> {
 
 #[derive(Debug)]
 pub struct DbtCatalogsV2View<'a> {
-    // TODO: Instead of a Vec, let's make this a hash table for O(1) access of catalog configs.
     pub catalogs: Vec<CatalogSpecV2View<'a>>,
 }
 

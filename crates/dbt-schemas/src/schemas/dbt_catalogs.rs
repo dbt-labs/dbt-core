@@ -69,8 +69,8 @@ use dbt_yaml::{self as yml};
 pub struct DbtCatalogs {
     pub repr: yml::Mapping,
     pub span: yml::Span,
-    v2_catalog_names: OnceLock<HashSet<String>>,
-    v2_catalog_databases: OnceLock<HashSet<String>>,
+    v2_catalog_names: OnceLock<Vec<String>>,
+    v2_catalog_databases: OnceLock<Vec<String>>,
 }
 
 impl DbtCatalogs {
@@ -108,18 +108,28 @@ impl DbtCatalogs {
 
     pub fn is_v2_catalog(&self, name: &str) -> FsResult<bool> {
         if let Some(names) = self.v2_catalog_names.get() {
-            return Ok(names.contains(name));
+            return Ok(names.iter().any(|n| n == name));
         }
         self.populate_v2_caches()?;
-        Ok(self.v2_catalog_names.get().unwrap().contains(name))
+        Ok(self
+            .v2_catalog_names
+            .get()
+            .unwrap()
+            .iter()
+            .any(|n| n == name))
     }
 
     pub fn is_v2_catalog_database(&self, db: &str) -> FsResult<bool> {
         if let Some(cds) = self.v2_catalog_databases.get() {
-            return Ok(cds.contains(db));
+            return Ok(cds.iter().any(|d| d == db));
         }
         self.populate_v2_caches()?;
-        Ok(self.v2_catalog_databases.get().unwrap().contains(db))
+        Ok(self
+            .v2_catalog_databases
+            .get()
+            .unwrap()
+            .iter()
+            .any(|d| d == db))
     }
 
     // Both is_v2_catalog and is_v2_catalog_database share a single
@@ -131,10 +141,10 @@ impl DbtCatalogs {
     // Post: v2_catalog_names and v2_catalog_databases are populated.
     fn populate_v2_caches(&self) -> FsResult<()> {
         let view = self.view_v2()?;
-        let mut names = HashSet::new();
-        let mut cds = HashSet::new();
+        let mut names = Vec::with_capacity(view.catalogs.len());
+        let mut cds = Vec::new();
         for catalog in &view.catalogs {
-            names.insert(catalog.name.to_owned());
+            names.push(catalog.name.to_owned());
             if let Some(snowflake) = catalog.config_block("snowflake") {
                 if let Some(db) = snowflake
                     .get(yml::Value::from("catalog_database"))
@@ -142,7 +152,7 @@ impl DbtCatalogs {
                     .map(|name| name.trim())
                     .filter(|name| !name.is_empty())
                 {
-                    cds.insert(db.to_owned());
+                    cds.push(db.to_owned());
                 }
             }
         }
