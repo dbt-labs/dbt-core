@@ -57,6 +57,7 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
@@ -68,9 +69,20 @@ use dbt_yaml::{self as yml};
 pub struct DbtCatalogs {
     pub repr: yml::Mapping,
     pub span: yml::Span,
+    v2_catalog_names: OnceLock<HashSet<String>>,
+    v2_catalog_databases: OnceLock<HashSet<String>>,
 }
 
 impl DbtCatalogs {
+    pub fn new(repr: yml::Mapping, span: yml::Span) -> Self {
+        Self {
+            repr,
+            span,
+            v2_catalog_names: OnceLock::new(),
+            v2_catalog_databases: OnceLock::new(),
+        }
+    }
+
     /// Borrow the validated raw mapping.
     pub fn mapping(&self) -> &yml::Mapping {
         &self.repr
@@ -92,6 +104,51 @@ impl DbtCatalogs {
             .get(yml::Value::from("catalogs"))
             .and_then(|yaml_value| yaml_value.as_sequence())
             .ok_or_else(|| fs_err!(ErrorCode::InvalidConfig, "Missing 'catalogs'"))
+    }
+
+    pub fn is_v2_catalog(&self, name: &str) -> FsResult<bool> {
+        if let Some(names) = self.v2_catalog_names.get() {
+            return Ok(names.contains(name));
+        }
+        self.populate_v2_caches()?;
+        Ok(self.v2_catalog_names.get().unwrap().contains(name))
+    }
+
+    pub fn is_v2_catalog_database(&self, db: &str) -> FsResult<bool> {
+        if let Some(cds) = self.v2_catalog_databases.get() {
+            return Ok(cds.contains(db));
+        }
+        self.populate_v2_caches()?;
+        Ok(self.v2_catalog_databases.get().unwrap().contains(db))
+    }
+
+    // Both is_v2_catalog and is_v2_catalog_database share a single
+    // view_v2() parse so that whichever fires first pays the cost once for
+    // both caches. This couples their initialization but avoids a redundant
+    // parse for callers that use both (the common case).
+    //
+    // Pre:  self.repr holds a validated v2 catalogs.yml mapping.
+    // Post: v2_catalog_names and v2_catalog_databases are populated.
+    fn populate_v2_caches(&self) -> FsResult<()> {
+        let view = self.view_v2()?;
+        let mut names = HashSet::new();
+        let mut cds = HashSet::new();
+        for catalog in &view.catalogs {
+            names.insert(catalog.name.to_owned());
+            if let Some(snowflake) = catalog.config_block("snowflake") {
+                if let Some(db) = snowflake
+                    .get(yml::Value::from("catalog_database"))
+                    .and_then(|val| val.as_str())
+                    .map(|name| name.trim())
+                    .filter(|name| !name.is_empty())
+                {
+                    cds.insert(db.to_owned());
+                }
+            }
+        }
+        self.v2_catalog_names.get_or_init(|| names);
+        self.v2_catalog_databases.get_or_init(|| cds);
+        Ok(())
     }
 }
 
@@ -2749,5 +2806,121 @@ catalogs:
             yaml,
             "Bigquery biglake_metastore requires table_format=iceberg",
         );
+    }
+
+    // === v2 cache methods ===
+
+    fn make_v2_catalogs(yaml: &str) -> DbtCatalogs {
+        let v: yml::Value = yml::from_str(yaml).unwrap();
+        let (repr, span) = match v {
+            yml::Value::Mapping(m, s) => (m, s),
+            _ => panic!("expected mapping"),
+        };
+        DbtCatalogs::new(repr, span)
+    }
+
+    #[test]
+    fn is_v2_catalog_finds_all_names() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: glue_cat
+    type: glue
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "GLUE_DB"
+  - name: horizon_cat
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: ev
+"#,
+        );
+        assert!(c.is_v2_catalog("glue_cat").unwrap());
+        assert!(c.is_v2_catalog("horizon_cat").unwrap());
+        assert!(!c.is_v2_catalog("nonexistent").unwrap());
+    }
+
+    #[test]
+    fn is_v2_catalog_database_collects_snowflake_catalog_databases() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: glue_cat
+    type: glue
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "GLUE_DB"
+  - name: unity_cat
+    type: unity
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "UNITY_DB"
+      databricks:
+        file_format: delta
+  - name: horizon_cat
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: ev
+"#,
+        );
+        assert!(c.is_v2_catalog_database("GLUE_DB").unwrap());
+        assert!(c.is_v2_catalog_database("UNITY_DB").unwrap());
+        assert!(!c.is_v2_catalog_database("horizon_cat").unwrap());
+    }
+
+    #[test]
+    fn is_v2_catalog_database_false_when_no_snowflake_blocks() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: hive
+    type: hive_metastore
+    table_format: default
+    config:
+      databricks:
+        file_format: delta
+"#,
+        );
+        assert!(!c.is_v2_catalog_database("anything").unwrap());
+    }
+
+    #[test]
+    fn is_v2_catalog_database_false_for_horizon() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: ev
+"#,
+        );
+        assert!(!c.is_v2_catalog_database("sf_native").unwrap());
+    }
+
+    #[test]
+    fn v2_caches_populated_together_on_first_call() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: uc
+    type: unity
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "CD"
+"#,
+        );
+        assert!(c.is_v2_catalog("uc").unwrap());
+        assert!(c.is_v2_catalog_database("CD").unwrap());
     }
 }

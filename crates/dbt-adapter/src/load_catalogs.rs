@@ -65,7 +65,7 @@ pub fn do_load_catalogs(
         }
     };
 
-    let catalogs = DbtCatalogs { repr, span };
+    let catalogs = DbtCatalogs::new(repr, span);
     // TODO: remove v1 after discussion/product alignment (see CATALOGS_V2_DISCUSSION_URL)
     if project_flags
         .and_then(|f| project_flags_get_value(f, "use_catalogs_v2"))

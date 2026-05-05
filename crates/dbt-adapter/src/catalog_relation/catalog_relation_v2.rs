@@ -788,7 +788,7 @@ mod tests {
             dbt_yaml::Value::Mapping(m, s) => (m, s),
             _ => panic!("expected top-level mapping"),
         };
-        let catalogs = DbtCatalogs { repr, span };
+        let catalogs = DbtCatalogs::new(repr, span);
         let view = catalogs.view_v2().expect("valid v2 view");
         validate_catalogs_v2(&view, Path::new("<test>")).expect("valid v2 catalogs");
         catalogs
