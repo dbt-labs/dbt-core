@@ -9,9 +9,9 @@ drivers = [
   "databricks-0.21.0+dbt0.21.5",
   "databricks-0.21.0+dbt0.21.6",
   "databricks-0.21.0+dbt0.21.7",
-  "duckdb-0.21.0.dev+dbt0.0.13",
   "duckdb-0.21.0.dev+dbt0.0.14",
   "duckdb-0.21.0.dev+dbt0.0.15",
+  "duckdb-0.21.0.dev+dbt0.0.16",
   "postgresql-0.18.0+dbt0.0.3",
   "postgresql-0.21.0+dbt0.21.0",
   # skipped: "snowflake-0.21.0.dev+dbt0.21.8"
