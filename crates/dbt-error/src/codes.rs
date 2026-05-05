@@ -142,6 +142,7 @@ pub enum ErrorCode {
     MicrobatchModelNoEventTimeInputs = 1093,
     UnversionedBreakingChange = 1094,
     UnsupportedConstraintMaterialization = 1095,
+    HubPackageDeprecated = 1096,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]

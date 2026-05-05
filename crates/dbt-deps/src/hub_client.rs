@@ -376,7 +376,7 @@ impl HubClient {
         // Check for deprecation
         if hub_package.deprecated {
             emit_warn_log_message(
-                ErrorCode::DependencyWarning,
+                ErrorCode::HubPackageDeprecated,
                 format!(
                     "Package '{}' has been deprecated. Consider finding an alternative package.",
                     hub_package.name
