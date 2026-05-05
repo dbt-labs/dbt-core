@@ -34,9 +34,12 @@ def validate_engine_env_vars() -> None:
     """
     env_vars = get_invocation_context()._env
     for env_var in env_vars.keys():
-        if env_var.startswith(ENGINE_ENV_PREFIX) and env_var not in _ALLOWED_ENV_VARS:
+        # Normalize to uppercase for comparison: on Windows, InvocationContext stores
+        # env keys via CaseInsensitiveMapping which iterates them in lowercase.
+        normalized = env_var.upper()
+        if normalized.startswith(ENGINE_ENV_PREFIX) and normalized not in _ALLOWED_ENV_VARS:
             warn(
                 "environment-variable-namespace-deprecation",
-                env_var=env_var,
+                env_var=normalized,
                 reserved_prefix=ENGINE_ENV_PREFIX,
             )
