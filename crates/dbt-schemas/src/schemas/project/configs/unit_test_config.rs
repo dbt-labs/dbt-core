@@ -1,4 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use crate::{
         common::{ClusterConfig, PartitionConfig, Schedule},
         manifest::GrantAccessToTarget,
         project::{
-            DefaultTo, TypedRecursiveConfig,
+            ResolvableConfig, TypedRecursiveConfig,
             configs::{
                 common::{WarehouseSpecificNodeConfig, default_meta_and_tags},
                 config_keys::ConfigKeys,
@@ -266,10 +267,12 @@ impl TypedRecursiveConfig for ProjectUnitTestConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
 pub struct UnitTestConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(
@@ -487,13 +490,29 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
     }
 }
 
-impl DefaultTo<UnitTestConfig> for UnitTestConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
+    type Resolved = ResolvedUnitTestConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = StaticAnalysisKind;
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn apply_resolve_defaults(&mut self, static_analysis: StaticAnalysisKind) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+    }
+
+    fn finalize(self) -> ResolvedUnitTestConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &UnitTestConfig) {

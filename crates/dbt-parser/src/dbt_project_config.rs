@@ -7,14 +7,15 @@ use std::path::{Path, PathBuf};
 use dbt_adapter_core::AdapterType;
 use indexmap::IndexMap;
 
+use crate::args::ResolveArgs;
 use dbt_common::{FsResult, io_args::IoArgs, tracing::emit::emit_strict_parse_error};
 use dbt_schemas::schemas::{
     common::DbtQuoting, project::DbtProject, relations::default_dbt_quoting_for,
 };
 use dbt_schemas::schemas::{
     project::{
-        AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, FunctionConfig, MetricConfig,
-        ModelConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
+        AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
+        ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
         SourceConfig, TypedRecursiveConfig, UnitTestConfig,
     },
     serde::yaml_to_fs_error,
@@ -40,14 +41,14 @@ use dbt_yaml::ShouldBe;
 /// configuration is inherited from the parent.
 ///
 #[derive(Debug, Clone)]
-pub struct DbtProjectConfig<T: DefaultTo<T>> {
+pub struct DbtProjectConfig<T: ResolvableConfig<T>> {
     /// The root configuration (i.e. at the `dbt_project.yml` level or inherited from `profiles.yml`)
     pub config: T,
     /// Child configuration applied by path part (preserves insertion order like Python dicts)
     pub children: IndexMap<String, DbtProjectConfig<T>>,
 }
 
-impl<T: DefaultTo<T>> DbtProjectConfig<T> {
+impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
     /// Create a new [GlobalProjectConfig] from a default configuration and the root dbt_project.yml [DbtProjectConfigs]
     pub fn try_new<S: Into<T> + TypedRecursiveConfig>(
         io: &IoArgs,
@@ -132,23 +133,25 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
 /// 2. **Properties / inline config** — `schema.yml` or inline `{{ config(...) }}` values
 /// 3. **Root overlay** — root project's `dbt_project.yml`, applied only for dependency packages
 ///
-/// Merging uses `DefaultTo`: each higher-precedence layer fills in unset fields from the
+/// Merging uses `ResolvableConfig`: each higher-precedence layer fills in unset fields from the
 /// layers below it. `enabled` intentionally has no default until `finalize()` so that the root
 /// overlay can disable a dependency node regardless of what lower layers set.
 ///
 /// For the root package, `root` is `None` and no overlay is applied.
 #[derive(Clone)]
-pub struct ProjectConfigResolver<T: DefaultTo<T>> {
+pub struct ProjectConfigResolver<T: ResolvableConfig<T>> {
     local: DbtProjectConfig<T>,
     root: Option<DbtProjectConfig<T>>,
+    resolve_defaults: T::ResolveDefaults,
 }
 
-impl<T: DefaultTo<T>> ProjectConfigResolver<T> {
+impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// Use when the current package is the root project (no root overlay needed).
     pub fn for_root(config: DbtProjectConfig<T>) -> Self {
         ProjectConfigResolver {
             local: config,
             root: None,
+            resolve_defaults: T::ResolveDefaults::default(),
         }
     }
 
@@ -157,7 +160,14 @@ impl<T: DefaultTo<T>> ProjectConfigResolver<T> {
         ProjectConfigResolver {
             local,
             root: Some(root),
+            resolve_defaults: T::ResolveDefaults::default(),
         }
+    }
+
+    /// Sets the resolve defaults, overriding the `Default` value.
+    pub fn with_resolve_defaults(mut self, defaults: T::ResolveDefaults) -> Self {
+        self.resolve_defaults = defaults;
+        self
     }
 
     /// Builds a resolver from a root config. When `is_dependency` is true, `build_local` is
@@ -201,6 +211,15 @@ impl<T: DefaultTo<T>> ProjectConfigResolver<T> {
         config
     }
 
+    /// Like `with_configs` but also applies the root project overlay. Use this when you need to
+    /// validate explicitly-configured values (including root overlay) before
+    /// `apply_resolve_defaults` fills in CLI-flag defaults.
+    pub fn with_configs_and_root_overlay(&self, fqn: &[String], configs: &[Option<&T>]) -> T {
+        let mut config = self.with_configs(fqn, configs);
+        self.apply_root_overlay(&mut config, fqn);
+        config
+    }
+
     /// Fully resolves config by applying all layers and calling `finalize`.
     ///
     /// `original_fqn` is used for local project config lookup so that nodes whose paths are
@@ -212,15 +231,50 @@ impl<T: DefaultTo<T>> ProjectConfigResolver<T> {
         original_fqn: &[String],
         fqn: &[String],
         configs: &[Option<&T>],
-    ) -> T {
+    ) -> T::Resolved {
+        self.resolve_with_overrides(original_fqn, fqn, configs, |_| {})
+    }
+
+    /// Like `resolve_with_configs` but applies `override_fn` to the merged config after all layers
+    /// (including the root overlay and resolve defaults) are applied, just before `finalize`.
+    /// Use this when a caller needs to unconditionally force a field value regardless of what the
+    /// user configured (e.g. forcing `enabled = false` on a render-error path).
+    pub fn resolve_with_overrides(
+        &self,
+        original_fqn: &[String],
+        fqn: &[String],
+        configs: &[Option<&T>],
+        override_fn: impl FnOnce(&mut T),
+    ) -> T::Resolved {
         let mut config = self.with_configs(original_fqn, configs);
         self.apply_root_overlay(&mut config, fqn);
-        config.finalize();
-        config
+        config.apply_resolve_defaults(self.resolve_defaults.clone());
+        override_fn(&mut config);
+        config.finalize()
+    }
+
+    /// Like `resolve_with_overrides` but `override_fn` may fail. Use this when the override
+    /// logic itself can produce an error that must propagate to the caller.
+    pub fn try_resolve_with_overrides<E>(
+        &self,
+        original_fqn: &[String],
+        fqn: &[String],
+        configs: &[Option<&T>],
+        override_fn: impl FnOnce(&mut T) -> Result<(), E>,
+    ) -> Result<T::Resolved, E> {
+        let mut config = self.with_configs(original_fqn, configs);
+        self.apply_root_overlay(&mut config, fqn);
+        config.apply_resolve_defaults(self.resolve_defaults.clone());
+        override_fn(&mut config)?;
+        Ok(config.finalize())
     }
 
     /// Convenience wrapper: equivalent to `resolve_with_configs(fqn, fqn, &[properties_config])`.
-    pub fn resolve_with_properties(&self, fqn: &[String], properties_config: Option<&T>) -> T {
+    pub fn resolve_with_properties(
+        &self,
+        fqn: &[String],
+        properties_config: Option<&T>,
+    ) -> T::Resolved {
         self.resolve_with_configs(fqn, fqn, &[properties_config])
     }
 
@@ -247,7 +301,7 @@ pub fn recur_build_dbt_project_config<T, S, F>(
     on_error: &F,
 ) -> DbtProjectConfig<T>
 where
-    T: DefaultTo<T>,
+    T: ResolvableConfig<T>,
     S: Into<T> + TypedRecursiveConfig,
     F: Fn(&ShouldBe<S>, &str),
 {
@@ -318,7 +372,7 @@ pub struct RootProjectConfigs {
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
 pub fn build_root_project_configs(
-    io_args: &IoArgs,
+    arg: &ResolveArgs,
     root_project: &DbtProject,
     root_project_quoting: DbtQuoting,
     adapter_type: AdapterType,
@@ -335,123 +389,46 @@ pub fn build_root_project_configs(
 
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
-    // NOTE: Don't add a default for enabled since resolution can span root and dependency project configs
     Ok(RootProjectConfigs {
-        models: init_project_config(
-            io_args,
-            &root_project.models,
-            ModelConfig {
-                quoting: Some(root_project_quoting),
-                sync: root_project.sync.clone(),
-                ..Default::default()
-            },
-            None,
-        )?,
-        sources: init_project_config(
-            io_args,
-            &root_project.sources,
-            SourceConfig {
-                quoting: Some(source_default_quoting),
-                sync: root_project.sync.clone(),
-                ..Default::default()
-            },
-            None,
-        )?,
+        models: init_project_config(&arg.io, &root_project.models, root_project_quoting, None)?,
+        sources: init_project_config(&arg.io, &root_project.sources, source_default_quoting, None)?,
         snapshots: init_project_config(
-            io_args,
+            &arg.io,
             &root_project.snapshots,
-            SnapshotConfig {
-                quoting: Some(root_project_quoting),
-                sync: root_project.sync.clone(),
-                ..Default::default()
-            },
+            root_project_quoting,
             None,
         )?,
-        seeds: init_project_config(
-            io_args,
-            &root_project.seeds,
-            SeedConfig {
-                quoting: Some(root_project_quoting),
-                ..Default::default()
-            },
-            None,
-        )?,
+        seeds: init_project_config(&arg.io, &root_project.seeds, root_project_quoting, None)?,
         tests: init_project_config(
-            io_args,
+            &arg.io,
             &maybe_root_project_config,
-            DataTestConfig {
-                quoting: Some(root_project_quoting),
-                ..Default::default()
-            },
+            root_project_quoting,
             None,
         )?,
-        unit_tests: init_project_config(
-            io_args,
-            &root_project.unit_tests,
-            UnitTestConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
-        exposures: init_project_config(
-            io_args,
-            &root_project.exposures,
-            ExposureConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
-        semantic_models: init_project_config(
-            io_args,
-            &root_project.semantic_models,
-            SemanticModelConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
-        metrics: init_project_config(
-            io_args,
-            &root_project.metrics,
-            MetricConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
-        saved_queries: init_project_config(
-            io_args,
-            &root_project.saved_queries,
-            SavedQueryConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
-        analyses: init_project_config(
-            io_args,
-            &root_project.analyses,
-            AnalysesConfig {
-                ..Default::default()
-            },
-            None,
-        )?,
+        unit_tests: init_project_config(&arg.io, &root_project.unit_tests, (), None)?,
+        exposures: init_project_config(&arg.io, &root_project.exposures, (), None)?,
+        semantic_models: init_project_config(&arg.io, &root_project.semantic_models, (), None)?,
+        metrics: init_project_config(&arg.io, &root_project.metrics, (), None)?,
+        saved_queries: init_project_config(&arg.io, &root_project.saved_queries, (), None)?,
+        analyses: init_project_config(&arg.io, &root_project.analyses, (), None)?,
         functions: init_project_config(
-            io_args,
+            &arg.io,
             &root_project.functions,
-            FunctionConfig {
-                quoting: Some(root_project_quoting),
-                ..Default::default()
-            },
+            root_project_quoting,
             None,
         )?,
     })
 }
 
 /// generate the project config that will be inherited throughout the project
-pub fn init_project_config<T: DefaultTo<T>, S: TypedRecursiveConfig + Into<T>>(
+pub fn init_project_config<T: ResolvableConfig<T>, S: TypedRecursiveConfig + Into<T>>(
     io_args: &IoArgs,
     dbt_project_configs: &Option<S>,
-    default_config: T,
+    package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
 ) -> FsResult<DbtProjectConfig<T>> {
+    let mut default_config = T::default();
+    default_config.apply_package_defaults(package_defaults);
     let project_config = if let Some(configs) = dbt_project_configs {
         DbtProjectConfig::try_new(io_args, &default_config, configs, dependency_package_name)?
     } else {

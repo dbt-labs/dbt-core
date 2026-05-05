@@ -21,6 +21,7 @@ dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-vars = { workspace = true }
+dbt-proc-macros = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }

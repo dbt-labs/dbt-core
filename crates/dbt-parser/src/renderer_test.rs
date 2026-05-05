@@ -45,6 +45,7 @@ mod tests {
         let package_cfg = ModelConfig {
             enabled: Some(true),
             schema: Omissible::Present(Some("package_schema".to_string())),
+            quoting: Some(DbtQuoting::default()),
             ..Default::default()
         };
         let package_config = DbtProjectConfig::<ModelConfig> {
@@ -55,6 +56,7 @@ mod tests {
         let root_cfg = ModelConfig {
             enabled: Some(true),
             schema: Omissible::Present(Some("root_override_schema".to_string())),
+            quoting: Some(DbtQuoting::default()),
             ..Default::default()
         };
         let root_config = DbtProjectConfig::<ModelConfig> {
@@ -203,20 +205,25 @@ mod tests {
         use dbt_schemas::schemas::project::ModelConfig;
         use indexmap::IndexMap;
 
+        let quoting = Some(DbtQuoting::default());
         let project_config = ModelConfig {
             schema: Omissible::Present(Some("project_schema".to_string())),
+            quoting,
             ..Default::default()
         };
         let properties_config = ModelConfig {
             schema: Omissible::Present(Some("properties_schema".to_string())),
+            quoting,
             ..Default::default()
         };
         let inline_config = ModelConfig {
             schema: Omissible::Present(Some("inline_schema".to_string())),
+            quoting,
             ..Default::default()
         };
         let root_config = ModelConfig {
             schema: Omissible::Present(Some("root_schema".to_string())),
+            quoting,
             ..Default::default()
         };
 
@@ -248,6 +255,7 @@ mod tests {
         let root_resolver = ProjectConfigResolver::for_root(DbtProjectConfig::<ModelConfig> {
             config: ModelConfig {
                 schema: Omissible::Present(Some("project_schema".to_string())),
+                quoting,
                 ..Default::default()
             },
             children: IndexMap::new(),

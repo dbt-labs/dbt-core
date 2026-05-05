@@ -1,4 +1,5 @@
 use crate::schemas::serde::bool_or_string_bool;
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,7 @@ type YmlValue = dbt_yaml::Value;
 use crate::{
     default_to,
     schemas::{
-        project::{DefaultTo, TypedRecursiveConfig, configs::common::default_meta_and_tags},
+        project::{ResolvableConfig, TypedRecursiveConfig, configs::common::default_meta_and_tags},
         serde::StringOrArrayOfStrings,
     },
 };
@@ -41,8 +42,9 @@ impl TypedRecursiveConfig for ProjectSemanticModelConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
 pub struct SemanticModelConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     pub enabled: Option<bool>,
     pub group: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -76,13 +78,23 @@ impl From<SemanticModelConfig> for ProjectSemanticModelConfig {
     }
 }
 
-impl DefaultTo<SemanticModelConfig> for SemanticModelConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<SemanticModelConfig> for SemanticModelConfig {
+    type Resolved = ResolvedSemanticModelConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedSemanticModelConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &SemanticModelConfig) {

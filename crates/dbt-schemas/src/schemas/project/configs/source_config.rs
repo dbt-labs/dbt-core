@@ -1,4 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned, Verbatim};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -16,7 +17,7 @@ use crate::schemas::common::{
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
-use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
+use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
     f64_or_string_f64, u64_or_string_u64,
@@ -227,8 +228,9 @@ impl TypedRecursiveConfig for ProjectSourceConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
 pub struct SourceConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
@@ -239,11 +241,14 @@ pub struct SourceConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Verbatim<Option<String>>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     /// Specifies where the schema metadata originates: 'remote' (default) or 'local'
+    #[resolved(promote)]
     pub schema_origin: Option<SchemaOrigin>,
     /// Schema synchronization configuration
     pub sync: Option<SyncConfig>,
@@ -451,13 +456,39 @@ impl From<SourceConfig> for ProjectSourceConfig {
     }
 }
 
-impl DefaultTo<SourceConfig> for SourceConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<SourceConfig> for SourceConfig {
+    type Resolved = ResolvedSourceConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>);
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
+    }
+
+    fn apply_resolve_defaults(
+        &mut self,
+        (static_analysis, sync): (StaticAnalysisKind, Option<SyncConfig>),
+    ) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+        if self.sync.is_none() {
+            self.sync = sync;
+        }
+    }
+
+    fn finalize(self) -> ResolvedSourceConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &SourceConfig) {

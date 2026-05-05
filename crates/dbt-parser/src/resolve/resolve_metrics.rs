@@ -8,7 +8,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtChecksum, NodeDependsOn};
-use dbt_schemas::schemas::project::{DefaultTo, MetricConfig};
+use dbt_schemas::schemas::project::MetricConfig;
 use dbt_schemas::schemas::properties::metrics_properties::{MetricType, PercentileType};
 use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
@@ -125,9 +125,7 @@ pub fn resolve_nested_model_metrics(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.metrics,
-                MetricConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -267,7 +265,7 @@ pub fn resolve_nested_model_metrics(
                         metrics: vec![], // always empty, hydrated in type_params.metrics
                     },
                     deprecated_config: MetricConfig {
-                        enabled: metric_config.enabled,
+                        enabled: Some(metric_config.enabled),
                         tags: metric_config.tags.clone(),
                         meta: metric_config.meta.clone(),
                         group: metric_config.group.clone(),
@@ -276,7 +274,7 @@ pub fn resolve_nested_model_metrics(
                 };
 
                 // Check if metric is enabled (following exposures pattern)
-                if metric_config.get_enabled_resolved() {
+                if metric_config.enabled {
                     metrics.insert(metric_unique_id, Arc::new(dbt_metric));
                 } else {
                     disabled_metrics.insert(metric_unique_id, Arc::new(dbt_metric));
@@ -314,9 +312,7 @@ pub fn resolve_top_level_metrics(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.metrics,
-                MetricConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -528,7 +524,7 @@ pub fn resolve_top_level_metrics(
                 metrics: vec![],
             },
             deprecated_config: MetricConfig {
-                enabled: metric_metric_config.enabled,
+                enabled: Some(metric_metric_config.enabled),
                 tags: metric_metric_config.tags.clone(),
                 meta: metric_metric_config.meta.clone(),
                 group: metric_metric_config.group.clone(),
@@ -537,7 +533,7 @@ pub fn resolve_top_level_metrics(
         };
 
         // Check if metric is enabled (following exposures pattern)
-        if metric_metric_config.get_enabled_resolved() {
+        if metric_metric_config.enabled {
             metrics.insert(metric_unique_id, Arc::new(dbt_metric));
         } else {
             disabled_metrics.insert(metric_unique_id, Arc::new(dbt_metric));

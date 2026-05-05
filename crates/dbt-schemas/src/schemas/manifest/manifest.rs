@@ -1,3 +1,4 @@
+use crate::schemas::project::ResolvableConfig;
 use chrono::{DateTime, Utc};
 use dbt_adapter_core::AdapterType;
 use dbt_common::Span;
@@ -8,6 +9,9 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
+use crate::schemas::project::DataTestConfig;
+use crate::schemas::project::configs::model_config::ModelConfig;
+use crate::schemas::project::configs::snapshot_config::SnapshotConfig;
 use crate::{
     dbt_utils::get_dbt_schema_version,
     schemas::{
@@ -610,10 +614,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             schema: test.__common_attr__.schema,
                             alias: test.__base_attr__.alias,
                             relation_name: test.__base_attr__.relation_name,
-                            materialized: DbtMaterialization::Test,
+                            materialized: DataTestConfig::default_materialized(),
                             static_analysis: Default::default(),
                             static_analysis_off_reason: None,
-                            enabled: test.config.enabled.unwrap_or(true),
+                            enabled: test.config.get_enabled_with_default(),
                             extended_model: false,
                             quoting: test
                                 .config
@@ -706,7 +710,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .config
                                 .materialized
                                 .clone()
-                                .unwrap_or(DbtMaterialization::Table),
+                                .unwrap_or_else(SnapshotConfig::default_materialized),
                             static_analysis: Default::default(),
                             static_analysis_off_reason: None,
                             quoting: snapshot
@@ -1299,7 +1303,7 @@ pub fn manifest_model_to_dbt_model(
                 .config
                 .materialized
                 .clone()
-                .unwrap_or(DbtMaterialization::View),
+                .unwrap_or_else(ModelConfig::default_materialized),
             static_analysis: Default::default(),
             static_analysis_off_reason: None,
             enabled: model.config.enabled.unwrap_or(true),

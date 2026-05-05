@@ -28,7 +28,7 @@ use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::{render_sql, render_sql_with_listeners};
 use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks, normalize_sql};
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::{ResolvableConfig, ResolvedConfig};
 use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, IntrospectionKind, Nodes};
@@ -48,7 +48,7 @@ use std::sync::atomic::{self, AtomicBool};
 
 /// Represents the result of rendering a single SQL file
 #[derive(Debug)]
-pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
+pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     /// The asset that was rendered
     pub asset: DbtAsset,
     /// The status of the model
@@ -56,7 +56,7 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
     /// The file info for the rendered SQL file
     pub sql_file_info: SqlFileInfo<T>,
     /// Fully resolved config for this node (project + properties + inline + root overlay).
-    pub config: T,
+    pub config: T::Resolved,
     /// The rendered SQL
     pub rendered_sql: String,
     /// The macro spans for the rendered SQL
@@ -70,7 +70,7 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
 }
 
 /// Extracts model and version configuration from node properties
-fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
+fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + Debug>(
     mpe: &mut MinimalPropertiesEntry,
     arg: &ResolveArgs,
     jinja_env: &JinjaEnv,
@@ -130,7 +130,7 @@ async fn render_sql_file<T, S>(
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<Option<SqlFileRenderResult<T, S>>>
 where
-    T: DefaultTo<T> + 'static,
+    T: ResolvableConfig<T> + 'static,
     S: GetConfig<T> + Debug,
 {
     let RenderCtx { inner, .. } = render_ctx;
@@ -185,7 +185,7 @@ async fn render_sql_file_inner<T, S>(
     ref_name: &str,
 ) -> FsResult<Option<SqlFileRenderResult<T, S>>>
 where
-    T: DefaultTo<T> + 'static,
+    T: ResolvableConfig<T> + 'static,
     S: GetConfig<T> + Debug,
 {
     let RenderCtx {
@@ -407,7 +407,7 @@ where
                     (info, cfg)
                 };
 
-                let status = if resolved_config.get_enabled_resolved() {
+                let status = if resolved_config.enabled() {
                     ModelStatus::Enabled
                 } else {
                     ModelStatus::Disabled
@@ -430,7 +430,11 @@ where
 
                 // Emit mangled ref warnings based on the final config's static_analysis setting
                 // This allows {{ config(static_analysis='off') }} to suppress warnings
-                if resolved_config.get_static_analysis() != Some(StaticAnalysisKind::Off) {
+                if resolved_config
+                    .get_static_analysis()
+                    .map(|s| s.into_inner())
+                    != Some(StaticAnalysisKind::Off)
+                {
                     for listener in &other_listeners {
                         listener
                             .check_and_emit_mangled_ref_warnings(&rendered_sql, &macro_spans.items);
@@ -454,6 +458,7 @@ where
             }
             Err(err) => {
                 // Build minimal info for error/disabled outcome
+                let mut was_enabled = true;
                 let (sql_file_info, resolved_config) = {
                     let sql_resources_locked = sql_resources.lock().unwrap().clone();
                     let normalized_sql = normalize_sql(&sql);
@@ -462,7 +467,7 @@ where
                         DbtChecksum::hash(normalized_sql.as_bytes()),
                         execute_exists.load(atomic::Ordering::Relaxed),
                     );
-                    let cfg = config_resolver.resolve_with_configs(
+                    let cfg = config_resolver.resolve_with_overrides(
                         &original_fqn,
                         &fqn,
                         &[
@@ -470,6 +475,10 @@ where
                             maybe_version_config.as_ref(),
                             info.explicit_config.as_deref(),
                         ],
+                        |c| {
+                            was_enabled = c.get_enabled_with_default();
+                            c.disable();
+                        },
                     );
                     (info, cfg)
                 };
@@ -485,7 +494,7 @@ where
                         ModelStatus::ParsingFailed
                     }
                     _ => {
-                        if resolved_config.get_enabled_resolved() {
+                        if was_enabled {
                             let err_with_loc = err.with_location(dbt_asset.path.clone());
                             emit_error_log_from_fs_error(
                                 &err_with_loc,
@@ -540,7 +549,7 @@ where
 
 /// Inner context for rendering sql files
 #[derive(Clone)]
-pub struct RenderCtxInner<T: DefaultTo<T>> {
+pub struct RenderCtxInner<T: ResolvableConfig<T>> {
     /// The arguments for the resolve
     pub args: ResolveArgs,
     /// The base context for the jinja environment
@@ -565,7 +574,7 @@ pub struct RenderCtxInner<T: DefaultTo<T>> {
 
 /// Outer context for rendering sql files
 #[derive(Clone)]
-pub struct RenderCtx<T: DefaultTo<T>> {
+pub struct RenderCtx<T: ResolvableConfig<T>> {
     /// The inner context for rendering sql files
     pub inner: Arc<RenderCtxInner<T>>,
     /// The jinja environment
@@ -577,7 +586,7 @@ pub struct RenderCtx<T: DefaultTo<T>> {
 /// Iterate over all the sql files passed in, generate the local config, initialize the sql render env, and render the sql
 /// and return the sql resources (deps) found while rendering the files
 pub async fn render_unresolved_sql_files<
-    T: DefaultTo<T> + 'static,
+    T: ResolvableConfig<T> + 'static,
     S: GetConfig<T> + 'static + Debug,
 >(
     render_ctx: &RenderCtx<T>,
@@ -854,8 +863,8 @@ fn chunk_vec<T>(mut v: Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
 ///
 /// Uses the real file path for error reporting rather than virtual paths.
 #[allow(clippy::too_many_arguments)]
-pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
-    config: &T,
+pub fn collect_hook_dependencies_from_config(
+    config: &dyn ResolvedConfig,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
     resource_path: &std::path::Path,

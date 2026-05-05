@@ -17,7 +17,9 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, default_meta_and_tags, default_quoting,
 };
-use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
+use dbt_proc_macros::Resolvable;
+
+use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings, bool_or_string_bool,
     f64_or_string_f64, u64_or_string_u64,
@@ -301,16 +303,20 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
+    #[resolved(or_else = Some(minijinja::constants::DEFAULT_TEST_SCHEMA.to_string()))]
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[resolved(promote, default = "!= 0".to_string())]
     pub error_if: Option<String>,
+    #[resolved(promote, default = "count(*)".to_string())]
     pub fail_calc: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
@@ -327,11 +333,15 @@ pub struct DataTestConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[resolved(promote, default = "!= 0".to_string())]
     pub warn_if: Option<String>,
+    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "where")]
     pub where_: Option<String>,
+    #[resolved(promote, default = DbtMaterialization::Test)]
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -359,7 +369,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             quoting: config.quoting,
             where_: config.where_,
             static_analysis: config.static_analysis,
-            materialized: Some(DbtMaterialization::Test),
+            materialized: Some(DataTestConfig::default_materialized()), // TODO: config.materialized?
             // Initialize adapter specific configs with values from flattened fields
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Not applicable for data tests
@@ -577,13 +587,39 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
     }
 }
 
-impl DefaultTo<DataTestConfig> for DataTestConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<DataTestConfig> for DataTestConfig {
+    type Resolved = ResolvedDataTestConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = (StaticAnalysisKind, bool);
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
+    }
+
+    fn apply_resolve_defaults(
+        &mut self,
+        (static_analysis, store_failures): (StaticAnalysisKind, bool),
+    ) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+        if store_failures && self.store_failures.is_none() {
+            self.store_failures = Some(store_failures);
+        }
+    }
+
+    fn finalize(self) -> ResolvedDataTestConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &DataTestConfig) {
@@ -646,18 +682,6 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 materialized,
             ]
         );
-    }
-
-    fn database(&self) -> Option<String> {
-        self.database.clone()
-    }
-
-    fn schema(&self) -> Option<String> {
-        self.schema.clone()
-    }
-
-    fn alias(&self) -> Option<String> {
-        self.alias.clone()
     }
 }
 

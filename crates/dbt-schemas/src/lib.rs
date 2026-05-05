@@ -133,27 +133,41 @@ pub mod schemas {
             pub mod unit_test_config;
         }
 
-        pub use configs::analysis_config::{AnalysesConfig, ProjectAnalysisConfig};
+        pub use configs::analysis_config::{
+            AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
+        };
         pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
         pub use configs::config_keys::ConfigKeys;
-        pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
-        pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
-        pub use configs::function_config::{FunctionConfig, ProjectFunctionConfig};
-        pub use configs::metric_config::{MetricConfig, ProjectMetricConfigs};
-        pub use configs::model_config::{ModelConfig, ProjectModelConfig};
+        pub use configs::data_test_config::{
+            DataTestConfig, ProjectDataTestConfig, ResolvedDataTestConfig,
+        };
+        pub use configs::exposure_config::{
+            ExposureConfig, ProjectExposureConfig, ResolvedExposureConfig,
+        };
+        pub use configs::function_config::{
+            FunctionConfig, ProjectFunctionConfig, ResolvedFunctionConfig,
+        };
+        pub use configs::metric_config::{
+            MetricConfig, ProjectMetricConfigs, ResolvedMetricConfig,
+        };
+        pub use configs::model_config::{ModelConfig, ProjectModelConfig, ResolvedModelConfig};
         pub use configs::saved_query_config::{
-            ExportConfigExportAs, SavedQueryCache, SavedQueryConfig,
+            ExportConfigExportAs, ResolvedSavedQueryConfig, SavedQueryCache, SavedQueryConfig,
         };
-        pub use configs::seed_config::{ProjectSeedConfig, SeedConfig};
-        pub use configs::semantic_model_config::{ProjectSemanticModelConfig, SemanticModelConfig};
+        pub use configs::seed_config::{ProjectSeedConfig, ResolvedSeedConfig, SeedConfig};
+        pub use configs::semantic_model_config::{
+            ProjectSemanticModelConfig, ResolvedSemanticModelConfig, SemanticModelConfig,
+        };
         pub use configs::snapshot_config::{
-            ProjectSnapshotConfig, SnapshotConfig, SnapshotMetaColumnNames,
+            ProjectSnapshotConfig, ResolvedSnapshotConfig, SnapshotConfig, SnapshotMetaColumnNames,
         };
-        pub use configs::source_config::{ProjectSourceConfig, SourceConfig};
-        pub use configs::unit_test_config::{ProjectUnitTestConfig, UnitTestConfig};
+        pub use configs::source_config::{ProjectSourceConfig, ResolvedSourceConfig, SourceConfig};
+        pub use configs::unit_test_config::{
+            ProjectUnitTestConfig, ResolvedUnitTestConfig, UnitTestConfig,
+        };
         pub use dbt_project::{
-            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, DefaultTo, ProjectDbtCloudConfig,
-            QueryComment, TypedRecursiveConfig,
+            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, ProjectDbtCloudConfig,
+            QueryComment, ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
         };
     }
 

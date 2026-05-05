@@ -1,9 +1,11 @@
+use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::get_node_fqn;
 use crate::utils::get_unique_id;
+use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
 use dbt_common::CodeLocationWithFile;
 use dbt_common::ErrorCode;
@@ -11,12 +13,9 @@ use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
-use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
-use dbt_common::static_analysis::{
-    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
-};
+
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -34,7 +33,8 @@ use dbt_schemas::schemas::common::Given;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::packages::DeprecatedDbtPackageLock;
 use dbt_schemas::schemas::project::DbtProject;
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
+use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::project::UnitTestConfig;
 use dbt_schemas::schemas::properties::UnitTestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -54,8 +54,7 @@ use std::sync::atomic::AtomicBool;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_unit_tests(
-    io_args: &IoArgs,
-    global_static_analysis: Option<StaticAnalysisKind>,
+    arg: &ResolveArgs,
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
@@ -77,15 +76,14 @@ pub fn resolve_unit_tests(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                io_args,
+                &arg.io,
                 &package.dbt_project.unit_tests,
-                UnitTestConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     for (unit_test_name, mpe) in unit_test_properties.into_iter() {
         // Capture YAML span of the unit-test `name:` declaration for error reporting.
@@ -101,7 +99,7 @@ pub fn resolve_unit_tests(
         });
 
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
-            io_args,
+            &arg.io,
             mpe.schema_value,
             false,
             jinja_env,
@@ -145,8 +143,15 @@ pub fn resolve_unit_tests(
 
         let properties_config =
             config_resolver.resolve_with_properties(&fqn, unit_test.config.as_ref());
+        check_node_static_analysis(
+            &properties_config,
+            arg.static_analysis,
+            &base_unique_id,
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
+        );
 
-        let enabled = properties_config.get_enabled_resolved();
+        let enabled = properties_config.enabled;
 
         // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
 
@@ -225,21 +230,7 @@ pub fn resolve_unit_tests(
             }
         };
 
-        let static_analysis =
-            if let Some(static_analysis) = properties_config.static_analysis.clone() {
-                check_deprecated_static_analysis_kind(
-                    static_analysis.clone().into_inner(),
-                    StaticAnalysisDeprecationOrigin::NodeConfig {
-                        unique_id: base_unique_id.as_str(),
-                    },
-                    dependency_package_name,
-                    io_args.status_reporter.as_ref(),
-                );
-                static_analysis
-            } else {
-                // If global override is set, use it. Otherwise default
-                global_static_analysis.unwrap_or_default().into()
-            };
+        let static_analysis = properties_config.static_analysis.clone();
 
         let base_unit_test = DbtUnitTest {
             __common_attr__: CommonAttributes {
@@ -279,8 +270,7 @@ pub fn resolve_unit_tests(
                 quoting: package_quoting.try_into()?,
                 quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
                 materialized: DbtMaterialization::Unit,
-                static_analysis_off_reason: (static_analysis.clone().into_inner()
-                    == StaticAnalysisKind::Off)
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 columns: vec![],
@@ -297,7 +287,7 @@ pub fn resolve_unit_tests(
             },
             tested_node_unique_id: tested_node_unique_id.clone(),
             defined_at,
-            deprecated_config: properties_config,
+            deprecated_config: properties_config.into(),
             ..Default::default()
         };
         // Check if this model has versions

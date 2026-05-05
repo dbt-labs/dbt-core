@@ -12,7 +12,6 @@ use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, NodeDependsO
 use dbt_schemas::schemas::manifest::saved_query::{
     self, DbtSavedQuery, DbtSavedQueryAttr, SavedQueryExportConfig, SavedQueryParams,
 };
-use dbt_schemas::schemas::project::{DefaultTo, SavedQueryConfig};
 use dbt_schemas::schemas::properties::SavedQueriesProperties;
 use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
@@ -55,9 +54,7 @@ pub async fn resolve_saved_queries(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.saved_queries,
-                SavedQueryConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -106,6 +103,7 @@ pub async fn resolve_saved_queries(
             // Get combined config from project config and saved query config
             let saved_query_config =
                 config_resolver.resolve_with_properties(&fqn, saved_query_props.config.as_ref());
+            let is_enabled = saved_query_config.enabled;
 
             let props_query_params = &saved_query_props.query_params;
 
@@ -240,12 +238,12 @@ pub async fn resolve_saved_queries(
                     created_at: chrono::Utc::now().timestamp() as f64,
                     cache: saved_query_config.cache.clone(),
                 },
-                deprecated_config: saved_query_config.clone(),
+                deprecated_config: saved_query_config.into(),
                 __other__: BTreeMap::new(),
             };
 
             // Check if saved query is enabled (following exposures pattern)
-            if saved_query_config.get_enabled_resolved() {
+            if is_enabled {
                 saved_queries.insert(unique_id, Arc::new(dbt_saved_query));
             } else {
                 disabled_saved_queries.insert(unique_id, Arc::new(dbt_saved_query));

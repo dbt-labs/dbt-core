@@ -11,7 +11,7 @@ use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normalize_quoting};
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::{ResolvableConfig, ResolvedConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::state::DbtPackage;
@@ -520,12 +520,30 @@ pub fn update_node_relation_components(
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NoOpConfig {}
 
-impl DefaultTo<NoOpConfig> for NoOpConfig {
-    fn default_to(&mut self, _other: &Self) {}
-    fn get_enabled(&self) -> Option<bool> {
-        None
+impl ResolvedConfig for NoOpConfig {
+    fn enabled(&self) -> bool {
+        true
     }
-    fn set_enabled(&mut self, _value: Option<bool>) {}
+}
+
+impl ResolvableConfig<NoOpConfig> for NoOpConfig {
+    type Resolved = Self;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn default_to(&mut self, _other: &Self) {}
+
+    fn get_enabled_with_default(&self) -> bool {
+        true
+    }
+
+    fn disable(&mut self) {}
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> Self {
+        self
+    }
 }
 
 /// Parse the macro sql and return the [SqlResource]s macro wrappers that are
@@ -555,7 +573,7 @@ pub fn parse_macro_statements(
     Ok(sql_resources)
 }
 
-fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
+fn extract_sql_resources_from_ast<T: ResolvableConfig<T>>(
     ast: &Stmt,
     sql_resources: &mut Vec<SqlResource<T>>,
     last_func_sign: &mut Option<(Span, String)>,

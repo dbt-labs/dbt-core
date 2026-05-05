@@ -17,6 +17,7 @@ use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::get_unique_id;
 use crate::utils::update_node_relation_components;
+use crate::validation::check_node_static_analysis;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::CodeLocationWithFile;
@@ -27,10 +28,8 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::io_utils::StatusReporter;
 use dbt_common::path::DbtPath;
-use dbt_common::static_analysis::{
-    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
-};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
@@ -61,8 +60,8 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
-use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::ModelConfig;
+use dbt_schemas::schemas::project::ResolvedModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
@@ -72,6 +71,7 @@ use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::NodeResolverTracker;
+use dbt_yaml::Spanned;
 use minijinja::MacroSpans;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -191,7 +191,6 @@ async fn build_raw_model_project_config(
 
     let default_config = ModelConfig {
         quoting: Some(package_quoting),
-        sync: package.dbt_project.sync.clone(),
         ..Default::default()
     };
 
@@ -535,14 +534,15 @@ pub async fn resolve_models(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.models,
-                ModelConfig {
-                    quoting: Some(package_quoting),
-                    ..Default::default()
-                },
+                package_quoting,
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults((
+        arg.static_analysis.unwrap_or_default(),
+        root_project.sync.clone(),
+    ));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -618,7 +618,7 @@ pub async fn resolve_models(
         base_ctx,
         package_name,
         &package.dbt_project,
-        &config_resolver,
+        config_resolver,
         python_files,
         &mut models_properties_sans_semantics,
     )?;
@@ -673,10 +673,6 @@ pub async fn resolve_models(
                 store_failures: None,
             }
         };
-        // Default to View if no materialized is set
-        if model_config.materialized.is_none() {
-            model_config.materialized = Some(DbtMaterialization::View);
-        }
 
         // Set to Inline if this is the inline file
         let is_inline_file = package
@@ -685,7 +681,7 @@ pub async fn resolve_models(
             .map(|inline_file| inline_file == &dbt_asset)
             .unwrap_or(false);
         if is_inline_file {
-            model_config.materialized = Some(DbtMaterialization::Inline);
+            model_config.materialized = DbtMaterialization::Inline;
         }
 
         let mut model_name = models_properties_sans_semantics
@@ -707,8 +703,6 @@ pub async fn resolve_models(
             .and_then(|mpe| mpe.version_info.as_ref().map(|v| v.latest_version.clone()));
 
         let unique_id = get_unique_id(&model_name, package_name, maybe_version.clone(), "model");
-
-        model_config.enabled = Some(!(status == ModelStatus::Disabled));
 
         if let Some(freshness) = &model_config.freshness {
             ModelFreshnessRules::validate(freshness.build_after.as_ref()).map_err(|e| {
@@ -804,14 +798,12 @@ pub async fn resolve_models(
             model_config.meta.clone(),
             model_config.tags.clone().map(|tags| tags.into()),
         )?;
-        let materialized = model_config
-            .materialized
-            .clone()
-            .expect("materialized should be set after defaulting missing materializations to view");
+        let materialized = model_config.materialized.clone();
 
         if let Some(versions) = &properties.versions {
+            let model_config_inner: ModelConfig = model_config.clone().into();
             columns = process_versioned_columns(
-                &model_config,
+                &model_config_inner,
                 maybe_version.as_ref(),
                 versions,
                 columns,
@@ -864,20 +856,14 @@ pub async fn resolve_models(
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
-        let static_analysis = if let Some(static_analysis) = model_config.static_analysis.clone() {
-            check_deprecated_static_analysis_kind(
-                static_analysis.clone().into_inner(),
-                StaticAnalysisDeprecationOrigin::NodeConfig {
-                    unique_id: unique_id.as_str(),
-                },
-                dependency_package_name,
-                arg.io.status_reporter.as_ref(),
-            );
-            static_analysis
-        } else {
-            // If global override is set, use it. Otherwise default
-            arg.static_analysis.unwrap_or_default().into()
-        };
+        let static_analysis = model_config.static_analysis.clone();
+        check_node_static_analysis(
+            &model_config,
+            arg.static_analysis,
+            unique_id.as_str(),
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
+        );
 
         // Hydrate time_spine from model properties
         let mut time_spine: Option<TimeSpine> = None;
@@ -930,7 +916,7 @@ pub async fn resolve_models(
                 // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
                 // hydrating it with get_original_file_contents would actually break dbt-evaluator
                 raw_code: Some("--placeholder--".to_string()),
-                language: if is_python_model(&dbt_asset) {
+                language: if dbt_asset.is_python() {
                     Some("python".to_string())
                 } else {
                     Some("sql".to_string())
@@ -947,7 +933,7 @@ pub async fn resolve_models(
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
-                enabled: model_config.get_enabled_resolved(),
+                enabled: model_config.enabled,
                 extended_model: false,
                 persist_docs: model_config.persist_docs.clone(),
                 columns,
@@ -1058,16 +1044,10 @@ pub async fn resolve_models(
                 materialized,
                 quoting: model_config
                     .quoting
-                    .expect("quoting is required")
                     .try_into()
-                    .expect("quoting is required"),
-                quoting_ignore_case: model_config
-                    .quoting
-                    .unwrap_or_default()
-                    .snowflake_ignore_case
-                    .unwrap_or(false),
-                static_analysis_off_reason: (static_analysis.clone().into_inner()
-                    == StaticAnalysisKind::Off)
+                    .expect("DbtQuoting -> QuotingConfig conversion"),
+                quoting_ignore_case: model_config.quoting.snowflake_ignore_case.unwrap_or(false),
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 unrendered_config: Default::default(),
@@ -1099,13 +1079,13 @@ pub async fn resolve_models(
                 adapter_type,
             ),
             // Derived from the model config
-            deprecated_config: model_config.clone(),
+            deprecated_config: model_config.clone().into(),
             __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {
-            database: model_config.database.into_inner().unwrap_or(None),
-            schema: model_config.schema.into_inner().unwrap_or(None),
+            database: model_config.database.clone().into_inner().unwrap_or(None),
+            schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
         };
@@ -1317,7 +1297,10 @@ fn has_warn_unsupported_constraints(
         })
 }
 
-pub fn validate_merge_update_columns_xor(model_config: &ModelConfig, path: &Path) -> FsResult<()> {
+pub fn validate_merge_update_columns_xor(
+    model_config: &ResolvedModelConfig,
+    path: &Path,
+) -> FsResult<()> {
     if model_config.merge_update_columns.is_some() && model_config.merge_exclude_columns.is_some() {
         let err = fs_err!(
             code => ErrorCode::InvalidConfig,
@@ -1345,7 +1328,7 @@ fn process_python_models(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     package_name: &str,
     dbt_project: &DbtProject,
-    config_resolver: &ProjectConfigResolver<ModelConfig>,
+    config_resolver: ProjectConfigResolver<ModelConfig>,
     python_files: Vec<dbt_schemas::state::DbtAsset>,
     models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
 ) -> FsResult<Vec<SqlFileRenderResult<ModelConfig, ModelProperties>>> {
@@ -1402,8 +1385,9 @@ fn process_python_models(
             &python_file_info,
             &python_asset,
             package_name,
+            dependency_package_name,
             dbt_project,
-            config_resolver,
+            &config_resolver,
             maybe_properties.as_ref(),
             arg,
         ) {
@@ -1414,7 +1398,7 @@ fn process_python_models(
             }
         };
 
-        let status = if merged_config.get_enabled_resolved() {
+        let status = if merged_config.enabled {
             ModelStatus::Enabled
         } else {
             ModelStatus::Disabled
@@ -1487,28 +1471,30 @@ fn extract_model_properties(
 
 /// Warn when config.get() accesses keys that exist in config.meta
 fn check_config_get_on_meta_keys(
-    python_file_info: &PythonFileInfo<ModelConfig>,
-    config: &ModelConfig,
+    config: &ResolvedModelConfig,
     path: &Path,
-    arg: &ResolveArgs,
-) -> FsResult<()> {
-    if let Some(meta) = &config.meta {
-        for key in &python_file_info.config_keys_used {
-            if meta.contains_key(key) {
-                let warning = fs_err!(
-                    code => ErrorCode::Generic,
-                    loc => path.to_path_buf(),
-                    "The key '{}' was accessed using dbt.config.get('{}'), \
-                     but was detected as a custom config under 'meta'. \
-                     Please use dbt.config.meta_get('{}') instead of dbt.config.get('{}') \
-                     to access the custom config value.",
-                    key, key, key, key
-                );
-                emit_warn_log_from_fs_error(&warning, arg.io.status_reporter.as_ref());
-            }
-        }
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) {
+    let Some(meta) = &config.meta else {
+        return;
+    };
+    let Some(config_keys) = &config.config_keys_used else {
+        return;
+    };
+    for key in config_keys.iter().filter(|key| meta.contains_key(*key)) {
+        emit_warn_log_from_fs_error(
+            &fs_err!(
+                code => ErrorCode::Generic,
+                loc => path.to_path_buf(),
+                "The key '{}' was accessed using dbt.config.get('{}'), \
+                 but was detected as a custom config under 'meta'. \
+                 Please use dbt.config.meta_get('{}') instead of dbt.config.get('{}') \
+                 to access the custom config value.",
+                key, key, key, key
+            ),
+            status_reporter,
+        );
     }
-    Ok(())
 }
 
 /// Merge Python model config with project config and schema.yml properties
@@ -1517,15 +1503,17 @@ fn check_config_get_on_meta_keys(
 /// These need to be merged with:
 /// 1. Project-level config (from dbt_project.yml)
 /// 2. Schema.yml properties config (if present)
+#[allow(clippy::too_many_arguments)]
 fn merge_python_config(
     python_file_info: &PythonFileInfo<ModelConfig>,
     python_asset: &dbt_schemas::state::DbtAsset,
     package_name: &str,
+    dependency_package_name: Option<&str>,
     dbt_project: &DbtProject,
     config_resolver: &ProjectConfigResolver<ModelConfig>,
     maybe_properties: Option<&ModelProperties>,
     arg: &ResolveArgs,
-) -> FsResult<ModelConfig> {
+) -> FsResult<ResolvedModelConfig> {
     let model_name = python_asset
         .path
         .file_stem()
@@ -1533,6 +1521,7 @@ fn merge_python_config(
         .to_str()
         .unwrap()
         .to_string();
+    let unique_id = get_unique_id(&model_name, package_name, None, "model");
 
     let fqn = get_node_fqn(
         package_name,
@@ -1557,72 +1546,62 @@ fn merge_python_config(
     }
 
     let python_config = *python_file_info.config.clone();
-    let mut merged_config = config_resolver.resolve_with_configs(
+    // Capture static_analysis BEFORE apply_resolve_defaults so we can distinguish an
+    // explicitly-set value from one inherited from the CLI --static-analysis flag.
+    let pre_defaults_config = config_resolver
+        .with_configs_and_root_overlay(&fqn, &[Some(&properties_config), Some(&python_config)]);
+    let merged_config = config_resolver.resolve_with_overrides(
         &fqn,
         &fqn,
         &[Some(&properties_config), Some(&python_config)],
+        |c| {
+            if !python_file_info.config_keys_used.is_empty() {
+                c.config_keys_used = Some(python_file_info.config_keys_used.clone());
+                c.config_keys_defaults = Some(python_file_info.config_keys_defaults.clone());
+            }
+            if !python_file_info.meta_keys_used.is_empty() {
+                c.meta_keys_used = Some(python_file_info.meta_keys_used.clone());
+                c.meta_keys_defaults = Some(python_file_info.meta_keys_defaults.clone());
+            }
+            // Python models always have static_analysis turned off
+            c.static_analysis = Some(Spanned::new(StaticAnalysisKind::Off));
+        },
     );
 
-    // Transfer Python-specific config key tracking from PythonFileInfo to merged config
-    // These fields should come from the Python file analysis, not from project/schema configs
-    if !python_file_info.config_keys_used.is_empty() {
-        merged_config.config_keys_used = Some(python_file_info.config_keys_used.clone());
-        merged_config.config_keys_defaults = Some(python_file_info.config_keys_defaults.clone());
-    }
-
-    // Transfer meta key tracking
-    if !python_file_info.meta_keys_used.is_empty() {
-        merged_config.meta_keys_used = Some(python_file_info.meta_keys_used.clone());
-        merged_config.meta_keys_defaults = Some(python_file_info.meta_keys_defaults.clone());
-    }
-
-    // Warn if config.get() used on meta keys
-    check_config_get_on_meta_keys(python_file_info, &merged_config, &python_asset.path, arg)?;
-
-    // Warn if user explicitly enabled static_analysis for a Python model
-    // This check happens after all config sources are merged
-    if merged_config.static_analysis == Some(StaticAnalysisKind::On.into())
-        || merged_config.static_analysis == Some(StaticAnalysisKind::Strict.into())
-    {
-        emit_warn_log_message(
-            ErrorCode::InvalidConfig,
-            format!(
-                "Python model '{}' has static_analysis set to 'on', but static analysis is not supported for Python models. Setting will be ignored.",
-                python_asset.path.display()
-            ),
+    if let Some(spanned) = pre_defaults_config.static_analysis {
+        crate::validation::warn_python_static_analysis(
+            spanned.into_inner(),
+            &unique_id,
             arg.io.status_reporter.as_ref(),
         );
     }
 
-    if let Some(ref mat) = merged_config.materialized {
-        if *mat != DbtMaterialization::Table && *mat != DbtMaterialization::Incremental {
-            let err = fs_err!(
-                code => ErrorCode::InvalidConfig,
-                loc => python_asset.path.to_path_buf(),
-                "Invalid materialization '{}' for Python model. Only 'table' or 'incremental' are allowed.",
-                mat,
-            );
-            return Err(err);
-        }
-    } else {
-        merged_config.materialized = Some(DbtMaterialization::Table);
+    check_node_static_analysis(
+        &merged_config,
+        arg.static_analysis,
+        &unique_id,
+        dependency_package_name,
+        arg.io.status_reporter.as_ref(),
+    );
+
+    check_config_get_on_meta_keys(
+        &merged_config,
+        &python_asset.path,
+        arg.io.status_reporter.as_ref(),
+    );
+
+    let mat = merged_config.materialized.clone();
+    if mat != DbtMaterialization::Table && mat != DbtMaterialization::Incremental {
+        let err = fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => python_asset.path.to_path_buf(),
+            "Invalid materialization '{}' for Python model. Only 'table' or 'incremental' are allowed.",
+            mat,
+        );
+        return Err(err);
     }
 
-    // Python models always have static_analysis turned off
-    // SQL analysis is not applicable to Python code
-    merged_config.static_analysis = Some(StaticAnalysisKind::Off.into());
-
     Ok(merged_config)
-}
-
-/// Determine if a DbtAsset is a Python model based on file extension
-fn is_python_model(asset: &dbt_schemas::state::DbtAsset) -> bool {
-    asset
-        .path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext == "py")
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

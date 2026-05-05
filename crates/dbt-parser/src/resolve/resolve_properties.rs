@@ -9,7 +9,6 @@ use dbt_common::{ErrorCode, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::schemas::project::SemanticModelConfig;
 use dbt_schemas::schemas::properties::{
     AnalysesProperties, DbtPropertiesFileValues, MacrosProperties, MinimalSchemaValue,
     MinimalTableValue, MinimalUnitTestValue,
@@ -615,7 +614,7 @@ pub fn resolve_minimal_properties(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.semantic_models,
-                SemanticModelConfig::default(),
+                (),
                 Some(package.dbt_project.name.as_str()),
             )
         },

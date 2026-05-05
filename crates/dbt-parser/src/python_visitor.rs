@@ -11,13 +11,14 @@ use crate::python_file_info::PythonFileInfo;
 use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::serde::into_typed_with_error;
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
 use ruff_python_ast::{
     self as ast, Expr, Stmt,
     visitor::{Visitor, walk_expr, walk_stmt},
 };
-use ruff_text_size::Ranged;
+use ruff_text_size::{Ranged, TextRange};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Type alias for function call arguments (positional, keyword)
 type CallArgs = (Vec<LiteralValue>, Vec<(String, LiteralValue)>);
@@ -52,6 +53,19 @@ fn literal_value_to_minijinja(value: &LiteralValue) -> minijinja::value::Value {
             let mj_items: Vec<MJValue> = items.iter().map(literal_value_to_minijinja).collect();
             MJValue::from(mj_items)
         }
+    }
+}
+
+/// Convert a ruff `TextRange` to a `dbt_yaml::Span` anchored to the current file.
+fn range_to_span(range: TextRange, line_starts: &[usize], file_path: &PathBuf) -> dbt_yaml::Span {
+    let start_offset = range.start().to_u32() as usize;
+    let end_offset = range.end().to_u32() as usize;
+    let (start_line, start_col) = offset_to_line_col(start_offset, line_starts);
+    let (end_line, end_col) = offset_to_line_col(end_offset, line_starts);
+    dbt_yaml::Span {
+        start: dbt_yaml::Marker::new(start_offset, start_line, start_col),
+        end: dbt_yaml::Marker::new(end_offset, end_line, end_col),
+        filename: Some(Arc::new(file_path.to_owned())),
     }
 }
 
@@ -100,7 +114,7 @@ fn literal_value_to_yaml(
 }
 
 /// Visitor for extracting dbt function calls from Python AST
-pub struct DbtPythonVisitor<'a, T: DefaultTo<T>> {
+pub struct DbtPythonVisitor<'a, T: ResolvableConfig<T>> {
     /// The file being parsed
     pub file_path: &'a PathBuf,
     /// Collected information about the Python file
@@ -117,7 +131,7 @@ pub struct DbtPythonVisitor<'a, T: DefaultTo<T>> {
     line_starts: Vec<usize>,
 }
 
-impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
+impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
     /// Create a new visitor
     pub fn new(
         file_path: &'a PathBuf,
@@ -277,30 +291,53 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
     }
 
     /// Handle a dbt.config() call
-    fn handle_config(&mut self, kwargs: Vec<(String, LiteralValue)>) {
+    fn handle_config(&mut self, keywords: &[ast::Keyword], range: TextRange) {
         // Convert kwargs into YAML mapping and deserialize into config struct
         // This handles all config fields uniformly, similar to SQL models
-        let span = dbt_yaml::Span::default();
-        let mut mapping = dbt_yaml::Mapping::with_capacity(kwargs.len());
+        let call_span = range_to_span(range, &self.line_starts, self.file_path);
+        let mut mapping = dbt_yaml::Mapping::with_capacity(keywords.len());
 
-        for (key, value) in kwargs {
+        for kw in keywords {
+            let Some(arg_name) = &kw.arg else {
+                self.errors
+                    .push("**kwargs unpacking is not supported in dbt.config()".to_string());
+                return;
+            };
+
+            let value = match literal_eval(&kw.value, &self.line_starts) {
+                Ok(v) => v,
+                Err(e) => {
+                    self.errors.push(format!(
+                        "Failed to evaluate config value for '{}': {}",
+                        arg_name, e
+                    ));
+                    return;
+                }
+            };
+
+            // Compute a per-keyword span so errors point to the specific key
+            let key_span = range_to_span(arg_name.range(), &self.line_starts, self.file_path);
+
             // Convert LiteralValue to dbt_yaml::Value
-            let yaml_value = match literal_value_to_yaml(value, &span) {
+            let yaml_value = match literal_value_to_yaml(value, &call_span) {
                 Ok(v) => v,
                 Err(e) => {
                     self.errors.push(format!(
                         "Failed to convert config value for '{}': {}",
-                        key, e
+                        arg_name, e
                     ));
                     continue;
                 }
             };
 
-            mapping.insert(dbt_yaml::Value::String(key, span.clone()), yaml_value);
+            mapping.insert(
+                dbt_yaml::Value::String(arg_name.to_string(), key_span),
+                yaml_value,
+            );
         }
 
         // Deserialize the entire mapping into the config struct, emitting strict warnings on unused keys
-        let yaml_value = dbt_yaml::Value::Mapping(mapping, span);
+        let yaml_value = dbt_yaml::Value::Mapping(mapping, call_span);
         match into_typed_with_error(
             self.io_args,
             yaml_value,
@@ -402,10 +439,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                     Ok((positional_args, _)) => self.handle_source(positional_args, line),
                     Err(e) => self.errors.push(e.to_string()),
                 },
-                "dbt.config" => match self.extract_call_args(args, keywords) {
-                    Ok((_positional_args, keyword_args)) => self.handle_config(keyword_args),
-                    Err(e) => self.errors.push(e.to_string()),
-                },
+                "dbt.config" => self.handle_config(keywords, range),
                 "dbt.config.get" => match self.extract_call_args(args, keywords) {
                     Ok((positional_args, _)) => self.handle_config_get(positional_args, line),
                     Err(e) => self.errors.push(e.to_string()),
@@ -420,7 +454,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
     }
 }
 
-impl<'a, T: DefaultTo<T>> Visitor<'_> for DbtPythonVisitor<'a, T> {
+impl<'a, T: ResolvableConfig<T>> Visitor<'_> for DbtPythonVisitor<'a, T> {
     fn visit_stmt(&mut self, stmt: &Stmt) {
         // Track import statements for package telemetry
         match stmt {
@@ -452,7 +486,7 @@ impl<'a, T: DefaultTo<T>> Visitor<'_> for DbtPythonVisitor<'a, T> {
 }
 
 /// Analyze a Python model file and extract dbt function calls
-pub fn analyze_python_file<T: DefaultTo<T>>(
+pub fn analyze_python_file<T: ResolvableConfig<T>>(
     file_path: &PathBuf,
     source: &str,
     stmts: &[Stmt],

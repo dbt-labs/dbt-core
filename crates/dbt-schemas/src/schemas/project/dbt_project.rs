@@ -237,59 +237,84 @@ pub enum QueryComment {
     Object(YmlValue),
 }
 
-/// This trait is used to default fields in a config to the values of a parent config.
-pub trait DefaultTo<T>:
-    Serialize + DeserializeOwned + Default + Debug + Clone + Send + Sync
-{
-    fn default_to(&mut self, parent: &T);
-
-    fn get_enabled(&self) -> Option<bool>;
-
-    /// Get a bool with default true value if None
-    fn get_enabled_with_default(&self) -> bool {
-        self.get_enabled().unwrap_or(true)
-    }
-
-    /// Get bool, ensuring finalize() was called and the default value was set
-    fn get_enabled_resolved(&self) -> bool {
-        self.get_enabled().expect("Need to call config.finalize()")
-    }
-
-    fn set_enabled(&mut self, _value: Option<bool>);
-
-    /// Called once after full resolution to normalize `enabled` from `None` to `Some(true)`.
-    /// This ensures that state comparisons always see a concrete value rather than `None`.
-    fn finalize(&mut self) {
-        self.set_enabled(Some(self.get_enabled_with_default()));
-    }
-
-    fn is_incremental(&self) -> bool {
-        false
-    }
-
-    fn database(&self) -> Option<String> {
-        None
-    }
-
-    fn schema(&self) -> Option<String> {
-        None
-    }
-
-    fn alias(&self) -> Option<String> {
-        None
-    }
-
+/// Common interface for configs that have completed the resolution pipeline.
+///
+/// Implemented by every `Resolved*Config` config type (generated via `#[derive(Resolvable)]`) and by
+/// trivially-resolved configs that implement it directly. All required fields are guaranteed
+/// to be set — `enabled()` always returns `bool`, never `Option<bool>`.
+///
+/// The optional capability methods (`get_pre_hook`, `get_post_hook`, `get_static_analysis`)
+/// default to `None` and are overridden only by config types that have those fields.
+pub trait ResolvedConfig {
+    fn enabled(&self) -> bool;
     fn get_pre_hook(&self) -> Option<&crate::schemas::common::Hooks> {
         None
     }
-
     fn get_post_hook(&self) -> Option<&crate::schemas::common::Hooks> {
         None
     }
-
-    fn get_static_analysis(&self) -> Option<dbt_common::io_args::StaticAnalysisKind> {
+    fn get_static_analysis(&self) -> Option<Spanned<dbt_common::io_args::StaticAnalysisKind>> {
         None
     }
+}
+
+/// Full config resolution lifecycle protocol.
+///
+/// Implement this on every config type that participates in the resolution pipeline.
+/// The four lifecycle steps, in order:
+/// 1. `default_to` — inherit unset fields from a parent config of the same type
+/// 2. `apply_package_defaults` — seed package-level values (e.g. quoting) once per package
+/// 3. `apply_resolve_defaults` — fill in runtime values (e.g. CLI flags) after all layers merge
+/// 4. `finalize` — consume self and produce `Self::Resolved`, the post-resolution type
+///
+/// For configs with fields that need `Option<T>` → `T` promotion in the resolved type, use
+/// `#[derive(Resolvable)]` to generate the `Resolved*Config` struct and `finalize_resolved()` helper.
+/// For trivially-resolved configs (no fields to promote), implement `ResolvedConfig` directly
+/// on the struct and set `type Resolved = Self`.
+pub trait ResolvableConfig<T>:
+    Serialize + DeserializeOwned + Default + Debug + Clone + Send + Sync
+{
+    /// Post-resolution type returned by `finalize()`.
+    ///
+    /// For configs with promoted fields use the `#[derive(Resolvable)]`-generated `Resolved*Config` struct.
+    /// For trivially-resolved configs set `type Resolved = Self` and impl `ResolvedConfig` directly.
+    type Resolved: Send + Sync + ResolvedConfig + Clone;
+
+    /// Values seeded into the root config before parent→child resolution within a package
+    /// (e.g. quoting, sync). Applied once per package; cross-package defaults belong in `finalize`.
+    /// Use `()` for configs that need no package-level seeding.
+    type PackageDefaults;
+
+    /// Runtime values applied after all layers are merged and the root overlay is applied, just
+    /// before `finalize()`. Supplied via `ProjectConfigResolver::with_resolve_defaults`.
+    ///
+    /// Use `()` for configs that need no post-resolution defaults.
+    /// Use `StaticAnalysisKind` for configs that carry a `static_analysis` field.
+    ///
+    /// For fields with a fixed compile-time default (i.e. not dependent on runtime inputs),
+    /// prefer the `#[resolved(promote, default = expr)]` or `#[resolved(promote)]` macro
+    /// attributes on the struct instead of implementing `apply_resolve_defaults`.
+    type ResolveDefaults: Default + Clone + Send + Sync;
+
+    fn default_to(&mut self, parent: &T);
+
+    /// Returns whether this node is enabled, defaulting to `true` if unset.
+    fn get_enabled_with_default(&self) -> bool;
+
+    fn apply_package_defaults(&mut self, defaults: Self::PackageDefaults);
+
+    /// Called after all config layers (project, properties, inline) are merged and the root
+    /// overlay is applied, but before `finalize()`. Use this to fill in fields that must always
+    /// have a value but are not set by `apply_package_defaults` for dependency packages.
+    fn apply_resolve_defaults(&mut self, _defaults: Self::ResolveDefaults) {}
+
+    /// Forces `enabled` to `false` unconditionally.
+    fn disable(&mut self);
+
+    /// Consumes self and returns the resolved type.
+    fn finalize(self) -> Self::Resolved
+    where
+        Self: Sized;
 }
 
 // Improved macro for simple field defaulting with mutable references

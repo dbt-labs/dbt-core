@@ -15,6 +15,7 @@ use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_contents;
 use crate::utils::get_original_file_path;
 use crate::utils::update_node_relation_components;
+use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
@@ -25,10 +26,8 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
-use dbt_common::static_analysis::{
-    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
-};
 use dbt_common::stdfs;
+use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -47,7 +46,8 @@ use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::DbtProject;
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
+use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -63,7 +63,6 @@ use dbt_yaml::Spanned;
 use dbt_yaml::Value as YmlValue;
 use md5;
 use minijinja::Value;
-use minijinja::constants::DEFAULT_TEST_SCHEMA;
 use serde::de;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -266,14 +265,12 @@ pub async fn resolve_data_tests(
             init_project_config(
                 &arg.io,
                 &tests_config,
-                DataTestConfig {
-                    quoting: Some(package_quoting),
-                    ..Default::default()
-                },
+                package_quoting,
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -311,37 +308,18 @@ pub async fn resolve_data_tests(
             .then(a.asset.path.cmp(&b.asset.path))
     });
 
-    let default_dbt_config = DataTestConfig {
-        fail_calc: Some("count(*)".to_string()),
-        warn_if: Some("!= 0".to_string()),
-        error_if: Some("!= 0".to_string()),
-        limit: None,
-        materialized: Some(DbtMaterialization::Test),
-        store_failures: arg.store_failures.then_some(true),
-        ..Default::default()
-    };
-
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        config: test_config_resolved,
+        config: test_config,
         rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
         patch_path: _,
         ..
-    } in test_sql_resources_map.iter()
+    } in test_sql_resources_map.into_iter()
     {
-        let mut test_config = test_config_resolved.clone();
-
-        // Appply defaults after full config resolution
-        test_config.default_to(&default_dbt_config);
-
-        if test_config.schema.is_none() {
-            test_config.schema = Some(DEFAULT_TEST_SCHEMA.to_string());
-        }
-
         // Use the custom test name from GenericTestAsset if available, otherwise use the filename.
         // test_name is the truncated form (for file paths); fqn_name is the full form
         // (for unique_id, name field, and FQN), matching dbt-core/Mantle behavior.
@@ -368,7 +346,7 @@ pub async fn resolve_data_tests(
                 (name.clone(), name)
             };
 
-        let properties = if let Some(properties) = maybe_properties {
+        let properties = if let Some(properties) = maybe_properties.as_ref() {
             properties
         } else {
             &DataTestProperties::empty(test_name.to_owned())
@@ -408,23 +386,14 @@ pub async fn resolve_data_tests(
             &package.dbt_project.all_source_paths(),
         );
 
-        // Errored models can be enabled, so enabled is set to the opposite of disabled
-        test_config.enabled = Some(!(*status == ModelStatus::Disabled));
-
-        let static_analysis = if let Some(static_analysis) = test_config.static_analysis.clone() {
-            check_deprecated_static_analysis_kind(
-                static_analysis.clone().into_inner(),
-                StaticAnalysisDeprecationOrigin::NodeConfig {
-                    unique_id: unique_id.as_str(),
-                },
-                dependency_package_name,
-                arg.io.status_reporter.as_ref(),
-            );
-            static_analysis
-        } else {
-            // If global override is set, use it. Otherwise default
-            arg.static_analysis.unwrap_or_default().into()
-        };
+        let static_analysis = test_config.static_analysis.clone();
+        check_node_static_analysis(
+            &test_config,
+            arg.static_analysis,
+            unique_id.as_str(),
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
+        );
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -491,22 +460,16 @@ pub async fn resolve_data_tests(
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
                 relation_name: None,
-                static_analysis_off_reason: (static_analysis.clone().into_inner()
-                    == StaticAnalysisKind::Off)
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 quoting: test_config
                     .quoting
-                    .expect("quoting is required")
                     .try_into()
-                    .expect("quoting is required"),
-                quoting_ignore_case: test_config
-                    .quoting
-                    .expect("quoting is required")
-                    .snowflake_ignore_case
-                    .unwrap_or(false),
-                materialized: test_config.materialized.clone().expect("hardcoded above"),
-                enabled: test_config.get_enabled_resolved(),
+                    .expect("DbtQuoting -> ResolvedQuoting conversion"),
+                quoting_ignore_case: test_config.quoting.snowflake_ignore_case.unwrap_or(false),
+                materialized: test_config.materialized.clone(),
+                enabled: test_config.enabled,
                 extended_model: false,
                 persist_docs: None,
                 columns: vec![],
@@ -572,7 +535,7 @@ pub async fn resolve_data_tests(
                 &test_config.__warehouse_specific_config__,
                 adapter_type,
             ),
-            deprecated_config: test_config.clone(),
+            deprecated_config: test_config.clone().into(),
             __other__: BTreeMap::new(),
         };
 

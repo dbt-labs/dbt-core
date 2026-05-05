@@ -40,7 +40,7 @@ use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
     same_warehouse_config,
 };
-use crate::schemas::project::dbt_project::DefaultTo;
+use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -48,6 +48,7 @@ use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, default_type, f64_or_string_f64,
     u64_or_string_u64,
 };
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::ShouldBe;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -483,8 +484,9 @@ impl TypedRecursiveConfig for ProjectModelConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
 pub struct ModelConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
@@ -511,6 +513,7 @@ pub struct ModelConfig {
     )]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
+    #[resolved(promote, default = DbtMaterialization::View)]
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     pub incremental_predicates: Option<Vec<String>>,
@@ -520,6 +523,7 @@ pub struct ModelConfig {
     pub persist_docs: Option<PersistDocsConfig>,
     pub post_hook: Verbatim<Option<Hooks>>,
     pub pre_hook: Verbatim<Option<Hooks>>,
+    #[resolved(promote, expect = "apply_package_defaults guarantees quoting is set")]
     pub quoting: Option<DbtQuoting>,
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -545,6 +549,7 @@ pub struct ModelConfig {
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     pub access: Option<Access>,
     pub table_format: Option<String>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
     pub sql_header: Option<String>,
@@ -912,7 +917,7 @@ impl From<ModelConfig> for ProjectModelConfig {
     }
 }
 
-impl DefaultTo<ModelConfig> for ModelConfig {
+impl ResolvableConfig<ModelConfig> for ModelConfig {
     /// Default this config to the parent config
     ///
     /// This method ensures that:
@@ -1071,42 +1076,38 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         );
     }
 
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+    type Resolved = ResolvedModelConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>);
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
     }
 
-    fn is_incremental(&self) -> bool {
-        self.incremental_strategy.is_some()
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
     }
 
-    fn database(&self) -> Option<String> {
-        self.database.clone().into_inner().unwrap_or(None)
+    fn apply_resolve_defaults(
+        &mut self,
+        (static_analysis, sync): (StaticAnalysisKind, Option<SyncConfig>),
+    ) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+        if self.sync.is_none() {
+            self.sync = sync;
+        }
     }
 
-    fn schema(&self) -> Option<String> {
-        self.schema.clone().into_inner().unwrap_or(None)
-    }
-
-    fn alias(&self) -> Option<String> {
-        self.alias.clone()
-    }
-
-    fn get_pre_hook(&self) -> Option<&Hooks> {
-        (*self.pre_hook).as_ref()
-    }
-
-    fn get_post_hook(&self) -> Option<&Hooks> {
-        (*self.post_hook).as_ref()
-    }
-
-    fn get_static_analysis(&self) -> Option<StaticAnalysisKind> {
-        self.static_analysis
-            .as_ref()
-            .map(|s| s.clone().into_inner())
+    fn finalize(self) -> ResolvedModelConfig {
+        self.finalize_resolved()
     }
 }
 
@@ -1630,7 +1631,7 @@ fn on_configuration_change_eq(
 
 // Helper function to compare materialized fields, treating None as View (the default)
 fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization>) -> bool {
-    let default_materialized = DbtMaterialization::View;
+    let default_materialized = ModelConfig::default_materialized();
 
     match (a, b) {
         (None, None) => true,
@@ -1646,7 +1647,7 @@ mod tests {
 
     #[test]
     fn test_packages_append() {
-        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
@@ -1679,7 +1680,7 @@ mod tests {
 
     #[test]
     fn test_packages_append_with_string_variant() {
-        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
@@ -1708,7 +1709,7 @@ mod tests {
 
     #[test]
     fn test_packages_none_child_inherits_parent() {
-        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {
@@ -1736,7 +1737,7 @@ mod tests {
 
     #[test]
     fn test_packages_no_deduplication() {
-        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::project::dbt_project::ResolvableConfig;
         use crate::schemas::serde::StringOrArrayOfStrings;
 
         let parent = ModelConfig {

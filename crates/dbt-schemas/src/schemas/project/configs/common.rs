@@ -19,7 +19,7 @@ use crate::schemas::common::merge_tags;
 use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
-use crate::schemas::project::dbt_project::DefaultTo;
+use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
 use crate::schemas::serde::QueryTag;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
@@ -401,12 +401,28 @@ pub struct WarehouseSpecificNodeConfig {
     pub category: Option<DataLakeObjectCategory>,
 }
 
-impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        None
+impl ResolvedConfig for WarehouseSpecificNodeConfig {
+    fn enabled(&self) -> bool {
+        true
+    }
+}
+
+impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
+    type Resolved = Self;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        true
     }
 
-    fn set_enabled(&mut self, _value: Option<bool>) {}
+    fn disable(&mut self) {}
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> Self {
+        self
+    }
 
     #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &WarehouseSpecificNodeConfig) {

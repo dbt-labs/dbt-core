@@ -23,9 +23,9 @@ use dbt_common::{
 use dbt_frontend_common::error::CodeLocation;
 use dbt_schemas::schemas::{
     DbtModelAttr, InternalDbtNode, IntrospectionKind,
-    common::{Access, DbtMaterialization, ResolvedQuoting},
+    common::{Access, ResolvedQuoting},
     nodes::AdapterAttr,
-    project::{DefaultTo, ModelConfig},
+    project::{ModelConfig, ResolvableConfig},
 };
 use dbt_schemas::{
     dbt_types::RelationType,
@@ -68,7 +68,7 @@ impl Object for ParseExecute {
 
 /// Builds a context for resolving models
 #[allow(clippy::too_many_arguments)]
-pub fn build_resolve_model_context<T: DefaultTo<T> + Serialize + 'static>(
+pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>(
     config: &T,
     adapter_type: AdapterType,
     database: &str,
@@ -237,7 +237,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + Serialize + 'static>(
             schema: schema.to_string(),
             alias: model_name.to_string(),
             relation_name: None,
-            materialized: DbtMaterialization::View,
+            materialized: ModelConfig::default_materialized(),
             static_analysis: global_static_analysis.unwrap_or_default().into(),
             static_analysis_off_reason: None,
             enabled: true,
@@ -379,7 +379,7 @@ fn init_batch_context() -> BTreeMap<String, MinijinjaValue> {
 }
 
 #[derive(Debug)]
-struct ResolveRefFunction<T: DefaultTo<T> + 'static> {
+struct ResolveRefFunction<T: ResolvableConfig<T> + 'static> {
     database: String,
     schema: String,
     adapter_type: AdapterType,
@@ -388,7 +388,7 @@ struct ResolveRefFunction<T: DefaultTo<T> + 'static> {
     package_quoting: DbtQuoting,
 }
 
-impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
+impl<T: ResolvableConfig<T>> Object for ResolveRefFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
             "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
@@ -462,7 +462,7 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
 }
 
 #[derive(Debug)]
-struct ResolveSourceFunction<T: DefaultTo<T>> {
+struct ResolveSourceFunction<T: ResolvableConfig<T>> {
     database: String,
     schema: String,
     adapter_type: AdapterType,
@@ -470,7 +470,7 @@ struct ResolveSourceFunction<T: DefaultTo<T>> {
     package_quoting: DbtQuoting,
 }
 
-impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
+impl<T: ResolvableConfig<T>> Object for ResolveSourceFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
             "function_name" => Some(MinijinjaValue::from("source")),
@@ -527,7 +527,7 @@ impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
 }
 
 #[derive(Debug)]
-struct ResolveFunctionFunction<T: DefaultTo<T>> {
+struct ResolveFunctionFunction<T: ResolvableConfig<T>> {
     database: String,
     schema: String,
     adapter_type: AdapterType,
@@ -535,7 +535,7 @@ struct ResolveFunctionFunction<T: DefaultTo<T>> {
     package_quoting: DbtQuoting,
 }
 
-impl<T: DefaultTo<T>> Object for ResolveFunctionFunction<T> {
+impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
             "function_name" => Some(MinijinjaValue::from("function")),
@@ -659,7 +659,7 @@ impl Object for ParseConfigValue {
 
 /// A struct that represents a parse config object to be used during parsing
 #[derive(Debug)]
-pub struct ParseConfig<T: DefaultTo<T> + 'static> {
+pub struct ParseConfig<T: ResolvableConfig<T> + 'static> {
     /// A pointer to a vector of sql resources to be collected during parsing
     pub sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     /// Whether the model is enabled (based on upstream config)
@@ -672,7 +672,7 @@ pub struct ParseConfig<T: DefaultTo<T> + 'static> {
     pub error_path: Option<PathBuf>,
 }
 
-impl<T: DefaultTo<T>> Object for ParseConfig<T> {
+impl<T: ResolvableConfig<T>> Object for ParseConfig<T> {
     /// Implement the call method on the config object
     fn call(
         self: &Arc<Self>,
@@ -855,12 +855,12 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
 }
 
 #[derive(Debug)]
-struct ResolveThisFunction<T: DefaultTo<T> + 'static> {
+struct ResolveThisFunction<T: ResolvableConfig<T> + 'static> {
     relation: MinijinjaValue,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
 }
 
-impl<T: DefaultTo<T>> Object for ResolveThisFunction<T> {
+impl<T: ResolvableConfig<T>> Object for ResolveThisFunction<T> {
     fn call_method(
         self: &Arc<Self>,
         state: &State<'_, '_>,

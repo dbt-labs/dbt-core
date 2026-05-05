@@ -87,6 +87,10 @@ pub struct DbtAsset {
 }
 
 impl DbtAsset {
+    pub fn is_python(&self) -> bool {
+        self.path.extension().and_then(|ext| ext.to_str()) == Some("py")
+    }
+
     /// Assumes all paths used are canonicalized
     pub fn to_display_path(&self, project_root: &Path) -> PathBuf {
         let absolute_path = self.base_path.join(&self.path);

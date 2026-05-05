@@ -1149,7 +1149,7 @@ pub struct ManifestAnalysis {
     pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     pub __base_attr__: ManifestNodeBaseAttributes,
-
+    // TODO: remove top level materialized, static_analysis, and enabled and move to config along with defaults?
     #[serde(default = "default_analysis_materialized")]
     pub materialized: DbtMaterialization,
     #[serde(default = "default_analysis_static_analysis")]

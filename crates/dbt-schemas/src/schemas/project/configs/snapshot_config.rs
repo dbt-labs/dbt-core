@@ -27,7 +27,7 @@ use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
 use crate::schemas::common::SyncConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::DefaultTo;
+use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_hooks;
@@ -39,6 +39,7 @@ use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
 };
+use dbt_proc_macros::Resolvable;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -343,7 +344,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
     #[serde(alias = "project", alias = "data_space")]
@@ -351,6 +352,7 @@ pub struct SnapshotConfig {
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
+    #[resolved(promote, default = DbtMaterialization::Table)]
     pub materialized: Option<DbtMaterialization>,
     pub strategy: Option<String>,
     pub unique_key: Option<StringOrArrayOfStrings>,
@@ -364,6 +366,7 @@ pub struct SnapshotConfig {
     pub target_database: Option<String>,
     pub target_schema: Option<String>,
     // General Configuration
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -381,7 +384,9 @@ pub struct SnapshotConfig {
     #[serde(default)]
     pub grants: OmissibleGrantConfig,
     pub event_time: Option<String>,
+    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
@@ -752,21 +757,39 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
     }
 }
 
-impl DefaultTo<SnapshotConfig> for SnapshotConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
+    type Resolved = ResolvedSnapshotConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>);
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
     }
 
-    fn get_pre_hook(&self) -> Option<&Hooks> {
-        (*self.pre_hook).as_ref()
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
     }
 
-    fn get_post_hook(&self) -> Option<&Hooks> {
-        (*self.post_hook).as_ref()
+    fn apply_resolve_defaults(
+        &mut self,
+        (static_analysis, sync): (StaticAnalysisKind, Option<SyncConfig>),
+    ) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+        if self.sync.is_none() {
+            self.sync = sync;
+        }
+    }
+
+    fn finalize(self) -> ResolvedSnapshotConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &SnapshotConfig) {
@@ -852,18 +875,6 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 sync,
             ]
         );
-    }
-
-    fn database(&self) -> Option<String> {
-        self.database.clone()
-    }
-
-    fn schema(&self) -> Option<String> {
-        self.schema.clone()
-    }
-
-    fn alias(&self) -> Option<String> {
-        self.alias.clone()
     }
 }
 

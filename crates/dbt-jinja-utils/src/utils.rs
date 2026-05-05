@@ -5,7 +5,7 @@ use dbt_common::{ErrorCode, FsError, fs_err};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, stdfs};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::schemas::{
     CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
@@ -570,7 +570,7 @@ pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
 }
 
 /// Render a reference or source string and return the corresponding SqlResource
-pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
+pub fn render_extract_ref_or_source_expr<T: ResolvableConfig<T>>(
     jinja_env: &JinjaEnv,
     resolve_model_context: &BTreeMap<String, Value>,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,

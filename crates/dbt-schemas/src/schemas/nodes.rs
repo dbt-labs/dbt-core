@@ -1848,7 +1848,16 @@ impl InternalDbtNode for DbtUnitTest {
             let other_config = &other.deprecated_config;
 
             let enabled_eq = self_config.enabled == other_config.enabled;
-            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+            // Treat None as equivalent to Some(default) so that old manifests
+            // that serialized null (before apply_resolve_defaults ran for unit tests)
+            // do not produce false-positive state:modified detections.
+            let default_sa = StaticAnalysisKind::default();
+            let static_analysis_eq =
+                match (&self_config.static_analysis, &other_config.static_analysis) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
+                    (Some(a), Some(b)) => a == b,
+                };
             let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
@@ -2011,6 +2020,7 @@ impl InternalDbtNode for DbtSource {
             let quoting_eq = |a: &Option<crate::schemas::common::DbtQuoting>,
                               b: &Option<crate::schemas::common::DbtQuoting>|
              -> bool {
+                // FIXME: default is actually dependent on adapter. We should call default_dbt_quoting_for(adapter_type)
                 let default_quoting = crate::schemas::common::DbtQuoting {
                     database: Some(false),
                     identifier: Some(false),
@@ -2091,7 +2101,16 @@ impl InternalDbtNode for DbtSource {
                 &other_source.__source_attr__.loaded_at_query,
             );
 
-            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+            // Treat None as equivalent to Some(default) so that old manifests
+            // that serialized null (before apply_resolve_defaults ran for sources)
+            // do not produce false-positive state:modified detections.
+            let default_sa = StaticAnalysisKind::default();
+            let static_analysis_eq =
+                match (&self_config.static_analysis, &other_config.static_analysis) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
+                    (Some(a), Some(b)) => a == b,
+                };
 
             let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
@@ -2348,7 +2367,16 @@ impl InternalDbtNode for DbtSnapshot {
             let grants_eq = grants_eq(&self_config.grants, &other_config.grants);
             let event_time_eq = self_config.event_time == other_config.event_time;
             let quoting_eq = quoting_equal(&self_config.quoting, &other_config.quoting);
-            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+            // Treat None as equivalent to Some(default) so that old manifests
+            // that serialized null (before apply_resolve_defaults ran for snapshots)
+            // do not produce false-positive state:modified detections.
+            let default_sa = StaticAnalysisKind::default();
+            let static_analysis_eq =
+                match (&self_config.static_analysis, &other_config.static_analysis) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
+                    (Some(a), Some(b)) => a == b,
+                };
             let group_eq = self_config.group == other_config.group;
             let quote_columns_eq = self_config.quote_columns == other_config.quote_columns;
             let invalidate_hard_deletes_eq =

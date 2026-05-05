@@ -1,3 +1,4 @@
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,7 @@ type YmlValue = dbt_yaml::Value;
 use crate::{
     default_to,
     schemas::{
-        project::{DefaultTo, TypedRecursiveConfig, configs::common::default_meta_and_tags},
+        project::{ResolvableConfig, TypedRecursiveConfig, configs::common::default_meta_and_tags},
         serde::{StringOrArrayOfStrings, bool_or_string_bool},
     },
 };
@@ -40,8 +41,9 @@ impl TypedRecursiveConfig for ProjectMetricConfigs {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq)]
 pub struct MetricConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -87,13 +89,23 @@ impl From<MetricConfig> for ProjectMetricConfigs {
     }
 }
 
-impl DefaultTo<MetricConfig> for MetricConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<MetricConfig> for MetricConfig {
+    type Resolved = ResolvedMetricConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedMetricConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &MetricConfig) {

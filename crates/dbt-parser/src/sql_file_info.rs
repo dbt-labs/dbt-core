@@ -2,12 +2,12 @@
 
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
-use dbt_schemas::schemas::{common::DbtChecksum, project::DefaultTo};
+use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig};
 use minijinja::{ArgSpec, machinery::Span};
 
 /// Collected details about processed sql files
 #[derive(Debug, Clone)]
-pub struct SqlFileInfo<T: DefaultTo<T>> {
+pub struct SqlFileInfo<T: ResolvableConfig<T>> {
     /// e.g. source('a', 'b')
     pub sources: Vec<(String, String, CodeLocation)>,
     /// e.g. ref('a', 'b', 'c')
@@ -39,7 +39,7 @@ pub struct SqlFileInfo<T: DefaultTo<T>> {
     pub execute: bool,
 }
 
-impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
+impl<T: ResolvableConfig<T>> Default for SqlFileInfo<T> {
     fn default() -> Self {
         Self {
             sources: Vec::new(),
@@ -59,7 +59,7 @@ impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
     }
 }
 
-impl<T: DefaultTo<T>> SqlFileInfo<T> {
+impl<T: ResolvableConfig<T>> SqlFileInfo<T> {
     /// Collects rendering artifacts from a list of SqlResources.
     ///
     /// `ConfigCall` items (from inline `{{ config(...) }}` calls) are merged into

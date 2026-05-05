@@ -3,6 +3,7 @@ use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
+use dbt_yaml::Spanned;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -13,6 +14,8 @@ use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
 use super::omissible_utils::handle_omissible_override;
+
+use dbt_proc_macros::Resolvable;
 
 use crate::default_to;
 use crate::schemas::common::DocsConfig;
@@ -27,8 +30,9 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
     default_meta_and_tags, default_packages, default_quoting, default_to_grants,
 };
-use crate::schemas::project::dbt_project::DefaultTo;
-use crate::schemas::project::dbt_project::TypedRecursiveConfig;
+use crate::schemas::project::dbt_project::{
+    ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
+};
 use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
@@ -65,7 +69,7 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+schema")]
     pub schema: Omissible<Option<String>>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+type")]
@@ -110,12 +114,28 @@ impl Default for ProjectFunctionConfig {
     }
 }
 
-impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        None
+impl ResolvedConfig for ProjectFunctionConfig {
+    fn enabled(&self) -> bool {
+        true
+    }
+}
+
+impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
+    type Resolved = Self;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        true
     }
 
-    fn set_enabled(&mut self, _value: Option<bool>) {}
+    fn disable(&mut self) {}
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> Self {
+        self
+    }
 
     fn default_to(&mut self, parent: &ProjectFunctionConfig) {
         let ProjectFunctionConfig {
@@ -181,10 +201,11 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
+#[derive(Resolvable, Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct FunctionConfig {
     pub access: Option<Access>,
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
@@ -201,9 +222,11 @@ pub struct FunctionConfig {
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
     pub grants: OmissibleGrantConfig,
+    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub on_configuration_change: Option<String>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(default = "default_function_kind", rename = "type")]
     pub function_kind: Option<FunctionKind>,
     pub volatility: Option<Volatility>,
@@ -215,25 +238,33 @@ pub struct FunctionConfig {
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
 
-impl DefaultTo<FunctionConfig> for FunctionConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<FunctionConfig> for FunctionConfig {
+    type Resolved = ResolvedFunctionConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = StaticAnalysisKind;
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
     }
 
-    fn database(&self) -> Option<String> {
-        self.database.clone().into_inner().unwrap_or(None)
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
     }
 
-    fn schema(&self) -> Option<String> {
-        self.schema.clone().into_inner().unwrap_or(None)
+    fn apply_resolve_defaults(&mut self, static_analysis: StaticAnalysisKind) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
     }
 
-    fn alias(&self) -> Option<String> {
-        self.alias.clone()
+    fn finalize(self) -> ResolvedFunctionConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &FunctionConfig) {
@@ -484,7 +515,7 @@ impl ConfigKeys for FunctionConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schemas::project::dbt_project::DefaultTo;
+    use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::serde::StringOrArrayOfStrings;
 
     #[test]

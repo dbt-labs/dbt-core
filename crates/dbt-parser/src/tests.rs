@@ -17,7 +17,7 @@ mod tests {
     use dbt_jinja_utils::utils::render_sql;
     use dbt_schemas::schemas::profiles::PostgresDbConfig;
     use dbt_schemas::schemas::project::ProjectModelConfig;
-    use dbt_schemas::schemas::project::{DefaultTo, ModelConfig};
+    use dbt_schemas::schemas::project::{ModelConfig, ResolvableConfig};
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::state::DbtRuntimeConfig;
@@ -39,7 +39,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::{collections::BTreeMap, path::PathBuf};
 
-    fn create_resolve_model_context<T: DefaultTo<T> + serde::Serialize + 'static>(
+    fn create_resolve_model_context<T: ResolvableConfig<T> + serde::Serialize + 'static>(
         init_config: &T,
         sql_resources: &Arc<Mutex<Vec<SqlResource<T>>>>,
     ) -> BTreeMap<String, Value> {

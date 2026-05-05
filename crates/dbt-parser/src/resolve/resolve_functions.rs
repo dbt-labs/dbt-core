@@ -13,7 +13,8 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
 use dbt_schemas::schemas::DbtFunctionAttr;
 use dbt_schemas::schemas::common::{Access, DbtQuoting};
-use dbt_schemas::schemas::project::{DefaultTo, FunctionConfig};
+use dbt_schemas::schemas::project::FunctionConfig;
+use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
@@ -36,16 +37,6 @@ use crate::{
 };
 
 use super::resolve_properties::MinimalPropertiesEntry;
-
-/// Determine if a DbtAsset is a Python function based on file extension
-fn is_python_function(asset: &dbt_schemas::state::DbtAsset) -> bool {
-    asset
-        .path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext == "py")
-        .unwrap_or(false)
-}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_functions(
@@ -79,14 +70,12 @@ pub async fn resolve_functions(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.functions,
-                FunctionConfig {
-                    quoting: Some(package_quoting),
-                    ..Default::default()
-                },
+                package_quoting,
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -146,20 +135,27 @@ pub async fn resolve_functions(
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
 
         let unique_id = get_unique_id(function_name, package_name, None, "function");
-        let static_analysis = if let Some(static_analysis) = model_config.static_analysis {
-            check_deprecated_static_analysis_kind(
-                static_analysis,
-                StaticAnalysisDeprecationOrigin::NodeConfig {
-                    unique_id: unique_id.as_str(),
-                },
-                dependency_package_name,
-                arg.io.status_reporter.as_ref(),
-            );
-            static_analysis
-        } else {
-            // If global override is set, use it. Otherwise default
-            arg.static_analysis.unwrap_or_default()
-        };
+        let static_analysis = model_config.static_analysis.clone();
+        if let Some(spanned) = model_config.get_static_analysis() {
+            let kind = spanned.into_inner();
+            if kind != arg.static_analysis.unwrap_or_default() {
+                check_deprecated_static_analysis_kind(
+                    kind,
+                    StaticAnalysisDeprecationOrigin::NodeConfig {
+                        unique_id: unique_id.as_str(),
+                    },
+                    dependency_package_name,
+                    arg.io.status_reporter.as_ref(),
+                );
+                if dbt_asset.is_python() {
+                    crate::validation::warn_python_static_analysis(
+                        kind,
+                        unique_id.as_str(),
+                        arg.io.status_reporter.as_ref(),
+                    );
+                }
+            }
+        }
 
         let fqn = get_node_fqn(
             package_name,
@@ -201,7 +197,7 @@ pub async fn resolve_functions(
                 // The actual rendered SQL is stored in rendering_results
                 raw_code: Some("--placeholder--".to_string()),
                 checksum: sql_file_info.checksum,
-                language: if is_python_function(&dbt_asset) {
+                language: if dbt_asset.is_python() {
                     Some("python".to_string())
                 } else {
                     properties.language.clone()
@@ -219,13 +215,13 @@ pub async fn resolve_functions(
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
                 materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
-                static_analysis: static_analysis.into(),
+                static_analysis,
                 static_analysis_off_reason: None,
                 quoting: package_quoting
                     .try_into()
                     .expect("DbtQuoting should be set"),
                 quoting_ignore_case: false,
-                enabled: model_config.get_enabled_resolved(),
+                enabled: model_config.enabled,
                 extended_model: false,
                 persist_docs: None,
                 columns: vec![],
@@ -268,7 +264,7 @@ pub async fn resolve_functions(
                     .and_then(|c| c.access.clone())
                     .unwrap_or(Access::Private),
                 group: properties.config.as_ref().and_then(|c| c.group.clone()),
-                language: if is_python_function(&dbt_asset) {
+                language: if dbt_asset.is_python() {
                     Some("python".to_string())
                 } else {
                     properties.language.clone()
@@ -280,8 +276,9 @@ pub async fn resolve_functions(
                 returns: properties.returns.clone(),
                 arguments: properties.arguments.clone(),
             },
+            // TODO: can we just take model_config and apply function_kind default elsewhere?
             deprecated_config: FunctionConfig {
-                enabled: model_config.enabled,
+                enabled: Some(model_config.enabled),
                 group: model_config.group.clone(),
                 tags: model_config.tags.clone(),
                 meta: model_config.meta.clone(),
@@ -298,8 +295,8 @@ pub async fn resolve_functions(
         };
 
         let components = RelationComponents {
-            database: model_config.database.into_inner().unwrap_or(None),
-            schema: model_config.schema.into_inner().unwrap_or(None),
+            database: model_config.database.clone().into_inner().unwrap_or(None),
+            schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
         };

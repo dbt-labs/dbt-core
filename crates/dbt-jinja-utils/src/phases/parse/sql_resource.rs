@@ -2,14 +2,14 @@
 
 use std::fmt::Debug;
 
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
 
 use dbt_frontend_common::error::CodeLocation;
 use minijinja::{ArgSpec, machinery::Span};
 
 /// Resources that are encountered while rendering sql and macros
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SqlResource<T: DefaultTo<T>> {
+pub enum SqlResource<T: ResolvableConfig<T>> {
     /// A source call (e.g. `{{ source('a', 'b') }}`)
     Source((String, String, CodeLocation)),
     /// A ref call (e.g. `{{ ref('a', 'b') }}`)
@@ -34,7 +34,7 @@ pub enum SqlResource<T: DefaultTo<T>> {
     Materialization(String, String, Span, Span), // name, adapter, span, macro_name_span
 }
 
-impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
+impl<T: ResolvableConfig<T>> std::fmt::Display for SqlResource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SqlResource::Source((a, b, location)) => {

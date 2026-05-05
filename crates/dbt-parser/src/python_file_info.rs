@@ -4,11 +4,11 @@
 //! analogous to SqlFileInfo for SQL models.
 
 use dbt_frontend_common::error::CodeLocation;
-use dbt_schemas::schemas::{common::DbtChecksum, project::DefaultTo};
+use dbt_schemas::schemas::{common::DbtChecksum, project::ResolvableConfig};
 
 /// Collected details about processed Python files
 #[derive(Debug, Clone)]
-pub struct PythonFileInfo<T: DefaultTo<T>> {
+pub struct PythonFileInfo<T: ResolvableConfig<T>> {
     /// e.g. dbt.source('a', 'b')
     pub sources: Vec<(String, String, CodeLocation)>,
 
@@ -44,7 +44,7 @@ pub struct PythonFileInfo<T: DefaultTo<T>> {
     pub has_valid_model_function: bool,
 }
 
-impl<T: DefaultTo<T>> Default for PythonFileInfo<T> {
+impl<T: ResolvableConfig<T>> Default for PythonFileInfo<T> {
     fn default() -> Self {
         Self {
             sources: Vec::new(),
@@ -61,7 +61,7 @@ impl<T: DefaultTo<T>> Default for PythonFileInfo<T> {
     }
 }
 
-impl<T: DefaultTo<T>> PythonFileInfo<T> {
+impl<T: ResolvableConfig<T>> PythonFileInfo<T> {
     /// Create a new PythonFileInfo with a checksum
     pub fn new(checksum: DbtChecksum) -> Self {
         Self {

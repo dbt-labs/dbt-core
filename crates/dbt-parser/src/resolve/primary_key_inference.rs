@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::nodes::TestMetadata;
-use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::project::ResolvableConfig;
 use dbt_schemas::schemas::{DbtModel, DbtTest, Nodes};
 use dbt_yaml::Value as YmlValue;
 
@@ -82,7 +82,7 @@ fn infer_from_tests(tests_for_model: &[(&DbtTest, bool)]) -> Vec<String> {
         if let Some(meta) = &test.__test_attr__.test_metadata {
             let columns = extract_columns_from_metadata(meta);
             let name = meta.name.as_str();
-            let is_enabled = test.deprecated_config.get_enabled_resolved() && !*is_disabled;
+            let is_enabled = test.deprecated_config.get_enabled_with_default() && !*is_disabled;
             for column in columns {
                 match name {
                     TEST_UNIQUE | TEST_UNIQUE_COMBO => {

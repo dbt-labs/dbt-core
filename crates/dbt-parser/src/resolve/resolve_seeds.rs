@@ -5,11 +5,9 @@ use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
     update_node_relation_components,
 };
+use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::static_analysis::{
-    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
-};
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -20,8 +18,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
-use dbt_schemas::schemas::project::DefaultTo;
-use dbt_schemas::schemas::project::{DbtProject, SeedConfig};
+use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
@@ -83,14 +80,12 @@ pub fn resolve_seeds(
             init_project_config(
                 io_args,
                 &package.dbt_project.seeds,
-                SeedConfig {
-                    quoting: Some(package_quoting),
-                    ..Default::default()
-                },
+                package_quoting,
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
@@ -193,22 +188,14 @@ pub fn resolve_seeds(
 
         let mut properties_config =
             config_resolver.resolve_with_properties(&fqn, seed.config.as_ref());
-
-        let static_analysis =
-            if let Some(static_analysis) = properties_config.static_analysis.clone() {
-                check_deprecated_static_analysis_kind(
-                    static_analysis.clone().into_inner(),
-                    StaticAnalysisDeprecationOrigin::NodeConfig {
-                        unique_id: unique_id.as_str(),
-                    },
-                    dependency_package_name,
-                    arg.io.status_reporter.as_ref(),
-                );
-                static_analysis
-            } else {
-                // If global override is set, use it. Otherwise default
-                arg.static_analysis.unwrap_or_default().into()
-            };
+        let static_analysis = properties_config.static_analysis.clone();
+        check_node_static_analysis(
+            &properties_config,
+            arg.static_analysis,
+            seed_name,
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
+        );
 
         // XXX: normalize column_types to uppercase if it is snowflake
         if matches!(adapter_type, AdapterType::Snowflake)
@@ -254,7 +241,7 @@ pub fn resolve_seeds(
 
             properties_config.column_types = Some(column_types);
         }
-        let is_enabled = properties_config.get_enabled_resolved();
+        let is_enabled = properties_config.enabled;
 
         let columns = process_columns(
             seed.columns.as_ref(),
@@ -308,12 +295,10 @@ pub fn resolve_seeds(
                 depends_on: NodeDependsOn::default(),
                 quoting: properties_config
                     .quoting
-                    .expect("quoting is required")
                     .try_into()
-                    .expect("quoting is required"),
+                    .expect("DbtQuoting -> ResolvedQuoting conversion"),
                 materialized: DbtMaterialization::Table,
-                static_analysis_off_reason: (static_analysis.clone().into_inner()
-                    == StaticAnalysisKind::Off)
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 ..Default::default()
@@ -326,7 +311,7 @@ pub fn resolve_seeds(
                 catalog_name: properties_config.catalog_name.clone(),
             },
             __other__: BTreeMap::new(),
-            deprecated_config: properties_config.clone(),
+            deprecated_config: properties_config.clone().into(),
         };
 
         let components = RelationComponents {

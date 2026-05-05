@@ -183,7 +183,7 @@ pub async fn resolve(
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let root_project_configs = build_root_project_configs(
-        &arg.io,
+        arg,
         dbt_state.root_project(),
         root_project_quoting,
         adapter_type,
@@ -673,6 +673,7 @@ pub async fn resolve_inner(
         arg,
         package,
         root_package_name,
+        dbt_state.root_project(),
         root_project_configs,
         min_properties.source_tables,
         database,
@@ -907,8 +908,7 @@ pub async fn resolve_inner(
     infer_and_apply_primary_keys(&mut nodes, &disabled_nodes);
 
     let (unit_tests, disabled_unit_tests) = resolve_unit_tests(
-        &arg.io,
-        arg.static_analysis,
+        arg,
         min_properties.unit_tests,
         package,
         package_quoting,

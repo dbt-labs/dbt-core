@@ -15,7 +15,7 @@ use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::nodes::{
     CommonAttributes, DbtExposure, DbtExposureAttr, NodeBaseAttributes,
 };
-use dbt_schemas::schemas::project::{DbtProject, DefaultTo, ExposureConfig};
+use dbt_schemas::schemas::project::{DbtProject, ExposureConfig, ResolvedExposureConfig};
 use dbt_schemas::schemas::properties::ExposureProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
@@ -58,9 +58,7 @@ pub async fn resolve_exposures(
             init_project_config(
                 &args.io,
                 &package.dbt_project.exposures,
-                ExposureConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -111,6 +109,8 @@ pub async fn resolve_exposures(
             //        - ref('model')
             //        - source('test_source', 'test_table')
             //        - metric('metric')
+
+            let is_enabled = exposure_properties_config.enabled;
 
             // Extract refs, sources & metrics from yaml depends_on
             let (refs, sources, metrics) = if let Some(depends_on) = &exposure.depends_on {
@@ -188,11 +188,11 @@ pub async fn resolve_exposures(
                     unrendered_config: BTreeMap::new(),
                     created_at: Default::default(),
                 },
-                deprecated_config: exposure_properties_config.clone(),
+                deprecated_config: exposure_properties_config.into(),
             };
 
             // Check if exposure is enabled, add to appropriate collection
-            if exposure_properties_config.get_enabled_resolved() {
+            if is_enabled {
                 exposures.insert(unique_id, Arc::new(dbt_exposure));
             } else {
                 disabled_exposures.insert(unique_id, Arc::new(dbt_exposure));
@@ -209,7 +209,7 @@ pub fn resolve_yaml_depends_on(
     depends_on: &[Spanned<String>],
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
-    exposure_config: &ExposureConfig,
+    exposure_config: &ResolvedExposureConfig,
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
@@ -220,6 +220,7 @@ pub fn resolve_yaml_depends_on(
     io_args: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
 ) -> FsResult<(Vec<DbtRef>, Vec<DbtSourceWrapper>, Vec<Vec<String>>)> {
+    let exposure_config: ExposureConfig = exposure_config.clone().into();
     let mut dependent_refs = vec![];
     let mut dependent_sources = vec![];
     let mut dependent_metrics = vec![];
@@ -231,7 +232,7 @@ pub fn resolve_yaml_depends_on(
 
         let mut resolve_model_context = base_ctx.clone();
         resolve_model_context.extend(build_resolve_model_context(
-            exposure_config,
+            &exposure_config,
             adapter_type,
             database,
             schema,

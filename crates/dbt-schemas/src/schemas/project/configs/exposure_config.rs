@@ -1,4 +1,5 @@
 use crate::schemas::project::TypedRecursiveConfig;
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ type YmlValue = dbt_yaml::Value;
 use crate::{
     default_to,
     schemas::{
-        project::{DefaultTo, configs::common::default_meta_and_tags},
+        project::{ResolvableConfig, configs::common::default_meta_and_tags},
         serde::{StringOrArrayOfStrings, bool_or_string_bool},
     },
 };
@@ -39,8 +40,9 @@ impl TypedRecursiveConfig for ProjectExposureConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, Default, DbtSchema, PartialEq)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema, PartialEq)]
 pub struct ExposureConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -72,13 +74,23 @@ impl From<ExposureConfig> for ProjectExposureConfig {
     }
 }
 
-impl DefaultTo<ExposureConfig> for ExposureConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<ExposureConfig> for ExposureConfig {
+    type Resolved = ResolvedExposureConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedExposureConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &ExposureConfig) {

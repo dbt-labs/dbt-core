@@ -3,7 +3,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::omissible_utils::handle_omissible_override;
-    use crate::schemas::project::DefaultTo;
+    use crate::schemas::project::ResolvableConfig;
+    use crate::schemas::project::dbt_project::ResolvedConfig;
     use dbt_common::serde_utils::Omissible;
     use serde::{Deserialize, Serialize};
 
@@ -28,7 +29,17 @@ mod tests {
         }
     }
 
-    impl DefaultTo<TestConfig> for TestConfig {
+    impl ResolvedConfig for TestConfig {
+        fn enabled(&self) -> bool {
+            self.enabled.unwrap_or(true)
+        }
+    }
+
+    impl ResolvableConfig<TestConfig> for TestConfig {
+        type Resolved = Self;
+        type PackageDefaults = ();
+        type ResolveDefaults = ();
+
         fn default_to(&mut self, parent: &TestConfig) {
             handle_omissible_override(&mut self.name, &parent.name);
             handle_omissible_override(&mut self.value, &parent.value);
@@ -38,31 +49,19 @@ mod tests {
             }
         }
 
-        fn get_enabled(&self) -> Option<bool> {
-            self.enabled
+        fn get_enabled_with_default(&self) -> bool {
+            self.enabled.unwrap_or(true)
         }
 
-        fn set_enabled(&mut self, value: Option<bool>) {
-            self.enabled = value;
+        fn disable(&mut self) {
+            self.enabled = Some(false);
         }
 
-        fn schema(&self) -> Option<String> {
-            None
-        }
-        fn database(&self) -> Option<String> {
-            None
-        }
-        fn alias(&self) -> Option<String> {
-            None
-        }
-        fn is_incremental(&self) -> bool {
-            false
-        }
-        fn get_pre_hook(&self) -> Option<&crate::schemas::common::Hooks> {
-            None
-        }
-        fn get_post_hook(&self) -> Option<&crate::schemas::common::Hooks> {
-            None
+        fn apply_package_defaults(&mut self, _: ()) {}
+
+        fn finalize(mut self) -> Self {
+            self.enabled = Some(self.get_enabled_with_default());
+            self
         }
     }
 

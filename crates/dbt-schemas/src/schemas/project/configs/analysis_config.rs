@@ -1,3 +1,4 @@
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::common::DocsConfig;
-use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
+use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_yaml::ShouldBe;
@@ -36,7 +37,7 @@ impl Default for ProjectAnalysisConfig {
     fn default() -> Self {
         Self {
             enabled: Some(true),
-            static_analysis: Some(StaticAnalysisKind::Off.into()),
+            static_analysis: Some(AnalysesConfig::default_static_analysis()),
             meta: None,
             tags: None,
             docs: None,
@@ -57,10 +58,13 @@ impl TypedRecursiveConfig for ProjectAnalysisConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, DbtSchema)]
 pub struct AnalysesConfig {
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    // We don't want to do static analysis for analysis nodes unless they are explicitly enabled
+    #[resolved(promote, default = StaticAnalysisKind::Off.into())]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(
@@ -87,7 +91,11 @@ impl From<ProjectAnalysisConfig> for AnalysesConfig {
     }
 }
 
-impl DefaultTo<AnalysesConfig> for AnalysesConfig {
+impl ResolvableConfig<AnalysesConfig> for AnalysesConfig {
+    type Resolved = ResolvedAnalysesConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
     fn default_to(&mut self, other: &AnalysesConfig) {
         if self.enabled.is_none() {
             self.enabled = other.enabled;
@@ -109,11 +117,17 @@ impl DefaultTo<AnalysesConfig> for AnalysesConfig {
         }
     }
 
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedAnalysesConfig {
+        self.finalize_resolved()
     }
 }

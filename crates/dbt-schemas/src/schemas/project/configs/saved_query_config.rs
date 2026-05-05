@@ -8,10 +8,12 @@ use serde_with::skip_serializing_none;
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
+use dbt_proc_macros::Resolvable;
+
 use crate::{
     default_to,
     schemas::{
-        project::{DefaultTo, TypedRecursiveConfig, configs::common::default_meta_and_tags},
+        project::{ResolvableConfig, TypedRecursiveConfig, configs::common::default_meta_and_tags},
         serde::{StringOrArrayOfStrings, bool_or_string_bool},
     },
 };
@@ -47,9 +49,10 @@ impl TypedRecursiveConfig for ProjectSavedQueryConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct SavedQueryConfig {
     pub cache: Option<SavedQueryCache>,
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub export_as: Option<ExportConfigExportAs>,
@@ -124,13 +127,23 @@ impl From<SavedQueryConfig> for ProjectSavedQueryConfig {
     }
 }
 
-impl DefaultTo<SavedQueryConfig> for SavedQueryConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<SavedQueryConfig> for SavedQueryConfig {
+    type Resolved = ResolvedSavedQueryConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedSavedQueryConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &SavedQueryConfig) {

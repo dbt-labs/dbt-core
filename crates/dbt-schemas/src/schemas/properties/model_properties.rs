@@ -8,10 +8,11 @@ use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::dbt_column::ColumnPropertiesDimensionType;
 use crate::schemas::dbt_column::ColumnPropertiesEntityType;
 use crate::schemas::dbt_column::Granularity;
-use crate::schemas::project::DefaultTo;
 use crate::schemas::project::ModelConfig;
+use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::SemanticModelConfig;
 use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::semantic_model_config::ResolvedSemanticModelConfig;
 use crate::schemas::properties::MetricsProperties;
 use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
@@ -77,13 +78,23 @@ pub struct ModelPropertiesSemanticModelConfig {
     pub config: Option<SemanticLayerElementConfig>,
 }
 
-impl DefaultTo<SemanticModelConfig> for ModelPropertiesSemanticModelConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        Some(self.enabled)
+impl ResolvableConfig<SemanticModelConfig> for ModelPropertiesSemanticModelConfig {
+    type Resolved = ResolvedSemanticModelConfig;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value.unwrap_or(true);
+    fn disable(&mut self) {
+        self.enabled = false;
+    }
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> ResolvedSemanticModelConfig {
+        unreachable!("ModelPropertiesSemanticModelConfig is never finalized directly")
     }
 
     fn default_to(&mut self, parent: &SemanticModelConfig) {

@@ -5,7 +5,6 @@ use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -72,10 +71,7 @@ pub async fn resolve_analyses(
             init_project_config(
                 &arg.io,
                 &package.dbt_project.analyses,
-                AnalysesConfig {
-                    static_analysis: Some(StaticAnalysisKind::Off.into()),
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -225,10 +221,7 @@ pub async fn resolve_analyses(
                 materialized: DbtMaterialization::Analysis,
                 quoting: ResolvedQuoting::trues(),
                 quoting_ignore_case: false,
-                static_analysis: analysis_config
-                    .static_analysis
-                    .clone()
-                    .unwrap_or_else(|| StaticAnalysisKind::Unsafe.into()),
+                static_analysis: analysis_config.static_analysis.clone(),
                 static_analysis_off_reason: None,
                 columns,
                 depends_on: NodeDependsOn {
@@ -268,7 +261,7 @@ pub async fn resolve_analyses(
                 metrics,
             },
             __analysis_attr__: DbtAnalysisAttr::default(),
-            deprecated_config: analysis_config,
+            deprecated_config: analysis_config.into(),
             __other__: BTreeMap::new(),
         };
 

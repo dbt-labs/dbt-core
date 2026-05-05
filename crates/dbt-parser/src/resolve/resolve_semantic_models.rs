@@ -15,7 +15,7 @@ use dbt_schemas::schemas::manifest::semantic_model::{
     DbtSemanticModel, DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
     SemanticModelDefaults,
 };
-use dbt_schemas::schemas::project::{DefaultTo, SemanticModelConfig};
+use dbt_schemas::schemas::project::SemanticModelConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -75,9 +75,7 @@ pub async fn resolve_semantic_models(
             init_project_config(
                 &args.io,
                 &package.dbt_project.semantic_models,
-                SemanticModelConfig {
-                    ..Default::default()
-                },
+                (),
                 dependency_package_name,
             )
         },
@@ -130,6 +128,7 @@ pub async fn resolve_semantic_models(
         let properties_config = semantic_model_properties_config(model_props);
         let semantic_model_config = config_resolver
             .resolve_with_properties(&semantic_model_fqn, properties_config.as_ref());
+        let is_enabled = semantic_model_config.enabled;
 
         let measures: Vec<SemanticMeasure> = model_props
             .metrics
@@ -261,12 +260,12 @@ pub async fn resolve_semantic_models(
                 dimensions,
                 primary_entity: model_props.primary_entity.clone(),
             },
-            deprecated_config: semantic_model_config.clone(),
+            deprecated_config: semantic_model_config.into(),
             __other__: BTreeMap::new(),
         };
 
         // Check if semantic_model is enabled (following exposures pattern)
-        if semantic_model_config.get_enabled_resolved() {
+        if is_enabled {
             semantic_models.insert(semantic_model_unique_id, Arc::new(dbt_semantic_model));
         } else {
             disabled_semantic_models.insert(semantic_model_unique_id, Arc::new(dbt_semantic_model));

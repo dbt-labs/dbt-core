@@ -2,12 +2,10 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
+use crate::validation::check_node_static_analysis;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::static_analysis::{
-    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
-};
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -19,7 +17,7 @@ use dbt_schemas::schemas::common::{
     merge_meta, merge_tags, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
-use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
+use dbt_schemas::schemas::project::{DbtProject, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
 use dbt_schemas::schemas::relations::default_dbt_quoting_for;
 use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
@@ -39,6 +37,7 @@ pub fn resolve_sources(
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_package_name: &str,
+    root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
     source_properties: BTreeMap<(String, String), MinimalPropertiesEntry>,
     database: &str,
@@ -76,14 +75,15 @@ pub fn resolve_sources(
             init_project_config(
                 io_args,
                 &package.dbt_project.sources,
-                SourceConfig {
-                    quoting: Some(source_default_quoting),
-                    ..Default::default()
-                },
+                source_default_quoting,
                 dependency_package_name,
             )
         },
-    )?;
+    )?
+    .with_resolve_defaults((
+        arg.static_analysis.unwrap_or_default(),
+        root_project.sync.clone(),
+    ));
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
         // Extract raw (unrendered) database and schema from the YAML before Jinja rendering.
         // These preserve Jinja templates like `{{ env_var('DBT_ENV') }}` for state comparisons.
@@ -125,71 +125,77 @@ pub fn resolve_sources(
             &package.dbt_project.all_source_paths(),
         );
 
-        let mut source_properties_config =
-            config_resolver.resolve_with_properties(&fqn, source.config.as_ref());
-
-        let table_config = table.config.clone().unwrap_or_default();
-
-        let is_enabled = table_config
-            .enabled
-            .unwrap_or_else(|| source_properties_config.get_enabled_resolved());
-
         let normalized_table_name = special_chars.replace_all(&table_name, "__");
         let unique_id = format!(
             "source.{}.{}.{}",
             &package_name, source_name, &normalized_table_name
         );
 
-        // Merge `loaded_at_field` / `loaded_at_query` across source and
-        // table levels. The override semantics, the inheritance rules, and
-        // the same-block validation are unit-tested directly via
-        // [`merge_loaded_at_pair`] in this file's `mod tests` block — those
-        // unit tests pin the RIGHT (`field`, `query`) pair for every input
-        // combination, addressing the e2e tests' inherent inability to
-        // assert resolved per-row values.
-        let merged = merge_loaded_at_pair(
-            source_properties_config.loaded_at_field.as_deref(),
-            source_properties_config.loaded_at_query.0.as_deref(),
-            table_config.loaded_at_field.as_deref(),
-            table_config.loaded_at_query.0.as_deref(),
-        )
-        .map_err(|msg| {
-            // Annotate with `source.table` so the error pins the offending
-            // row rather than just observing that "an error fired
-            // somewhere" inside the per-table merge loop.
-            dbt_common::fs_err!(
-                ErrorCode::Unexpected,
-                "{} on source `{}.{}`",
-                msg,
-                source_name,
-                table_name
-            )
-        })?;
-        let merged_loaded_at_field = Some(merged.field);
-        let merged_loaded_at_query = Some(merged.query);
+        let table_config = table.config.clone().unwrap_or_default();
 
-        let merged_schema_origin = table_config
-            .schema_origin
-            .or_else(|| source.config.as_ref().and_then(|c| c.schema_origin))
-            .or(source_properties_config.schema_origin)
-            .unwrap_or_default();
+        // Sources have two config layers: source-level and table-level. The config_resolver
+        // handles project-level → source-level propagation via `default_to`. Table-level config
+        // is NOT passed as an override to the resolver, so its fields must be merged manually
+        // in the closure below. Tags and meta are additive (union/merge) rather than simple
+        // overrides, but they are still handled here so that source_config carries the fully
+        // merged state (used by process_columns and deprecated_config).
+        // See: https://github.com/dbt-labs/dbt-fusion/issues/767
+        let source_config = config_resolver.try_resolve_with_overrides(
+            &fqn,
+            &fqn,
+            &[source.config.as_ref()],
+            |c: &mut SourceConfig| -> FsResult<()> {
+                c.enabled = Some(
+                    table_config
+                        .enabled
+                        .unwrap_or_else(|| c.enabled.unwrap_or(true)),
+                );
+                c.freshness = merge_freshness(c.freshness.as_ref(), &table_config.freshness);
+                c.event_time =
+                    merge_event_time(c.event_time.clone(), table_config.event_time.clone());
+                c.schema_origin = Some(
+                    table_config
+                        .schema_origin
+                        .or(c.schema_origin)
+                        .unwrap_or_default(),
+                );
+                c.sync = table_config.sync.clone().or_else(|| c.sync.clone());
+                let source_tags: Option<Vec<String>> = c.tags.take().map(|t| t.into());
+                let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|t| t.into());
+                c.tags =
+                    merge_tags(source_tags, table_tags).map(StringOrArrayOfStrings::ArrayOfStrings);
+                c.meta = merge_meta(c.meta.take(), table_config.meta.clone());
+                let merged = merge_loaded_at_pair(
+                    c.loaded_at_field.as_deref(),
+                    c.loaded_at_query.0.as_deref(),
+                    table_config.loaded_at_field.as_deref(),
+                    table_config.loaded_at_query.0.as_deref(),
+                )
+                .map_err(|msg| {
+                    dbt_common::fs_err!(
+                        ErrorCode::Unexpected,
+                        "{} on source `{}.{}`",
+                        msg,
+                        source_name,
+                        table_name
+                    )
+                })?;
+                c.loaded_at_field = Some(merged.field);
+                c.loaded_at_query = Some(merged.query).into();
+                Ok(())
+            },
+        )?;
 
-        // Merge sync config: table-level overrides source-level
-        let merged_sync = table_config
-            .sync
-            .clone()
-            .or_else(|| source.config.as_ref().and_then(|c| c.sync.clone()))
-            .or_else(|| source_properties_config.sync.clone());
-        let merged_freshness = merge_freshness(
-            source_properties_config.freshness.as_ref(),
-            &table_config.freshness,
+        check_node_static_analysis(
+            &source_config,
+            arg.static_analysis,
+            &unique_id,
+            dependency_package_name,
+            arg.io.status_reporter.as_ref(),
         );
-        source_properties_config.freshness = merged_freshness.clone();
 
         // This should be set due to propagation from the resolved root project
-        let properties_quoting = source_properties_config
-            .quoting
-            .expect("quoting should be set");
+        let properties_quoting = source_config.quoting;
 
         let mut source_quoting = source.quoting.unwrap_or_default();
         source_quoting.default_to(&properties_quoting);
@@ -216,31 +222,11 @@ pub fn resolve_sources(
         let relation_name =
             generate_relation_name(parse_adapter, &database, &schema, &identifier, quoting)?;
 
-        let source_tags: Option<Vec<String>> = source_properties_config
-            .tags
-            .clone()
-            .map(|tags| tags.into());
-        let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|tags| tags.into());
-
-        let merged_tags = merge_tags(source_tags, table_tags);
-        let merged_meta = merge_meta(
-            source_properties_config.meta.clone(),
-            table_config.meta.clone(),
-        );
-
-        let merged_event_time = merge_event_time(
-            source_properties_config.event_time.clone(),
-            table_config.event_time.clone(),
-        );
-
         let columns = if let Some(ref cols) = table.columns {
             process_columns(
                 Some(cols),
-                source_properties_config.meta.clone(),
-                source_properties_config
-                    .tags
-                    .clone()
-                    .map(|tags| tags.into()),
+                source_config.meta.clone(),
+                source_config.tags.clone().map(|tags| tags.into()),
             )?
         } else {
             vec![]
@@ -248,7 +234,7 @@ pub fn resolve_sources(
 
         // Validate local sources have data types defined
         use dbt_schemas::schemas::common::SchemaOrigin;
-        if merged_schema_origin == SchemaOrigin::Local {
+        if source_config.schema_origin == SchemaOrigin::Local {
             if columns.is_empty() {
                 return err!(
                     ErrorCode::InvalidConfig,
@@ -273,7 +259,7 @@ pub fn resolve_sources(
             }
         }
 
-        if let Some(freshness) = merged_freshness.as_ref() {
+        if let Some(freshness) = source_config.freshness.as_ref() {
             // F2: a partially-populated freshness rule (only one of
             // {count, period}) is tolerated by Mantle at parse time and only
             // enforced when `dbt source freshness` actually consumes the rule.
@@ -301,50 +287,12 @@ pub fn resolve_sources(
             Some(external) => BTreeMap::from([("external".to_owned(), external.clone())]),
         };
 
-        let static_analysis =
-            if let Some(static_analysis) = source_properties_config.clone().static_analysis {
-                check_deprecated_static_analysis_kind(
-                    static_analysis.clone().into_inner(),
-                    StaticAnalysisDeprecationOrigin::NodeConfig {
-                        unique_id: unique_id.as_str(),
-                    },
-                    dependency_package_name,
-                    arg.io.status_reporter.as_ref(),
-                );
-                static_analysis
-            } else {
-                // If global override is set, use it. Otherwise default
-                arg.static_analysis.unwrap_or_default().into()
-            };
-        // Create a config that respects the table-level overrides of
-        // the source-level config.
-        // See: https://github.com/dbt-labs/dbt-fusion/issues/767
-        // In resolve_sources method, merging is done which is basically
-        // overriding the source-level config with the table-level config.
-        // The overriden members are scattered across the DbtSource struct
-        // and we need to merge them back into the config that will be
-        // serialized in the manifest.
-        let mut merged_configs = source_properties_config.clone();
-        merged_configs.enabled = Some(is_enabled);
-        merged_configs.freshness = merged_freshness.clone();
-        merged_configs.loaded_at_field = merged_loaded_at_field.clone();
-        merged_configs.loaded_at_query = merged_loaded_at_query.clone().into();
-        merged_configs.event_time = merged_event_time.clone();
-        merged_configs.schema_origin = Some(merged_schema_origin);
-        merged_configs.sync = merged_sync.clone();
-        // node.meta and node.tags receive the merged values via __common_attr__ below;
-        // node.config.meta and node.config.tags need them too to match dbt-core. (#1393)
-        merged_configs.meta = merged_meta.clone();
-        merged_configs.tags = merged_tags
-            .clone()
-            .map(StringOrArrayOfStrings::ArrayOfStrings);
+        let static_analysis = source_config.static_analysis.clone();
 
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
                 name: table_name.to_owned(),
                 package_name: package_name.to_owned(),
-                // original_file_path: dbt_asset.base_path.join(&dbt_asset.path),
-                // path: dbt_asset.base_path.join(&dbt_asset.path),
                 original_file_path: mpe.relative_path.clone(),
                 path: mpe.relative_path.clone(),
                 name_span: dbt_common::Span::from_serde_span(
@@ -354,10 +302,13 @@ pub fn resolve_sources(
                 unique_id: unique_id.to_owned(),
                 fqn,
                 description: table.description.to_owned(),
-                // todo: columns code gen missing
                 patch_path: Some(mpe.relative_path.clone()),
-                meta: merged_meta.unwrap_or_default(),
-                tags: merged_tags.unwrap_or_default(),
+                meta: source_config.meta.clone().unwrap_or_default(),
+                tags: source_config
+                    .tags
+                    .clone()
+                    .map(|t| t.into())
+                    .unwrap_or_default(),
                 raw_code: None,
                 checksum: DbtChecksum::default(),
                 language: None,
@@ -369,12 +320,11 @@ pub fn resolve_sources(
                 relation_name: Some(relation_name),
                 quoting,
                 quoting_ignore_case,
-                enabled: is_enabled,
+                enabled: source_config.enabled,
                 extended_model: false,
                 persist_docs: None,
                 materialized: DbtMaterialization::External,
-                static_analysis_off_reason: (static_analysis.clone().into_inner()
-                    == StaticAnalysisKind::Off)
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 columns,
@@ -395,20 +345,20 @@ pub fn resolve_sources(
                 },
             },
             __source_attr__: DbtSourceAttr {
-                freshness: merged_freshness.clone(),
+                freshness: source_config.freshness.clone(),
                 identifier,
                 source_name: source_name.to_owned(),
                 source_description: source.description.clone().unwrap_or_default(), // needs to be some or empty string per dbt spec
                 loader: source.loader.clone().unwrap_or_default(),
-                loaded_at_field: merged_loaded_at_field.clone(),
-                loaded_at_query: merged_loaded_at_query.clone(),
-                schema_origin: merged_schema_origin,
-                sync: merged_sync,
+                loaded_at_field: source_config.loaded_at_field.clone(),
+                loaded_at_query: source_config.loaded_at_query.0.clone(),
+                schema_origin: source_config.schema_origin,
+                sync: source_config.sync.clone(),
             },
-            deprecated_config: merged_configs,
+            deprecated_config: source_config.clone().into(),
             __other__: other,
         };
-        let status = if is_enabled {
+        let status = if source_config.enabled {
             ModelStatus::Enabled
         } else {
             ModelStatus::Disabled
@@ -465,9 +415,9 @@ fn merge_event_time(
 /// table-level config over source-level config. Either value may be empty
 /// (downstream treats `""` and `None` as "no freshness on this dimension").
 #[derive(Debug)]
-pub(crate) struct MergedLoadedAt {
-    pub field: String,
-    pub query: String,
+struct MergedLoadedAt {
+    field: String,
+    query: String,
 }
 
 /// Merge `loaded_at_field` and `loaded_at_query` across source-level and

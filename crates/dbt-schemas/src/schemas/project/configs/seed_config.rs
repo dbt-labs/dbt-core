@@ -2,6 +2,7 @@ use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_proc_macros::Resolvable;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use dbt_yaml::Spanned;
@@ -24,7 +25,7 @@ use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::DefaultTo;
+use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
@@ -294,7 +295,7 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
+#[derive(Resolvable, Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]
@@ -304,6 +305,7 @@ pub struct SeedConfig {
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
     pub docs: Option<DocsConfig>,
+    #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(default)]
@@ -315,6 +317,7 @@ pub struct SeedConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
+    #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(alias = "post-hook")]
@@ -326,6 +329,7 @@ pub struct SeedConfig {
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
     )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
@@ -568,21 +572,33 @@ impl From<SeedConfig> for ProjectSeedConfig {
     }
 }
 
-impl DefaultTo<SeedConfig> for SeedConfig {
-    fn get_enabled(&self) -> Option<bool> {
-        self.enabled
+impl ResolvableConfig<SeedConfig> for SeedConfig {
+    type Resolved = ResolvedSeedConfig;
+    type PackageDefaults = DbtQuoting;
+    type ResolveDefaults = StaticAnalysisKind;
+
+    fn get_enabled_with_default(&self) -> bool {
+        self.enabled.unwrap_or(true)
     }
 
-    fn set_enabled(&mut self, value: Option<bool>) {
-        self.enabled = value;
+    fn disable(&mut self) {
+        self.enabled = Some(false);
     }
 
-    fn get_pre_hook(&self) -> Option<&Hooks> {
-        (*self.pre_hook).as_ref()
+    fn apply_package_defaults(&mut self, quoting: DbtQuoting) {
+        if self.quoting.is_none() {
+            self.quoting = Some(quoting);
+        }
     }
 
-    fn get_post_hook(&self) -> Option<&Hooks> {
-        (*self.post_hook).as_ref()
+    fn apply_resolve_defaults(&mut self, static_analysis: StaticAnalysisKind) {
+        if self.static_analysis.is_none() {
+            self.static_analysis = Some(Spanned::new(static_analysis));
+        }
+    }
+
+    fn finalize(self) -> ResolvedSeedConfig {
+        self.finalize_resolved()
     }
 
     fn default_to(&mut self, parent: &SeedConfig) {
@@ -650,18 +666,6 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 materialized,
             ]
         );
-    }
-
-    fn database(&self) -> Option<String> {
-        self.database.clone()
-    }
-
-    fn schema(&self) -> Option<String> {
-        self.schema.clone()
-    }
-
-    fn alias(&self) -> Option<String> {
-        self.alias.clone()
     }
 }
 
