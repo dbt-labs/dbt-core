@@ -9,7 +9,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::{
     ErrorCode, FsResult, fs_err, io_args::IoArgs, warn_error_options::WarnErrorOptions,
 };
-use dbt_jinja_ctx::{LoadCtx, to_jinja_globals_btreemap};
+use dbt_jinja_ctx::{LoadCtx, to_jinja_btreemap};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::dbt_catalogs::DbtCatalogs,
@@ -61,7 +61,7 @@ pub fn initialize_load_jinja_environment(
     Ok(JinjaEnvBuilder::new()
         .with_adapter(Arc::new(adapter))
         .with_root_package("dbt".to_string())
-        .with_globals(to_jinja_globals_btreemap(&load_ctx))
+        .with_globals(to_jinja_btreemap(&load_ctx))
         .with_warn_error_options(warn_error_options)
         .with_io_args(io_args)
         .build())

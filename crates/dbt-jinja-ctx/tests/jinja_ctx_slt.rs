@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono_tz::Tz;
-use dbt_jinja_ctx::{GlobalCore, JinjaObject, LoadCtx, ResolveCore};
+use dbt_jinja_ctx::{GlobalCore, JinjaObject, LoadCtx, ResolveBaseCtx, ResolveCore};
 use dbt_jinja_vars::ConfiguredVar;
 use minijinja::Value as MinijinjaValue;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
@@ -74,10 +74,32 @@ fn fixture_resolve_core() -> ResolveCore {
     }
 }
 
+fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
+    let mut macro_dispatch_order: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+    macro_dispatch_order.insert(
+        "dbt".to_string(),
+        MinijinjaValue::from(vec!["dbt".to_string()]),
+    );
+
+    let mut dbt_namespaces: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+    dbt_namespaces.insert("dbt".to_string(), MinijinjaValue::from("dbt-ns-stub"));
+
+    ResolveBaseCtx {
+        doc: MinijinjaValue::from("doc-stub"),
+        macro_dispatch_order,
+        target_package_name: "my_project".to_string(),
+        execute: false,
+        node: MinijinjaValue::NONE,
+        connection_name: String::new(),
+        dbt_namespaces,
+    }
+}
+
 fn fixtures() -> PhaseFixtures {
     PhaseFixtures {
         load: Some(MinijinjaValue::from_serialize(fixture_load_ctx())),
         resolve_globals: Some(MinijinjaValue::from_serialize(fixture_resolve_core())),
+        resolve_base: Some(MinijinjaValue::from_serialize(fixture_resolve_base_ctx())),
         ..PhaseFixtures::default()
     }
 }
@@ -93,6 +115,14 @@ fn resolve_globals_basics_slt() {
         "tests/data/jinja_ctx_slt/resolve_globals_basics.slt",
         &fixtures(),
     )
+}
+
+#[test]
+fn resolve_base_basics_slt() {
+    run_slt(
+        "tests/data/jinja_ctx_slt/resolve_base_basics.slt",
+        &fixtures(),
+    );
 }
 
 #[test]

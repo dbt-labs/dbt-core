@@ -10,7 +10,7 @@ use chrono_tz::Tz;
 use dbt_adapter::{Adapter, sql_types::SATypeOpsImpl};
 use dbt_adapter_core::*;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
-use dbt_jinja_ctx::{GlobalCore, JinjaObject, ResolveCore, to_jinja_globals_btreemap};
+use dbt_jinja_ctx::{GlobalCore, JinjaObject, ResolveCore, to_jinja_btreemap};
 use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::{
     common::DbtQuoting,
@@ -103,7 +103,7 @@ pub fn initialize_parse_jinja_environment(
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
         .with_adapter(adapter)
         .with_root_package(project_name.to_string())
-        .with_globals(to_jinja_globals_btreemap(&resolve_core))
+        .with_globals(to_jinja_btreemap(&resolve_core))
         .with_warn_error_options(invocation_args.warn_error_options.clone())
         .with_io_args(io_args)
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?

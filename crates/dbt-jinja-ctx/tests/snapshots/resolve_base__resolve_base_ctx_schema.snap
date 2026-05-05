@@ -1,0 +1,50 @@
+---
+source: fs/sa/crates/dbt-jinja-ctx/tests/resolve_base.rs
+assertion_line: 117
+expression: schema
+---
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ResolveBaseCtx",
+  "description": "Per-render parse-base context. Today's `build_resolve_context` populates this 1:1 — same field names, same key constants (`MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME`).\n\nUsed at every template render that doesn't have a per-model overlay (e.g. project-yml resolution, source docs, selectors) and as the base for per-model contexts.",
+  "type": "object",
+  "required": [
+    "MACRO_DISPATCH_ORDER",
+    "TARGET_PACKAGE_NAME",
+    "connection_name",
+    "doc",
+    "execute",
+    "node"
+  ],
+  "properties": {
+    "MACRO_DISPATCH_ORDER": {
+      "description": "`{{ MACRO_DISPATCH_ORDER }}` — per-package dispatch order map. Key string matches `minijinja::constants::MACRO_DISPATCH_ORDER`.\n\nEach value is `MinijinjaValue::from(Vec<String>)` constructed at the call site, NOT a serde-serialized `Vec<String>`. The dispatch lookup in `minijinja/src/dispatch_object.rs` does `order.downcast_object::<Vec<String>>()` to read the search order, so the underlying `Object` type must be `Vec<String>` specifically. Going through serde would produce a `MutableVec<Value>` instead and silently break dispatch.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "TARGET_PACKAGE_NAME": {
+      "description": "`{{ TARGET_PACKAGE_NAME }}` — local project name. Key string matches `minijinja::constants::TARGET_PACKAGE_NAME`.",
+      "type": "string"
+    },
+    "connection_name": {
+      "description": "`{{ connection_name }}` — empty string at base scope.",
+      "type": "string"
+    },
+    "doc": {
+      "description": "`{{ doc(package, name) }}` — `DocMacro` Object lookup.\n\nTyped `MinijinjaValue` while `DocMacro` lives in `dbt-jinja-utils`; a future PR moves it here and tightens to `JinjaObject<DocMacro>`."
+    },
+    "execute": {
+      "description": "`{{ execute }}` — `false` at parse, flipped to `true` at compile/run (PR 5+).",
+      "type": "boolean"
+    },
+    "node": {
+      "description": "`{{ node }}` — `Value::NONE` at base scope; populated per-model."
+    }
+  },
+  "additionalProperties": true
+}

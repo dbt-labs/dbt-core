@@ -1,17 +1,26 @@
 # Cross-phase key-set documentation.
 #
 # This file is the living source-of-truth for "which Jinja key appears in
-# which phase, and with what concrete value." Fixtures populated so far:
-#   * load              (PR 1)
-#   * resolve_globals   (PR 2)
-# Future PRs will flip the remaining `<skip>` placeholders to real
-# expectations as resolve_base / resolve_model / compile_* / run_node land.
+# which ctx struct's serialized output." Fixtures populated so far:
+#   * load              (PR 1) — load env globals
+#   * resolve_globals   (PR 2) — parse env globals
+#   * resolve_base      (PR 3) — parse per-render base ctx
+# Future PRs will flip the remaining `<skip>` placeholders.
+#
+# IMPORTANT: each phase column reflects ONLY what that ctx struct serializes.
+# At parse render time, Jinja sees `resolve_globals + resolve_base` layered
+# together — so a key being `<absent>` in `resolve_base` means "not added by
+# the per-render layer" (it may still be visible via env globals from
+# `resolve_globals`).
 
+# `target` / `flags` / `run_started_at` / `project_name` / `var` etc. live in
+# env globals (resolve_globals) — the per-render resolve_base ctx does NOT
+# re-emit them.
 key target.name
 ----
 load              dev
 resolve_globals   dev
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -21,7 +30,7 @@ key flags.FULL_REFRESH
 ----
 load              false
 resolve_globals   false
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -31,42 +40,37 @@ key run_started_at
 ----
 load              <object>
 resolve_globals   <object>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
 
-# Project-name only appears starting at the resolve (parse) phase — at load
-# this key is absent.
 key project_name
 ----
 load              <absent>
 resolve_globals   my_project
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
 
-# `env` is a parse-and-onward alias of `target`. Absent at load.
 key env.name
 ----
 load              <absent>
 resolve_globals   dev
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
 
-# `var`, `database`, `schema`, `invocation_id`, `invocation_args_dict`, `write`
-# are introduced at parse and carry through compile + run on the same env.
 key var
 ----
 load              <absent>
 resolve_globals   <object>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -76,7 +80,7 @@ key database
 ----
 load              <absent>
 resolve_globals   analytics
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -86,7 +90,7 @@ key schema
 ----
 load              <absent>
 resolve_globals   public
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -96,7 +100,7 @@ key invocation_id
 ----
 load              <absent>
 resolve_globals   11111111-2222-3333-4444-555555555555
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -106,34 +110,88 @@ key write
 ----
 load              <absent>
 resolve_globals   null
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
 
-# `execute` is unset at load (no `execute` key on the load env), absent at
-# resolve_globals (only added by per-render contexts), false at resolve_base
-# / resolve_model, true at compile + run. Future PRs will fill this in.
+# `execute` is a per-render concept — only the resolve_base / compile_base /
+# compile_node / run_node ctxs emit it. resolve_globals deliberately doesn't.
 key execute
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      <skip>
+resolve_base      false
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
 
-# Callable Jinja values: ref/source/config/this only appear once we have a
-# resolve-model or compile-node ctx. Until then, future-PR rows are skipped.
-# At resolve_globals these are absent — they live on per-render contexts, not
-# env globals.
+# `node` lives on per-render contexts and is NONE at base, populated per-model.
+key node
+----
+load              <absent>
+resolve_globals   <absent>
+resolve_base      null
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# `connection_name`, `MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME` are
+# resolve_base / compile_* additions; absent before that.
+key connection_name
+----
+load              <absent>
+resolve_globals   <absent>
+resolve_base      ""
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+key TARGET_PACKAGE_NAME
+----
+load              <absent>
+resolve_globals   <absent>
+resolve_base      my_project
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# `doc(...)` is a parse-time-only callable on the resolve_base ctx — it does
+# NOT exist at compile/run.
+key doc
+----
+load              <absent>
+resolve_globals   <absent>
+resolve_base      <present>
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# `dbt_namespaces` are flattened — each becomes its own top-level key.
+# We test the fixture's `dbt` namespace; the field-name itself never appears.
+key dbt
+----
+load              <absent>
+resolve_globals   <absent>
+resolve_base      dbt-ns-stub
+resolve_model     <skip>
+compile_base      <skip>
+compile_node      <skip>
+run_node          <skip>
+
+# Callable Jinja values added by per-model / per-node contexts (resolve_model
+# and beyond). Future PRs will fill these in.
 key ref
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -143,7 +201,7 @@ key source
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -153,7 +211,7 @@ key config
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>
@@ -163,7 +221,7 @@ key this
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      <skip>
+resolve_base      <absent>
 resolve_model     <skip>
 compile_base      <skip>
 compile_node      <skip>

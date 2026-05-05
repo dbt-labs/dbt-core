@@ -1,15 +1,19 @@
 use std::collections::BTreeMap;
 
+use dbt_jinja_ctx::{ResolveBaseCtx, to_jinja_btreemap};
 use dbt_schemas::schemas::macros::DbtDocsMacro;
-use minijinja::{
-    constants::{MACRO_DISPATCH_ORDER, TARGET_PACKAGE_NAME},
-    value::Value as MinijinjaValue,
-};
+use minijinja::value::Value as MinijinjaValue;
 
 use crate::functions::DocMacro;
 use crate::phases::compile_and_run_context::DbtNamespace;
 
-/// Builds a context for resolving models
+/// Builds a context for resolving models.
+///
+/// Internally constructs a typed [`ResolveBaseCtx`]; the
+/// `BTreeMap<String, MinijinjaValue>` return type is preserved for now so
+/// today's `dbt-parser` callers (which `.extend(...)` per-model overlays onto
+/// this base) continue to work. A follow-up PR migrates them to consume the
+/// typed struct directly via `render_named_str<S: Serialize>(...)`.
 pub fn build_resolve_context(
     root_project_name: &str,
     local_project_name: &str,
@@ -17,7 +21,6 @@ pub fn build_resolve_context(
     macro_dispatch_order: BTreeMap<String, Vec<String>>,
     namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
-    let mut ctx = BTreeMap::new();
     let docs_map: BTreeMap<(String, String), String> = docs_macros
         .values()
         .map(|v| {
@@ -28,38 +31,32 @@ pub fn build_resolve_context(
         })
         .collect();
 
-    ctx.insert(
-        "doc".to_string(),
-        MinijinjaValue::from_object(DocMacro::new(root_project_name.to_string(), docs_map)),
-    );
+    let dbt_namespaces: BTreeMap<String, MinijinjaValue> = namespace_keys
+        .into_iter()
+        .map(|key| {
+            let value = MinijinjaValue::from_object(DbtNamespace::new(&key));
+            (key, value)
+        })
+        .collect();
 
-    ctx.insert(
-        MACRO_DISPATCH_ORDER.to_string(),
-        MinijinjaValue::from_object(
-            macro_dispatch_order
-                .into_iter()
-                .map(|(k, v)| (MinijinjaValue::from(k), MinijinjaValue::from(v)))
-                .collect::<BTreeMap<_, _>>(),
-        ),
-    );
+    // Wrap each per-namespace search order as `Value::from(Vec<String>)` —
+    // dispatch lookup downcasts to `Vec<String>` so the underlying Object
+    // type must be exactly that, not the `MutableVec<Value>` that
+    // serde-serializing a `Vec<String>` produces.
+    let macro_dispatch_order: BTreeMap<String, MinijinjaValue> = macro_dispatch_order
+        .into_iter()
+        .map(|(k, v)| (k, MinijinjaValue::from(v)))
+        .collect();
 
-    ctx.insert(
-        TARGET_PACKAGE_NAME.to_string(),
-        MinijinjaValue::from(local_project_name),
-    );
+    let ctx = ResolveBaseCtx {
+        doc: MinijinjaValue::from_object(DocMacro::new(root_project_name.to_string(), docs_map)),
+        macro_dispatch_order,
+        target_package_name: local_project_name.to_string(),
+        execute: false,
+        node: MinijinjaValue::NONE,
+        connection_name: String::new(),
+        dbt_namespaces,
+    };
 
-    ctx.insert("execute".to_string(), MinijinjaValue::from(false));
-    ctx.insert("node".to_string(), MinijinjaValue::NONE);
-
-    ctx.insert("connection_name".to_string(), MinijinjaValue::from(""));
-
-    // Insert DbtNamespace objects for each namespace key
-    for key in namespace_keys {
-        ctx.insert(
-            key.clone(),
-            MinijinjaValue::from_object(DbtNamespace::new(&key)),
-        );
-    }
-
-    ctx
+    to_jinja_btreemap(&ctx)
 }

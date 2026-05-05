@@ -129,6 +129,15 @@ impl Expected {
             "true" => Expected::Json(serde_json::Value::Bool(true)),
             "false" => Expected::Json(serde_json::Value::Bool(false)),
             "null" => Expected::Json(serde_json::Value::Null),
+            // Quoted-string form: `""` → empty string; `"foo bar"` → `foo bar`.
+            // Necessary because `s.parse::<i64>()` matches `""` (no), and a
+            // raw `""` literal at the parser level otherwise becomes the
+            // 2-character string `""`.
+            quoted if quoted.starts_with('"') && quoted.ends_with('"') && quoted.len() >= 2 => {
+                Expected::Json(serde_json::Value::String(
+                    quoted[1..quoted.len() - 1].to_string(),
+                ))
+            }
             _ => {
                 if let Ok(n) = s.parse::<i64>() {
                     Expected::Json(serde_json::Value::Number(n.into()))

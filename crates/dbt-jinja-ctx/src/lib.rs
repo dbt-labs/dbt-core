@@ -9,15 +9,19 @@
 //! Two flavours of context exist:
 //!
 //! * **Env globals** — set once at `JinjaEnv` construction (load and parse only).
-//!   These structs go through [`register::to_jinja_globals_btreemap`] before
+//!   These structs go through [`register::to_jinja_btreemap`] before
 //!   `JinjaEnvBuilder.with_globals(...)` so the registered map is visible to
 //!   downstream builder hooks (notably `try_with_macros`'s replay-mode
 //!   detection). [`register::register_globals_from_serialize`] is the
 //!   already-built-env equivalent for tests and callers that don't go through
 //!   the builder.
-//! * **Per-render contexts** — passed at every `render_named_str<S: Serialize>`
-//!   call. These flow directly into minijinja's existing render API; no helper
-//!   needed.
+//! * **Per-render contexts** — conceptually passed at every
+//!   `render_named_str<S: Serialize>` call. The end-state is to flow them
+//!   directly into that API; today's `dbt-parser` callers still consume the
+//!   `BTreeMap<String, Value>` shape (they `.extend(...)` it onto a
+//!   per-model overlay before rendering), so per-render ctx builders return
+//!   that shape via [`register::to_jinja_btreemap`] until the caller-site
+//!   migration lands.
 //!
 //! Object identity for callable Jinja values (`ref`, `source`, `config`, `var`,
 //! `this`, …) is preserved through serde via the [`JinjaObject`] wrapper, which
@@ -32,12 +36,14 @@ pub mod core;
 pub mod jinja_object;
 pub mod load;
 pub mod register;
+pub mod resolve;
 
 pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;
 pub use load::LoadCtx;
-pub use register::{register_globals_from_serialize, to_jinja_globals_btreemap};
+pub use register::{register_globals_from_serialize, to_jinja_btreemap};
+pub use resolve::ResolveBaseCtx;
 
 /// Shape used by the `target` Jinja global. Cheap-cloned (`Arc`) across the
 /// resolve / model loop.
