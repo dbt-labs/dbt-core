@@ -5523,15 +5523,6 @@
     "ProjectSourceConfig": {
       "type": "object",
       "properties": {
-        "+adapter_properties": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/AnyValue"
-          }
-        },
         "+as_columnstore": {
           "anyOf": [
             {
@@ -5577,21 +5568,6 @@
             }
           ]
         },
-        "+automatic_clustering": {
-          "anyOf": [
-            {
-              "default": null,
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
-          ]
-        },
         "+backup": {
           "anyOf": [
             {
@@ -5605,18 +5581,6 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
-          ]
-        },
-        "+base_location_root": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+base_location_subpath": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+bind": {
@@ -5687,21 +5651,6 @@
             "null"
           ]
         },
-        "+copy_grants": {
-          "anyOf": [
-            {
-              "default": null,
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
-          ]
-        },
         "+databricks_compute": {
           "type": [
             "string",
@@ -5754,12 +5703,6 @@
           ]
         },
         "+event_time": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+external_volume": {
           "type": [
             "string",
             "null"
@@ -5828,12 +5771,6 @@
             {
               "$ref": "#/definitions/IndexesConfig"
             }
-          ]
-        },
-        "+initialize": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+job_execution_timeout_seconds": {
@@ -6001,16 +5938,6 @@
             "type": "string"
           }
         },
-        "+query_tag": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/QueryTag"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "+quoting": {
           "anyOf": [
             {
@@ -6037,12 +5964,6 @@
             }
           ]
         },
-        "+refresh_mode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+require_partition_filter": {
           "anyOf": [
             {
@@ -6056,12 +5977,6 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
-          ]
-        },
-        "+row_access_policy": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+schedule": {
@@ -6082,21 +5997,6 @@
             },
             {
               "type": "null"
-            }
-          ]
-        },
-        "+secure": {
-          "anyOf": [
-            {
-              "default": null,
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -6128,12 +6028,6 @@
               "type": "string",
               "pattern": "^\\{.*\\}$"
             }
-          ]
-        },
-        "+snowflake_warehouse": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+sort": {
@@ -6179,12 +6073,6 @@
             }
           ]
         },
-        "+table_tag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+table_type": {
           "default": null,
           "type": [
@@ -6208,12 +6096,6 @@
             "null"
           ]
         },
-        "+target_lag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+tblproperties": {
           "type": [
             "object",
@@ -6222,27 +6104,6 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
-        },
-        "+tmp_relation_type": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "+transient": {
-          "anyOf": [
-            {
-              "default": null,
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{.*\\}$"
-            }
-          ]
         }
       },
       "additionalProperties": {
