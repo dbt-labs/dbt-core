@@ -1,28 +1,27 @@
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
-use dbt_common::tracing::{TracingFeaturesHandle, noop_tracing_handle};
 
 use crate::feature_stack::*;
-use crate::formatter::FormatterCommandHandler;
-use crate::linter::LinterCommandHandler;
+use crate::tracing::TracingFeature;
 
 struct NoOpExtensionHooks;
 impl CliExtensionHooks for NoOpExtensionHooks {}
 
-#[derive(Default)]
 pub struct SourceAvailableFeatureStackBuilder {
     send_anonymous_usage_stats: bool,
-    tracing: Option<TracingFeaturesHandle>,
+    tracing: TracingFeature,
 }
 
 impl SourceAvailableFeatureStackBuilder {
-    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
-        self.send_anonymous_usage_stats = enabled;
-        self
+    pub fn new(tracing: TracingFeature) -> Self {
+        Self {
+            send_anonymous_usage_stats: false,
+            tracing,
+        }
     }
 
-    pub fn tracing(mut self, tracing_features_handle: TracingFeaturesHandle) -> Self {
-        self.tracing = Some(tracing_features_handle);
+    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
+        self.send_anonymous_usage_stats = enabled;
         self
     }
 
@@ -30,21 +29,13 @@ impl SourceAvailableFeatureStackBuilder {
         let instrumentation = InstrumentationFeature {
             event_emitter: vortex_events::fusion_sa_event_emitter(self.send_anonymous_usage_stats),
         };
-        let formatter = FormatterFeature {
-            command_handler: Box::new(FormatterCommandHandler {}),
-        };
-        let linter = LinterFeature {
-            command_handler: Box::new(LinterCommandHandler {}),
-        };
         let cli_extension = CliExtensionFeature {
             hooks: Box::new(NoOpExtensionHooks),
         };
         let stack = FeatureStack {
             instrumentation,
-            formatter,
-            linter,
             cli_extension,
-            tracing: self.tracing.unwrap_or_else(|| noop_tracing_handle()),
+            tracing: self.tracing,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

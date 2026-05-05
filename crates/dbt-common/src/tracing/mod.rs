@@ -25,7 +25,7 @@ mod shared;
 mod shared_writer;
 pub mod shutdown;
 pub mod span_info;
-pub mod tracing_features_handle;
+pub mod tracing_feature_handles;
 
 pub use async_tracing::{spawn_blocking_traced, spawn_traced, spawn_traced_block_in_place};
 pub use config::FsTraceConfig;
@@ -34,7 +34,7 @@ pub use emit::{
     create_info_span_with_parent, create_root_info_span,
 };
 pub use init::{BaseSubscriber, TelemetryHandle, init_tracing, init_tracing_with_consumer_layer};
-pub use tracing_features_handle::{TracingFeatures, TracingFeaturesHandle, noop_tracing_handle};
+pub use tracing_feature_handles::{TracingConfigProvider, noop_tracing_config_provider};
 
 #[cfg(test)]
 mod tests;

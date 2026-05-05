@@ -6,6 +6,5 @@ pub mod sa;
 
 // All features:
 pub mod compilation;
-pub mod formatter;
-pub mod linter;
+pub mod tracing;
 // add more features here...

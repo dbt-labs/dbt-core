@@ -20,9 +20,11 @@ use super::{
     middlewares::warn_error_options::TelemetryWarnErrorOptionsMiddleware,
     rotating_file_writer::RotatingFileWriter,
     shutdown::TelemetryShutdownItem,
-    tracing_features_handle::{TracingFeatures, TracingFeaturesHandle},
+    tracing_feature_handles::TracingConfigProvider,
 };
-use crate::collections::HashSet;
+use crate::{
+    collections::HashSet, tracing::tracing_feature_handles::create_tracing_config_provider,
+};
 use crate::{
     constants::{
         DBT_DEFAULT_LOG_FILE_BACKUP_COUNT, DBT_DEFAULT_LOG_FILE_MAX_BYTES,
@@ -139,29 +141,11 @@ fn calculate_trace_dirs(
     (in_dir, out_dir)
 }
 
-struct FsTracingFeatures {
-    warn_error_options: std::sync::Arc<std::sync::RwLock<WarnErrorOptions>>,
-    file_log_path: Option<PathBuf>,
-}
-
-impl TracingFeatures for FsTracingFeatures {
-    fn set_warn_error_options(&self, warn_error_options: WarnErrorOptions) {
-        *self
-            .warn_error_options
-            .write()
-            .expect("warn_error_options lock should not be poisoned") = warn_error_options;
-    }
-
-    fn get_file_log_path(&self) -> Option<&std::path::Path> {
-        self.file_log_path.as_deref()
-    }
-}
-
 pub struct FsTraceLayers {
     middleware_layers: Vec<MiddlewareLayer>,
     consumer_layers: Vec<ConsumerLayer>,
     shutdown_items: Vec<TelemetryShutdownItem>,
-    tracing_feature_handle: TracingFeaturesHandle,
+    tracing_config_provider: Box<dyn TracingConfigProvider>,
 }
 
 impl FsTraceLayers {
@@ -171,13 +155,13 @@ impl FsTraceLayers {
         Vec<MiddlewareLayer>,
         Vec<ConsumerLayer>,
         Vec<TelemetryShutdownItem>,
-        TracingFeaturesHandle,
+        Box<dyn TracingConfigProvider>,
     ) {
         (
             self.middleware_layers,
             self.consumer_layers,
             self.shutdown_items,
-            self.tracing_feature_handle,
+            self.tracing_config_provider,
         )
     }
 }
@@ -515,10 +499,8 @@ impl FsTraceConfig {
             None
         };
 
-        let tracing_feature_handle: TracingFeaturesHandle = Box::new(FsTracingFeatures {
-            warn_error_options,
-            file_log_path,
-        });
+        let tracing_config_provider =
+            create_tracing_config_provider(warn_error_options, file_log_path);
 
         // Create query log writer layer (always enabled; internal-only event sink)
         if self.enable_query_log {
@@ -559,7 +541,7 @@ impl FsTraceConfig {
             ],
             consumer_layers,
             shutdown_items,
-            tracing_feature_handle,
+            tracing_config_provider,
         })
     }
 }

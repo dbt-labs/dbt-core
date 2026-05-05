@@ -3,6 +3,7 @@ use clap::error::ErrorKind;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
 use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
+use dbt_error::FsError;
 use dbt_sa_lib::dbt_sa_clap::CliParser;
 use dbt_sa_lib::dbt_sa_clap::from_main;
 use dbt_sa_lib::dbt_sa_lib::execute_fs;
@@ -47,7 +48,7 @@ fn main() -> ExitCode {
     let arg = from_main(&cli);
 
     // Init tracing
-    let (mut telemetry_shutdown_handle, _tracing_features_handle) =
+    let (telemetry_shutdown_handle, _tracing_config_provider) =
         match init_tracing(FsTraceConfig::new_from_io_args(
             arg.command,
             cli.project_dir().as_ref(),
@@ -113,8 +114,11 @@ fn main() -> ExitCode {
     let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
 
     // Shut down telemetry
-    for err in telemetry_shutdown_handle.shutdown_fs_errors() {
-        eprintln!("{}", err.pretty());
+    if let Err(errors) = telemetry_shutdown_handle.shutdown_once() {
+        for err in errors {
+            let err = FsError::from(err);
+            eprintln!("{}", err.pretty());
+        }
     }
 
     // Remove the panic hook

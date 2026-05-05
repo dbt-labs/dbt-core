@@ -16,7 +16,7 @@ use super::{
     event_info::store_event_attributes,
     layers::data_layer::TelemetryDataLayer,
     shutdown::TelemetryShutdownItem,
-    tracing_features_handle::TracingFeaturesHandle,
+    tracing_feature_handles::TracingConfigProvider,
 };
 use dbt_error::{FsError, FsResult};
 
@@ -70,7 +70,7 @@ impl TelemetryHandle {
     }
 
     /// Gracefully shuts down telemetry
-    pub fn shutdown(&mut self) -> Vec<TracingError> {
+    pub fn shutdown_once(mut self) -> Result<(), Vec<TracingError>> {
         // First, drop the process span handle to ensure that
         // the process span is closed properly.
         if let Some(handle) = self.process_span_handle.take() {
@@ -78,19 +78,16 @@ impl TelemetryHandle {
         }
 
         // Then, do shutdown of all items.
-        self.items
+        let errors = self
+            .items
             .iter_mut()
             .filter_map(|item| item.shutdown().err())
-            .collect()
-    }
-}
-
-// Fusion-specific compatibility methods. This impl block should move out of the
-// generic tracing library boundary when tracing is extracted.
-impl TelemetryHandle {
-    /// Gracefully shuts down telemetry and converts shutdown failures to Fusion errors.
-    pub fn shutdown_fs_errors(&mut self) -> Vec<FsError> {
-        self.shutdown().into_iter().map(FsError::from).collect()
+            .collect::<Vec<_>>();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -104,7 +101,9 @@ impl TelemetryHandle {
 /// # Returns
 ///
 /// On success, returns a `TelemetryHandle` that should be used for graceful shutdown.
-pub fn init_tracing(config: FsTraceConfig) -> FsResult<(TelemetryHandle, TracingFeaturesHandle)> {
+pub fn init_tracing(
+    config: FsTraceConfig,
+) -> FsResult<(TelemetryHandle, Box<dyn TracingConfigProvider>)> {
     // Convert invocation ID to trace ID
     let trace_id = config.invocation_id.as_u128();
 

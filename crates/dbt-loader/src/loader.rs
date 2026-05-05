@@ -10,7 +10,7 @@ use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::path::DbtPath;
-use dbt_common::tracing::TracingFeatures;
+use dbt_common::tracing::TracingConfigProvider;
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_common::warn_error_options::{project_flags_get_value, resolve_warn_error_options};
@@ -104,7 +104,7 @@ fn resolve_warn_error_options_from_flags<'a>(
     from_cli: Option<bool>,
     from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
     project_flags: Option<&dbt_yaml::Value>,
-    tracing_features: Option<&dyn TracingFeatures>,
+    tracing_features: Option<&dyn TracingConfigProvider>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) -> FsResult<Cow<'a, InvocationArgs>> {
     let (warn_error, warn_error_options) =
@@ -171,7 +171,7 @@ pub fn resolve_use_v2_compatible_package_download_options(
 pub async fn load(
     arg: &LoadArgs,
     iarg: Cow<'_, InvocationArgs>,
-    tracing_features: Option<&dyn TracingFeatures>,
+    tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile) =

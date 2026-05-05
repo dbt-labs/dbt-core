@@ -7,7 +7,6 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
-use dbt_common::tracing::TracingFeaturesHandle;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::PreviousState;
@@ -20,28 +19,12 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::compilation::CompilationConfig;
-
-pub trait CommandHandler: Sync + Send {
-    fn process_eval_args(
-        &self,
-        eval_args: &EvalArgs,
-        resolver_state: &ResolverState,
-    ) -> FsResult<()>;
-}
+use crate::tracing::TracingFeature;
 
 /// The instrumentation feature. Exposed as a set of instrumentation services.
 pub struct InstrumentationFeature {
     pub event_emitter: Box<dyn DiscreteEventEmitter>,
     // TODO: add more instrumentation services here
-}
-
-/// The formatter feature. Exposed as a [CommandHandler] implementation.
-pub struct FormatterFeature {
-    pub command_handler: Box<dyn CommandHandler>,
-}
-
-pub struct LinterFeature {
-    pub command_handler: Box<dyn CommandHandler>,
 }
 
 #[async_trait]
@@ -84,6 +67,17 @@ pub trait CliExtensionHooks: Send + Sync {
         &self,
         _arg: &EvalArgs,
         _resolved_state: &ResolverState,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Called just before tasks are scheduled and run.
+    fn will_run_tasks(
+        &self,
+        _cli: &Cli,
+        _arg: &EvalArgs,
+        _resolved_state: &ResolverState,
+        _token: &CancellationToken,
     ) -> FsResult<()> {
         Ok(())
     }
@@ -147,10 +141,8 @@ pub struct CliExtensionFeature {
 /// objects that implement feature-specific services.
 pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
-    pub formatter: FormatterFeature,
-    pub linter: LinterFeature,
     pub cli_extension: CliExtensionFeature,
-    pub tracing: TracingFeaturesHandle,
+    pub tracing: TracingFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
