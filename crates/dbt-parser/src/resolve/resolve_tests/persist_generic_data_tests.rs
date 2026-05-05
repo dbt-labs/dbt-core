@@ -728,6 +728,15 @@ fn merge_yaml_values(lhs: dbt_yaml::Value, rhs: dbt_yaml::Value) -> (bool, dbt_y
 static CLEAN_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^0-9a-zA-Z_]+").expect("valid regex"));
 
+/// Narrow sanitizer for the test-name segments that become a filename
+/// (`source_name` / `resource_name`). The synthesized name is used directly
+/// as `target/generic_tests/<name>.sql`, so only path separators must be
+/// rewritten — anything else is left alone to avoid changing test names /
+/// `unique_id`s for inputs that already worked (e.g. `prod.events`,
+/// `my-source`).
+static PATH_UNSAFE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[/\\]").expect("valid regex"));
+
 /// Matches strings that are a single bare call to one of dbt-Core's whitelisted
 /// renderable test-arg functions (e.g. `var('foo')`, `env_var('FOO', 'default')`).
 /// Mirrors `looks_like_func` in dbt-core/clients/jinja.py — used by
@@ -942,16 +951,29 @@ fn generate_test_name(
         String::new()
     };
 
-    // Build the test name from here
+    // Build the test name from here.
+    //
+    // The synthesized name is also used as the SQL filename written under
+    // `target/generic_tests/`, so path separators in source / resource names
+    // (e.g. `raw/data/table`) would otherwise be interpreted as directory
+    // boundaries and cause the write to fail. Sanitize only those — every
+    // other character is preserved so test names and `unique_id`s for
+    // already-working inputs (e.g. `prod.events`, `my-source`) don't drift.
     let (prefix, resource_name) = match &test_config.source_name {
-        Some(source_name) => (
+        Some(source_name) => {
             // handles the test from a source model
-            format!("source_{test_macro_name}"),
-            format!("{}_{}", source_name, &test_config.resource_name),
-        ),
+            let safe_source = PATH_UNSAFE_REGEX.replace_all(source_name, "_");
+            let safe_resource = PATH_UNSAFE_REGEX.replace_all(&test_config.resource_name, "_");
+            (
+                format!("source_{test_macro_name}"),
+                format!("{safe_source}_{safe_resource}"),
+            )
+        }
         None => (
             test_macro_name.to_string(),
-            test_config.resource_name.clone(),
+            PATH_UNSAFE_REGEX
+                .replace_all(&test_config.resource_name, "_")
+                .into_owned(),
         ),
     };
 
@@ -1790,6 +1812,127 @@ mod tests {
         assert_eq!(
             test_name_no_vars, custom_test_name,
             "Test name should exactly match the custom test name when provided"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_name_sanitizes_path_unsafe_chars_in_source_table() {
+        // A source table name containing `/` would otherwise leak path
+        // separators into the synthesized test name and the generic test
+        // SQL filename, producing missing intermediate directories on write.
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String(
+                "{{ get_where_subquery(source('special_chars_source', 'raw/data/table')) }}"
+                    .to_string(),
+            ),
+        );
+        kwargs.insert("column_name".to_string(), Value::String("id".to_string()));
+
+        let test_config = GenericTestConfig {
+            resource_type: "source".to_string(),
+            resource_name: "raw/data/table".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: Some("special_chars_source".to_string()),
+        };
+
+        let name = generate_test_name(
+            "not_null",
+            None,
+            "project_name",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut HashMap::new(),
+        );
+
+        assert!(
+            !name.contains('/'),
+            "synthesized test name must not contain `/`: {name}"
+        );
+        assert_eq!(
+            name, "source_not_null_special_chars_source_raw_data_table_id",
+            "slashes in the source table name should be normalized to `_`"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_name_preserves_non_path_special_chars() {
+        // Hyphens, dots, etc. previously produced working filenames; the
+        // path-separator-only sanitizer must leave them alone so existing
+        // test names and `unique_id`s do not drift.
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("{{ get_where_subquery(ref('weird.name-model')) }}".to_string()),
+        );
+        kwargs.insert("column_name".to_string(), Value::String("id".to_string()));
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "weird.name-model".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let name = generate_test_name(
+            "unique",
+            None,
+            "project_name",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut HashMap::new(),
+        );
+
+        assert_eq!(name, "unique_weird.name-model_id");
+    }
+
+    #[test]
+    fn test_generate_test_name_sanitizes_windows_path_separator() {
+        // Backslashes are path separators on Windows. Treat them like `/`
+        // so the same source table name behaves identically across platforms.
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String(
+                "{{ get_where_subquery(source('special_chars_source', 'raw\\data\\table')) }}"
+                    .to_string(),
+            ),
+        );
+        kwargs.insert("column_name".to_string(), Value::String("id".to_string()));
+
+        let test_config = GenericTestConfig {
+            resource_type: "source".to_string(),
+            resource_name: "raw\\data\\table".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: Some("special_chars_source".to_string()),
+        };
+
+        let name = generate_test_name(
+            "not_null",
+            None,
+            "project_name",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut HashMap::new(),
+        );
+
+        assert!(!name.contains('\\'));
+        assert_eq!(
+            name,
+            "source_not_null_special_chars_source_raw_data_table_id"
         );
     }
 
