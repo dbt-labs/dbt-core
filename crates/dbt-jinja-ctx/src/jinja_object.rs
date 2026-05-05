@@ -22,8 +22,16 @@ use serde::{Serialize, Serializer};
 
 /// A serializable wrapper around any `Object` impl that preserves Jinja
 /// dispatch identity through `serde::Serialize`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct JinjaObject<T: Object + Send + Sync + 'static>(pub Arc<T>);
+
+// Manual `Clone` so we don't require `T: Clone` — `Arc<T>` is unconditionally
+// cloneable via reference counting.
+impl<T: Object + Send + Sync + 'static> Clone for JinjaObject<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<T: Object + Send + Sync + 'static> JinjaObject<T> {
     pub fn new(value: T) -> Self {

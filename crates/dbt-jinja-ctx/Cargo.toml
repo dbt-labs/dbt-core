@@ -17,6 +17,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-handles = { workspace = true }
+dbt-jinja-vars = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }

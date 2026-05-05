@@ -33,7 +33,7 @@ pub mod jinja_object;
 pub mod load;
 pub mod register;
 
-pub use core::GlobalCore;
+pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;
 pub use load::LoadCtx;
