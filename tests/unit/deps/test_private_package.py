@@ -1146,22 +1146,15 @@ class TestPrivatePackageHelperMultiProvider(BasePrivatePackageHelperResolution):
 
 class TestSshFallbackUrl:
     def test_default_provider_yields_github_ssh(self):
-        assert (
-            _get_ssh_fallback_url("dbt-labs/repo", None)
-            == "git@github.com:dbt-labs/repo.git"
-        )
+        assert _get_ssh_fallback_url("dbt-labs/repo", None) == "git@github.com:dbt-labs/repo.git"
 
     def test_explicit_github(self):
         assert (
-            _get_ssh_fallback_url("dbt-labs/repo", "github")
-            == "git@github.com:dbt-labs/repo.git"
+            _get_ssh_fallback_url("dbt-labs/repo", "github") == "git@github.com:dbt-labs/repo.git"
         )
 
     def test_gitlab_flat(self):
-        assert (
-            _get_ssh_fallback_url("org/repo", "gitlab")
-            == "git@gitlab.com:org/repo.git"
-        )
+        assert _get_ssh_fallback_url("org/repo", "gitlab") == "git@gitlab.com:org/repo.git"
 
     def test_gitlab_nested_groups(self):
         assert (
@@ -1225,4 +1218,3 @@ class TestPrivatePackageHelperDispatch:
         url = helper.get_resolved_url("dbt-labs/repo", "github")
         assert url == "https://abc123@github.com/dbt-labs/repo.git"
         assert "git@" not in url
-

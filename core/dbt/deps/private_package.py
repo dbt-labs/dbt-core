@@ -4,13 +4,13 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from dbt_common.dataclass_schema import StrEnum
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from dbt.contracts.project import PrivatePackage
 from dbt.deps.git import GitPinnedPackage, GitUnpinnedPackage
 from dbt_common.context import get_invocation_context
+from dbt_common.dataclass_schema import StrEnum
 
 PRIVATE_PACKAGE_HELPER = None
 
@@ -22,7 +22,9 @@ class PrivatePackageResolutionError(Exception):
 class GitProvider(StrEnum):
     GITHUB = "github"
     GITLAB = "gitlab"
-    AZURE_ACTIVE_DIRECTORY = "azure_active_directory"  # ADO: accepted for backward compatibility; prefer "ado"
+    AZURE_ACTIVE_DIRECTORY = (
+        "azure_active_directory"  # ADO: accepted for backward compatibility; prefer "ado"
+    )
     AZURE_DEVOPS = "azure_devops"  # ADO: accepted for backward compatibility; prefer "ado"
     ADO = "ado"
 
