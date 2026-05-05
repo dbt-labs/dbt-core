@@ -33,6 +33,7 @@ pub mod resolve;
 pub mod resolver;
 pub mod sql_file_info;
 pub mod tests;
+mod unused_config_paths;
 pub mod utils;
 /// Validator functions for node configs
 pub mod validation;

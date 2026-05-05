@@ -609,6 +609,9 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::UnsupportedConstraintMaterialization => {
             error_code == ErrorCode::UnsupportedConstraintMaterialization
         }
+        SupportedLegacyWarnError::UnusedResourceConfigPath => {
+            error_code == ErrorCode::UnusedResourceConfigPath
+        }
     }
 }
 
@@ -870,6 +873,11 @@ mod tests {
                 "UnsupportedConstraintMaterialization",
                 SupportedLegacyWarnError::UnsupportedConstraintMaterialization,
                 ErrorCode::UnsupportedConstraintMaterialization,
+            ),
+            (
+                "UnusedResourceConfigPath",
+                SupportedLegacyWarnError::UnusedResourceConfigPath,
+                ErrorCode::UnusedResourceConfigPath,
             ),
             // Tested separately below.
         ];

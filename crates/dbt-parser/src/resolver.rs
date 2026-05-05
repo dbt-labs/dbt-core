@@ -67,6 +67,7 @@ use crate::resolve::primary_key_inference::infer_and_apply_primary_keys;
 use crate::resolve::resolve_selectors::{
     resolve_final_selectors, resolve_manifest_selectors, resolve_selectors_from_yaml,
 };
+use crate::unused_config_paths::check_unused_resource_config_paths;
 use dbt_yaml::Value as YmlValue;
 
 use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
@@ -357,6 +358,13 @@ pub async fn resolve(
 
     // Check for model deprecation warnings
     check_for_model_deprecations(&arg.io, &nodes);
+
+    check_unused_resource_config_paths(
+        &arg.io,
+        &dbt_state.root_package().package_root_path,
+        &nodes,
+        &disabled_nodes,
+    )?;
 
     // Check access
     let nodes_with_access_errors = check_access(arg, &nodes, &all_runtime_configs);

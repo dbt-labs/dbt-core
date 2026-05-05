@@ -143,6 +143,7 @@ pub enum ErrorCode {
     UnversionedBreakingChange = 1094,
     UnsupportedConstraintMaterialization = 1095,
     HubPackageDeprecated = 1096,
+    UnusedResourceConfigPath = 1097,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
