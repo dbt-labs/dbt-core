@@ -76,7 +76,9 @@ pub fn get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
         AdapterType::ClickHouse => todo!("ClickHouse"),
-        AdapterType::Exasol => todo!("Exasol"),
+        AdapterType::Exasol => exasol_get_relation(
+            adapter, state, ctx, conn, database, schema, identifier, token,
+        ),
         AdapterType::Starburst => todo!("Starburst"),
         AdapterType::Athena => todo!("Athena"),
         AdapterType::Trino => todo!("Trino"),
@@ -651,6 +653,57 @@ fn postgres_get_relation(
         adapter.quoting(),
     )?;
     Ok(Some(Box::new(relation)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exasol_get_relation(
+    adapter: &AdapterImpl,
+    state: &State,
+    ctx: &QueryCtx,
+    conn: &mut dyn Connection,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+    token: CancellationToken,
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
+    let q_schema = schema.to_uppercase();
+    let q_ident = identifier.to_uppercase();
+
+    let sql = format!(
+        "select 'table' as \"type\" from sys.exa_all_tables \
+         where table_schema = '{q_schema}' and table_name = '{q_ident}' \
+         union all \
+         select 'view' from sys.exa_all_views \
+         where view_schema = '{q_schema}' and view_name = '{q_ident}'"
+    );
+    let batch = adapter
+        .engine()
+        .execute(Some(state), conn, ctx, &sql, token)?;
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
+
+    let column = batch.column_by_name("type").unwrap();
+    let arr = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let relation_type = match arr.value(0) {
+        "table" => Some(RelationType::Table),
+        "view" => Some(RelationType::View),
+        other => {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                format!("Unexpected relation type: {other}"),
+            ));
+        }
+    };
+    let relation = do_create_relation(
+        AdapterType::Exasol,
+        database.to_string(),
+        schema.to_string(),
+        Some(identifier.to_string()),
+        relation_type,
+        adapter.quoting(),
+    )?;
+    Ok(Some(relation))
 }
 
 fn salesforce_get_relation(

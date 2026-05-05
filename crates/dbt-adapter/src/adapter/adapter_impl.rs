@@ -237,7 +237,7 @@ impl AdapterImpl {
                             Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
                         ClickHouse => todo!("ClickHouse"),
-                        Exasol => todo!("Exasol"),
+                        Exasol => return None,
                         Starburst => todo!("Starburst"),
                         Athena => todo!("Athena"),
                         Trino => todo!("Trino"),
@@ -880,7 +880,7 @@ impl AdapterImpl {
                 DuckDB => "schema_name",
                 Fabric => "schema",
                 ClickHouse => todo!("ClickHouse"),
-                Exasol => todo!("Exasol"),
+                Exasol => "name",
                 Starburst => todo!("Starburst"),
                 Athena => todo!("Athena"),
                 Trino => todo!("Trino"),

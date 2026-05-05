@@ -283,7 +283,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::DuckDB => todo!(),
         AdapterType::Fabric => FABRIC_METADATA_SQL_TYPE_KEY,
         AdapterType::ClickHouse => todo!(),
-        AdapterType::Exasol => todo!(),
+        AdapterType::Exasol => "DATA_TYPE",
         AdapterType::Starburst => todo!(),
         AdapterType::Athena => todo!(),
         AdapterType::Trino => todo!(),

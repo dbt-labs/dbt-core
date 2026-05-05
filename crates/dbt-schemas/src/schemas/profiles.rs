@@ -50,7 +50,7 @@ pub enum DbConfig {
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
     // Hive,
-    // Exasol, // TODO: add ExasolDbConfig when profile schema is defined
+    Exasol(Box<ExasolDbConfig>),
     // Oracle,
     // Synapse,
     Fabric(Box<FabricDbConfig>),
@@ -103,6 +103,7 @@ impl_from_db_config!(Datafusion, DatafusionDbConfig);
 impl_from_db_config!(Databricks, DatabricksDbConfig);
 impl_from_db_config!(DuckDB, DuckDbConfig);
 impl_from_db_config!(Fabric, FabricDbConfig);
+impl_from_db_config!(Exasol, ExasolDbConfig);
 
 impl DbConfig {
     pub fn get_unique_field(&self) -> Option<&str> {
@@ -119,6 +120,7 @@ impl DbConfig {
             DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
+            DbConfig::Exasol(config) => config.host.as_deref(),
         }
     }
 
@@ -256,6 +258,14 @@ impl DbConfig {
                 "trust_cert",
                 "api_url",
             ],
+            DbConfig::Exasol(_) => &[
+                "host",
+                "port",
+                "user",
+                "schema",
+                "encryption",
+                "certificate_validation",
+            ],
         }
     }
 
@@ -288,6 +298,7 @@ impl DbConfig {
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
+            DbConfig::Exasol(config) => dbt_yaml::to_value(config),
         }
     }
 
@@ -304,6 +315,7 @@ impl DbConfig {
             DbConfig::DuckDB(..) => AdapterType::DuckDB,
             DbConfig::Spark(..) => AdapterType::Spark,
             DbConfig::Fabric(..) => AdapterType::Fabric,
+            DbConfig::Exasol(..) => AdapterType::Exasol,
         }
     }
 
@@ -326,6 +338,7 @@ impl DbConfig {
             DbConfig::DuckDB(config) => config.database.as_ref(),
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(config) => config.database.as_ref(),
+            DbConfig::Exasol(config) => config.database.as_ref(),
         }
     }
 
@@ -363,6 +376,7 @@ impl DbConfig {
             DbConfig::DuckDB(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
+            DbConfig::Exasol(config) => config.schema.as_ref(),
         }
     }
 
@@ -379,6 +393,7 @@ impl DbConfig {
             DbConfig::Salesforce(_) => None,
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(_) => None,
+            DbConfig::Exasol(config) => config.threads.as_ref(),
         }
     }
 
@@ -395,6 +410,7 @@ impl DbConfig {
             DbConfig::Salesforce(_) => (),
             DbConfig::Spark(_) => (),
             DbConfig::Fabric(_) => (),
+            DbConfig::Exasol(config) => config.threads = threads,
         }
     }
 
@@ -1141,6 +1157,32 @@ pub struct FabricDbConfig {
     pub api_url: Option<String>, // default = "https://api.fabric.microsoft.com/v1"
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct ExasolDbConfig {
+    pub user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "pass")]
+    pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<StringOrInteger>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+    pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub certificate_validation: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub certificate_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_timeout: Option<StringOrInteger>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<StringOrInteger>,
+}
+
 #[derive(Serialize, DbtSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
@@ -1157,6 +1199,7 @@ pub enum TargetContext {
     DuckDB(DuckDbTargetEnv),
     Spark(SparkTargetEnv),
     Fabric(FabricTargetEnv),
+    Exasol(ExasolTargetEnv),
     // Add other variants as needed
 }
 
@@ -1325,6 +1368,14 @@ pub struct FabricTargetEnv {
     pub __common__: CommonTargetContext,
     pub authentication: String,
     // TODO: ...
+}
+
+#[derive(Serialize, DbtSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ExasolTargetEnv {
+    pub host: Option<String>,
+    pub user: Option<String>,
+    pub __common__: CommonTargetContext,
 }
 
 /// The location type of a DuckDB database path.
@@ -1681,6 +1732,19 @@ impl TryFrom<DbConfig> for TargetContext {
                     authentication,
                 }))
             }
+            DbConfig::Exasol(config) => Ok(TargetContext::Exasol(ExasolTargetEnv {
+                host: config.host.clone(),
+                user: config.user.clone(),
+                __common__: CommonTargetContext {
+                    database: config
+                        .database
+                        .clone()
+                        .unwrap_or_else(|| "exasol".to_string()),
+                    schema: config.schema.ok_or_else(|| missing("schema"))?,
+                    type_: adapter_type,
+                    threads: None,
+                },
+            })),
         }
     }
 }

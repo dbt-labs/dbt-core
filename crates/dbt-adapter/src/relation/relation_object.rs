@@ -484,6 +484,20 @@ pub fn do_create_relation(
             false,
             false,
         )) as Box<dyn BaseRelation>,
+        Exasol => Box::new(GenericRelation::new_with_policy(
+            Exasol,
+            RelationPath {
+                database: Some(database).filter(|s| !s.is_empty()),
+                schema: Some(schema),
+                identifier,
+            },
+            relation_type,
+            Policy::new(false, true, true),
+            custom_quoting,
+            None,
+            false,
+            false,
+        )) as Box<dyn BaseRelation>,
         Salesforce => Box::new(SalesforceRelation::new(
             Some(database),
             Some(schema),
@@ -491,7 +505,6 @@ pub fn do_create_relation(
             relation_type,
         )) as Box<dyn BaseRelation>,
         ClickHouse => todo!("ClickHouse"),
-        Exasol => todo!("Exasol"),
         Starburst => todo!("Starburst"),
         Athena => todo!("Athena"),
         Trino => todo!("Trino"),

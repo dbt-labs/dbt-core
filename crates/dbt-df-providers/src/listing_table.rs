@@ -177,7 +177,7 @@ pub fn infer_seed_column_name_strategy(
             | AdapterType::Fabric,
         ) => InferColumnNameStrategy::Verbatim,
         (false, AdapterType::ClickHouse) => todo!("ClickHouse"),
-        (false, AdapterType::Exasol) => todo!("Exasol"),
+        (false, AdapterType::Exasol) => InferColumnNameStrategy::Uppercase,
         (false, AdapterType::Starburst) => todo!("Starburst"),
         (false, AdapterType::Athena) => todo!("Athena"),
         (false, AdapterType::Trino) => todo!("Trino"),

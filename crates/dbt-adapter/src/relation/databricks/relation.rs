@@ -51,6 +51,8 @@ impl StaticBaseRelation for GenericRelationType {
                 true,
                 true,
             ),
+            // Exasol does not support 3-part db.schema.table names.
+            AdapterType::Exasol => Policy::new(false, true, true),
             _ => Policy::trues(),
         };
         Ok(
