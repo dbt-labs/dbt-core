@@ -18,7 +18,7 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
 use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings, bool_or_string_bool,
+    IndexesConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
     f64_or_string_f64, u64_or_string_u64,
 };
 
@@ -43,52 +43,6 @@ pub struct ProjectSourceConfig {
     pub loaded_at_field: Option<String>,
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
-
-    // Snowflake specific fields
-    #[serde(rename = "+adapter_properties")]
-    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
-    #[serde(rename = "+external_volume")]
-    pub external_volume: Option<String>,
-    #[serde(rename = "+base_location_root")]
-    pub base_location_root: Option<String>,
-    #[serde(rename = "+base_location_subpath")]
-    pub base_location_subpath: Option<String>,
-    #[serde(rename = "+target_lag")]
-    pub target_lag: Option<String>,
-    #[serde(rename = "+snowflake_warehouse")]
-    pub snowflake_warehouse: Option<String>,
-    #[serde(rename = "+refresh_mode")]
-    pub refresh_mode: Option<String>,
-    #[serde(rename = "+initialize")]
-    pub initialize: Option<String>,
-    #[serde(rename = "+tmp_relation_type")]
-    pub tmp_relation_type: Option<String>,
-    #[serde(rename = "+query_tag")]
-    pub query_tag: Option<QueryTag>,
-    #[serde(rename = "+table_tag")]
-    pub table_tag: Option<String>,
-    #[serde(rename = "+row_access_policy")]
-    pub row_access_policy: Option<String>,
-    #[serde(
-        default,
-        rename = "+automatic_clustering",
-        deserialize_with = "bool_or_string_bool"
-    )]
-    pub automatic_clustering: Option<bool>,
-    #[serde(
-        default,
-        rename = "+copy_grants",
-        deserialize_with = "bool_or_string_bool"
-    )]
-    pub copy_grants: Option<bool>,
-    #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
-    pub secure: Option<bool>,
-    #[serde(
-        default,
-        rename = "+transient",
-        deserialize_with = "bool_or_string_bool"
-    )]
-    pub transient: Option<bool>,
 
     // BigQuery specific fields
     #[serde(rename = "+partition_by")]
@@ -313,30 +267,30 @@ impl From<ProjectSourceConfig> for SourceConfig {
             sync: config.sync,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Only for Bigquery Models
-                adapter_properties: config.adapter_properties,
-                external_volume: config.external_volume,
-                base_location_root: config.base_location_root,
-                base_location_subpath: config.base_location_subpath,
+                adapter_properties: None,
+                external_volume: None,
+                base_location_root: None,
+                base_location_subpath: None,
                 change_tracking: None,
                 data_retention_time_in_days: None,
                 max_data_extension_time_in_days: None,
                 storage_serialization_policy: None,
                 target_file_size: None,
-                target_lag: config.target_lag,
+                target_lag: None,
                 snowflake_initialization_warehouse: None,
                 immutable_where: None,
-                snowflake_warehouse: config.snowflake_warehouse,
-                refresh_mode: config.refresh_mode,
-                initialize: config.initialize,
+                snowflake_warehouse: None,
+                refresh_mode: None,
+                initialize: None,
                 scheduler: None,
-                tmp_relation_type: config.tmp_relation_type,
-                query_tag: config.query_tag,
-                table_tag: config.table_tag,
-                row_access_policy: config.row_access_policy,
-                automatic_clustering: config.automatic_clustering,
-                copy_grants: config.copy_grants,
-                secure: config.secure,
-                transient: config.transient,
+                tmp_relation_type: None,
+                query_tag: None,
+                table_tag: None,
+                row_access_policy: None,
+                automatic_clustering: None,
+                copy_grants: None,
+                secure: None,
+                transient: None,
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
@@ -423,23 +377,6 @@ impl From<SourceConfig> for ProjectSourceConfig {
             static_analysis: config.static_analysis,
             schema_origin: config.schema_origin,
             sync: config.sync,
-            // Snowflake fields
-            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
-            external_volume: config.__warehouse_specific_config__.external_volume,
-            base_location_root: config.__warehouse_specific_config__.base_location_root,
-            base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
-            target_lag: config.__warehouse_specific_config__.target_lag,
-            snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
-            refresh_mode: config.__warehouse_specific_config__.refresh_mode,
-            initialize: config.__warehouse_specific_config__.initialize,
-            tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
-            query_tag: config.__warehouse_specific_config__.query_tag,
-            table_tag: config.__warehouse_specific_config__.table_tag,
-            row_access_policy: config.__warehouse_specific_config__.row_access_policy,
-            automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
-            copy_grants: config.__warehouse_specific_config__.copy_grants,
-            secure: config.__warehouse_specific_config__.secure,
-            transient: config.__warehouse_specific_config__.transient,
             // BigQuery fields
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
