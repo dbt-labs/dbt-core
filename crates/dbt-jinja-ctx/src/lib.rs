@@ -43,7 +43,7 @@ pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;
 pub use load::LoadCtx;
 pub use register::{register_globals_from_serialize, to_jinja_btreemap};
-pub use resolve::ResolveBaseCtx;
+pub use resolve::{ResolveBaseCtx, ResolveModelCtx};
 
 /// Shape used by the `target` Jinja global. Cheap-cloned (`Arc`) across the
 /// resolve / model loop.

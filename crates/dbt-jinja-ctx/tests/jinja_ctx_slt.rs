@@ -14,9 +14,12 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono_tz::Tz;
-use dbt_jinja_ctx::{GlobalCore, JinjaObject, LoadCtx, ResolveBaseCtx, ResolveCore};
+use dbt_jinja_ctx::{
+    GlobalCore, JinjaObject, LoadCtx, ResolveBaseCtx, ResolveCore, ResolveModelCtx,
+};
 use dbt_jinja_vars::ConfiguredVar;
 use minijinja::Value as MinijinjaValue;
+use minijinja::machinery::Span;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use minijinja_contrib::modules::pytz::PytzTimezone;
 
@@ -95,11 +98,48 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
     }
 }
 
+fn fixture_resolve_model_ctx() -> ResolveModelCtx {
+    let mut model_inner: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+    model_inner.insert(
+        "name".to_string(),
+        MinijinjaValue::from("dbt_columns".to_string()),
+    );
+    model_inner.insert(
+        "package_name".to_string(),
+        MinijinjaValue::from("my_project".to_string()),
+    );
+
+    let mut builtins_inner: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+    builtins_inner.insert("ref".to_string(), MinijinjaValue::from("ref-fn-stub"));
+    builtins_inner.insert("source".to_string(), MinijinjaValue::from("source-fn-stub"));
+
+    ResolveModelCtx {
+        this: MinijinjaValue::from("this-stub"),
+        ref_fn: MinijinjaValue::from("ref-fn-stub"),
+        source: MinijinjaValue::from("source-fn-stub"),
+        function: MinijinjaValue::from("function-fn-stub"),
+        metric: MinijinjaValue::from("metric-fn-stub"),
+        config: MinijinjaValue::from("config-stub"),
+        model: MinijinjaValue::from_object(model_inner),
+        builtins: MinijinjaValue::from_object(builtins_inner),
+        graph: MinijinjaValue::UNDEFINED,
+        store_result: MinijinjaValue::from("store-result-stub"),
+        load_result: MinijinjaValue::from("load-result-stub"),
+        store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
+        execute: MinijinjaValue::from(false),
+        context: MinijinjaValue::from("ctx-stub"),
+        target_unique_id: "my_project.dbt_columns".to_string(),
+        current_path: "models/dbt_columns.sql".to_string(),
+        current_span: MinijinjaValue::from_serialize(Span::default()),
+    }
+}
+
 fn fixtures() -> PhaseFixtures {
     PhaseFixtures {
         load: Some(MinijinjaValue::from_serialize(fixture_load_ctx())),
         resolve_globals: Some(MinijinjaValue::from_serialize(fixture_resolve_core())),
         resolve_base: Some(MinijinjaValue::from_serialize(fixture_resolve_base_ctx())),
+        resolve_model: Some(MinijinjaValue::from_serialize(fixture_resolve_model_ctx())),
         ..PhaseFixtures::default()
     }
 }
@@ -121,6 +161,14 @@ fn resolve_globals_basics_slt() {
 fn resolve_base_basics_slt() {
     run_slt(
         "tests/data/jinja_ctx_slt/resolve_base_basics.slt",
+        &fixtures(),
+    );
+}
+
+#[test]
+fn resolve_model_basics_slt() {
+    run_slt(
+        "tests/data/jinja_ctx_slt/resolve_model_basics.slt",
         &fixtures(),
     );
 }

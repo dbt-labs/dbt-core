@@ -50,6 +50,8 @@ use minijinja::{
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 use serde::Serialize;
 
+use dbt_jinja_ctx::{ResolveModelCtx, to_jinja_btreemap};
+
 use crate::{phases::MacroLookupContext, serde::into_typed_with_error};
 
 use super::sql_resource::SqlResource;
@@ -86,7 +88,6 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     global_static_analysis: Option<StaticAnalysisKind>,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
-    let mut context = BTreeMap::new();
     let sql_resources_clone = sql_resources.clone();
     let this_relation = ResolveThisFunction {
         relation: dbt_adapter::relation::RelationObject::new(Arc::from(
@@ -105,9 +106,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         .into_value(),
         sql_resources: sql_resources_clone,
     };
-
     let this_value = MinijinjaValue::from_object(this_relation);
-    context.insert("this".to_owned(), this_value);
 
     // Create a BTreeMap for builtins
     let mut builtins = BTreeMap::new();
@@ -123,8 +122,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         package_quoting,
     };
     let ref_value = MinijinjaValue::from_object(ref_function);
-    context.insert("ref".to_owned(), ref_value.clone());
-    builtins.insert("ref".to_string(), ref_value);
+    builtins.insert("ref".to_string(), ref_value.clone());
 
     // Create source function
     let source_function = ResolveSourceFunction {
@@ -135,8 +133,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         package_quoting,
     };
     let source_value = MinijinjaValue::from_object(source_function);
-    context.insert("source".to_owned(), source_value.clone());
-    builtins.insert("source".to_string(), source_value);
+    builtins.insert("source".to_string(), source_value.clone());
 
     // Create function function
     let function_function = ResolveFunctionFunction {
@@ -147,44 +144,40 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         package_quoting,
     };
     let function_value = MinijinjaValue::from_object(function_function);
-    context.insert("function".to_owned(), function_value.clone());
-    builtins.insert("function".to_string(), function_value);
+    builtins.insert("function".to_string(), function_value.clone());
 
     let sql_resources_clone = sql_resources.clone();
-    context.insert(
-        "metric".to_owned(),
-        MinijinjaValue::from_function(move |args: &[MinijinjaValue]| {
-            if args.is_empty() || args.len() > 3 {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "invalid number of arguments for metric macro",
-                ));
-            }
-            let mut parser = ArgParser::new(args, None);
-            // If there are two positional args, the first is the package name and the second is the model name
-            let arg0 = parser.get::<String>("")?;
-            let arg1 = parser.get_optional::<String>("");
-            let (package_name, metric_name) = match (arg0, arg1) {
-                (package_name, Some(metric_name)) => (Some(package_name), metric_name),
-                (metric_name, None) => (None, metric_name),
-            };
+    let metric_value = MinijinjaValue::from_function(move |args: &[MinijinjaValue]| {
+        if args.is_empty() || args.len() > 3 {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "invalid number of arguments for metric macro",
+            ));
+        }
+        let mut parser = ArgParser::new(args, None);
+        // If there are two positional args, the first is the package name and the second is the model name
+        let arg0 = parser.get::<String>("")?;
+        let arg1 = parser.get_optional::<String>("");
+        let (package_name, metric_name) = match (arg0, arg1) {
+            (package_name, Some(metric_name)) => (Some(package_name), metric_name),
+            (metric_name, None) => (None, metric_name),
+        };
 
-            // Push the SqlResource with all available information
-            sql_resources_clone
-                .lock()
-                .unwrap()
-                .push(SqlResource::Metric((
-                    metric_name.clone(),
-                    package_name.clone(),
-                )));
+        // Push the SqlResource with all available information
+        sql_resources_clone
+            .lock()
+            .unwrap()
+            .push(SqlResource::Metric((
+                metric_name.clone(),
+                package_name.clone(),
+            )));
 
-            // Create and return the DbtMetricReference
-            Ok(MinijinjaValue::from_object(ParseMetricReference {
-                metric_name,
-                _package_name: package_name,
-            }))
-        }),
-    );
+        // Create and return the DbtMetricReference
+        Ok(MinijinjaValue::from_object(ParseMetricReference {
+            metric_name,
+            _package_name: package_name,
+        }))
+    });
     let package_dependency = if package_name == root_project_name {
         None
     } else {
@@ -193,16 +186,13 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     // Pre-finalization read: used to initialize the Jinja context before rendering starts,
     // before the root overlay has been applied. The optimistic `true` default is intentional.
     let is_enabled = config.get_enabled_with_default();
-    context.insert(
-        "config".to_owned(),
-        MinijinjaValue::from_object(ParseConfig {
-            enabled: is_enabled,
-            sql_resources: sql_resources.clone(),
-            io_args: io_args.clone().into(),
-            package_dependency: package_dependency.clone(),
-            error_path: Some(display_path.to_path_buf()),
-        }),
-    );
+    let config_value = MinijinjaValue::from_object(ParseConfig {
+        enabled: is_enabled,
+        sql_resources: sql_resources.clone(),
+        io_args: io_args.clone().into(),
+        package_dependency: package_dependency.clone(),
+        error_path: Some(display_path.to_path_buf()),
+    });
     builtins.insert(
         "config".to_string(),
         MinijinjaValue::from_object(ParseConfig {
@@ -298,60 +288,51 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         MinijinjaValue::from_object(init_batch_context()),
     );
 
-    context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
-
-    // Register builtins as a global
-    context.insert("builtins".to_owned(), MinijinjaValue::from_object(builtins));
-
-    context.insert("graph".to_owned(), MinijinjaValue::UNDEFINED);
-
-    context.insert(
-        TARGET_UNIQUE_ID.to_string(),
-        MinijinjaValue::from(format!("{package_name}.{model_name}")),
-    );
-
-    // Result Store
     let result_store = ResultStore::default();
-    context.insert(
-        "store_result".to_owned(),
-        MinijinjaValue::from_function(result_store.store_result()),
-    );
-    context.insert(
-        "load_result".to_owned(),
-        MinijinjaValue::from_function(result_store.load_result()),
-    );
-    context.insert(
-        "store_raw_result".to_owned(),
-        MinijinjaValue::from_function(result_store.store_raw_result()),
-    );
-
-    context.insert(
-        "execute".to_owned(),
-        MinijinjaValue::from_object(ParseExecute(execute_exists)),
-    );
-
     let mut packages: BTreeSet<String> = runtime_config.dependencies.keys().cloned().collect();
     packages.insert(root_project_name.to_string());
 
-    context.insert(
-        "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
+    // Object-typed slots are wrapped via `MinijinjaValue::from_object(...)` /
+    // `MinijinjaValue::from_function(closure)` HERE rather than in the typed
+    // ctx struct, because going through serde's `serialize_map` /
+    // `serialize_seq` paths would change the underlying Object's concrete
+    // type. `model` and `builtins` in particular get downcast to
+    // `BTreeMap<String, MinijinjaValue>` by compile/run-node-context code;
+    // the original `Vec<String>` regression in `MACRO_DISPATCH_ORDER`
+    // (dbt-fusion#…) showed why this matters. See `ResolveModelCtx`'s
+    // doc comment.
+    let ctx = ResolveModelCtx {
+        this: this_value,
+        ref_fn: ref_value,
+        source: source_value,
+        function: function_value,
+        metric: metric_value,
+        config: config_value,
+        model: MinijinjaValue::from_object(model_map),
+        builtins: MinijinjaValue::from_object(builtins),
+        graph: MinijinjaValue::UNDEFINED,
+        store_result: MinijinjaValue::from_function(result_store.store_result()),
+        load_result: MinijinjaValue::from_function(result_store.load_result()),
+        store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
+        execute: MinijinjaValue::from_object(ParseExecute(execute_exists)),
+        context: MinijinjaValue::from_object(MacroLookupContext {
             root_project_name: root_project_name.to_string(),
             current_project_name: None,
             packages,
         }),
-    );
+        target_unique_id: format!("{package_name}.{model_name}"),
+        current_path: display_path.to_string_lossy().into_owned(),
+        current_span: MinijinjaValue::from_serialize(Span::default()),
+    };
 
-    context.insert(
-        CURRENT_PATH.to_string(),
-        MinijinjaValue::from(display_path.to_string_lossy()),
-    );
-    context.insert(
-        CURRENT_SPAN.to_string(),
-        MinijinjaValue::from_serialize(Span::default()),
-    );
+    // Sanity: the constants downstream code uses to look up these keys must
+    // match the field-rename strings on `ResolveModelCtx`. Compile-time
+    // assertions; no runtime cost.
+    debug_assert_eq!(TARGET_UNIQUE_ID, "TARGET_UNIQUE_ID");
+    debug_assert_eq!(CURRENT_PATH, "__minijinja_current_path");
+    debug_assert_eq!(CURRENT_SPAN, "__minijinja_current_span");
 
-    context
+    to_jinja_btreemap(&ctx)
 }
 
 /// Batch Context (stubbing this on the fly for now. We'll need to implement this in the future)
