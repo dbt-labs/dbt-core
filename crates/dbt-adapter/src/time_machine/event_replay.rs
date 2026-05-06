@@ -95,6 +95,71 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
     }
 }
 
+pub(crate) fn adapter_args_match(
+    method: &str,
+    recorded: &serde_json::Value,
+    actual: &serde_json::Value,
+) -> bool {
+    if method == "get_relation"
+        && let (Some(recorded), Some(actual)) = (
+            extract_get_relation_args(recorded),
+            extract_get_relation_args(actual),
+        )
+    {
+        return recorded == actual;
+    }
+
+    values_match(recorded, actual)
+}
+
+fn extract_get_relation_args(args: &serde_json::Value) -> Option<GetRelationArgs> {
+    let args = args.as_array()?;
+
+    if args.len() == 1
+        && let Some(kwargs) = args[0].as_object()
+    {
+        return get_relation_args_from_kwargs(kwargs);
+    }
+
+    let database = args.first()?.as_str()?.to_string();
+    let schema = args.get(1)?.as_str()?.to_string();
+    let identifier = args.get(2)?.as_str()?.to_string();
+    let needs_information = args
+        .iter()
+        .filter_map(|arg| arg.as_object())
+        .find_map(|obj| obj.get("needs_information").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+
+    Some(GetRelationArgs {
+        database,
+        schema,
+        identifier,
+        needs_information,
+    })
+}
+
+fn get_relation_args_from_kwargs(
+    kwargs: &serde_json::Map<String, serde_json::Value>,
+) -> Option<GetRelationArgs> {
+    Some(GetRelationArgs {
+        database: kwargs.get("database")?.as_str()?.to_string(),
+        schema: kwargs.get("schema")?.as_str()?.to_string(),
+        identifier: kwargs.get("identifier")?.as_str()?.to_string(),
+        needs_information: kwargs
+            .get("needs_information")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GetRelationArgs {
+    database: String,
+    schema: String,
+    identifier: String,
+    needs_information: bool,
+}
+
 /// Replay ordering mode.
 ///
 /// Controls how events are matched during replay.
@@ -501,7 +566,7 @@ impl Recording {
     fn find_read_in_segment_untracked<'a>(
         &'a self,
         events: &'a [AdapterCallEvent],
-        state: &SemanticReplayState,
+        state: &mut SemanticReplayState,
         method: &str,
         args: &serde_json::Value,
     ) -> Option<&'a AdapterCallEvent> {
@@ -514,10 +579,44 @@ impl Recording {
             .map(|pos| search_start + pos)
             .unwrap_or(events.len());
 
-        // Search within the segment for a matching read (method + args)
-        events[search_start..segment_end]
+        // Search within the current segment for a matching read (method + args).
+        if let Some(event) = events[search_start..segment_end]
             .iter()
-            .find(|event| event.method == method && values_match(&event.args, args))
+            .find(|event| event.method == method && adapter_args_match(method, &event.args, args))
+        {
+            return Some(event);
+        }
+
+        // The current run may skip recorded writes when graph-derived hook content is empty.
+        // If the requested read exists in a later segment, advance to that segment so the next
+        // current write matches the corresponding recorded write instead of the skipped one.
+        let mut future_segment_start = segment_end;
+        while future_segment_start < events.len() {
+            if events[future_segment_start].semantic_category.is_mutating() {
+                state.last_write_barrier = Some(future_segment_start);
+                future_segment_start += 1;
+            }
+
+            let future_segment_end = events[future_segment_start..]
+                .iter()
+                .position(|e| e.semantic_category.is_mutating())
+                .map(|pos| future_segment_start + pos)
+                .unwrap_or(events.len());
+
+            if let Some(event) = events[future_segment_start..future_segment_end]
+                .iter()
+                .find(|event| {
+                    event.method == method && adapter_args_match(method, &event.args, args)
+                })
+            {
+                state.segment_start = future_segment_start;
+                return Some(event);
+            }
+
+            future_segment_start = future_segment_end;
+        }
+
+        None
     }
 
     /// Peek at the next event in semantic mode without consuming it.
@@ -1290,8 +1389,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_mode_read_not_in_segment_fails() {
-        // Trying to match a read that's past the current segment boundary should fail
+    fn test_semantic_mode_advance_to_future_read_does_not_match_prior_segment() {
         let events = vec![
             make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
             make_event("node1", 1, "execute", SemanticCategory::Write),
@@ -1299,28 +1397,25 @@ mod tests {
         ];
         let recording = make_recording(events);
 
-        // Try to match list_schemas (which is after the write barrier in segment 2)
-        let result = recording.take_semantic_match(
-            "node1",
-            "list_schemas",
-            &empty_args(),
-            SemanticCategory::MetadataRead,
-        );
-        assert!(
-            result.is_none(),
-            "Should not match read from future segment"
-        );
-
-        // But we can match get_relation from current segment
+        // A skipped write can move replay to a later segment.
         let event = recording
             .take_semantic_match(
                 "node1",
-                "get_relation",
+                "list_schemas",
                 &empty_args(),
                 SemanticCategory::MetadataRead,
             )
             .unwrap();
-        assert_eq!(event.seq, 0);
+        assert_eq!(event.seq, 2);
+
+        // After advancing, prior-segment reads are no longer available.
+        let result = recording.take_semantic_match(
+            "node1",
+            "get_relation",
+            &empty_args(),
+            SemanticCategory::MetadataRead,
+        );
+        assert!(result.is_none(), "Should not match read from prior segment");
     }
 
     #[test]
@@ -1682,6 +1777,129 @@ mod tests {
             SemanticCategory::MetadataRead,
         );
         assert!(result.is_none(), "Should not find TABLE_C");
+    }
+
+    #[test]
+    fn test_get_relation_args_match_positional_and_kwargs() {
+        let positional = serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let kwargs = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions"
+            }
+        ]);
+
+        assert!(adapter_args_match("get_relation", &kwargs, &positional));
+        assert!(adapter_args_match("get_relation", &positional, &kwargs));
+    }
+
+    #[test]
+    fn test_semantic_mode_read_can_advance_over_skipped_write() {
+        let events = vec![
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 0,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "model_executions"]),
+                result: serde_json::json!({"seq": 0}),
+                success: true,
+                error: None,
+                timestamp_ns: 0,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 1,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert model_executions"]),
+                result: serde_json::json!({"seq": 1}),
+                success: true,
+                error: None,
+                timestamp_ns: 1,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 2,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "test_executions"]),
+                result: serde_json::json!({"seq": 2}),
+                success: true,
+                error: None,
+                timestamp_ns: 2,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 3,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert test_executions"]),
+                result: serde_json::json!({"seq": 3}),
+                success: true,
+                error: None,
+                timestamp_ns: 3,
+            },
+        ];
+        let recording = make_recording(events);
+
+        let test_args = serde_json::json!(["DB", "SCHEMA", "test_executions"]);
+        let read = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &test_args,
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(read.seq, 2);
+
+        let write = recording
+            .take_semantic_match(
+                "node1",
+                "execute",
+                &serde_json::json!(["insert test_executions"]),
+                SemanticCategory::Write,
+            )
+            .unwrap();
+        assert_eq!(write.seq, 3);
+    }
+
+    #[test]
+    fn test_get_relation_args_match_needs_information() {
+        let default_needs_information =
+            serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let explicit_false = serde_json::json!([
+            "rioter_dbt",
+            "dbt_artifacts",
+            "model_executions",
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "needs_information": false
+            }
+        ]);
+        let explicit_true = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions",
+                "needs_information": true
+            }
+        ]);
+
+        assert!(adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_false
+        ));
+        assert!(!adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_true
+        ));
     }
 
     #[test]
