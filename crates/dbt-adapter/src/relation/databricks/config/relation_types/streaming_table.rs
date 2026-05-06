@@ -32,7 +32,9 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::AdapterType;
-    use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
+    use crate::relation::config_v2::{
+        ComponentConfigChange, ComponentConfigLoader, RelationComponentConfigChangeSet,
+    };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
         test_helpers::{TestModelConfig, run_test_cases},
@@ -94,7 +96,7 @@ mod tests {
                     [
                         // TODO: add liquid clustering to changeset here once that gets implemented
                         (
-                            components::RefreshLoader::type_name(),
+                            components::RefreshLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::RefreshLoader::new_component_type_erased(
                                     Some("*/60 * * * *".to_string()),
@@ -103,7 +105,7 @@ mod tests {
                             ),
                         ),
                         (
-                            components::RelationCommentLoader::type_name(),
+                            components::RelationCommentLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::RelationCommentLoader::new_component_type_erased(Some(
                                     "new comment".to_string(),
@@ -112,7 +114,7 @@ mod tests {
                         ),
                         // TODO: re-add tags
                         // (
-                        //     components::RelationTagsLoader::type_name(),
+                        //     components::RelationTagsLoader.type_name(),
                         //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
                         //         IndexMap::from_iter([
                         //             ("a_tag".to_string(), "new".to_string()),
@@ -121,7 +123,7 @@ mod tests {
                         //     )),
                         // ),
                         (
-                            components::TblPropertiesLoader::type_name(),
+                            components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
                                     IndexMap::from_iter([
@@ -187,7 +189,7 @@ mod tests {
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     AdapterType::Databricks,
                     [(
-                        components::PartitionByLoader::type_name(),
+                        components::PartitionByLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::PartitionByLoader::new_component_type_erased(vec![
                                 "partition_by_new".to_string(),

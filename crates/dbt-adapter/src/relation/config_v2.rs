@@ -48,7 +48,7 @@ pub trait ComponentConfig: fmt::Debug + Send + Sync + Any {
 
     fn as_any(&self) -> &dyn Any;
 
-    fn as_jinja(&self) -> Value;
+    fn to_jinja(&self) -> Value;
 }
 
 /// Contains custom diffing functions that can be used by component implementations
@@ -128,16 +128,16 @@ mod jinja {
 
             // Python BigQuery adapter flattens refresh keys
             if name == components::refresh::TYPE_NAME {
-                let inner_vm = component.as_jinja().downcast_object::<ValueMap>().unwrap();
+                let inner_vm = component.to_jinja().downcast_object::<ValueMap>().unwrap();
                 for (k, v) in inner_vm.iter() {
                     vm.insert(k.clone(), v.clone());
                 }
                 continue;
             }
 
-            let jinja = component.as_jinja();
+            let jinja = component.to_jinja();
             if jinja != none {
-                vm.insert(Value::from(name), component.as_jinja());
+                vm.insert(Value::from(name), component.to_jinja());
             }
         }
 
@@ -200,7 +200,7 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
         self
     }
 
-    fn as_jinja(&self) -> Value {
+    fn to_jinja(&self) -> Value {
         (self.to_jinja_fn)(&self.value)
     }
 }
@@ -217,9 +217,9 @@ pub enum ComponentConfigChange {
 }
 
 impl ComponentConfigChange {
-    fn as_jinja(&self) -> Value {
+    fn to_jinja(&self) -> Value {
         match self {
-            Self::Some(v) => v.as_jinja(),
+            Self::Some(v) => v.to_jinja(),
             _ => none_value(),
         }
     }
@@ -359,7 +359,7 @@ impl Object for RelationConfig {
             }
             (_, _) => {
                 let key = key.as_str()?;
-                self.components.get(key).map(|v| v.as_jinja())
+                self.components.get(key).map(|v| v.to_jinja())
             }
         }
     }
@@ -371,7 +371,6 @@ impl Object for RelationConfig {
 
 /// Loads a `ComponentConfig` from the remote data platform state (current state)
 /// or from the local configs (desired state).
-#[expect(dead_code)]
 pub(crate) trait ComponentConfigLoader<R> {
     /// Load the current applied state for the component given the remote state
     #[expect(clippy::wrong_self_convention)]
@@ -384,9 +383,41 @@ pub(crate) trait ComponentConfigLoader<R> {
         relation_config: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Box<dyn ComponentConfig>>;
 
+    #[cfg(test)]
     /// The unique type name of the component loaded by this loader
     fn type_name(&self) -> &'static str;
 }
+
+/// Generate the impl block for a ComponentConfigLoader
+///
+/// It requires `TYPE_NAME`, `from_remote_state()`, `from_local_config()` to
+/// be defined in the current scope.
+macro_rules! impl_loader {
+    ($component_name:ident, $remote_type:ident) => (
+        paste::paste! {
+            pub(crate) struct [<$component_name Loader>];
+            impl ComponentConfigLoader<$remote_type> for [<$component_name Loader>] {
+                #[cfg(test)]
+                fn type_name(&self) -> &'static str {
+                    TYPE_NAME
+                }
+
+                fn from_remote_state(&self, remote_state: &$remote_type) -> AdapterResult<Box<dyn ComponentConfig>> {
+                    Ok(Box::new(from_remote_state(remote_state)?))
+                }
+
+                fn from_local_config(
+                    &self,
+                    relation_config: &dyn InternalDbtNodeAttributes,
+                ) -> AdapterResult<Box<dyn ComponentConfig>> {
+                    Ok(Box::new(from_local_config(relation_config)?))
+                }
+            }
+        }
+    )
+}
+
+pub(crate) use impl_loader;
 
 /// Holds a collection of `ComponentConfigLoader` to populate a `RelationConfig`
 /// by loading each of its components one by one
@@ -517,7 +548,7 @@ impl Object for RelationComponentConfigChangeSet {
                 Ok(self
                     .changes
                     .get(key)
-                    .map(|v| v.as_jinja())
+                    .map(|v| v.to_jinja())
                     .unwrap_or_else(none_value))
             }
             "has_changes" => Ok(Value::from(!self.changes.is_empty())),
@@ -568,7 +599,7 @@ impl Object for RelationComponentConfigChangeSet {
                 }
             }
             (_, "requires_full_refresh") => Some(Value::from(self.requires_full_refresh())),
-            (_, key) => self.changes.get(key).map(|v| v.as_jinja()),
+            (_, key) => self.changes.get(key).map(|v| v.to_jinja()),
         }
     }
 

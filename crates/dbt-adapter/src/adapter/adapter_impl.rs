@@ -28,9 +28,6 @@ use crate::record_batch_utils::{
     RenamedColumn, disambiguate_column_names, extract_first_value_as_i64, get_column_values,
 };
 use crate::relation::RelationObject;
-use crate::relation::bigquery::{
-    BigqueryPartitionConfigExt, cluster_by_from_schema, partitions_match,
-};
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -2874,6 +2871,7 @@ impl AdapterImpl {
         local_cluster_by: Option<ClusterConfig>,
         state: Option<&State>,
     ) -> AdapterResult<bool> {
+        use crate::relation::bigquery::config::components::{ClusterByLoader, PartitionByLoader};
         match self.adapter_type() {
             Bigquery => {
                 if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
@@ -2890,24 +2888,22 @@ impl AdapterImpl {
 
                 match schema_result {
                     Ok(schema) => {
-                        let is_partition_match = partitions_match(
-                            BigqueryPartitionConfig::try_from_schema(
-                                &schema,
-                                self.engine().type_ops(),
-                            )
-                            .map_err(|err| {
-                                AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
-                            })?,
-                            local_partition_by,
-                        );
+                        let remote_partition_by = PartitionByLoader.from_remote_state(&schema)?;
+                        let local_partition_by =
+                            PartitionByLoader::new_component_type_erased(local_partition_by);
+                        let is_partition_match = local_partition_by
+                            .diff_from(Some(remote_partition_by.as_ref()))
+                            .is_none();
 
-                        let local_cluster_by = local_cluster_by
-                            .map(|c| c.into_fields())
-                            .unwrap_or_default();
-                        let remote_cluster_by = cluster_by_from_schema(&schema).map_err(|err| {
-                            AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
-                        })?;
-                        let is_cluster_match = local_cluster_by == remote_cluster_by;
+                        let remote_cluster_by = ClusterByLoader.from_remote_state(&schema)?;
+                        let local_cluster_by = ClusterByLoader::new_component_type_erased(
+                            local_cluster_by
+                                .map(|cb| cb.into_fields())
+                                .unwrap_or_default(),
+                        );
+                        let is_cluster_match = local_cluster_by
+                            .diff_from(Some(remote_cluster_by.as_ref()))
+                            .is_none();
 
                         Ok(is_partition_match && is_cluster_match)
                     }
@@ -3800,7 +3796,7 @@ impl AdapterImpl {
 
         let tags = (&ColumnTagsLoader as &dyn ComponentConfigLoader<DatabricksRelationMetadata>)
             .from_local_config(model)?;
-        Ok(tags.as_jinja())
+        Ok(tags.to_jinja())
     }
     /// TODO: implement if necessary, currently its noop
     ///

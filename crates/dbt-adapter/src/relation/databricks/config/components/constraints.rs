@@ -6,7 +6,7 @@
 //! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py
 
 use crate::errors::AdapterResult;
-use crate::relation::config_v2::{ComponentConfig, ComponentConfigLoader};
+use crate::relation::config_v2::{ComponentConfig, ComponentConfigLoader, impl_loader};
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
@@ -316,7 +316,17 @@ impl Constraints {
     }
 }
 
-pub(crate) struct ConstraintsLoader;
+fn from_remote_state(state: &DatabricksRelationMetadata) -> AdapterResult<Constraints> {
+    Ok(Constraints::from_remote_state(state))
+}
+
+fn from_local_config(
+    relation_config: &dyn InternalDbtNodeAttributes,
+) -> AdapterResult<Constraints> {
+    Ok(Constraints::from_local_config(relation_config))
+}
+
+impl_loader!(Constraints, DatabricksRelationMetadata);
 
 impl ConstraintsLoader {
     pub fn new_component_type_erased(
@@ -331,30 +341,6 @@ impl ConstraintsLoader {
             set_constraints,
             unset_constraints,
         ))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for ConstraintsLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(Constraints::from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(Constraints::from_local_config(relation_config)))
     }
 }
 
@@ -424,7 +410,7 @@ impl ComponentConfig for Constraints {
         self
     }
 
-    fn as_jinja(&self) -> Value {
+    fn to_jinja(&self) -> Value {
         Value::from_serialize(self)
     }
 }

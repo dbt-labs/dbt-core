@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
 };
 use crate::relation::databricks::config::DatabricksRelationMetadata;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -25,44 +25,20 @@ fn new_component(query: &str) -> Query {
     }
 }
 
-fn from_remote_state(_results: &DatabricksRelationMetadata) -> Query {
+fn from_remote_state(_results: &DatabricksRelationMetadata) -> AdapterResult<Query> {
     // TODO: implement
-    new_component("")
+    Ok(new_component(""))
 }
 
-fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> Query {
+fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> AdapterResult<Query> {
     // TODO: implement
-    new_component("")
+    Ok(new_component(""))
 }
 
-pub(crate) struct QueryLoader;
+impl_loader!(Query, DatabricksRelationMetadata);
 
 impl QueryLoader {
     pub fn new_component_type_erased(query: &str) -> Box<dyn ComponentConfig> {
         Box::new(new_component(query))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for QueryLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)))
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -56,7 +56,7 @@ fn merge_tags_diff(
     }
 }
 
-fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnTags {
+fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<ColumnTags> {
     let mut column_tags: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
     if let Some(column_tags_table) =
         results.get(&DatabricksRelationMetadataKey::InfoSchemaColumnTags)
@@ -79,10 +79,10 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnTags {
         }
     }
 
-    new_component(column_tags)
+    Ok(new_component(column_tags))
 }
 
-fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnTags {
+fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> AdapterResult<ColumnTags> {
     let mut column_tags = IndexMap::new();
 
     if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
@@ -101,40 +101,16 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnT
         }
     }
 
-    new_component(column_tags)
+    Ok(new_component(column_tags))
 }
 
-pub(crate) struct ColumnTagsLoader;
+impl_loader!(ColumnTags, DatabricksRelationMetadata);
 
 impl ColumnTagsLoader {
     pub fn new_component_type_erased(
         tags: IndexMap<String, IndexMap<String, String>>,
     ) -> Box<dyn ComponentConfig> {
         Box::new(new_component(tags))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for ColumnTagsLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)))
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
 };
 
 use arrow_schema::Schema;
@@ -138,32 +138,11 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Adapter
     Ok(new_component(cfg))
 }
 
-pub(crate) struct RefreshLoader;
+impl_loader!(Refresh, Schema);
 
 impl RefreshLoader {
     pub fn new_component_type_erased(cfg: Config) -> Box<dyn ComponentConfig> {
         Box::new(new_component(cfg))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<Schema> for RefreshLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(&self, remote_state: &Schema) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)?))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)?))
     }
 }
 

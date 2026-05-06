@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -37,10 +37,10 @@ fn new_component(tags: IndexMap<String, String>) -> RelationTags {
     }
 }
 
-fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
+fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<RelationTags> {
     let Some(remote_tags) = results.get(&DatabricksRelationMetadataKey::InfoSchemaRelationTags)
     else {
-        return new_component(IndexMap::new());
+        return Ok(new_component(IndexMap::new()));
     };
 
     let mut tags = IndexMap::new();
@@ -55,12 +55,14 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
         }
     }
 
-    new_component(tags)
+    Ok(new_component(tags))
 }
 
-fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> RelationTags {
+fn from_local_config(
+    relation_config: &dyn InternalDbtNodeAttributes,
+) -> AdapterResult<RelationTags> {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new_component(IndexMap::new());
+        return Ok(new_component(IndexMap::new()));
     };
 
     let mut tags = IndexMap::new();
@@ -75,38 +77,14 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
         }
     }
 
-    new_component(tags)
+    Ok(new_component(tags))
 }
 
-pub(crate) struct RelationTagsLoader;
+impl_loader!(RelationTags, DatabricksRelationMetadata);
 
 impl RelationTagsLoader {
     pub fn new_component_type_erased(tags: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
         Box::new(new_component(tags))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationTagsLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)))
     }
 }
 

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::errors::AdapterResult;
 use crate::relation::{
-    config_v2::{ComponentConfig, ComponentConfigLoader},
+    config_v2::{ComponentConfig, ComponentConfigLoader, impl_loader},
     databricks::config::{DatabricksRelationMetadata, DatabricksRelationMetadataKey},
 };
 
@@ -152,12 +152,22 @@ impl ComponentConfig for ColumnMasks {
         self
     }
 
-    fn as_jinja(&self) -> Value {
+    fn to_jinja(&self) -> Value {
         Value::from_serialize(self)
     }
 }
 
-pub(crate) struct ColumnMasksLoader;
+fn from_remote_state(state: &DatabricksRelationMetadata) -> AdapterResult<ColumnMasks> {
+    Ok(ColumnMasks::from_remote_state(state))
+}
+
+fn from_local_config(
+    relation_config: &dyn InternalDbtNodeAttributes,
+) -> AdapterResult<ColumnMasks> {
+    Ok(ColumnMasks::from_local_config(relation_config))
+}
+
+impl_loader!(ColumnMasks, DatabricksRelationMetadata);
 
 impl ColumnMasksLoader {
     pub fn new_component_type_erased(
@@ -165,30 +175,6 @@ impl ColumnMasksLoader {
         unset_column_masks: Vec<String>,
     ) -> Box<dyn ComponentConfig> {
         Box::new(ColumnMasks::new(set_column_masks, unset_column_masks))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for ColumnMasksLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(ColumnMasks::from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(ColumnMasks::from_local_config(relation_config)))
     }
 }
 

@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
 };
 use crate::relation::databricks::config::DatabricksRelationMetadata;
 
@@ -33,17 +33,19 @@ fn new_component(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClusterin
     }
 }
 
-fn from_remote_state(_state: &DatabricksRelationMetadata) -> LiquidClustering {
+fn from_remote_state(_state: &DatabricksRelationMetadata) -> AdapterResult<LiquidClustering> {
     // TODO: this currently just returns an empty config
-    new_component(false, Vec::new())
+    Ok(new_component(false, Vec::new()))
 }
 
-fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> LiquidClustering {
+fn from_local_config(
+    _relation_config: &dyn InternalDbtNodeAttributes,
+) -> AdapterResult<LiquidClustering> {
     // TODO: this currently just returns an empty config
-    new_component(false, Vec::new())
+    Ok(new_component(false, Vec::new()))
 }
 
-pub(crate) struct LiquidClusteringLoader;
+impl_loader!(LiquidClustering, DatabricksRelationMetadata);
 
 impl LiquidClusteringLoader {
     pub fn new_component_type_erased(
@@ -51,29 +53,5 @@ impl LiquidClusteringLoader {
         cluster_by: Vec<String>,
     ) -> Box<dyn ComponentConfig> {
         Box::new(new_component(auto_cluster, cluster_by))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for LiquidClusteringLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)))
     }
 }

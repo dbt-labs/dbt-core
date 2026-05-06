@@ -27,7 +27,9 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::AdapterType;
-    use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
+    use crate::relation::config_v2::{
+        ComponentConfigChange, ComponentConfigLoader, RelationComponentConfigChangeSet,
+    };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
         test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
@@ -108,7 +110,7 @@ mod tests {
                     AdapterType::Databricks,
                     [
                         (
-                            components::ColumnCommentsLoader::type_name(),
+                            components::ColumnCommentsLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::ColumnCommentsLoader::new_component_type_erased(
                                     IndexMap::from_iter([(
@@ -119,7 +121,7 @@ mod tests {
                             ),
                         ),
                         (
-                            components::RelationTagsLoader::type_name(),
+                            components::RelationTagsLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::RelationTagsLoader::new_component_type_erased(
                                     IndexMap::from_iter([
@@ -131,13 +133,13 @@ mod tests {
                         ),
                         // TODO: query is not implemented
                         // (
-                        //     components::QueryLoader::type_name(),
+                        //     components::QueryLoader.type_name(),
                         //     ComponentConfigChange::Some(components::QueryLoader::new_component_type_erased(
                         //         "SELECT 1000",
                         //     )),
                         // ),
                         (
-                            components::TblPropertiesLoader::type_name(),
+                            components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
                                     IndexMap::from_iter([
@@ -207,7 +209,7 @@ mod tests {
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     AdapterType::Databricks,
                     [(
-                        components::RelationCommentLoader::type_name(),
+                        components::RelationCommentLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::RelationCommentLoader::new_component_type_erased(Some(
                                 "new comment".to_string(),

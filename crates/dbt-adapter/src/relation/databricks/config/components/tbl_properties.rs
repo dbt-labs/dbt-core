@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -109,9 +109,9 @@ fn diff(
     }
 }
 
-fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
+fn from_remote_state(results: &DatabricksRelationMetadata) -> AdapterResult<TblProperties> {
     let Some(table) = results.get(&DatabricksRelationMetadataKey::ShowTblProperties) else {
-        return new_component(IndexMap::new());
+        return Ok(new_component(IndexMap::new()));
     };
 
     let mut tblproperties = IndexMap::new();
@@ -126,12 +126,14 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
         }
     }
 
-    new_component(tblproperties)
+    Ok(new_component(tblproperties))
 }
 
-fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProperties {
+fn from_local_config(
+    relation_config: &dyn InternalDbtNodeAttributes,
+) -> AdapterResult<TblProperties> {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new_component(IndexMap::new());
+        return Ok(new_component(IndexMap::new()));
     };
 
     let mut tblproperties = IndexMap::new();
@@ -165,40 +167,16 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProp
         );
     }
 
-    new_component(tblproperties)
+    Ok(new_component(tblproperties))
 }
 
-pub(crate) struct TblPropertiesLoader;
+impl_loader!(TblProperties, DatabricksRelationMetadata);
 
 impl TblPropertiesLoader {
     pub fn new_component_type_erased(
         properties: IndexMap<String, String>,
     ) -> Box<dyn ComponentConfig> {
         Box::new(new_component(properties))
-    }
-
-    pub fn type_name() -> &'static str {
-        TYPE_NAME
-    }
-}
-
-impl ComponentConfigLoader<DatabricksRelationMetadata> for TblPropertiesLoader {
-    fn type_name(&self) -> &'static str {
-        TYPE_NAME
-    }
-
-    fn from_remote_state(
-        &self,
-        remote_state: &DatabricksRelationMetadata,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_remote_state(remote_state)))
-    }
-
-    fn from_local_config(
-        &self,
-        relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Box<dyn ComponentConfig>> {
-        Ok(Box::new(from_local_config(relation_config)))
     }
 }
 
@@ -368,7 +346,7 @@ mod tests {
         ]);
 
         let results = IndexMap::from([(DatabricksRelationMetadataKey::ShowTblProperties, table)]);
-        let config = from_remote_state(&results);
+        let config = from_remote_state(&results).unwrap();
 
         assert_eq!(config.value.len(), 4); // Ignores delta properties
         assert_eq!(
@@ -398,7 +376,7 @@ mod tests {
             ("custom.property", "test_value"),
         ]);
         let model = create_mock_dbt_model(props, None);
-        let config = from_local_config(&model);
+        let config = from_local_config(&model).unwrap();
 
         assert_eq!(config.value.len(), 3);
         assert_eq!(
@@ -420,7 +398,7 @@ mod tests {
     fn test_from_local_config_iceberg() {
         let props = IndexMap::from_iter([("custom.property", "test_value")]);
         let model = create_mock_dbt_model(props, Some("iceberg"));
-        let config = from_local_config(&model);
+        let config = from_local_config(&model).unwrap();
 
         assert_eq!(config.value.len(), 3); // custom + 2 iceberg properties
         assert_eq!(
@@ -440,7 +418,7 @@ mod tests {
     #[test]
     fn test_from_local_config_empty() {
         let model = create_mock_dbt_model(IndexMap::new(), None);
-        let config = from_local_config(&model);
+        let config = from_local_config(&model).unwrap();
 
         assert!(config.value.is_empty());
     }

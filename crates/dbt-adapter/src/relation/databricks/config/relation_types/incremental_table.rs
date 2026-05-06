@@ -33,7 +33,9 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::AdapterType;
-    use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
+    use crate::relation::config_v2::{
+        ComponentConfigChange, ComponentConfigLoader, RelationComponentConfigChangeSet,
+    };
     use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
         test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
@@ -136,7 +138,7 @@ mod tests {
                 [
                     // TODO: add liquid clustering to changeset here once that gets implemented
                     (
-                        components::ColumnCommentsLoader::type_name(),
+                        components::ColumnCommentsLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::ColumnCommentsLoader::new_component_type_erased(
                                 IndexMap::from_iter([(
@@ -147,7 +149,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::ColumnTagsLoader::type_name(),
+                        components::ColumnTagsLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::ColumnTagsLoader::new_component_type_erased(
                                 IndexMap::from_iter([(
@@ -161,7 +163,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::ConstraintsLoader::type_name(),
+                        components::ConstraintsLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::ConstraintsLoader::new_component_type_erased(
                                 // set non-nulls
@@ -174,7 +176,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::RelationCommentLoader::type_name(),
+                        components::RelationCommentLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::RelationCommentLoader::new_component_type_erased(Some(
                                 "new comment".to_string(),
@@ -182,7 +184,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::RelationTagsLoader::type_name(),
+                        components::RelationTagsLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::RelationTagsLoader::new_component_type_erased(
                                 IndexMap::from_iter([
@@ -193,7 +195,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::TblPropertiesLoader::type_name(),
+                        components::TblPropertiesLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::TblPropertiesLoader::new_component_type_erased(
                                 IndexMap::from_iter([
@@ -204,7 +206,7 @@ mod tests {
                         ),
                     ),
                     (
-                        components::ColumnMasksLoader::type_name(),
+                        components::ColumnMasksLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::ColumnMasksLoader::new_component_type_erased(
                                 IndexMap::from_iter([(
