@@ -1,10 +1,10 @@
 use dbt_yaml::Verbatim;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, hash_map::Entry},
     path::Path,
 };
 
-use dbt_common::tracing::emit::emit_info_log_message;
+use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,
@@ -247,13 +247,26 @@ impl PackageListing {
                     jinja_env,
                     &self.vars,
                 )?;
-                self.packages.insert(
-                    full_path.to_string_lossy().to_string(),
-                    UnpinnedPackage::Local(LocalUnpinnedPackage {
-                        local: full_path,
-                        name: Some(dbt_project.name),
-                    }),
-                );
+                let package_key = full_path.to_string_lossy().to_string();
+                match self.packages.entry(package_key) {
+                    Entry::Occupied(_) => {
+                        emit_warn_log_message(
+                            ErrorCode::DepsFoundDuplicatePackage,
+                            format!(
+                                "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
+                                 This will be an error in a future version of Fusion.",
+                                dbt_project.name
+                            ),
+                            self.io_args.status_reporter.as_ref(),
+                        );
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(UnpinnedPackage::Local(LocalUnpinnedPackage {
+                            local: full_path,
+                            name: Some(dbt_project.name),
+                        }));
+                    }
+                }
             }
             DbtPackageEntry::Private(private_package) => {
                 let mut private_package: PrivatePackage = {

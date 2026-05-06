@@ -144,6 +144,7 @@ pub enum ErrorCode {
     UnsupportedConstraintMaterialization = 1095,
     HubPackageDeprecated = 1096,
     UnusedResourceConfigPath = 1097,
+    DepsFoundDuplicatePackage = 1099,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
