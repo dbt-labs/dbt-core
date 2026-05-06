@@ -273,9 +273,11 @@ class TestLegacySchemaFileConfigs(TestSchemaFileConfigs):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "flags": {
-                "state_modified_compare_more_unrendered_values": False,
-            },
+            # The uncommented below lines can be removed once the default behaviour is flipped.
+            # state_modified_compare_more_unrendered_values defaults to false currently
+            # "flags": {
+            #     "state_modified_compare_more_unrendered_values": False,
+            # },
             "models": {
                 "+meta": {
                     "company": "NuMade",

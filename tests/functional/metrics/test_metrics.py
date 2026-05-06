@@ -24,7 +24,6 @@ from tests.functional.metrics.fixtures import (
     invalid_models_people_metrics_yml,
     long_name_metrics_yml,
     metricflow_time_spine_sql,
-    metricflow_time_spine_yml,
     mock_purchase_data_csv,
     models_people_metrics_yml,
     models_people_sql,
@@ -44,7 +43,6 @@ class TestSimpleMetrics:
         return {
             "people_metrics.yml": models_people_metrics_yml,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
-            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_model_people.yml": semantic_model_people_yml,
             "people.sql": models_people_sql,
         }
@@ -62,6 +60,7 @@ class TestSimpleMetrics:
         expected_metric_ids = [
             "metric.test.number_of_people",
             "metric.test.collective_tenure",
+            "metric.test.collective_window",
             "metric.test.average_tenure",
             "metric.test.average_tenure_minus_people",
         ]
@@ -72,6 +71,9 @@ class TestSimpleMetrics:
         )
         assert (
             len(manifest.metrics["metric.test.collective_tenure"].type_params.input_measures) == 1
+        )
+        assert (
+            len(manifest.metrics["metric.test.collective_window"].type_params.input_measures) == 1
         )
         assert len(manifest.metrics["metric.test.average_tenure"].type_params.input_measures) == 2
         assert (
@@ -220,7 +222,6 @@ class TestMetricDependsOn:
         return {
             "people.sql": models_people_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
-            "time_spine.yml": metricflow_time_spine_yml,
             "semantic_models.yml": semantic_model_people_yml,
             "people_metrics.yml": models_people_metrics_yml,
         }
