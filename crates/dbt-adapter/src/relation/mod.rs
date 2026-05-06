@@ -13,6 +13,10 @@ pub mod salesforce;
 pub mod snowflake;
 
 pub mod factory;
+
+mod relation_impl;
+pub use relation_impl::{Relation, RelationStatic};
+
 mod relation_object;
 pub use relation_object::{
     RelationObject, StaticBaseRelation, StaticBaseRelationObject, create_relation,
@@ -161,7 +165,7 @@ mod tests {
     #[test]
     fn test_render_with_run_filter_databricks_adapter() {
         // relation impl in dbt-databricks doesn't seem to override this
-        let relation = databricks::GenericRelation::new(
+        let relation = Relation::new(
             AdapterType::Databricks, // ?
             None,
             None,

@@ -6,7 +6,7 @@ use crate::metadata::{
     create_schemas_if_not_exists,
 };
 use crate::record_batch_utils::get_column_values;
-use crate::relation::databricks::GenericRelation;
+use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
@@ -60,7 +60,7 @@ pub fn list_relations(
         } else {
             None
         };
-        let relation = Arc::new(GenericRelation::new_fabric(
+        let relation = Arc::new(Relation::new_fabric(
             Some(database_name.value(i).to_string()),
             Some(schema_name.value(i).to_string()),
             Some(table_name.value(i).to_string()),

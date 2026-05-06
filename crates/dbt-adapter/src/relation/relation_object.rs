@@ -11,8 +11,9 @@ use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
+use crate::relation::Relation;
 use crate::relation::bigquery::*;
-use crate::relation::databricks::{GenericRelation, typed_constraint::TypedConstraint};
+use crate::relation::databricks::typed_constraint::TypedConstraint;
 use crate::relation::duckdb_should_include_database;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
@@ -87,7 +88,7 @@ impl RelationObject {
         let dbx = self
             .relation
             .as_any()
-            .downcast_ref::<GenericRelation>()
+            .downcast_ref::<Relation>()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
@@ -121,7 +122,7 @@ impl RelationObject {
         let dbx = self
             .relation
             .as_any()
-            .downcast_ref::<GenericRelation>()
+            .downcast_ref::<Relation>()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
@@ -133,7 +134,7 @@ impl RelationObject {
 
     /// Databricks: get create_constraints for get_column_and_constraints_sql
     fn relation_create_constraints(self: &Arc<Self>) -> Option<Value> {
-        let dbx = self.relation.as_any().downcast_ref::<GenericRelation>()?;
+        let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
         Some(Value::from_serialize(&dbx.create_constraints))
     }
 }
@@ -433,7 +434,7 @@ pub fn do_create_relation(
                 true,
                 true,
             );
-            Box::new(GenericRelation::new_with_policy(
+            Box::new(Relation::new_with_policy(
                 DuckDB,
                 RelationPath {
                     database: Some(database).filter(|s| !s.is_empty()),
@@ -472,7 +473,7 @@ pub fn do_create_relation(
             None,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        Databricks | Spark | Fabric => Box::new(GenericRelation::new(
+        Databricks | Spark | Fabric => Box::new(Relation::new(
             adapter_type,
             Some(database),
             Some(schema),
@@ -484,7 +485,7 @@ pub fn do_create_relation(
             false,
             false,
         )) as Box<dyn BaseRelation>,
-        Exasol => Box::new(GenericRelation::new_with_policy(
+        Exasol => Box::new(Relation::new_with_policy(
             Exasol,
             RelationPath {
                 database: Some(database).filter(|s| !s.is_empty()),

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use dbt_adapter_core::AdapterType;
 
+use crate::relation::RelationStatic;
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
-use crate::relation::databricks::GenericRelationType;
 use crate::relation::postgres::PostgresRelationType;
 use crate::relation::redshift::RedshiftRelationType;
 use crate::relation::salesforce::SalesforceRelationType;
@@ -42,7 +42,7 @@ pub fn create_static_relation(
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
         Databricks | Spark | Fabric | DuckDB | Exasol => {
-            let relation_type = GenericRelationType {
+            let relation_type = RelationStatic {
                 adapter_type,
                 quoting,
             };
