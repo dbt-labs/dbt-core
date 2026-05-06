@@ -23,32 +23,45 @@ use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::NodePathKind;
 use dbt_schemas::schemas::telemetry::NodeType;
 use minijinja::State;
-use minijinja::constants::CURRENT_PATH;
-use minijinja::constants::CURRENT_SPAN;
-use minijinja::constants::TARGET_PACKAGE_NAME;
 use minijinja::listener::RenderingEventListener;
 use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 
+use dbt_jinja_ctx::{JinjaObject, MacroLookupContext, RunNodeCtx, to_jinja_btreemap};
+
 use super::lazy_model::LazyModelWrapper;
-use crate::phases::MacroLookupContext;
 
 use super::run_config::RunConfig;
 use dbt_schemas::schemas::project::ConfigKeys;
 
 type YmlValue = dbt_yaml::Value;
 
-/// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
+/// Per-node fields computed from the YAML node config and used to construct
+/// the `RunNodeCtx` overlay. Replaces the historical
+/// `extend_with_model_context(&mut base_context, ...)` mutator: returning
+/// the values lets `build_run_node_context` construct a typed `RunNodeCtx`
+/// in one shot rather than incrementally mutating a `BTreeMap`.
+struct ModelContextFields {
+    this: MinijinjaValue,
+    database: String,
+    schema: String,
+    identifier: String,
+    pre_hooks: Option<MinijinjaValue>,
+    post_hooks: Option<MinijinjaValue>,
+    config: MinijinjaValue,
+    model: MinijinjaValue,
+    node: MinijinjaValue,
+}
+
 #[allow(clippy::too_many_arguments)]
-fn extend_with_model_context<S: Serialize>(
-    base_context: &mut BTreeMap<String, MinijinjaValue>,
+fn build_model_context_fields<S: Serialize>(
     node: &dyn InternalDbtNode,
     deprecated_config: &S,
     adapter_type: AdapterType,
     io_args: &IoArgs,
     sql_header: Option<MinijinjaValue>,
-) {
+) -> ModelContextFields {
     let model = node.serialize();
     let common_attr = node.common();
     let base_attr = node.base();
@@ -67,23 +80,9 @@ fn extend_with_model_context<S: Serialize>(
     ))
     .into_value();
 
-    base_context.insert("this".to_owned(), this_relation);
-    base_context.insert(
-        "database".to_owned(),
-        MinijinjaValue::from(base_attr.database.clone()),
-    );
-    base_context.insert(
-        "schema".to_owned(),
-        MinijinjaValue::from(base_attr.schema.clone()),
-    );
-    base_context.insert(
-        "identifier".to_owned(),
-        MinijinjaValue::from(common_attr.name.clone()),
-    );
-
     let config_yml = dbt_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
-    if let Some(pre_hook) = config_yml.get("pre_hook") {
+    let pre_hooks = config_yml.get("pre_hook").map(|pre_hook| {
         let values: Vec<HookConfig> = match pre_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(pre_hook).into_iter().collect()
@@ -96,18 +95,17 @@ fn extend_with_model_context<S: Serialize>(
                     format!("Unknown pre-hook type: {:?}", pre_hook),
                     io_args.status_reporter.as_ref(),
                 );
-
                 vec![]
             }
         };
-        let pre_hooks_vals: MinijinjaValue = values
+        values
             .iter()
             .map(|hook| MinijinjaValue::from_object(hook.clone()))
             .collect::<Vec<MinijinjaValue>>()
-            .into();
-        base_context.insert("pre_hooks".to_owned(), pre_hooks_vals);
-    }
-    if let Some(post_hook) = config_yml.get("post_hook") {
+            .into()
+    });
+
+    let post_hooks = config_yml.get("post_hook").map(|post_hook| {
         let values: Vec<HookConfig> = match post_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(post_hook).into_iter().collect()
@@ -120,17 +118,15 @@ fn extend_with_model_context<S: Serialize>(
                     format!("Unknown post-hook type: {:?}", post_hook),
                     io_args.status_reporter.as_ref(),
                 );
-
                 vec![]
             }
         };
-        let post_hooks_vals: MinijinjaValue = values
+        values
             .iter()
             .map(|hook| MinijinjaValue::from_object(hook.clone()))
             .collect::<Vec<MinijinjaValue>>()
-            .into();
-        base_context.insert("post_hooks".to_owned(), post_hooks_vals);
-    }
+            .into()
+    });
 
     let mut config_map = convert_yml_to_value_map(config_yml);
     if let Some(sql_header) = sql_header {
@@ -179,22 +175,23 @@ fn extend_with_model_context<S: Serialize>(
         valid_keys,
     };
 
-    base_context.insert(
-        "config".to_owned(),
-        MinijinjaValue::from_object(node_config),
-    );
-
     // Create the lazy wrapper for the model with the compiled path
     let compiled_path =
         node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
     let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
-
-    base_context.insert("model".to_owned(), MinijinjaValue::from_object(lazy_model));
-    // For "node", we'll use the same lazy model wrapper
     let lazy_node = LazyModelWrapper::new(model_map, compiled_path);
 
-    base_context.insert("node".to_owned(), MinijinjaValue::from_object(lazy_node));
-    base_context.insert("connection_name".to_owned(), MinijinjaValue::from(""));
+    ModelContextFields {
+        this: this_relation,
+        database: base_attr.database.clone(),
+        schema: base_attr.schema.clone(),
+        identifier: common_attr.name.clone(),
+        pre_hooks,
+        post_hooks,
+        config: MinijinjaValue::from_object(node_config),
+        model: MinijinjaValue::from_object(lazy_model),
+        node: MinijinjaValue::from_object(lazy_node),
+    }
 }
 
 /// Extend the base context with stateful functions
@@ -252,18 +249,28 @@ pub fn build_run_node_context<S: Serialize>(
     let base_attr = node.base();
     let resource_type = node.resource_type();
 
-    // Build model-specific context
-    let mut context = base_context.clone();
-    extend_base_context_stateful_fn(&mut context, &common_attr.package_name, packages);
+    // Stateful fns: store_result/load_result/store_raw_result/submit_python_job + context.
+    // These were `extend_base_context_stateful_fn` mutations into the BTreeMap;
+    // pull the same closures + MacroLookupContext into local bindings so we
+    // can construct the typed overlay below.
+    let result_store = ResultStore::default();
+    let store_result = MinijinjaValue::from_function(result_store.store_result());
+    let load_result = MinijinjaValue::from_function(result_store.load_result());
+    let store_raw_result = MinijinjaValue::from_function(result_store.store_raw_result());
+    let submit_python_job = MinijinjaValue::from_function(submit_python_job_context_fn());
 
-    extend_with_model_context(
-        &mut context,
-        node,
-        deprecated_config,
-        adapter_type,
-        io_args,
-        sql_header,
-    );
+    let mut packages_with_root = packages;
+    packages_with_root.insert(common_attr.package_name.clone());
+    let context_lookup = JinjaObject::new(MacroLookupContext {
+        root_project_name: common_attr.package_name.clone(),
+        current_project_name: None,
+        packages: packages_with_root,
+    });
+
+    // Per-node model-specific fields (this/database/schema/identifier, hooks,
+    // config, model, node).
+    let model_fields =
+        build_model_context_fields(node, deprecated_config, adapter_type, io_args, sql_header);
 
     // Use alias for the run file path (target/run/<alias>.sql) rather than name.
     // For most nodes, alias == name. For generic tests with long names, the name is the
@@ -274,30 +281,28 @@ pub fn build_run_node_context<S: Serialize>(
     } else {
         base_attr.alias.clone()
     };
-    // Add write function
-    context.insert(
-        "write".to_owned(),
-        MinijinjaValue::from_object(WriteConfig {
-            node_name: model_name,
-            resource_type: resource_type.as_static_ref().to_string(),
-            project_root: io_args.in_dir.clone(),
-            target_path: io_args.out_dir.clone(),
-            package_name: common_attr.package_name.clone(),
-            path: common_attr.path.clone(),
-            original_file_path: common_attr.original_file_path.clone(),
-        }),
-    );
 
-    if let Some(agate_table) = agate_table {
-        context.insert(
-            "load_agate_table".to_owned(),
-            MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
-                MinijinjaValue::from_object(agate_table.clone())
-            }),
-        );
-    }
+    let write_value = MinijinjaValue::from_object(WriteConfig {
+        node_name: model_name,
+        resource_type: resource_type.as_static_ref().to_string(),
+        project_root: io_args.in_dir.clone(),
+        target_path: io_args.out_dir.clone(),
+        package_name: common_attr.package_name.clone(),
+        path: common_attr.path.clone(),
+        original_file_path: common_attr.original_file_path.clone(),
+    });
 
-    let mut base_builtins = if let Some(builtins) = context.get("builtins") {
+    let load_agate_table = agate_table.map(|agate_table| {
+        MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
+            MinijinjaValue::from_object(agate_table.clone())
+        })
+    });
+
+    // Builtins overlay: clone the compile-base map and insert the per-node
+    // RunConfig. The map underlying `builtins` MUST be
+    // `BTreeMap<String, MinijinjaValue>` exactly (downstream macro code
+    // downcasts to that type) — same trap as `MACRO_DISPATCH_ORDER`.
+    let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
         builtins
             .as_object()
             .unwrap()
@@ -307,30 +312,16 @@ pub fn build_run_node_context<S: Serialize>(
     } else {
         BTreeMap::new()
     };
-
-    // Get the config from model context to pass to general context
-    let node_config = context
-        .get("config")
-        .unwrap()
+    let node_config = model_fields
+        .config
         .as_object()
         .unwrap()
         .downcast_ref::<RunConfig>()
-        .unwrap();
-
+        .unwrap()
+        .clone();
     base_builtins.insert(
         "config".to_string(),
-        MinijinjaValue::from_object(node_config.clone()),
-    );
-
-    // Register builtins as a global
-    context.insert(
-        "builtins".to_owned(),
-        MinijinjaValue::from_object(base_builtins),
-    );
-
-    context.insert(
-        TARGET_PACKAGE_NAME.to_owned(),
-        MinijinjaValue::from(&common_attr.package_name),
+        MinijinjaValue::from_object(node_config),
     );
 
     let abs_compiled =
@@ -339,15 +330,39 @@ pub fn build_run_node_context<S: Serialize>(
         .strip_prefix(&io_args.out_dir)
         .map(|p| p.to_path_buf())
         .unwrap_or(abs_compiled);
-    context.insert(
-        CURRENT_PATH.to_string(),
-        MinijinjaValue::from(relative_path.to_string_lossy()),
-    );
-    context.insert(
-        CURRENT_SPAN.to_string(),
-        MinijinjaValue::from_serialize(Span::default()),
-    );
 
+    let overlay = RunNodeCtx {
+        this: model_fields.this,
+        database: model_fields.database,
+        schema: model_fields.schema,
+        identifier: model_fields.identifier,
+        pre_hooks: model_fields.pre_hooks,
+        post_hooks: model_fields.post_hooks,
+        config: model_fields.config,
+        model: model_fields.model,
+        node: model_fields.node,
+        connection_name: String::new(),
+        store_result,
+        load_result,
+        store_raw_result,
+        submit_python_job,
+        context: context_lookup,
+        write: write_value,
+        load_agate_table,
+        builtins: MinijinjaValue::from_object(base_builtins),
+        target_package_name: common_attr.package_name.clone(),
+        current_path: relative_path.to_string_lossy().into_owned(),
+        current_span: MinijinjaValue::from_serialize(Span::default()),
+    };
+
+    // Today's caller still consumes `BTreeMap<String, MinijinjaValue>`. We
+    // serialize the typed overlay and `.extend(...)` onto a clone of the
+    // base — same last-write-wins shadowing semantic the original
+    // BTreeMap-based code produced. PR 9 (cleanup) flows the typed struct
+    // directly through `render_named_str<S: Serialize>` and drops the
+    // conversion.
+    let mut context = base_context.clone();
+    context.extend(to_jinja_btreemap(&overlay));
     context
 }
 

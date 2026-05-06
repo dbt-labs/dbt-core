@@ -18,8 +18,6 @@ use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use dbt_telemetry::NodeType;
 use minijinja::arg_utils::ArgParser;
-use minijinja::constants::MACRO_DISPATCH_ORDER;
-use minijinja::constants::TARGET_PACKAGE_NAME;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{
@@ -27,6 +25,8 @@ use minijinja::{
 };
 use minijinja::{State, UndefinedBehavior};
 use std::rc::Rc;
+
+use dbt_jinja_ctx::{CompileBaseCtx, JinjaObject, to_jinja_btreemap};
 
 /// Configure the Jinja environment for the compile phase.
 pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: Arc<Adapter>) {
@@ -76,26 +76,22 @@ pub fn build_compile_and_run_base_context(
     runtime_config: Arc<DbtRuntimeConfig>,
     namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
-    let mut ctx = BTreeMap::new();
-    let config = DummyConfig {};
-    ctx.insert("config".to_string(), MinijinjaValue::from_object(config));
-
-    let macro_dispatch_order = DISPATCH_CONFIG
+    // Wrap each per-namespace search order as `Value::from(Vec<String>)` —
+    // dispatch lookup downcasts to `Vec<String>` so the underlying Object
+    // type must be exactly that, not the `MutableVec<Value>` that
+    // serde-serializing a `Vec<String>` produces. Same downcast contract as
+    // `ResolveBaseCtx::macro_dispatch_order`.
+    let macro_dispatch_order: BTreeMap<String, MinijinjaValue> = DISPATCH_CONFIG
         .get()
         .map(|macro_dispatch_order| {
             macro_dispatch_order
                 .read()
                 .unwrap()
                 .iter()
-                .map(|(k, v)| (MinijinjaValue::from(k), MinijinjaValue::from(v.clone())))
-                .collect::<BTreeMap<_, _>>()
+                .map(|(k, v)| (k.clone(), MinijinjaValue::from(v.clone())))
+                .collect()
         })
         .unwrap_or_default();
-
-    ctx.insert(
-        MACRO_DISPATCH_ORDER.to_string(),
-        MinijinjaValue::from_object(macro_dispatch_order),
-    );
 
     // Create a BTreeMap for builtins
     let mut builtins = BTreeMap::new();
@@ -107,15 +103,13 @@ pub fn build_compile_and_run_base_context(
         runtime_config.clone(),
     );
     let ref_value = MinijinjaValue::from_object(ref_function);
-    ctx.insert("ref".to_string(), ref_value.clone());
-    builtins.insert("ref".to_string(), ref_value);
+    builtins.insert("ref".to_string(), ref_value.clone());
 
     // Create source function
     let source_function =
         SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned());
     let source_value = MinijinjaValue::from_object(source_function);
-    ctx.insert("source".to_string(), source_value.clone());
-    builtins.insert("source".to_string(), source_value);
+    builtins.insert("source".to_string(), source_value.clone());
 
     // Create function function
     let function_function = FunctionFunction::new_unvalidated(
@@ -124,72 +118,55 @@ pub fn build_compile_and_run_base_context(
         runtime_config.clone(),
     );
     let function_value = MinijinjaValue::from_object(function_function);
-    ctx.insert("function".to_string(), function_value.clone());
-    builtins.insert("function".to_string(), function_value);
+    builtins.insert("function".to_string(), function_value.clone());
 
-    // This is used in macros to gate the sql execution (set to true only after parse stage)
-    // for example dbt_macro_assets/dbt-adapters/macros/etc/statement.sql
-    ctx.insert("execute".to_string(), MinijinjaValue::from(true));
-
-    // Register builtins as a global
-    ctx.insert(
-        "builtins".to_string(),
-        MinijinjaValue::from_object(builtins),
-    );
-
-    // Populate dbt_metadata_envs from OS env vars with prefix DBT_ENV_CUSTOM_ENV_
-    // Mirrors dbt-core behavior so packages can safely iterate .items()
-    {
-        let meta_envs: BTreeMap<String, MinijinjaValue> =
-            dbt_common::constants::collect_dbt_custom_envs()
-                .into_iter()
-                .map(|(k, v)| (k, MinijinjaValue::from(v)))
-                .collect();
-        ctx.insert(
-            "dbt_metadata_envs".to_string(),
-            MinijinjaValue::from_object(meta_envs),
-        );
-    }
+    // Populate dbt_metadata_envs from OS env vars with prefix DBT_ENV_CUSTOM_ENV_.
+    // Mirrors dbt-core behavior so packages can safely iterate .items().
+    let meta_envs: BTreeMap<String, MinijinjaValue> =
+        dbt_common::constants::collect_dbt_custom_envs()
+            .into_iter()
+            .map(|(k, v)| (k, MinijinjaValue::from(v)))
+            .collect();
 
     let mut packages: BTreeSet<String> = runtime_config.dependencies.keys().cloned().collect();
     packages.insert(package_name.to_string());
-    ctx.insert(
-        "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
+
+    let result_store = ResultStore::default();
+
+    let dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>> = namespace_keys
+        .into_iter()
+        .map(|key| {
+            let value = JinjaObject::new(DbtNamespace::new(&key));
+            (key, value)
+        })
+        .collect();
+
+    let ctx = CompileBaseCtx {
+        config: MinijinjaValue::from_object(DummyConfig {}),
+        macro_dispatch_order,
+        ref_fn: ref_value,
+        source: source_value,
+        function: function_value,
+        // Used in macros to gate the sql execution (set to true only after
+        // parse stage); e.g. dbt_macro_assets/dbt-adapters/macros/etc/statement.sql.
+        execute: true,
+        builtins: MinijinjaValue::from_object(builtins),
+        dbt_metadata_envs: MinijinjaValue::from_object(meta_envs),
+        context: JinjaObject::new(MacroLookupContext {
             root_project_name: package_name.to_string(),
             current_project_name: None,
             packages,
         }),
-    );
+        graph: MinijinjaValue::from_object(LazyFlatGraph::new(nodes, defer_nodes)),
+        store_result: MinijinjaValue::from_function(result_store.store_result()),
+        load_result: MinijinjaValue::from_function(result_store.load_result()),
+        target_package_name: package_name.to_string(),
+        node: MinijinjaValue::NONE,
+        connection_name: String::new(),
+        dbt_namespaces,
+    };
 
-    // Register graph as a global
-    ctx.insert(
-        "graph".to_string(),
-        MinijinjaValue::from_object(LazyFlatGraph::new(nodes, defer_nodes)),
-    );
-    let result_store = ResultStore::default();
-    ctx.insert(
-        "store_result".to_owned(),
-        MinijinjaValue::from_function(result_store.store_result()),
-    );
-    ctx.insert(
-        "load_result".to_owned(),
-        MinijinjaValue::from_function(result_store.load_result()),
-    );
-
-    ctx.insert(
-        TARGET_PACKAGE_NAME.to_owned(),
-        MinijinjaValue::from(package_name),
-    );
-    ctx.insert("node".to_owned(), MinijinjaValue::NONE);
-    ctx.insert("connection_name".to_owned(), MinijinjaValue::from(""));
-    for key in namespace_keys {
-        ctx.insert(
-            key.clone(),
-            MinijinjaValue::from_object(DbtNamespace::new(&key)),
-        );
-    }
-    ctx
+    to_jinja_btreemap(&ctx)
 }
 
 // `DbtNamespace` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported here

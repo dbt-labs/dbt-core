@@ -32,13 +32,16 @@
 //! implement them without depending on this crate (or on the heavier
 //! `dbt-common`). They are re-exported here for ergonomics.
 
+pub mod compile;
 pub mod core;
 pub mod jinja_object;
 pub mod load;
 pub mod objects;
 pub mod register;
 pub mod resolve;
+pub mod run;
 
+pub use compile::{CompileBaseCtx, CompileNodeCtx};
 pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;
@@ -46,6 +49,7 @@ pub use load::LoadCtx;
 pub use objects::{DbtNamespace, MacroLookupContext, ParseExecute};
 pub use register::{register_globals_from_serialize, to_jinja_btreemap};
 pub use resolve::{ResolveBaseCtx, ResolveModelCtx};
+pub use run::RunNodeCtx;
 
 /// Shape used by the `target` Jinja global. Cheap-cloned (`Arc`) across the
 /// resolve / model loop.

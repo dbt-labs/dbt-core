@@ -1,0 +1,115 @@
+---
+source: fs/sa/crates/dbt-jinja-ctx/tests/run_node.rs
+assertion_line: 124
+expression: schema
+---
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RunNodeCtx",
+  "description": "Per-node run-time overlay layered onto [`crate::CompileBaseCtx`] for each node materialization. Today's `build_run_node_context<S>` populates this 1:1 — same field-key strings (including the underscore-decorated `__minijinja_current_path` / `__minijinja_current_span` constants).\n\nAt construction, the calling materializer first builds `CompileBaseCtx`, then overlays a `RunNodeCtx` on top. Several keys are intentionally re-emitted on the overlay — they shadow the base entries with per-node variants. The `pre_hooks` / `post_hooks` / `load_agate_table` fields are `Option<MinijinjaValue>` and `#[serde(skip_serializing_if = \"Option::is_none\")]` so they only land in the overlay map when actually present (today's `BTreeMap::insert` only fires when the corresponding YAML key is set or the agate table is supplied).",
+  "type": "object",
+  "required": [
+    "TARGET_PACKAGE_NAME",
+    "__minijinja_current_path",
+    "__minijinja_current_span",
+    "builtins",
+    "config",
+    "connection_name",
+    "context",
+    "database",
+    "identifier",
+    "load_result",
+    "model",
+    "node",
+    "schema",
+    "store_raw_result",
+    "store_result",
+    "submit_python_job",
+    "this",
+    "write"
+  ],
+  "properties": {
+    "TARGET_PACKAGE_NAME": {
+      "description": "`{{ TARGET_PACKAGE_NAME }}` — node's package_name (overlays the base, which is the local project's name at base-build time).",
+      "type": "string"
+    },
+    "__minijinja_current_path": {
+      "description": "`{{ __minijinja_current_path }}` — compiled-SQL path relative to the out_dir. Key string matches `minijinja::constants::CURRENT_PATH`.",
+      "type": "string"
+    },
+    "__minijinja_current_span": {
+      "description": "`{{ __minijinja_current_span }}` — span at the start of rendering. Key string matches `minijinja::constants::CURRENT_SPAN`."
+    },
+    "builtins": {
+      "description": "`{{ builtins.* }}` — overlay map carrying the per-node `RunConfig` alongside the base's ref/source/function. Same downcast contract as [`crate::CompileNodeCtx::builtins`]."
+    },
+    "config": {
+      "description": "`{{ config(...) }}` — `RunConfig` Object backed by the node's merged config map. Shadows [`crate::CompileBaseCtx::config`]."
+    },
+    "connection_name": {
+      "description": "`{{ connection_name }}` — empty string at run scope (overlays).",
+      "type": "string"
+    },
+    "context": {
+      "description": "`{{ context }}` — `MacroLookupContext` keyed by the node's package_name (NOT root project's; this differs from [`crate::CompileBaseCtx::context`]).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>"
+        }
+      ]
+    },
+    "database": {
+      "description": "`{{ database }}` — node's adapter database.",
+      "type": "string"
+    },
+    "identifier": {
+      "description": "`{{ identifier }}` — node's adapter alias (note: run uses `name`, not `alias`; alias is the truncated form for path-length safety on Linux. See the comment in `build_run_node_context`.)",
+      "type": "string"
+    },
+    "load_agate_table": {
+      "description": "`{{ load_agate_table(...) }}` — closure that returns the seed's loaded agate table; only emitted when an `agate_table` was supplied to `build_run_node_context`."
+    },
+    "load_result": {
+      "description": "`{{ load_result(...) }}` — `ResultStore`-backed closure."
+    },
+    "model": {
+      "description": "`{{ model.* }}` — `LazyModelWrapper` Object that lazy-loads `compiled_code` from the on-disk compiled SQL on first attribute access. Shadows the base."
+    },
+    "node": {
+      "description": "`{{ node.* }}` — same `LazyModelWrapper` content as `model` (run phase aliases them; compile-node does not). Shadows [`crate::CompileBaseCtx::node`] (`Value::NONE`)."
+    },
+    "post_hooks": {
+      "description": "`{{ post_hooks }}` — sequence of `HookConfig` Objects, only emitted when the node's config contains a `post_hook` entry."
+    },
+    "pre_hooks": {
+      "description": "`{{ pre_hooks }}` — sequence of `HookConfig` Objects, only emitted when the node's config contains a `pre_hook` entry."
+    },
+    "schema": {
+      "description": "`{{ schema }}` — node's adapter schema.",
+      "type": "string"
+    },
+    "store_raw_result": {
+      "description": "`{{ store_raw_result(...) }}` — `ResultStore`-backed closure."
+    },
+    "store_result": {
+      "description": "`{{ store_result(...) }}` — `ResultStore`-backed closure."
+    },
+    "submit_python_job": {
+      "description": "`{{ submit_python_job(...) }}` — closure invoked for Python models; always present on the run ctx (no-op for non-Python nodes)."
+    },
+    "this": {
+      "description": "`{{ this }}` — `RelationObject` for the node's adapter relation."
+    },
+    "write": {
+      "description": "`{{ write(...) }}` — `WriteConfig` Object closure that writes a payload to the target run directory."
+    }
+  },
+  "definitions": {
+    "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::lookup::MacroLookupContext"
+    }
+  }
+}
