@@ -163,8 +163,9 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__drop_relation(relation) -%}
+  {% set fmt = adapter.table_format(relation) %}
   {% call statement('drop_relation', auto_begin=False) -%}
-    {% if adapter.is_ducklake(relation) %}
+    {% if fmt == 'ducklake' or fmt == 'iceberg' %}
       drop {{ relation.type }} if exists {{ relation }}
     {% else %}
       drop {{ relation.type }} if exists {{ relation }} cascade
@@ -173,9 +174,18 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__rename_relation(from_relation, to_relation) -%}
+  {% set fmt = adapter.table_format(from_relation) %}
   {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
   {% call statement('rename_relation') -%}
-    alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
+    {% if fmt == 'iceberg' %}
+      {# DuckDB Iceberg REST does not support ALTER TABLE RENAME.
+         Use DROP + CREATE AS SELECT instead. #}
+      drop table if exists {{ to_relation }};
+      create table {{ to_relation }} as select * from {{ from_relation }};
+      drop table if exists {{ from_relation }}
+    {% else %}
+      alter {{ to_relation.type }} {{ from_relation }} rename to {{ target_name }}
+    {% endif %}
   {%- endcall %}
 {% endmacro %}
 

@@ -12,6 +12,7 @@ use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::dbt_catalogs_v2::CatalogSpecV2View;
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::*;
@@ -298,26 +299,176 @@ impl XdbcEngine {
         database: &mut Box<dyn Database>,
         config: &AdapterConfig,
     ) -> AdapterResult<()> {
-        let init_stmts = dbt_auth::generate_duckdb_init_sql(config);
-        if init_stmts.is_empty() {
+        let mut all_stmts = dbt_auth::generate_duckdb_init_sql(config);
+
+        // Append v2 catalog-driven ATTACH statements for DuckDB REST catalogs
+        all_stmts.extend(self.generate_v2_catalog_attach_stmts()?);
+
+        if all_stmts.is_empty() {
             return Ok(());
         }
         let mut conn = database
             .new_connection()
             .map_err(adbc_error_to_adapter_error)?;
-        for sql in &init_stmts {
+        for (idx, sql) in all_stmts.iter().enumerate() {
             let mut stmt = conn.new_statement().map_err(adbc_error_to_adapter_error)?;
             stmt.set_sql_query(sql)
                 .map_err(adbc_error_to_adapter_error)?;
             let _ = stmt.execute_update().map_err(|e| {
                 adbc_error_to_adapter_error(adbc_core::error::Error::with_message_and_status(
-                    format!("DuckDB init SQL failed on '{sql}': {e}"),
+                    format!("DuckDB init SQL statement {} failed: {e}", idx + 1),
                     adbc_core::error::Status::Internal,
                 ))
             })?;
         }
         Ok(())
     }
+
+    /// Build v2 catalog-driven `ATTACH IF NOT EXISTS` statements for DuckDB
+    /// iceberg REST catalogs.
+    ///
+    /// Reads the global catalogs v2 state, extracts every catalog that has a
+    /// `config.duckdb` block, and emits one ATTACH per catalog. Duplicate
+    /// aliases (after sanitization) are rejected with an error.
+    fn generate_v2_catalog_attach_stmts(&self) -> AdapterResult<Vec<String>> {
+        use crate::load_catalogs;
+        use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+
+        if !load_catalogs::fetch_use_catalogs_v2() {
+            return Ok(Vec::new());
+        }
+        let Some(catalogs) = load_catalogs::fetch_catalogs() else {
+            return Ok(Vec::new());
+        };
+        let Ok(view) = catalogs.view_v2() else {
+            return Ok(Vec::new());
+        };
+
+        let mut stmts = Vec::new();
+        let mut seen_aliases: HashMap<String, String> = HashMap::new(); // alias → catalog_name
+
+        for catalog in &view.catalogs {
+            if !matches!(
+                catalog.catalog_type,
+                V2CatalogType::Glue | V2CatalogType::IcebergRest
+            ) {
+                continue;
+            }
+            let Some(duckdb) = catalog.config_block("duckdb") else {
+                continue;
+            };
+
+            let (alias, stmt) = build_duckdb_catalog_attach_stmt(catalog, duckdb)?;
+            if let Some(prior) = seen_aliases.get(&alias) {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!(
+                        "Catalog '{}' duckdb attach alias '{alias}' collides with catalog '{prior}'",
+                        catalog.name
+                    ),
+                ));
+            }
+            seen_aliases.insert(alias.clone(), catalog.name.to_string());
+            stmts.push(stmt);
+        }
+
+        Ok(stmts)
+    }
+}
+
+fn build_duckdb_catalog_attach_stmt(
+    catalog: &CatalogSpecV2View<'_>,
+    duckdb: &dbt_yaml::Mapping,
+) -> AdapterResult<(String, String)> {
+    let alias = crate::catalog_relation::sanitize_duckdb_identifier(
+        duckdb_get_str(duckdb, "attach_as").unwrap_or(catalog.name),
+    );
+    if alias.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{}' duckdb attach alias is empty after sanitization",
+                catalog.name
+            ),
+        ));
+    }
+
+    let endpoint_type = duckdb_get_str(duckdb, "endpoint_type");
+    let mut opts = vec!["TYPE ICEBERG".to_string()];
+    if let Some(secret) = duckdb_get_str(duckdb, "secret") {
+        let secret = crate::catalog_relation::sanitize_duckdb_identifier(secret);
+        if !secret.is_empty() {
+            opts.push(format!("SECRET {secret}"));
+        }
+    }
+    if let Some(et) = endpoint_type {
+        opts.push(format!(
+            "ENDPOINT_TYPE {}",
+            crate::catalog_relation::sanitize_duckdb_identifier(et)
+        ));
+    }
+    if let Some(ep) = duckdb_get_str(duckdb, "endpoint") {
+        opts.push(format!("ENDPOINT '{}'", escape_duckdb_single_quotes(ep)));
+    }
+
+    for (key, sql_key) in [
+        ("default_region", "DEFAULT_REGION"),
+        ("default_schema", "DEFAULT_SCHEMA"),
+        ("max_table_staleness", "MAX_TABLE_STALENESS"),
+        ("authorization_type", "AUTHORIZATION_TYPE"),
+        ("access_delegation_mode", "ACCESS_DELEGATION_MODE"),
+    ] {
+        if let Some(val) = duckdb_get_str(duckdb, key) {
+            opts.push(format!("{sql_key} '{}'", escape_duckdb_single_quotes(val)));
+        }
+    }
+    for (key, sql_key) in [
+        ("support_nested_namespaces", "SUPPORT_NESTED_NAMESPACES"),
+        ("support_stage_create", "SUPPORT_STAGE_CREATE"),
+        ("purge_requested", "PURGE_REQUESTED"),
+    ] {
+        if let Some(val) = duckdb_get_bool(duckdb, key) {
+            opts.push(format!("{sql_key} {val}"));
+        }
+    }
+    if duckdb_get_bool(duckdb, "encode_entire_prefix").unwrap_or(false) {
+        opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
+    }
+
+    // For Iceberg REST catalogs, source is the warehouse name, not the endpoint
+    // URL. DuckDB's Glue shortcut uses ":" for the default account catalog.
+    let warehouse = match endpoint_type {
+        Some(et) if et.eq_ignore_ascii_case("GLUE") => {
+            duckdb_get_str(duckdb, "warehouse").unwrap_or(":")
+        }
+        _ => duckdb_get_str(duckdb, "warehouse").unwrap_or(catalog.name),
+    };
+    let source = format!("'{}'", escape_duckdb_single_quotes(warehouse));
+
+    Ok((
+        alias.clone(),
+        format!(
+            "ATTACH IF NOT EXISTS {source} AS {alias} ({})",
+            opts.join(", ")
+        ),
+    ))
+}
+
+fn duckdb_get_str<'a>(duckdb: &'a dbt_yaml::Mapping, key: &str) -> Option<&'a str> {
+    duckdb
+        .get(dbt_yaml::Value::from(key))
+        .and_then(|v| v.as_str())
+}
+
+fn duckdb_get_bool(duckdb: &dbt_yaml::Mapping, key: &str) -> Option<bool> {
+    duckdb
+        .get(dbt_yaml::Value::from(key))
+        .and_then(|v| v.as_bool())
+}
+
+/// Escape single quotes for SQL string literals (`'` → `''`).
+fn escape_duckdb_single_quotes(s: &str) -> String {
+    s.replace('\'', "''")
 }
 
 impl AdapterEngine for XdbcEngine {
@@ -510,5 +661,74 @@ Original error: {}",
             AdapterError::new(adbc_error_to_adapter_error(err).kind(), message)
         }
         _ => adbc_error_to_adapter_error(err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+
+    fn attach_stmt(yaml: &str) -> AdapterResult<String> {
+        let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
+        let dbt_yaml::Value::Mapping(repr, span) = parsed else {
+            panic!("expected top-level mapping");
+        };
+        let catalogs = DbtCatalogs::new(repr, span);
+        let view = catalogs.view_v2().expect("valid v2 view");
+        let catalog = view.catalogs.first().expect("one catalog");
+        let duckdb = catalog.config_block("duckdb").expect("duckdb block");
+        build_duckdb_catalog_attach_stmt(catalog, duckdb).map(|(_, stmt)| stmt)
+    }
+
+    #[test]
+    fn duckdb_catalog_attach_uses_profile_secret_reference_and_safe_options() {
+        let stmt = attach_stmt(
+            r#"
+catalogs:
+  - name: rest_catalog
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+        warehouse: "warehouse_name"
+        secret: "iceberg_secret"
+        attach_as: "iceberg_db"
+        default_schema: "demo"
+        max_table_staleness: "10 minutes"
+        support_nested_namespaces: false
+        support_stage_create: true
+        purge_requested: false
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            stmt,
+            "ATTACH IF NOT EXISTS 'warehouse_name' AS iceberg_db (TYPE ICEBERG, SECRET iceberg_secret, ENDPOINT 'https://rest.example.com', DEFAULT_SCHEMA 'demo', MAX_TABLE_STALENESS '10 minutes', SUPPORT_NESTED_NAMESPACES false, SUPPORT_STAGE_CREATE true, PURGE_REQUESTED false)"
+        );
+    }
+
+    #[test]
+    fn duckdb_glue_endpoint_type_defaults_to_current_account_catalog() {
+        let stmt = attach_stmt(
+            r#"
+catalogs:
+  - name: glue_catalog
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        secret: "aws_secret"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            stmt,
+            "ATTACH IF NOT EXISTS ':' AS glue_catalog (TYPE ICEBERG, SECRET aws_secret, ENDPOINT_TYPE GLUE)"
+        );
     }
 }

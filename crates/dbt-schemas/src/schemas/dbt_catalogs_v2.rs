@@ -23,8 +23,8 @@
 //!         base_location_subpath: <string>                         # optional
 //!
 //!   # type: glue
-//!   # supported platforms: snowflake
-//!   # a snowflake config block is required
+//!   # supported platforms: snowflake, duckdb
+//!   # at least one supported platform block is required
 //!   - name: glue_catalog
 //!     type: glue
 //!     table_format: iceberg
@@ -34,6 +34,20 @@
 //!         auto_refresh: <boolean>                                 # optional
 //!         max_data_extension_time_in_days: <u32 in 0..=90>        # optional
 //!         target_file_size: AUTO|16MB|32MB|64MB|128MB             # optional
+//!       duckdb:
+//!         endpoint|endpoint_type: <string>                        # exactly one required
+//!         warehouse: <string>                                     # optional, non-empty if present
+//!         secret: <string>                                        # optional DuckDB secret name from profiles.yml
+//!         attach_as: <string>                                     # optional, non-empty if present
+//!         default_region: <string>                                # optional, non-empty if present
+//!         default_schema: <string>                                # optional, non-empty if present
+//!         max_table_staleness: <string>                           # optional, non-empty if present
+//!         authorization_type: OAUTH2|SIGV4|NONE                   # optional
+//!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
+//!         support_nested_namespaces: <boolean>                    # optional
+//!         support_stage_create: <boolean>                         # optional
+//!         purge_requested: <boolean>                              # optional
+//!         encode_entire_prefix: <boolean>                         # optional
 //!
 //!   # type: unity
 //!   # supported platforms: snowflake, databricks
@@ -73,6 +87,33 @@
 //!         external_volume: gs://<bucket_name>                     # required, non-empty
 //!         file_format: parquet                                    # required
 //!         base_location_root: <path string>                       # optional, non-empty if present
+//!
+//!   # type: iceberg_rest
+//!   # supported platforms: snowflake, duckdb
+//!   # at least one supported platform block is required
+//!   - name: rest_catalog
+//!     type: iceberg_rest
+//!     table_format: iceberg
+//!     config:
+//!       snowflake:
+//!         catalog_database: <string>                              # required if snowflake block exists; non-empty
+//!         auto_refresh: <boolean>                                 # optional
+//!         max_data_extension_time_in_days: <u32 in 0..=90>        # optional
+//!         target_file_size: AUTO|16MB|32MB|64MB|128MB             # optional
+//!       duckdb:
+//!         endpoint|endpoint_type: <string>                        # exactly one required
+//!         warehouse: <string>                                     # optional, non-empty if present
+//!         secret: <string>                                        # optional DuckDB secret name from profiles.yml
+//!         attach_as: <string>                                     # optional, non-empty if present
+//!         default_region: <string>                                # optional, non-empty if present
+//!         default_schema: <string>                                # optional, non-empty if present
+//!         max_table_staleness: <string>                           # optional, non-empty if present
+//!         authorization_type: OAUTH2|SIGV4|NONE                   # optional
+//!         access_delegation_mode: VENDED_CREDENTIALS|NONE         # optional
+//!         support_nested_namespaces: <boolean>                    # optional
+//!         support_stage_create: <boolean>                         # optional
+//!         purge_requested: <boolean>                              # optional
+//!         encode_entire_prefix: <boolean>                         # optional
 //! ```
 //!
 //! Type-specific validation decides which platform blocks are supported for a particular
@@ -309,13 +350,9 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 
         if let Some(value) = catalog.get(yml::Value::from("config")) {
             let config = require_mapping(value, &format!("catalogs[{idx}].config"))?;
-            check_unknown_keys(
-                config,
-                &["snowflake", "databricks", "bigquery"],
-                "catalogs[].config",
-            )?;
+            check_unknown_keys(config, ALL_V2_PLATFORMS, "catalogs[].config")?;
 
-            for platform in ["snowflake", "databricks", "bigquery"] {
+            for &platform in ALL_V2_PLATFORMS {
                 if let Some(platform_value) = config.get(yml::Value::from(platform)) {
                     let _ = require_mapping(
                         platform_value,
@@ -577,18 +614,40 @@ const UNITY_DATABRICKS_KEYS: &[&str] = &["file_format", "location_root", "use_un
 const HIVE_METASTORE_DATABRICKS_KEYS: &[&str] = &["file_format"];
 
 const BIGLAKE_BIGQUERY_KEYS: &[&str] = &["external_volume", "file_format", "base_location_root"];
+const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb"];
+
+// Keys map to safe DuckDB ATTACH options for iceberg REST catalogs.
+// Credential-bearing values belong in profiles.yml `secrets`; catalogs.yml only
+// stores `secret`, the name of the DuckDB secret to reference during ATTACH.
+// See: https://duckdb.org/docs/stable/core_extensions/iceberg/iceberg_rest_catalogs#attach-options
+const DUCKDB_KEYS: &[&str] = &[
+    "endpoint",
+    "endpoint_type",
+    "warehouse",
+    "secret",
+    "attach_as",
+    "default_region",
+    "default_schema",
+    "max_table_staleness",
+    "authorization_type",
+    "access_delegation_mode",
+    "support_nested_namespaces",
+    "support_stage_create",
+    "purge_requested",
+    "encode_entire_prefix",
+];
 
 fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     let catalog_platforms = match catalog.catalog_type {
         V2CatalogType::Horizon => &["snowflake"][..],
-        V2CatalogType::Glue => &["snowflake"],
-        V2CatalogType::IcebergRest => &["snowflake"],
+        V2CatalogType::Glue => &["snowflake", "duckdb"],
+        V2CatalogType::IcebergRest => &["snowflake", "duckdb"],
         V2CatalogType::Unity => &["snowflake", "databricks"],
         V2CatalogType::HiveMetastore => &["databricks"],
         V2CatalogType::BiglakeMetastore => &["bigquery"],
     };
 
-    for platform in ["snowflake", "databricks", "bigquery"] {
+    for &platform in ALL_V2_PLATFORMS {
         if catalog.config_block(platform).is_some() && !catalog_platforms.contains(&platform) {
             return err!(
                 code => ErrorCode::InvalidConfig,
@@ -692,57 +751,156 @@ fn parse_horizon_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     Ok(())
 }
 
-fn parse_iceberg_rest_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
-    validate_platform_support(catalog)?;
-    if catalog.table_format != V2TableFormat::Iceberg {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("table_format").cloned(),
-            "Catalog '{}' type 'iceberg_rest' requires table_format='iceberg'",
-            catalog.name
-        );
-    }
-    let Some(snowflake) = catalog.config_block("snowflake") else {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' type 'iceberg_rest' requires config.snowflake",
-            catalog.name
-        );
-    };
+fn validate_duckdb_config(
+    duckdb: &yml::Mapping,
+    catalog: &CatalogSpecV2View<'_>,
+    type_name: &str,
+) -> FsResult<()> {
     check_unknown_keys(
-        snowflake,
-        GLUE_SNOWFLAKE_KEYS,
-        "catalogs[].config.snowflake (iceberg_rest)",
+        duckdb,
+        DUCKDB_KEYS,
+        &format!("catalogs[].config.duckdb ({})", type_name),
     )?;
-    let Some(catalog_database) = get_str(snowflake, "catalog_database")? else {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' iceberg_rest/snowflake config requires 'catalog_database'",
-            catalog.name
-        );
-    };
-    if catalog_database.is_empty_or_whitespace() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "catalog_database").cloned(),
-            "Catalog '{}' iceberg_rest/snowflake 'catalog_database' must be non-empty",
-            catalog.name
-        );
+
+    let has_endpoint = get_str(duckdb, "endpoint")?;
+    let has_endpoint_type = get_str(duckdb, "endpoint_type")?;
+
+    // endpoint and endpoint_type are mutually exclusive; exactly one is required
+    match (has_endpoint, has_endpoint_type) {
+        (None, None) => {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => catalog.field_span("type").cloned(),
+                "Catalog '{}' {}/duckdb config requires 'endpoint' or 'endpoint_type'",
+                catalog.name,
+                type_name
+            );
+        }
+        (Some(ep), Some(_)) if !ep.is_empty_or_whitespace() => {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                "Catalog '{}' {}/duckdb 'endpoint' and 'endpoint_type' are mutually exclusive",
+                catalog.name,
+                type_name
+            );
+        }
+        (Some(ep), _) if ep.is_empty_or_whitespace() => {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "endpoint").cloned(),
+                "Catalog '{}' {}/duckdb 'endpoint' must be non-empty",
+                catalog.name,
+                type_name
+            );
+        }
+        (_, Some(et)) => {
+            let val = et.trim();
+            if !val.eq_ignore_ascii_case("GLUE") && !val.eq_ignore_ascii_case("S3_TABLES") {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                    "Catalog '{}' {}/duckdb 'endpoint_type' must be 'GLUE' or 'S3_TABLES'",
+                    catalog.name,
+                    type_name
+                );
+            }
+            if val.eq_ignore_ascii_case("S3_TABLES") {
+                let Some(warehouse) = get_str(duckdb, "warehouse")? else {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                        "Catalog '{}' {}/duckdb endpoint_type='S3_TABLES' requires 'warehouse'",
+                        catalog.name,
+                        type_name
+                    );
+                };
+                if warehouse.is_empty_or_whitespace() {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
+                        "Catalog '{}' {}/duckdb 'warehouse' must be non-empty",
+                        catalog.name,
+                        type_name
+                    );
+                }
+            }
+        }
+        _ => {}
     }
-    if let Some(target_file_size) = get_str(snowflake, "target_file_size")?
-        && !is_valid_target_file_size(target_file_size)
-    {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "target_file_size").cloned(),
-            "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
-            target_file_size
-        );
+
+    // All remaining string fields: optional, but non-empty if present
+    for key in [
+        "warehouse",
+        "secret",
+        "attach_as",
+        "default_region",
+        "default_schema",
+        "max_table_staleness",
+    ] {
+        if let Some(val) = get_str(duckdb, key)?
+            && val.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, key).cloned(),
+                "Catalog '{}' {}/duckdb '{}' must be non-empty",
+                catalog.name,
+                type_name,
+                key
+            );
+        }
     }
-    validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
-    validate_optional_bool(snowflake, "auto_refresh")?;
+
+    // authorization_type: constrained enum
+    if let Some(auth_type) = get_str(duckdb, "authorization_type")? {
+        if has_endpoint_type.is_some() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
+                "Catalog '{}' {}/duckdb 'authorization_type' cannot be combined with 'endpoint_type'",
+                catalog.name,
+                type_name
+            );
+        }
+        let val = auth_type.trim();
+        if !val.eq_ignore_ascii_case("OAUTH2")
+            && !val.eq_ignore_ascii_case("SIGV4")
+            && !val.eq_ignore_ascii_case("NONE")
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
+                "Catalog '{}' {}/duckdb 'authorization_type' must be 'OAUTH2', 'SIGV4', or 'NONE'",
+                catalog.name,
+                type_name
+            );
+        }
+    }
+
+    // access_delegation_mode: constrained enum
+    if let Some(mode) = get_str(duckdb, "access_delegation_mode")? {
+        let val = mode.trim();
+        if !val.eq_ignore_ascii_case("VENDED_CREDENTIALS") && !val.eq_ignore_ascii_case("NONE") {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "access_delegation_mode").cloned(),
+                "Catalog '{}' {}/duckdb 'access_delegation_mode' must be 'VENDED_CREDENTIALS' or 'NONE'",
+                catalog.name,
+                type_name
+            );
+        }
+    }
+
+    for key in [
+        "support_nested_namespaces",
+        "support_stage_create",
+        "purge_requested",
+        "encode_entire_prefix",
+    ] {
+        validate_optional_bool(duckdb, key)?;
+    }
+
     Ok(())
 }
 
@@ -757,48 +915,55 @@ fn parse_glue_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         );
     }
 
-    let Some(snowflake) = catalog.config_block("snowflake") else {
+    if catalog.config_block("snowflake").is_none() && catalog.config_block("duckdb").is_none() {
         return err!(
             code => ErrorCode::InvalidConfig,
             hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' type 'glue' requires config.snowflake",
+            "Catalog '{}' of type 'glue' requires at least one config block: snowflake or duckdb",
             catalog.name
         );
-    };
-    check_unknown_keys(
-        snowflake,
-        GLUE_SNOWFLAKE_KEYS,
-        "catalogs[].config.snowflake (glue)",
-    )?;
+    }
 
-    let Some(catalog_database) = get_str(snowflake, "catalog_database")? else {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => catalog.field_span("type").cloned(),
-            "Catalog '{}' glue/snowflake config requires 'catalog_database'",
-            catalog.name
-        );
-    };
-    if catalog_database.is_empty_or_whitespace() {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "catalog_database").cloned(),
-            "Catalog '{}' glue/snowflake 'catalog_database' must be non-empty",
-            catalog.name
-        );
+    if let Some(snowflake) = catalog.config_block("snowflake") {
+        check_unknown_keys(
+            snowflake,
+            GLUE_SNOWFLAKE_KEYS,
+            "catalogs[].config.snowflake (glue)",
+        )?;
+
+        let Some(catalog_database) = get_str(snowflake, "catalog_database")? else {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => catalog.field_span("type").cloned(),
+                "Catalog '{}' glue/snowflake config requires 'catalog_database'",
+                catalog.name
+            );
+        };
+        if catalog_database.is_empty_or_whitespace() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "catalog_database").cloned(),
+                "Catalog '{}' glue/snowflake 'catalog_database' must be non-empty",
+                catalog.name
+            );
+        }
+        if let Some(target_file_size) = get_str(snowflake, "target_file_size")?
+            && !is_valid_target_file_size(target_file_size)
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "target_file_size").cloned(),
+                "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
+                target_file_size
+            );
+        }
+        validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+        validate_optional_bool(snowflake, "auto_refresh")?;
     }
-    if let Some(target_file_size) = get_str(snowflake, "target_file_size")?
-        && !is_valid_target_file_size(target_file_size)
-    {
-        return err!(
-            code => ErrorCode::InvalidConfig,
-            hacky_yml_loc => field_span(snowflake, "target_file_size").cloned(),
-            "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
-            target_file_size
-        );
+
+    if let Some(duckdb) = catalog.config_block("duckdb") {
+        validate_duckdb_config(duckdb, catalog, "glue")?;
     }
-    validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
-    validate_optional_bool(snowflake, "auto_refresh")?;
 
     Ok(())
 }
@@ -1043,6 +1208,69 @@ fn parse_biglake_metastore_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
             "Catalog '{}' BigLake base_location_root cannot be blank",
             catalog.name
         );
+    }
+
+    Ok(())
+}
+
+fn parse_iceberg_rest_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
+    validate_platform_support(catalog)?;
+    if catalog.table_format != V2TableFormat::Iceberg {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("table_format").cloned(),
+            "Catalog '{}' type 'iceberg_rest' requires table_format='iceberg'",
+            catalog.name
+        );
+    }
+
+    if catalog.config_block("snowflake").is_none() && catalog.config_block("duckdb").is_none() {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' of type 'iceberg_rest' requires at least one config block: snowflake or duckdb",
+            catalog.name
+        );
+    }
+
+    if let Some(snowflake) = catalog.config_block("snowflake") {
+        check_unknown_keys(
+            snowflake,
+            GLUE_SNOWFLAKE_KEYS,
+            "catalogs[].config.snowflake (iceberg_rest)",
+        )?;
+        let Some(catalog_database) = get_str(snowflake, "catalog_database")? else {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => catalog.field_span("type").cloned(),
+                "Catalog '{}' iceberg_rest/snowflake config requires 'catalog_database'",
+                catalog.name
+            );
+        };
+        if catalog_database.is_empty_or_whitespace() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "catalog_database").cloned(),
+                "Catalog '{}' iceberg_rest/snowflake 'catalog_database' must be non-empty",
+                catalog.name
+            );
+        }
+        if let Some(target_file_size) = get_str(snowflake, "target_file_size")?
+            && !is_valid_target_file_size(target_file_size)
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(snowflake, "target_file_size").cloned(),
+                "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
+                target_file_size
+            );
+        }
+        validate_u32_range(snowflake, "max_data_extension_time_in_days", 90)?;
+        validate_optional_bool(snowflake, "auto_refresh")?;
+    }
+
+    if let Some(duckdb) = catalog.config_block("duckdb") {
+        validate_duckdb_config(duckdb, catalog, "iceberg_rest")?;
     }
 
     Ok(())
@@ -1377,6 +1605,21 @@ catalogs:
     }
 
     #[test]
+    fn iceberg_rest_snowflake_only_still_valid() {
+        let yaml = r#"
+catalogs:
+  - name: rest_sf
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "MY_DB"
+        auto_refresh: true
+"#;
+        parse_and_validate(yaml).expect("iceberg_rest + snowflake should validate");
+    }
+
+    #[test]
     fn unity_databricks_parquet_with_use_uniform_is_rejected() {
         let yaml = r#"
 catalogs:
@@ -1475,6 +1718,492 @@ catalogs:
         assert!(
             msg.contains("Unknown key 'file_format' in catalog specification"),
             "unexpected error: {msg}"
+        );
+    }
+
+    // ===== DuckDB + IcebergRest tests =====
+
+    #[test]
+    fn glue_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: glue_duck
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://glue.us-east-1.amazonaws.com"
+"#;
+        parse_and_validate(yaml).expect("glue + duckdb should validate");
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://my-iceberg-rest.example.com"
+        secret: "my_secret"
+        attach_as: "my_catalog"
+"#;
+        parse_and_validate(yaml).expect("iceberg_rest + duckdb should validate");
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_and_snowflake_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: rest_mixed
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "MY_DB"
+      duckdb:
+        endpoint: "https://my-iceberg-rest.example.com"
+"#;
+        parse_and_validate(yaml).expect("iceberg_rest + snowflake + duckdb should validate");
+    }
+
+    #[test]
+    fn glue_snowflake_only_still_valid() {
+        let yaml = r#"
+catalogs:
+  - name: glue_sf
+    type: glue
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "MY_CLD"
+        auto_refresh: true
+"#;
+        parse_and_validate(yaml).expect("glue + snowflake should still validate");
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_missing_endpoint() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        secret: "my_secret"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("'endpoint'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_blank_endpoint() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "   "
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("'endpoint' must be non-empty"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_blank_secret() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://my-rest.example.com"
+        secret: ""
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("'secret' must be non-empty"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn iceberg_rest_duckdb_blank_attach_as() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://my-rest.example.com"
+        attach_as: ""
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("'attach_as' must be non-empty"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn unity_duckdb_v2_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: unity_duck
+    type: unity
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("does not support duckdb on the unity"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // DuckDB config: endpoint_type
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn duckdb_endpoint_type_glue_valid() {
+        let yaml = r#"
+catalogs:
+  - name: glue_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+"#;
+        parse_and_validate(yaml).expect("endpoint_type=GLUE should validate");
+    }
+
+    #[test]
+    fn duckdb_endpoint_type_s3_tables_valid() {
+        let yaml = r#"
+catalogs:
+  - name: s3t_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: S3_TABLES
+        warehouse: "arn:aws:s3tables:us-east-1:123456789012:bucket/example"
+"#;
+        parse_and_validate(yaml).expect("endpoint_type=S3_TABLES should validate");
+    }
+
+    #[test]
+    fn duckdb_endpoint_type_invalid_value() {
+        let yaml = r#"
+catalogs:
+  - name: bad_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: INVALID
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("'GLUE' or 'S3_TABLES'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_endpoint_and_endpoint_type_mutual_exclusion() {
+        let yaml = r#"
+catalogs:
+  - name: both_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        endpoint_type: GLUE
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("mutually exclusive"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_s3_tables_endpoint_type_requires_warehouse() {
+        let yaml = r#"
+catalogs:
+  - name: s3t_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: S3_TABLES
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("requires 'warehouse'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_neither_endpoint_nor_endpoint_type() {
+        let yaml = r#"
+catalogs:
+  - name: empty_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        secret: "my_secret"
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("'endpoint' or 'endpoint_type'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // DuckDB config: authorization_type, access_delegation_mode
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn duckdb_authorization_type_valid() {
+        for auth_type in ["OAUTH2", "SIGV4", "NONE"] {
+            let yaml = format!(
+                r#"
+catalogs:
+  - name: auth_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        authorization_type: {auth_type}
+"#
+            );
+            parse_and_validate(&yaml)
+                .unwrap_or_else(|e| panic!("authorization_type={auth_type} should validate: {e}"));
+        }
+    }
+
+    #[test]
+    fn duckdb_authorization_type_invalid() {
+        let yaml = r#"
+catalogs:
+  - name: auth_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        authorization_type: BEARER
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("'OAUTH2', 'SIGV4', or 'NONE'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_authorization_type_cannot_combine_with_endpoint_type() {
+        let yaml = r#"
+catalogs:
+  - name: auth_cat
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        authorization_type: SIGV4
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("cannot be combined with 'endpoint_type'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_access_delegation_mode_valid() {
+        for mode in ["VENDED_CREDENTIALS", "NONE"] {
+            let yaml = format!(
+                r#"
+catalogs:
+  - name: deleg_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        access_delegation_mode: {mode}
+"#
+            );
+            parse_and_validate(&yaml)
+                .unwrap_or_else(|e| panic!("access_delegation_mode={mode} should validate: {e}"));
+        }
+    }
+
+    #[test]
+    fn duckdb_access_delegation_mode_invalid() {
+        let yaml = r#"
+catalogs:
+  - name: deleg_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        access_delegation_mode: REMOTE
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("'VENDED_CREDENTIALS' or 'NONE'"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // DuckDB config: full config with all optional keys
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn duckdb_full_config_all_optional_keys() {
+        let yaml = r#"
+catalogs:
+  - name: full_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://my-catalog.example.com"
+        warehouse: "warehouse_name"
+        secret: "my_secret"
+        attach_as: "my_db"
+        default_region: "us-east-1"
+        default_schema: "demo"
+        max_table_staleness: "10 minutes"
+        authorization_type: OAUTH2
+        access_delegation_mode: VENDED_CREDENTIALS
+        support_nested_namespaces: true
+        support_stage_create: false
+        purge_requested: true
+        encode_entire_prefix: true
+"#;
+        parse_and_validate(yaml).expect("full config should validate");
+    }
+
+    #[test]
+    fn duckdb_credential_values_belong_in_profile_secrets() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        client_secret: "actual-secret-value"
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error for credential-bearing key");
+        assert!(
+            format!("{res:?}").contains("client_secret"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_boolean_attach_options_validate_type() {
+        let yaml = r#"
+catalogs:
+  - name: rest_duck
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        support_stage_create: "yes"
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error for non-boolean attach option");
+        assert!(
+            format!("{res:?}").contains("support_stage_create"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_unknown_key_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: unk_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        bogus_key: "value"
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error for unknown key");
+        assert!(
+            format!("{res:?}").contains("bogus_key"),
+            "unexpected: {res:?}"
+        );
+    }
+
+    #[test]
+    fn duckdb_blank_warehouse_invalid() {
+        let yaml = r#"
+catalogs:
+  - name: bad_cat
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://example.com"
+        warehouse: "   "
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error");
+        assert!(
+            format!("{res:?}").contains("'warehouse' must be non-empty"),
+            "unexpected: {res:?}"
         );
     }
 }

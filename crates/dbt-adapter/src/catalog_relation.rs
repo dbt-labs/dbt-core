@@ -18,6 +18,15 @@ use crate::load_catalogs;
 
 mod catalog_relation_v2;
 
+/// Keep only ASCII alphanumeric and underscore characters (SQL identifier safety).
+/// Used for DuckDB ATTACH aliases so that the routing database name matches the
+/// attached alias exactly.
+pub(crate) fn sanitize_duckdb_identifier(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect()
+}
+
 const BIGQUERY_INFO_SCHEMA: &str = "INFO_SCHEMA";
 const BIGQUERY_DEFAULT_TABLE_FORMAT: &str = "default";
 const BIGQUERY_DEFAULT_FILE_FORMAT: &str = "default";
@@ -57,6 +66,7 @@ const ALLOWED_TABLE_FORMATS_SNOWFLAKE: [&str; 2] = [DEFAULT_TABLE_FORMAT, ICEBER
 const ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE: &str = "DEFAULT|ICEBERG";
 
 const SNOWFLAKE_ATTR: &str = "snowflake_attr";
+const DUCKDB_ATTR: &str = "duckdb_attr";
 const ADAPTER_PROP_CATALOG_DATABASE: &str = "catalog_database";
 const ADAPTER_PROP_CATALOG_LINKED_DATABASE_TYPE: &str = "catalog_linked_database_type";
 
@@ -147,6 +157,7 @@ impl CatalogRelation {
                 Self::from_model_config_and_catalogs_snowflake(model, catalogs)
             }
             AdapterType::Bigquery => Self::from_model_config_and_catalogs_bigquery(model, catalogs),
+            AdapterType::DuckDB => Ok(Self::default_catalog_relation_duckdb()),
             _ => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
                 format!("build_relation_catalog cannot be invoked by an adapter {adapter_type:?}"),
@@ -217,6 +228,21 @@ impl CatalogRelation {
             external_volume: None,
             base_location: None,
             file_format: Some(BIGQUERY_DEFAULT_FILE_FORMAT.to_string()),
+        }
+    }
+
+    pub fn default_catalog_relation_duckdb() -> CatalogRelation {
+        CatalogRelation {
+            adapter_type: AdapterType::DuckDB,
+            catalog_name: None,
+            integration_name: None,
+            catalog_type: "duckdb".to_string(),
+            table_format: "default".to_string(),
+            file_format: None,
+            external_volume: None,
+            base_location: None,
+            adapter_properties: BTreeMap::new(),
+            is_transient: None,
         }
     }
 
@@ -1147,6 +1173,7 @@ impl CatalogRelation {
             AdapterType::Bigquery => BIGQUERY_ATTR,
             AdapterType::Databricks => DATABRICKS_ATTR,
             AdapterType::Snowflake => SNOWFLAKE_ATTR,
+            AdapterType::DuckDB => DUCKDB_ATTR,
             _ => return None,
         };
         let model_config = if let Ok(adapter_attr) = model.get_attr(adapter_attr)
@@ -1186,6 +1213,7 @@ impl CatalogRelation {
             AdapterType::Bigquery => BIGQUERY_ATTR,
             AdapterType::Databricks => DATABRICKS_ATTR,
             AdapterType::Snowflake => SNOWFLAKE_ATTR,
+            AdapterType::DuckDB => DUCKDB_ATTR,
             _ => return None,
         };
         let model_config = if let Ok(adapter_attr) = model.get_attr(adapter_attr)
@@ -1456,6 +1484,9 @@ impl Object for CatalogRelation {
             "auto_refresh" => Self::map_properties_bool(&self.adapter_properties, "auto_refresh"),
             "catalog_linked_database" => {
                 Self::map_properties_str(&self.adapter_properties, "catalog_linked_database")
+            }
+            "attached_database" => {
+                Self::map_properties_str(&self.adapter_properties, "attached_database")
             }
             "catalog_linked_database_type" => Self::map_properties_str(
                 &self.adapter_properties,

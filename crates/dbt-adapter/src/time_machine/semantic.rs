@@ -132,7 +132,8 @@ impl SemanticCategory {
             | "external_root"
             | "external_write_options"
             | "external_read_location"
-            | "get_temp_relation_path" => SemanticCategory::Pure,
+            | "get_temp_relation_path"
+            | "table_format" => SemanticCategory::Pure,
 
             _ => {
                 debug_assert!(

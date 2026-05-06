@@ -108,6 +108,10 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 Some(catalog_name) => catalog_name,
             }
         }
+        AdapterType::DuckDB => match model_catalog_name(model, AdapterType::DuckDB) {
+            None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
+            Some(catalog_name) => catalog_name,
+        },
         _ => Err(AdapterError::new(
             AdapterErrorKind::Internal,
             format!("build_relation_catalog cannot be invoked by an adapter {adapter_type:?}"),
@@ -161,6 +165,17 @@ pub(super) fn from_model_config_and_catalogs_v2(
         (AdapterType::Bigquery, V2CatalogType::BiglakeMetastore) => {
             CatalogRelation::build_bigquery_biglake_with_catalogs_v2(model, catalog, &catalog_name)
         }
+        (AdapterType::DuckDB, V2CatalogType::Glue)
+        | (AdapterType::DuckDB, V2CatalogType::IcebergRest) => {
+            CatalogRelation::build_duckdb_with_catalogs_v2(model, catalog, &catalog_name)
+        }
+        (AdapterType::DuckDB, other) => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue' and 'iceberg_rest'",
+                other.as_str()
+            ),
+        )),
         (AdapterType::Databricks, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
@@ -729,6 +744,61 @@ impl CatalogRelation {
             file_format: Some(file_format),
         })
     }
+
+    fn build_duckdb_with_catalogs_v2(
+        _model: &Value,
+        catalog: &CatalogSpecV2View<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let duckdb = require_platform_block(catalog, catalog_name, "duckdb")?;
+
+        let table_format = uppercase_table_format(catalog);
+
+        let endpoint = get_yaml_str(duckdb, "endpoint").map(|s| s.to_string());
+        let endpoint_type = get_yaml_str(duckdb, "endpoint_type").map(|s| s.to_string());
+        let warehouse = get_yaml_str(duckdb, "warehouse").map(|s| s.to_string());
+        let secret = get_yaml_str(duckdb, "secret").map(|s| s.to_string());
+        let attach_as = get_yaml_str(duckdb, "attach_as").map(|s| s.to_string());
+        // Use same sanitization as ATTACH SQL generation so routing and attachment stay in sync
+        let alias = sanitize_duckdb_identifier(attach_as.as_deref().unwrap_or(catalog_name));
+
+        if endpoint.is_none() && endpoint_type.is_none() {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "Catalog '{catalog_name}' duckdb config requires 'endpoint' or 'endpoint_type'"
+                ),
+            ));
+        }
+
+        let mut adapter_properties = BTreeMap::new();
+        if let Some(endpoint) = endpoint {
+            adapter_properties.insert("endpoint".to_string(), endpoint);
+        }
+        if let Some(endpoint_type) = endpoint_type {
+            adapter_properties.insert("endpoint_type".to_string(), endpoint_type);
+        }
+        if let Some(warehouse) = warehouse {
+            adapter_properties.insert("warehouse".to_string(), warehouse);
+        }
+        if let Some(ref secret) = secret {
+            adapter_properties.insert("secret".to_string(), secret.clone());
+        }
+        adapter_properties.insert("attached_database".to_string(), alias);
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::DuckDB,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: catalog.catalog_type.as_str().to_string(),
+            table_format,
+            file_format: None,
+            external_volume: None,
+            base_location: None,
+            adapter_properties,
+            is_transient: None,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -743,6 +813,7 @@ mod tests {
             AdapterType::Snowflake => "snowflake_attr".to_string(),
             AdapterType::Bigquery => "bigquery_attr".to_string(),
             AdapterType::Databricks => "databricks_attr".to_string(),
+            AdapterType::DuckDB => "duckdb_attr".to_string(),
             _ => panic!("Not yet supported"),
         }
     }
@@ -1240,5 +1311,228 @@ catalogs:
                 "Snowflake v2 unity does not support model field 'external_volume' yet."
             ));
         }
+    }
+
+    // ===== DuckDB v2 tests =====
+
+    #[test]
+    fn duckdb_no_catalog_returns_default() {
+        // DuckDB with no catalog_name should return a default relation
+        // We need *some* catalogs.yml for the v2 path, but DuckDB with no
+        // catalog_name should early-exit before looking it up.
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_rest
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+"#,
+        );
+        let conf = json!({});
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap();
+
+        assert!(r.catalog_name.is_none());
+        assert!(r.integration_name.is_none());
+        assert_eq!(r.catalog_type, "duckdb");
+        assert_eq!(r.table_format, "default");
+        assert!(r.file_format.is_none());
+        assert!(r.adapter_properties.is_empty());
+    }
+
+    #[test]
+    fn duckdb_catalog_name_without_catalogs_yml_errors() {
+        // catalog_name specified but no matching catalog in catalogs.yml -> error
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: other_catalog
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://glue.example.com"
+"#,
+        );
+        let conf = json!({ "catalog_name": "nonexistent" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let err = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap_err();
+
+        assert!(format!("{err}").contains("Catalog 'nonexistent' not found in catalogs.yml"));
+    }
+
+    #[test]
+    fn duckdb_v2_glue_catalog_builds_relation() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://glue.example.com"
+        secret: "my_secret"
+        attach_as: "glue_db"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_glue" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("my_glue"));
+        assert!(r.integration_name.is_none());
+        assert_eq!(r.catalog_type, "glue");
+        assert_eq!(r.table_format, ICEBERG_TABLE_FORMAT);
+        assert!(r.file_format.is_none());
+        assert_eq!(
+            r.adapter_properties.get("endpoint").map(|s| s.as_str()),
+            Some("https://glue.example.com")
+        );
+        assert_eq!(
+            r.adapter_properties.get("secret").map(|s| s.as_str()),
+            Some("my_secret")
+        );
+        assert_eq!(
+            r.adapter_properties
+                .get("attached_database")
+                .map(|s| s.as_str()),
+            Some("glue_db")
+        );
+    }
+
+    #[test]
+    fn duckdb_v2_iceberg_rest_catalog_builds_relation() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_rest
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_rest" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("my_rest"));
+        assert_eq!(r.catalog_type, "iceberg_rest");
+        assert_eq!(r.table_format, ICEBERG_TABLE_FORMAT);
+        assert_eq!(
+            r.adapter_properties.get("endpoint").map(|s| s.as_str()),
+            Some("https://rest.example.com")
+        );
+        // When no attach_as, alias defaults to catalog_name
+        assert_eq!(
+            r.adapter_properties
+                .get("attached_database")
+                .map(|s| s.as_str()),
+            Some("my_rest")
+        );
+        // No secret specified
+        assert!(!r.adapter_properties.contains_key("secret"));
+    }
+
+    #[test]
+    fn duckdb_v2_glue_catalog_builds_relation_with_endpoint_type() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: "GLUE"
+        warehouse: "123456789012"
+        attach_as: "glue_db"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_glue" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap();
+
+        assert_eq!(
+            r.adapter_properties
+                .get("endpoint_type")
+                .map(|s| s.as_str()),
+            Some("GLUE")
+        );
+        assert_eq!(
+            r.adapter_properties.get("warehouse").map(|s| s.as_str()),
+            Some("123456789012")
+        );
+        assert!(!r.adapter_properties.contains_key("endpoint"));
+        assert_eq!(
+            r.adapter_properties
+                .get("attached_database")
+                .map(|s| s.as_str()),
+            Some("glue_db")
+        );
+    }
+
+    #[test]
+    fn duckdb_v2_unsupported_catalog_type_errors() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_horizon
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: "EV"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_horizon" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let err = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap_err();
+
+        assert!(
+            format!("{err}").contains("DuckDB v2 mapping supports only 'glue' and 'iceberg_rest'")
+        );
+    }
+
+    #[test]
+    fn duckdb_v2_catalog_name_none_returns_default() {
+        // DuckDB with catalog_name = "none" should return default
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_rest
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+"#,
+        );
+        let conf = json!({ "catalog_name": "none" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+            .unwrap();
+
+        assert!(r.catalog_name.is_none());
+        assert_eq!(r.catalog_type, "duckdb");
+        assert_eq!(r.table_format, "default");
     }
 }

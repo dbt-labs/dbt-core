@@ -374,6 +374,28 @@ impl AdapterImpl {
             return TableFormat::DuckLake;
         }
 
+        // Check v2 catalogs first: if this database matches an attached catalog,
+        // return the appropriate table format so that macros can skip CASCADE / ALTER TABLE RENAME.
+        if load_catalogs::fetch_use_catalogs_v2() {
+            if let Some(catalogs) = load_catalogs::fetch_catalogs() {
+                if let Ok(view) = catalogs.view_v2() {
+                    for catalog in &view.catalogs {
+                        if let Some(duckdb_block) = catalog.config_block("duckdb") {
+                            let alias = duckdb_block
+                                .get(dbt_yaml::Value::from("attach_as"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(catalog.name);
+                            let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
+                            if alias.eq_ignore_ascii_case(database) {
+                                return TableFormat::Iceberg;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Legacy path: check profile-level attach: entries
         let Some(attach_val) = self.get_db_config_value("attach") else {
             return TableFormat::Default;
         };
@@ -405,6 +427,7 @@ impl AdapterImpl {
                 return TableFormat::DuckLake;
             }
         }
+
         TableFormat::Default
     }
 
