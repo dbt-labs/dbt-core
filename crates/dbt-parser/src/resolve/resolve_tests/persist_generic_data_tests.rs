@@ -1326,9 +1326,10 @@ fn collect_versioned_model_tests(
                 }
             }
 
-            if !column_tests.is_empty() {
-                version_config.column_tests = Some(column_tests);
-            }
+            // Always assign even when empty: a version with `columns` that excludes
+            // all testable columns should produce zero tests, not fall back to the
+            // base config (which still carries the excluded column tests from the clone).
+            version_config.column_tests = Some(column_tests);
         } else {
             // No columns section at all - inherit all column tests
             version_config.column_tests = base_test_config.column_tests.clone();
@@ -1505,7 +1506,7 @@ mod tests {
     use super::*;
     use dbt_schemas::schemas::data_tests::{CustomTestInner, CustomTestMultiKey};
     use serde_json::Value;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
     #[test]
     fn test_no_double_quoting() {
@@ -1782,6 +1783,107 @@ mod tests {
         assert!(
             !test_name_no_vars.contains(set_var_name),
             "Set var name should be truncated from the final test name"
+        );
+    }
+
+    #[test]
+    fn test_version_column_exclude_suppresses_inherited_tests() {
+        // Regression test for https://github.com/dbt-labs/dbt-fusion/issues/1666
+        //
+        // When a versioned model uses `columns.exclude` to omit a column from a
+        // specific version, any tests defined on that column in the base model
+        // must NOT appear in that version's column_tests.
+        //
+        // The bug: after filtering, if every testable column is excluded the
+        // resulting BTreeMap is empty.  The old guard `if !is_empty()` skipped
+        // the assignment, leaving the cloned base config (with all tests) intact.
+
+        use dbt_schemas::schemas::common::Versions;
+        use dbt_yaml::{Mapping, Verbatim};
+
+        // Build a base config: one column "cost_center_bkey" with a `unique` test.
+        let unique_test = DataTests::String(Spanned::from("unique".to_string()));
+        let mut base_col_tests = BTreeMap::new();
+        base_col_tests.insert("cost_center_bkey".to_string(), (false, vec![unique_test]));
+        let base_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "cost_centers".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: Some(base_col_tests),
+            source_name: None,
+        };
+
+        // Helper: build `columns` YAML value for a version spec.
+        let make_columns_value = |include: &str, exclude: Vec<&str>| -> dbt_yaml::Value {
+            let mut entry = Mapping::new();
+            entry.insert(
+                dbt_yaml::Value::string("include".to_string()),
+                dbt_yaml::Value::string(include.to_string()),
+            );
+            if !exclude.is_empty() {
+                let seq = exclude
+                    .iter()
+                    .map(|s| dbt_yaml::Value::string((*s).to_string()))
+                    .collect();
+                entry.insert(
+                    dbt_yaml::Value::string("exclude".to_string()),
+                    dbt_yaml::Value::sequence(seq),
+                );
+            }
+            dbt_yaml::Value::sequence(vec![dbt_yaml::Value::mapping(entry)])
+        };
+
+        let make_version = |v: i64, columns_value: dbt_yaml::Value| -> Versions {
+            let mut extra: HashMap<String, dbt_yaml::Value> = HashMap::new();
+            extra.insert("columns".to_string(), columns_value);
+            Versions {
+                v: dbt_yaml::Value::Number(dbt_yaml::Number::from(v), Span::zero()),
+                deprecation_date: None,
+                defined_in: None,
+                description: None,
+                access: None,
+                config: Verbatim::from(None),
+                constraints: None,
+                data_tests: None,
+                __additional_properties__: Verbatim::from(extra),
+            }
+        };
+
+        // v1: include all (no exclusions) — test must be present
+        let v1 = make_version(1, make_columns_value("all", vec![]));
+        // v2: include all, exclude cost_center_bkey — test must be absent
+        let v2 = make_version(2, make_columns_value("all", vec!["cost_center_bkey"]));
+
+        let result =
+            collect_versioned_model_tests(&base_config, &[v1, v2]).expect("should not fail");
+
+        assert_eq!(result.len(), 2, "expected one config per version");
+
+        let v1_cfg = result
+            .iter()
+            .find(|c| c.version_num.as_deref() == Some("1"))
+            .unwrap();
+        assert!(
+            v1_cfg
+                .column_tests
+                .as_ref()
+                .map(|m| m.contains_key("cost_center_bkey"))
+                .unwrap_or(false),
+            "v1 should inherit the unique test for cost_center_bkey"
+        );
+
+        let v2_cfg = result
+            .iter()
+            .find(|c| c.version_num.as_deref() == Some("2"))
+            .unwrap();
+        assert!(
+            !v2_cfg
+                .column_tests
+                .as_ref()
+                .map(|m| m.contains_key("cost_center_bkey"))
+                .unwrap_or(false),
+            "v2 must not have a test for cost_center_bkey (it is excluded)"
         );
     }
 
