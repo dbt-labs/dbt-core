@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 from dbt.contracts.project import PrivatePackage
 from dbt.deps.git import GitPinnedPackage, GitUnpinnedPackage
-from dbt_common.context import get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 
 PRIVATE_PACKAGE_HELPER = None
