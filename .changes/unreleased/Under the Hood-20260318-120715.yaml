@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: 'Update jsonschemas for more accurate deprecation warnings: macro.config should not warn'
-time: 2026-03-18T12:07:15.833316-04:00
-custom:
-    Author: michelleark
-    Issue: "12670"
