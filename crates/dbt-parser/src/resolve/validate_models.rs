@@ -195,6 +195,7 @@ mod tests {
             config: dbt_yaml::Verbatim::from(None),
             constraints: None,
             data_tests: None,
+            tests: None,
             __additional_properties__: dbt_yaml::Verbatim::from(std::collections::HashMap::new()),
         }
     }

@@ -1197,8 +1197,8 @@ pub struct Versions {
     pub access: Option<String>,
     pub config: Verbatim<Option<dbt_yaml::Value>>,
     pub constraints: Option<Vec<crate::schemas::properties::model_properties::ModelConstraint>>,
-    #[serde(alias = "tests")]
     pub data_tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
+    pub tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
     // TODO: promote `docs` to a typed field once we settle on the right struct (dbt-core uses
     // Docs { show: bool, node_color: Optional[str] } but we only have DocsConfig which may
     // not match exactly).

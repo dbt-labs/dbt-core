@@ -189,7 +189,13 @@ mod tests {
         Versions {
             v: dbt_yaml::Value::String(version.to_string(), Default::default()),
             deprecation_date: None,
+            defined_in: None,
+            description: None,
+            access: None,
             config: dbt_yaml::Verbatim::from(None),
+            constraints: None,
+            data_tests: None,
+            tests: None,
             __additional_properties__: dbt_yaml::Verbatim::from(
                 std::collections::HashMap::new(),
             ),

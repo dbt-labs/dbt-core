@@ -1263,7 +1263,7 @@ fn collect_versioned_model_tests(
     for version in versions {
         let Some(version_suffix) = version.get_version() else {
             return err!(
-                ErrorCode::InvalidSchema,
+                ErrorCode::InvalidConfig,
                 "Version '{:?}' does not meet the required format",
                 version.v
             );
@@ -1275,7 +1275,13 @@ fn collect_versioned_model_tests(
 
         // Override with version-specific tests if they exist
         // Base model level tests are exclusive or with versioned model level tests
-        if let Some(version_tests) = version.data_tests.clone() {
+        if version.tests.is_some() && version.data_tests.is_some() {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "Cannot have both 'tests' and 'data_tests' defined"
+            );
+        }
+        if let Some(version_tests) = version.tests.clone().or_else(|| version.data_tests.clone()) {
             version_config.model_tests = Some(version_tests);
         }
 
@@ -1311,7 +1317,7 @@ fn collect_versioned_model_tests(
                 for col in column_map {
                     if col.tests.is_some() && col.data_tests.is_some() {
                         return err!(
-                            ErrorCode::InvalidSchema,
+                            ErrorCode::InvalidConfig,
                             "Cannot have both 'tests' and 'data_tests' defined"
                         );
                     }
@@ -1846,6 +1852,7 @@ mod tests {
                 config: Verbatim::from(None),
                 constraints: None,
                 data_tests: None,
+                tests: None,
                 __additional_properties__: Verbatim::from(extra),
             }
         };
