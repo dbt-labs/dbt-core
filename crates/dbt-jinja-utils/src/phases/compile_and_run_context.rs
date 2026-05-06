@@ -577,40 +577,33 @@ impl SourceFunction {
         source_name: &str,
         table_name: &str,
     ) -> Result<(), MinijinjaError> {
-        if self.validation_config.skip_validation {
+        if self.validation_config.skip_validation
+            || self.validation_config.node_type != NodeType::UnitTest
+            || self
+                .validation_config
+                .allowed_dependencies
+                .contains(unique_id)
+        {
             return Ok(());
         }
 
-        if self
+        let unit_test_name = self
             .validation_config
-            .allowed_dependencies
-            .contains(unique_id)
-        {
-            Ok(())
-        } else if self.validation_config.node_type == NodeType::UnitTest {
-            let unit_test_name = self
-                .validation_config
-                .current_node_unique_id
-                .as_deref()
-                .and_then(|uid| uid.rsplit('.').next())
-                .unwrap_or("<unknown>");
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                format!(
-                    "Unit test '{unit_test_name}' references \
+            .current_node_unique_id
+            .as_deref()
+            .and_then(|uid| uid.rsplit('.').next())
+            .unwrap_or("<unknown>");
+        Err(MinijinjaError::new(
+            MinijinjaErrorKind::InvalidOperation,
+            format!(
+                "Unit test '{unit_test_name}' references \
 {{{{ source('{source_name}', '{table_name}') }}}}, but this dependency was not mocked.\n\n\
 Add it to the unit test's `given` block:\n  \
 - input: source('{source_name}', '{table_name}')\n    \
 rows: [...]\n\n\
 Or remove the source() from the model if it's unused."
-                ),
-            ))
-        } else {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                format!("dbt was unable to resolve '{source_name}.{table_name}'"),
-            ))
-        }
+            ),
+        ))
     }
 }
 
