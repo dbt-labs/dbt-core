@@ -1,6 +1,8 @@
 use crate::information_schema::InformationSchema;
 use crate::need_quotes::need_quotes;
+use crate::relation::config_v2::RelationConfig;
 use crate::relation::{RelationObject, StaticBaseRelation};
+use crate::value::none_value;
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::AdapterType;
@@ -19,8 +21,6 @@ use minijinja::Value;
 use std::any::Any;
 // use std::ops::Deref;
 use std::sync::Arc;
-
-use crate::relation::bigquery::*;
 
 const INFORMATION_SCHEMA_SCHEMA: &str = "information_schema";
 
@@ -338,38 +338,36 @@ impl BaseRelation for BigqueryRelation {
 
     fn materialized_view_config_changeset(
         &self,
-        relation_results_value: &Value,
-        new_config_value: &Value,
+        remote_state_value: &Value,
+        local_config_value: &Value,
     ) -> Result<Value, minijinja::Error> {
-        let existing_mv = relation_results_value
+        let current_state = remote_state_value
             .as_object()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidArgument,
-                    "relation_results must be Object",
+                    "remote_state must be Object",
                 )
             })?
-            .downcast_ref::<BigqueryMaterializedViewConfigObject>()
+            .downcast_ref::<RelationConfig>()
             .ok_or_else(|| {
                 minijinja::Error::new(
                     minijinja::ErrorKind::InvalidArgument,
-                    "relation_results must be BigqueryMaterializedViewConfigObject",
+                    "remote_state must be RelationConfig",
                 )
-            })?
-            .inner();
+            })?;
 
         // TODO(serramatutu): minijinja_value_to_typed_struct does not work with references, so we
         // have to clone the value here...
-        let new_config_node =
-            minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(new_config_value.clone())
+        let local_config =
+            minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(local_config_value.clone())
                 .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                    )
-                })?;
-
-        let new_config_model = match new_config_node {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
+                    format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
+        let local_config = match local_config {
             InternalDbtNodeWrapper::Model(model) => model,
             _ => {
                 return Err(minijinja::Error::new(
@@ -378,18 +376,16 @@ impl BaseRelation for BigqueryRelation {
                 ));
             }
         };
+        let desired_state =
+            crate::relation::bigquery::config::relation_types::materialized_view::new_loader()
+                .from_local_config(local_config.as_ref())?;
 
-        let new_mv_config =
-            <dyn BigqueryMaterializedViewConfig>::try_from_model(Arc::from(new_config_model))
-                .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::InvalidArgument, e))?;
+        let changeset = RelationConfig::diff(&desired_state, current_state);
 
-        let changeset =
-            BigqueryMaterializedViewConfigChangesetObject::new(existing_mv, new_mv_config);
-
-        if changeset.has_changes() {
-            Ok(Value::from_object(changeset))
+        if changeset.is_empty() {
+            Ok(none_value())
         } else {
-            Ok(Value::from(None::<()>))
+            Ok(Value::from_object(changeset))
         }
     }
 }

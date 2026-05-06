@@ -23,7 +23,7 @@
 use crate::errors::AdapterResult;
 use crate::value::none_value;
 
-use crate::AdapterType;
+use dbt_adapter_core::AdapterType;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, map::Iter as IndexMapIter};
 use minijinja::{
@@ -31,6 +31,7 @@ use minijinja::{
     listener::RenderingEventListener,
     value::{Enumerator, Object, Value, ValueMap},
 };
+use minijinja_contrib::dyn_object::DynJinjaObject;
 use std::{any::Any, fmt, rc::Rc, sync::Arc};
 
 pub trait ComponentConfig: fmt::Debug + Send + Sync + Any {
@@ -59,7 +60,7 @@ pub(crate) mod diff {
     pub(crate) type DiffFn<T> = fn(&T, &T) -> Option<T>;
 
     /// The resulting diff is simply a clone of the desired state
-    pub(crate) fn desired_state<T: Sized + Eq + Clone>(
+    pub(crate) fn desired_state<T: Sized + PartialEq + Clone>(
         desired_state: &T,
         current_state: &T,
     ) -> Option<T> {
@@ -101,6 +102,46 @@ pub(crate) mod diff {
         }
 
         if diff.is_empty() { None } else { Some(diff) }
+    }
+}
+
+/// Contains shared function implementations for Jinja objects
+mod jinja {
+    use super::ComponentConfig;
+    use crate::value::none_value;
+    use minijinja::value::{Value, ValueMap};
+
+    pub fn bigquery_as_ddl_dict<'a>(
+        iter: impl Iterator<Item = (&'a str, &'a dyn ComponentConfig)>,
+    ) -> Result<Value, minijinja::Error> {
+        use crate::relation::bigquery::config::components;
+
+        let mut vm = ValueMap::new();
+        let none = none_value();
+        for (name, component) in iter {
+            if matches!(
+                name,
+                components::partition_by::TYPE_NAME | components::cluster_by::TYPE_NAME
+            ) {
+                continue;
+            }
+
+            // Python BigQuery adapter flattens refresh keys
+            if name == components::refresh::TYPE_NAME {
+                let inner_vm = component.as_jinja().downcast_object::<ValueMap>().unwrap();
+                for (k, v) in inner_vm.iter() {
+                    vm.insert(k.clone(), v.clone());
+                }
+                continue;
+            }
+
+            let jinja = component.as_jinja();
+            if jinja != none {
+                vm.insert(Value::from(name), component.as_jinja());
+            }
+        }
+
+        Ok(Value::from(vm))
     }
 }
 
@@ -263,10 +304,11 @@ impl Object for RelationConfig {
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
-        // TODO: args iter
+        use AdapterType::Databricks;
+
         let mut parser = ArgParser::new(args, None);
-        match name {
-            "get_changeset" => {
+        match (&self.adapter_type, name) {
+            (Databricks, "get_changeset") => {
                 let val = if let Some(existing) = parser
                     .get::<Value>("existing_relation")?
                     .downcast_object::<RelationConfig>()
@@ -290,13 +332,36 @@ impl Object for RelationConfig {
 
                 Ok(val)
             }
-            _ => unimplemented!("RelationConfigBaseObject does not support method: {}", name),
+            (_, _) => unimplemented!("RelationConfigBaseObject does not support method: {}", name),
         }
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        let key = key.as_str()?;
-        self.components.get(key).map(|v| v.as_jinja())
+        use AdapterType::Bigquery;
+
+        match (self.adapter_type, key.as_str()?) {
+            (Bigquery, "options") => {
+                let obj = DynJinjaObject::<(), Self>::new_arc(
+                    "BigqueryMaterializedViewOptions",
+                    (),
+                    self.clone(),
+                )
+                .with_method("as_ddl_dict", |obj, _state, _args, _listeners| {
+                    jinja::bigquery_as_ddl_dict(
+                        obj.repr_ref()
+                            .components
+                            .iter()
+                            .map(|(k, v)| (*k, v.as_ref())),
+                    )
+                });
+
+                Some(Value::from_object(obj))
+            }
+            (_, _) => {
+                let key = key.as_str()?;
+                self.components.get(key).map(|v| v.as_jinja())
+            }
+        }
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
@@ -455,6 +520,8 @@ impl Object for RelationComponentConfigChangeSet {
                     .map(|v| v.as_jinja())
                     .unwrap_or_else(none_value))
             }
+            "has_changes" => Ok(Value::from(!self.changes.is_empty())),
+            "requires_full_refresh" => Ok(Value::from(self.requires_full_refresh())),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,
                 format!("RelationComponentConfigChangeSet has no method named '{name}'"),
@@ -463,8 +530,46 @@ impl Object for RelationComponentConfigChangeSet {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        let key = key.as_str()?;
-        self.changes.get(key).map(|v| v.as_jinja())
+        use AdapterType::Bigquery;
+        match (self.adapter_type, key.as_str()?) {
+            // Reference: https://github.com/dbt-labs/dbt-adapters/blob/bd80e5a9d4b7b3b0200872892ff41994586c72ef/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_options.py#L190
+            (Bigquery, "options") => {
+                if self.changes.is_empty() {
+                    None
+                } else {
+                    let obj = DynJinjaObject::<(), ValueMap>::empty("BigqueryOptionsConfigChange")
+                        .with_repr(ValueMap::from([(
+                            "context".into(),
+                            Value::from_object(
+                                DynJinjaObject::<(), Self>::new_arc(
+                                    "BigqueryMaterializedViewOptions",
+                                    (),
+                                    self.clone(),
+                                )
+                                .with_method(
+                                    "as_ddl_dict",
+                                    |obj, _state, _args, _listeners| {
+                                        jinja::bigquery_as_ddl_dict(
+                                            obj.repr_ref().changes.iter().filter_map(
+                                                |(name, change)| match change {
+                                                    ComponentConfigChange::Some(c) => {
+                                                        Some((*name, c.as_ref()))
+                                                    }
+                                                    ComponentConfigChange::None => None,
+                                                    ComponentConfigChange::Drop => None,
+                                                },
+                                            ),
+                                        )
+                                    },
+                                ),
+                            ),
+                        )]));
+                    Some(Value::from_object(obj))
+                }
+            }
+            (_, "requires_full_refresh") => Some(Value::from(self.requires_full_refresh())),
+            (_, key) => self.changes.get(key).map(|v| v.as_jinja()),
+        }
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
@@ -766,6 +871,185 @@ mod tests {
 
             fn enumerate(self: &Arc<Self>) -> Enumerator {
                 Enumerator::Values(vec![Value::from("desired"), Value::from("existing")])
+            }
+        }
+
+        mod bigquery {
+            use super::*;
+            use dbt_schemas::schemas::manifest::{
+                BigqueryPartitionConfig, BigqueryPartitionConfigInner, TimeConfig,
+            };
+
+            use std::collections::HashMap;
+
+            use crate::relation::bigquery::config::relation_types::materialized_view;
+            use crate::relation::bigquery::config::test_helpers::{
+                TestTableConfig, make_driver_data,
+            };
+
+            fn make_mat_view(cfg: TestTableConfig) -> RelationConfig {
+                materialized_view::new_loader()
+                    .from_remote_state(&make_driver_data(cfg))
+                    .unwrap()
+            }
+
+            #[test]
+            fn mat_view_config() {
+                let cfg = make_mat_view(TestTableConfig {
+                    partition_by: Some(BigqueryPartitionConfig {
+                        field: "my_field".to_string(),
+                        data_type: "DATETIME".to_string(),
+                        __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
+                            granularity: "DAY".to_string(),
+                            time_ingestion_partitioning: false,
+                        }),
+                        copy_partitions: false,
+                    }),
+                    kms_key: "kms_key",
+                    description: "description\nother_line",
+                    cluster_by: &["a", "b"],
+                    tags: HashMap::from([("tag_key", "tag_value")]),
+                    labels: HashMap::from([("label_key", "label_value")]),
+                    enable_refresh: Some(true),
+                    expiration_ns: 1111,
+                    max_staleness: "1 day",
+                    refresh_interval_minutes: 1234.0,
+                });
+
+                let template = "
+                obj.partition
+                {{ obj.partition|tojson(indent=2) }}
+                ---
+                obj.cluster
+                {{ obj.cluster|tojson(indent=2) }}
+                ---
+                obj.options.as_ddl_dict()
+                {{ obj.options.as_ddl_dict()|tojson(indent=2) }}
+                ";
+                let expect = r#"
+                obj.partition
+                {
+                    "copy_partitions": false,
+                    "data_type": "DATETIME",
+                    "field": "my_field",
+                    "granularity": "DAY",
+                    "range": null,
+                    "time_ingestion_partitioning": false
+                }
+                ---
+                obj.cluster
+                {
+                    "fields": [
+                        "a",
+                        "b"
+                    ]
+                }
+                ---
+                obj.options.as_ddl_dict()
+                {
+                    "description": "\"\"\"description\\nother_line\"\"\"",
+                    "enable_refresh": true,
+                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000001111+00:00\u0027",
+                    "kms_key_name": "\u0027kms_key\u0027",
+                    "labels": [
+                        [
+                            "label_key", 
+                            "label_value"
+                        ]
+                    ],
+                    "max_staleness": "1 day",
+                    "refresh_interval_minutes": 1234.0,
+                    "tags": [
+                        [
+                            "tag_key", 
+                            "tag_value"
+                        ]
+                    ]
+                }
+                "#;
+                jinja_assert(cfg, template, expect);
+            }
+
+            #[test]
+            fn mat_view_changeset() {
+                let current_state = make_mat_view(TestTableConfig {
+                    partition_by: Some(BigqueryPartitionConfig {
+                        field: "my_field".to_string(),
+                        data_type: "DATETIME".to_string(),
+                        __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
+                            granularity: "DAY".to_string(),
+                            time_ingestion_partitioning: false,
+                        }),
+                        copy_partitions: false,
+                    }),
+                    kms_key: "kms_key",
+                    description: "description\nother_line",
+                    cluster_by: &["a", "b"],
+                    tags: HashMap::from([("tag_key", "tag_value")]),
+                    labels: HashMap::from([("label_key", "label_value")]),
+                    enable_refresh: Some(true),
+                    expiration_ns: 1111,
+                    max_staleness: "1 day",
+                    refresh_interval_minutes: 1234.0,
+                });
+
+                let desired_state = make_mat_view(TestTableConfig {
+                    partition_by: Some(BigqueryPartitionConfig {
+                        field: "my_new_field".to_string(),
+                        data_type: "DATETIME".to_string(),
+                        __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
+                            granularity: "DAY".to_string(),
+                            time_ingestion_partitioning: false,
+                        }),
+                        copy_partitions: false,
+                    }),
+                    kms_key: "new_kms_key",
+                    description: "new description\nother_line",
+                    cluster_by: &["a", "b", "c"],
+                    tags: HashMap::from([("new_tag_key", "new_tag_value")]),
+                    labels: HashMap::from([("new_label_key", "new_label_value")]),
+                    enable_refresh: Some(false),
+                    expiration_ns: 2222,
+                    max_staleness: "2 day",
+                    refresh_interval_minutes: 4321.0,
+                });
+
+                let changeset = RelationConfig::diff(&desired_state, &current_state);
+
+                let template = "
+                obj.requires_full_refresh
+                {{ obj.requires_full_refresh|tojson(indent=2) }}
+                ---
+                obj.options.context.as_ddl_dict()
+                {{ obj.options.context.as_ddl_dict()|tojson(indent=2) }}
+                ";
+                let expect = r#"
+                obj.requires_full_refresh
+                true
+                ---
+                obj.options.context.as_ddl_dict()
+                {
+                    "description": "\"\"\"new description\\nother_line\"\"\"",
+                    "enable_refresh": false,
+                    "expiration_timestamp": "TIMESTAMP \u00271970-01-01T00:00:00.000002222+00:00\u0027",
+                    "kms_key_name": "\u0027new_kms_key\u0027",
+                    "labels": [
+                        [
+                            "new_label_key", 
+                            "new_label_value"
+                        ]
+                    ],
+                    "max_staleness": "2 day",
+                    "refresh_interval_minutes": 4321.0,
+                    "tags": [
+                        [
+                            "new_tag_key", 
+                            "new_tag_value"
+                        ]
+                    ]
+                }
+                "#;
+                jinja_assert(changeset, template, expect);
             }
         }
 

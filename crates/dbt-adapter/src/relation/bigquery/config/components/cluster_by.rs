@@ -1,0 +1,146 @@
+use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::relation::config_v2::{
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+};
+use crate::value::none_value;
+
+use arrow_schema::Schema;
+use dbt_schemas::schemas::{DbtModel, InternalDbtNodeAttributes};
+use minijinja::value::{Value, ValueMap};
+use serde_json;
+
+pub(crate) const TYPE_NAME: &str = "cluster";
+
+/// Component for BigQuery relation labels
+pub(crate) type ClusterBy = SimpleComponentConfigImpl<Vec<String>>;
+
+fn to_jinja(v: &Vec<String>) -> Value {
+    if v.is_empty() {
+        none_value()
+    } else {
+        ValueMap::from([("fields".into(), Value::from_serialize(v))]).into()
+    }
+}
+
+fn new_component(columns: Vec<String>) -> ClusterBy {
+    ClusterBy {
+        type_name: TYPE_NAME,
+        diff_fn: diff::desired_state,
+        to_jinja_fn: to_jinja,
+        value: columns,
+    }
+}
+
+fn from_remote_state(schema: &Schema) -> AdapterResult<ClusterBy> {
+    let columns = schema
+        .metadata
+        .get("Clustering.Fields")
+        .map(|value_json| {
+            if value_json.is_empty() {
+                Vec::default()
+            } else {
+                serde_json::from_str(value_json).unwrap_or_default()
+            }
+        })
+        .unwrap_or_default();
+
+    Ok(new_component(columns))
+}
+
+fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> AdapterResult<ClusterBy> {
+    let config = match relation_config.as_any().downcast_ref::<DbtModel>() {
+        None => Vec::new(),
+        Some(model) => model
+            .__adapter_attr__
+            .bigquery_attr
+            .as_ref()
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "relation config needs to be BigQuery model".to_string(),
+                )
+            })?
+            .cluster_by
+            .as_ref()
+            .map(|cb| cb.fields().iter().map(|f| (*f).to_string()).collect())
+            .unwrap_or_default(),
+    };
+    Ok(new_component(config))
+}
+
+pub(crate) struct ClusterByLoader;
+
+impl ClusterByLoader {
+    pub fn new_component_type_erased(columns: Vec<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new_component(columns))
+    }
+
+    pub fn type_name() -> &'static str {
+        TYPE_NAME
+    }
+}
+
+impl ComponentConfigLoader<Schema> for ClusterByLoader {
+    fn type_name(&self) -> &'static str {
+        TYPE_NAME
+    }
+
+    fn from_remote_state(&self, remote_state: &Schema) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(from_remote_state(remote_state)?))
+    }
+
+    fn from_local_config(
+        &self,
+        relation_config: &dyn InternalDbtNodeAttributes,
+    ) -> AdapterResult<Box<dyn ComponentConfig>> {
+        Ok(Box::new(from_local_config(relation_config)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::relation::bigquery::config::test_helpers::{
+        TestTableConfig, make_driver_data, make_local_config,
+    };
+
+    #[test]
+    fn from_remote_state_no_cluster_by() {
+        let driver_data = make_driver_data(Default::default());
+        let loaded = from_remote_state(&driver_data).unwrap();
+        assert!(loaded.value.is_empty());
+    }
+
+    #[test]
+    fn from_remote_state_with_cluster_by() {
+        let driver_data = make_driver_data(TestTableConfig {
+            cluster_by: &["a", "b", "c"],
+            ..Default::default()
+        });
+        let loaded = from_remote_state(&driver_data).unwrap();
+        assert_eq!(loaded.value.len(), 3);
+        assert_eq!(loaded.value[0], "a");
+        assert_eq!(loaded.value[1], "b");
+        assert_eq!(loaded.value[2], "c");
+    }
+
+    #[test]
+    fn from_local_config_no_cluster_by() {
+        let local_data = make_local_config(Default::default());
+        let loaded = from_local_config(&local_data).unwrap();
+        assert!(loaded.value.is_empty());
+    }
+
+    #[test]
+    fn from_local_config_with_cluster_by() {
+        let local_data = make_local_config(TestTableConfig {
+            cluster_by: &["a", "b", "c"],
+            ..Default::default()
+        });
+        let loaded = from_local_config(&local_data).unwrap();
+        assert_eq!(loaded.value.len(), 3);
+        assert_eq!(loaded.value[0], "a");
+        assert_eq!(loaded.value[1], "b");
+        assert_eq!(loaded.value[2], "c");
+    }
+}

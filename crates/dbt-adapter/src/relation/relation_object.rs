@@ -587,51 +587,43 @@ impl Object for StaticBaseRelationObject {
             "scd_args" => self.scd_args(args),
             // // The following is required by BigQuery materialized_views
             "materialized_view_from_relation_config" => {
-                // TODO(serramatutu): find out how to use new AdapterType enum here
-                if self.0.get_adapter_type() == AdapterType::Bigquery.as_ref() {
-                    let iter = ArgsIter::new(
-                        "Relation.materialized_view_from_relation_config",
-                        &["relation_config"],
-                        args,
-                    );
-                    let relation_config_arg = iter.next_arg::<&Value>()?;
-                    iter.finish()?;
-
-                    let config_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(relation_config_arg.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                            )
-                        })?;
-
-                    let model = match config_wrapper {
-                        InternalDbtNodeWrapper::Model(model) => model,
-                        _ => {
-                            return Err(minijinja::Error::new(
-                                minijinja::ErrorKind::InvalidOperation,
-                                "Expected a model node",
-                            ));
-                        }
-                    };
-
-                    let mv_config = BigqueryMaterializedViewConfigObject::new(
-                        <dyn BigqueryMaterializedViewConfig>::try_from_model(Arc::new(*model))
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!("materialized_view_from_relation_config: Failed to deserialize BigqueryMaterializedViewConfig: {e}")
-                            )
-                        })?
-                    );
-
-                    Ok(Value::from_object(mv_config))
-                } else {
-                    Err(minijinja::Error::new(
+                if self.0.get_adapter_type() != AdapterType::Bigquery.as_ref() {
+                    return Err(minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
                         "'materialized_view_from_relation_config' can only be invoked using the BigQuery adapter",
-                    ))
+                    ));
                 }
+
+                let iter = ArgsIter::new(
+                    "Relation.materialized_view_from_relation_config",
+                    &["local_config"],
+                    args,
+                );
+                let local_config_value = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let local_config = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    local_config_value.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                        ),
+                    )
+                })?;
+
+                let loader = config::relation_types::materialized_view::new_loader();
+                let relation_config = loader
+                    .from_local_config(local_config.as_internal_node())
+                    .map_err(|err| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            format!("error while loading local materialized view config: {err}"),
+                        )
+                    })?;
+                Ok(Value::from_object(relation_config))
             }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,

@@ -2255,8 +2255,10 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let result = adapter.describe_relation(conn.as_mut(), relation, Some(state))?;
-                Ok(result.map_or_else(none_value, Value::from_serialize))
+                Ok(adapter
+                    .describe_relation(conn.as_mut(), relation, Some(state))?
+                    .map(Value::from_object)
+                    .unwrap_or_else(none_value))
             }
             Parse(_) => Ok(none_value()),
         }

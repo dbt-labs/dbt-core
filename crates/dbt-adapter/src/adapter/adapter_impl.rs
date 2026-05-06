@@ -29,7 +29,6 @@ use crate::record_batch_utils::{
 };
 use crate::relation::RelationObject;
 use crate::relation::bigquery::{
-    BigqueryMaterializedViewConfig, BigqueryMaterializedViewConfigObject,
     BigqueryPartitionConfigExt, cluster_by_from_schema, partitions_match,
 };
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
@@ -3907,51 +3906,40 @@ impl AdapterImpl {
         &self,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
-        state: Option<&State>,
-    ) -> AdapterResult<Option<Value>> {
-        match self.adapter_type() {
-            Bigquery => {
-                if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
-                    return replay.replay_describe_relation(state);
-                }
-
-                let adbc_schema = conn
-                    .get_table_schema(
-                        Some(&relation.database_as_str()?),
-                        Some(&relation.schema_as_str()?),
-                        &relation.identifier_as_str()?,
-                    )
-                    .map_err(adbc_error_to_adapter_error)?;
-                if let Some(relation_type) = relation.relation_type() {
-                    if relation_type == RelationType::MaterializedView {
-                        return Ok(Some(Value::from_object(
-                            BigqueryMaterializedViewConfigObject::new(
-                                <dyn BigqueryMaterializedViewConfig>::try_from_schema(
-                                    &adbc_schema,
-                                    self.engine().type_ops(),
-                                )
-                                .map_err(|err| {
-                                    AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
-                                })?,
-                            ),
-                        )));
-                    } else {
-                        return Err(AdapterError::new(
-                            AdapterErrorKind::Configuration,
-                            format!(
-                                "The method `BigQueryAdapter.describe_relation` is not implemented for this relation type: {relation_type}"
-                            ),
-                        ));
-                    }
-                }
-
-                Ok(None)
-            }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fabric
-            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
-                unimplemented!("only available with BigQuery adapter")
-            }
+        _state: Option<&State>,
+    ) -> AdapterResult<Option<RelationConfig>> {
+        if self.adapter_type() != Bigquery {
+            unimplemented!("only available with BigQuery adapter");
         }
+
+        if let Replay(_, _) = self.inner_adapter() {
+            return Ok(None);
+        }
+
+        let adbc_schema = conn
+            .get_table_schema(
+                Some(&relation.database_as_str()?),
+                Some(&relation.schema_as_str()?),
+                &relation.identifier_as_str()?,
+            )
+            .map_err(adbc_error_to_adapter_error)?;
+
+        let Some(relation_type) = relation.relation_type() else {
+            return Ok(None);
+        };
+
+        if relation_type != RelationType::MaterializedView {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "The method `BigQueryAdapter.describe_relation` is not implemented for this relation type: {relation_type}"
+                ),
+            ));
+        }
+
+        crate::relation::bigquery::config::relation_types::materialized_view::new_loader()
+            .from_remote_state(&adbc_schema)
+            .map(Some)
     }
 
     /// Ensure that the target relation is valid, by making sure it
