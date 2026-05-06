@@ -1,6 +1,6 @@
 ---
 source: fs/sa/crates/dbt-jinja-ctx/tests/resolve_model.rs
-assertion_line: 165
+assertion_line: 173
 expression: schema
 ---
 {
@@ -46,10 +46,20 @@ expression: schema
       "description": "`{{ config(...) }}` — `ParseConfig<T>` Object."
     },
     "context": {
-      "description": "`{{ context }}` — `MacroLookupContext` Object for `context['name']` macro dispatch."
+      "description": "`{{ context }}` — `MacroLookupContext` Object for `context['name']` macro dispatch.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>"
+        }
+      ]
     },
     "execute": {
-      "description": "`{{ execute }}` — `ParseExecute(AtomicBool)` Object that records when the model truthy-tests it during parse, used to gate static analysis."
+      "description": "`{{ execute }}` — `ParseExecute(AtomicBool)` Object that records when the model truthy-tests it during parse; used to gate static analysis.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::parse::ParseExecute>"
+        }
+      ]
     },
     "function": {
       "description": "`{{ function(...) }}` — `ResolveFunctionFunction<T>` Object."
@@ -80,6 +90,20 @@ expression: schema
     },
     "this": {
       "description": "`{{ this }}` — `ResolveThisFunction<T>` Object delegating to a constructed `RelationObject`."
+    }
+  },
+  "definitions": {
+    "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::lookup::MacroLookupContext"
+    },
+    "JinjaObject<dbt_jinja_ctx::objects::parse::ParseExecute>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::parse::ParseExecute`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::parse::ParseExecute"
     }
   }
 }

@@ -46,8 +46,16 @@ key builtins.source
 ----
 resolve_model  source-fn-stub
 
-# `execute` at parse-model is a ParseExecute Object stand-in here (bool
-# false in the fixture). Real impl flips an AtomicBool when truthy-tested.
+# `execute` at parse-model is a real `ParseExecute` Object — round-tripped
+# through serde via `JinjaObject<ParseExecute>`. The Object is what the
+# real parse-phase orchestrator reads after rendering to detect whether
+# the model truthy-tested `execute`.
 key execute
 ----
-resolve_model  false
+resolve_model  <object>
+
+# `context` at parse-model is a real `MacroLookupContext` Object —
+# round-tripped through serde via `JinjaObject<MacroLookupContext>`.
+key context
+----
+resolve_model  <object>

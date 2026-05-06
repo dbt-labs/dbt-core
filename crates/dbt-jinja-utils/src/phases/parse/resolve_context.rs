@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
 
-use dbt_jinja_ctx::{ResolveBaseCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{DbtNamespace, JinjaObject, ResolveBaseCtx, to_jinja_btreemap};
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use minijinja::value::Value as MinijinjaValue;
 
 use crate::functions::DocMacro;
-use crate::phases::compile_and_run_context::DbtNamespace;
 
 /// Builds a context for resolving models.
 ///
@@ -31,10 +30,10 @@ pub fn build_resolve_context(
         })
         .collect();
 
-    let dbt_namespaces: BTreeMap<String, MinijinjaValue> = namespace_keys
+    let dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>> = namespace_keys
         .into_iter()
         .map(|key| {
-            let value = MinijinjaValue::from_object(DbtNamespace::new(&key));
+            let value = JinjaObject::new(DbtNamespace::new(&key));
             (key, value)
         })
         .collect();

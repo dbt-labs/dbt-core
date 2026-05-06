@@ -17,10 +17,9 @@ use dbt_schemas::filter::{RunFilter, Sample};
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use dbt_telemetry::NodeType;
-use minijinja::arg_utils::{ArgParser, ArgsIter};
+use minijinja::arg_utils::ArgParser;
 use minijinja::constants::MACRO_DISPATCH_ORDER;
 use minijinja::constants::TARGET_PACKAGE_NAME;
-use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{
@@ -193,86 +192,12 @@ pub fn build_compile_and_run_base_context(
     ctx
 }
 
-#[derive(Debug)]
-pub struct DbtNamespace {
-    pub name: String,
-}
-
-impl Object for DbtNamespace {
-    fn get_property(
-        self: &Arc<Self>,
-        state: &State<'_, '_>,
-        name: &str,
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
-        let ns_name = MinijinjaValue::from(self.name.clone());
-        let namespace_registry = state
-            .env()
-            .get_macro_namespace_registry()
-            .unwrap_or_default();
-        let template_registry = state.env().get_macro_template_registry();
-        // a could be a package name, we need to check if there's a macro in the namespace
-        if namespace_registry.get(&ns_name).is_some_and(|val| {
-            val.try_iter()
-                .map(|mut iter| iter.any(|v| v.as_str() == Some(name)))
-                .unwrap_or(false)
-        }) {
-            let template_registry_entry = template_registry.get(&ns_name);
-            let path = template_registry_entry
-                .and_then(|entry| entry.get_attr("path").ok())
-                .unwrap_or(ns_name);
-            let span = template_registry_entry
-                .and_then(|entry| entry.get_attr("span").ok())
-                .unwrap_or_else(|| {
-                    MinijinjaValue::from_serialize(minijinja::machinery::Span::default())
-                });
-
-            let context = state.get_base_context_with_path_and_span(&path, &span);
-            Ok(MinijinjaValue::from_object(DispatchObject {
-                macro_name: (*name).to_string(),
-                package_name: Some(self.name.clone()),
-                strict: true,
-                auto_execute: false,
-                context: Some(context),
-            }))
-        } else if self.name == "dbt" {
-            let dbt_and_adapters = state.env().get_dbt_and_adapters_namespace();
-            if let Some(package) = dbt_and_adapters.get(&MinijinjaValue::from(name)) {
-                let package_name = package.as_str().map(|s| s.to_string());
-                let template_registry_entry = template_registry.get(&ns_name);
-                let path = template_registry_entry
-                    .and_then(|entry| entry.get_attr("path").ok())
-                    .unwrap_or(ns_name);
-                let span = template_registry_entry
-                    .and_then(|entry| entry.get_attr("span").ok())
-                    .unwrap_or_else(|| {
-                        MinijinjaValue::from_serialize(minijinja::machinery::Span::default())
-                    });
-
-                let context = state.get_base_context_with_path_and_span(&path, &span);
-                Ok(MinijinjaValue::from_object(DispatchObject {
-                    macro_name: (*name).to_string(),
-                    package_name,
-                    strict: true,
-                    auto_execute: false,
-                    context: Some(context),
-                }))
-            } else {
-                Ok(MinijinjaValue::UNDEFINED)
-            }
-        } else {
-            Ok(MinijinjaValue::UNDEFINED)
-        }
-    }
-}
-
-impl DbtNamespace {
-    pub fn new(name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-        }
-    }
-}
+// `DbtNamespace` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported here
+// so existing call sites in this crate (`build_resolve_context`,
+// `build_compile_and_run_base_context`, etc.) keep importing the type from
+// the path they always have. The transitional re-export is removed once
+// every call site has been migrated to consume `dbt-jinja-ctx` directly.
+pub use dbt_jinja_ctx::DbtNamespace;
 
 /// Context for microbatch ref filtering.
 ///
@@ -949,97 +874,12 @@ impl Object for FunctionFunction {
     }
 }
 
-/// This is a special context object that is available during the compile or run phase.
-/// It allows users to lookup macros by string and returns a DispatchObject, which when called
-/// executes the macro. Users can also lookup macro namespaces by string, and this returns a Context
-/// object, which when called with a macro name returns a DispatchObject.
-#[derive(Debug)]
-pub struct MacroLookupContext {
-    /// The root project name.
-    pub root_project_name: String,
-    /// The current project name, when no current project specified, we search from the root project.
-    pub current_project_name: Option<String>,
-    /// The packages in the project.
-    pub packages: BTreeSet<String>,
-}
-
-impl Object for MacroLookupContext {
-    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
-        match key.as_str()? {
-            // NOTE(serramatutu): In Core, the following non-macro keys are all members of `MacroLookupContext`.
-            // They can all technically be used, though the usage is undocumented and not encouraged by dbt:
-            // - dbt_version
-            // - project_name
-            // - schema
-            // - run_started_at
-            //
-            // We added `project_name` because some naughty famous macro uses it and was
-            // breaking lots of projects, but I prefer to avoid polluting this scope and sticking
-            // as faithfully as possible to the "intended" behavior (only looking up macros)
-            "project_name" => Some(MinijinjaValue::from(self.root_project_name.clone())),
-
-            lookup_macro => {
-                if self.packages.contains(lookup_macro) {
-                    Some(MinijinjaValue::from_object(MacroLookupContext {
-                        root_project_name: self.root_project_name.clone(),
-                        current_project_name: Some(lookup_macro.to_string()),
-                        packages: BTreeSet::new(),
-                    }))
-                } else {
-                    Some(MinijinjaValue::from_object(DispatchObject {
-                        macro_name: lookup_macro.to_string(),
-                        package_name: self.current_project_name.clone(),
-                        strict: self.current_project_name.is_some(),
-                        auto_execute: false,
-                        // TODO: If the macro uses a recursive context (i.e. context['self']) we will stack overflow
-                        // but there is no way to conjure up a context object here without access to State
-                        context: None,
-                    }))
-                }
-            }
-        }
-    }
-
-    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    where
-        Self: Sized + 'static,
-    {
-        self.fmt(f)
-    }
-
-    fn call_method(
-        self: &Arc<Self>,
-        state: &State<'_, '_>,
-        method: &str,
-        args: &[MinijinjaValue],
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
-        // TODO(serramatutu): should this behave fully like a dict, with values, keys, items,
-        // enumerate etc?
-        match method {
-            "get" => {
-                let iter = ArgsIter::new("MacroLookupContext.get", &["key"], args);
-                let key = iter.next_arg::<&MinijinjaValue>()?;
-                let default = iter.next_kwarg::<Option<&MinijinjaValue>>("default")?;
-                iter.finish()?;
-
-                Ok(self
-                    .get_value(key)
-                    .or_else(|| default.cloned())
-                    .unwrap_or(MinijinjaValue::from(None::<MinijinjaValue>)))
-            }
-            _ => {
-                if let Some(value) = self.get_value(&MinijinjaValue::from(method)) {
-                    return value.call(state, args, listeners);
-                }
-                Err(MinijinjaError::new(
-                    MinijinjaErrorKind::UnknownMethod,
-                    format!("MacroLookupContext has no method named {method}"),
-                ))
-            }
-        }
-    }
-}
+// `MacroLookupContext` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported
+// here so existing call sites in this crate (`build_compile_and_run_base_context`,
+// the parse-phase resolve-model context, etc.) keep importing from the path
+// they always have. The transitional re-export is removed once every call
+// site has been migrated to consume `dbt-jinja-ctx` directly.
+pub use dbt_jinja_ctx::MacroLookupContext;
 
 /// This is a lazy-loaded flat graph object that builds the flat graph from
 /// `nodes` on first access. `defer_nodes`, when present, is used to populate

@@ -7,10 +7,7 @@ use std::{
     fmt::Debug,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use chrono::TimeZone;
@@ -50,23 +47,11 @@ use minijinja::{
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 use serde::Serialize;
 
-use dbt_jinja_ctx::{ResolveModelCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{JinjaObject, ParseExecute, ResolveModelCtx, to_jinja_btreemap};
 
 use crate::{phases::MacroLookupContext, serde::into_typed_with_error};
 
 use super::sql_resource::SqlResource;
-
-/// To be used as the `execute` flag in resolve-model context
-/// This is to record if an `execute` is encountered during parse in a .sql file
-#[derive(Debug, Clone)]
-struct ParseExecute(Arc<AtomicBool>);
-
-impl Object for ParseExecute {
-    fn is_true(self: &Arc<Self>) -> bool {
-        self.0.store(true, Ordering::Relaxed);
-        false
-    }
-}
 
 /// Builds a context for resolving models
 #[allow(clippy::too_many_arguments)]
@@ -314,8 +299,8 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         store_result: MinijinjaValue::from_function(result_store.store_result()),
         load_result: MinijinjaValue::from_function(result_store.load_result()),
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
-        execute: MinijinjaValue::from_object(ParseExecute(execute_exists)),
-        context: MinijinjaValue::from_object(MacroLookupContext {
+        execute: JinjaObject::new(ParseExecute::new(execute_exists)),
+        context: JinjaObject::new(MacroLookupContext {
             root_project_name: root_project_name.to_string(),
             current_project_name: None,
             packages,

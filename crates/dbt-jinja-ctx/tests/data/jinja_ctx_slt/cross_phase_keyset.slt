@@ -118,15 +118,15 @@ compile_node      <skip>
 run_node          <skip>
 
 # `execute` is a per-render concept. resolve_base emits a literal `false`
-# bool. resolve_model emits a `ParseExecute` Object whose `is_true()` flips
-# an AtomicBool when truthy-tested but reports false (the fixture stub uses
-# a plain bool `false` which serializes the same way at the .slt level).
+# bool. resolve_model emits a real `ParseExecute` Object whose `is_true()`
+# flips an AtomicBool when truthy-tested — round-tripped through serde via
+# `JinjaObject<ParseExecute>` so dispatch identity holds.
 key execute
 ----
 load              <absent>
 resolve_globals   <absent>
 resolve_base      false
-resolve_model     false
+resolve_model     <object>
 compile_base      <skip>
 compile_node      <skip>
 run_node          <skip>
@@ -181,7 +181,7 @@ key dbt
 ----
 load              <absent>
 resolve_globals   <absent>
-resolve_base      dbt-ns-stub
+resolve_base      <object>
 resolve_model     <absent>
 compile_base      <skip>
 compile_node      <skip>

@@ -27,6 +27,9 @@ use minijinja::Value as MinijinjaValue;
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::JinjaObject;
+use crate::objects::{DbtNamespace, MacroLookupContext, ParseExecute};
+
 /// Per-render parse-base context. Today's `build_resolve_context` populates
 /// this 1:1 — same field names, same key constants
 /// (`MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME`).
@@ -78,12 +81,13 @@ pub struct ResolveBaseCtx {
     /// "snowflake": <DbtNamespace>, … }` flattens into individual `{{ dbt }}`,
     /// `{{ snowflake }}` keys.
     ///
-    /// Each value is `MinijinjaValue::from_object(DbtNamespace::new(&key))`
-    /// at the call site; the underlying `DbtNamespace` Object in
-    /// `dbt-jinja-utils` will move into this crate alongside `DocMacro`.
+    /// Naming note: this is the *dispatch-side* `DbtNamespace` from
+    /// [`crate::objects::lookup`], distinct from
+    /// `dbt_parser::dbt_namespace::DbtNamespace` (parse-phase
+    /// adapter-call tracking — different concern, different crate).
     #[serde(flatten)]
     #[schemars(with = "BTreeMap<String, serde_json::Value>")]
-    pub dbt_namespaces: BTreeMap<String, MinijinjaValue>,
+    pub dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>>,
 }
 
 /// Per-model overlay layered onto [`ResolveBaseCtx`] for each model SQL
@@ -169,15 +173,14 @@ pub struct ResolveModelCtx {
     #[schemars(with = "serde_json::Value")]
     pub store_raw_result: MinijinjaValue,
 
-    /// `{{ execute }}` — `ParseExecute(AtomicBool)` Object that records when
-    /// the model truthy-tests it during parse, used to gate static analysis.
-    #[schemars(with = "serde_json::Value")]
-    pub execute: MinijinjaValue,
+    /// `{{ execute }}` — `ParseExecute(AtomicBool)` Object that records
+    /// when the model truthy-tests it during parse; used to gate static
+    /// analysis.
+    pub execute: JinjaObject<ParseExecute>,
 
     /// `{{ context }}` — `MacroLookupContext` Object for `context['name']`
     /// macro dispatch.
-    #[schemars(with = "serde_json::Value")]
-    pub context: MinijinjaValue,
+    pub context: JinjaObject<MacroLookupContext>,
 
     /// `{{ TARGET_UNIQUE_ID }}` — `<package>.<model_name>` identifier.
     /// Key string matches `minijinja::constants::TARGET_UNIQUE_ID`.

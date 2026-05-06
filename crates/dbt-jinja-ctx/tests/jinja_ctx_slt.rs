@@ -9,13 +9,15 @@
 #[path = "common/jinja_ctx_slt.rs"]
 mod jinja_ctx_slt;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use chrono::TimeZone;
 use chrono_tz::Tz;
 use dbt_jinja_ctx::{
-    GlobalCore, JinjaObject, LoadCtx, ResolveBaseCtx, ResolveCore, ResolveModelCtx,
+    DbtNamespace, GlobalCore, JinjaObject, LoadCtx, MacroLookupContext, ParseExecute,
+    ResolveBaseCtx, ResolveCore, ResolveModelCtx,
 };
 use dbt_jinja_vars::ConfiguredVar;
 use minijinja::Value as MinijinjaValue;
@@ -84,8 +86,11 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
         MinijinjaValue::from(vec!["dbt".to_string()]),
     );
 
-    let mut dbt_namespaces: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
-    dbt_namespaces.insert("dbt".to_string(), MinijinjaValue::from("dbt-ns-stub"));
+    let mut dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>> = BTreeMap::new();
+    dbt_namespaces.insert(
+        "dbt".to_string(),
+        JinjaObject::new(DbtNamespace::new("dbt")),
+    );
 
     ResolveBaseCtx {
         doc: MinijinjaValue::from("doc-stub"),
@@ -126,8 +131,12 @@ fn fixture_resolve_model_ctx() -> ResolveModelCtx {
         store_result: MinijinjaValue::from("store-result-stub"),
         load_result: MinijinjaValue::from("load-result-stub"),
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
-        execute: MinijinjaValue::from(false),
-        context: MinijinjaValue::from("ctx-stub"),
+        execute: JinjaObject::new(ParseExecute::new(Arc::new(AtomicBool::new(false)))),
+        context: JinjaObject::new(MacroLookupContext {
+            root_project_name: "my_project".to_string(),
+            current_project_name: None,
+            packages: BTreeSet::new(),
+        }),
         target_unique_id: "my_project.dbt_columns".to_string(),
         current_path: "models/dbt_columns.sql".to_string(),
         current_span: MinijinjaValue::from_serialize(Span::default()),

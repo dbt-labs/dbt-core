@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use dbt_jinja_ctx::{ResolveBaseCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{DbtNamespace, JinjaObject, ResolveBaseCtx, to_jinja_btreemap};
 use minijinja::Value as MinijinjaValue;
 
 fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
@@ -19,11 +19,14 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
         MinijinjaValue::from(vec!["dbt".to_string()]),
     );
 
-    let mut dbt_namespaces: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
-    dbt_namespaces.insert("dbt".to_string(), MinijinjaValue::from("dbt-ns-stub"));
+    let mut dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>> = BTreeMap::new();
+    dbt_namespaces.insert(
+        "dbt".to_string(),
+        JinjaObject::new(DbtNamespace::new("dbt")),
+    );
     dbt_namespaces.insert(
         "snowflake".to_string(),
-        MinijinjaValue::from("snowflake-ns-stub"),
+        JinjaObject::new(DbtNamespace::new("snowflake")),
     );
 
     ResolveBaseCtx {
@@ -71,18 +74,23 @@ fn dbt_namespaces_flatten_to_top_level_keys() {
         !registered.contains_key("dbt_namespaces"),
         "`dbt_namespaces` flatten leaked the field name as a top-level key"
     );
-    assert_eq!(
-        registered
-            .get("dbt")
-            .and_then(|v| v.as_str().map(|s| s.to_string())),
-        Some("dbt-ns-stub".to_string()),
-    );
-    assert_eq!(
-        registered
-            .get("snowflake")
-            .and_then(|v| v.as_str().map(|s| s.to_string())),
-        Some("snowflake-ns-stub".to_string()),
-    );
+
+    // Each namespace value must round-trip back to a `DbtNamespace` Object,
+    // not a serde-serialized stand-in (the dispatch path on
+    // `{{ dbt.macro_name }}` calls `Object::get_property`).
+    let dbt_obj = registered
+        .get("dbt")
+        .and_then(|v| v.as_object())
+        .and_then(|o| o.downcast::<DbtNamespace>())
+        .expect("`dbt` namespace must downcast to DbtNamespace");
+    assert_eq!(dbt_obj.name, "dbt");
+
+    let snowflake_obj = registered
+        .get("snowflake")
+        .and_then(|v| v.as_object())
+        .and_then(|o| o.downcast::<DbtNamespace>())
+        .expect("`snowflake` namespace must downcast to DbtNamespace");
+    assert_eq!(snowflake_obj.name, "snowflake");
 }
 
 #[test]

@@ -12,9 +12,13 @@
 //!    caught with `MACRO_DISPATCH_ORDER`'s `Vec<String>` values.
 //! 3. The `ResolveModelCtx` JsonSchema has stable shape (snapshot test).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
-use dbt_jinja_ctx::{ResolveModelCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{
+    JinjaObject, MacroLookupContext, ParseExecute, ResolveModelCtx, to_jinja_btreemap,
+};
 use minijinja::Value as MinijinjaValue;
 use minijinja::machinery::Span;
 
@@ -47,8 +51,12 @@ fn fixture_resolve_model_ctx() -> ResolveModelCtx {
         store_result: MinijinjaValue::from("store-result-stub"),
         load_result: MinijinjaValue::from("load-result-stub"),
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
-        execute: MinijinjaValue::from(false),
-        context: MinijinjaValue::from("ctx-stub"),
+        execute: JinjaObject::new(ParseExecute::new(Arc::new(AtomicBool::new(false)))),
+        context: JinjaObject::new(MacroLookupContext {
+            root_project_name: "my_project".to_string(),
+            current_project_name: None,
+            packages: BTreeSet::new(),
+        }),
         target_unique_id: "my_project.dbt_columns".to_string(),
         current_path: "models/dbt_columns.sql".to_string(),
         current_span: MinijinjaValue::from_serialize(Span::default()),

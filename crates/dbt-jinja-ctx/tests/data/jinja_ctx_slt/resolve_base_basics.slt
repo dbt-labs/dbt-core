@@ -8,7 +8,7 @@
 #   execute                   = false (flips true at compile/run)
 #   node                      = NONE (populated per-model)
 #   connection_name           = "" (empty at base scope)
-#   dbt_namespaces            = { dbt: "dbt-ns-stub" }     <-- flattened to top-level
+#   dbt_namespaces            = { dbt: <DbtNamespace Object> } <-- flattened to top-level
 
 key TARGET_PACKAGE_NAME
 ----
@@ -28,10 +28,11 @@ resolve_base  null
 
 # `dbt_namespaces` is `#[serde(flatten)]` over a Map → each entry gets
 # promoted to its own top-level key. The map field name itself MUST NOT
-# leak through.
+# leak through. Each value is a real `DbtNamespace` Object — round-tripped
+# through serde via `JinjaObject<DbtNamespace>` so dispatch identity holds.
 key dbt
 ----
-resolve_base  dbt-ns-stub
+resolve_base  <object>
 
 key dbt_namespaces
 ----
