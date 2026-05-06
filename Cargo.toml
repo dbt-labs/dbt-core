@@ -31,6 +31,8 @@ members = [
   "crates/dbt-jinja-ctx",
   "crates/dbt-jinja-filters",
   "crates/dbt-jinja-vars",
+  "crates/dbt-metadata",
+  "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
@@ -222,6 +224,8 @@ dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
 
+dbt-metadata = { path = "crates/dbt-metadata" }
+dbt-metadata-parquet = { path = "crates/dbt-metadata-parquet" }
 dbt-schema-store = { path = "crates/dbt-schema-store" }
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
