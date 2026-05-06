@@ -124,10 +124,6 @@ class TestMacroNonEnforcement:
     def macros(self):
         return {"macros.yml": bad_everything_types_macros_yml, "macros.sql": macros_sql}
 
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"flags": {"validate_macro_args": False}}
-
     def test_macro_non_enforcement(self, project) -> None:
         event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
         run_dbt(["parse"], callbacks=[event_catcher.catch])

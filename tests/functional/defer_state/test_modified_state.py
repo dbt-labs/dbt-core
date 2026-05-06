@@ -542,10 +542,7 @@ class TestChangedContractUnversioned(BaseModifiedState):
         manifest = get_manifest(project.project_root)
         model_unique_id = self.MODEL_UNIQUE_ID
         model = manifest.nodes[model_unique_id]
-        expected_unrendered_config = {
-            "contract": {"enforced": True},
-            "materialized": "Keyword(key='materialized', value=Const(value='table'))",
-        }
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
 
         # Run it again with "state:modified:contract", still finds modified due to contract: true
@@ -629,10 +626,7 @@ class TestChangedContractVersioned(BaseModifiedState):
         manifest = get_manifest(project.project_root)
         model_unique_id = self.MODEL_UNIQUE_ID
         model = manifest.nodes[model_unique_id]
-        expected_unrendered_config = {
-            "contract": {"enforced": True},
-            "materialized": "Keyword(key='materialized', value=Const(value='table'))",
-        }
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
 
         # Run it again with "state:modified:contract", still finds modified due to contract: true
@@ -831,10 +825,7 @@ class TestChangedConstraintUnversioned(BaseModifiedState):
         manifest = get_manifest(project.project_root)
         model_unique_id = "model.test.table_model"
         model = manifest.nodes[model_unique_id]
-        expected_unrendered_config = {
-            "contract": {"enforced": True},
-            "materialized": "Keyword(key='materialized', value=Const(value='table'))",
-        }
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
 
         # Run it again with "state:modified:contract", still finds modified due to contract: true
@@ -905,10 +896,7 @@ class TestChangedMaterializationConstraint(BaseModifiedState):
         manifest = get_manifest(project.project_root)
         model_unique_id = "model.test.table_model"
         model = manifest.nodes[model_unique_id]
-        expected_unrendered_config = {
-            "contract": {"enforced": True},
-            "materialized": "Keyword(key='materialized', value=Const(value='table'))",
-        }
+        expected_unrendered_config = {"contract": {"enforced": True}, "materialized": "table"}
         assert model.unrendered_config == expected_unrendered_config
 
         # Run it again with "state:modified:contract", still finds modified due to contract: true

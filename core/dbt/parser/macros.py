@@ -103,7 +103,7 @@ class MacroParser(BaseParser[Macro]):
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
 
-            if getattr(get_flags(), "validate_macro_args", True):
+            if getattr(get_flags(), "validate_macro_args", False):
                 node.arguments = self._extract_args(macro)
 
             # get supported_languages for materialization macro
