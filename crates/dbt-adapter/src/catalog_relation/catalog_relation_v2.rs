@@ -1,6 +1,8 @@
 use super::*;
-use crate::try_parse_bool_str;
-use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
+use dbt_common::string_utils::try_parse_bool_str;
+use dbt_schemas::schemas::dbt_catalogs_v2::{
+    CatalogSpecV2View, DbtCatalogsV2View, UniformMode, V2CatalogType, V2FileFormat,
+};
 use dbt_yaml as yml;
 
 const FIELD_CATALOG_NAME: &str = "catalog_name";
@@ -200,6 +202,7 @@ fn parse_model_bool(
 ) -> AdapterResult<Option<bool>> {
     let raw = CatalogRelation::get_model_config_value(model, key, adapter_type);
     try_parse_bool_str(raw.as_deref(), key)
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e.to_string()))
 }
 
 fn parse_model_u32(
@@ -354,8 +357,11 @@ impl CatalogRelation {
 
         let mut external_volume = None;
         let mut adapter_properties = BTreeMap::new();
-        let use_uniform = parse_model_bool(model, FIELD_USE_UNIFORM, AdapterType::Databricks)?
-            .or_else(|| get_yaml_bool(databricks, FIELD_USE_UNIFORM));
+        let use_uniform = UniformMode::from_bool(
+            parse_model_bool(model, FIELD_USE_UNIFORM, AdapterType::Databricks)?
+                .or_else(|| get_yaml_bool(databricks, FIELD_USE_UNIFORM))
+                .unwrap_or(false),
+        );
 
         if let Some(location_root) = location_root {
             if location_root.trim().is_empty() {
@@ -368,19 +374,30 @@ impl CatalogRelation {
             adapter_properties.insert(ADAPTER_PROP_LOCATION_ROOT.to_string(), location_root);
         }
 
-        if !file_format.eq_ignore_ascii_case(DELTA_TABLE_FORMAT) {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "Databricks v2 unity requires file_format=delta",
-            ));
-        }
+        let file_format_enum = V2FileFormat::parse(&file_format, None)
+            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, format!("{e}")))?;
 
-        if let Some(use_uniform) = use_uniform {
-            adapter_properties.insert(
-                ADAPTER_PROP_USE_UNIFORM.to_string(),
-                use_uniform.to_string(),
-            );
-        }
+        match (file_format_enum, use_uniform) {
+            (V2FileFormat::Delta, UniformMode::Enabled)
+            | (V2FileFormat::Parquet, UniformMode::Disabled) => Ok(()),
+            (V2FileFormat::Delta, UniformMode::Disabled) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Databricks v2 unity use_uniform: false (or unset) requires file_format: parquet",
+            )),
+            (V2FileFormat::Parquet, UniformMode::Enabled) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Databricks v2 unity use_uniform: true requires file_format: delta",
+            )),
+            (V2FileFormat::Hudi, _) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Databricks v2 unity does not support file_format 'hudi' (use delta or parquet)",
+            )),
+        }?;
+
+        adapter_properties.insert(
+            ADAPTER_PROP_USE_UNIFORM.to_string(),
+            use_uniform.is_enabled().to_string(),
+        );
         Ok(CatalogRelation {
             adapter_type: AdapterType::Databricks,
             catalog_name: Some(catalog_name.to_string()),
@@ -805,7 +822,7 @@ catalogs:
     config:
       databricks:
         file_format: delta
-        use_uniform: false
+        use_uniform: true
 "#,
         );
         let conf = json!({ "catalog_name": "UC" });
@@ -831,7 +848,7 @@ catalogs:
     }
 
     #[test]
-    fn databricks_v2_unity_model_rejects_non_delta_file_format() {
+    fn databricks_v2_unity_catalog_builds_relation_parquet_managed_iceberg() {
         let catalogs = load_catalogs_yaml(
             r#"
 catalogs:
@@ -840,10 +857,46 @@ catalogs:
     table_format: iceberg
     config:
       databricks:
-        file_format: delta
+        file_format: parquet
 "#,
         );
-        let conf = json!({ "catalog_name": "UC", "file_format": "parquet" });
+        let conf = json!({ "catalog_name": "UC" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                &AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_type, "unity");
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+        }
+    }
+
+    #[test]
+    fn databricks_v2_unity_model_override_rejects_invalid_combo() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UC
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: parquet
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "UC",
+            "file_format": "parquet",
+            "use_uniform": true,
+        });
         let ms = [
             model(AdapterType::Databricks, conf.clone()),
             model_deprecated_config(conf),
@@ -857,7 +910,44 @@ catalogs:
             )
             .unwrap_err();
 
-            assert!(format!("{err}").contains("Databricks v2 unity requires file_format=delta"));
+            assert!(
+                format!("{err}")
+                    .contains("Databricks v2 unity use_uniform: true requires file_format: delta")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_v2_unity_model_override_rejects_delta_without_use_uniform() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UC
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "catalog_name": "UC", "use_uniform": false });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let err = from_model_config_and_catalogs_v2(
+                &AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap_err();
+
+            assert!(format!("{err}").contains(
+                "Databricks v2 unity use_uniform: false (or unset) requires file_format: parquet"
+            ));
         }
     }
 
@@ -906,6 +996,7 @@ catalogs:
     config:
       databricks:
         file_format: delta
+        use_uniform: true
 "#,
         );
         let model = JVal::from_serialize(json!({

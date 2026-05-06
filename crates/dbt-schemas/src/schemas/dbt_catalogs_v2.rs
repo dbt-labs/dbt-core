@@ -83,6 +83,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use super::dbt_catalogs::DbtCatalogs;
+use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
@@ -160,24 +161,7 @@ fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Mapping
 }
 
 fn validate_optional_bool(m: &yml::Mapping, k: &str) -> FsResult<()> {
-    match m.get(yml::Value::from(k)) {
-        Some(v) => match v {
-            yml::Value::Bool(_, _) => Ok(()),
-            yml::Value::String(s, _)
-                if s.trim().eq_ignore_ascii_case("true")
-                    || s.trim().eq_ignore_ascii_case("false") =>
-            {
-                Ok(())
-            }
-            _ => Err(fs_err!(
-                code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span().clone()),
-                "Key '{}' must be a boolean",
-                k
-            )),
-        },
-        None => Ok(()),
-    }
+    try_get_bool(m, k).map(|_| ())
 }
 
 fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Sequence>> {
@@ -429,6 +413,48 @@ impl V2TableFormat {
             Self::Default => "default",
             Self::Iceberg => "iceberg",
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum V2FileFormat {
+    Delta,
+    Parquet,
+    Hudi,
+}
+
+impl V2FileFormat {
+    pub fn parse(raw: &str, span: Option<yml::Span>) -> FsResult<Self> {
+        if raw.eq_ignore_ascii_case("delta") {
+            Ok(Self::Delta)
+        } else if raw.eq_ignore_ascii_case("parquet") {
+            Ok(Self::Parquet)
+        } else if raw.eq_ignore_ascii_case("hudi") {
+            Ok(Self::Hudi)
+        } else {
+            err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => span,
+                "file_format '{}' invalid. choose one of (delta|parquet|hudi)",
+                raw
+            )
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UniformMode {
+    Enabled,
+    Disabled,
+}
+
+impl UniformMode {
+    pub fn from_bool(b: bool) -> Self {
+        if b { Self::Enabled } else { Self::Disabled }
+    }
+
+    pub fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
     }
 }
 
@@ -846,20 +872,42 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
             return err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => catalog.field_span("type").cloned(),
-                "Catalog '{}' {}/databricks config requires 'file_format' (delta)",
+                "Catalog '{}' {}/databricks config requires 'file_format' (delta|parquet)",
                 catalog.name,
                 type_name
             );
         };
-        if !file_format.eq_ignore_ascii_case("delta") {
-            return err!(
+
+        let file_format_span = field_span(databricks, "file_format").cloned();
+        let file_format = V2FileFormat::parse(file_format, file_format_span.clone())?;
+        let use_uniform =
+            UniformMode::from_bool(try_get_bool(databricks, "use_uniform")?.unwrap_or(false));
+
+        match (file_format, use_uniform) {
+            (V2FileFormat::Delta, UniformMode::Enabled)
+            | (V2FileFormat::Parquet, UniformMode::Disabled) => Ok(()),
+            (V2FileFormat::Delta, UniformMode::Disabled) => err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => field_span(databricks, "file_format").cloned(),
-                "Catalog '{}' {}/databricks file_format must be 'delta'",
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' {}/databricks use_uniform: false (or unset) requires file_format: parquet",
                 catalog.name,
                 type_name
-            );
-        }
+            ),
+            (V2FileFormat::Parquet, UniformMode::Enabled) => err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' {}/databricks use_uniform: true requires file_format: delta",
+                catalog.name,
+                type_name
+            ),
+            (V2FileFormat::Hudi, _) => err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => file_format_span,
+                "Catalog '{}' {}/databricks file_format 'hudi' is not valid for unity (use delta or parquet)",
+                catalog.name,
+                type_name
+            ),
+        }?;
         if let Some(location_root) = get_str(databricks, "location_root")?
             && location_root.is_empty_or_whitespace()
         {
@@ -871,7 +919,6 @@ fn parse_linked_catalog(catalog: &CatalogSpecV2View<'_>, type_name: &str) -> FsR
                 type_name
             );
         }
-        validate_optional_bool(databricks, "use_uniform")?;
     }
 
     Ok(())
@@ -1046,9 +1093,38 @@ catalogs:
       databricks:
         file_format: delta
         location_root: "s3://bucket/path"
-        use_uniform: false
+        use_uniform: true
 "#;
         parse_and_validate(yaml).expect("v2 should validate");
+    }
+
+    #[test]
+    fn unity_databricks_parquet_managed_iceberg_valid() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: parquet
+        use_uniform: false
+"#;
+        parse_and_validate(yaml).expect("parquet + use_uniform=false should validate");
+    }
+
+    #[test]
+    fn unity_databricks_parquet_use_uniform_unset_valid() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: parquet
+"#;
+        parse_and_validate(yaml).expect("parquet with use_uniform unset should validate");
     }
 
     #[test]
@@ -1301,7 +1377,7 @@ catalogs:
     }
 
     #[test]
-    fn unity_databricks_requires_delta_even_with_use_uniform() {
+    fn unity_databricks_parquet_with_use_uniform_is_rejected() {
         let yaml = r#"
 catalogs:
   - name: linked_catalog
@@ -1316,7 +1392,68 @@ catalogs:
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("file_format must be 'delta'"),
+            msg.contains("use_uniform: true requires file_format: delta"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn unity_databricks_delta_without_use_uniform_is_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("use_uniform: false (or unset) requires file_format: parquet"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn unity_databricks_delta_with_use_uniform_false_is_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: false
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("use_uniform: false (or unset) requires file_format: parquet"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn unity_databricks_unknown_file_format_is_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: linked_catalog
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: iceberg
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("invalid. choose one of (delta|parquet|hudi)"),
             "unexpected error: {msg}"
         );
     }

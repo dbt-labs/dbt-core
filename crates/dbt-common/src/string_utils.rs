@@ -1,3 +1,5 @@
+use crate::{ErrorCode, FsResult, fs_err};
+
 /// Splits the input string into words, but treats every {..} as one word
 pub fn split_into_whitespace_and_brackets(input: &str) -> Vec<String> {
     // Used to prepare programmatic commandline parsing
@@ -111,6 +113,24 @@ pub fn is_test_temp_identifier(identifier: &str) -> bool {
     identifier.to_ascii_lowercase().starts_with("test_")
 }
 
+/// Parse a string config value as a boolean.
+///
+/// Accepts `"true"`/`"false"` case-insensitively with surrounding
+/// whitespace trimmed. Returns `Ok(None)` for `None` input; returns an
+/// `InvalidConfig` `FsError` naming `key` for unparseable values.
+pub fn try_parse_bool_str(s: Option<&str>, key: &str) -> FsResult<Option<bool>> {
+    match s {
+        None => Ok(None),
+        Some(v) if v.trim().eq_ignore_ascii_case("true") => Ok(Some(true)),
+        Some(v) if v.trim().eq_ignore_ascii_case("false") => Ok(Some(false)),
+        Some(_) => Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "Failed to parse {}, expected \"true\" or \"false\"",
+            key
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +161,48 @@ mod tests {
         let input = r#"hello { "world "  }"#;
         let expected = vec!["hello", "{ \"world \"  }"];
         assert_eq!(split_into_whitespace_and_brackets(input), expected);
+    }
+
+    #[test]
+    fn try_parse_bool_str_missing_input_yields_none() {
+        assert_eq!(try_parse_bool_str(None, "ra3_node").unwrap(), None);
+    }
+
+    #[test]
+    fn try_parse_bool_str_parses_true_in_any_casing() {
+        for s in ["true", "True", "TRUE", "tRuE"] {
+            assert_eq!(try_parse_bool_str(Some(s), "k").unwrap(), Some(true));
+        }
+    }
+
+    #[test]
+    fn try_parse_bool_str_parses_false_in_any_casing() {
+        for s in ["false", "False", "FALSE", "fAlSe"] {
+            assert_eq!(try_parse_bool_str(Some(s), "k").unwrap(), Some(false));
+        }
+    }
+
+    #[test]
+    fn try_parse_bool_str_trims_surrounding_whitespace() {
+        assert_eq!(try_parse_bool_str(Some(" true"), "k").unwrap(), Some(true));
+        assert_eq!(try_parse_bool_str(Some("true "), "k").unwrap(), Some(true));
+        assert_eq!(
+            try_parse_bool_str(Some("  TRUE  "), "k").unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            try_parse_bool_str(Some(" false "), "k").unwrap(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn try_parse_bool_str_unparseable_yields_invalid_config_error_naming_the_key() {
+        let err = try_parse_bool_str(Some("yes"), "ra3_node").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(
+            err.to_string().contains("ra3_node"),
+            "error should name the failing key, got: {err}"
+        );
     }
 }

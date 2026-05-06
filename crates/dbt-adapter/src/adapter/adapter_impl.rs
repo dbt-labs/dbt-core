@@ -140,7 +140,9 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
 /// dbt-core users may write in `profiles.yml`. Missing keys default to
 /// `false`; unparseable values return a `Configuration` error.
 pub(crate) fn get_bool_config(engine: &dyn AdapterEngine, key: &str) -> AdapterResult<bool> {
-    crate::try_parse_bool_str(engine.config(key).as_deref(), key).map(|o| o.unwrap_or(false))
+    dbt_common::string_utils::try_parse_bool_str(engine.config(key).as_deref(), key)
+        .map(|o| o.unwrap_or(false))
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e.to_string()))
 }
 
 pub fn quote_ident(adapter_type: AdapterType, identifier: &str) -> String {

@@ -383,6 +383,37 @@ impl<T> From<Option<T>> for Omissible<T> {
     }
 }
 
+/// Read an optional boolean from a YAML mapping.
+///
+/// Accepts a YAML `Bool` literal or a string parseable by
+/// [`crate::string_utils::try_parse_bool_str`]. Missing keys return
+/// `Ok(None)`; other YAML shapes or unparseable strings return an
+/// `InvalidConfig` error.
+pub fn try_get_bool(m: &dbt_yaml::Mapping, k: &str) -> crate::FsResult<Option<bool>> {
+    use crate::string_utils::try_parse_bool_str;
+    use crate::{ErrorCode, fs_err};
+    match m.get(dbt_yaml::Value::from(k)) {
+        None => Ok(None),
+        Some(v) => match v {
+            dbt_yaml::Value::Bool(b, _) => Ok(Some(*b)),
+            dbt_yaml::Value::String(s, _) => try_parse_bool_str(Some(s.as_str()), k).map_err(|e| {
+                fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(v.span().clone()),
+                    "{}",
+                    e.message()
+                )
+            }),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span().clone()),
+                "Key '{}' must be a boolean",
+                k
+            )),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,5 +580,43 @@ properties:
             "expected list syntax `[...]` but got: {rendered}"
         );
         assert_eq!(rendered, "['ID', 'TH', 'PH', 'SG']");
+    }
+
+    #[test]
+    fn try_get_bool_missing_key_yields_none() {
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str("other_key: true").unwrap();
+        assert_eq!(try_get_bool(&m, "use_uniform").unwrap(), None);
+    }
+
+    #[test]
+    fn try_get_bool_yaml_bool_literal() {
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str("k: true").unwrap();
+        assert_eq!(try_get_bool(&m, "k").unwrap(), Some(true));
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str("k: false").unwrap();
+        assert_eq!(try_get_bool(&m, "k").unwrap(), Some(false));
+    }
+
+    #[test]
+    fn try_get_bool_yaml_string_with_casing_and_whitespace() {
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str(r#"k: "True""#).unwrap();
+        assert_eq!(try_get_bool(&m, "k").unwrap(), Some(true));
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str(r#"k: "  TRUE  ""#).unwrap();
+        assert_eq!(try_get_bool(&m, "k").unwrap(), Some(true));
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str(r#"k: "false""#).unwrap();
+        assert_eq!(try_get_bool(&m, "k").unwrap(), Some(false));
+    }
+
+    #[test]
+    fn try_get_bool_unparseable_string_errors() {
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str(r#"k: "yes""#).unwrap();
+        let err = try_get_bool(&m, "k").unwrap_err();
+        assert!(err.to_string().contains(r#"expected "true" or "false""#));
+    }
+
+    #[test]
+    fn try_get_bool_wrong_yaml_type_errors() {
+        let m: dbt_yaml::Mapping = dbt_yaml::from_str("k: 42").unwrap();
+        let err = try_get_bool(&m, "k").unwrap_err();
+        assert!(err.to_string().contains("must be a boolean"));
     }
 }
