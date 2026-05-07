@@ -55,7 +55,7 @@ pub enum DbConfig {
     // Synapse,
     Fabric(Box<FabricDbConfig>),
     // Dremio,
-    // ClickHouse,
+    ClickHouse(Box<ClickHouseDbConfig>),
     // Materialize,
     // Rockset,
     // Firebolt,
@@ -104,6 +104,7 @@ impl_from_db_config!(Databricks, DatabricksDbConfig);
 impl_from_db_config!(DuckDB, DuckDbConfig);
 impl_from_db_config!(Fabric, FabricDbConfig);
 impl_from_db_config!(Exasol, ExasolDbConfig);
+impl_from_db_config!(ClickHouse, ClickHouseDbConfig);
 
 impl DbConfig {
     pub fn get_unique_field(&self) -> Option<&str> {
@@ -121,6 +122,7 @@ impl DbConfig {
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
             DbConfig::Exasol(config) => config.host.as_deref(),
+            DbConfig::ClickHouse(config) => config.host.as_deref(),
         }
     }
 
@@ -266,6 +268,9 @@ impl DbConfig {
                 "encryption",
                 "certificate_validation",
             ],
+            DbConfig::ClickHouse(_) => &[
+                "host", "port", "user", "password", "database", "schema", "secure",
+            ],
         }
     }
 
@@ -299,6 +304,7 @@ impl DbConfig {
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
             DbConfig::Exasol(config) => dbt_yaml::to_value(config),
+            DbConfig::ClickHouse(config) => dbt_yaml::to_value(config),
         }
     }
 
@@ -316,6 +322,7 @@ impl DbConfig {
             DbConfig::Spark(..) => AdapterType::Spark,
             DbConfig::Fabric(..) => AdapterType::Fabric,
             DbConfig::Exasol(..) => AdapterType::Exasol,
+            DbConfig::ClickHouse(..) => AdapterType::ClickHouse,
         }
     }
 
@@ -339,6 +346,7 @@ impl DbConfig {
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
+            DbConfig::ClickHouse(config) => config.database.as_ref(),
         }
     }
 
@@ -377,6 +385,7 @@ impl DbConfig {
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
             DbConfig::Exasol(config) => config.schema.as_ref(),
+            DbConfig::ClickHouse(config) => config.schema.as_ref(),
         }
     }
 
@@ -394,6 +403,7 @@ impl DbConfig {
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(_) => None,
             DbConfig::Exasol(config) => config.threads.as_ref(),
+            DbConfig::ClickHouse(config) => config.threads.as_ref(),
         }
     }
 
@@ -411,6 +421,7 @@ impl DbConfig {
             DbConfig::Spark(_) => (),
             DbConfig::Fabric(_) => (),
             DbConfig::Exasol(config) => config.threads = threads,
+            DbConfig::ClickHouse(config) => config.threads = threads,
         }
     }
 
@@ -1183,6 +1194,25 @@ pub struct ExasolDbConfig {
     pub threads: Option<StringOrInteger>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct ClickHouseDbConfig {
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<StringOrInteger>,
+    pub user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "pass")]
+    pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "dbname")]
+    pub database: Option<String>,
+    pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secure: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<StringOrInteger>,
+}
+
 #[derive(Serialize, DbtSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
@@ -1200,6 +1230,7 @@ pub enum TargetContext {
     Spark(SparkTargetEnv),
     Fabric(FabricTargetEnv),
     Exasol(ExasolTargetEnv),
+    ClickHouse(ClickHouseTargetEnv),
     // Add other variants as needed
 }
 
@@ -1375,6 +1406,16 @@ pub struct FabricTargetEnv {
 pub struct ExasolTargetEnv {
     pub host: Option<String>,
     pub user: Option<String>,
+    pub __common__: CommonTargetContext,
+}
+
+#[derive(Serialize, DbtSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ClickHouseTargetEnv {
+    pub host: String,
+    pub user: String,
+    pub port: StringOrInteger,
+    pub secure: bool,
     pub __common__: CommonTargetContext,
 }
 
@@ -1745,6 +1786,34 @@ impl TryFrom<DbConfig> for TargetContext {
                     threads: None,
                 },
             })),
+
+            DbConfig::ClickHouse(config) => {
+                let secure = config.secure.unwrap_or(false);
+                let default_port: i64 = if secure { 8443 } else { 8123 };
+                let port = config
+                    .port
+                    .unwrap_or(StringOrInteger::Integer(default_port));
+                Ok(TargetContext::ClickHouse(ClickHouseTargetEnv {
+                    host: config.host.unwrap_or_else(|| "localhost".to_string()),
+                    user: config.user.unwrap_or_else(|| "default".to_string()),
+                    port,
+                    secure,
+                    __common__: CommonTargetContext {
+                        database: config.database.unwrap_or_default(),
+                        schema: config.schema.ok_or_else(|| missing("schema"))?,
+                        type_: adapter_type,
+                        threads: match config.threads {
+                            Some(StringOrInteger::String(threads)) => {
+                                Some(threads.parse::<u16>().map_err(|_| {
+                                    "threads must be a positive integer".to_string()
+                                })?)
+                            }
+                            Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                            None => None,
+                        },
+                    },
+                }))
+            }
         }
     }
 }
@@ -1965,5 +2034,81 @@ extensions:
         assert!(duckdb_config.extensions.is_some());
         let extensions = duckdb_config.extensions.unwrap();
         assert_eq!(extensions.len(), 3);
+    }
+
+    #[test]
+    fn test_clickhouse_minimal_config_parses() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: clickhouse\n\
+             schema: analytics\n",
+        )
+        .unwrap();
+
+        let DbConfig::ClickHouse(clickhouse_config) = config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+        assert_eq!(clickhouse_config.host, None);
+        assert_eq!(clickhouse_config.port, None);
+        assert_eq!(clickhouse_config.user, None);
+        assert_eq!(clickhouse_config.password, None);
+        assert_eq!(clickhouse_config.database, None);
+        assert_eq!(clickhouse_config.schema, Some("analytics".to_string()));
+        assert_eq!(clickhouse_config.secure, None);
+    }
+
+    #[test]
+    fn test_clickhouse_full_config_parses() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: clickhouse\n\
+             host: ch.prod.internal\n\
+             port: 9000\n\
+             user: alice\n\
+             password: secret\n\
+             database: warehouse\n\
+             schema: analytics\n\
+             secure: true\n\
+             threads: 4\n",
+        )
+        .unwrap();
+
+        let DbConfig::ClickHouse(clickhouse_config) = config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+        assert_eq!(clickhouse_config.host, Some("ch.prod.internal".to_string()));
+        assert_eq!(clickhouse_config.port, Some(StringOrInteger::Integer(9000)));
+        assert_eq!(clickhouse_config.user, Some("alice".to_string()));
+        assert_eq!(clickhouse_config.password, Some("secret".to_string()));
+        assert_eq!(clickhouse_config.database, Some("warehouse".to_string()));
+        assert_eq!(clickhouse_config.schema, Some("analytics".to_string()));
+        assert_eq!(clickhouse_config.secure, Some(true));
+        assert_eq!(clickhouse_config.threads, Some(StringOrInteger::Integer(4)));
+    }
+
+    #[test]
+    fn test_clickhouse_dbname_alias() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: clickhouse\n\
+             dbname: warehouse\n\
+             schema: analytics\n",
+        )
+        .unwrap();
+
+        let DbConfig::ClickHouse(clickhouse_config) = config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+        assert_eq!(clickhouse_config.database, Some("warehouse".to_string()));
+    }
+
+    #[test]
+    fn test_clickhouse_adapter_type_dispatch() {
+        let config: DbConfig = ClickHouseDbConfig {
+            host: Some("ch.example.com".to_string()),
+            schema: Some("analytics".to_string()),
+            ..Default::default()
+        }
+        .into();
+
+        assert_eq!(config.adapter_type(), AdapterType::ClickHouse);
+        assert_eq!(config.get_unique_field(), Some("ch.example.com"));
     }
 }
