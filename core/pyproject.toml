@@ -32,7 +32,7 @@ dependencies = [
     # ----
     # dbt-core uses these packages deeply, throughout the codebase, and there have been breaking changes in past patch releases (even though these are major-version-one).
     # Pin to the patch or minor version, and bump in each new minor version of dbt-core.
-    "agate>=1.7.0,<1.10",
+    "agate>=1.7.0,<1.15",
     "Jinja2>=3.1.3,<4",
     "mashumaro[msgpack]>=3.9,<3.18",
     # ----
@@ -41,7 +41,7 @@ dependencies = [
     "click>=8.3.0,<9.0",
     "jsonschema>=4.19.1,<5.0",
     "networkx>=2.3,<4.0",
-    "protobuf>=6.0,<7.0",
+    "protobuf>=6.0,<8.0",
     "requests<3.0.0",  # should match dbt-common
     "snowplow-tracker>=1.0.2,<2.0",
     "pathspec>=0.9,<1.1",
