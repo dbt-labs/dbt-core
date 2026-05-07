@@ -1,6 +1,5 @@
 kind: Features
-body: Add `Reused` to `NodeStatus` and `RunStatus` so plugins (e.g. run cache) can
-  distinguish reused-from-cache results from no-ops
+body: Add `Reused` to `NodeStatus` and `RunStatus`
 time: 2026-05-07T11:55:22-07:00
 custom:
     Author: colin-rogers-dbt
