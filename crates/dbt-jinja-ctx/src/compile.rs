@@ -32,7 +32,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::JinjaObject;
-use crate::objects::{DbtNamespace, MacroLookupContext};
+use crate::objects::{DbtNamespace, DummyConfig, MacroLookupContext};
 
 /// Per-render compile-base context. Today's `build_compile_and_run_base_context`
 /// populates this 1:1 — same field names, same key constants
@@ -45,8 +45,7 @@ pub struct CompileBaseCtx {
     /// `{{ config(...) }}` — base-scope `DummyConfig` Object that absorbs
     /// macro-time `config(...)` calls (overlaid per-node by
     /// [`CompileNodeCtx::config`]).
-    #[schemars(with = "serde_json::Value")]
-    pub config: MinijinjaValue,
+    pub config: JinjaObject<DummyConfig>,
 
     /// `{{ MACRO_DISPATCH_ORDER }}` — per-package dispatch order map. Same
     /// downcast contract as [`crate::ResolveBaseCtx::macro_dispatch_order`]:

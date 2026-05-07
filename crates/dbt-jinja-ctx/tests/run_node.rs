@@ -11,8 +11,12 @@
 //! 4. The `RunNodeCtx` JsonSchema has stable shape (snapshot test).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
-use dbt_jinja_ctx::{JinjaObject, MacroLookupContext, RunNodeCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{
+    JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx, to_jinja_btreemap,
+};
+use indexmap::IndexMap;
 use minijinja::Value as MinijinjaValue;
 use minijinja::machinery::Span;
 
@@ -21,7 +25,7 @@ fn fixture_run_node_ctx(
     post_hooks: Option<MinijinjaValue>,
     load_agate_table: Option<MinijinjaValue>,
 ) -> RunNodeCtx {
-    let mut model_inner: BTreeMap<String, MinijinjaValue> = BTreeMap::new();
+    let mut model_inner: IndexMap<String, MinijinjaValue> = IndexMap::new();
     model_inner.insert(
         "name".to_string(),
         MinijinjaValue::from("dbt_columns".to_string()),
@@ -39,8 +43,14 @@ fn fixture_run_node_ctx(
         pre_hooks,
         post_hooks,
         config: MinijinjaValue::from("run-config-stub"),
-        model: MinijinjaValue::from_object(model_inner.clone()),
-        node: MinijinjaValue::from_object(model_inner),
+        model: JinjaObject::new(LazyModelWrapper::new(
+            model_inner.clone(),
+            PathBuf::from("/tmp/nonexistent.sql"),
+        )),
+        node: JinjaObject::new(LazyModelWrapper::new(
+            model_inner,
+            PathBuf::from("/tmp/nonexistent.sql"),
+        )),
         connection_name: String::new(),
         store_result: MinijinjaValue::from("store-result-stub"),
         load_result: MinijinjaValue::from("load-result-stub"),

@@ -46,7 +46,9 @@ pub use core::{GlobalCore, ResolveCore};
 pub use dbt_handles::AdapterHandle;
 pub use jinja_object::JinjaObject;
 pub use load::LoadCtx;
-pub use objects::{DbtNamespace, MacroLookupContext, ParseExecute};
+pub use objects::{
+    DbtNamespace, DummyConfig, HookConfig, LazyModelWrapper, MacroLookupContext, ParseExecute,
+};
 pub use register::{register_globals_from_serialize, to_jinja_btreemap};
 pub use resolve::{ResolveBaseCtx, ResolveModelCtx};
 pub use run::RunNodeCtx;

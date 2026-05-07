@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use dbt_jinja_ctx::{
-    CompileBaseCtx, DbtNamespace, JinjaObject, MacroLookupContext, to_jinja_btreemap,
+    CompileBaseCtx, DbtNamespace, DummyConfig, JinjaObject, MacroLookupContext, to_jinja_btreemap,
 };
 use minijinja::Value as MinijinjaValue;
 
@@ -39,7 +39,7 @@ fn fixture_compile_base_ctx() -> CompileBaseCtx {
     );
 
     CompileBaseCtx {
-        config: MinijinjaValue::from("dummy-config-stub"),
+        config: JinjaObject::new(DummyConfig),
         macro_dispatch_order,
         ref_fn: MinijinjaValue::from("ref-fn-stub"),
         source: MinijinjaValue::from("source-fn-stub"),

@@ -44,7 +44,12 @@ expression: schema
       "description": "`{{ builtins.* }}` — `BTreeMap<String, MinijinjaValue>` Object holding `ref` / `source` / `function`. Compile-node-context code downcasts this back to `BTreeMap<String, MinijinjaValue>` when overlaying validated variants per-node, so the underlying Object type must be exactly that."
     },
     "config": {
-      "description": "`{{ config(...) }}` — base-scope `DummyConfig` Object that absorbs macro-time `config(...)` calls (overlaid per-node by [`CompileNodeCtx::config`])."
+      "description": "`{{ config(...) }}` — base-scope `DummyConfig` Object that absorbs macro-time `config(...)` calls (overlaid per-node by [`CompileNodeCtx::config`]).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::compile::DummyConfig>"
+        }
+      ]
     },
     "connection_name": {
       "description": "`{{ connection_name }}` — empty string at base scope.",
@@ -89,6 +94,12 @@ expression: schema
   },
   "additionalProperties": true,
   "definitions": {
+    "JinjaObject<dbt_jinja_ctx::objects::compile::DummyConfig>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::compile::DummyConfig`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::compile::DummyConfig"
+    },
     "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
       "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
       "type": "object",

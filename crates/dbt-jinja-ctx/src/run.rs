@@ -24,7 +24,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::JinjaObject;
-use crate::objects::MacroLookupContext;
+use crate::objects::{LazyModelWrapper, MacroLookupContext};
 
 /// Per-node run-time overlay layered onto [`crate::CompileBaseCtx`] for each
 /// node materialization. Today's `build_run_node_context<S>` populates this
@@ -76,14 +76,12 @@ pub struct RunNodeCtx {
     /// `{{ model.* }}` — `LazyModelWrapper` Object that lazy-loads
     /// `compiled_code` from the on-disk compiled SQL on first attribute
     /// access. Shadows the base.
-    #[schemars(with = "serde_json::Value")]
-    pub model: MinijinjaValue,
+    pub model: JinjaObject<LazyModelWrapper>,
 
     /// `{{ node.* }}` — same `LazyModelWrapper` content as `model` (run
     /// phase aliases them; compile-node does not). Shadows
     /// [`crate::CompileBaseCtx::node`] (`Value::NONE`).
-    #[schemars(with = "serde_json::Value")]
-    pub node: MinijinjaValue,
+    pub node: JinjaObject<LazyModelWrapper>,
 
     /// `{{ connection_name }}` — empty string at run scope (overlays).
     pub connection_name: String,

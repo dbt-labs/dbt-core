@@ -28,9 +28,9 @@ use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 
-use dbt_jinja_ctx::{JinjaObject, MacroLookupContext, RunNodeCtx, to_jinja_btreemap};
-
-use super::lazy_model::LazyModelWrapper;
+use dbt_jinja_ctx::{
+    HookConfig, JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx, to_jinja_btreemap,
+};
 
 use super::run_config::RunConfig;
 use dbt_schemas::schemas::project::ConfigKeys;
@@ -50,8 +50,8 @@ struct ModelContextFields {
     pre_hooks: Option<MinijinjaValue>,
     post_hooks: Option<MinijinjaValue>,
     config: MinijinjaValue,
-    model: MinijinjaValue,
-    node: MinijinjaValue,
+    model: JinjaObject<LazyModelWrapper>,
+    node: JinjaObject<LazyModelWrapper>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -189,8 +189,8 @@ fn build_model_context_fields<S: Serialize>(
         pre_hooks,
         post_hooks,
         config: MinijinjaValue::from_object(node_config),
-        model: MinijinjaValue::from_object(lazy_model),
-        node: MinijinjaValue::from_object(lazy_node),
+        model: JinjaObject::new(lazy_model),
+        node: JinjaObject::new(lazy_node),
     }
 }
 
@@ -384,31 +384,6 @@ fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {
             eprintln!("Pre hook unknown type: {item:?}");
             None
         }
-    }
-}
-
-#[derive(Clone)]
-struct HookConfig {
-    pub sql: String,
-
-    pub transaction: bool,
-}
-impl Object for HookConfig {
-    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
-        match key.as_str() {
-            Some("sql") => Some(MinijinjaValue::from(self.sql.clone())),
-            Some("transaction") => Some(MinijinjaValue::from(self.transaction)),
-            _ => None,
-        }
-    }
-    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.sql)
-    }
-}
-// iplement std::fmt::Debug for HookConfig
-impl std::fmt::Debug for HookConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "HookConfig {{ sql: {} }}", self.sql)
     }
 }
 

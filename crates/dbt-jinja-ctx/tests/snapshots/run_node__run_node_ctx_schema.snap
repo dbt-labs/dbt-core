@@ -1,6 +1,6 @@
 ---
 source: fs/sa/crates/dbt-jinja-ctx/tests/run_node.rs
-assertion_line: 124
+assertion_line: 134
 expression: schema
 ---
 {
@@ -73,10 +73,20 @@ expression: schema
       "description": "`{{ load_result(...) }}` — `ResultStore`-backed closure."
     },
     "model": {
-      "description": "`{{ model.* }}` — `LazyModelWrapper` Object that lazy-loads `compiled_code` from the on-disk compiled SQL on first attribute access. Shadows the base."
+      "description": "`{{ model.* }}` — `LazyModelWrapper` Object that lazy-loads `compiled_code` from the on-disk compiled SQL on first attribute access. Shadows the base.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::run::LazyModelWrapper>"
+        }
+      ]
     },
     "node": {
-      "description": "`{{ node.* }}` — same `LazyModelWrapper` content as `model` (run phase aliases them; compile-node does not). Shadows [`crate::CompileBaseCtx::node`] (`Value::NONE`)."
+      "description": "`{{ node.* }}` — same `LazyModelWrapper` content as `model` (run phase aliases them; compile-node does not). Shadows [`crate::CompileBaseCtx::node`] (`Value::NONE`).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::run::LazyModelWrapper>"
+        }
+      ]
     },
     "post_hooks": {
       "description": "`{{ post_hooks }}` — sequence of `HookConfig` Objects, only emitted when the node's config contains a `post_hook` entry."
@@ -110,6 +120,12 @@ expression: schema
       "type": "object",
       "x-jinja-object": true,
       "x-jinja-object-type": "dbt_jinja_ctx::objects::lookup::MacroLookupContext"
+    },
+    "JinjaObject<dbt_jinja_ctx::objects::run::LazyModelWrapper>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::run::LazyModelWrapper`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::run::LazyModelWrapper"
     }
   }
 }

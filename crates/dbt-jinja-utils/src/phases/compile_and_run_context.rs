@@ -34,35 +34,11 @@ pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: 
     env.set_undefined_behavior(UndefinedBehavior::Lenient);
 }
 
-#[derive(Debug)]
-struct DummyConfig;
-
-impl Object for DummyConfig {
-    fn call(
-        self: &Arc<Self>,
-        _: &State,
-        _: &[MinijinjaValue],
-        _: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
-        Ok(MinijinjaValue::from(""))
-    }
-
-    fn call_method(
-        self: &Arc<Self>,
-        _state: &State<'_, '_>,
-        name: &str,
-        _args: &[MinijinjaValue],
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
-        match name {
-            "get" => Ok(MinijinjaValue::from(None::<Option<String>>)),
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod,
-                format!("Unknown method on config: {name}"),
-            )),
-        }
-    }
-}
+// `DummyConfig` moved to `dbt_jinja_ctx::objects::compile`. Re-exported
+// here so existing call sites that imported it from this crate keep
+// working unchanged. Removed once every consumer migrates to
+// `dbt-jinja-ctx` directly.
+pub use dbt_jinja_ctx::DummyConfig;
 
 /// Configure the Jinja environment for the compile phase.
 ///
@@ -142,7 +118,7 @@ pub fn build_compile_and_run_base_context(
         .collect();
 
     let ctx = CompileBaseCtx {
-        config: MinijinjaValue::from_object(DummyConfig {}),
+        config: JinjaObject::new(DummyConfig {}),
         macro_dispatch_order,
         ref_fn: ref_value,
         source: source_value,
