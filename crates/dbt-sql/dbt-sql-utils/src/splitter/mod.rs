@@ -300,7 +300,7 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
                 let mut lexer = $dialect_crate::Lexer::<_>::new(arena, input_stream);
                 loop {
                     let token = lexer.next_token();
-                    if token.token_type == EOF {
+                    if token.get_token_type() == EOF {
                         break;
                     }
                     // If we find any token on the default channel (channel 0), it's not comment-only

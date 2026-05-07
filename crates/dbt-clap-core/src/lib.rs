@@ -1826,6 +1826,43 @@ pub struct CommonArgs {
     /// When installing packages from Package Hub, use v2-compatible downloads if available
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = false, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new())]
     pub use_v2_compatible_package_downloads: bool,
+
+    /// If set, the maximum number of bytes that the ANTLR parser is allowed to
+    /// allocate in its (per-dialect) global cache before it aborts with an
+    /// error. USE WITH CAUTION: as setting this too low may cause parsing to
+    /// fail on large SQL inputs. Default is 0 (unlimited). [env:
+    /// DBT_ANTLR_PARSER_CACHE_HARD_LIMIT_BYTES]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_ANTLR_PARSER_CACHE_HARD_LIMIT_BYTES",
+        hide = true
+    )]
+    pub antlr_parser_cache_hard_limit_bytes: Option<usize>,
+
+    /// If set, places a hard limit on the size of each Antlr AST -- if the
+    /// limit is exceeded, the parser will abort with an error. The purpose of
+    /// this limit is to prevent excessively large inputs (e.g.
+    /// machine-generated SQL) causing the whole process to be OOM-killed.
+    /// Default is 0 (unlimited). [env: DBT_ANTLR_ARENA_LIMIT_BYTES]
+    #[arg(global = true, long, env = "DBT_ANTLR_ARENA_LIMIT_BYTES", hide = true)]
+    pub antlr_arena_limit_bytes: Option<usize>,
+
+    /// If set, the number of bytes that the ANTLR parser is allowed to allocate
+    /// in its (per-dialect) global cache before it attempts to reset the whole
+    /// cache to free up memory. This setting is a "soft" limit that is checked
+    /// at the end of each parse (since cache resets can not be performed while
+    /// a parse is in progress), and if exceeded, triggers a cache reset. USE
+    /// WITH CAUTION: setting this too low may cause excessive cache resets and
+    /// degrade parsing performance on large SQL inputs. Default is 0
+    /// (unlimited). [env: DBT_ANTLR_CACHE_THRESHOLD_BYTES]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_ANTLR_CACHE_THRESHOLD_BYTES",
+        hide = true
+    )]
+    pub antlr_parser_cache_threshold_bytes: Option<usize>,
 }
 
 fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOptions> {

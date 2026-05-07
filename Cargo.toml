@@ -307,7 +307,7 @@ dbt-xdbc = { path = "crates/dbt-xdbc" }
 xdbc-record-replay = { path = "crates/xdbc-record-replay" }
 
 # antlr for frontend
-dbt-antlr4 = "1.0.5"
+dbt-antlr4 = { version = "1.3.4", features = ["arena-allocation-limit"] }
 # dbt-antlr4 = { path = "../antlr4.dev/runtime/Rust" }
 
 # datafusion
