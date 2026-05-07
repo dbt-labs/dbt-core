@@ -1,0 +1,64 @@
+name: Publish dbt-kernel to PyPI
+
+# Tag-triggered. Push a tag matching `dbt-kernel-v*` (e.g. dbt-kernel-v2.0.0.dev0)
+# at the commit you want to publish, and this workflow builds and uploads to PyPI
+# using the repo's existing PYPI_API_TOKEN secret.
+#
+# Dry-run convention: any tag containing the substring `dryrun` (e.g.
+# `dbt-kernel-v0.0.0-dryrun`) builds and smoke-tests the wheel but SKIPS the
+# PyPI upload step. Use this to verify the workflow itself before pushing a
+# real version tag.
+#
+# Tag triggers don't require the workflow file to live on the default branch,
+# so this workflow is safe to keep solely on the `v2` branch.
+
+on:
+  push:
+    tags:
+      - 'dbt-kernel-v*'
+
+jobs:
+  publish:
+    name: Build and upload dbt-kernel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        run: pip install --upgrade build
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Smoke test wheel
+        run: |
+          python -m venv /tmp/dk-test
+          /tmp/dk-test/bin/pip install dist/*.whl
+          /tmp/dk-test/bin/dbt-kernel
+
+      - name: Publish to PyPI
+        if: ${{ !contains(github.ref, 'dryrun') }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
+          skip-existing: true
+
+      - name: Note dry run (publish skipped)
+        if: ${{ contains(github.ref, 'dryrun') }}
+        run: |
+          echo "::notice title=Dry run::Skipped PyPI upload because the tag contains 'dryrun'."
+          echo "Tag ref: ${{ github.ref }}"
+          echo "Build artifacts in dist/:"
+          ls -la dist/
