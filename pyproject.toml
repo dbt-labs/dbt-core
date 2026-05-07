@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dbt-kernel"
+version = "2.0.0.dev0"
+description = "The dbt v2 engine. Placeholder for the upcoming 2.0.0 release."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "dbt Labs", email = "info@getdbt.com" }]
+keywords = ["dbt", "sql", "data", "analytics", "engineering"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Database",
+]
+
+[project.urls]
+Homepage = "https://getdbt.com"
+Repository = "https://github.com/dbt-labs/dbt-core"
+Issues = "https://github.com/dbt-labs/dbt-core/issues"
+
+[project.scripts]
+dbt-kernel = "dbt_kernel.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dbt_kernel"]
