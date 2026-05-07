@@ -104,14 +104,6 @@ def get_active_write_integration(catalog: Catalog) -> Optional[CatalogWriteInteg
 
 # ===== catalogs.yml v2 =====
 
-_VALID_V2_CATALOG_TYPES = {
-    "horizon",
-    "glue",
-    "iceberg_rest",
-    "unity",
-    "hive_metastore",
-    "biglake_metastore",
-}
 _VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
 _VALID_PLATFORMS = {"snowflake", "databricks", "bigquery"}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
@@ -206,14 +198,8 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
     if not isinstance(name, str) or not name.strip():
         raise DbtValidationError("catalogs[].name must be a non-empty string")
 
-    # Validate type
-    raw_type = str(rendered["type"]).lower()
-    if raw_type not in _VALID_V2_CATALOG_TYPES:
-        raise DbtValidationError(
-            f"Invalid catalog type '{rendered['type']}'. "
-            f"Must be one of: {sorted(_VALID_V2_CATALOG_TYPES)}"
-        )
-    catalog_type = raw_type
+    # Normalize type to lowercase — any string is accepted
+    catalog_type = str(rendered["type"]).lower()
 
     # Validate table_format
     raw_format = str(rendered["table_format"]).lower()
@@ -298,10 +284,18 @@ def _validate_platform_block(catalog: CatalogV2, adapter_type: str) -> None:
 
 
 def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> None:
-    """Phase 2 semantic validation: check type-specific platform support and field constraints."""
+    """Phase 2 semantic validation: check type-specific platform support and field constraints.
+
+    Unknown catalog types (not in _TYPE_PLATFORMS) pass through without type-specific checks
+    so 3p adapters can add new catalog types without core PRs.
+    """
     ct = catalog.catalog_type
     name = catalog.name
-    supported = _TYPE_PLATFORMS[ct]
+    supported = _TYPE_PLATFORMS.get(ct)
+
+    # Unknown catalog type — skip type-specific checks; adapter handles it at registration
+    if supported is None:
+        return
 
     # Validate table_format matches what the type requires
     required_format = _TYPE_TABLE_FORMAT[ct]
@@ -364,12 +358,9 @@ def bridge_v2_catalog_to_integration(
     ct = catalog.catalog_type
     key = (ct, adapter_type)
 
-    v1_catalog_type = _V2_TO_V1_CATALOG_TYPE.get(key)
-    if v1_catalog_type is None:
-        raise DbtValidationError(
-            f"Catalog '{catalog.name}' has type '{ct}'; "
-            f"{adapter_type} does not support this catalog type"
-        )
+    # Known types have explicit v1 bridge mappings; unknown types pass through as-is
+    # so 3p adapters can use their own catalog types without core changes.
+    v1_catalog_type = _V2_TO_V1_CATALOG_TYPE.get(key, ct)
 
     platform_block = _get_platform_block(catalog, adapter_type) or {}
 

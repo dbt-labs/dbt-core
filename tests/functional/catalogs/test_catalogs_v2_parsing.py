@@ -272,31 +272,6 @@ class TestV2DuplicateCatalogNames:
             run_dbt(["run"])
 
 
-class TestV2InvalidType:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"flags": {"use_catalogs_v2": True}}
-
-    @pytest.fixture
-    def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "bad_cat",
-                    "type": "nonexistent_type",
-                    "table_format": "iceberg",
-                    "config": {},
-                }
-            ]
-        }
-
-    def test_invalid_type_rejected(self, project, catalogs, adapter):
-        write_config_file(catalogs, project.project_root, "catalogs.yml")
-
-        with pytest.raises(DbtValidationError, match="Invalid catalog type"):
-            run_dbt(["run"])
-
-
 class TestV2InvalidTableFormat:
     @pytest.fixture(scope="class")
     def project_config_update(self):

@@ -194,15 +194,16 @@ class TestLoadSingleCatalogV2:
         with pytest.raises(DbtValidationError, match="Missing required key 'config'"):
             load_single_catalog_v2(raw, renderer)
 
-    def test_invalid_type(self, renderer):
+    def test_unknown_type_passes_through(self, renderer):
+        # Unknown catalog types are accepted — 3p adapters define their own types
         raw = {
             "name": "cat",
-            "type": "invalid_type",
+            "type": "my_custom_type",
             "table_format": "iceberg",
             "config": {},
         }
-        with pytest.raises(DbtValidationError, match="Invalid catalog type"):
-            load_single_catalog_v2(raw, renderer)
+        catalog = load_single_catalog_v2(raw, renderer)
+        assert catalog.catalog_type == "my_custom_type"
 
     def test_invalid_table_format(self, renderer):
         raw = {
@@ -551,13 +552,14 @@ class TestBridgeV2CatalogToIntegration:
         assert config.file_format == "parquet"
         assert config.adapter_properties == {"base_location_root": "root"}
 
-    def test_unsupported_adapter_type(self):
+    def test_unknown_type_passes_through_bridge(self):
+        # Unknown catalog types bridge using the raw type string as v1 catalog_type
         cat = _make_catalog(
-            catalog_type="horizon",
+            catalog_type="my_custom_type",
             snowflake={"external_volume": "vol"},
         )
-        with pytest.raises(DbtValidationError, match="does not support"):
-            bridge_v2_catalog_to_integration(cat, "databricks")
+        config = bridge_v2_catalog_to_integration(cat, "snowflake")
+        assert config.catalog_type == "my_custom_type"
 
     def test_missing_platform_block_uses_empty(self):
         """When a unity catalog has no snowflake block, bridge uses empty + type annotation."""
