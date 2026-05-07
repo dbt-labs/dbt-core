@@ -4,6 +4,7 @@ use crate::relation::duckdb_should_include_database;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use dbt_adapter_core::AdapterType;
+use dbt_adapter_sql::ident::max_identifier_length;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -18,18 +19,7 @@ use minijinja::Value;
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::num::NonZero;
 use std::sync::Arc;
-
-fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>> {
-    use AdapterType::*;
-    match adapter_type {
-        // SAFETY: literal 63 is never 0
-        Postgres => Some(unsafe { NonZero::new_unchecked(63) }),
-        Snowflake | Bigquery | Databricks | Redshift | Spark | DuckDB | Salesforce | Fabric
-        | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => None,
-    }
-}
 
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
@@ -260,17 +250,18 @@ impl Relation {
         is_delta: bool,
         temporary: bool,
     ) -> Result<Self, minijinja::Error> {
-        if let Some(max_identifier_length) = max_identifier_length(adapter_type) {
-            if let (Some(id), Some(_)) = (path.identifier.as_deref(), relation_type) {
-                if id.len() > max_identifier_length.into() {
-                    return Err(minijinja::Error::new(
-                        minijinja::ErrorKind::InvalidOperation,
-                        format!(
-                            "Relation name '{}' is longer than {} characters",
-                            id, max_identifier_length
-                        ),
-                    ));
-                }
+        if let (Some(ident), Some(_relation_type), Some(max_len)) = (
+            &path.identifier,
+            &relation_type,
+            max_identifier_length(adapter_type),
+        ) {
+            use minijinja::ErrorKind::InvalidOperation;
+            if ident.len() > max_len.into() {
+                let message = format!(
+                    "Relation name '{}' is longer than {} characters",
+                    ident, max_len
+                );
+                return Err(minijinja::Error::new(InvalidOperation, message));
             }
         }
 

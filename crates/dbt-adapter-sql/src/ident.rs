@@ -1,6 +1,7 @@
 use core::fmt;
+use std::num::NonZero;
 
-use dbt_adapter_core::AdapterType;
+use dbt_adapter_core::{AdapterType, quote_char};
 
 use super::is_keyword_ignore_ascii_case;
 use super::tokenizer::QuotingStyle;
@@ -108,6 +109,18 @@ fn _render_ident_in_quotes(
     write!(f, "{closing}")
 }
 
+pub fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>> {
+    use AdapterType::*;
+    match adapter_type {
+        Postgres => {
+            // SAFETY: literal 63 is never 0
+            Some(unsafe { NonZero::new_unchecked(63) })
+        }
+        Snowflake | Bigquery | Databricks | Redshift | Spark | DuckDB | Salesforce | Fabric
+        | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => None,
+    }
+}
+
 // TODO: implement a separate struct Idents that can be used as (BTree|Hash)(Map|Set) keys
 // (a separate struct that binds the backend is needed because comparing Idents is backend-dependent)
 //
@@ -117,19 +130,6 @@ fn _render_ident_in_quotes(
 // are different from these three and each other.
 //
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
-
-/// The character used to quote identifiers in this backend's dialect.
-pub const fn quote_char(backend: AdapterType) -> char {
-    use AdapterType::*;
-    match backend {
-        Bigquery | Databricks | Spark | Athena => '`',
-        Snowflake => '"',
-        ClickHouse | Exasol | Redshift | Postgres | Salesforce | DuckDB => '"',
-        // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
-        Fabric => '"',
-        _ => '"',
-    }
-}
 
 /// The canonical quoting style used to quote identifiers in this backend's dialect.
 pub const fn canonical_quote(backend: AdapterType) -> QuotingStyle {

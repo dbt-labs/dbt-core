@@ -19,3 +19,4 @@ workspace = true
 arrow-schema = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-sql-keywords = { workspace = true }
