@@ -298,6 +298,14 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-postgres-windows
 
+      # Required when pip installs dependencies from git sources (e.g. the
+      # temporary metricflow @ git+https://... pin): metricflow's snapshot
+      # filenames exceed Windows' 260-char MAX_PATH, so `git clone` aborts
+      # with "Filename too long" unless core.longpaths is enabled.
+      - name: Enable git long paths (windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
       - name: "Install hatch"
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
