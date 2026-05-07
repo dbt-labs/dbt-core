@@ -67,8 +67,8 @@ pub enum Backend {
     Salesforce,
     /// Spark driver implementation (ADBC).
     Spark,
-    /// DuckDB driver implementation (ADBC).
-    DuckDB,
+    /// DuckDB driver implementation (ADBC) + a set of extensions.
+    DuckDBExtended,
     /// Microsoft SQL Server implementation (ADBC).
     SQLServer,
     /// Athena driver implementation (ADBC).
@@ -105,7 +105,7 @@ impl fmt::Display for Backend {
             Backend::Postgres => write!(f, "PostgreSQL"),
             Backend::Databricks => write!(f, "Databricks"),
             Backend::Redshift => write!(f, "Redshift"),
-            Backend::DuckDB => write!(f, "DuckDB"),
+            Backend::DuckDBExtended => write!(f, "DuckDB"),
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
             Backend::Salesforce => write!(f, "Salesforce"),
@@ -129,7 +129,7 @@ impl Backend {
             Backend::Salesforce => Some("adbc_driver_salesforce"),
             Backend::Spark => Some("adbc_driver_spark"),
             Backend::Redshift => Some("adbc_driver_redshift"),
-            Backend::DuckDB => Some("duckdb"),
+            Backend::DuckDBExtended => Some("duckdb"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Athena => Some("adbc_driver_athena"),
@@ -142,7 +142,7 @@ impl Backend {
     pub fn adbc_driver_entrypoint(&self) -> Option<&'static [u8]> {
         match self {
             Backend::Snowflake => Some(b"SnowflakeDriverInit"),
-            Backend::DuckDB => Some(b"duckdb_adbc_init"),
+            Backend::DuckDBExtended => Some(b"duckdb_adbc_init"),
             Backend::Generic {
                 library_name: _,
                 entrypoint,
@@ -160,7 +160,7 @@ impl Backend {
             | Backend::Redshift
             | Backend::Salesforce
             | Backend::Spark
-            | Backend::DuckDB
+            | Backend::DuckDBExtended
             | Backend::SQLServer
             | Backend::Athena
             | Backend::ClickHouse
@@ -403,7 +403,7 @@ impl AdbcDriver {
             // CDN strategy for drivers published to the dbt Labs CDN.
             (
                 load_strategy @ (CdnCache | SystemThenCdnCache),
-                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDBExtended
                 | Salesforce | SQLServer,
             ) => {
                 #[cfg(debug_assertions)]
@@ -451,7 +451,7 @@ impl AdbcDriver {
             // Remote drivers are used via the "adbc_driver_flock" library
             (
                 load_strategy @ Remote,
-                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDBExtended
                 | Salesforce | SQLServer,
             ) => load_strategy,
         };
@@ -670,7 +670,7 @@ mod tests {
         try_load_with_builder(Backend::BigQuery, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Postgres, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Databricks, AdbcVersion::V100)?;
-        try_load_with_builder(Backend::DuckDB, AdbcVersion::V100)?;
+        try_load_with_builder(Backend::DuckDBExtended, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::Spark, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V100)?;
@@ -686,7 +686,7 @@ mod tests {
         try_load_with_builder(Backend::BigQuery, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Postgres, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Databricks, AdbcVersion::V110)?;
-        try_load_with_builder(Backend::DuckDB, AdbcVersion::V110)?;
+        try_load_with_builder(Backend::DuckDBExtended, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::Spark, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V110)?;
@@ -703,7 +703,7 @@ mod tests {
             Backend::BigQuery,
             Backend::Postgres,
             Backend::Databricks,
-            Backend::DuckDB,
+            Backend::DuckDBExtended,
             Backend::Salesforce,
             // Backend::Spark,
             // Backend::SQLServer,
@@ -739,7 +739,7 @@ mod tests {
             Backend::Databricks,
             Backend::Redshift,
             Backend::Spark,
-            Backend::DuckDB,
+            Backend::DuckDBExtended,
             Backend::Salesforce,
             Backend::SQLServer,
         ] {

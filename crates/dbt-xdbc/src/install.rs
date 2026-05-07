@@ -18,7 +18,7 @@ static INSTALLABLE_DRIVERS: &[Backend; 9] = &[
     Backend::Postgres,
     Backend::Databricks,
     Backend::Redshift,
-    Backend::DuckDB,
+    Backend::DuckDBExtended,
     Backend::Salesforce,
     Backend::Spark,
     Backend::SQLServer,
@@ -306,7 +306,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Redshift => ("redshift", REDSHIFT_DRIVER_VERSION),
         Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
-        Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
+        Backend::DuckDBExtended => ("duckdb", DUCKDB_EXTENDED_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::Athena
         | Backend::ClickHouse

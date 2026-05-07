@@ -6,7 +6,7 @@ pub struct DuckDBAuth;
 
 impl Auth for DuckDBAuth {
     fn backend(&self) -> Backend {
-        Backend::DuckDB
+        Backend::DuckDBExtended
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {

@@ -74,7 +74,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::Redshift | Backend::RedshiftODBC => Box::new(redshift::RedshiftAuth {}),
         Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
         Backend::Spark => Box::new(spark::SparkAuth {}),
-        Backend::DuckDB => Box::new(duckdb::DuckDbAuth {}),
+        Backend::DuckDBExtended => Box::new(duckdb::DuckDbAuth {}),
         Backend::SQLServer => Box::new(sqlserver::SQLServerAuth {}),
         Backend::ClickHouse => Box::new(clickhouse::ClickHouseAuth {}),
         Backend::Athena => Box::new(athena::AthenaAuth {}),

@@ -177,7 +177,7 @@ mod tests {
 
                 Ok(builder)
             }
-            Backend::DuckDB => {
+            Backend::DuckDBExtended => {
                 let mut builder = database::Builder::new(backend);
                 let database_path = ":memory:".to_string();
                 builder.with_named_option("path", database_path)?;
@@ -230,7 +230,7 @@ mod tests {
     }
 
     fn database_builder_for_duckdb_file(path: &str) -> Result<database::Builder> {
-        let mut builder = database::Builder::new(Backend::DuckDB);
+        let mut builder = database::Builder::new(Backend::DuckDBExtended);
         builder.with_named_option("path", path)?;
         Ok(builder)
     }
@@ -336,7 +336,7 @@ mod tests {
                 Backend::Postgres
                 | Backend::Redshift
                 | Backend::Databricks
-                | Backend::DuckDB
+                | Backend::DuckDBExtended
                 | Backend::DatabricksODBC
                 | Backend::RedshiftODBC => {
                     assert_eq!(batch.column(0).as_primitive::<Int32Type>().value(0), 42);
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn statement_execute_duckdb() -> Result<()> {
-        execute_statement(Backend::DuckDB)
+        execute_statement(Backend::DuckDBExtended)
     }
 
     #[test]
@@ -409,7 +409,7 @@ mod tests {
 
         // First connection: create table and insert data
         {
-            let mut driver = driver_for(Backend::DuckDB)?;
+            let mut driver = driver_for(Backend::DuckDBExtended)?;
             let builder = database_builder_for_duckdb_file(&db_path_str)?;
             let mut database = builder.build(&mut driver)?;
             let mut conn = connection::Builder::default().build(&mut database)?;
@@ -426,7 +426,7 @@ mod tests {
 
         // Second connection: verify data persisted
         {
-            let mut driver = driver_for(Backend::DuckDB)?;
+            let mut driver = driver_for(Backend::DuckDBExtended)?;
             let builder = database_builder_for_duckdb_file(&db_path_str)?;
             let mut database = builder.build(&mut driver)?;
             let mut conn = connection::Builder::default().build(&mut database)?;
@@ -451,7 +451,7 @@ mod tests {
 
     #[test]
     fn duckdb_data_types_bool() -> Result<()> {
-        with_empty_statement(Backend::DuckDB, |mut statement| {
+        with_empty_statement(Backend::DuckDBExtended, |mut statement| {
             statement.set_sql_query(
                 r#"SELECT * FROM (
                      VALUES
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn duckdb_data_types_integer() -> Result<()> {
-        with_empty_statement(Backend::DuckDB, |mut statement| {
+        with_empty_statement(Backend::DuckDBExtended, |mut statement| {
             statement.set_sql_query(
                 r#"SELECT * FROM (
                     VALUES
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn duckdb_data_types_string() -> Result<()> {
-        with_empty_statement(Backend::DuckDB, |mut statement| {
+        with_empty_statement(Backend::DuckDBExtended, |mut statement| {
             // Note: Using CONCAT instead of || operator to avoid Arrow StringViewArray panic
             statement.set_sql_query(
                 r#"SELECT * FROM (
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn duckdb_null_handling() -> Result<()> {
-        with_empty_statement(Backend::DuckDB, |mut statement| {
+        with_empty_statement(Backend::DuckDBExtended, |mut statement| {
             statement.set_sql_query(
                 r#"SELECT * FROM (
                     VALUES
@@ -615,7 +615,7 @@ mod tests {
 
     #[test]
     fn duckdb_empty_result() -> Result<()> {
-        with_empty_statement(Backend::DuckDB, |mut statement| {
+        with_empty_statement(Backend::DuckDBExtended, |mut statement| {
             statement.set_sql_query("SELECT 1 AS one WHERE 1 = 0")?;
             let mut batch_reader = statement.execute()?;
             let batch = batch_reader.next();
@@ -1002,7 +1002,7 @@ mod tests {
 
         // Open database and create a table, then drop everything
         {
-            let mut driver = driver_for(Backend::DuckDB)?;
+            let mut driver = driver_for(Backend::DuckDBExtended)?;
             let builder = database_builder_for_duckdb_file(&db_path_str)?;
             let mut database = builder.build(&mut driver)?;
             let mut conn = connection::Builder::default().build(&mut database)?;
@@ -1021,7 +1021,7 @@ mod tests {
         // After dropping, a second process/connection should be able to open
         // the same file for writing (no lingering lock).
         {
-            let mut driver = driver_for(Backend::DuckDB)?;
+            let mut driver = driver_for(Backend::DuckDBExtended)?;
             let builder = database_builder_for_duckdb_file(&db_path_str)?;
             let mut database = builder.build(&mut driver)?;
             let mut conn = connection::Builder::default().build(&mut database)?;
@@ -1064,7 +1064,7 @@ mod tests {
         let _ = fs::remove_file(format!("{}.wal", db_path_str));
 
         // Open database and keep the handle alive (simulates LSP holding the lock)
-        let mut driver = driver_for(Backend::DuckDB)?;
+        let mut driver = driver_for(Backend::DuckDBExtended)?;
         let builder = database_builder_for_duckdb_file(&db_path_str)?;
         let mut database = builder.build(&mut driver)?;
 
@@ -1140,7 +1140,7 @@ mod tests {
         let _ = fs::remove_file(format!("{}.wal", db_path_str));
 
         // Create database and a connection
-        let mut driver = driver_for(Backend::DuckDB)?;
+        let mut driver = driver_for(Backend::DuckDBExtended)?;
         let builder = database_builder_for_duckdb_file(&db_path_str)?;
         let mut database = builder.build(&mut driver)?;
         let mut conn = connection::Builder::default().build(&mut database)?;

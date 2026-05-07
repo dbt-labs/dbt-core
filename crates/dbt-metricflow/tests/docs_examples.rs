@@ -13,11 +13,13 @@ struct DuckDb {
 
 impl DuckDb {
     fn open_memory() -> Self {
-        let mut drv =
-            driver::Builder::new(Backend::DuckDB, driver::LoadStrategy::SystemThenCdnCache)
-                .try_load()
-                .expect("failed to load DuckDB driver");
-        let mut db_builder = database::Builder::new(Backend::DuckDB);
+        let mut drv = driver::Builder::new(
+            Backend::DuckDBExtended,
+            driver::LoadStrategy::SystemThenCdnCache,
+        )
+        .try_load()
+        .expect("failed to load DuckDB driver");
+        let mut db_builder = database::Builder::new(Backend::DuckDBExtended);
         db_builder
             .with_named_option("path", ":memory:")
             .expect("failed to set DuckDB path");
