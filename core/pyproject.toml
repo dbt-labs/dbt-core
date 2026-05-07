@@ -56,7 +56,7 @@ dependencies = [
     "metricflow @ git+https://github.com/dbt-labs/metricflow.git@main",
     # Minor versions for these are expected to be backwards-compatible
     "dbt-common>=1.37.5,<2.0",
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-adapters",
+    "dbt-adapters>=1.23.0,<2.0",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",
     # ----
