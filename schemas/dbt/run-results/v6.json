@@ -237,6 +237,33 @@
               }
             ],
             "default": null
+          },
+          "overload_results": {
+            "anyOf": [
+              {
+                "type": "object",
+                "title": "OverloadResults",
+                "properties": {
+                  "successful": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "additionalProperties": false,

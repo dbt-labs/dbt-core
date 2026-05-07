@@ -53,10 +53,10 @@ dependencies = [
     # These are major-version-0 packages also maintained by dbt-labs.
     # Accept patches but avoid automatically updating past a set minor version range.
     "dbt-extractor>=0.5.0,<=0.6",
-    "dbt-semantic-interfaces @ git+https://github.com/dbt-labs/dbt-semantic-interfaces.git@ash2shukla/feat/3-14-compat",
+    "metricflow>=0.210.0,<1.0",
     # Minor versions for these are expected to be backwards-compatible
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@ash2shukla/fix/py-3-14-compat",
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@ash2shukla/feat/py-3-14-compat#subdirectory=dbt-adapters",
+    "dbt-common>=1.37.5,<2.0",
+    "dbt-adapters>=1.22.8,<2.0",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",
     # ----

@@ -1,4 +1,4 @@
-from dbt_semantic_interfaces.type_enums import TimeGranularity
+from metricflow_semantic_interfaces.type_enums import TimeGranularity
 
 DEFAULT_ENV_PLACEHOLDER = "DBT_DEFAULT_PLACEHOLDER"
 

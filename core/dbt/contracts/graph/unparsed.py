@@ -5,6 +5,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    DimensionType,
+    PeriodAggregation,
+)
 from typing_extensions import override
 
 # trigger the PathEncoder
@@ -47,11 +52,6 @@ from dbt_common.dataclass_schema import (
     dbtClassMixin,
 )
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    ConversionCalculationType,
-    DimensionType,
-    PeriodAggregation,
-)
 
 
 @dataclass
@@ -913,9 +913,20 @@ class UnparsedFunctionReturns(dbtClassMixin):
 
 
 @dataclass
+class UnparsedFunctionOverload(dbtClassMixin):
+    """An overload definition within a function's YAML entry."""
+
+    defined_in: str
+    arguments: List[FunctionArgument] = field(default_factory=list)
+    returns: Optional[FunctionReturns] = None
+    description: Optional[str] = None
+
+
+@dataclass
 class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
+    overloads: List[UnparsedFunctionOverload] = field(default_factory=list)
 
 
 #

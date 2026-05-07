@@ -964,6 +964,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
     fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
+    # Maps overload function file_id → root function unique_id.
+    # Used by partial parsing to invalidate the root when an overload file changes.
+    function_overload_owners: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -1173,6 +1176,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
             unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
             saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
+            function_overload_owners=dict(self.function_overload_owners),
         )
         copy.build_flat_graph()
         return copy
@@ -1916,6 +1920,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.semantic_models,
             self.unit_tests,
             self.saved_queries,
+            self.fixtures,
+            self.function_overload_owners,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,

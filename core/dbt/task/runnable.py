@@ -24,7 +24,8 @@ import dbt.utils
 import dbt_common.utils.formatting
 from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.artifacts.resources import Catalog
+from dbt.artifacts.resources import Catalog, ModelOnErrorOptions
+from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.schemas.results import (
     BaseResult,
     NodeResult,
@@ -71,7 +72,7 @@ from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
 
@@ -410,6 +411,7 @@ class GraphRunnableTask(ConfiguredTask):
         the result was an ephemeral model) as skipped.
         """
         is_ephemeral = result.node.is_ephemeral_model
+
         if not is_ephemeral:
             self.node_results.append(result)
 
@@ -418,12 +420,19 @@ class GraphRunnableTask(ConfiguredTask):
         if self.manifest is None:
             raise DbtInternalError("manifest was None in _handle_result")
 
+        if (
+            node.resource_type is NodeType.Model
+            and node.config.on_error is ModelOnErrorOptions.continue_
+        ):
+            return
+
         # If result.status == NodeStatus.Error, plus Fail for build command
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
             if is_ephemeral:
                 cause = result
             else:
                 cause = None
+
             self._mark_dependent_errors(node.unique_id, result, cause)
 
     def _cancel_connections(self, pool):
@@ -632,7 +641,7 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                warn_or_error(NothingToDo())
+                fire_event(NothingToDo(), force_warn_or_error_handling=True)
                 result = self.get_result(
                     results=[],
                     generated_at=datetime.now(timezone.utc).replace(tzinfo=None),

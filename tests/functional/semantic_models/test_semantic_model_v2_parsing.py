@@ -1,8 +1,5 @@
 import pytest
-
-from core.dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.contracts.graph.manifest import Manifest
-from dbt_semantic_interfaces.type_enums import (
+from metricflow_semantic_interfaces.type_enums import (
     AggregationType,
     ConversionCalculationType,
     DimensionType,
@@ -10,6 +7,9 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     PeriodAggregation,
 )
+
+from core.dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.contracts.graph.manifest import Manifest
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,

@@ -28,6 +28,7 @@ from dbt.context.providers import (
 )
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
+    FunctionNode,
     GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
@@ -669,6 +670,16 @@ class Compiler:
                 context,
                 node,
             )
+            # Render Jinja in overload bodies using the same node context so
+            # they're available to anything that consumes the compiled manifest.
+            if isinstance(node, FunctionNode) and node.overloads:
+                for overload in node.overloads:
+                    if overload.raw_body is not None:
+                        overload.compiled_body = jinja.get_rendered(
+                            overload.raw_body,
+                            context,
+                            node,
+                        )
 
         node.compiled = True
 

@@ -4,6 +4,9 @@ from datetime import timedelta
 from typing import Any, Dict
 
 import pytest
+from metricflow_semantic_interfaces.type_enums.conversion_calculation_type import (
+    ConversionCalculationType,
+)
 from typing_extensions import override
 
 from dbt.artifacts.resources import (
@@ -41,9 +44,6 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.schemas import ParserRef
-from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
-    ConversionCalculationType,
-)
 from tests.unit.utils import ContractTestCase
 
 

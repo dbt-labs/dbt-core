@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources import (
     ColumnConfig,
     ColumnDimension,
@@ -29,11 +35,6 @@ from dbt.node_types import NodeType
 from dbt.parser.search import FileBlock
 from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    DimensionType,
-    EntityType,
-    TimeGranularity,
-)
 
 schema_file_keys_to_resource_types = {
     "models": NodeType.Model,

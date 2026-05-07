@@ -2689,6 +2689,7 @@
         "count": {
           "anyOf": [
             {
+              "default": null,
               "type": [
                 "integer",
                 "null"
@@ -2702,6 +2703,7 @@
           ]
         },
         "period": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessPeriod"
@@ -3720,6 +3722,44 @@
         "table"
       ]
     },
+    "FunctionOverload": {
+      "description": "An overload of a function with different argument signatures. Each overload references a separate SQL file (via `defined_in`) that contains the function body for this overload.",
+      "type": "object",
+      "required": [
+        "defined_in"
+      ],
+      "properties": {
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionArgument"
+          }
+        },
+        "defined_in": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "FunctionProperties": {
       "type": "object",
       "required": [
@@ -3775,6 +3815,15 @@
         },
         "name": {
           "type": "string"
+        },
+        "overloads": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionOverload"
+          }
         },
         "returns": {
           "anyOf": [
@@ -11223,6 +11272,12 @@
         "v"
       ],
       "properties": {
+        "access": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -11233,11 +11288,50 @@
             }
           ]
         },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "defined_in": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "deprecation_date": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
         },
         "v": {
           "$ref": "#/definitions/AnyValue"

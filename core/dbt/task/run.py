@@ -28,6 +28,7 @@ from dbt.adapters.events.types import FinishedRunningStats
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.resources import Catalog, Hook
 from dbt.artifacts.schemas.batch_results import BatchResults, BatchType
+from dbt.artifacts.schemas.overload_results import OverloadResults
 from dbt.artifacts.schemas.results import (
     NodeStatus,
     RunningStatus,
@@ -43,6 +44,7 @@ from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     BatchContext,
+    FunctionNode,
     HookNode,
     ModelConfig,
     ModelNode,
@@ -865,6 +867,7 @@ class RunTask(CompileTask):
     ) -> None:
         super().__init__(args, config, manifest, catalogs=catalogs)
         self.batch_map = batch_map
+        self.overload_map: Optional[Dict[str, OverloadResults]] = None
         self.original_invocation_started_at: Optional[datetime] = None
 
     def raise_on_first_error(self) -> bool:
@@ -1134,6 +1137,15 @@ class RunTask(CompileTask):
                     if isinstance(node, ModelNode):
                         node.previous_batch_results = self.batch_map[uid]
 
+    def populate_function_overloads(self, selected_uids: AbstractSet[str]):
+        if self.overload_map is None or self.manifest is None:
+            return
+        for uid in selected_uids:
+            if uid in self.overload_map:
+                node = self.manifest.functions.get(uid)
+                if isinstance(node, FunctionNode):
+                    node.previous_overload_results = self.overload_map[uid]
+
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
@@ -1141,6 +1153,7 @@ class RunTask(CompileTask):
             self.create_schemas(adapter, required_schemas)
             self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)
+            self.populate_function_overloads(selected_uids)
             group_lookup.init(self.manifest, selected_uids)
             run_hooks_status = self.safe_run_hooks(adapter, RunHookType.Start, {})
             return run_hooks_status

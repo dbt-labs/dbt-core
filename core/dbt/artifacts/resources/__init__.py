@@ -43,6 +43,7 @@ from dbt.artifacts.resources.v1.function import (
     FunctionArgument,
     FunctionConfig,
     FunctionMandatory,
+    FunctionOverload,
     FunctionReturns,
 )
 from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
@@ -71,6 +72,7 @@ from dbt.artifacts.resources.v1.model import (
     Model,
     ModelConfig,
     ModelFreshness,
+    ModelOnErrorOptions,
     TimeSpine,
 )
 from dbt.artifacts.resources.v1.owner import Owner

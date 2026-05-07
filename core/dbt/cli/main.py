@@ -677,8 +677,9 @@ def clone(ctx, **kwargs):
 @cli.command("run-operation")
 @click.pass_context
 @global_flags
-@click.argument("macro")
+@click.argument("macro", required=False, default=None)
 @p.args
+@p.sql
 @p.profiles_dir
 @p.project_dir
 @p.target_path

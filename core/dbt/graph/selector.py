@@ -7,7 +7,7 @@ from dbt.contracts.state import PreviousState
 from dbt.events.types import NoNodesForSelectionCriteria, SelectorReportInvalidSelector
 from dbt.exceptions import DbtInternalError, InvalidSelectorError
 from dbt.node_types import NodeType
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
@@ -172,7 +172,10 @@ class NodeSelector(MethodManager):
             )
 
             if spec.expect_exists and len(direct_nodes) == 0 and warn_on_no_nodes:
-                warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
+                fire_event(
+                    NoNodesForSelectionCriteria(spec_raw=str(spec.raw)),
+                    force_warn_or_error_handling=True,
+                )
 
         return direct_nodes, indirect_nodes
 

@@ -2,6 +2,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
+from metricflow_semantic_interfaces.references import MeasureReference, MetricReference
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    ConversionCalculationType,
+    MetricType,
+    PeriodAggregation,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
@@ -13,21 +22,13 @@ from dbt.artifacts.resources.v1.semantic_layer_components import (
 )
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.references import MeasureReference, MetricReference
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    ConversionCalculationType,
-    MetricType,
-    PeriodAggregation,
-    TimeGranularity,
-)
 
 """
 The following classes are dataclasses which are used to construct the Metric
 node in dbt-core. Additionally, these classes need to at a minimum support
 what is specified in their protocol definitions in dbt-semantic-interfaces.
 Their protocol definitions can be found here:
-https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/metric.py
+https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/metricflow_semantic_interfaces/protocols/metric.py
 """
 
 
