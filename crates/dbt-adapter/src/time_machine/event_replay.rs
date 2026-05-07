@@ -95,6 +95,91 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
     }
 }
 
+pub(crate) fn adapter_args_match(
+    method: &str,
+    recorded: &serde_json::Value,
+    actual: &serde_json::Value,
+) -> bool {
+    match method {
+        "get_relation" => match (
+            GetRelationArgs::try_from(recorded),
+            GetRelationArgs::try_from(actual),
+        ) {
+            (Ok(recorded), Ok(actual)) => recorded == actual,
+            _ => values_match(recorded, actual),
+        },
+        _ => values_match(recorded, actual),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GetRelationArgs {
+    database: String,
+    schema: String,
+    identifier: String,
+    needs_information: bool,
+}
+
+impl TryFrom<&serde_json::Value> for GetRelationArgs {
+    type Error = ();
+
+    fn try_from(args: &serde_json::Value) -> Result<Self, Self::Error> {
+        let args = args.as_array().ok_or(())?;
+
+        if args.len() == 1
+            && let Some(kwargs) = args[0].as_object()
+        {
+            return Self::try_from_kwargs(kwargs);
+        }
+
+        let database = args.first().and_then(|arg| arg.as_str()).ok_or(())?;
+        let schema = args.get(1).and_then(|arg| arg.as_str()).ok_or(())?;
+        let identifier = args.get(2).and_then(|arg| arg.as_str()).ok_or(())?;
+        let needs_information = args
+            .get(3)
+            .and_then(|arg| arg.as_bool())
+            .or_else(|| {
+                args.iter()
+                    .filter_map(|arg| arg.as_object())
+                    .find_map(|obj| obj.get("needs_information").and_then(|v| v.as_bool()))
+            })
+            .unwrap_or(false);
+
+        Ok(Self {
+            database: database.to_string(),
+            schema: schema.to_string(),
+            identifier: identifier.to_string(),
+            needs_information,
+        })
+    }
+}
+
+impl GetRelationArgs {
+    fn try_from_kwargs(kwargs: &serde_json::Map<String, serde_json::Value>) -> Result<Self, ()> {
+        Ok(Self {
+            database: kwargs
+                .get("database")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            schema: kwargs
+                .get("schema")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            identifier: kwargs
+                .get("identifier")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            needs_information: kwargs
+                .get("needs_information")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        })
+    }
+}
+
 /// Replay ordering mode.
 ///
 /// Controls how events are matched during replay.
@@ -517,7 +602,7 @@ impl Recording {
         // Search within the segment for a matching read (method + args)
         events[search_start..segment_end]
             .iter()
-            .find(|event| event.method == method && values_match(&event.args, args))
+            .find(|event| event.method == method && adapter_args_match(method, &event.args, args))
     }
 
     /// Peek at the next event in semantic mode without consuming it.
@@ -1682,6 +1767,132 @@ mod tests {
             SemanticCategory::MetadataRead,
         );
         assert!(result.is_none(), "Should not find TABLE_C");
+    }
+
+    #[test]
+    fn test_get_relation_args_match_positional_and_kwargs() {
+        let positional = serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let kwargs = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions"
+            }
+        ]);
+
+        assert!(adapter_args_match("get_relation", &kwargs, &positional));
+        assert!(adapter_args_match("get_relation", &positional, &kwargs));
+    }
+
+    #[test]
+    fn test_semantic_mode_read_does_not_advance_over_skipped_write() {
+        let events = vec![
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 0,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "model_executions"]),
+                result: serde_json::json!({"seq": 0}),
+                success: true,
+                error: None,
+                timestamp_ns: 0,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 1,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert model_executions"]),
+                result: serde_json::json!({"seq": 1}),
+                success: true,
+                error: None,
+                timestamp_ns: 1,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 2,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "test_executions"]),
+                result: serde_json::json!({"seq": 2}),
+                success: true,
+                error: None,
+                timestamp_ns: 2,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 3,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert test_executions"]),
+                result: serde_json::json!({"seq": 3}),
+                success: true,
+                error: None,
+                timestamp_ns: 3,
+            },
+        ];
+        let recording = make_recording(events);
+
+        let test_args = serde_json::json!(["DB", "SCHEMA", "test_executions"]);
+        let read = recording.take_semantic_match(
+            "node1",
+            "get_relation",
+            &test_args,
+            SemanticCategory::MetadataRead,
+        );
+        assert!(
+            read.is_none(),
+            "Should not match a future read across a skipped write"
+        );
+    }
+
+    #[test]
+    fn test_get_relation_args_match_needs_information() {
+        let default_needs_information =
+            serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let explicit_false = serde_json::json!([
+            "rioter_dbt",
+            "dbt_artifacts",
+            "model_executions",
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "needs_information": false
+            }
+        ]);
+        let explicit_true = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions",
+                "needs_information": true
+            }
+        ]);
+        let positional_true =
+            serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions", true]);
+
+        assert!(adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_false
+        ));
+        assert!(!adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_true
+        ));
+        assert!(!adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &positional_true
+        ));
+        assert!(adapter_args_match(
+            "get_relation",
+            &explicit_true,
+            &positional_true
+        ));
     }
 
     #[test]
