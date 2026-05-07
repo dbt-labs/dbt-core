@@ -10,6 +10,10 @@ cleanup() {
     if [ -n "${td:-}" ]; then
         rm -rf "$td"
     fi
+    # Remove any in-progress staging binary left behind by a failed install
+    if [ -n "${tmp_bin:-}" ]; then
+        rm -f "$tmp_bin"
+    fi
 }
 
 # Register the cleanup function to be called on EXIT.
@@ -560,24 +564,20 @@ install_package() {
             continue
         }
 
-        if [ -e "$dest/$package_name" ] && [ "$update" = true ]; then
-            # Remove file - no sudo needed for home directory
-            rm -f "$dest/$package_name" || {
-                err_and_exit "Error: Failed to remove existing $package_name binary."
-            }
-        fi
-
         log_debug "Moving $f to $dest/$package_name"
 
         # Ensure the destination directory exists
         mkdir -p "$dest" || err_and_exit "Error: Failed to create installation directory: $dest"
 
-        # Install the binary and pipe its verbose output to log_debug
-        install -v -m 755 "$td/$f" "$dest/$package_name" 2>&1 | while IFS= read -r line; do
+        # Stage into a temp file in the same directory (same filesystem = atomic mv).
+        # install sets permissions before the file goes live; mv -f atomically
+        # replaces any existing binary without a removal gap.
+        tmp_bin="$dest/.${package_name}.tmp.$$"
+        install -v -m 755 "$td/$f" "$tmp_bin" 2>&1 | while IFS= read -r line; do
             log_debug "$line"
-        done || {
-            err_and_exit "Error: Failed to install $package_name binary."
-        }
+        done || err_and_exit "Error: Failed to stage $package_name binary."
+        mv -f "$tmp_bin" "$dest/$package_name" || err_and_exit "Error: Failed to replace $package_name binary."
+        log_debug "Installed $package_name to $dest/$package_name"
     done
 
     display_ascii_art "$package_name" "$version"
