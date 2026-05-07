@@ -567,7 +567,6 @@ test:
 # and underscores. A good package name should reflect your organization's
 # name or the intended use of these models
 name: '{project_name}'
-version: '1.0.0'
 
 # This setting configures which "profile" dbt uses for this project.
 profile: '{project_name}'
@@ -685,7 +684,6 @@ class TestInitProvidedProjectNameAndSkipProfileSetup(TestInitOutsideOfProjectBas
 # and underscores. A good package name should reflect your organization's
 # name or the intended use of these models
 name: '{project_name}'
-version: '1.0.0'
 
 # This setting configures which "profile" dbt uses for this project.
 profile: '{project_name}'
@@ -781,7 +779,6 @@ class TestInitOutsideOfProjectWithSpecifiedProfile(TestInitOutsideOfProjectBase)
 # and underscores. A good package name should reflect your organization's
 # name or the intended use of these models
 name: '{project_name}'
-version: '1.0.0'
 
 # This setting configures which "profile" dbt uses for this project.
 profile: 'test'
