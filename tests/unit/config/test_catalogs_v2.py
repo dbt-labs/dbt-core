@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from dbt.artifacts.resources import CatalogV2, CatalogV2PlatformConfig
+from dbt.artifacts.resources import CatalogV2, CatalogV2PlatformConfig, V2TableFormat
 from dbt.config.catalogs import (
     bridge_v2_catalog_to_integration,
     load_catalogs_v2,
@@ -262,7 +262,7 @@ class TestLoadSingleCatalogV2:
 def _make_catalog(
     name="test_cat",
     catalog_type="horizon",
-    table_format="iceberg",
+    table_format=V2TableFormat.ICEBERG,
     snowflake=None,
     databricks=None,
     bigquery=None,
@@ -320,7 +320,7 @@ class TestValidateV2CatalogForPlatform:
     def test_horizon_wrong_table_format(self):
         cat = _make_catalog(
             catalog_type="horizon",
-            table_format="default",
+            table_format=V2TableFormat.DEFAULT,
             snowflake={"external_volume": "vol"},
         )
         with pytest.raises(DbtValidationError, match="requires table_format='iceberg'"):
@@ -404,7 +404,7 @@ class TestValidateV2CatalogForPlatform:
     def test_hive_metastore_valid(self):
         cat = _make_catalog(
             catalog_type="hive_metastore",
-            table_format="default",
+            table_format=V2TableFormat.DEFAULT,
             databricks={"file_format": "delta"},
         )
         validate_v2_catalog_for_platform(cat, "databricks")
@@ -412,7 +412,7 @@ class TestValidateV2CatalogForPlatform:
     def test_hive_metastore_missing_databricks(self):
         cat = _make_catalog(
             catalog_type="hive_metastore",
-            table_format="default",
+            table_format=V2TableFormat.DEFAULT,
         )
         with pytest.raises(DbtValidationError, match="requires config.databricks"):
             validate_v2_catalog_for_platform(cat, "databricks")
@@ -420,7 +420,7 @@ class TestValidateV2CatalogForPlatform:
     def test_hive_metastore_wrong_table_format(self):
         cat = _make_catalog(
             catalog_type="hive_metastore",
-            table_format="iceberg",
+            table_format=V2TableFormat.ICEBERG,
             databricks={"file_format": "delta"},
         )
         with pytest.raises(DbtValidationError, match="requires table_format='default'"):
@@ -527,7 +527,7 @@ class TestBridgeV2CatalogToIntegration:
     def test_hive_metastore_databricks(self):
         cat = _make_catalog(
             catalog_type="hive_metastore",
-            table_format="default",
+            table_format=V2TableFormat.DEFAULT,
             databricks={"file_format": "delta"},
         )
         config = bridge_v2_catalog_to_integration(cat, "databricks")

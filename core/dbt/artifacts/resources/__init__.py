@@ -5,6 +5,7 @@ from dbt.artifacts.resources.v1.catalog import (
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
+    V2TableFormat,
 )
 
 # alias to latest resource definitions

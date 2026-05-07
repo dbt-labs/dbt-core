@@ -8,6 +8,7 @@ from dbt.artifacts.resources import (
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
+    V2TableFormat,
 )
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
@@ -111,7 +112,7 @@ _VALID_V2_CATALOG_TYPES = {
     "hive_metastore",
     "biglake_metastore",
 }
-_VALID_V2_TABLE_FORMATS = {"default", "iceberg"}
+_VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
 _VALID_PLATFORMS = {"snowflake", "databricks", "bigquery"}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
 
@@ -126,13 +127,13 @@ _TYPE_PLATFORMS: Dict[str, List[str]] = {
 }
 
 # Type → required table_format
-_TYPE_TABLE_FORMAT: Dict[str, str] = {
-    "horizon": "iceberg",
-    "glue": "iceberg",
-    "iceberg_rest": "iceberg",
-    "unity": "iceberg",
-    "hive_metastore": "default",
-    "biglake_metastore": "iceberg",
+_TYPE_TABLE_FORMAT: Dict[str, V2TableFormat] = {
+    "horizon": V2TableFormat.ICEBERG,
+    "glue": V2TableFormat.ICEBERG,
+    "iceberg_rest": V2TableFormat.ICEBERG,
+    "unity": V2TableFormat.ICEBERG,
+    "hive_metastore": V2TableFormat.DEFAULT,
+    "biglake_metastore": V2TableFormat.ICEBERG,
 }
 
 # v2 type + adapter_type → v1 catalog_type string (matching fs bridge)
@@ -221,7 +222,7 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
             f"Invalid table_format '{rendered['table_format']}'. "
             f"Must be {sorted(_VALID_V2_TABLE_FORMATS)}"
         )
-    table_format = raw_format
+    table_format = V2TableFormat(raw_format)
 
     # Validate config is a dict with only known platform keys
     config_raw = rendered["config"]
@@ -306,8 +307,8 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
     required_format = _TYPE_TABLE_FORMAT[ct]
     if catalog.table_format != required_format:
         raise DbtValidationError(
-            f"Catalog '{name}' type '{ct}' requires table_format='{required_format}', "
-            f"got '{catalog.table_format}'"
+            f"Catalog '{name}' type '{ct}' requires table_format='{required_format.value}', "
+            f"got '{catalog.table_format.value}'"
         )
 
     # Reject platform blocks not supported by this type
@@ -395,7 +396,9 @@ def bridge_v2_catalog_to_integration(
         catalog_type=v1_catalog_type,
         catalog_name=catalog.name,
         table_format=(
-            catalog.table_format.upper() if adapter_type == "snowflake" else catalog.table_format
+            catalog.table_format.value.upper()
+            if adapter_type == "snowflake"
+            else catalog.table_format.value
         ),
         external_volume=str(external_volume) if external_volume is not None else None,
         file_format=str(file_format) if file_format is not None else None,
