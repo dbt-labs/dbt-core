@@ -1,21 +1,24 @@
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
 use dbt_schemas::schemas::{
-    packages::{DbtPackageEntry, LocalPackage},
+    packages::{DbtPackageEntry, DbtPackages, LocalPackage},
     project::DbtProjectNameOnly,
 };
 use sha1::Digest;
 
 use dbt_common::{
     ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs, tokiofs,
+    tracing::emit::emit_warn_log_message,
 };
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     phases::load::LoadContext,
     serde::{into_typed_with_jinja, value_from_file},
+    utils::SECRET_ENV_VAR_PREFIX,
 };
 use dbt_schemas::schemas::project::DbtProject;
 
@@ -119,6 +122,60 @@ pub fn fusion_sha1_hash_packages(
 #[allow(dead_code)]
 pub fn core_sha1_hash_packages(_packages: &[DbtPackageEntry]) -> String {
     unimplemented!()
+}
+
+pub fn scrub_package_name_secret_env_vars(package_name: &str) -> Option<Cow<'_, str>> {
+    let mut scrubbed = Cow::Borrowed(package_name);
+    for (_, secret) in std::env::vars()
+        .filter(|(key, value)| key.starts_with(SECRET_ENV_VAR_PREFIX) && !value.trim().is_empty())
+    {
+        if scrubbed.contains(secret.as_str()) {
+            scrubbed = Cow::Owned(scrubbed.replace(secret.as_str(), "*****"));
+        }
+    }
+
+    match scrubbed {
+        Cow::Borrowed(_) => None,
+        owned @ Cow::Owned(_) => Some(owned),
+    }
+}
+
+pub fn scrubbed_package_names_from_package_def(dbt_packages: &DbtPackages) -> Vec<String> {
+    let mut scrubbed_package_names = Vec::new();
+
+    // https://github.com/dbt-labs/dbt-core/blob/c02340d4c14df1459c00cf91b9ab738e1c4c9507/core/dbt/deps/git.py#L56-L69
+    for package in &dbt_packages.packages {
+        match package {
+            DbtPackageEntry::Git(git_package) => {
+                if let Some(scrubbed) = scrub_package_name_secret_env_vars(git_package.git.as_str())
+                {
+                    scrubbed_package_names.push(scrubbed.into_owned());
+                }
+            }
+            DbtPackageEntry::Tarball(tarball_package) => {
+                if let Some(scrubbed) =
+                    scrub_package_name_secret_env_vars(tarball_package.tarball.as_str())
+                {
+                    scrubbed_package_names.push(scrubbed.into_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    scrubbed_package_names
+}
+
+pub fn emit_scrubbed_package_name_warnings(io_args: &IoArgs, scrubbed_package_names: &[String]) {
+    for scrubbed in scrubbed_package_names {
+        emit_warn_log_message(
+            ErrorCode::DepsScrubbedPackageName,
+            format!(
+                "Detected secret env var in {scrubbed}. dbt will write a scrubbed representation to the lock file. This will cause issues with subsequent 'dbt deps' using the lock file, requiring 'dbt deps --upgrade'"
+            ),
+            io_args.status_reporter.as_ref(),
+        );
+    }
 }
 
 pub fn read_and_validate_dbt_project(

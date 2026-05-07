@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::EvalArgs;
+use dbt_common::tracing::TracingConfigProvider;
 use dbt_common::tracing::dbt_metrics::error_count_checkpoint;
+use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::Var;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
@@ -14,7 +16,8 @@ use fs_deps::get_or_install_packages;
 
 use crate::args::LoadArgs;
 use crate::loader::{
-    get_packages_install_path, resolve_use_v2_compatible_package_download_options,
+    get_packages_install_path, resolve_and_reload_weo_from_project,
+    resolve_use_v2_compatible_package_download_options,
 };
 
 /// Execute `dbt deps` without loading a profile.
@@ -23,11 +26,24 @@ use crate::loader::{
 /// then delegates to `get_or_install_packages`. No `profiles.yml` lookup
 /// is performed, matching dbt-core's behaviour where `dbt deps` does not
 /// require a valid profile.
-pub async fn execute_deps_command(arg: &EvalArgs, token: &CancellationToken) -> FsResult<()> {
+pub async fn execute_deps_command(
+    arg: &EvalArgs,
+    cli_warn_error: Option<bool>,
+    cli_warn_error_options: Option<WarnErrorOptions>,
+    tracing_features: Option<&dyn TracingConfigProvider>,
+    token: &CancellationToken,
+) -> FsResult<()> {
     let load_args = LoadArgs::from_eval_args(arg);
 
     // Read dbt_project.yml without loading profiles.yml.
     let simplified_dbt_project = load_simplified_project_only(&load_args)?;
+    let _resolved_warn_error_options = resolve_and_reload_weo_from_project(
+        &simplified_dbt_project,
+        cli_warn_error,
+        cli_warn_error_options.as_ref(),
+        tracing_features,
+        load_args.io.status_reporter.as_ref(),
+    )?;
 
     let (packages_install_path, _internal_packages_install_path) = get_packages_install_path(
         &load_args.io.in_dir,

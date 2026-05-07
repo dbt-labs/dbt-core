@@ -30,6 +30,7 @@ use steps::{
     load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
 use tracing::Instrument as _;
+use utils::{emit_scrubbed_package_name_warnings, scrubbed_package_names_from_package_def};
 
 use crate::context::DepsOperationContext;
 
@@ -94,6 +95,12 @@ pub async fn get_or_install_packages(
     let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir)?;
 
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
+        // Check for dbt secrets in package definitions and emit warnings if found.
+        // Note that package lock scrubbing happens later after during lock generation,
+        // in install_packages
+        let scrubbed_package_names = scrubbed_package_names_from_package_def(dbt_packages);
+        emit_scrubbed_package_name_warnings(io, &scrubbed_package_names);
+
         if !upgrade
             && !lock
             && let Some(dbt_packages_lock) = try_load_valid_dbt_packages_lock(

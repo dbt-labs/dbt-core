@@ -13,7 +13,9 @@ use dbt_common::path::DbtPath;
 use dbt_common::tracing::TracingConfigProvider;
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::tracing::span_info::SpanStatusRecorder;
-use dbt_common::warn_error_options::{project_flags_get_value, resolve_warn_error_options};
+use dbt_common::warn_error_options::{
+    WarnErrorOptions, project_flags_get_value, resolve_warn_error_options,
+};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
@@ -99,16 +101,27 @@ fn resolve_and_set_threads(
     Ok(final_threads)
 }
 
-fn resolve_warn_error_options_from_flags<'a>(
-    mut iarg: Cow<'a, InvocationArgs>,
+pub(crate) struct ResolvedWarnErrorOptions {
+    pub warn_error: bool,
+    pub warn_error_options: WarnErrorOptions,
+}
+
+/// Resolve warn-error options from CLI/env and project flags.
+///
+/// This has a side effect: when `tracing_features` is provided, it reloads the
+/// current tracing config with the resolved warn-error options.
+pub(crate) fn resolve_and_reload_weo_from_project(
+    simplified_dbt_project: &DbtProjectSimplified,
     from_cli: Option<bool>,
-    from_cli_or_env: Option<&dbt_common::warn_error_options::WarnErrorOptions>,
-    project_flags: Option<&dbt_yaml::Value>,
+    from_cli_or_env: Option<&WarnErrorOptions>,
     tracing_features: Option<&dyn TracingConfigProvider>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
-) -> FsResult<Cow<'a, InvocationArgs>> {
-    let (warn_error, warn_error_options) =
-        resolve_warn_error_options(from_cli, from_cli_or_env, project_flags);
+) -> FsResult<ResolvedWarnErrorOptions> {
+    let (warn_error, warn_error_options) = resolve_warn_error_options(
+        from_cli,
+        from_cli_or_env,
+        simplified_dbt_project.flags.as_ref(),
+    );
 
     let (warning_messages, error_message) = warn_error_options.validation_messages();
 
@@ -132,18 +145,14 @@ fn resolve_warn_error_options_from_flags<'a>(
             status_reporter,
         );
     }
-    if iarg.warn_error == warn_error && iarg.warn_error_options == warn_error_options {
-        return Ok(iarg);
-    }
-
     if let Some(tracing_handle) = tracing_features {
         tracing_handle.set_warn_error_options(warn_error_options.clone());
     }
 
-    let iarg_mut = iarg.to_mut();
-    iarg_mut.warn_error = warn_error;
-    iarg_mut.warn_error_options = warn_error_options;
-    Ok(iarg)
+    Ok(ResolvedWarnErrorOptions {
+        warn_error,
+        warn_error_options,
+    })
 }
 
 fn project_flags_v2_compatible_download(flags: &dbt_yaml::Value) -> Option<bool> {
@@ -206,14 +215,21 @@ pub async fn load(
     let env = initialize_load_profile_jinja_environment();
     load_catalogs(arg, &env, simplified_dbt_project.flags.as_ref()).await?;
 
-    let mut iarg = resolve_warn_error_options_from_flags(
-        iarg,
+    let resolved_warn_error_options = resolve_and_reload_weo_from_project(
+        &simplified_dbt_project,
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
-        simplified_dbt_project.flags.as_ref(),
         tracing_features,
         arg.io.status_reporter.as_ref(),
     )?;
+    let mut iarg = iarg;
+    if iarg.warn_error != resolved_warn_error_options.warn_error
+        || iarg.warn_error_options != resolved_warn_error_options.warn_error_options
+    {
+        let iarg_mut = iarg.to_mut();
+        iarg_mut.warn_error = resolved_warn_error_options.warn_error;
+        iarg_mut.warn_error_options = resolved_warn_error_options.warn_error_options.clone();
+    }
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
 
     // Merge use_v2_compatible_package_downloads flags from project and CLI/env
@@ -426,11 +442,10 @@ pub async fn load(
 )]
 pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
     let (simplified_dbt_project, dbt_profile) = load_simplified_project_and_profiles(arg).await?;
-    let invocation_args = resolve_warn_error_options_from_flags(
-        Cow::Owned(InvocationArgs::default()),
+    let resolved_warn_error_options = resolve_and_reload_weo_from_project(
+        &simplified_dbt_project,
         arg.cli_warn_error,
         arg.cli_warn_error_options.as_ref(),
-        simplified_dbt_project.flags.as_ref(),
         None,
         arg.io.status_reporter.as_ref(),
     )?;
@@ -447,8 +462,8 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         cli_vars: arg.vars.clone(),
         catalogs: load_catalogs::fetch_catalogs(),
         cloud_config: None,
-        warn_error: invocation_args.warn_error,
-        warn_error_options: invocation_args.warn_error_options.clone(),
+        warn_error: resolved_warn_error_options.warn_error,
+        warn_error_options: resolved_warn_error_options.warn_error_options,
     };
 
     Ok(dbt_state)

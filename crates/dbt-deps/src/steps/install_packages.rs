@@ -12,8 +12,9 @@ use dbt_common::{
     pretty_string::BLUE,
     stdfs, tokiofs,
 };
-use dbt_schemas::schemas::packages::DbtPackagesLock;
+use dbt_schemas::schemas::packages::{DbtPackageLock, DbtPackagesLock};
 use dbt_telemetry::{DepsAllPackagesInstalled, DepsPackageInstalled, PackageType};
+use dbt_yaml::Verbatim;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{Instrument as _, Span};
@@ -25,7 +26,10 @@ use crate::context::DepsOperationContext;
 use crate::{
     git_client::install_git_like_package,
     package_listing::PackageListing,
-    utils::{ensure_dir, make_tempdir, move_dir, read_and_validate_dbt_project, sanitize_git_url},
+    utils::{
+        ensure_dir, make_tempdir, move_dir, read_and_validate_dbt_project, sanitize_git_url,
+        scrub_package_name_secret_env_vars,
+    },
 };
 
 /// Create a package installation span and report to status reporter
@@ -83,13 +87,60 @@ fn create_package_installed_span(
     create_info_span(attrs)
 }
 
+fn package_lock_needs_scrub(package: &DbtPackageLock) -> bool {
+    match package {
+        DbtPackageLock::Git(git_package_lock) => {
+            scrub_package_name_secret_env_vars(git_package_lock.git.as_str()).is_some()
+        }
+        DbtPackageLock::Tarball(tarball_package_lock) => {
+            scrub_package_name_secret_env_vars(tarball_package_lock.tarball.as_str()).is_some()
+        }
+        _ => false,
+    }
+}
+
+fn scrub_package_lock_for_file(dbt_packages_lock: &mut DbtPackagesLock) {
+    for package in dbt_packages_lock.packages.iter_mut() {
+        match package {
+            DbtPackageLock::Git(git_package_lock) => {
+                if let Some(scrubbed) =
+                    scrub_package_name_secret_env_vars(git_package_lock.git.as_str())
+                {
+                    git_package_lock.git = Verbatim::from(scrubbed.into_owned());
+                }
+            }
+            DbtPackageLock::Tarball(tarball_package_lock) => {
+                if let Some(scrubbed) =
+                    scrub_package_name_secret_env_vars(tarball_package_lock.tarball.as_str())
+                {
+                    tarball_package_lock.tarball = Verbatim::from(scrubbed.into_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 pub async fn install_packages(
     ctx: &DepsOperationContext<'_>,
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
 ) -> FsResult<()> {
     // Cleanup package-lock.yml
-    let package_lock_str = dbt_yaml::to_string(&dbt_packages_lock).unwrap();
+    let package_lock_str = if dbt_packages_lock
+        .packages
+        .iter()
+        .any(package_lock_needs_scrub)
+    {
+        let mut scrubbed_dbt_packages_lock = DbtPackagesLock {
+            packages: dbt_packages_lock.packages.clone(),
+            sha1_hash: dbt_packages_lock.sha1_hash.clone(),
+        };
+        scrub_package_lock_for_file(&mut scrubbed_dbt_packages_lock);
+        dbt_yaml::to_string(&scrubbed_dbt_packages_lock).unwrap()
+    } else {
+        dbt_yaml::to_string(dbt_packages_lock).unwrap()
+    };
     // Create tmp dir for tarball
     let packages_lock_path = &ctx.io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     std::fs::write(packages_lock_path, &package_lock_str).map_err(|e| {

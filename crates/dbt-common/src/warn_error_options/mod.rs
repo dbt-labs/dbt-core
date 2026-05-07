@@ -594,6 +594,9 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
             error_code == ErrorCode::PackageRedirectDeprecation
         }
         SupportedLegacyWarnError::DepsUnpinned => error_code == ErrorCode::DepsUnpinned,
+        SupportedLegacyWarnError::DepsScrubbedPackageName => {
+            error_code == ErrorCode::DepsScrubbedPackageName
+        }
         SupportedLegacyWarnError::DepsFoundDuplicatePackage => {
             error_code == ErrorCode::DepsFoundDuplicatePackage
         }
@@ -851,6 +854,11 @@ mod tests {
                 "DepsUnpinned",
                 SupportedLegacyWarnError::DepsUnpinned,
                 ErrorCode::DepsUnpinned,
+            ),
+            (
+                "DepsScrubbedPackageName",
+                SupportedLegacyWarnError::DepsScrubbedPackageName,
+                ErrorCode::DepsScrubbedPackageName,
             ),
             (
                 "DepsFoundDuplicatePackage",

@@ -11,7 +11,10 @@ use crate::{
     package_listing::UnpinnedPackage,
     tarball_client::download_tarball_package,
     types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
-    utils::{ensure_dir, fusion_sha1_hash_packages, make_tempdir, read_and_validate_dbt_project},
+    utils::{
+        emit_scrubbed_package_name_warnings, ensure_dir, fusion_sha1_hash_packages, make_tempdir,
+        read_and_validate_dbt_project, scrubbed_package_names_from_package_def,
+    },
 };
 
 use crate::package_listing::PackageListing;
@@ -195,6 +198,7 @@ async fn resolve_packages(
                 )?;
                 git_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -203,6 +207,7 @@ async fn resolve_packages(
             UnpinnedPackage::Local(local_unpinned_package) => {
                 let (dbt_packages, _) = load_dbt_packages(ctx.io, &local_unpinned_package.local)?;
                 if let Some(dbt_packages) = dbt_packages {
+                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
             }
@@ -229,6 +234,7 @@ async fn resolve_packages(
                 )?;
                 private_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -251,6 +257,7 @@ async fn resolve_packages(
                 )?;
                 tarball_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
             }
@@ -260,5 +267,14 @@ async fn resolve_packages(
     if !next_listing.packages.is_empty() {
         Box::pin(resolve_packages(ctx, final_listing, &mut next_listing)).await?;
     }
+    Ok(())
+}
+
+fn emit_nested_scrubbed_package_name_warnings(
+    ctx: &DepsOperationContext<'_>,
+    dbt_packages: &DbtPackages,
+) -> FsResult<()> {
+    let scrubbed_package_names = scrubbed_package_names_from_package_def(dbt_packages);
+    emit_scrubbed_package_name_warnings(ctx.io, &scrubbed_package_names);
     Ok(())
 }
