@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from dbt.adapters.catalogs import CatalogIntegrationConfig
@@ -27,20 +26,6 @@ class Catalog(dbtClassMixin):
 # ===== catalogs.yml v2 types =====
 
 
-class V2CatalogType(str, Enum):
-    HORIZON = "horizon"
-    GLUE = "glue"
-    ICEBERG_REST = "iceberg_rest"
-    UNITY = "unity"
-    HIVE_METASTORE = "hive_metastore"
-    BIGLAKE_METASTORE = "biglake_metastore"
-
-
-class V2TableFormat(str, Enum):
-    DEFAULT = "default"
-    ICEBERG = "iceberg"
-
-
 @dataclass
 class CatalogV2PlatformConfig:
     snowflake: Optional[Dict[str, Any]] = None
@@ -51,6 +36,6 @@ class CatalogV2PlatformConfig:
 @dataclass
 class CatalogV2:
     name: str
-    catalog_type: V2CatalogType
-    table_format: V2TableFormat
+    catalog_type: str
+    table_format: str
     config: CatalogV2PlatformConfig

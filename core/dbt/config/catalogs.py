@@ -8,8 +8,6 @@ from dbt.artifacts.resources import (
     CatalogV2,
     CatalogV2PlatformConfig,
     CatalogWriteIntegrationConfig,
-    V2CatalogType,
-    V2TableFormat,
 )
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
@@ -105,40 +103,47 @@ def get_active_write_integration(catalog: Catalog) -> Optional[CatalogWriteInteg
 
 # ===== catalogs.yml v2 =====
 
-_VALID_V2_CATALOG_TYPES = {t.value for t in V2CatalogType}
-_VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
+_VALID_V2_CATALOG_TYPES = {
+    "horizon",
+    "glue",
+    "iceberg_rest",
+    "unity",
+    "hive_metastore",
+    "biglake_metastore",
+}
+_VALID_V2_TABLE_FORMATS = {"default", "iceberg"}
 _VALID_PLATFORMS = {"snowflake", "databricks", "bigquery"}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
 
 # Type → supported platforms
-_TYPE_PLATFORMS: Dict[V2CatalogType, List[str]] = {
-    V2CatalogType.HORIZON: ["snowflake"],
-    V2CatalogType.GLUE: ["snowflake"],
-    V2CatalogType.ICEBERG_REST: ["snowflake"],
-    V2CatalogType.UNITY: ["snowflake", "databricks"],
-    V2CatalogType.HIVE_METASTORE: ["databricks"],
-    V2CatalogType.BIGLAKE_METASTORE: ["bigquery"],
+_TYPE_PLATFORMS: Dict[str, List[str]] = {
+    "horizon": ["snowflake"],
+    "glue": ["snowflake"],
+    "iceberg_rest": ["snowflake"],
+    "unity": ["snowflake", "databricks"],
+    "hive_metastore": ["databricks"],
+    "biglake_metastore": ["bigquery"],
 }
 
 # Type → required table_format
-_TYPE_TABLE_FORMAT: Dict[V2CatalogType, V2TableFormat] = {
-    V2CatalogType.HORIZON: V2TableFormat.ICEBERG,
-    V2CatalogType.GLUE: V2TableFormat.ICEBERG,
-    V2CatalogType.ICEBERG_REST: V2TableFormat.ICEBERG,
-    V2CatalogType.UNITY: V2TableFormat.ICEBERG,
-    V2CatalogType.HIVE_METASTORE: V2TableFormat.DEFAULT,
-    V2CatalogType.BIGLAKE_METASTORE: V2TableFormat.ICEBERG,
+_TYPE_TABLE_FORMAT: Dict[str, str] = {
+    "horizon": "iceberg",
+    "glue": "iceberg",
+    "iceberg_rest": "iceberg",
+    "unity": "iceberg",
+    "hive_metastore": "default",
+    "biglake_metastore": "iceberg",
 }
 
 # v2 type + adapter_type → v1 catalog_type string (matching fs bridge)
 _V2_TO_V1_CATALOG_TYPE: Dict[tuple, str] = {
-    (V2CatalogType.HORIZON, "snowflake"): "BUILT_IN",
-    (V2CatalogType.GLUE, "snowflake"): "ICEBERG_REST",
-    (V2CatalogType.ICEBERG_REST, "snowflake"): "ICEBERG_REST",
-    (V2CatalogType.UNITY, "snowflake"): "ICEBERG_REST",
-    (V2CatalogType.UNITY, "databricks"): "unity",
-    (V2CatalogType.HIVE_METASTORE, "databricks"): "hive_metastore",
-    (V2CatalogType.BIGLAKE_METASTORE, "bigquery"): "biglake_metastore",
+    ("horizon", "snowflake"): "BUILT_IN",
+    ("glue", "snowflake"): "ICEBERG_REST",
+    ("iceberg_rest", "snowflake"): "ICEBERG_REST",
+    ("unity", "snowflake"): "ICEBERG_REST",
+    ("unity", "databricks"): "unity",
+    ("hive_metastore", "databricks"): "hive_metastore",
+    ("biglake_metastore", "bigquery"): "biglake_metastore",
 }
 
 
@@ -207,7 +212,7 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
             f"Invalid catalog type '{rendered['type']}'. "
             f"Must be one of: {sorted(_VALID_V2_CATALOG_TYPES)}"
         )
-    catalog_type = V2CatalogType(raw_type)
+    catalog_type = raw_type
 
     # Validate table_format
     raw_format = str(rendered["table_format"]).lower()
@@ -216,7 +221,7 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
             f"Invalid table_format '{rendered['table_format']}'. "
             f"Must be {sorted(_VALID_V2_TABLE_FORMATS)}"
         )
-    table_format = V2TableFormat(raw_format)
+    table_format = raw_format
 
     # Validate config is a dict with only known platform keys
     config_raw = rendered["config"]
@@ -270,7 +275,7 @@ def _validate_platform_block(catalog: CatalogV2, adapter_type: str) -> None:
     if block is None:
         return
 
-    catalog_type = catalog.catalog_type.value
+    catalog_type = catalog.catalog_type
     adapter_class = FACTORY.get_adapter_class_by_name(adapter_type)
     configs = getattr(adapter_class, "CATALOG_V2_CONFIGS", {})
     config_class = configs.get(catalog_type)
@@ -301,18 +306,18 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
     required_format = _TYPE_TABLE_FORMAT[ct]
     if catalog.table_format != required_format:
         raise DbtValidationError(
-            f"Catalog '{name}' type '{ct.value}' requires table_format='{required_format.value}', "
-            f"got '{catalog.table_format.value}'"
+            f"Catalog '{name}' type '{ct}' requires table_format='{required_format}', "
+            f"got '{catalog.table_format}'"
         )
 
     # Reject platform blocks not supported by this type
     for platform in _VALID_PLATFORMS:
         block = _get_platform_block(catalog, platform)
         if block is not None and platform not in supported:
-            raise DbtValidationError(f"dbt does not support {platform} on the {ct.value} 'type'")
+            raise DbtValidationError(f"dbt does not support {platform} on the {ct} 'type'")
 
     # Required-platform rules: unity needs at least one supported platform; others need all of theirs
-    if ct == V2CatalogType.UNITY:
+    if ct == "unity":
         if all(_get_platform_block(catalog, p) is None for p in supported):
             raise DbtValidationError(
                 f"Catalog '{name}' of type 'unity' requires at least one config block: "
@@ -322,7 +327,7 @@ def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> N
         for platform in supported:
             if _get_platform_block(catalog, platform) is None:
                 raise DbtValidationError(
-                    f"Catalog '{name}' type '{ct.value}' requires config.{platform}"
+                    f"Catalog '{name}' type '{ct}' requires config.{platform}"
                 )
 
     # Validate the platform block matching the running adapter (only when supported by this type)
@@ -337,9 +342,9 @@ _SNOWFLAKE_LINKED_FIELD_MAP: Dict[str, str] = {
 }
 
 # v2 type → catalog_linked_database_type value for the adapter
-_LINKED_DATABASE_TYPE: Dict[V2CatalogType, str] = {
-    V2CatalogType.GLUE: "glue",
-    V2CatalogType.UNITY: "unity",
+_LINKED_DATABASE_TYPE: Dict[str, str] = {
+    "glue": "glue",
+    "unity": "unity",
 }
 
 
@@ -361,7 +366,7 @@ def bridge_v2_catalog_to_integration(
     v1_catalog_type = _V2_TO_V1_CATALOG_TYPE.get(key)
     if v1_catalog_type is None:
         raise DbtValidationError(
-            f"Catalog '{catalog.name}' has type '{ct.value}'; "
+            f"Catalog '{catalog.name}' has type '{ct}'; "
             f"{adapter_type} does not support this catalog type"
         )
 
@@ -376,11 +381,7 @@ def bridge_v2_catalog_to_integration(
     adapter_properties = {k: v for k, v in platform_block.items() if k not in top_level_fields}
 
     # Translate v2 field names to v1 adapter-expected names for snowflake linked catalogs
-    is_snowflake_linked = adapter_type == "snowflake" and ct in (
-        V2CatalogType.GLUE,
-        V2CatalogType.ICEBERG_REST,
-        V2CatalogType.UNITY,
-    )
+    is_snowflake_linked = adapter_type == "snowflake" and ct in ("glue", "iceberg_rest", "unity")
     if is_snowflake_linked:
         adapter_properties = _translate_adapter_properties(
             adapter_properties, _SNOWFLAKE_LINKED_FIELD_MAP
@@ -394,9 +395,7 @@ def bridge_v2_catalog_to_integration(
         catalog_type=v1_catalog_type,
         catalog_name=catalog.name,
         table_format=(
-            catalog.table_format.value.upper()
-            if adapter_type == "snowflake"
-            else catalog.table_format.value
+            catalog.table_format.upper() if adapter_type == "snowflake" else catalog.table_format
         ),
         external_volume=str(external_volume) if external_volume is not None else None,
         file_format=str(file_format) if file_format is not None else None,

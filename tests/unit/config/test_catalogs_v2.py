@@ -4,12 +4,7 @@ from unittest import mock
 
 import pytest
 
-from dbt.artifacts.resources import (
-    CatalogV2,
-    CatalogV2PlatformConfig,
-    V2CatalogType,
-    V2TableFormat,
-)
+from dbt.artifacts.resources import CatalogV2, CatalogV2PlatformConfig
 from dbt.config.catalogs import (
     bridge_v2_catalog_to_integration,
     load_catalogs_v2,
@@ -119,8 +114,8 @@ class TestLoadSingleCatalogV2:
         }
         catalog = load_single_catalog_v2(raw, renderer)
         assert catalog.name == "sf_managed"
-        assert catalog.catalog_type == V2CatalogType.HORIZON
-        assert catalog.table_format == V2TableFormat.ICEBERG
+        assert catalog.catalog_type == "horizon"
+        assert catalog.table_format == "iceberg"
         assert catalog.config.snowflake == {
             "external_volume": "s3_iceberg",
             "change_tracking": True,
@@ -137,7 +132,7 @@ class TestLoadSingleCatalogV2:
             },
         }
         catalog = load_single_catalog_v2(raw, renderer)
-        assert catalog.catalog_type == V2CatalogType.UNITY
+        assert catalog.catalog_type == "unity"
         assert catalog.config.snowflake == {"catalog_database": "MY_DB"}
         assert catalog.config.databricks == {"file_format": "delta", "use_uniform": True}
         assert catalog.config.bigquery is None
@@ -150,8 +145,8 @@ class TestLoadSingleCatalogV2:
             "config": {"databricks": {"file_format": "delta"}},
         }
         catalog = load_single_catalog_v2(raw, renderer)
-        assert catalog.catalog_type == V2CatalogType.HIVE_METASTORE
-        assert catalog.table_format == V2TableFormat.DEFAULT
+        assert catalog.catalog_type == "hive_metastore"
+        assert catalog.table_format == "default"
 
     def test_valid_biglake(self, renderer):
         raw = {
@@ -166,7 +161,7 @@ class TestLoadSingleCatalogV2:
             },
         }
         catalog = load_single_catalog_v2(raw, renderer)
-        assert catalog.catalog_type == V2CatalogType.BIGLAKE_METASTORE
+        assert catalog.catalog_type == "biglake_metastore"
 
     def test_type_case_insensitive(self, renderer):
         raw = {
@@ -176,8 +171,8 @@ class TestLoadSingleCatalogV2:
             "config": {"snowflake": {"external_volume": "vol"}},
         }
         catalog = load_single_catalog_v2(raw, renderer)
-        assert catalog.catalog_type == V2CatalogType.HORIZON
-        assert catalog.table_format == V2TableFormat.ICEBERG
+        assert catalog.catalog_type == "horizon"
+        assert catalog.table_format == "iceberg"
 
     def test_missing_name(self, renderer):
         raw = {"type": "horizon", "table_format": "iceberg", "config": {}}
@@ -266,8 +261,8 @@ class TestLoadSingleCatalogV2:
 
 def _make_catalog(
     name="test_cat",
-    catalog_type=V2CatalogType.HORIZON,
-    table_format=V2TableFormat.ICEBERG,
+    catalog_type="horizon",
+    table_format="iceberg",
     snowflake=None,
     databricks=None,
     bigquery=None,
@@ -292,7 +287,7 @@ class TestValidateV2CatalogForPlatform:
             CATALOG_V2_CONFIGS: dict = {}
 
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
+            catalog_type="horizon",
             snowflake={"external_volume": "vol"},
         )
         with mock.patch(
@@ -305,7 +300,7 @@ class TestValidateV2CatalogForPlatform:
     # --- horizon ---
     def test_horizon_valid(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
+            catalog_type="horizon",
             snowflake={
                 "external_volume": "vol",
                 "change_tracking": True,
@@ -318,14 +313,14 @@ class TestValidateV2CatalogForPlatform:
         validate_v2_catalog_for_platform(cat, "snowflake")  # should not raise
 
     def test_horizon_missing_snowflake_block(self):
-        cat = _make_catalog(catalog_type=V2CatalogType.HORIZON)
+        cat = _make_catalog(catalog_type="horizon")
         with pytest.raises(DbtValidationError, match="requires config.snowflake"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_horizon_wrong_table_format(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
-            table_format=V2TableFormat.DEFAULT,
+            catalog_type="horizon",
+            table_format="default",
             snowflake={"external_volume": "vol"},
         )
         with pytest.raises(DbtValidationError, match="requires table_format='iceberg'"):
@@ -333,7 +328,7 @@ class TestValidateV2CatalogForPlatform:
 
     def test_horizon_rejects_databricks_block(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
+            catalog_type="horizon",
             snowflake={"external_volume": "vol"},
             databricks={"file_format": "delta"},
         )
@@ -343,7 +338,7 @@ class TestValidateV2CatalogForPlatform:
     # --- glue ---
     def test_glue_valid(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.GLUE,
+            catalog_type="glue",
             snowflake={
                 "catalog_database": "MY_CLD",
                 "auto_refresh": True,
@@ -355,7 +350,7 @@ class TestValidateV2CatalogForPlatform:
     # --- iceberg_rest ---
     def test_iceberg_rest_valid(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.ICEBERG_REST,
+            catalog_type="iceberg_rest",
             snowflake={"catalog_database": "MY_REST_CLD"},
         )
         validate_v2_catalog_for_platform(cat, "snowflake")
@@ -363,28 +358,28 @@ class TestValidateV2CatalogForPlatform:
     # --- unity ---
     def test_unity_snowflake_only(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             snowflake={"catalog_database": "DB"},
         )
         validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_unity_databricks_only(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             databricks={"file_format": "parquet"},
         )
         validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_unity_databricks_uniform(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             databricks={"file_format": "delta", "use_uniform": True},
         )
         validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_unity_both_platforms(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             snowflake={"catalog_database": "DB"},
             databricks={"file_format": "parquet"},
         )
@@ -392,13 +387,13 @@ class TestValidateV2CatalogForPlatform:
         validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_unity_no_platform(self):
-        cat = _make_catalog(catalog_type=V2CatalogType.UNITY)
+        cat = _make_catalog(catalog_type="unity")
         with pytest.raises(DbtValidationError, match="requires at least one config block"):
             validate_v2_catalog_for_platform(cat, "snowflake")
 
     def test_unity_rejects_bigquery(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             snowflake={"catalog_database": "DB"},
             bigquery={"external_volume": "gs://bucket", "file_format": "parquet"},
         )
@@ -408,24 +403,24 @@ class TestValidateV2CatalogForPlatform:
     # --- hive_metastore ---
     def test_hive_metastore_valid(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.DEFAULT,
+            catalog_type="hive_metastore",
+            table_format="default",
             databricks={"file_format": "delta"},
         )
         validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_hive_metastore_missing_databricks(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.DEFAULT,
+            catalog_type="hive_metastore",
+            table_format="default",
         )
         with pytest.raises(DbtValidationError, match="requires config.databricks"):
             validate_v2_catalog_for_platform(cat, "databricks")
 
     def test_hive_metastore_wrong_table_format(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.ICEBERG,
+            catalog_type="hive_metastore",
+            table_format="iceberg",
             databricks={"file_format": "delta"},
         )
         with pytest.raises(DbtValidationError, match="requires table_format='default'"):
@@ -434,7 +429,7 @@ class TestValidateV2CatalogForPlatform:
     # --- biglake_metastore ---
     def test_biglake_valid(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.BIGLAKE_METASTORE,
+            catalog_type="biglake_metastore",
             bigquery={
                 "external_volume": "gs://my-bucket",
                 "file_format": "parquet",
@@ -444,7 +439,7 @@ class TestValidateV2CatalogForPlatform:
         validate_v2_catalog_for_platform(cat, "bigquery")
 
     def test_biglake_missing_bigquery(self):
-        cat = _make_catalog(catalog_type=V2CatalogType.BIGLAKE_METASTORE)
+        cat = _make_catalog(catalog_type="biglake_metastore")
         with pytest.raises(DbtValidationError, match="requires config.bigquery"):
             validate_v2_catalog_for_platform(cat, "bigquery")
 
@@ -455,7 +450,7 @@ class TestValidateV2CatalogForPlatform:
 class TestBridgeV2CatalogToIntegration:
     def test_horizon_snowflake(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
+            catalog_type="horizon",
             snowflake={
                 "external_volume": "vol",
                 "change_tracking": True,
@@ -476,7 +471,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_glue_snowflake(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.GLUE,
+            catalog_type="glue",
             snowflake={"catalog_database": "DB", "auto_refresh": True},
         )
         config = bridge_v2_catalog_to_integration(cat, "snowflake")
@@ -490,7 +485,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_iceberg_rest_snowflake(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.ICEBERG_REST,
+            catalog_type="iceberg_rest",
             snowflake={"catalog_database": "REST_DB", "target_file_size": "AUTO"},
         )
         config = bridge_v2_catalog_to_integration(cat, "snowflake")
@@ -503,7 +498,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_unity_snowflake(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             snowflake={"catalog_database": "UNITY_DB"},
             databricks={"file_format": "parquet"},
         )
@@ -517,7 +512,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_unity_databricks(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             snowflake={"catalog_database": "DB"},
             databricks={"file_format": "delta", "location_root": "/path", "use_uniform": True},
         )
@@ -531,8 +526,8 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_hive_metastore_databricks(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HIVE_METASTORE,
-            table_format=V2TableFormat.DEFAULT,
+            catalog_type="hive_metastore",
+            table_format="default",
             databricks={"file_format": "delta"},
         )
         config = bridge_v2_catalog_to_integration(cat, "databricks")
@@ -543,7 +538,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_biglake_bigquery(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.BIGLAKE_METASTORE,
+            catalog_type="biglake_metastore",
             bigquery={
                 "external_volume": "gs://bucket",
                 "file_format": "parquet",
@@ -558,7 +553,7 @@ class TestBridgeV2CatalogToIntegration:
 
     def test_unsupported_adapter_type(self):
         cat = _make_catalog(
-            catalog_type=V2CatalogType.HORIZON,
+            catalog_type="horizon",
             snowflake={"external_volume": "vol"},
         )
         with pytest.raises(DbtValidationError, match="does not support"):
@@ -567,7 +562,7 @@ class TestBridgeV2CatalogToIntegration:
     def test_missing_platform_block_uses_empty(self):
         """When a unity catalog has no snowflake block, bridge uses empty + type annotation."""
         cat = _make_catalog(
-            catalog_type=V2CatalogType.UNITY,
+            catalog_type="unity",
             databricks={"file_format": "delta"},
         )
         config = bridge_v2_catalog_to_integration(cat, "snowflake")
