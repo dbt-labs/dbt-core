@@ -2,7 +2,6 @@ import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.factory import FACTORY
 from dbt.artifacts.resources import (
     Catalog,
     CatalogV2,
@@ -15,7 +14,6 @@ from dbt.config.renderer import SecretRenderer
 from dbt.constants import CATALOGS_FILE_NAME
 from dbt.exceptions import YamlLoadError
 from dbt_common.clients.system import load_file_contents
-from dbt_common.dataclass_schema import ValidationError as SchemaValidationError
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
 
@@ -107,26 +105,6 @@ def get_active_write_integration(catalog: Catalog) -> Optional[CatalogWriteInteg
 _VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
 _VALID_PLATFORMS = {"snowflake", "databricks", "bigquery"}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
-
-# Type → supported platforms
-_TYPE_PLATFORMS: Dict[str, List[str]] = {
-    "horizon": ["snowflake"],
-    "glue": ["snowflake"],
-    "iceberg_rest": ["snowflake"],
-    "unity": ["snowflake", "databricks"],
-    "hive_metastore": ["databricks"],
-    "biglake_metastore": ["bigquery"],
-}
-
-# Type → required table_format
-_TYPE_TABLE_FORMAT: Dict[str, V2TableFormat] = {
-    "horizon": V2TableFormat.ICEBERG,
-    "glue": V2TableFormat.ICEBERG,
-    "iceberg_rest": V2TableFormat.ICEBERG,
-    "unity": V2TableFormat.ICEBERG,
-    "hive_metastore": V2TableFormat.DEFAULT,
-    "biglake_metastore": V2TableFormat.ICEBERG,
-}
 
 # v2 type + adapter_type → v1 catalog_type string (matching fs bridge)
 _V2_TO_V1_CATALOG_TYPE: Dict[tuple, str] = {
@@ -246,88 +224,6 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
 
 def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str, Any]]:
     return getattr(catalog.config, platform, None)
-
-
-def _validate_platform_block(catalog: CatalogV2, adapter_type: str) -> None:
-    """Validate the platform block for the running adapter against its registered v2 schema.
-
-    Looks up the schema via adapter_class.CATALOG_V2_CONFIGS — adapter packages own their
-    own platform-specific schemas (see CATALOG_V2_CONFIGS on SnowflakeAdapter, etc.).
-
-    Cross-platform blocks (e.g. a unity catalog's databricks block while running on
-    snowflake) are intentionally not validated here — those errors surface when the user
-    actually runs against that platform.
-    """
-    block = _get_platform_block(catalog, adapter_type)
-    if block is None:
-        return
-
-    catalog_type = catalog.catalog_type
-    adapter_class = FACTORY.get_adapter_class_by_name(adapter_type)
-    configs = getattr(adapter_class, "CATALOG_V2_CONFIGS", {})
-    config_class = configs.get(catalog_type)
-    if config_class is None:
-        raise DbtValidationError(
-            f"Catalog '{catalog.name}' type '{catalog_type}' on platform '{adapter_type}': "
-            f"no v2 catalog schema registered. The adapter may not yet support v2 catalogs "
-            f"of this type."
-        )
-
-    ctx = f"Catalog '{catalog.name}' {catalog_type}/{adapter_type}"
-    try:
-        config_class.validate(block)
-        config_class.from_dict(block)
-    except SchemaValidationError as e:
-        raise DbtValidationError(f"{ctx}: {e.message}")
-    except DbtValidationError as e:
-        raise DbtValidationError(f"{ctx}: {e}")
-
-
-def validate_v2_catalog_for_platform(catalog: CatalogV2, adapter_type: str) -> None:
-    """Phase 2 semantic validation: check type-specific platform support and field constraints.
-
-    Unknown catalog types (not in _TYPE_PLATFORMS) pass through without type-specific checks
-    so 3p adapters can add new catalog types without core PRs.
-    """
-    ct = catalog.catalog_type
-    name = catalog.name
-    supported = _TYPE_PLATFORMS.get(ct)
-
-    # Unknown catalog type — skip type-specific checks; adapter handles it at registration
-    if supported is None:
-        return
-
-    # Validate table_format matches what the type requires
-    required_format = _TYPE_TABLE_FORMAT[ct]
-    if catalog.table_format != required_format:
-        raise DbtValidationError(
-            f"Catalog '{name}' type '{ct}' requires table_format='{required_format.value}', "
-            f"got '{catalog.table_format.value}'"
-        )
-
-    # Reject platform blocks not supported by this type
-    for platform in _VALID_PLATFORMS:
-        block = _get_platform_block(catalog, platform)
-        if block is not None and platform not in supported:
-            raise DbtValidationError(f"dbt does not support {platform} on the {ct} 'type'")
-
-    # Required-platform rules: unity needs at least one supported platform; others need all of theirs
-    if ct == "unity":
-        if all(_get_platform_block(catalog, p) is None for p in supported):
-            raise DbtValidationError(
-                f"Catalog '{name}' of type 'unity' requires at least one config block: "
-                f"{' or '.join(supported)}"
-            )
-    else:
-        for platform in supported:
-            if _get_platform_block(catalog, platform) is None:
-                raise DbtValidationError(
-                    f"Catalog '{name}' type '{ct}' requires config.{platform}"
-                )
-
-    # Validate the platform block matching the running adapter (only when supported by this type)
-    if adapter_type in supported:
-        _validate_platform_block(catalog, adapter_type)
 
 
 # v2 field name → v1 adapter_properties field name translations.

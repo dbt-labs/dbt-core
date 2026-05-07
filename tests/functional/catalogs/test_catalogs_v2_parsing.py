@@ -1,14 +1,11 @@
 """Functional tests for catalogs.yml v2 parsing and integration."""
 
-from dataclasses import dataclass
-from typing import Optional
 from unittest import mock
 
 import pytest
 
 from dbt.adapters.catalogs import CatalogIntegration, CatalogIntegrationConfig
 from dbt.tests.util import run_dbt, write_config_file
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import DbtValidationError
 
 # ===== Stub integrations matching the v2-to-v1 bridge catalog_type strings =====
@@ -35,63 +32,14 @@ class IcebergRestStubIntegration(CatalogIntegration):
 V2_STUB_INTEGRATIONS = [BuiltInStubIntegration, IcebergRestStubIntegration]
 
 
-# ===== Stub schemas exposed via a fake adapter class =====
-# Real adapter packages declare CATALOG_V2_CONFIGS on their adapter class
-# (see SnowflakeAdapter etc.); these functional tests use a stub adapter so
-# the parse → validate → bridge flow can run without depending on any specific
-# adapter's installed version.
-
-
-@dataclass
-class _StubPlatformConfig(dbtClassMixin):
-    external_volume: Optional[str] = None
-    change_tracking: Optional[bool] = None
-    base_location_root: Optional[str] = None
-    catalog_database: Optional[str] = None
-    auto_refresh: Optional[bool] = None
-    target_file_size: Optional[str] = None
-
-
-class _StubAdapterClass:
-    CATALOG_V2_CONFIGS = {
-        "horizon": _StubPlatformConfig,
-        "glue": _StubPlatformConfig,
-        "iceberg_rest": _StubPlatformConfig,
-        "unity": _StubPlatformConfig,
-    }
-
-
-@pytest.fixture(autouse=True)
-def _stub_adapter_lookup():
-    """Pass through real adapter lookups (postgres) but return _StubAdapterClass
-    for the v2 platforms (snowflake/databricks/bigquery) that aren't installed
-    in this test environment."""
-    from dbt.adapters.factory import FACTORY
-
-    real = FACTORY.get_adapter_class_by_name
-
-    def lookup(name):
-        if name in ("snowflake", "databricks", "bigquery"):
-            return _StubAdapterClass
-        return real(name)
-
-    with mock.patch.object(FACTORY, "get_adapter_class_by_name", side_effect=lookup):
-        yield
-
-
 def _mock_adapter_type(adapter_type):
-    """Mock the bridge and validation functions to use a specific adapter_type.
+    """Mock the bridge function to use a specific adapter_type.
 
     This avoids mocking credentials.type which would break internal adapter validation.
     """
     from dbt.config.catalogs import bridge_v2_catalog_to_integration as _real_bridge
-    from dbt.config.catalogs import validate_v2_catalog_for_platform as _real_validate
 
     return (
-        mock.patch(
-            "dbt.cli.requires.validate_v2_catalog_for_platform",
-            side_effect=lambda cat, _: _real_validate(cat, adapter_type),
-        ),
         mock.patch(
             "dbt.cli.requires.bridge_v2_catalog_to_integration",
             side_effect=lambda cat, _: _real_bridge(cat, adapter_type),
@@ -128,10 +76,9 @@ class TestV2HorizonIntegration:
 
     def test_horizon_registers_as_built_in(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
-        mock_validate, mock_bridge = _mock_adapter_type("snowflake")
+        (mock_bridge,) = _mock_adapter_type("snowflake")
 
         with (
-            mock_validate,
             mock_bridge,
             mock.patch.object(type(project.adapter), "CATALOG_INTEGRATIONS", V2_STUB_INTEGRATIONS),
         ):
@@ -174,10 +121,9 @@ class TestV2GlueIntegration:
 
     def test_glue_registers_as_iceberg_rest(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
-        mock_validate, mock_bridge = _mock_adapter_type("snowflake")
+        (mock_bridge,) = _mock_adapter_type("snowflake")
 
         with (
-            mock_validate,
             mock_bridge,
             mock.patch.object(type(project.adapter), "CATALOG_INTEGRATIONS", V2_STUB_INTEGRATIONS),
         ):
@@ -220,10 +166,9 @@ class TestV2MultipleCatalogs:
 
     def test_multiple_catalogs_registered(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
-        mock_validate, mock_bridge = _mock_adapter_type("snowflake")
+        (mock_bridge,) = _mock_adapter_type("snowflake")
 
         with (
-            mock_validate,
             mock_bridge,
             mock.patch.object(type(project.adapter), "CATALOG_INTEGRATIONS", V2_STUB_INTEGRATIONS),
         ):

@@ -18,7 +18,6 @@ from dbt.config.catalogs import (
     get_active_write_integration,
     load_catalogs,
     load_catalogs_v2,
-    validate_v2_catalog_for_platform,
 )
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
@@ -432,8 +431,6 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         )
         catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
         adapter_type = runtime_config.credentials.type
-        for catalog in catalogs_v2:
-            validate_v2_catalog_for_platform(catalog, adapter_type)
         active_integrations = [
             bridge_v2_catalog_to_integration(catalog, adapter_type) for catalog in catalogs_v2
         ]
