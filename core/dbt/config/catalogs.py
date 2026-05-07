@@ -106,6 +106,28 @@ _VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
 _VALID_PLATFORMS = {"snowflake", "databricks", "bigquery"}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
 
+# Platforms valid for each known catalog type (matches fs validate_platform_support).
+# Unknown types are not checked — 3p adapters define their own constraints.
+_TYPE_PLATFORMS: Dict[str, List[str]] = {
+    "horizon": ["snowflake"],
+    "glue": ["snowflake"],
+    "iceberg_rest": ["snowflake"],
+    "unity": ["snowflake", "databricks"],
+    "hive_metastore": ["databricks"],
+    "biglake_metastore": ["bigquery"],
+}
+
+# Required table_format per known catalog type (matches fs validation).
+# Unknown types are not checked — 3p adapters define their own constraints.
+_REQUIRED_TABLE_FORMAT: Dict[str, "V2TableFormat"] = {
+    "horizon": V2TableFormat.ICEBERG,
+    "glue": V2TableFormat.ICEBERG,
+    "iceberg_rest": V2TableFormat.ICEBERG,
+    "unity": V2TableFormat.ICEBERG,
+    "hive_metastore": V2TableFormat.DEFAULT,
+    "biglake_metastore": V2TableFormat.ICEBERG,
+}
+
 # v2 type + adapter_type → v1 catalog_type string (matching fs bridge)
 _V2_TO_V1_CATALOG_TYPE: Dict[tuple, str] = {
     ("horizon", "snowflake"): "BUILT_IN",
@@ -188,6 +210,13 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
         )
     table_format = V2TableFormat(raw_format)
 
+    # Validate table_format matches the required format for known catalog types
+    required_format = _REQUIRED_TABLE_FORMAT.get(catalog_type)
+    if required_format is not None and table_format != required_format:
+        raise DbtValidationError(
+            f"Catalog '{name}' type '{catalog_type}' requires table_format='{required_format.value}'"
+        )
+
     # Validate config is a dict with only known platform keys
     config_raw = rendered["config"]
     if not isinstance(config_raw, dict):
@@ -214,16 +243,29 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
         bigquery=config_raw.get("bigquery"),
     )
 
-    return CatalogV2(
+    catalog = CatalogV2(
         name=name.strip(),
         catalog_type=catalog_type,
         table_format=table_format,
         config=config,
     )
+    _validate_platform_support(catalog)
+    return catalog
 
 
 def _get_platform_block(catalog: CatalogV2, platform: str) -> Optional[Dict[str, Any]]:
     return getattr(catalog.config, platform, None)
+
+
+def _validate_platform_support(catalog: CatalogV2) -> None:
+    allowed = _TYPE_PLATFORMS.get(catalog.catalog_type)
+    if allowed is None:
+        return  # unknown type — skip
+    for platform in _VALID_PLATFORMS:
+        if _get_platform_block(catalog, platform) is not None and platform not in allowed:
+            raise DbtValidationError(
+                f"dbt does not support {platform} config on catalog type '{catalog.catalog_type}'"
+            )
 
 
 # v2 field name → v1 adapter_properties field name translations.

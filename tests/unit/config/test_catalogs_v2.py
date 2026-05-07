@@ -201,6 +201,93 @@ class TestLoadSingleCatalogV2:
         with pytest.raises(DbtValidationError, match="config.snowflake must be a mapping"):
             load_single_catalog_v2(raw, renderer)
 
+    def test_horizon_requires_iceberg(self, renderer):
+        raw = {"name": "cat", "type": "horizon", "table_format": "default", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'horizon' requires table_format='iceberg'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_glue_requires_iceberg(self, renderer):
+        raw = {"name": "cat", "type": "glue", "table_format": "default", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'glue' requires table_format='iceberg'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_iceberg_rest_requires_iceberg(self, renderer):
+        raw = {"name": "cat", "type": "iceberg_rest", "table_format": "default", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'iceberg_rest' requires table_format='iceberg'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_unity_requires_iceberg(self, renderer):
+        raw = {"name": "cat", "type": "unity", "table_format": "default", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'unity' requires table_format='iceberg'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_hive_metastore_requires_default(self, renderer):
+        raw = {"name": "cat", "type": "hive_metastore", "table_format": "iceberg", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'hive_metastore' requires table_format='default'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_biglake_metastore_requires_iceberg(self, renderer):
+        raw = {"name": "cat", "type": "biglake_metastore", "table_format": "default", "config": {}}
+        with pytest.raises(
+            DbtValidationError, match="type 'biglake_metastore' requires table_format='iceberg'"
+        ):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_unknown_type_skips_table_format_check(self, renderer):
+        # Unknown types are not validated — 3p adapters define their own constraints
+        raw = {"name": "cat", "type": "my_custom_type", "table_format": "default", "config": {}}
+        catalog = load_single_catalog_v2(raw, renderer)
+        assert catalog.table_format == V2TableFormat.DEFAULT
+
+    def test_unsupported_platform_rejected(self, renderer):
+        # horizon is snowflake-only; databricks block should be rejected
+        raw = {
+            "name": "cat",
+            "type": "horizon",
+            "table_format": "iceberg",
+            "config": {
+                "snowflake": {"external_volume": "vol"},
+                "databricks": {"file_format": "delta"},
+            },
+        }
+        with pytest.raises(DbtValidationError, match="does not support databricks.*horizon"):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_unsupported_platform_hive_metastore(self, renderer):
+        # hive_metastore is databricks-only; snowflake block should be rejected
+        raw = {
+            "name": "cat",
+            "type": "hive_metastore",
+            "table_format": "default",
+            "config": {
+                "databricks": {"file_format": "delta"},
+                "snowflake": {"external_volume": "vol"},
+            },
+        }
+        with pytest.raises(DbtValidationError, match="does not support snowflake.*hive_metastore"):
+            load_single_catalog_v2(raw, renderer)
+
+    def test_unknown_type_skips_platform_support_check(self, renderer):
+        # Unknown types can have any platform block
+        raw = {
+            "name": "cat",
+            "type": "my_custom_type",
+            "table_format": "iceberg",
+            "config": {"snowflake": {}, "databricks": {}},
+        }
+        catalog = load_single_catalog_v2(raw, renderer)
+        assert catalog.catalog_type == "my_custom_type"
+
 
 def _make_catalog(
     name="test_cat",
