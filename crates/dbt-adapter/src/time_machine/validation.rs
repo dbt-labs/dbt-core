@@ -329,8 +329,7 @@ impl TimeMachineEventValidationEngine {
         }
 
         // 4. For non SQL methods, compare args directly
-        if !super::event_replay::adapter_args_match(incoming.method, &recorded.args, incoming.args)
-        {
+        if !super::serde::values_match(&recorded.args, incoming.args) {
             return ValidationResult::Mismatch(ValidationMismatch {
                 kind: MismatchKind::Args,
                 expected: recorded.args.to_string(),
