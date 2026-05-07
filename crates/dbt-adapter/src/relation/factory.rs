@@ -5,7 +5,6 @@ use dbt_adapter_core::AdapterType;
 use crate::relation::RelationStatic;
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
-use crate::relation::postgres::PostgresRelationType;
 use crate::relation::redshift::RedshiftRelationType;
 use crate::relation::salesforce::SalesforceRelationType;
 use crate::relation::snowflake::SnowflakeRelationType;
@@ -25,10 +24,6 @@ pub fn create_static_relation(
             let snowflake_relation_type = SnowflakeRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(snowflake_relation_type))
         }
-        Postgres => {
-            let postgres_relation_type = PostgresRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(postgres_relation_type))
-        }
         Bigquery => {
             let bigquery_relation_type = BigqueryRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(bigquery_relation_type))
@@ -41,7 +36,7 @@ pub fn create_static_relation(
             let salesforce_relation_type = SalesforceRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
-        Databricks | Spark | Fabric | DuckDB | Exasol => {
+        Databricks | Spark | Fabric | DuckDB | Exasol | Postgres => {
             let relation_type = RelationStatic {
                 adapter_type,
                 quoting,

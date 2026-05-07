@@ -18,7 +18,18 @@ use minijinja::Value;
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::num::NonZero;
 use std::sync::Arc;
+
+fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>> {
+    use AdapterType::*;
+    match adapter_type {
+        // SAFETY: literal 63 is never 0
+        Postgres => Some(unsafe { NonZero::new_unchecked(63) }),
+        Snowflake | Bigquery | Databricks | Redshift | Spark | DuckDB | Salesforce | Fabric
+        | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => None,
+    }
+}
 
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
@@ -62,7 +73,7 @@ impl StaticBaseRelation for RelationStatic {
             None,
             false,
             temporary.unwrap_or(false),
-        )))
+        )?))
         .into_value())
     }
 
@@ -111,7 +122,7 @@ impl BaseRelationProperties for Relation {
     fn get_database(&self) -> FsResult<String> {
         use AdapterType::*;
         match self.adapter_type {
-            Databricks | Fabric => self.path.database.clone().ok_or_else(|| {
+            Databricks | Fabric | Postgres => self.path.database.clone().ok_or_else(|| {
                 fs_err!(
                     ErrorCode::InvalidConfig,
                     "database is required for {} relation",
@@ -248,8 +259,22 @@ impl Relation {
         metadata: Option<BTreeMap<String, String>>,
         is_delta: bool,
         temporary: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, minijinja::Error> {
+        if let Some(max_identifier_length) = max_identifier_length(adapter_type) {
+            if let (Some(id), Some(_)) = (path.identifier.as_deref(), relation_type) {
+                if id.len() > max_identifier_length.into() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        format!(
+                            "Relation name '{}' is longer than {} characters",
+                            id, max_identifier_length
+                        ),
+                    ));
+                }
+            }
+        }
+
+        Ok(Self {
             adapter_type,
             path,
             relation_type,
@@ -261,7 +286,7 @@ impl Relation {
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
             temporary,
-        }
+        })
     }
 
     /// Add a constraint, routing to create_constraints or alter_constraints based on type
@@ -364,7 +389,7 @@ impl BaseRelation for Relation {
             self.metadata.clone(),
             self.is_delta,
             self.temporary,
-        );
+        )?;
 
         // Preserve constraints
         relation.create_constraints = self.create_constraints.clone();
@@ -431,6 +456,7 @@ impl BaseRelation for Relation {
                 true,
                 true,
             ),
+            AdapterType::Postgres => self.include_policy,
             _ => Policy::trues(),
         };
         Ok(Arc::new(Relation::new_with_policy(
@@ -446,7 +472,7 @@ impl BaseRelation for Relation {
             self.metadata.clone(),
             self.is_delta,
             self.temporary,
-        )))
+        )?))
     }
 
     fn information_schema_inner(
@@ -458,12 +484,40 @@ impl BaseRelation for Relation {
             InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
         Ok(Arc::new(result))
     }
+
+    fn relation_max_name_length(&self) -> Result<u32, minijinja::Error> {
+        Ok(max_identifier_length(self.adapter_type)
+            .map(|v| v.get().try_into().unwrap_or(u32::MAX))
+            .unwrap_or(u32::MAX))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use dbt_schemas::{dbt_types::RelationType, schemas::relations::DEFAULT_RESOLVED_QUOTING};
+
+    #[test]
+    fn test_try_new_via_static_base_relation_postgres() {
+        let relation_type = RelationStatic {
+            adapter_type: AdapterType::Postgres,
+            quoting: DEFAULT_RESOLVED_QUOTING,
+        };
+        let relation = relation_type
+            .try_new(
+                Some("d".to_string()),
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                Some(DEFAULT_RESOLVED_QUOTING),
+                None,
+            )
+            .unwrap();
+
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
+        assert_eq!(relation.inner().render_self_as_str(), "\"d\".\"s\".\"i\"");
+        assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
+    }
 
     #[test]
     fn test_try_new_via_static_base_relation() {

@@ -15,7 +15,6 @@ use crate::relation::Relation;
 use crate::relation::bigquery::*;
 use crate::relation::databricks::typed_constraint::TypedConstraint;
 use crate::relation::duckdb_should_include_database;
-use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -420,12 +419,19 @@ pub fn do_create_relation(
 ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
     use AdapterType::*;
     let relation = match adapter_type {
-        Postgres => Box::new(PostgresRelation::try_new(
-            Some(database),
-            Some(schema),
-            identifier,
+        Postgres => Box::new(Relation::new_with_policy(
+            Postgres,
+            RelationPath {
+                database: Some(database).filter(|s| !s.is_empty()),
+                schema: Some(schema),
+                identifier,
+            },
             relation_type,
+            Policy::trues(),
             custom_quoting,
+            None,
+            false,
+            false,
         )?) as Box<dyn BaseRelation>,
         DuckDB => {
             // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
@@ -447,7 +453,7 @@ pub fn do_create_relation(
                 None,
                 false,
                 false,
-            )) as Box<dyn BaseRelation>
+            )?) as Box<dyn BaseRelation>
         }
         Snowflake => Box::new(SnowflakeRelation::new(
             Some(database),
@@ -498,7 +504,7 @@ pub fn do_create_relation(
             None,
             false,
             false,
-        )) as Box<dyn BaseRelation>,
+        )?) as Box<dyn BaseRelation>,
         Salesforce => Box::new(SalesforceRelation::new(
             Some(database),
             Some(schema),

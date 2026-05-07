@@ -5,7 +5,7 @@ use arrow::array::{Array as _, StringArray};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, RelationPath, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
@@ -17,7 +17,6 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::Relation;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::do_create_relation;
-use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -645,12 +644,19 @@ fn postgres_get_relation(
         _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
     };
 
-    let relation = PostgresRelation::try_new(
-        Some(database.to_string()),
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
+    let relation = Relation::new_with_policy(
+        AdapterType::Postgres,
+        RelationPath {
+            database: Some(database.to_string()).filter(|s| !s.is_empty()),
+            schema: Some(schema.to_string()),
+            identifier: Some(identifier.to_string()),
+        },
         relation_type,
+        Policy::trues(),
         adapter.quoting(),
+        None,
+        false,
+        false,
     )?;
     Ok(Some(Box::new(relation)))
 }

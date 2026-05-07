@@ -7,7 +7,6 @@ pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, Rel
 pub mod bigquery;
 pub mod databricks;
 pub mod parse;
-pub mod postgres;
 pub mod redshift;
 pub mod salesforce;
 pub mod snowflake;
