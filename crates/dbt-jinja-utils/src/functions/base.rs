@@ -1362,10 +1362,13 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                 // dbt-core's manifest stores paths relative to the models folder (e.g., "3-data_vault/...")
                 // not including "models/" prefix. Customer macros like bfs_find_all_downstream_nodes
                 // rely on path.startswith() checks that assume this format.
+                // Normalize to forward slashes first so Windows paths (backslash separators) are handled
+                // consistently with Mac/Linux.
                 let path_key = YmlValue::string("path".to_string());
                 if let Some(path_value) = map.get(&path_key) {
                     if let Some(path_str) = path_value.as_str() {
-                        let stripped = path_str.strip_prefix("models/").unwrap_or(path_str);
+                        let normalized = path_str.replace('\\', "/");
+                        let stripped = normalized.strip_prefix("models/").unwrap_or(&normalized);
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
@@ -1385,7 +1388,8 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                 let path_key = YmlValue::string("path".to_string());
                 if let Some(path_value) = map.get(&path_key) {
                     if let Some(path_str) = path_value.as_str() {
-                        let stripped = path_str.strip_prefix("snapshots/").unwrap_or(path_str);
+                        let normalized = path_str.replace('\\', "/");
+                        let stripped = normalized.strip_prefix("snapshots/").unwrap_or(&normalized);
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
@@ -1443,7 +1447,8 @@ pub fn build_flat_graph(nodes: &Nodes, defer_nodes: Option<&Nodes>) -> MutableMa
                 let path_key = YmlValue::string("path".to_string());
                 if let Some(path_value) = map.get(&path_key) {
                     if let Some(path_str) = path_value.as_str() {
-                        let stripped = path_str.strip_prefix("seeds/").unwrap_or(path_str);
+                        let normalized = path_str.replace('\\', "/");
+                        let stripped = normalized.strip_prefix("seeds/").unwrap_or(&normalized);
                         map.insert(path_key, YmlValue::string(stripped.to_string()));
                     }
                 }
