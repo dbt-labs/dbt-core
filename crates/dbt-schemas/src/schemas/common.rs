@@ -1326,13 +1326,37 @@ pub fn merge_tags(
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
-    // Strip snapshot tags to match dbt-mantle behavior
-    // Remove everything before and including {%snapshot name%} or {%-snapshot name-%}
-    let sql_without_opening = normalized_full
-        .find("{%-snapshot")
-        .or_else(|| normalized_full.find("{%snapshot"))
+    // Strip snapshot tags to match dbt-mantle behavior.
+    //
+    // This fn runs *after* `normalize_sql`, which collapses every run of
+    // whitespace into a single ASCII space. So an on-disk `{%snapshot foo%}`
+    // (no spaces) and `{%- snapshot foo -%}` (whitespace control) both arrive
+    // here as variants of `{% snapshot foo %}` etc. We must accept all of:
+    //   `{%snapshot`, `{% snapshot`, `{%-snapshot`, `{%- snapshot`
+    // and the corresponding `endsnapshot` forms — otherwise the strip silently
+    // no-ops and Fusion's recalculated checksum diverges from Mantle's
+    // pre-stripped raw_code, breaking `state:modified.body` parity.
+    let find_opening = |s: &str| -> Option<usize> {
+        ["{%-snapshot", "{%- snapshot", "{%snapshot", "{% snapshot"]
+            .iter()
+            .filter_map(|p| s.find(*p))
+            .min()
+    };
+    let rfind_closing = |s: &str| -> Option<usize> {
+        [
+            "{%-endsnapshot",
+            "{%- endsnapshot",
+            "{%endsnapshot",
+            "{% endsnapshot",
+        ]
+        .iter()
+        .filter_map(|p| s.rfind(*p))
+        .max()
+    };
+
+    // Remove everything before and including the opening snapshot tag.
+    let sql_without_opening = find_opening(normalized_full)
         .and_then(|start_pos| {
-            // Found the opening tag, now find where it ends
             let after_tag_start = &normalized_full[start_pos..];
             after_tag_start
                 .find("-%}")
@@ -1348,19 +1372,18 @@ pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &s
         })
         .unwrap_or(normalized_full);
 
-    // Strip the closing endsnapshot tag ({%endsnapshot%} or {%-endsnapshot-%})
+    // Strip the closing endsnapshot tag.
     let normalized_sql = sql_without_opening
         .strip_suffix("-%}")
         .or_else(|| sql_without_opening.strip_suffix("%}"))
-        .and_then(|s| {
-            // Find the start of the closing tag ({%- or {%)
-            s.rfind("{%-endsnapshot")
-                .or_else(|| s.rfind("{%endsnapshot"))
-                .map(|pos| &s[..pos])
-        })
+        .and_then(|s| rfind_closing(s).map(|pos| &s[..pos]))
         .unwrap_or(sql_without_opening);
 
-    normalized_sql.to_string()
+    // Trim boundary whitespace left behind by tag stripping. Without this, on-disk
+    // snapshot SQL (which has a `{% snapshot %}` wrapper to strip) and Mantle's
+    // pre-stripped raw_code produce different leading/trailing whitespace and hash
+    // to different digests, breaking `state:modified.body` parity.
+    normalized_sql.trim().to_string()
 }
 
 /// Schema refresh interval configuration.
@@ -1592,6 +1615,81 @@ mod tests {
 
     use super::*;
     use minijinja::value::Value as MinijinjaValue;
+
+    #[test]
+    fn test_conform_normalized_snapshot_strips_spaced_snapshot_blocks() {
+        // Regression: this fn runs *after* `normalize_sql`, which collapses every
+        // run of whitespace into a single ASCII space. So even input that was
+        // `{%snapshot foo%}` on disk becomes `{% snapshot foo %}` (with spaces)
+        // by the time it reaches this fn. The previous implementation only
+        // matched `{%snapshot` / `{%-snapshot` (no space) and silently no-op'd
+        // on the spaced form, leaving the wrapper in the hashed input. That
+        // produced a different checksum than Mantle's pre-stripped raw_code,
+        // breaking `state:modified` parity for snapshots.
+        //
+        // dbt-core's recorded raw_code already has the wrapper removed, so
+        // when Fusion recalculates checksums on both sides, the inputs should
+        // converge once we correctly strip.
+
+        // Standard form: `{% snapshot name %}` ... `{% endsnapshot %}`
+        let normalized = "{% snapshot ip_location %} {{ config(...) }} body {% endsnapshot %}";
+        let stripped = conform_normalized_snapshot_raw_code_to_mantle_format(normalized);
+        assert!(
+            !stripped.contains("snapshot ip_location"),
+            "opening `{{% snapshot ip_location %}}` should be stripped, got: {stripped:?}"
+        );
+        assert!(
+            !stripped.contains("endsnapshot"),
+            "closing `{{% endsnapshot %}}` should be stripped, got: {stripped:?}"
+        );
+        assert!(
+            stripped.contains("config"),
+            "body should be preserved, got: {stripped:?}"
+        );
+
+        // Whitespace-control form: `{%- snapshot name -%}` ... `{%- endsnapshot -%}`
+        let normalized_ws = "{%- snapshot foo -%} {{ x }} {%- endsnapshot -%}";
+        let stripped_ws = conform_normalized_snapshot_raw_code_to_mantle_format(normalized_ws);
+        assert!(
+            !stripped_ws.contains("snapshot foo"),
+            "opening `{{%- snapshot foo -%}}` should be stripped, got: {stripped_ws:?}"
+        );
+        assert!(
+            !stripped_ws.contains("endsnapshot"),
+            "closing `{{%- endsnapshot -%}}` should be stripped, got: {stripped_ws:?}"
+        );
+
+        // Already-stripped form (e.g. raw_code from Mantle's manifest): no-op.
+        let already = "{{ config(...) }} body";
+        assert_eq!(
+            conform_normalized_snapshot_raw_code_to_mantle_format(already),
+            already,
+            "already-stripped input should be returned unchanged"
+        );
+    }
+
+    #[test]
+    fn test_conform_normalized_snapshot_idempotent_with_normalize_sql() {
+        // End-to-end: a typical on-disk snapshot file run through
+        // `normalize_sql` then `conform_...` should produce the same string
+        // as Mantle's pre-stripped raw_code run through the same pipeline.
+        // This is what makes recalculated-checksum equality work for
+        // `state:modified.body` parity.
+        let on_disk = "{% snapshot ip_location %}\n\n    {{\n        config(\n            target_schema='utils'\n        )\n    }}\n    select 1 as id\n{% endsnapshot %}";
+        let mantle_raw_code = "\n\n    {{\n        config(\n            target_schema='utils'\n        )\n    }}\n    select 1 as id\n";
+
+        let from_disk =
+            conform_normalized_snapshot_raw_code_to_mantle_format(&normalize_sql(on_disk));
+        let from_manifest =
+            conform_normalized_snapshot_raw_code_to_mantle_format(&normalize_sql(mantle_raw_code));
+        // Byte-exact, not trim-equal: this output feeds directly into SHA256 for
+        // the body checksum. Any boundary-whitespace divergence produces different
+        // digests and breaks `state:modified.body` parity.
+        assert_eq!(
+            from_disk, from_manifest,
+            "Conform pipeline must produce byte-equal output for on-disk and Mantle-stored raw_code"
+        );
+    }
 
     #[test]
     fn model_freshness_rules_eq_defaults_updates_on_to_any() {
