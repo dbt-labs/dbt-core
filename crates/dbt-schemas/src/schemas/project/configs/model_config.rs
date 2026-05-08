@@ -1,6 +1,7 @@
 use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
@@ -114,6 +115,8 @@ pub struct ProjectModelConfig {
     pub clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+column_types")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
+    #[serde(rename = "+compute")]
+    pub compute: Option<ComputeArg>,
     #[serde(
         default,
         rename = "+concurrent_batches",
@@ -526,6 +529,7 @@ pub struct ModelConfig {
     #[resolved(promote, expect = "apply_package_defaults guarantees quoting is set")]
     pub quoting: Option<DbtQuoting>,
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
+    pub compute: Option<ComputeArg>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
     pub unique_key: Option<DbtUniqueKey>,
@@ -608,6 +612,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
             column_types: config.column_types,
+            compute: config.compute,
             concurrent_batches: config.concurrent_batches,
             contract: config.contract,
             database: config.database,
@@ -760,6 +765,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
             column_types: config.column_types,
+            compute: config.compute,
             concurrent_batches: config.concurrent_batches,
             contract: config.contract,
             database: config.database,
@@ -944,6 +950,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             schema,
             database,
             catalog_name,
+            compute,
             group,
             materialized,
             incremental_strategy,
@@ -1027,6 +1034,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
                 enabled,
                 alias,
                 catalog_name,
+                compute,
                 group,
                 materialized,
                 incremental_strategy,

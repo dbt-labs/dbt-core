@@ -167,6 +167,7 @@ pub async fn resolve_exposures(
                     materialized: Default::default(),
                     static_analysis: Default::default(),
                     static_analysis_off_reason: None,
+                    compute: None,
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,

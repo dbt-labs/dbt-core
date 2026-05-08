@@ -80,6 +80,7 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use super::resolve_utils::validate_compute;
 use super::validate_models::validate_model;
 
 #[derive(serde::Deserialize)]
@@ -843,6 +844,7 @@ pub async fn resolve_models(
         };
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
+        validate_compute(model_config.compute, &dbt_asset.path)?;
 
         if model_config.on_error == Some(OnError::Continue) {
             emit_warn_log_message(
@@ -934,6 +936,7 @@ pub async fn resolve_models(
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
                 enabled: model_config.enabled,
+                compute: model_config.compute,
                 extended_model: false,
                 persist_docs: model_config.persist_docs.clone(),
                 columns,

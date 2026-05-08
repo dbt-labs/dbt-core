@@ -1,3 +1,4 @@
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
@@ -32,6 +33,8 @@ use crate::{
 pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(rename = "+compute")]
+    pub compute: Option<ComputeArg>,
     #[serde(rename = "+meta")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
@@ -272,6 +275,7 @@ pub struct UnitTestConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    pub compute: Option<ComputeArg>,
     #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -288,6 +292,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
     fn from(config: ProjectUnitTestConfig) -> Self {
         Self {
             enabled: config.enabled,
+            compute: config.compute,
             static_analysis: config.static_analysis,
             meta: config.meta,
             tags: config.tags,
@@ -392,6 +397,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
     fn from(config: UnitTestConfig) -> Self {
         Self {
             enabled: config.enabled,
+            compute: config.compute,
             static_analysis: config.static_analysis,
             meta: config.meta,
             tags: config.tags,
@@ -518,6 +524,7 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
     fn default_to(&mut self, parent: &UnitTestConfig) {
         let UnitTestConfig {
             enabled,
+            compute,
             static_analysis,
             meta,
             tags,
@@ -534,7 +541,7 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
 
-        default_to!(parent, [enabled, static_analysis]);
+        default_to!(parent, [enabled, compute, static_analysis]);
     }
 }
 

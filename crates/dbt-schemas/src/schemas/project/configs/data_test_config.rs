@@ -1,3 +1,4 @@
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,8 @@ use crate::schemas::serde::{
 pub struct ProjectDataTestConfig {
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
+    #[serde(rename = "+compute")]
+    pub compute: Option<ComputeArg>,
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
     pub database: Option<String>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
@@ -306,6 +309,7 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
 #[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
+    pub compute: Option<ComputeArg>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
     #[resolved(or_else = Some(minijinja::constants::DEFAULT_TEST_SCHEMA.to_string()))]
@@ -351,6 +355,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
     fn from(config: ProjectDataTestConfig) -> Self {
         Self {
             alias: config.alias,
+            compute: config.compute,
             database: config.database,
             enabled: config.enabled,
             error_if: config.error_if,
@@ -473,6 +478,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
     fn from(config: DataTestConfig) -> Self {
         Self {
             alias: config.alias,
+            compute: config.compute,
             database: config.database,
             enabled: config.enabled,
             error_if: config.error_if,
@@ -625,6 +631,7 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
     fn default_to(&mut self, parent: &DataTestConfig) {
         let DataTestConfig {
             alias,
+            compute,
             database,
             enabled,
             error_if,
@@ -664,6 +671,7 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
             parent,
             [
                 enabled,
+                compute,
                 store_failures,
                 store_failures_as,
                 sql_header,

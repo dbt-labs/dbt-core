@@ -8,7 +8,7 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
-use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_compute};
 use crate::utils::RelationComponents;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
@@ -394,6 +394,7 @@ pub async fn resolve_data_tests(
             dependency_package_name,
             arg.io.status_reporter.as_ref(),
         );
+        validate_compute(test_config.compute, &dbt_asset.path)?;
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -463,6 +464,7 @@ pub async fn resolve_data_tests(
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
+                compute: test_config.compute,
                 quoting: test_config
                     .quoting
                     .try_into()

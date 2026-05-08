@@ -177,6 +177,7 @@ pub(crate) fn make_local_config(cfg: TestTableConfig) -> DbtModel {
         quoting: dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
         quoting_ignore_case: false,
         materialized: DbtMaterialization::Table,
+        compute: None,
         static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::On),
         static_analysis_off_reason: None,
         enabled: true,

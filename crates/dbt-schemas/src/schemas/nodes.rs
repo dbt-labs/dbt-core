@@ -7,7 +7,7 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 use chrono::Utc;
 use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
-use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::get_target_write_path;
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
@@ -619,6 +619,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     fn meta(&self) -> IndexMap<String, YmlValue> {
         self.common().meta.clone()
+    }
+
+    fn compute(&self) -> Option<ComputeArg> {
+        self.base().compute
     }
 
     fn static_analysis(&self) -> Spanned<StaticAnalysisKind> {
@@ -4456,6 +4460,8 @@ pub struct NodeBaseAttributes {
     pub static_analysis: Spanned<StaticAnalysisKind>,
     #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
+    #[serde(default)]
+    pub compute: Option<ComputeArg>,
     pub enabled: bool,
     #[serde(skip_serializing, default = "default_false")]
     pub extended_model: bool,

@@ -30,7 +30,7 @@ use dbt_common::constants::{
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
-    ClapResourceType, ClapSchemaTypes, EvalArgs, InternalPackageMode, IoArgs,
+    ClapResourceType, ClapSchemaTypes, ComputeArg, EvalArgs, InternalPackageMode, IoArgs,
     LocalExecutionBackendKind, LogFormat, LogLevel, OptimizeTestsOptions, Phases, RunCacheMode,
     ShowOptions, SystemArgs, TimeMachineModeKind, TimeMachineReplayOrdering,
     check_key_value_cli_arg, check_selector, check_target, validate_project_name,
@@ -2120,34 +2120,6 @@ impl CommonArgs {
 
         options
     }
-}
-
-impl From<ComputeArg> for LocalExecutionBackendKind {
-    fn from(arg: ComputeArg) -> Self {
-        match arg {
-            ComputeArg::Remote => LocalExecutionBackendKind::Remote,
-            ComputeArg::Inline => LocalExecutionBackendKind::Inline,
-            ComputeArg::Sidecar => LocalExecutionBackendKind::Worker,
-            ComputeArg::Service => LocalExecutionBackendKind::Service,
-        }
-    }
-}
-
-#[derive(
-    Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ValueEnum, Display, Default,
-)]
-#[serde(rename_all = "kebab-case")]
-#[clap(rename_all = "kebab-case")]
-pub enum ComputeArg {
-    #[default]
-    /// Execute on the remote warehouse (Snowflake, BigQuery, etc.)
-    Remote,
-    /// Run computations in-process
-    Inline,
-    /// Run computations in a separate, ephemeral worker process
-    Sidecar,
-    /// Run via the remote compute service (persistent workers/cluster).
-    Service,
 }
 
 /// Maintain the system: update and uninstall

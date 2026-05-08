@@ -3,6 +3,7 @@ use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+use crate::resolve::resolve_utils::validate_compute;
 use crate::utils::get_node_fqn;
 use crate::utils::get_unique_id;
 use crate::validation::check_node_static_analysis;
@@ -150,6 +151,7 @@ pub fn resolve_unit_tests(
             dependency_package_name,
             arg.io.status_reporter.as_ref(),
         );
+        validate_compute(properties_config.compute, &mpe.relative_path)?;
 
         let enabled = properties_config.enabled;
 
@@ -273,6 +275,7 @@ pub fn resolve_unit_tests(
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
+                compute: properties_config.compute,
                 columns: vec![],
                 metrics: vec![],
                 unrendered_config: Default::default(),

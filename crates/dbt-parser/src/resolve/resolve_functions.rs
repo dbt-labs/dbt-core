@@ -217,6 +217,7 @@ pub async fn resolve_functions(
                 materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
                 static_analysis,
                 static_analysis_off_reason: None,
+                compute: None,
                 quoting: package_quoting
                     .try_into()
                     .expect("DbtQuoting should be set"),

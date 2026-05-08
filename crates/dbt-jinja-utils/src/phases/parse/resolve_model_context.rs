@@ -215,6 +215,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             materialized: ModelConfig::default_materialized(),
             static_analysis: global_static_analysis.unwrap_or_default().into(),
             static_analysis_off_reason: None,
+            compute: None,
             enabled: true,
             extended_model: false,
             persist_docs: None,

@@ -30,6 +30,45 @@ pub enum LocalExecutionBackendKind {
     Service,
 }
 
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    ValueEnum,
+    Display,
+    Default,
+    JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum ComputeArg {
+    #[default]
+    /// Execute on the remote warehouse (Snowflake, BigQuery, etc.)
+    Remote,
+    /// Run computations in-process
+    Inline,
+    /// Run computations in a separate, ephemeral worker process
+    Sidecar,
+    /// Run via the remote compute service (persistent workers/cluster).
+    Service,
+}
+
+impl From<ComputeArg> for LocalExecutionBackendKind {
+    fn from(arg: ComputeArg) -> Self {
+        match arg {
+            ComputeArg::Remote => LocalExecutionBackendKind::Remote,
+            ComputeArg::Inline => LocalExecutionBackendKind::Inline,
+            ComputeArg::Sidecar => LocalExecutionBackendKind::Worker,
+            ComputeArg::Service => LocalExecutionBackendKind::Service,
+        }
+    }
+}
+
 use crate::constants::DBT_TARGET_DIR_NAME;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]

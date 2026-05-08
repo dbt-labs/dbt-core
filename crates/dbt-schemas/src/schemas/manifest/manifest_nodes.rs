@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize, de::Deserializer};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::OmissibleGrantConfig;
+use dbt_common::io_args::ComputeArg;
 use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::Spanned;
@@ -409,6 +410,8 @@ impl From<DbtTest> for ManifestDataTest {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
 pub struct ManifestSnapshotConfig {
+    #[serde(default)]
+    pub compute: Option<ComputeArg>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
     #[serde(alias = "dataset")]
@@ -453,6 +456,7 @@ pub struct ManifestSnapshotConfig {
 impl From<SnapshotConfig> for ManifestSnapshotConfig {
     fn from(config: SnapshotConfig) -> Self {
         Self {
+            compute: config.compute,
             database: config.database,
             schema: config.schema,
             alias: config.alias,
@@ -496,6 +500,7 @@ impl From<SnapshotConfig> for ManifestSnapshotConfig {
 impl From<ManifestSnapshotConfig> for SnapshotConfig {
     fn from(config: ManifestSnapshotConfig) -> Self {
         Self {
+            compute: config.compute,
             database: config.database,
             schema: config.schema,
             alias: config.alias,
@@ -763,6 +768,8 @@ pub struct ManifestModel {
 pub struct ManifestModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(default)]
+    pub compute: Option<ComputeArg>,
     pub alias: Option<String>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Omissible<Option<String>>,
@@ -942,6 +949,7 @@ impl From<ModelConfig> for ManifestModelConfig {
     fn from(config: ModelConfig) -> Self {
         Self {
             enabled: config.enabled,
+            compute: config.compute,
             alias: config.alias,
             database: config.database,
             schema: config.schema,
@@ -1015,6 +1023,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             schema: config.schema,
             tags: config.tags,
             catalog_name: config.catalog_name,
+            compute: config.compute,
             meta: config.meta,
             group: config.group,
             materialized: config.materialized,

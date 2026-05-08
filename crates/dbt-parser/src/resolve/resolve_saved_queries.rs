@@ -216,6 +216,7 @@ pub async fn resolve_saved_queries(
                     materialized: DbtMaterialization::Unknown("export".to_string()),
                     static_analysis: StaticAnalysisKind::Off.into(),
                     static_analysis_off_reason: Some(StaticAnalysisOffReason::UnableToFetchSchema),
+                    compute: None,
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,

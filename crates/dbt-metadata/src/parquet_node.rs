@@ -2,7 +2,7 @@ use chrono::Utc;
 use dbt_common::CodeLocationWithFile;
 use dbt_common::FsResult;
 use dbt_common::constants::NODES_RD;
-use dbt_common::io_args::{EvalArgs, FsCommand, IoArgs, StaticAnalysisKind};
+use dbt_common::io_args::{ComputeArg, EvalArgs, FsCommand, IoArgs, StaticAnalysisKind};
 use dbt_metadata_parquet::utils::{
     generate_list_type, generate_map_type, generate_struct_type, read_parquet_file,
 };
@@ -532,6 +532,7 @@ pub struct ModelDetails {
 pub struct UserConfigs {
     // Common fields across multiple configs (excluding those in WarehouseDetails)
     pub enabled: Option<bool>,
+    pub compute: Option<ComputeArg>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,

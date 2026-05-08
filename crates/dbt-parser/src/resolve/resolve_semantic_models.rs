@@ -222,6 +222,7 @@ pub async fn resolve_semantic_models(
                 materialized: Default::default(),
                 static_analysis: StaticAnalysisKind::Off.into(),
                 static_analysis_off_reason: Some(StaticAnalysisOffReason::UnableToFetchSchema),
+                compute: None,
                 enabled: true,
                 extended_model: false,
                 persist_docs: None,

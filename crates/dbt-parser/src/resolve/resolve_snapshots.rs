@@ -9,7 +9,7 @@ use crate::renderer::{
     render_unresolved_sql_files,
 };
 use crate::resolve::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
-use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_compute};
 use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
@@ -355,6 +355,7 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
                 arg.io.status_reporter.as_ref(),
             );
+            validate_compute(snapshot_config.compute, &dbt_asset.path)?;
 
             let macro_depends_on = all_depends_on
                 .get(&format!("{package_name}.{snapshot_name}"))
@@ -400,6 +401,7 @@ pub async fn resolve_snapshots(
                         nodes: vec![],
                         nodes_with_ref_location: vec![],
                     },
+                    compute: snapshot_config.compute,
                     enabled: snapshot_config.enabled,
                     extended_model: false,
                     persist_docs: snapshot_config.persist_docs.clone(),

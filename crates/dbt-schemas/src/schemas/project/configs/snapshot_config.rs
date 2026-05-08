@@ -1,6 +1,7 @@
 use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
+use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
@@ -245,6 +246,8 @@ pub struct ProjectSnapshotConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+clustered_by")]
     pub clustered_by: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+compute")]
+    pub compute: Option<ComputeArg>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -365,6 +368,7 @@ pub struct SnapshotConfig {
     // they're not not just aliases)
     pub target_database: Option<String>,
     pub target_schema: Option<String>,
+    pub compute: Option<ComputeArg>,
     // General Configuration
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -515,6 +519,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             hard_deletes: config.hard_deletes,
             target_database: config.target_database,
             target_schema: config.target_schema,
+            compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags,
@@ -645,6 +650,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             hard_deletes: config.hard_deletes,
             target_database: config.target_database,
             target_schema: config.target_schema,
+            compute: config.compute,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags,
@@ -792,6 +798,7 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
         self.finalize_resolved()
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &SnapshotConfig) {
         let SnapshotConfig {
             database,
@@ -807,6 +814,7 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
             hard_deletes,
             target_database,
             target_schema,
+            compute,
             enabled,
             full_refresh,
             tags,
@@ -850,6 +858,7 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
             parent,
             [
                 enabled,
+                compute,
                 full_refresh,
                 alias,
                 schema,

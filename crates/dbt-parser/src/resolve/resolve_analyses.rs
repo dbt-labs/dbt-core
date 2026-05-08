@@ -223,6 +223,7 @@ pub async fn resolve_analyses(
                 quoting_ignore_case: false,
                 static_analysis: analysis_config.static_analysis.clone(),
                 static_analysis_off_reason: None,
+                compute: None,
                 columns,
                 depends_on: NodeDependsOn {
                     macros: macro_depends_on,

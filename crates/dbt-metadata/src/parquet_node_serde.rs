@@ -179,6 +179,7 @@ fn deserialize_quoting_to_dbt_quoting(quoting_str: &Option<String>) -> Option<Db
 fn model_config_to_user_configs(config: &ModelConfig) -> UserConfigs {
     UserConfigs {
         enabled: config.enabled,
+        compute: config.compute,
         tags: config.tags.clone(),
         meta: config.meta.clone(),
         group: config.group.clone(),
@@ -234,6 +235,7 @@ fn model_config_to_user_configs(config: &ModelConfig) -> UserConfigs {
 fn seed_config_to_user_configs(config: &SeedConfig) -> UserConfigs {
     UserConfigs {
         enabled: config.enabled,
+        compute: None,
         tags: config.tags.clone(),
         meta: config.meta.clone(),
         group: config.group.clone(),
@@ -258,6 +260,7 @@ fn seed_config_to_user_configs(config: &SeedConfig) -> UserConfigs {
 fn snapshot_config_to_user_configs(config: &SnapshotConfig) -> UserConfigs {
     UserConfigs {
         enabled: config.enabled,
+        compute: config.compute,
         tags: config.tags.clone(),
         meta: config.meta.clone(),
         group: config.group.clone(),
@@ -305,6 +308,7 @@ fn source_config_to_user_configs(config: &SourceConfig) -> UserConfigs {
 fn data_test_config_to_user_configs(config: &DataTestConfig) -> UserConfigs {
     UserConfigs {
         enabled: config.enabled,
+        compute: config.compute,
         tags: config.tags.clone(),
         meta: config.meta.clone(),
         group: config.group.clone(),
@@ -328,6 +332,7 @@ fn data_test_config_to_user_configs(config: &DataTestConfig) -> UserConfigs {
 fn unit_test_config_to_user_configs(config: &UnitTestConfig) -> UserConfigs {
     UserConfigs {
         enabled: config.enabled,
+        compute: config.compute,
         tags: config.tags.clone(),
         meta: config.meta.clone(),
         // Note: static_analysis is in WarehouseDetails
@@ -348,6 +353,7 @@ fn user_configs_to_model_config(
 
     ModelConfig {
         enabled: user_config.enabled,
+        compute: user_config.compute,
         alias: warehouse_details.as_ref().and_then(|w| w.alias.clone()),
         schema: warehouse_details
             .as_ref()
@@ -473,6 +479,7 @@ fn user_configs_to_snapshot_config(
 
     SnapshotConfig {
         enabled: user_config.enabled,
+        compute: user_config.compute,
         alias: warehouse_details.as_ref().and_then(|w| w.alias.clone()),
         schema: warehouse_details.as_ref().and_then(|w| w.schema.clone()),
         target_schema: user_config.target_database.clone(),
@@ -547,6 +554,7 @@ fn user_configs_to_data_test_config(
 ) -> DataTestConfig {
     DataTestConfig {
         enabled: user_config.enabled,
+        compute: user_config.compute,
         alias: warehouse_details.as_ref().and_then(|w| w.alias.clone()),
         schema: warehouse_details.as_ref().and_then(|w| w.schema.clone()),
         database: warehouse_details.as_ref().and_then(|w| w.database.clone()),
@@ -583,6 +591,7 @@ fn user_configs_to_unit_test_config(
 ) -> UnitTestConfig {
     UnitTestConfig {
         enabled: user_config.enabled,
+        compute: user_config.compute,
         tags: user_config.tags.clone(),
         meta: user_config.meta.clone(),
         static_analysis: warehouse_details

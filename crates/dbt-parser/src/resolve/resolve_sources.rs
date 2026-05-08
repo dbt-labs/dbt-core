@@ -327,6 +327,7 @@ pub fn resolve_sources(
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
+                compute: None,
                 columns,
                 refs: vec![],
                 sources: vec![],
