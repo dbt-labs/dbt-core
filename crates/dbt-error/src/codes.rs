@@ -155,6 +155,9 @@ pub enum ErrorCode {
     ProfileInvalid = 1103,
     EnvVarMissing = 1104,
     EnvVarInvalid = 1105,
+    UnsupportedFusionFeature = 1106,
+    UnknownCommand = 1107,
+    UnknownCliOption = 1108,
 
     // Project/manifest/package [1150–1199]
     ManifestLoadFailed = 1150,
@@ -162,12 +165,18 @@ pub enum ErrorCode {
     PackageDownloadFailed = 1152,
     ProfileLoadFailed = 1153,
     GitError = 1154,
+    DuplicateSourceTableDefinition = 1155,
+    SourceTableDefinitionMissing = 1156,
+    LegacySemanticLayerYaml = 1157,
+    PackageMissingProjectFile = 1158,
+    DbtYamlValidationError = 1159,
 
     // Network/HTTP [1200–1249]
     NetworkError = 1200,
     HttpTimeout = 1201,
     RateLimited = 1202,
     HttpError = 1203,
+    DbtPlatformApiError = 1204,
 
     // Auth/credentials [1250–1279]
     AuthFailed = 1250,
@@ -197,6 +206,7 @@ pub enum ErrorCode {
     TaskCancelled = 1404,
     SqlMismatch = 1405,
     SidecarError = 1406,
+    NoDataToShow = 1407,
 
     // Serialization [1450–1460]
     JsonError = 1450,
@@ -212,11 +222,14 @@ pub enum ErrorCode {
     /// Emitted when `validate_macro_args` is enabled and a YAML-documented
     /// macro argument name or type does not match the Jinja macro definition.
     ValidateMacroArgs = 1506,
+    JinjaTypecheckIssue = 1507,
+    JinjaTopLevelReturn = 1508,
 
     // --------------------------------------------------------------------------------------------
     // Local execution
     SelectorError = 1600,
     NoNodesSelected = 1601,
+    UnsupportedColumnSelector = 1602,
 
     // --------------------------------------------------------------------------------------------
     // CLI errors

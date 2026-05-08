@@ -13,7 +13,7 @@ use regex::Regex;
 ///
 /// # Returns
 /// * `Ok(())` if the metric is valid
-/// * `Err(FsError)` with SchemaError code if any validation fails
+/// * `Err(FsError)` with DbtYamlValidationError code if any validation fails
 pub fn validate_metric(props: &MetricsProperties) -> FsResult<()> {
     // Validate metric name
     validate_metric_name(&props.name)?;
@@ -37,7 +37,7 @@ pub fn validate_metric(props: &MetricsProperties) -> FsResult<()> {
 ///
 /// # Returns
 /// * `Ok(())` if the name is valid
-/// * `Err(FsError)` with SchemaError code if the name is invalid
+/// * `Err(FsError)` with DbtYamlValidationError code if the name is invalid
 ///
 /// # Example
 /// ```rust
@@ -72,7 +72,7 @@ pub fn validate_metric_name(name: &str) -> FsResult<()> {
 
     if !errors.is_empty() {
         return Err(fs_err!(
-            ErrorCode::SchemaError,
+            ErrorCode::DbtYamlValidationError,
             "The metric name '{}' is invalid. It {}",
             name,
             errors.join(", ")
@@ -93,11 +93,11 @@ pub fn validate_metric_name(name: &str) -> FsResult<()> {
 ///
 /// # Returns
 /// * `Ok(())` if the window is valid
-/// * `Err(FsError)` with SchemaError code if the window is invalid
+/// * `Err(FsError)` with DbtYamlValidationError code if the window is invalid
 pub fn validate_metric_window(window: &str) -> FsResult<()> {
     match MetricTimeWindow::from_string(window.to_string()) {
         Ok(_) => Ok(()),
-        Err(err) => Err(fs_err!(ErrorCode::SchemaError, "{}", err)),
+        Err(err) => Err(fs_err!(ErrorCode::DbtYamlValidationError, "{}", err)),
     }
 }
 
@@ -120,7 +120,7 @@ mod tests {
         let result = validate_metric_name("invalid name");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("cannot contain spaces"));
     }
 
@@ -130,7 +130,7 @@ mod tests {
         let result = validate_metric_name(&long_name);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -143,7 +143,7 @@ mod tests {
         let result = validate_metric_name("123metric");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("must begin with a letter"));
     }
 
@@ -152,7 +152,7 @@ mod tests {
         let result = validate_metric_name("metric@name");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -165,7 +165,7 @@ mod tests {
         let result = validate_metric_name("metric-with-hyphens");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -178,7 +178,7 @@ mod tests {
         let result = validate_metric_name("123 invalid@name");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         let context = &error.context;
         assert!(context.contains("cannot contain spaces"));
         assert!(context.contains("must begin with a letter"));
@@ -203,7 +203,7 @@ mod tests {
         let result = validate_metric_window("invalid");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -216,7 +216,7 @@ mod tests {
         let result = validate_metric_window("1 2 3 days");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -229,7 +229,7 @@ mod tests {
         let result = validate_metric_window("abc days");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Invalid count (abc)"));
     }
 
@@ -238,7 +238,7 @@ mod tests {
         let result = validate_metric_window("-5 days");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Invalid count (-5)"));
     }
 
@@ -247,7 +247,7 @@ mod tests {
         let result = validate_metric_window("7 fortnights");
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Invalid granularity (fortnights)"));
     }
 
@@ -275,7 +275,7 @@ mod integration_tests {
             // Check for duplicates
             if !seen_names.insert(name.to_string()) {
                 return Err(fs_err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "Duplicate metric name '{}' found in package",
                     name
                 ));
@@ -296,7 +296,7 @@ mod integration_tests {
         let result = check_duplicate_names(&names);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Duplicate metric name 'metric_one'"));
     }
 
@@ -306,7 +306,7 @@ mod integration_tests {
         let result = check_duplicate_names(&names);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         // Should fail on the individual name validation, not duplicate
         assert!(error.context.contains("invalid name"));
         assert!(error.context.contains("cannot contain spaces"));
@@ -334,7 +334,7 @@ mod integration_tests {
         let result = validate_metric(&props);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("must begin with a letter"));
     }
 
@@ -349,7 +349,7 @@ mod integration_tests {
         let result = validate_metric(&props);
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Invalid count (invalid)"));
     }
 

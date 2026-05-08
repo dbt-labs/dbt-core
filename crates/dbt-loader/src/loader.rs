@@ -80,7 +80,7 @@ fn resolve_and_set_threads(
                 StringOrInteger::Integer(n) => Some(*n as usize),
                 StringOrInteger::String(s) => Some(s.parse::<usize>().map_err(|_| {
                     fs_err!(
-                        ErrorCode::Generic,
+                        ErrorCode::ProfileInvalid,
                         "Invalid number of threads in profiles.yml: {s}",
                     )
                 })?),

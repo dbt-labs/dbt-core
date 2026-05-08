@@ -43,7 +43,7 @@ pub fn validate_time_spine(model_props: &ModelProperties) -> FsResult<Vec<FsErro
                 ""
             };
             errors.push(*fs_err!(
-                ErrorCode::SchemaError,
+                ErrorCode::DbtYamlValidationError,
                 "Time spine standard granularity column must be defined on the model. Got invalid \
                 column name '{}' for model '{}'. Valid names{}: {:?}.",
                 time_spine.standard_granularity_column,
@@ -60,7 +60,7 @@ pub fn validate_time_spine(model_props: &ModelProperties) -> FsResult<Vec<FsErro
         && standard_col.granularity.is_none()
     {
         errors.push(*fs_err!(
-            ErrorCode::SchemaError,
+            ErrorCode::DbtYamlValidationError,
             "Time spine standard granularity column must have a granularity defined. Please add one for \
             column '{}' in model '{}'.",
             time_spine.standard_granularity_column,
@@ -86,7 +86,7 @@ pub fn validate_time_spine(model_props: &ModelProperties) -> FsResult<Vec<FsErro
 
         if !custom_granularity_columns_not_found.is_empty() {
             errors.push(*fs_err!(
-                ErrorCode::SchemaError,
+                ErrorCode::DbtYamlValidationError,
                 "Time spine custom granularity columns do not exist in the model '{}'. \
                 Columns not found: {:?}; Available columns: {:?}",
                 model_props.name,
@@ -127,7 +127,7 @@ pub fn validate_model(model_props: &ModelProperties) -> FsResult<Vec<FsError>> {
 
         if !version_values.contains(&latest_version_str) {
             errors.push(*fs_err!(
-                ErrorCode::SchemaError,
+                ErrorCode::DbtYamlValidationError,
                 "latest_version: {} is not one of model '{}' versions: {:?}",
                 latest_version_str,
                 model_props.name,
@@ -144,7 +144,7 @@ pub fn validate_model(model_props: &ModelProperties) -> FsResult<Vec<FsError>> {
                 && !seen_versions.insert(version_str.clone())
             {
                 errors.push(*fs_err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "Found duplicate version: '{}' in versions list of model '{}'",
                     version_str,
                     model_props.name
@@ -243,7 +243,7 @@ mod tests {
         let errors = validate_time_spine(&model_props).unwrap();
         assert_eq!(errors.len(), 1);
         let error = &errors[0];
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -268,7 +268,7 @@ mod tests {
         let errors = validate_time_spine(&model_props).unwrap();
         assert_eq!(errors.len(), 1);
         let error = &errors[0];
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -302,7 +302,7 @@ mod tests {
         let errors = validate_time_spine(&model_props).unwrap();
         assert_eq!(errors.len(), 1);
         let error = &errors[0];
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -333,7 +333,7 @@ mod tests {
         let errors = validate_model(&model_props).unwrap();
         assert_eq!(errors.len(), 1);
         let error = &errors[0];
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(
             error
                 .context
@@ -354,7 +354,7 @@ mod tests {
         let errors = validate_model(&model_props).unwrap();
         assert_eq!(errors.len(), 1);
         let error = &errors[0];
-        assert_eq!(error.code, ErrorCode::SchemaError);
+        assert_eq!(error.code, ErrorCode::DbtYamlValidationError);
         assert!(error.context.contains("Found duplicate version: '1.0'"));
     }
 

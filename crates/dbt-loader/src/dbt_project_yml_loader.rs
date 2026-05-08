@@ -190,7 +190,7 @@ pub fn load_project_yml(
 
     if dbt_project.name.contains(' ') {
         return Err(fs_err!(
-            code => ErrorCode::SchemaError,
+            code => ErrorCode::DbtYamlValidationError,
             loc => dbt_project_path.to_path_buf(),
             "Project name '{}' in {} contains spaces. Project names cannot contain spaces.",
             dbt_project.name,

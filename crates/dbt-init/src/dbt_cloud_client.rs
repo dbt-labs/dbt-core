@@ -377,7 +377,7 @@ fn create_merged_db_config(
             }
             _ => {
                 emit_warn_log_message(
-                    ErrorCode::Generic,
+                    ErrorCode::InvalidConfig,
                     "Adapter type mismatch between credential and connection",
                     None,
                 );
@@ -643,7 +643,7 @@ impl DbtCloudClient {
                 Some(merged_config) => Ok(Some(merged_config)),
                 None => {
                     emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::UnsupportedFusionFeature,
                         "Unable to create DbConfig from user credential and connection data",
                         None,
                     );

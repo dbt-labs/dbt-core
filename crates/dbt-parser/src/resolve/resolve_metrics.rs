@@ -163,7 +163,7 @@ pub fn resolve_nested_model_metrics(
                 // Check for duplicate metric names
                 if !seen_metric_names.insert(metric_name.clone()) {
                     emit_error_log_message(
-                        ErrorCode::SchemaError,
+                        ErrorCode::DbtYamlValidationError,
                         format!(
                             "Duplicate metric name '{}' found in package '{}'",
                             metric_name, package_name
@@ -357,7 +357,7 @@ pub fn resolve_top_level_metrics(
         // Check for duplicate metric names
         if !seen_metric_names.insert(metric_name.clone()) {
             emit_error_log_message(
-                ErrorCode::SchemaError,
+                ErrorCode::DbtYamlValidationError,
                 format!(
                     "Duplicate metric name '{}' found in package '{}'",
                     metric_name, package_name

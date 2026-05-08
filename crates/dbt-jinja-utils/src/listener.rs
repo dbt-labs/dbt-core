@@ -355,7 +355,7 @@ impl TypecheckingEventListener for WarningPrinter {
         });
         warnings.iter().for_each(|(location, message)| {
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::JinjaTypecheckIssue,
                 format!("{}\n  --> {}", message, location),
                 self.args.status_reporter.as_ref(),
             );
@@ -563,7 +563,7 @@ impl RenderingEventListener for DefaultRenderingEventListener {
         if !self.quiet {
             // We should also warn it
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::JinjaTopLevelReturn,
                 format!(
                     "return is not at the top level of the block.\nIts value is final and cannot be modified by surrounding expressions.\nExample: return(0) + 1. The + 1 is ignored and the macro returns 0.\n  --> {}",
                     location

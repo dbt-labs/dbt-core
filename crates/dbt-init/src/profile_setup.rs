@@ -424,7 +424,7 @@ impl ProfileSetup {
             Ok(db_config) => Ok(db_config),
             Err(e) => {
                 emit_warn_log_message(
-                    ErrorCode::IoError,
+                    ErrorCode::DbtPlatformApiError,
                     format!("Failed to fetch cloud config: {e}"),
                     None,
                 );

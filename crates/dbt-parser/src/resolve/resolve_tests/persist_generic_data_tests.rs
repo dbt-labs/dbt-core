@@ -193,7 +193,7 @@ fn persist_inner(
         match column_name {
             Some(column_name) => {
                 return err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "dbt found two data_tests with the same name \"{}\" on column \"{}\" in \"{}\" in the file \"{}\"",
                     full_name,
                     column_name,
@@ -203,7 +203,7 @@ fn persist_inner(
             }
             None => {
                 return err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "dbt found two data_tests with the same name \"{}\" in \"{}\" in the file \"{}\"",
                     full_name,
                     test_config.resource_name,
@@ -304,7 +304,7 @@ fn get_test_details(
                 )
             } else {
                 return err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "Source identifiers are missing for a source resource",
                 );
             }
@@ -352,7 +352,7 @@ fn get_test_details(
             CustomTest::SimpleKeyValue(sk) => {
                 if sk.len() != 1 {
                     return err!(
-                        ErrorCode::SchemaError,
+                        ErrorCode::DbtYamlValidationError,
                         "Simple key-value custom test must contain exactly one test"
                     );
                 }
@@ -405,7 +405,7 @@ fn extract_reserved_name_kwarg(
             Ok(())
         }
         other => err!(
-            ErrorCode::SchemaError,
+            ErrorCode::DbtYamlValidationError,
             "Generic test 'name' must be a string (got {other})"
         ),
     }
@@ -476,7 +476,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
         };
 
         let schema_error = fs_err!(
-            code => ErrorCode::SchemaError,
+            code => ErrorCode::DbtYamlValidationError,
             loc => deprecated.iter().next().map(|(_, v)| v.span().clone()).unwrap_or_default(),
             "{}",
             message
@@ -509,7 +509,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             for key in config_from_deprecated.keys() {
                 if existing_map.contains_key(key) {
                     return err!(
-                        ErrorCode::SchemaError,
+                        ErrorCode::DbtYamlValidationError,
                         "Test cannot have the same key '{}' at the top-level and in config",
                         key
                     );
@@ -535,7 +535,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     // Check for reserved "model" argument in combined args
     if combined_args.contains_key("model") {
         return err!(
-            ErrorCode::SchemaError,
+            ErrorCode::DbtYamlValidationError,
             "Test arguments include \"model\", which is a reserved argument",
         );
     }
@@ -1080,7 +1080,7 @@ fn generate_test_macro(
             let cfg_json = Value::Object(obj.clone());
             let cfg_yaml: dbt_yaml::Value = serde_json::from_value(cfg_json).map_err(|e| {
                 fs_err!(
-                    ErrorCode::SchemaError,
+                    ErrorCode::DbtYamlValidationError,
                     "Failed to convert embedded config: {}",
                     e
                 )
@@ -1108,8 +1108,13 @@ fn generate_test_macro(
     // `unknown variant` (production conformance bucket dbt1501).
     let (non_empty, cfg_json) = merge_yaml_values(passed_in_cfg, embedded_cfg);
     let config_emit = if non_empty {
-        let cfg_serde: Value = serde_json::to_value(&cfg_json)
-            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
+        let cfg_serde: Value = serde_json::to_value(&cfg_json).map_err(|e| {
+            fs_err!(
+                ErrorCode::DbtYamlValidationError,
+                "Failed to serialize config: {}",
+                e
+            )
+        })?;
         Some(format_value_for_jinja(&cfg_serde, jinja_set_vars))
     } else {
         None

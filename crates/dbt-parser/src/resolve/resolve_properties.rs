@@ -187,7 +187,7 @@ impl MinimalProperties {
                                 .push(properties_path.to_path_buf());
 
                             emit_warn_log_message(
-                                ErrorCode::SchemaError,
+                                ErrorCode::DuplicateSourceTableDefinition,
                                 format!(
                                     "Duplicate definition for table '{}' in source '{}' found in file '{}'. Using definition from '{}'.",
                                     minimum_table_value.name.clone().into_inner(),
@@ -214,7 +214,7 @@ impl MinimalProperties {
                     }
                 } else {
                     emit_warn_log_message(
-                        ErrorCode::SchemaError,
+                        ErrorCode::SourceTableDefinitionMissing,
                         format!(
                             "No tables defined for source '{}' in file '{}'.",
                             source.name,
@@ -581,7 +581,7 @@ fn validate_resource_name(name: &str) -> FsResult<String> {
     // more of special characters like !@#%$":'
     if name.chars().any(|c| matches!(c, ' ')) {
         let err = fs_err!(
-            ErrorCode::SchemaError,
+            ErrorCode::DbtYamlValidationError,
             "Resource name '{}' contains forbidden characters",
             name
         );
@@ -678,7 +678,7 @@ pub fn resolve_minimal_properties(
                             // Top level semantic models are not allowed anymore
                             // TODO: edit copy to encourage user to use auto-fix.
                             emit_warn_log_message(
-                                ErrorCode::SchemaError,
+                                ErrorCode::LegacySemanticLayerYaml,
                                 format!(
                                     "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
                                     &package.dbt_project.name,

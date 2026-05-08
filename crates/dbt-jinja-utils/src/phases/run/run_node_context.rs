@@ -91,7 +91,7 @@ fn build_model_context_fields<S: Serialize>(
             YmlValue::Null(_) => vec![],
             _ => {
                 emit_warn_log_message(
-                    ErrorCode::Generic,
+                    ErrorCode::InvalidConfig,
                     format!("Unknown pre-hook type: {:?}", pre_hook),
                     io_args.status_reporter.as_ref(),
                 );
@@ -114,7 +114,7 @@ fn build_model_context_fields<S: Serialize>(
             YmlValue::Null(_) => vec![],
             _ => {
                 emit_warn_log_message(
-                    ErrorCode::Generic,
+                    ErrorCode::InvalidConfig,
                     format!("Unknown post-hook type: {:?}", post_hook),
                     io_args.status_reporter.as_ref(),
                 );
@@ -147,7 +147,7 @@ fn build_model_context_fields<S: Serialize>(
             model_map.insert("raw_sql".to_owned(), MinijinjaValue::from(raw_sql));
         } else {
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::IoError,
                 format!("Failed to read raw_sql: {}", raw_sql_path.display()),
                 io_args.status_reporter.as_ref(),
             );

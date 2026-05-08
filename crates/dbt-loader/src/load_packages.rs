@@ -239,7 +239,7 @@ async fn collect_packages(
                 packages.push(package);
             } else {
                 emit_warn_log_message(
-                    ErrorCode::InvalidConfig,
+                    ErrorCode::PackageMissingProjectFile,
                     format!(
                         "Package {} does not contain a dbt_project.yml file",
                         package_path.file_name().unwrap().to_str().unwrap()

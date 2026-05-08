@@ -11,7 +11,7 @@ use dbt_common::io_args::ComputeArg;
 /// `check_for_spaces_in_resource_names` validation.
 pub(crate) fn err_resource_name_has_spaces(name: &str, path: &Path) -> Box<FsError> {
     fs_err!(
-        code => ErrorCode::SchemaError,
+        code => ErrorCode::DbtYamlValidationError,
         loc => path.to_path_buf(),
         "Resource name '{}' contains spaces. Resource names cannot contain spaces. \
          Rename '{}' to remove any spaces.",
