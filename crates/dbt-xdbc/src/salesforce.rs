@@ -40,5 +40,5 @@ pub mod auth_type {
 
 // Default values
 pub const DEFAULT_LOGIN_URL: &str = "https://login.salesforce.com";
-pub const DEFAULT_API_VERSION: &str = "64.0";
+pub const DEFAULT_API_VERSION: &str = "65.0";
 pub const DEFAULT_REQUEST_TIMEOUT: &str = "30s";

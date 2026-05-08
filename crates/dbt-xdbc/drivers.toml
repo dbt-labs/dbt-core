@@ -23,6 +23,7 @@ drivers = [
   "salesforce-0.18.0+dbt0.0.4",
   "salesforce-0.21.0+dbt0.21.1",
   "salesforce-0.21.0.dev+dbt0.21.2",
+  "salesforce-0.21.0.dev+dbt0.22.0",
   "spark-0.21.0.dev+dbt0.1.0",
   "spark-0.21.0.dev+dbt0.1.1",
   "spark-0.21.0.dev+dbt0.1.2",
