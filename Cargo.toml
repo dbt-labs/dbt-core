@@ -11,6 +11,7 @@ members = [
   "crates/dbt-cli-lib",
   "crates/dbt-adapter-core",
   "crates/dbt-common",
+  "crates/dbt-compilation",
   "crates/dbt-csv",
   "crates/dbt-pretty-table",
   "crates/dbt-cloud-api",
@@ -202,6 +203,7 @@ dbt-cli-lib = { path = "crates/dbt-cli-lib" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-cloud-config = { path = "crates/dbt-cloud-config" }
 dbt-common = { path = "crates/dbt-common" }
+dbt-compilation = { path = "crates/dbt-compilation" }
 dbt-csv = { path = "crates/dbt-csv" }
 dbt-dag = { path = "crates/dbt-dag" }
 dbt-deps = { path = "crates/dbt-deps" }
