@@ -12,6 +12,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Typ
 import jinja2
 import msgpack
 from jinja2.nodes import Call, Const
+from metricflow_semantic_interfaces.enum_extension import assert_values_exhausted
+from metricflow_semantic_interfaces.type_enums import MetricType
 
 import dbt.deprecations
 import dbt.exceptions
@@ -33,7 +35,7 @@ from dbt.artifacts.resources import (
     NodeRelation,
     NodeVersion,
 )
-from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.resources.types import BatchSize, FunctionLanguage, FunctionType
 from dbt.artifacts.schemas.base import Writable
 from dbt.clients.jinja import MacroStack, get_rendered
 from dbt.clients.jinja_static import statically_extract_macro_calls
@@ -95,6 +97,7 @@ from dbt.exceptions import (
     AmbiguousAliasError,
     DuplicateResourceNameError,
     InvalidAccessTypeError,
+    ParsingError,
     TargetNotFoundError,
     scrub_secrets,
 )
@@ -131,13 +134,16 @@ from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.base_types import EventGroupType, EventLevel
+from dbt_common.events.functions import (
+    fire_event,
+    fire_or_defer_event,
+    get_invocation_id,
+)
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt_common.ui import error_tag
 
 PERF_INFO_FILE_NAME = "perf_info.json"
 
@@ -606,12 +612,14 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and node.deprecation_date:
                 if node.is_past_deprecation_date:
-                    warn_or_error(
+                    fire_or_defer_event(
                         DeprecatedModel(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
                             deprecation_date=node.deprecation_date.isoformat(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                 # At this point _process_refs should already have been called, and
                 # we just rebuilt the parent and child maps.
@@ -626,7 +634,7 @@ class ManifestLoader:
                     else:
                         event_cls = UpcomingReferenceDeprecation
 
-                    warn_or_error(
+                    fire_or_defer_event(
                         event_cls(
                             model_name=child_node.name,
                             ref_model_package=node.package_name,
@@ -634,7 +642,9 @@ class ManifestLoader:
                             ref_model_version=version_to_str(node.version),
                             ref_model_latest_version=str(node.latest_version),
                             ref_model_deprecation_date=node.deprecation_date.isoformat(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_for_spaces_in_resource_names(self):
@@ -681,6 +691,64 @@ class ManifestLoader:
                 )
                 raise DbtValidationError(
                     f"Resource names cannot contain spaces:\n{formatted_resources_with_spaces}\nPlease rename the invalid model(s) so that their name(s) do not contain any spaces."
+                )
+
+        self._check_for_spaces_in_source_and_semantic_model_names(flags)
+
+    def _check_for_spaces_in_source_and_semantic_model_names(self, flags):
+        """Validates that source and semantic model names do not contain spaces.
+
+        Controlled by the `REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES` flag.
+        """
+        error_on_invalid = get_flags().require_source_and_semantic_model_names_without_spaces
+        level = EventLevel.ERROR if error_on_invalid else EventLevel.WARN
+
+        improper_names: dict[str, str] = {}  # unique_id -> original_file_path
+
+        # Check source names (source_name is the source-level name).
+        # Deduplicate by source_name since multiple tables share the same source_name.
+        seen_source_names: set[str] = set()
+        for source in self.manifest.sources.values():
+            if " " in source.source_name and source.source_name not in seen_source_names:
+                seen_source_names.add(source.source_name)
+                source_id = f"source.{source.package_name}.{source.source_name}"
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=source_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[source_id] = source.original_file_path
+
+        # Check semantic model names.
+        for semantic_model in self.manifest.semantic_models.values():
+            if " " in semantic_model.name:
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=semantic_model.unique_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[semantic_model.unique_id] = semantic_model.original_file_path
+
+        if improper_names:
+            if level == EventLevel.WARN:
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=len(improper_names),
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:
+                formatted = "\n".join(
+                    f"  * '{uid}' ({path})" for uid, path in improper_names.items()
+                )
+                raise DbtValidationError(
+                    f"Resource names cannot contain spaces:\n{formatted}\n"
+                    "Please rename the invalid resource(s) so that their name(s) do not contain any spaces."
                 )
 
     def check_for_microbatch_deprecations(self) -> None:
@@ -1537,11 +1605,13 @@ class ManifestLoader:
                         models_forcing_concurrent_batches += 1
 
                 if models_forcing_concurrent_batches > 0:
-                    warn_or_error(
+                    fire_or_defer_event(
                         InvalidConcurrentBatchesConfig(
                             num_models=models_forcing_concurrent_batches,
                             adapter_type=adapter.type(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_microbatch_model_has_a_filtered_input(self):
@@ -1621,7 +1691,7 @@ def invalid_target_fail_unless_test(
 
             fire_event(event, EventLevel.WARN if should_warn_if_disabled else None)
         else:
-            warn_or_error(
+            fire_or_defer_event(
                 NodeNotFoundOrDisabled(
                     original_file_path=node.original_file_path,
                     unique_id=node.unique_id,
@@ -1630,7 +1700,9 @@ def invalid_target_fail_unless_test(
                     target_kind=target_kind,
                     target_package=target_package if target_package else "",
                     disabled=str(disabled),
-                )
+                ),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
     else:
         raise TargetNotFoundError(
@@ -1661,12 +1733,14 @@ def warn_if_package_node_depends_on_root_project_node(
         and target_model.package_name == current_project
         and ref_package_name != current_project
     ):
-        warn_or_error(
+        fire_or_defer_event(
             PackageNodeDependsOnRootProjectNode(
                 node_name=node.name,
                 package_name=node.package_name,
                 root_project_unique_id=target_model.unique_id,
-            )
+            ),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
         )
 
 
@@ -1751,8 +1825,34 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
+def _check_function_language_support(manifest: Manifest, config: RuntimeConfig) -> None:
+    """Validate that function languages are supported by the current adapter.
+
+    - JavaScript UDFs are only supported on BigQuery and Snowflake.
+    - JavaScript aggregate UDFs are not supported on Snowflake.
+    """
+    JS_SUPPORTED_ADAPTERS = {"bigquery", "snowflake"}
+    adapter_type = config.credentials.type
+
+    for unique_id, function_node in manifest.functions.items():
+        if function_node.language == FunctionLanguage.javascript:
+            if adapter_type not in JS_SUPPORTED_ADAPTERS:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' uses JavaScript, which is not supported on '{adapter_type}'. "
+                    )
+                )
+            if adapter_type == "snowflake" and function_node.config.type == FunctionType.Aggregate:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' is a JavaScript aggregate function and not supported on '{adapter_type}'. "
+                    )
+                )
+
+
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
+    _check_function_language_support(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
 
 

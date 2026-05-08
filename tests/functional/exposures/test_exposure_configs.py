@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.artifacts.resources import ExposureConfig
+from dbt.exceptions import ParsingError
 from dbt.tests.util import get_manifest, run_dbt, update_config_file
 from dbt_common.dataclass_schema import ValidationError
 from tests.functional.exposures.fixtures import (
@@ -162,10 +163,9 @@ class TestNullExposureTags:
         return {"exposures": {"tags": None}}
 
     def test_null_exposure_tags_raises_invalid_field_value(self, project):
-        from mashumaro.exceptions import InvalidFieldValue
 
         with pytest.raises(
-            InvalidFieldValue,
+            ParsingError,
             match='Field "tags" of type List\[str\] in ExposureConfig has invalid value None',  # noqa: [W605]
         ):
             run_dbt(["parse"])

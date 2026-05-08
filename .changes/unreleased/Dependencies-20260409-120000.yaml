@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump libpq-dev in Docker image from 13.23-0+deb11u1 to 13.23-0+deb11u2 to fix build failure due to superseded package version
+time: 2026-04-09T12:00:00.000000-04:00
+custom:
+  Author: tauhid621
+  Issue: NA

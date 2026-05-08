@@ -1,6 +1,7 @@
 import json
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
+from dbt.artifacts.resources import Catalog
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
@@ -19,7 +20,7 @@ from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
 from dbt.utils import JSONEncoder
 from dbt_common.events.contextvars import task_contextvars
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.events.types import PrintEvent
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
@@ -56,8 +57,14 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
-        super().__init__(args, config, manifest)
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        catalogs: Optional[List[Catalog]] = None,
+    ) -> None:
+        super().__init__(args, config, manifest, catalogs=catalogs)
         if self.args.models:
             if self.args.select:
                 raise DbtRuntimeError('"models" and "select" are mutually exclusive arguments')
@@ -71,7 +78,7 @@ class ListTask(GraphRunnableTask):
         spec = self.get_selection_spec()
         unique_ids = sorted(selector.get_selected(spec))
         if not unique_ids:
-            warn_or_error(NoNodesSelected())
+            fire_event(NoNodesSelected(), force_warn_or_error_handling=True)
             return
         if self.manifest is None:
             raise DbtInternalError("manifest is None in _iterate_selected_nodes")

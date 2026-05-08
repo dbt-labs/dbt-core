@@ -10463,6 +10463,127 @@
                   ]
                 }
               },
+              "overloads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "FunctionOverload",
+                  "properties": {
+                    "defined_in": {
+                      "type": "string"
+                    },
+                    "arguments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FunctionArgument",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "data_type": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "default_value": {
+                            "anyOf": [
+                              {},
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "data_type"
+                        ]
+                      }
+                    },
+                    "returns": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "title": "FunctionReturns",
+                          "properties": {
+                            "data_type": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "data_type"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "raw_body": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "compiled_body": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "defined_in"
+                  ]
+                }
+              },
               "defer_function": {
                 "anyOf": [
                   {
@@ -24434,6 +24555,127 @@
                         ]
                       }
                     },
+                    "overloads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FunctionOverload",
+                        "properties": {
+                          "defined_in": {
+                            "type": "string"
+                          },
+                          "arguments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "title": "FunctionArgument",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "data_type": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "default_value": {
+                                  "anyOf": [
+                                    {},
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "name",
+                                "data_type"
+                              ]
+                            }
+                          },
+                          "returns": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "FunctionReturns",
+                                "properties": {
+                                  "data_type": {
+                                    "type": "string"
+                                  },
+                                  "description": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "default": null
+                                  }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                  "data_type"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "raw_body": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "compiled_body": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "defined_in"
+                        ]
+                      }
+                    },
                     "defer_function": {
                       "anyOf": [
                         {
@@ -32035,6 +32277,127 @@
               "required": [
                 "name",
                 "data_type"
+              ]
+            }
+          },
+          "overloads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "title": "FunctionOverload",
+              "properties": {
+                "defined_in": {
+                  "type": "string"
+                },
+                "arguments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "title": "FunctionArgument",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "data_type": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "default_value": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "data_type"
+                    ]
+                  }
+                },
+                "returns": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "FunctionReturns",
+                      "properties": {
+                        "data_type": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "data_type"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "raw_body": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "compiled_body": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "defined_in"
               ]
             }
           },

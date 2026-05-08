@@ -20,6 +20,11 @@ from dbt_common.dataclass_schema import (
 )
 
 
+class ModelOnErrorOptions(enum.Enum):
+    skip_children = "skip_children"
+    continue_ = "continue"
+
+
 @dataclass
 class LatestVersionView(dbtClassMixin):
     enabled: Optional[bool] = None  # None = defer to latest_version_view_enabled_by_default flag
@@ -84,6 +89,7 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
+    on_error: Optional[ModelOnErrorOptions] = None
     latest_version_view: LatestVersionView = field(
         default_factory=LatestVersionView,
         metadata=MergeBehavior.Update.meta(),

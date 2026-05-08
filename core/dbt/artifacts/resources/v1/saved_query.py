@@ -4,6 +4,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Union
 
+from metricflow_semantic_interfaces.type_enums.export_destination_type import (
+    ExportDestinationType,
+)
+
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
@@ -15,9 +19,6 @@ from dbt.artifacts.resources.v1.semantic_layer_components import (
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.contracts.config.metadata import ShowBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.type_enums.export_destination_type import (
-    ExportDestinationType,
-)
 
 
 @dataclass

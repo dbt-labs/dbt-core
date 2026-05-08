@@ -171,7 +171,7 @@ class ArtifactMixin(VersionedSchema, Writable, Readable):
 def get_artifact_schema_version(dct: dict) -> int:
     schema_version = dct.get("metadata", {}).get("dbt_schema_version", None)
     if not schema_version:
-        raise ValueError("Artifact is missing schema version")
+        raise DbtInternalError("Artifact is missing schema version")
 
     # schema_version is in this format: https://schemas.getdbt.com/dbt/manifest/v10.json
     # What the code below is doing:

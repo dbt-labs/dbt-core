@@ -1,17 +1,17 @@
 from typing import List
 
 import pytest
+from metricflow_semantic_interfaces.type_enums.conversion_calculation_type import (
+    ConversionCalculationType,
+)
+from metricflow_semantic_interfaces.type_enums.period_agg import PeriodAggregation
+from metricflow_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 
 from dbt.artifacts.resources.v1.semantic_model import MetricType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt, write_file
 from dbt_common.events.base_types import BaseEvent
-from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
-    ConversionCalculationType,
-)
-from dbt_semantic_interfaces.type_enums.period_agg import PeriodAggregation
-from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml,

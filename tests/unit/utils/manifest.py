@@ -1,6 +1,12 @@
 from typing import Any, Dict, List
 
 import pytest
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    MetricType,
+    TimeGranularity,
+)
 
 from dbt.artifacts.resources import (
     ExposureType,
@@ -50,12 +56,6 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    DimensionType,
-    MetricType,
-    TimeGranularity,
-)
 
 
 def make_model(

@@ -245,6 +245,90 @@ class TestSelectorSelectorMethod:
             run_dbt(["ls", "--select", "selector:nonexistent_selector"])
 
 
+exclude_test_name_models__schema_yml = """
+version: 2
+models:
+  - name: model_a
+    columns:
+      - name: id
+        tests:
+          - not_null
+  - name: model_b
+    columns:
+      - name: id
+        tests:
+          - not_null
+"""
+
+exclude_test_name_selectors__yml = """
+selectors:
+  - name: model_a_selector
+    description: Selects model_a
+    definition:
+      method: fqn
+      value: model_a
+
+  - name: exclude_not_null_selector
+    description: Selects all models but excludes not_null tests
+    definition:
+      union:
+        - method: fqn
+          value: '*'
+        - exclude:
+            - method: test_name
+              value: not_null
+
+  - name: inherit_exclude_not_null_selector
+    description: Inherits exclude_not_null_selector via selector method
+    definition:
+      intersection:
+        - method: selector
+          value: exclude_not_null_selector
+"""
+
+
+class TestExcludeTestNameInheritedViaSelectorMethod:
+    """Regression test: exclude: test_name must be preserved when a selector is
+    inherited via `method: selector`. Previously, expand_selection() ran again on
+    the result of get_selected() and re-introduced tests that had been explicitly
+    excluded (because their parent models were still in the selected set).
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": exclude_test_name_models__schema_yml,
+            "model_a.sql": models__model_a_sql,
+            "model_b.sql": models_model_b_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def selectors(self):
+        return exclude_test_name_selectors__yml
+
+    def test_exclude_test_name_directly(self, project):
+        result = run_dbt(["ls", "--selector", "exclude_not_null_selector"])
+        assert not any(
+            "not_null" in node for node in result
+        ), "not_null tests should be excluded by the direct selector"
+
+    def test_exclude_test_name_inherited_via_selector_method(self, project):
+        # Confirm not_null tests exist in the project
+        all_not_null = run_dbt(["ls", "--select", "test_name:not_null"])
+        assert len(all_not_null) > 0, "not_null tests must exist to make this test meaningful"
+
+        direct_result = set(run_dbt(["ls", "--selector", "exclude_not_null_selector"]))
+        inherited_result = set(run_dbt(["ls", "--selector", "inherit_exclude_not_null_selector"]))
+
+        assert not any("not_null" in node for node in inherited_result), (
+            "not_null tests should still be excluded when the selector is inherited "
+            "via method: selector"
+        )
+        assert (
+            direct_result == inherited_result
+        ), "inherited selector result should match the directly-referenced selector result"
+
+
 class TestSelectExcludeIgnoredWithSelectorWarning:
     """Test that SelectExcludeIgnoredWithSelectorWarning is raised when CLI is invoked with
     --selector together with --select or --exclude.

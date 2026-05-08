@@ -45,6 +45,8 @@ def get_rendered_model_config(**updates):
         "begin": None,
         "concurrent_batches": None,
         "freshness": None,
+        "on_error": None,
+        "static_analysis": None,
         "latest_version_view": {},
     }
     result.update(updates)
@@ -86,6 +88,7 @@ def get_rendered_seed_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -139,6 +142,7 @@ def get_rendered_snapshot_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -169,6 +173,7 @@ def get_rendered_tst_config(**updates):
         "schema": "dbt_test__audit",
         "alias": None,
         "meta": {},
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -879,6 +884,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "loaded_at_query": None,
                     "loaded_at_field": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {
@@ -1461,6 +1467,7 @@ def expected_references_manifest(project):
                     "loaded_at_field": None,
                     "loaded_at_query": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {

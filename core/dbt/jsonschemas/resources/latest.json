@@ -1023,6 +1023,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -1056,6 +1070,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -1215,6 +1245,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -1344,6 +1396,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -1533,6 +1601,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -1591,6 +1665,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -1633,6 +1713,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "store_failures": {
@@ -1689,6 +1781,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -1727,6 +1825,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -2577,6 +2689,7 @@
         "count": {
           "anyOf": [
             {
+              "default": null,
               "type": [
                 "integer",
                 "null"
@@ -2590,6 +2703,7 @@
           ]
         },
         "period": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessPeriod"
@@ -2800,6 +2914,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -2833,6 +2961,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -2983,6 +3127,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -3090,6 +3256,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -3157,6 +3339,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "partition_by": {
@@ -3288,6 +3480,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -3336,6 +3534,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -3374,6 +3578,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -3397,6 +3613,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -3464,6 +3686,20 @@
             }
           ]
         },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "volatility": {
           "anyOf": [
             {
@@ -3485,6 +3721,44 @@
         "aggregate",
         "table"
       ]
+    },
+    "FunctionOverload": {
+      "description": "An overload of a function with different argument signatures. Each overload references a separate SQL file (via `defined_in`) that contains the function body for this overload.",
+      "type": "object",
+      "required": [
+        "defined_in"
+      ],
+      "properties": {
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionArgument"
+          }
+        },
+        "defined_in": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "FunctionProperties": {
       "type": "object",
@@ -3541,6 +3815,15 @@
         },
         "name": {
           "type": "string"
+        },
+        "overloads": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionOverload"
+          }
         },
         "returns": {
           "anyOf": [
@@ -4499,6 +4782,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -4586,6 +4883,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -4778,6 +5091,28 @@
             "null"
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "imports": {
           "anyOf": [
             {
@@ -4960,6 +5295,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -5048,6 +5399,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"
@@ -5251,6 +5612,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -5308,6 +5675,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -5350,6 +5723,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "submission_method": {
@@ -5399,6 +5784,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -5469,6 +5860,20 @@
           "anyOf": [
             {
               "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
               "type": [
                 "boolean",
                 "null"
@@ -5861,6 +6266,13 @@
         "continue",
         "fail",
         "unknown"
+      ]
+    },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
       ]
     },
     "OnSchemaChange": {
@@ -6463,6 +6875,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -6505,6 +6931,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -6681,6 +7123,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -6795,6 +7259,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -7029,6 +7509,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -7077,6 +7563,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -7115,6 +7607,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -7139,6 +7643,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -7182,6 +7692,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -7282,8 +7806,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotConfig": {
@@ -7444,6 +7968,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "check_cols": {
           "anyOf": [
             {
@@ -7487,6 +8025,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -7674,6 +8228,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -7803,6 +8379,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -8037,6 +8629,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
@@ -8095,6 +8693,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -8131,6 +8735,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "strategy": {
@@ -8180,6 +8796,12 @@
           ]
         },
         "target_database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -8256,6 +8878,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -8521,6 +9157,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -8554,6 +9204,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -8690,6 +9356,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -8807,6 +9495,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "max_staleness": {
@@ -8995,6 +9699,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema_origin": {
           "description": "Specifies where the schema metadata originates: 'remote' (default) or 'local'",
           "anyOf": [
@@ -9048,6 +9758,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -9086,6 +9802,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sync": {
           "description": "Schema synchronization configuration",
           "anyOf": [
@@ -9121,6 +9849,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -9164,6 +9898,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -9693,6 +10441,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -9726,6 +10488,22 @@
                 "boolean",
                 "null"
               ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
             },
             {
               "type": "string",
@@ -9845,6 +10623,28 @@
             }
           ]
         },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "include_full_name_in_path": {
           "anyOf": [
             {
@@ -9950,6 +10750,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "max_staleness": {
@@ -10128,6 +10944,12 @@
             }
           ]
         },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "secure": {
           "anyOf": [
             {
@@ -10170,6 +10992,12 @@
             }
           ]
         },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
           "type": [
             "string",
@@ -10208,6 +11036,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -10231,6 +11071,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -10274,6 +11120,20 @@
           ]
         },
         "transient": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
           "anyOf": [
             {
               "type": [
@@ -10412,6 +11272,12 @@
         "v"
       ],
       "properties": {
+        "access": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -10422,11 +11288,50 @@
             }
           ]
         },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "defined_in": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "deprecation_date": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
         },
         "v": {
           "$ref": "#/definitions/AnyValue"

@@ -158,7 +158,7 @@ class Flags:
                     try:
                         assert isinstance(new_name, str)
                     except AssertionError:
-                        raise Exception(
+                        raise DbtInternalError(
                             f"No deprecated param name match in DEPRECATED_PARAMS from {dep_name} to {new_name}"
                         )
 
@@ -167,7 +167,7 @@ class Flags:
                         dep_param = [x for x in ctx.command.params if x.name == dep_name][0]
                         new_param = [x for x in ctx.command.params if x.name == new_name][0]
                     except IndexError:
-                        raise Exception(
+                        raise DbtInternalError(
                             f"No deprecated param name match in context from {dep_name} to {new_name}"
                         )
 
@@ -519,7 +519,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
                 continue
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
-            add_fn(v)
+            if v is not None:
+                add_fn(v)
+            continue
         # None is a Singleton, False is a Flyweight, only one instance of each.
         elif (v is None or v is False) and k not in (
             # These are None by default but they do not support --no-{flag}

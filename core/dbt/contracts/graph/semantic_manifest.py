@@ -1,5 +1,39 @@
 from typing import List, Optional, Set
 
+from metricflow_semantic_interfaces.implementations.metric import PydanticMetric
+from metricflow_semantic_interfaces.implementations.node_relation import (
+    PydanticNodeRelation,
+)
+from metricflow_semantic_interfaces.implementations.project_configuration import (
+    PydanticProjectConfiguration,
+)
+from metricflow_semantic_interfaces.implementations.saved_query import (
+    PydanticSavedQuery,
+)
+from metricflow_semantic_interfaces.implementations.semantic_manifest import (
+    PydanticSemanticManifest,
+)
+from metricflow_semantic_interfaces.implementations.semantic_model import (
+    PydanticSemanticModel,
+)
+from metricflow_semantic_interfaces.implementations.time_spine import (
+    PydanticTimeSpine,
+    PydanticTimeSpineCustomGranularityColumn,
+    PydanticTimeSpinePrimaryColumn,
+)
+from metricflow_semantic_interfaces.implementations.time_spine_table_configuration import (
+    PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
+)
+from metricflow_semantic_interfaces.type_enums import TimeGranularity
+from metricflow_semantic_interfaces.validations.semantic_manifest_validator import (
+    SemanticManifestValidator,
+)
+from metricflow_semantic_interfaces.validations.validator_helpers import (
+    FileContext,
+    ValidationError,
+    ValidationIssueContext,
+)
+
 from dbt import deprecations
 from dbt.constants import (
     LEGACY_TIME_SPINE_GRANULARITY,
@@ -14,33 +48,6 @@ from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_semantic_interfaces.implementations.metric import PydanticMetric
-from dbt_semantic_interfaces.implementations.node_relation import PydanticNodeRelation
-from dbt_semantic_interfaces.implementations.project_configuration import (
-    PydanticProjectConfiguration,
-)
-from dbt_semantic_interfaces.implementations.saved_query import PydanticSavedQuery
-from dbt_semantic_interfaces.implementations.semantic_manifest import (
-    PydanticSemanticManifest,
-)
-from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
-from dbt_semantic_interfaces.implementations.time_spine import (
-    PydanticTimeSpine,
-    PydanticTimeSpineCustomGranularityColumn,
-    PydanticTimeSpinePrimaryColumn,
-)
-from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
-    PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
-)
-from dbt_semantic_interfaces.type_enums import TimeGranularity
-from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
-    SemanticManifestValidator,
-)
-from dbt_semantic_interfaces.validations.validator_helpers import (
-    FileContext,
-    ValidationError,
-    ValidationIssueContext,
-)
 
 
 class SemanticManifest:
@@ -215,7 +222,7 @@ class SemanticManifest:
 
         legacy_time_spine_model: Optional[ModelNode] = None
         if self.manifest.semantic_models:
-            legacy_time_spine_model = self.manifest.ref_lookup.find(
+            legacy_time_spine_model = self.manifest.ref_lookup.find(  # type: ignore[assignment]
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
             )
             if legacy_time_spine_model:

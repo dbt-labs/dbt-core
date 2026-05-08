@@ -9,13 +9,16 @@ from pytest_mock import MockerFixture
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
+from dbt.artifacts.resources.types import FunctionLanguage, FunctionType
 from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
+from dbt.exceptions import ParsingError
 from dbt.flags import set_from_args
 from dbt.parser.manifest import (
     ManifestLoader,
+    _check_function_language_support,
     _warn_for_unused_resource_config_paths,
     extended_mashumaro_encoder,
     extended_msgpack_encoder,
@@ -407,3 +410,89 @@ class TestExtendedMsgpackEncoder:
         packed = extended_mashumaro_encoder(data)
         unpacked = msgpack.unpackb(packed, raw=False)
         assert unpacked == data
+
+
+class TestCheckFunctionLanguageSupport:
+    def _make_function_node(self, name, language, function_type=FunctionType.Scalar):
+        node = MagicMock()
+        node.name = name
+        node.language = language
+        node.config = MagicMock()
+        node.config.type = function_type
+        return node
+
+    def _make_config(self, adapter_type):
+        config = MagicMock(spec=RuntimeConfig)
+        config.credentials = MagicMock()
+        config.credentials.type = adapter_type
+        return config
+
+    def test_js_udf_on_unsupported_adapter_raises(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("postgres")
+        with pytest.raises(ParsingError) as excinfo:
+            _check_function_language_support(manifest, config)
+        assert "Function 'my_func' uses JavaScript, which is not supported on 'postgres'" in str(
+            excinfo.value
+        )
+
+    def test_js_udf_on_bigquery_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("bigquery")
+        # Test passes if this function doesn't throw an error
+        _check_function_language_support(manifest, config)
+
+    def test_js_udf_on_snowflake_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("snowflake")
+        _check_function_language_support(manifest, config)
+
+    def test_js_aggregate_on_snowflake_raises(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_agg": self._make_function_node(
+                "my_agg", FunctionLanguage.javascript, FunctionType.Aggregate
+            )
+        }
+        config = self._make_config("snowflake")
+        with pytest.raises(ParsingError) as excinfo:
+            _check_function_language_support(manifest, config)
+        assert (
+            "Function 'my_agg' is a JavaScript aggregate function and not supported on 'snowflake'"
+            in str(excinfo.value)
+        )
+
+    def test_js_aggregate_on_bigquery_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_agg": self._make_function_node(
+                "my_agg", FunctionLanguage.javascript, FunctionType.Aggregate
+            )
+        }
+        config = self._make_config("bigquery")
+        _check_function_language_support(manifest, config)
+
+    def test_js_scalar_on_snowflake_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript, FunctionType.Scalar
+            )
+        }
+        config = self._make_config("snowflake")
+        _check_function_language_support(manifest, config)

@@ -3,7 +3,18 @@ import json
 import os
 import pickle
 from collections import defaultdict, deque
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import networkx as nx  # type: ignore
 import sqlparse
@@ -17,6 +28,7 @@ from dbt.context.providers import (
 )
 from dbt.contracts.graph.manifest import Manifest, UniqueID
 from dbt.contracts.graph.nodes import (
+    FunctionNode,
     GenericTestNode,
     GraphMemberNode,
     InjectedCTE,
@@ -50,11 +62,18 @@ from dbt_common.invocation import get_invocation_id
 
 graph_file_name = "graph.gpickle"
 
+StatsKeyType = Union[NodeType, Literal["catalogs"]]
 
-def print_compile_stats(stats: Dict[NodeType, int]):
+
+def print_compile_stats(stats: Dict[StatsKeyType, int]):
     # create tracking event for resource_counts
     if dbt.tracking.active_user is not None:
-        resource_counts = {k.pluralize(): v for k, v in stats.items()}
+        resource_counts = {}
+        for k, v in stats.items():
+            if isinstance(k, NodeType):
+                resource_counts[k.pluralize()] = v
+            else:
+                resource_counts[k] = v
         dbt.tracking.track_resource_counts(resource_counts)
 
     # do not include resource types that are not actually defined in the project
@@ -72,8 +91,10 @@ def _node_enabled(node: ManifestNode):
         return True
 
 
-def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
-    stats: Dict[NodeType, int] = defaultdict(int)
+def _generate_stats(
+    manifest: Manifest, catalogs: Optional[Sequence[Any]] = None
+) -> Dict[StatsKeyType, int]:
+    stats: Dict[StatsKeyType, int] = defaultdict(int)
     for node in manifest.nodes.values():
         if _node_enabled(node):
             stats[node.resource_type] += 1
@@ -87,6 +108,8 @@ def _generate_stats(manifest: Manifest) -> Dict[NodeType, int]:
     stats[NodeType.SemanticModel] += len(manifest.semantic_models)
     stats[NodeType.SavedQuery] += len(manifest.saved_queries)
     stats[NodeType.Unit] += len(manifest.unit_tests)
+    if catalogs is not None:
+        stats["catalogs"] = len(catalogs)
 
     # TODO: should we be counting dimensions + entities?
 
@@ -647,6 +670,16 @@ class Compiler:
                 context,
                 node,
             )
+            # Render Jinja in overload bodies using the same node context so
+            # they're available to anything that consumes the compiled manifest.
+            if isinstance(node, FunctionNode) and node.overloads:
+                for overload in node.overloads:
+                    if overload.raw_body is not None:
+                        overload.compiled_body = jinja.get_rendered(
+                            overload.raw_body,
+                            context,
+                            node,
+                        )
 
         node.compiled = True
 
@@ -705,7 +738,13 @@ class Compiler:
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,
     # writes out the graph.gpickle file, and prints the stats, returning a Graph object.
-    def compile(self, manifest: Manifest, write=True, add_test_edges=False) -> Graph:
+    def compile(
+        self,
+        manifest: Manifest,
+        write=True,
+        add_test_edges=False,
+        catalogs: Optional[Sequence[Any]] = None,
+    ) -> Graph:
         self.initialize()
         linker = Linker()
         linker.link_graph(manifest)
@@ -737,14 +776,12 @@ class Compiler:
                     )
                 )
 
-        stats = _generate_stats(manifest)
-
         if write:
             self.write_graph_file(linker, manifest)
 
         # Do not print these for list command
         if self.config.args.which != "list":
-            stats = _generate_stats(manifest)
+            stats = _generate_stats(manifest, catalogs)
             print_compile_stats(stats)
 
         return Graph(linker.graph)

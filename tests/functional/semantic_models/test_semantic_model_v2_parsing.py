@@ -1,8 +1,5 @@
 import pytest
-
-from core.dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt.contracts.graph.manifest import Manifest
-from dbt_semantic_interfaces.type_enums import (
+from metricflow_semantic_interfaces.type_enums import (
     AggregationType,
     ConversionCalculationType,
     DimensionType,
@@ -10,6 +7,9 @@ from dbt_semantic_interfaces.type_enums import (
     MetricType,
     PeriodAggregation,
 )
+
+from core.dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.contracts.graph.manifest import Manifest
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
@@ -991,4 +991,74 @@ class TestMetricOnModelWithoutCustomSemanticModelName:
 
 
 # TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
+
+
+class TestV2SemanticModelPartialParsingChanged:
+    """
+    Regression test for DI-3697: partial parsing must not create duplicate v2 semantic models
+    when the model YAML entry is changed.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_v2_semantic_model_partial_parsing_changed(self, project):
+        from dbt.tests.util import write_file
+
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        assert len(result.result.semantic_models) == 1
+
+        # Modify a column dimension label — triggers partial parsing of the model entry
+        modified = semantic_model_schema_yml_v2.replace(
+            'label: "ID Dimension"', 'label: "Updated ID Dimension"'
+        )
+        write_file(modified, project.project_root, "models", "schema.yml")
+
+        result = runner.invoke(["parse"])
+        assert result.success, result.exception
+        # Before the fix this would be 2 (duplicate), not 1
+        assert len(result.result.semantic_models) == 1
+
+
+class TestV2SemanticModelPartialParsingDisabled:
+    """
+    Regression test for DI-3697: partial parsing must clean up a v2 semantic model
+    when semantic_model is changed from true to false on the model entry.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_v2_semantic_model_partial_parsing_disabled(self, project):
+        from dbt.tests.util import write_file
+
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert len(result.result.semantic_models) == 1
+
+        # Disable the v2 semantic model
+        disabled = semantic_model_schema_yml_v2.replace(
+            "semantic_model: true", "semantic_model: false"
+        )
+        write_file(disabled, project.project_root, "models", "schema.yml")
+
+        result = runner.invoke(["parse"])
+        assert result.success, result.exception
+        assert len(result.result.semantic_models) == 0
+
+
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set
