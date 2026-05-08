@@ -452,7 +452,7 @@ impl PreviousState {
                 let previous_macro = prev_nodes.macros.get(macro_uid);
                 match (current_macro, previous_macro) {
                     (Some(cur), Some(prev)) => {
-                        if cur.macro_sql != prev.macro_sql {
+                        if cur.macro_sql.trim() != prev.macro_sql.trim() {
                             log_state_mod_diff(
                                 &current_node.common().unique_id,
                                 "macro_dependency",
