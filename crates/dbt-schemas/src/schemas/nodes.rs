@@ -19,7 +19,7 @@ use crate::schemas::common::{PersistDocsConfig, hooks_equal, normalize_sql};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
-use crate::schemas::project::configs::common::{array_of_strings_eq, grants_eq, meta_eq};
+use crate::schemas::project::configs::common::{grants_eq, meta_eq, tags_eq, tags_eq_vec};
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -1676,8 +1676,7 @@ impl InternalDbtNode for DbtTest {
             // so we do not do that comparison
             let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
             let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
-            let tags_eq =
-                array_of_strings_eq(&self.deprecated_config.tags, &other.deprecated_config.tags);
+            let tags_eq = tags_eq(&self.deprecated_config.tags, &other.deprecated_config.tags);
             let meta_eq = meta_eq(&self.deprecated_config.meta, &other.deprecated_config.meta);
             let group_eq = self.deprecated_config.group == other.deprecated_config.group;
             let quoting_eq = quoting_equal(
@@ -3345,8 +3344,10 @@ impl InternalDbtNode for DbtSavedQuery {
             let same_fqn_result = self.__common_attr__.fqn == other_saved_query.__common_attr__.fqn;
             let same_label_result =
                 self.__saved_query_attr__.label == other_saved_query.__saved_query_attr__.label;
-            let same_tags_result =
-                self.__common_attr__.tags == other_saved_query.__common_attr__.tags;
+            let same_tags_result = tags_eq_vec(
+                &self.__common_attr__.tags,
+                &other_saved_query.__common_attr__.tags,
+            );
             let same_exports_result =
                 self.__saved_query_attr__.exports == other_saved_query.__saved_query_attr__.exports;
             let same_group_by_result = self.__saved_query_attr__.query_params.group_by

@@ -862,13 +862,16 @@ fn write_value_to_hashable_repr(out: &mut String, value: &Value) {
                 let _ = write!(out, "'{}'", s);
             }
         }
+        // dbt-core's get_hashable_md recursively wraps every leaf primitive with `str()`
+        // before `repr()`-ing the metadata, so leaves appear in the hash input as quoted
+        // Python strings (e.g. `'True'`, `'-90'`, `'None'`) — not raw types. Match that.
         Value::Number(n) => {
-            let _ = write!(out, "{}", n);
+            let _ = write!(out, "'{}'", n);
         }
         Value::Bool(b) => {
-            out.push_str(if *b { "True" } else { "False" });
+            out.push_str(if *b { "'True'" } else { "'False'" });
         }
-        Value::Null => out.push_str("None"),
+        Value::Null => out.push_str("'None'"),
     }
 }
 
@@ -918,10 +921,22 @@ fn generate_test_name(
             arg_val.clone()
         };
 
-        let parts = match actual_value {
-            Value::Object(map) => map.values().map(|v| v.to_string()).collect::<Vec<_>>(),
-            Value::Array(arr) => arr.iter().map(|v| v.to_string()).collect(),
-            _ => vec![actual_value.to_string()],
+        // Match dbt-core's `str(value)` semantics for leaf primitives: Python renders
+        // `True`/`False`/`None`, not the JSON forms `true`/`false`/`null`. This affects
+        // the synthesized test name (and therefore the unique_id hash) — diverging here
+        // breaks `state:modified` parity against Mantle.
+        let render = |v: &Value| -> String {
+            match v {
+                Value::Bool(true) => "True".to_string(),
+                Value::Bool(false) => "False".to_string(),
+                Value::Null => "None".to_string(),
+                _ => v.to_string(),
+            }
+        };
+        let parts = match &actual_value {
+            Value::Object(map) => map.values().map(&render).collect::<Vec<_>>(),
+            Value::Array(arr) => arr.iter().map(&render).collect(),
+            _ => vec![render(&actual_value)],
         };
 
         flat_args.extend(parts);
@@ -2172,6 +2187,125 @@ mod tests {
             "Full generated name should treat escaped newlines as whitespace: {full}"
         );
     }
+
+    #[test]
+    fn test_generate_test_name_renders_primitives_as_python_str() {
+        // Regression: `serde_json::Value::{Bool, Null}.to_string()` produces JSON-style
+        // forms (`"true"`, `"false"`, `"null"`), but dbt-core uses Python's `str(value)`
+        // which produces (`"True"`, `"False"`, `"None"`) when building the synthesized
+        // test name. The wrong form changes both the displayed name and the trailing
+        // unique_id hash (since the hash is computed over the name), breaking
+        // `state:modified` parity against Mantle-produced manifests.
+        // Cover all three branches of the kwargs match in `generate_test_name`:
+        //   - bare leaf       -> `_ => actual_value.to_string()`
+        //   - leaf in Object  -> `Value::Object(map) => map.values().map(.to_string())`
+        //   - leaf in Array   -> `Value::Array(arr) => arr.iter().map(.to_string())`
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "my_model".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        // ── bare leaf kwargs (bool + null) ────────────────────────────────
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        kwargs.insert("inclusive".to_string(), Value::Bool(true));
+        kwargs.insert("strict".to_string(), Value::Bool(false));
+        kwargs.insert("missing".to_string(), Value::Null);
+
+        let mut test_name_truncations = HashMap::new();
+        let generated = generate_test_name(
+            "accepted_range",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+
+        assert!(
+            generated.contains("True"),
+            "Bare bool kwarg should render as Python `True`, got: {generated}"
+        );
+        assert!(
+            generated.contains("False"),
+            "Bare bool kwarg should render as Python `False`, got: {generated}"
+        );
+        assert!(
+            generated.contains("None"),
+            "Bare null kwarg should render as Python `None`, got: {generated}"
+        );
+
+        // ── leaves nested in Value::Object ────────────────────────────────
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        let mut constraint = serde_json::Map::new();
+        constraint.insert("strict".to_string(), Value::Bool(false));
+        constraint.insert("default".to_string(), Value::Null);
+        kwargs.insert("constraint".to_string(), Value::Object(constraint));
+
+        let mut test_name_truncations = HashMap::new();
+        let generated = generate_test_name(
+            "accepted_range",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+
+        assert!(
+            generated.contains("False"),
+            "Bool inside Value::Object should render as Python `False`, got: {generated}"
+        );
+        assert!(
+            generated.contains("None"),
+            "Null inside Value::Object should render as Python `None`, got: {generated}"
+        );
+
+        // ── leaves inside Value::Array ────────────────────────────────────
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        kwargs.insert(
+            "values".to_string(),
+            Value::Array(vec![Value::Bool(true), Value::Bool(false), Value::Null]),
+        );
+
+        let mut test_name_truncations = HashMap::new();
+        let generated = generate_test_name(
+            "accepted_range",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+
+        assert!(
+            generated.contains("True") && generated.contains("False") && generated.contains("None"),
+            "Leaves inside Value::Array should render as Python `True`/`False`/`None`, got: {generated}"
+        );
+    }
+
     #[test]
     fn test_generate_test_name_with_name_longer_than_63_chars() {
         //This test is to ensure that if the generated test name is longer than 63 characters
@@ -2827,31 +2961,36 @@ mod tests {
 
     #[test]
     fn test_write_value_to_hashable_repr_number() {
+        // dbt-core's `get_hashable_md` wraps every leaf primitive in `str()` before
+        // `repr()`-ing the metadata, so numbers appear as quoted strings in the hash input.
         let mut out = String::new();
         write_value_to_hashable_repr(&mut out, &Value::Number(42.into()));
-        assert_eq!(out, "42");
+        assert_eq!(out, "'42'");
     }
 
     #[test]
     fn test_write_value_to_hashable_repr_bool() {
+        // Match Python's `repr(str(True))` / `repr(str(False))` — quoted strings.
         let mut out = String::new();
         write_value_to_hashable_repr(&mut out, &Value::Bool(true));
-        assert_eq!(out, "True");
+        assert_eq!(out, "'True'");
 
         out.clear();
         write_value_to_hashable_repr(&mut out, &Value::Bool(false));
-        assert_eq!(out, "False");
+        assert_eq!(out, "'False'");
     }
 
     #[test]
     fn test_write_value_to_hashable_repr_null() {
+        // Match Python's `repr(str(None))` — `'None'` (quoted string).
         let mut out = String::new();
         write_value_to_hashable_repr(&mut out, &Value::Null);
-        assert_eq!(out, "None");
+        assert_eq!(out, "'None'");
     }
 
     #[test]
     fn test_write_value_to_hashable_repr_array() {
+        // Numbers inside arrays are also leaf primitives, so they get quoted.
         let mut out = String::new();
         write_value_to_hashable_repr(
             &mut out,
@@ -2860,7 +2999,7 @@ mod tests {
                 Value::Number(1.into()),
             ]),
         );
-        assert_eq!(out, "['a', 1]");
+        assert_eq!(out, "['a', '1']");
     }
 
     #[test]
@@ -2899,6 +3038,46 @@ mod tests {
         let repr = build_hashable_metadata_repr("unique", None, &kwargs);
 
         assert!(repr.contains("'namespace': 'None'"));
+    }
+
+    #[test]
+    fn test_generate_test_unique_id_hash_matches_dbt_core() {
+        // Regression: pin the hash output for `dbt_utils.accepted_range` against a
+        // Mantle-produced value. This caught two parity bugs:
+        //   1. boolean arg lowercased in fqn_name (`__true__` vs `__True__`)
+        //   2. leaf primitives in the hashable-metadata repr emitted as raw types
+        //      (`'inclusive': True`) instead of dbt-core's stringified form
+        //      (`'inclusive': 'True'`).
+        // Inputs mirror the YAML:
+        //   - dbt_utils.accepted_range:
+        //       arguments: { min_value: -90, max_value: 90, inclusive: true }
+        // applied to source SWIMPLY_SWIMPLY_PROD.POOLS column `latitude`.
+        let fqn_name =
+            "dbt_utils_source_accepted_range_SWIMPLY_SWIMPLY_PROD_POOLS_latitude__True__90___90";
+
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "column_name".to_string(),
+            Value::String("latitude".to_string()),
+        );
+        kwargs.insert("min_value".to_string(), Value::Number((-90).into()));
+        kwargs.insert("max_value".to_string(), Value::Number(90.into()));
+        kwargs.insert("inclusive".to_string(), Value::Bool(true));
+        kwargs.insert(
+            "model".to_string(),
+            Value::String(
+                "{{ get_where_subquery(source('SWIMPLY_SWIMPLY_PROD', 'POOLS')) }}".to_string(),
+            ),
+        );
+
+        let namespace = "dbt_utils".to_string();
+        let hash =
+            generate_test_unique_id_hash(fqn_name, "accepted_range", Some(&namespace), &kwargs);
+
+        assert_eq!(
+            hash, "1a34381004",
+            "Hash must match Mantle/dbt-core for replay parity. Got: {hash}"
+        );
     }
 
     #[test]
