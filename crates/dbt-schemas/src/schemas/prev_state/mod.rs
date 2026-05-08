@@ -7,6 +7,7 @@ use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::DbtTest,
     nodes::is_invalid_for_relation_comparison, nodes::same_persisted_description,
 };
+use dbt_adapter_core::AdapterType;
 use dbt_common::string_utils::test_name_from_uid;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err};
@@ -401,6 +402,7 @@ impl PreviousState {
         node: &dyn InternalDbtNode,
         modification_type: Option<ModificationType>,
         current_nodes: Option<&Nodes>,
+        adapter_type: AdapterType,
     ) -> bool {
         // If it's new, it's also considered modified
         if self.is_new(node) {
@@ -421,7 +423,7 @@ impl PreviousState {
 
         match modification_type {
             Some(ModificationType::Body) => self.check_body_modified(node),
-            Some(ModificationType::Configs) => self.check_configs_modified(node),
+            Some(ModificationType::Configs) => self.check_configs_modified(node, adapter_type),
             Some(ModificationType::Relation) => self.check_relation_modified(node),
             Some(ModificationType::PersistedDescriptions) => {
                 self.check_persisted_descriptions_modified(node)
@@ -432,11 +434,11 @@ impl PreviousState {
             Some(ModificationType::Contract) => self.check_contract_modified(node),
             Some(ModificationType::Any) | None => {
                 self.check_contract_modified(node)
-                    || self.check_configs_modified(node)
+                    || self.check_configs_modified(node, adapter_type)
                     || self.check_relation_modified(node)
                     || self.check_persisted_descriptions_modified(node)
                     || self.check_modified_macros(node, current_nodes)
-                    || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match previous cases
+                    || self.check_modified_content(node, adapter_type) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match previous cases
             }
         }
     }
@@ -517,7 +519,11 @@ impl PreviousState {
     }
 
     // Private helper methods to check specific types of modifications
-    fn check_modified_content(&self, current_node: &dyn InternalDbtNode) -> bool {
+    fn check_modified_content(
+        &self,
+        current_node: &dyn InternalDbtNode,
+        adapter_type: AdapterType,
+    ) -> bool {
         // Get the previous node from the manifest (unique_id first, then test signature fallback).
         let Some(previous_node) = self.previous_node_for(current_node) else {
             // If previous node doesn't exist, consider it modified.
@@ -536,14 +542,18 @@ impl PreviousState {
             }
         }
 
-        if current_node.has_same_content(previous_node) {
+        if current_node.has_same_content(previous_node, adapter_type) {
             return false;
         }
 
         true
     }
 
-    fn check_configs_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+    fn check_configs_modified(
+        &self,
+        current_node: &dyn InternalDbtNode,
+        adapter_type: AdapterType,
+    ) -> bool {
         // Get the previous node from the manifest (unique_id first, then test signature fallback).
         let Some(previous_node) = self.previous_node_for(current_node) else {
             // If previous node doesn't exist, consider it modified.
@@ -646,7 +656,7 @@ impl PreviousState {
             }
         }
 
-        let same_config = current_node.has_same_config(previous_node);
+        let same_config = current_node.has_same_config(previous_node, adapter_type);
         !same_config
     }
 

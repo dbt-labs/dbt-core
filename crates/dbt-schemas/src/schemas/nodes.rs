@@ -21,6 +21,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{grants_eq, meta_eq, tags_eq, tags_eq_vec};
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
+use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
@@ -260,8 +261,8 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     ) -> YmlValue;
 
     // Selector functions
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool;
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool;
+    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool;
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool;
     fn has_same_body(&self, other: &dyn InternalDbtNode) -> bool {
         self.common().checksum == other.common().checksum
     }
@@ -1119,7 +1120,7 @@ impl InternalDbtNode for DbtModel {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             let deprecated_config_eq = self
                 .deprecated_config
@@ -1139,7 +1140,7 @@ impl InternalDbtNode for DbtModel {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         // TODO: the checksum for extended model is always different in mantle and fusion, dig more into this
         if self.is_extended_model() {
             return true;
@@ -1148,7 +1149,7 @@ impl InternalDbtNode for DbtModel {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result = same_body(&self.__common_attr__, &other_model.__common_attr__);
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1474,27 +1475,37 @@ fn docs_config_equal(
 fn quoting_equal(
     left: &Option<crate::schemas::common::DbtQuoting>,
     right: &Option<crate::schemas::common::DbtQuoting>,
+    adapter_type: AdapterType,
 ) -> bool {
     use crate::schemas::common::DbtQuoting;
 
-    let database = |q: &DbtQuoting| -> bool { q.database.unwrap_or(false) };
-    let identifier = |q: &DbtQuoting| -> bool { q.identifier.unwrap_or(false) };
-    let schema = |q: &DbtQuoting| -> bool { q.schema.unwrap_or(false) };
-    let snowflake_ignore_case =
-        |q: &DbtQuoting| -> bool { q.snowflake_ignore_case.unwrap_or(false) };
+    let default = default_dbt_quoting_for(adapter_type);
+    let resolve = |q: Option<&DbtQuoting>| -> DbtQuoting {
+        let q = q.cloned().unwrap_or_default();
+        DbtQuoting {
+            database: Some(q.database.unwrap_or_else(|| {
+                default
+                    .database
+                    .expect("default quoting must have database")
+            })),
+            schema: Some(
+                q.schema
+                    .unwrap_or_else(|| default.schema.expect("default quoting must have schema")),
+            ),
+            identifier: Some(q.identifier.unwrap_or_else(|| {
+                default
+                    .identifier
+                    .expect("default quoting must have identifier")
+            })),
+            snowflake_ignore_case: Some(q.snowflake_ignore_case.unwrap_or_else(|| {
+                default
+                    .snowflake_ignore_case
+                    .expect("default quoting must have snowflake_ignore_case")
+            })),
+        }
+    };
 
-    match (left, right) {
-        (None, None) => true,
-        (Some(l), Some(r)) => {
-            database(l) == database(r)
-                && identifier(l) == identifier(r)
-                && schema(l) == schema(r)
-                && snowflake_ignore_case(l) == snowflake_ignore_case(r)
-        }
-        (None, Some(q)) | (Some(q), None) => {
-            !database(q) && !identifier(q) && !schema(q) && !snowflake_ignore_case(q)
-        }
-    }
+    resolve(left.as_ref()) == resolve(right.as_ref())
 }
 
 impl InternalDbtNode for DbtSeed {
@@ -1528,7 +1539,7 @@ impl InternalDbtNode for DbtSeed {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
             let deprecated_config_eq =
                 seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config);
@@ -1547,7 +1558,7 @@ impl InternalDbtNode for DbtSeed {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_seed) = other.as_any().downcast_ref::<DbtSeed>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             // TODO: Seeds might have path based checksum. When they do,
@@ -1555,7 +1566,7 @@ impl InternalDbtNode for DbtSeed {
             // after confirming they make sense. See:
             //https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/contracts/graph/nodes.py#L900-L933
             let same_body_result = same_body(&self.__common_attr__, &other_seed.__common_attr__);
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1667,7 +1678,7 @@ impl InternalDbtNode for DbtTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
             // these fields are what dbt compares for test nodes
             // Some other configs were skipped
@@ -1682,6 +1693,7 @@ impl InternalDbtNode for DbtTest {
             let quoting_eq = quoting_equal(
                 &self.deprecated_config.quoting,
                 &other.deprecated_config.quoting,
+                adapter_type,
             );
 
             let result = enabled_eq && alias_eq && tags_eq && meta_eq && group_eq && quoting_eq;
@@ -1749,9 +1761,9 @@ impl InternalDbtNode for DbtTest {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_test) = other.as_any().downcast_ref::<DbtTest>() {
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_fqn_result = self.common().fqn == other_test.common().fqn;
 
             let result = same_config_result && same_fqn_result;
@@ -1841,7 +1853,7 @@ impl InternalDbtNode for DbtUnitTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let self_config = &self.deprecated_config;
             let other_config = &other.deprecated_config;
@@ -1896,7 +1908,7 @@ impl InternalDbtNode for DbtUnitTest {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_unit_test) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let same_fqn_result = self.common().fqn == other_unit_test.common().fqn;
 
@@ -1999,7 +2011,7 @@ impl InternalDbtNode for DbtSource {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             // Merged fields are scattered across the DbtSource struct, while unmerged
             // fields are in deprecated_config.
@@ -2012,24 +2024,6 @@ impl InternalDbtNode for DbtSource {
                     (None, None) => true,
                     (None, Some(b_val)) => b_val.is_empty(),
                     (Some(a_val), None) => a_val.is_empty(),
-                    (Some(a_val), Some(b_val)) => a_val == b_val,
-                }
-            };
-            // Helper function to compare quoting where None equals default DbtQuoting
-            let quoting_eq = |a: &Option<crate::schemas::common::DbtQuoting>,
-                              b: &Option<crate::schemas::common::DbtQuoting>|
-             -> bool {
-                // FIXME: default is actually dependent on adapter. We should call default_dbt_quoting_for(adapter_type)
-                let default_quoting = crate::schemas::common::DbtQuoting {
-                    database: Some(false),
-                    identifier: Some(false),
-                    schema: Some(false),
-                    snowflake_ignore_case: Some(false),
-                };
-                match (a, b) {
-                    (None, None) => true,
-                    (None, Some(b_val)) => b_val == &default_quoting,
-                    (Some(a_val), None) => a_val == &default_quoting,
                     (Some(a_val), Some(b_val)) => a_val == b_val,
                 }
             };
@@ -2088,7 +2082,8 @@ impl InternalDbtNode for DbtSource {
                 }
             };
 
-            let quoting_eq = quoting_eq(&self_config.quoting, &other_config.quoting);
+            let quoting_eq =
+                quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);
 
             let loaded_at_field_eq = loaded_at_eq(
                 &self.__source_attr__.loaded_at_field,
@@ -2197,14 +2192,14 @@ impl InternalDbtNode for DbtSource {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             let same_relation_name_result = same_relation_name(
                 &self.__base_attr__.relation_name,
                 &other_source.__base_attr__.relation_name,
             );
             let same_fqn_result = self.__common_attr__.fqn == other_source.__common_attr__.fqn;
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_loader_result =
                 self.__source_attr__.loader == other_source.__source_attr__.loader;
 
@@ -2315,7 +2310,7 @@ impl InternalDbtNode for DbtSnapshot {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             let self_config = &self.deprecated_config;
             let other_config = &other_snapshot.deprecated_config;
@@ -2365,7 +2360,8 @@ impl InternalDbtNode for DbtSnapshot {
                 persist_docs_configs_equal(&self_config.persist_docs, &other_config.persist_docs);
             let grants_eq = grants_eq(&self_config.grants, &other_config.grants);
             let event_time_eq = self_config.event_time == other_config.event_time;
-            let quoting_eq = quoting_equal(&self_config.quoting, &other_config.quoting);
+            let quoting_eq =
+                quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);
             // Treat None as equivalent to Some(default) so that old manifests
             // that serialized null (before apply_resolve_defaults ran for snapshots)
             // do not produce false-positive state:modified detections.
@@ -2598,12 +2594,12 @@ impl InternalDbtNode for DbtSnapshot {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result =
                 same_body(&self.__common_attr__, &other_snapshot.__common_attr__);
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -2758,7 +2754,7 @@ impl InternalDbtNode for DbtExposure {
     ) -> YmlValue {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
             let enabled_eq =
                 self.deprecated_config.enabled == other_exposure.deprecated_config.enabled;
@@ -2783,7 +2779,7 @@ impl InternalDbtNode for DbtExposure {
             false
         }
     }
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
             let same_name_result = self.__common_attr__.name == other_exposure.__common_attr__.name;
             let same_fqn_result = self.__common_attr__.fqn == other_exposure.__common_attr__.fqn;
@@ -2919,7 +2915,7 @@ impl InternalDbtNode for DbtSemanticModel {
     ) -> YmlValue {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(_other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
             // TODO: implement proper config comparison when needed
             true
@@ -2931,9 +2927,9 @@ impl InternalDbtNode for DbtSemanticModel {
     // dbt-core does in SemanticModel.same_contents(). See:
     // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1585-L1602
     // TODO: group is not compared while it is in dbt-core. SemanticModel group is not implemented in dbt-fusion.
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_model_result = self.__semantic_model_attr__.model
                 == other_semantic_model.__semantic_model_attr__.model;
             let same_description_result = self.__common_attr__.description
@@ -3094,7 +3090,7 @@ impl InternalDbtNode for DbtMetric {
     ) -> YmlValue {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
             let self_config = &self.deprecated_config;
             let other_config = &other_metric.deprecated_config;
@@ -3137,9 +3133,9 @@ impl InternalDbtNode for DbtMetric {
     // This function only compares a subset of the DbMetric node, similar to what
     // dbt-core does in Metric.same_contents(). See:
     // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1496-L1511
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_filter_result =
                 self.__metric_attr__.filter == other_metric.__metric_attr__.filter;
             let same_metadata_result =
@@ -3269,7 +3265,7 @@ impl InternalDbtNode for DbtSavedQuery {
     ) -> YmlValue {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
             let self_config = &self.deprecated_config;
             let other_config = &other_saved_query.deprecated_config;
@@ -3336,9 +3332,9 @@ impl InternalDbtNode for DbtSavedQuery {
             false
         }
     }
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
-            let same_config_result = self.has_same_config(other);
+            let same_config_result = self.has_same_config(other, adapter_type);
             let same_description_result =
                 self.__common_attr__.description == other_saved_query.__common_attr__.description;
             let same_fqn_result = self.__common_attr__.fqn == other_saved_query.__common_attr__.fqn;
@@ -3494,7 +3490,7 @@ impl InternalDbtNode for DbtFunction {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
             let deprecated_config_eq = self
                 .deprecated_config
@@ -3514,7 +3510,7 @@ impl InternalDbtNode for DbtFunction {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
             let same_checksum_result =
                 self.__common_attr__.checksum == other_function.__common_attr__.checksum;
@@ -3607,10 +3603,10 @@ impl InternalDbtNode for DbtMacro {
     ) -> YmlValue {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
-    fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, _other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         unimplemented!("macro config comparison")
     }
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_macro) = other.as_any().downcast_ref::<DbtMacro>() {
             let same_macro_sql_result = self.macro_sql == other_macro.macro_sql;
 
@@ -5617,6 +5613,7 @@ mod tests {
         ModelConfig, hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
+    use dbt_adapter_core::AdapterType;
     use dbt_yaml::Verbatim;
 
     type YmlValue = dbt_yaml::Value;
@@ -5688,8 +5685,16 @@ mod tests {
             snowflake_ignore_case: None,
         });
 
-        assert!(quoting_equal(&none_quoting, &all_none_quoting));
-        assert!(quoting_equal(&all_none_quoting, &none_quoting));
+        assert!(quoting_equal(
+            &none_quoting,
+            &all_none_quoting,
+            AdapterType::Snowflake
+        ));
+        assert!(quoting_equal(
+            &all_none_quoting,
+            &none_quoting,
+            AdapterType::Snowflake
+        ));
 
         // Case 2: None vs Some with all fields Some(false)
         let all_false_quoting: Option<DbtQuoting> = Some(DbtQuoting {
@@ -5699,12 +5704,28 @@ mod tests {
             snowflake_ignore_case: Some(false),
         });
 
-        assert!(quoting_equal(&none_quoting, &all_false_quoting));
-        assert!(quoting_equal(&all_false_quoting, &none_quoting));
+        assert!(quoting_equal(
+            &none_quoting,
+            &all_false_quoting,
+            AdapterType::Snowflake
+        ));
+        assert!(quoting_equal(
+            &all_false_quoting,
+            &none_quoting,
+            AdapterType::Snowflake
+        ));
 
         // Case 3: Some with all None vs Some with all Some(false)
-        assert!(quoting_equal(&all_none_quoting, &all_false_quoting));
-        assert!(quoting_equal(&all_false_quoting, &all_none_quoting));
+        assert!(quoting_equal(
+            &all_none_quoting,
+            &all_false_quoting,
+            AdapterType::Snowflake
+        ));
+        assert!(quoting_equal(
+            &all_false_quoting,
+            &all_none_quoting,
+            AdapterType::Snowflake
+        ));
 
         // Case 4: Mixed None and Some(false) should be equal
         let mixed_quoting_1: Option<DbtQuoting> = Some(DbtQuoting {
@@ -5721,7 +5742,11 @@ mod tests {
             snowflake_ignore_case: Some(false),
         });
 
-        assert!(quoting_equal(&mixed_quoting_1, &mixed_quoting_2));
+        assert!(quoting_equal(
+            &mixed_quoting_1,
+            &mixed_quoting_2,
+            AdapterType::Snowflake
+        ));
 
         // Case 5: Some(true) should NOT be equal to None or Some(false)
         let some_true_quoting: Option<DbtQuoting> = Some(DbtQuoting {
@@ -5731,9 +5756,21 @@ mod tests {
             snowflake_ignore_case: Some(false),
         });
 
-        assert!(!quoting_equal(&some_true_quoting, &none_quoting));
-        assert!(!quoting_equal(&some_true_quoting, &all_none_quoting));
-        assert!(!quoting_equal(&some_true_quoting, &all_false_quoting));
+        assert!(!quoting_equal(
+            &some_true_quoting,
+            &none_quoting,
+            AdapterType::Snowflake
+        ));
+        assert!(!quoting_equal(
+            &some_true_quoting,
+            &all_none_quoting,
+            AdapterType::Snowflake
+        ));
+        assert!(!quoting_equal(
+            &some_true_quoting,
+            &all_false_quoting,
+            AdapterType::Snowflake
+        ));
 
         // Case 6: Two identical configs with Some(true) should be equal
         let another_true_quoting: Option<DbtQuoting> = Some(DbtQuoting {
@@ -5743,7 +5780,11 @@ mod tests {
             snowflake_ignore_case: Some(false),
         });
 
-        assert!(quoting_equal(&some_true_quoting, &another_true_quoting));
+        assert!(quoting_equal(
+            &some_true_quoting,
+            &another_true_quoting,
+            AdapterType::Snowflake
+        ));
     }
 
     #[test]
@@ -6158,7 +6199,7 @@ impl InternalDbtNode for DbtAnalysis {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_analysis) = other.as_any().downcast_ref::<DbtAnalysis>() {
             let self_config = &self.deprecated_config;
             let other_config = &other_analysis.deprecated_config;
@@ -6199,7 +6240,7 @@ impl InternalDbtNode for DbtAnalysis {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_analysis) = other.as_any().downcast_ref::<DbtAnalysis>() {
             self.__common_attr__.checksum == other_analysis.__common_attr__.checksum
         } else {

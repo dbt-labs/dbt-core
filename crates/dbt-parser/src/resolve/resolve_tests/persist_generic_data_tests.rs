@@ -311,7 +311,10 @@ fn get_test_details(
         }
         _ => {
             if let Some(ref version_num) = test_config.version_num {
-                format!("ref('{}', v='{}')", &test_config.resource_name, version_num)
+                format!(
+                    "ref('{}', version='{}')",
+                    &test_config.resource_name, version_num
+                )
             } else {
                 format!("ref('{}')", &test_config.resource_name)
             }
@@ -3273,11 +3276,11 @@ mod tests {
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(
-            model, "{{ get_where_subquery(ref('turmoenster', v='1_1')) }}",
+            model, "{{ get_where_subquery(ref('turmoenster', version='1_1')) }}",
             "Version should be emitted as a quoted string to avoid Jinja interpreting 1_1 as numeric 11"
         );
         assert!(
-            !model.contains("v=1_1"),
+            !model.contains("version=1_1"),
             "Unquoted v=1_1 would be parsed by Jinja as the numeric literal 11"
         );
     }

@@ -9,6 +9,7 @@ type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::nodes::{InternalDbtNode, InternalDbtNodeAttributes, IntrospectionKind};
 use crate::schemas::{CommonAttributes, NodeBaseAttributes};
+use dbt_adapter_core::AdapterType;
 use dbt_telemetry::NodeType;
 
 #[skip_serializing_none]
@@ -53,7 +54,7 @@ impl InternalDbtNode for DbtOperation {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         // Operations don't have config to compare
         matches!(
             other.as_any().downcast_ref::<DbtOperation>(),
@@ -61,7 +62,7 @@ impl InternalDbtNode for DbtOperation {
         )
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_operation) = other.as_any().downcast_ref::<DbtOperation>() {
             self.__common_attr__.raw_code == other_operation.__common_attr__.raw_code
         } else {
