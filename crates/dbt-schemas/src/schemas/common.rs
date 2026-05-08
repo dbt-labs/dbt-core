@@ -798,8 +798,12 @@ pub struct DbtChecksumObject {
 
 impl Default for DbtChecksum {
     fn default() -> Self {
+        // dbt-core FileHash.empty() → {"name": "none", "checksum": ""}.
+        // Generic tests have no source file and use this as their checksum.
+        // name:"" diverges from Mantle state manifests and causes every
+        // generic test to appear as state:modified on every run.
         Self::Object(DbtChecksumObject {
-            name: "".to_string(),
+            name: "none".to_string(),
             checksum: "".to_string(),
         })
     }
@@ -2096,5 +2100,32 @@ period: hour
         assert_eq!(spanned.as_str(), "source('raw', 'orders')");
         assert!(spanned.span().is_valid(), "span should be valid");
         assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
+    }
+
+    #[test]
+    fn test_dbt_checksum_default_matches_dbt_core_file_hash_empty() {
+        // dbt-core's FileHash.empty() serializes as {"name": "none", "checksum": ""}.
+        // Generic tests have no source file and use DbtChecksum::default() for their
+        // checksum. If default() emits name:"" instead of name:"none", every generic
+        // test appears as state:modified against a Mantle-recorded state manifest,
+        // causing all-test over-selection and Replay Data Missing errors in conformance.
+        let default = DbtChecksum::default();
+        let json = serde_json::to_value(&default).expect("serializes");
+        assert_eq!(
+            json["name"], "none",
+            "DbtChecksum::default() must serialize name as \"none\" to match dbt-core FileHash.empty()"
+        );
+        assert_eq!(json["checksum"], "", "checksum must be empty string");
+
+        // Must be equal to an explicitly constructed {name:"none", checksum:""} — the
+        // form that appears in Mantle-produced state manifests.
+        let mantle_form = DbtChecksum::Object(DbtChecksumObject {
+            name: "none".to_string(),
+            checksum: "".to_string(),
+        });
+        assert_eq!(
+            default, mantle_form,
+            "DbtChecksum::default() must equal the Mantle state-manifest form {{name:\"none\",checksum:\"\"}}"
+        );
     }
 }
