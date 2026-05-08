@@ -305,7 +305,6 @@ class ModelRunner(CompileRunner[ModelNode]):
         )
 
         # Drop any existing relation (table, view, etc.) before creating the pointer view.
-        # Users should not have to manually drop objects in their prod schemas.
         if existing_relation is not None:
             self.adapter.drop_relation(existing_relation)
 
