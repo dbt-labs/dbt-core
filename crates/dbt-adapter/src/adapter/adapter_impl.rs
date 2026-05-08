@@ -897,7 +897,14 @@ impl AdapterImpl {
                 Snowflake | Salesforce => "name",
                 Databricks | Spark => "databaseName",
                 Bigquery => "schema_name",
-                Postgres | Redshift => "nspname",
+                Redshift => {
+                    if get_bool_config(self.engine().as_ref(), "datasharing")? {
+                        "schema_name"
+                    } else {
+                        "nspname"
+                    }
+                }
+                Postgres => "nspname",
                 DuckDB => "schema_name",
                 Fabric => "schema",
                 ClickHouse => todo!("ClickHouse"),
@@ -5044,5 +5051,45 @@ mod tests {
             .has_feature(&state, "datasharing", CancellationToken::never_cancels())
             .unwrap();
         assert_eq!(result, Some(true));
+    }
+
+    fn record_batch_with_string_column(name: &str, values: Vec<&str>) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(name, DataType::Utf8, false)]));
+        let array = Arc::new(StringArray::from(values)) as ArrayRef;
+        Arc::new(RecordBatch::try_new(schema, vec![array]).unwrap())
+    }
+
+    #[test]
+    fn test_redshift_list_schemas_uses_nspname_by_default() {
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let batch = record_batch_with_string_column("nspname", vec!["public", "analytics"]);
+        let schemas = adapter.list_schemas(batch).unwrap();
+        assert_eq!(schemas, vec!["public".to_string(), "analytics".to_string()]);
+    }
+
+    #[test]
+    fn test_redshift_list_schemas_uses_schema_name_with_datasharing() {
+        // SHOW SCHEMAS FROM DATABASE returns a `schema_name` column instead of `nspname`.
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        let batch = record_batch_with_string_column("schema_name", vec!["public", "shared_a"]);
+        let schemas = adapter.list_schemas(batch).unwrap();
+        assert_eq!(schemas, vec!["public".to_string(), "shared_a".to_string()]);
+    }
+
+    #[test]
+    fn test_redshift_list_schemas_datasharing_rejects_nspname_column() {
+        // Sanity: with datasharing on, `nspname` is no longer the expected column,
+        // so a batch shaped for the postgres path should error rather than silently match.
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("datasharing".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        let batch = record_batch_with_string_column("nspname", vec!["public"]);
+        assert!(adapter.list_schemas(batch).is_err());
     }
 }

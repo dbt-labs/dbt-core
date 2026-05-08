@@ -266,9 +266,25 @@
 {%- endmacro %}
 
 
-{% macro redshift__list_schemas(database) -%}
-  {{ return(postgres__list_schemas(database)) }}
-{%- endmacro %}
+{% macro redshift__list_schemas(database) %}
+  {% if adapter.has_feature('datasharing') %}
+    {# dbt-core's create_schemas passes a pre-quoted identifier via str(relation);
+       other callers pass the raw database name. Only quote when the input is not
+       already wrapped in double-quotes, so the identifier is quoted exactly once —
+       required for databases with hyphens. #}
+    {%- if database.startswith('"') and database.endswith('"') -%}
+      {%- set _quoted_database = database -%}
+    {%- else -%}
+      {%- set _quoted_database = adapter.quote(database) -%}
+    {%- endif -%}
+    {% call statement('list_schemas', fetch_result=True) -%}
+      SHOW SCHEMAS FROM DATABASE {{ _quoted_database }}
+    {% endcall %}
+    {{ return(load_result('list_schemas').table) }}
+  {% else %}
+    {{ return(postgres__list_schemas(database)) }}
+  {% endif %}
+{% endmacro %}
 
 {% macro redshift__check_schema_exists(information_schema, schema) -%}
   {{ return(postgres__check_schema_exists(information_schema, schema)) }}
