@@ -430,6 +430,9 @@ class TestModelRunner:
 
         model_runner.adapter = mocker.Mock()
         manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = (
+            None  # alias macro not found, falls back to custom_alias_name
+        )
 
         with pytest.raises(DbtRuntimeError, match="already aliased"):
             model_runner._materialize_latest_version_view(

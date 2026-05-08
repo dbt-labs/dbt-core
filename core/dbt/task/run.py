@@ -246,16 +246,15 @@ class ModelRunner(CompileRunner[ModelNode]):
         context: Dict[str, Any],
     ) -> str:
         lvv = getattr(model.config, "latest_version_view", None)
-        if lvv and lvv.alias:
-            return str(lvv.alias).strip()
+        custom_alias_name = str(lvv.alias).strip() if (lvv and lvv.alias) else None
         alias_macro = manifest.find_macro_by_name(
             "generate_latest_version_view_alias", self.config.project_name, None
         )
         if alias_macro is not None:
             return MacroGenerator(alias_macro, context, stack=context["context_macro_stack"])(
-                context["model"]
+                custom_alias_name, context["model"]
             ).strip()
-        return model.name
+        return custom_alias_name or model.name
 
     def _should_create_latest_version_view(self, model: ModelNode) -> bool:
         lvv = getattr(model.config, "latest_version_view", None)
