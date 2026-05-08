@@ -45,7 +45,7 @@ def get_rendered_model_config(**updates):
         "begin": None,
         "concurrent_batches": None,
         "freshness": None,
-        "latest_version_view": {"enabled": True},
+        "latest_version_view": {},
     }
     result.update(updates)
     return result

@@ -21,6 +21,8 @@ models:
   - name: versioned_model
     config:
       materialized: table
+      latest_version_view:
+        enabled: true
     latest_version: 2
     versions:
       - v: 1
@@ -45,6 +47,8 @@ models:
   - name: view_versioned_model
     config:
       materialized: view
+      latest_version_view:
+        enabled: true
     latest_version: 2
     versions:
       - v: 1

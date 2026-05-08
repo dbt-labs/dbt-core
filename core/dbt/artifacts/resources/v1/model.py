@@ -22,7 +22,7 @@ from dbt_common.dataclass_schema import (
 
 @dataclass
 class LatestVersionView(dbtClassMixin):
-    enabled: bool = True
+    enabled: Optional[bool] = None  # None = defer to latest_version_view_enabled_by_default flag
     alias: Optional[str] = None
 
 

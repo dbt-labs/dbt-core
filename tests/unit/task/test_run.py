@@ -180,7 +180,10 @@ class TestModelRunner:
         model.name = "versioned_model"
         model.version = 2
         model.latest_version = 2
-        model.config = ModelConfig(materialized="table")
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True),
+        )
 
         source_relation = FakeRelation(
             database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
@@ -246,7 +249,7 @@ class TestModelRunner:
         model.latest_version = 2
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(alias="latest_alias"),
+            latest_version_view=LatestVersionView(enabled=True, alias="latest_alias"),
         )
 
         source_relation = FakeRelation(
@@ -337,7 +340,7 @@ class TestModelRunner:
         model_runner.adapter.Relation.create.assert_not_called()
         manifest.find_macro_by_name.assert_not_called()
 
-    def test_materialize_latest_version_view_skips_when_existing_table(
+    def test_materialize_latest_version_view_drops_and_recreates_existing_relation(
         self, mocker: MockerFixture, model_runner: ModelRunner
     ) -> None:
         @dataclass
@@ -346,7 +349,67 @@ class TestModelRunner:
             schema: str
             identifier: str
             type: str
-            is_view: bool = False
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+            def __str__(self) -> str:
+                return f'"{self.database}"."{self.schema}"."{self.identifier}"'
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True),
+        )
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model", type="view"
+        )
+        existing_table = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model", type="table"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        model_runner.adapter.Relation.create.return_value = pointer_relation
+        model_runner.adapter.get_relation.return_value = existing_table
+
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.side_effect = lambda name, *_: (
+            None if name == "generate_latest_version_view_alias" else mocker.sentinel.pointer_macro
+        )
+
+        macro_generator = mocker.Mock(return_value="create view sql")
+        mocker.patch("dbt.task.run.MacroGenerator", return_value=macro_generator)
+
+        pointer_relations = model_runner._materialize_latest_version_view(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        assert pointer_relations == [pointer_relation]
+        model_runner.adapter.drop_relation.assert_called_once_with(existing_table)
+        model_runner.adapter.execute.assert_called_once_with(
+            "create view sql", auto_begin=False, fetch=False
+        )
+
+    def test_materialize_latest_version_view_errors_on_alias_collision(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
 
             @property
             def name(self) -> str:
@@ -356,44 +419,25 @@ class TestModelRunner:
         model.name = "versioned_model"
         model.version = 2
         model.latest_version = 2
-        model.config = ModelConfig(materialized="table")
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True, alias="versioned_model_v2"),
+        )
 
         source_relation = FakeRelation(
             database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
         )
-        pointer_relation = FakeRelation(
-            database="dbt", schema="dbt_schema", identifier="versioned_model", type="view"
-        )
-        existing_table = FakeRelation(
-            database="dbt",
-            schema="dbt_schema",
-            identifier="versioned_model",
-            type="table",
-            is_view=False,
-        )
 
         model_runner.adapter = mocker.Mock()
-        model_runner.adapter.Relation.create.return_value = pointer_relation
-        model_runner.adapter.get_relation.return_value = existing_table
-
         manifest = mocker.Mock(spec=Manifest)
-        manifest.find_macro_by_name.return_value = (
-            None  # alias macro not found, falls back to model.name
-        )
 
-        pointer_relations = model_runner._materialize_latest_version_view(
-            manifest=manifest,
-            model=model,
-            context={"context_macro_stack": []},
-            relations=[source_relation],
-        )
-
-        assert pointer_relations == []
-        model_runner.adapter.execute.assert_not_called()
-        # find_macro_by_name is called for alias resolution, but not for DDL
-        manifest.find_macro_by_name.assert_called_once_with(
-            "generate_latest_version_view_alias", model_runner.config.project_name, None
-        )
+        with pytest.raises(DbtRuntimeError, match="already aliased"):
+            model_runner._materialize_latest_version_view(
+                manifest=manifest,
+                model=model,
+                context={"context_macro_stack": []},
+                relations=[source_relation],
+            )
 
 
 class TestMicrobatchModelRunner:

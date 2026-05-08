@@ -52,6 +52,7 @@ from dbt.events.types import (
     MicrobatchExecutionDebug,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
+from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.graph.thread_pool import DbtThreadPool
 from dbt.hooks import get_hook_dict
@@ -233,11 +234,17 @@ class ModelRunner(CompileRunner):
 
     def _should_create_latest_version_view(self, model: ModelNode) -> bool:
         lvv = getattr(model.config, "latest_version_view", None)
+        if lvv is not None and lvv.enabled is not None:
+            # User explicitly set enabled — respect it regardless of flag
+            enabled = lvv.enabled
+        else:
+            # Not explicitly set — defer to project flag (default: False)
+            enabled = bool(getattr(get_flags(), "latest_version_view_enabled_by_default", False))
         return (
             isinstance(model, ModelNode)
             and model.version is not None
             and model.is_latest_version
-            and (lvv.enabled if lvv else True)
+            and enabled
         )
 
     def _materialize_latest_version_view(
@@ -254,7 +261,11 @@ class ModelRunner(CompileRunner):
         pointer_identifier = self._latest_version_view_identifier(model, manifest, context)
 
         if self._relation_identifier(source_relation) == pointer_identifier:
-            return []
+            raise DbtRuntimeError(
+                f"Cannot create latest version view: the latest version of '{model.name}' "
+                f"is already aliased to '{pointer_identifier}'. "
+                f"Set `latest_version_view: enabled: false` or remove the conflicting alias."
+            )
 
         pointer_relation = self.adapter.Relation.create(
             database=source_relation.database,
@@ -268,23 +279,13 @@ class ModelRunner(CompileRunner):
             self._relation_identifier(pointer_relation),
         )
 
-        # Safety guard: refuse to replace a non-view relation (e.g. a table with data)
-        # to avoid silent data loss on upgrade. Users must drop it manually first.
-        if existing_relation is not None and not existing_relation.is_view:
-            fire_event(
-                JinjaLogInfo(
-                    msg=(
-                        f"Skipping latest version view: a {existing_relation.type} "
-                        f"already exists at {pointer_relation}. Drop it first to enable "
-                        f"automatic pointer view creation."
-                    ),
-                    node_info=model.node_info,
-                )
-            )
-            return []
+        # Drop any existing relation (table, view, etc.) before creating the pointer view.
+        # Users should not have to manually drop objects in their prod schemas.
+        if existing_relation is not None:
+            self.adapter.drop_relation(existing_relation)
 
         pointer_sql = f"select * from {source_relation}"
-        macro_name = "get_replace_sql" if existing_relation is not None else "get_create_sql"
+        macro_name = "get_create_sql"
         pointer_macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
         if pointer_macro is None:
             raise DbtInternalError(f'Missing macro "{macro_name}" for latest version view')
@@ -294,11 +295,7 @@ class ModelRunner(CompileRunner):
             context,
             stack=context["context_macro_stack"],
         )
-        rendered_sql = (
-            macro_generator(existing_relation, pointer_relation, pointer_sql)
-            if existing_relation is not None
-            else macro_generator(pointer_relation, pointer_sql)
-        )
+        rendered_sql = macro_generator(pointer_relation, pointer_sql)
         self.adapter.execute(rendered_sql, auto_begin=False, fetch=False)
         fire_event(
             JinjaLogInfo(
