@@ -490,13 +490,25 @@ fn merge_freshness_unwrapped(
     update: Option<&FreshnessDefinition>,
 ) -> Option<FreshnessDefinition> {
     match (base, update) {
-        // As long as a single element is present in update, override all of the elements in the base
-        // with the elements in the update.
-        // See mantle logic: https://github.com/dbt-labs/dbt-mantle/blob/847ab93f830d745c1c3d6609ead642b2bd07139a/core/dbt/parser/sources.py#L532-L542
-        // The mantle logic looks complicated but it is basically doing the same thing as the first
-        // statement of this comment. Especially look at the merge_freshness_time_thresholds function,
-        // which states that if an element of update is None, just return None for the specific element.
-        (_, Some(update)) => Some(update.clone()),
+        (_, Some(update)) => {
+            // Mantle uses field-level merging: each field uses the update value if set,
+            // otherwise inherits from base.
+            // https://github.com/dbt-labs/dbt-mantle/blob/6bcac392d653a5c8a35da01bc94d93a45b882629/core/dbt/parser/sources.py#L545-L555
+            Some(FreshnessDefinition {
+                error_after: update
+                    .error_after
+                    .clone()
+                    .or_else(|| base.and_then(|b| b.error_after.clone())),
+                warn_after: update
+                    .warn_after
+                    .clone()
+                    .or_else(|| base.and_then(|b| b.warn_after.clone())),
+                filter: update
+                    .filter
+                    .clone()
+                    .or_else(|| base.and_then(|b| b.filter.clone())),
+            })
+        }
         (Some(base), None) => Some(base.clone()),
         (None, None) => Some(FreshnessDefinition::default()), // Provide default value if user never defined freshness https://dbtlabs.atlassian.net/browse/META-5461
     }
@@ -546,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_merge_freshness_unwrapped_update_overrides_base() {
-        // When both base and update have values, update should override completely
+        // When both base and update have values, update fields win; unset fields inherit from base.
         let base = FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
@@ -567,8 +579,12 @@ mod tests {
             filter: None,
         };
 
-        let result = merge_freshness_unwrapped(Some(&base), Some(&update));
-        assert_eq!(result, Some(update));
+        let result = merge_freshness_unwrapped(Some(&base), Some(&update)).unwrap();
+        // error_after comes from update
+        assert_eq!(result.error_after.as_ref().unwrap().count, Some(10));
+        // warn_after and filter inherit from base
+        assert_eq!(result.warn_after.as_ref().unwrap().count, Some(3));
+        assert_eq!(result.filter.as_deref(), Some("base_filter"));
     }
 
     #[test]
@@ -685,9 +701,9 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_freshness_partial_update_overrides_completely() {
-        // Test that partial updates in the update completely override base
-        // This validates the comment about mantle logic
+    fn test_merge_freshness_partial_update_inherits_unset_fields() {
+        // Test that partial updates inherit unset fields from base (field-level merge).
+        // Matches Mantle's behavior where FreshnessThreshold.merged() uses last-non-None-wins.
         let base = FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
@@ -700,7 +716,7 @@ mod tests {
             filter: Some("base_filter".to_string()),
         };
 
-        // Update only has error_after, but it should still completely replace base
+        // Update only has error_after; warn_after and filter should be inherited from base.
         let update_value = FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(10),
@@ -710,14 +726,15 @@ mod tests {
             filter: None,
         };
 
-        let update = Omissible::Present(Some(update_value.clone()));
+        let update = Omissible::Present(Some(update_value));
         let result = merge_freshness(Some(&base), &update);
 
-        // The result should be exactly the update, not a merge
-        assert_eq!(result, Some(update_value));
-        // Specifically verify that warn_after and filter are None, not inherited from base
-        assert!(result.as_ref().unwrap().warn_after.is_none());
-        assert!(result.as_ref().unwrap().filter.is_none());
+        let merged = result.unwrap();
+        // error_after comes from update
+        assert_eq!(merged.error_after.as_ref().unwrap().count, Some(10));
+        // warn_after and filter are inherited from base
+        assert_eq!(merged.warn_after.as_ref().unwrap().count, Some(3));
+        assert_eq!(merged.filter.as_deref(), Some("base_filter"));
     }
 
     // ── merge_loaded_at_pair ──────────────────────────────────────────────
