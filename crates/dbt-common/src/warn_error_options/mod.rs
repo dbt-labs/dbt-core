@@ -26,6 +26,7 @@ pub enum LegacyWarnErrorGroupValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum FusionWarnErrorGroupValue {
     StaticAnalysis,
+    PackageParsingCompatibilityErrors,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -73,6 +74,27 @@ pub enum WarnErrorDecision {
     UpgradeToError,
     Retain,
     Silence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCtx {
+    /// Error was emitted while processing a dependency package.
+    DependencyPackage,
+    /// Error was emitted while processing the root project.
+    ProjectRoot,
+    /// Caller does not have enough context to determine package ownership.
+    Unknown,
+}
+
+impl ErrorCtx {
+    /// Builds context from the package name field used by structured log messages.
+    pub fn from_dependency_package_name(package_name: Option<impl AsRef<str>>) -> Self {
+        if package_name.is_some() {
+            Self::DependencyPackage
+        } else {
+            Self::ProjectRoot
+        }
+    }
 }
 
 // Parsing related implementations. For resolving logic see separate block below
@@ -127,7 +149,10 @@ impl WarnErrorOptions {
                 WarnErrorOptionValue::LegacyGroup(
                     LegacyWarnErrorGroupValue::All | LegacyWarnErrorGroupValue::Deprecations,
                 ) => {}
-                WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis) => {}
+                WarnErrorOptionValue::FusionGroup(
+                    FusionWarnErrorGroupValue::StaticAnalysis
+                    | FusionWarnErrorGroupValue::PackageParsingCompatibilityErrors,
+                ) => {}
                 WarnErrorOptionValue::SupportedLegacy(_) => {}
                 WarnErrorOptionValue::NotYetSupportedLegacy(legacy) => {
                     not_yet_supported.insert(legacy.as_ref());
@@ -425,6 +450,12 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
         ));
     }
 
+    if raw == "PackageParsingCompatibility" {
+        return Some(WarnErrorOptionValue::FusionGroup(
+            FusionWarnErrorGroupValue::PackageParsingCompatibilityErrors,
+        ));
+    }
+
     if let Ok(legacy) = raw.try_into() {
         return Some(WarnErrorOptionValue::SupportedLegacy(legacy));
     }
@@ -446,6 +477,14 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
 
 impl WarnErrorOptions {
     pub fn decision_for_error_code(&self, error_code: ErrorCode) -> WarnErrorDecision {
+        self.decision_for_error_code_with_context(error_code, ErrorCtx::Unknown)
+    }
+
+    pub fn decision_for_error_code_with_context(
+        &self,
+        error_code: ErrorCode,
+        error_ctx: ErrorCtx,
+    ) -> WarnErrorDecision {
         // dbt-core precedence logic is as follows:
         // 1. named event > Deprecations > "all" / "*"
         // 2. silence > warn > error
@@ -471,6 +510,11 @@ impl WarnErrorOptions {
             WarnErrorOptionValue::FusionGroup(FusionWarnErrorGroupValue::StaticAnalysis)
                 if error_code.is_frontend() =>
             {
+                MatchType::Group
+            }
+            WarnErrorOptionValue::FusionGroup(
+                FusionWarnErrorGroupValue::PackageParsingCompatibilityErrors,
+            ) if Self::matches_package_parsing_compatibility(error_code, error_ctx) => {
                 MatchType::Group
             }
             WarnErrorOptionValue::FusionCode(code) if *code == error_code as u16 => {
@@ -521,6 +565,23 @@ impl WarnErrorOptions {
             .map(|(_match_type, verdict)| verdict)
             // default to retaining the warning if no matches at all, including "all"
             .unwrap_or(WarnErrorDecision::Retain)
+    }
+
+    fn matches_package_parsing_compatibility(error_code: ErrorCode, error_ctx: ErrorCtx) -> bool {
+        error_code == ErrorCode::PackageParsingCompatibility
+            || matches!(error_ctx, ErrorCtx::DependencyPackage)
+                && matches!(
+                    error_code,
+                    ErrorCode::DuplicateConfigKey
+                        | ErrorCode::UnusedConfigKey
+                        | ErrorCode::SerializationError
+                        | ErrorCode::DbtYamlValidationError
+                        | ErrorCode::JinjaError
+                        | ErrorCode::MacroSyntaxError
+                        | ErrorCode::InvalidConfig
+                        | ErrorCode::ExecutionError
+                        | ErrorCode::YamlError
+                )
     }
 
     pub fn decision_for_supported_legacy(
@@ -935,6 +996,60 @@ mod tests {
             parsed.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
             WarnErrorDecision::UpgradeToError,
             "WEOIncludeExcludeDeprecation in error list should upgrade",
+        );
+    }
+
+    #[test]
+    fn package_parsing_compatibility_group_parse_and_resolve() {
+        let parsed =
+            parse_warn_error_options("{silence: [PackageParsingCompatibility], error: [1059]}")
+                .unwrap();
+
+        assert_eq!(
+            parsed.silence,
+            vec![WarnErrorOptionValue::FusionGroup(
+                FusionWarnErrorGroupValue::PackageParsingCompatibilityErrors,
+            )],
+        );
+        assert_eq!(
+            parsed.decision_for_error_code(ErrorCode::DuplicateConfigKey),
+            WarnErrorDecision::UpgradeToError,
+            "specific visible code should match by numeric code",
+        );
+        assert_eq!(
+            parsed.decision_for_error_code(ErrorCode::PackageParsingCompatibility),
+            WarnErrorDecision::Silence,
+            "package compatibility group should match the aggregate code",
+        );
+
+        let aggregate =
+            parse_warn_error_options("{error: [PackageParsingCompatibility], silence: [1059]}")
+                .unwrap();
+        assert_eq!(
+            aggregate.decision_for_error_code(ErrorCode::PackageParsingCompatibility),
+            WarnErrorDecision::UpgradeToError,
+            "aggregate package compatibility code should match the group",
+        );
+        assert_eq!(
+            aggregate.decision_for_error_code(ErrorCode::DuplicateConfigKey),
+            WarnErrorDecision::Silence,
+            "ordinary code matching should still match explicit numeric codes",
+        );
+
+        let group_only =
+            parse_warn_error_options("{error: [PackageParsingCompatibility]}").unwrap();
+        assert_eq!(
+            group_only.decision_for_error_code(ErrorCode::DuplicateConfigKey),
+            WarnErrorDecision::Retain,
+            "context-free matching should not treat individual package parse codes as group members",
+        );
+        assert_eq!(
+            group_only.decision_for_error_code_with_context(
+                ErrorCode::DuplicateConfigKey,
+                ErrorCtx::DependencyPackage,
+            ),
+            WarnErrorDecision::UpgradeToError,
+            "package compatibility group should match visible individual package parse codes",
         );
     }
 

@@ -152,7 +152,7 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
                     }
 
                     // Not seen before, replace with a general message
-                    log_message.code = Some(ErrorCode::DependencyWarning as u32);
+                    log_message.code = Some(ErrorCode::PackageParsingCompatibility as u32);
                     record.body = format!(
                         "Package `{package_name}` issued one or more compatibility warnings. To display all warnings associated with this package, run with `--show-all-deprecations`."
                     );

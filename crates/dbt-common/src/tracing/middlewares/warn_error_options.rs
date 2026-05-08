@@ -5,7 +5,7 @@ use dbt_telemetry::{LogMessage, LogRecordInfo, SeverityNumber};
 
 use crate::{
     tracing::{data_provider::DataProvider, layer::TelemetryMiddleware},
-    warn_error_options::{WarnErrorDecision, WarnErrorOptions},
+    warn_error_options::{ErrorCtx, WarnErrorDecision, WarnErrorOptions},
 };
 
 pub struct TelemetryWarnErrorOptionsMiddleware {
@@ -34,7 +34,7 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
         let Some(log_message) = record.attributes.downcast_ref::<LogMessage>() else {
             return Some(record);
         };
-        if log_message.original_severity_number() != SeverityNumber::Warn {
+        if record.severity_number != SeverityNumber::Warn {
             return Some(record);
         }
         let Some(code) = log_message
@@ -49,7 +49,10 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
             .warn_error_options
             .read()
             .expect("warn_error_options lock should not be poisoned")
-            .decision_for_error_code(code);
+            .decision_for_error_code_with_context(
+                code,
+                ErrorCtx::from_dependency_package_name(log_message.package_name.as_deref()),
+            );
 
         match decision {
             WarnErrorDecision::Silence => None,

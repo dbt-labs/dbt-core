@@ -106,7 +106,7 @@ pub enum ErrorCode {
 
     DisabledModel = 1064,
 
-    DependencyWarning = 1065,
+    PackageParsingCompatibility = 1065,
 
     AccessDenied = 1066,
 
