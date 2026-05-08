@@ -3,4 +3,4 @@ body: Add `Reused` to `NodeStatus` and `RunStatus`
 time: 2026-05-07T11:55:22-07:00
 custom:
     Author: colin-rogers-dbt
-    Issue: "TBD"
+    Issue: "12912"
