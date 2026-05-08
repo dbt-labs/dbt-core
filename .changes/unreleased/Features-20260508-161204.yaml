@@ -1,0 +1,6 @@
+kind: Features
+body: Add per-overload start and result log events for overloaded UDFs (LogStartOverload, LogOverloadResult)
+time: 2026-05-08T16:12:04.299545+05:30
+custom:
+    Author: aahel
+    Issue: "12250"
