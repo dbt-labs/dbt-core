@@ -819,7 +819,7 @@ impl ExecuteAndCompareTelemetry {
         // Keys to normalize with regex patterns, format: (key_path, regex_pattern, replacement)
         const REGEX_KEYS: &[(&str, &str, &str)] = &[(
             "attributes.target",
-            r"\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?",
+            r"(?:\d+\.\d+\.\d+|dbt-fusion-version)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?",
             "dbt-fusion-version",
         )];
         let keys = Self::volatile_keys(deterministic_sort);
@@ -1134,5 +1134,20 @@ async fn exec_sh(
                 .expect("Could not write");
             Err(FsError::exit_with_status(1))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExecuteAndCompareTelemetry;
+
+    #[test]
+    fn normalizes_preview_nightly_version_targets() {
+        let content = r#"{"attributes":{"action":"dbt-fusion","target":"dbt-fusion-version-preview-nightly.176"},"event_type":"v1.public.events.fusion.log.ProgressMessage"}"#.to_string();
+
+        let normalized = ExecuteAndCompareTelemetry::normalize_volatile_keys(content, false);
+
+        assert!(normalized.contains(r#""target":"dbt-fusion-version""#));
+        assert!(!normalized.contains("preview-nightly.176"));
     }
 }
