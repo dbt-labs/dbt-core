@@ -61,7 +61,20 @@ models:
     config:
       materialized: table
       latest_version_view:
+        enabled: true
         alias: my_custom_latest
+    latest_version: 2
+    versions:
+      - v: 1
+      - v: 2
+"""
+
+# No explicit latest_version_view config — project-level config controls it
+project_disabled_schema_yml = """
+models:
+  - name: versioned_model
+    config:
+      materialized: table
     latest_version: 2
     versions:
       - v: 1
@@ -211,18 +224,21 @@ class TestLatestVersionViewCustomAlias:
 
 
 class TestLatestVersionViewProjectDisabled:
-    """Project-level latest_version_view config cascades to models."""
+    """Project-level latest_version_view config disables the view even when flag is on."""
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"models": {"+latest_version_view": {"enabled": False}}}
+        return {
+            "flags": {"latest_version_view_enabled_by_default": True},
+            "models": {"+latest_version_view": {"enabled": False}},
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
         return {
             "versioned_model_v1.sql": versioned_model_v1_sql,
             "versioned_model_v2.sql": versioned_model_v2_sql,
-            "schema.yml": schema_yml,
+            "schema.yml": project_disabled_schema_yml,
         }
 
     def test_project_level_disables_view(self, project):
