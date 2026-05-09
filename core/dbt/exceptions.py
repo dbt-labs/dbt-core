@@ -1214,9 +1214,14 @@ class AmbiguousCatalogMatchError(CompilationError):
         return f"{match_schema}.{match_name}"
 
     def get_message(self) -> str:
+        # The unique_id prefix encodes the resource type (e.g. "source", "seed",
+        # "snapshot", "model"). Use it instead of hardcoding "model", which is
+        # misleading when the offending node is a source/seed/snapshot.
+        # See: https://github.com/dbt-labs/dbt-core/issues/12629
+        resource_type = self.unique_id.split(".")[0] if "." in self.unique_id else "node"
         msg = (
             "dbt found two relations in your warehouse with similar database identifiers. "
-            "dbt\nis unable to determine which of these relations was created by the model "
+            f"dbt\nis unable to determine which of these relations was created by the {resource_type} "
             f'"{self.unique_id}".\nIn order for dbt to correctly generate the catalog, one '
             "of the following relations must be deleted or renamed:\n\n - "
             f"{self.get_match_string(self.match_1)}\n - {self.get_match_string(self.match_2)}"
