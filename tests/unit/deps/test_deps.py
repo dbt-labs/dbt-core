@@ -885,6 +885,15 @@ class TestPackageSpec(unittest.TestCase):
         msg = "dbt-labs-test/b is missing the version. When installing from the Hub package index, version is a required property"
         assert msg in str(exc.exception)
 
+    def test_validation_error_when_version_key_absent_from_package_config(self):
+        # Regression test for #12649: when the `version` key is entirely
+        # absent (not just None), PackageConfig.validate should raise the
+        # descriptive ValidationError, not a bare KeyError.
+        packages_data = {"packages": [{"package": "dbt-labs-test/b"}]}
+
+        with self.assertRaisesRegex(ValidationError, r"is missing the version"):
+            PackageConfig.validate(data=packages_data)
+
     def test_validation_error_when_namespace_is_missing_from_package_config(self):
         packages_data = {"packages": [{"package": "dbt-labs", "version": "1.0.0"}]}
 
