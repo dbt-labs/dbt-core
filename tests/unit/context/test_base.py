@@ -1,3 +1,4 @@
+import json
 import os
 
 from jinja2.runtime import Undefined
@@ -52,3 +53,29 @@ class TestBaseContext:
         flags = BaseContext(cli_vars={}).flags
         for expected_flag in expected_context_flags:
             assert hasattr(flags, expected_flag.upper())
+
+    def test_tojson_default_is_compact(self):
+        result = BaseContext.tojson({"a": 1, "b": [2, 3]})
+        # default: single line, no indent
+        assert "\n" not in result
+        assert json.loads(result) == {"a": 1, "b": [2, 3]}
+
+    def test_tojson_with_indent(self):
+        result = BaseContext.tojson({"a": 1}, indent=2)
+        # indented: multi-line and starts with '{\n  '
+        assert result == '{\n  "a": 1\n}'
+        assert json.loads(result) == {"a": 1}
+
+    def test_tojson_with_indent_and_sort_keys(self):
+        result = BaseContext.tojson({"b": 2, "a": 1}, sort_keys=True, indent=4)
+        assert result == '{\n    "a": 1,\n    "b": 2\n}'
+
+    def test_toyaml_default(self):
+        result = BaseContext.toyaml({"a": 1})
+        # default safe_dump produces "a: 1\n"
+        assert result == "a: 1\n"
+
+    def test_toyaml_with_indent(self):
+        result = BaseContext.toyaml({"a": {"b": 1}}, indent=4)
+        # nested mapping should be indented by 4 spaces
+        assert "\n    b: 1" in result
