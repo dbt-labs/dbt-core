@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Drop dead `enable` parameter from dbt.profiler.profiler
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "5886"
