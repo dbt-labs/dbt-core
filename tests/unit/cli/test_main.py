@@ -59,3 +59,12 @@ class TestCLI:
                 continue
             cmd = Command.from_str(command.name)
             command_args(cmd)
+
+    def test_dunder_main_module_importable(self):
+        # Regression test for dbt-labs/dbt-core#11013:
+        # `python -m dbt.cli` must work, which requires dbt/cli/__main__.py
+        # to exist and be importable.
+        import importlib
+
+        module = importlib.import_module("dbt.cli.__main__")
+        assert module.cli is cli
