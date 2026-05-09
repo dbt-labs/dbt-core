@@ -36,7 +36,7 @@ const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
 const MODEL_NONE_SENTINEL: &str = "none";
 
 pub(super) fn from_model_config_and_catalogs_v2(
-    adapter_type: &AdapterType,
+    adapter_type: AdapterType,
     model: &Value,
     catalogs: Arc<DbtCatalogs>,
 ) -> AdapterResult<CatalogRelation> {
@@ -48,7 +48,7 @@ pub(super) fn from_model_config_and_catalogs_v2(
         "catalogs.yml v2 received a bare string model config; this is unsupported and indicates a parser bug."
     );
 
-    if CatalogRelation::get_model_adapter_properties(model, *adapter_type).is_some() {
+    if CatalogRelation::get_model_adapter_properties(model, adapter_type).is_some() {
         return Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             "catalogs.yml v2 supports top-level model overrides only; model adapter_properties are not supported",
@@ -121,14 +121,14 @@ pub(super) fn from_model_config_and_catalogs_v2(
     let spec = parse_v2_view(&catalogs)?;
     let catalog = find_v2_catalog(&spec, &catalog_name)?;
 
-    if CatalogRelation::get_model_config_value(model, FIELD_CATALOG_TYPE, *adapter_type).is_some() {
+    if CatalogRelation::get_model_config_value(model, FIELD_CATALOG_TYPE, adapter_type).is_some() {
         return Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             "catalog_type may only be specified in write integration entries of catalogs.yml",
         ));
     }
 
-    match (*adapter_type, catalog.catalog_type) {
+    match (adapter_type, catalog.catalog_type) {
         (AdapterType::Databricks, V2CatalogType::Unity) => {
             CatalogRelation::build_databricks_unity_with_catalogs_v2(model, catalog, &catalog_name)
         }
@@ -904,7 +904,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -939,7 +939,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -975,7 +975,7 @@ catalogs:
 
         for m in ms {
             let err = from_model_config_and_catalogs_v2(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1010,7 +1010,7 @@ catalogs:
 
         for m in ms {
             let err = from_model_config_and_catalogs_v2(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1043,7 +1043,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1080,7 +1080,7 @@ catalogs:
         }));
 
         let err =
-            from_model_config_and_catalogs_v2(&AdapterType::Databricks, &model, Arc::new(catalogs))
+            from_model_config_and_catalogs_v2(AdapterType::Databricks, &model, Arc::new(catalogs))
                 .unwrap_err();
 
         assert!(
@@ -1115,7 +1115,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1165,7 +1165,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1201,7 +1201,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Snowflake,
+                AdapterType::Snowflake,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1250,7 +1250,7 @@ catalogs:
 
         for m in ms {
             let r = from_model_config_and_catalogs_v2(
-                &AdapterType::Snowflake,
+                AdapterType::Snowflake,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1302,7 +1302,7 @@ catalogs:
 
         for m in ms {
             let err = from_model_config_and_catalogs_v2(
-                &AdapterType::Snowflake,
+                AdapterType::Snowflake,
                 &m,
                 Arc::new(catalogs.clone()),
             )
@@ -1334,8 +1334,8 @@ catalogs:
         let conf = json!({});
         let m = model(AdapterType::DuckDB, conf);
 
-        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
-            .unwrap();
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
 
         assert!(r.catalog_name.is_none());
         assert!(r.integration_name.is_none());
@@ -1362,7 +1362,7 @@ catalogs:
         let conf = json!({ "catalog_name": "nonexistent" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let err = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+        let err = from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
             .unwrap_err();
 
         assert!(format!("{err}").contains("Catalog 'nonexistent' not found in catalogs.yml"));
@@ -1386,8 +1386,8 @@ catalogs:
         let conf = json!({ "catalog_name": "my_glue" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
-            .unwrap();
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
 
         assert_eq!(r.catalog_name.as_deref(), Some("my_glue"));
         assert!(r.integration_name.is_none());
@@ -1426,8 +1426,8 @@ catalogs:
         let conf = json!({ "catalog_name": "my_rest" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
-            .unwrap();
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
 
         assert_eq!(r.catalog_name.as_deref(), Some("my_rest"));
         assert_eq!(r.catalog_type, "iceberg_rest");
@@ -1465,8 +1465,8 @@ catalogs:
         let conf = json!({ "catalog_name": "my_glue" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
-            .unwrap();
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
 
         assert_eq!(
             r.adapter_properties
@@ -1503,7 +1503,7 @@ catalogs:
         let conf = json!({ "catalog_name": "my_horizon" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let err = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
+        let err = from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs))
             .unwrap_err();
 
         assert!(
@@ -1528,8 +1528,8 @@ catalogs:
         let conf = json!({ "catalog_name": "none" });
         let m = model(AdapterType::DuckDB, conf);
 
-        let r = from_model_config_and_catalogs_v2(&AdapterType::DuckDB, &m, Arc::new(catalogs))
-            .unwrap();
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
 
         assert!(r.catalog_name.is_none());
         assert_eq!(r.catalog_type, "duckdb");

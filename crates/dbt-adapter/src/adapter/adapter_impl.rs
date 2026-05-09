@@ -1066,7 +1066,7 @@ impl AdapterImpl {
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L539
     pub fn build_catalog_relation(&self, model: &Value) -> AdapterResult<CatalogRelation> {
         CatalogRelation::from_model_config_and_catalogs(
-            &self.adapter_type(),
+            self.adapter_type(),
             model,
             load_catalogs::fetch_catalogs(),
         )
@@ -3454,7 +3454,7 @@ impl AdapterImpl {
                 // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
                 let node_yml = node.as_internal_node().serialize();
                 let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
-                    &adapter_type,
+                    adapter_type,
                     &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(
                         node_yml,
                     )),
@@ -3530,7 +3530,7 @@ impl AdapterImpl {
                 // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
                 let node_yml = node.as_internal_node().serialize();
                 let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
-                    &adapter_type,
+                    adapter_type,
                     &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(
                         node_yml,
                     )),

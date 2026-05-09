@@ -135,7 +135,7 @@ impl CatalogRelation {
     }
 
     pub fn from_model_config_and_catalogs(
-        adapter_type: &AdapterType,
+        adapter_type: AdapterType,
         model: &Value,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> AdapterResult<Self> {
@@ -1875,7 +1875,7 @@ mod tests {
         ];
         for m in ms {
             let r =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Snowflake, &m, None)
                     .unwrap();
             assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
             assert_eq!(r.catalog_type, SNOWFLAKE_RELATION_STORE);
@@ -1891,7 +1891,7 @@ mod tests {
         ];
         for m in ms {
             let err =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Snowflake, &m, None)
                     .unwrap_err();
             assert!(format!("{err}").contains("catalog_name 'CAT'"));
             assert!(format!("{err}").contains("catalogs.yml was not found"));
@@ -1908,7 +1908,7 @@ mod tests {
         ];
         for m in ms {
             let r =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Snowflake, &m, None)
                     .unwrap();
             assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
             assert!(r.catalog_name.is_none());
@@ -2196,7 +2196,7 @@ mod tests {
         ];
         for m in ms {
             let r =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Databricks, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Databricks, &m, None)
                     .unwrap();
 
             assert_eq!(r.table_format, DBX_DEFAULT_TABLE_FORMAT);
@@ -2218,7 +2218,7 @@ mod tests {
         ];
         for m in ms {
             let err =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Databricks, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Databricks, &m, None)
                     .unwrap_err();
             let msg = format!("{err}");
             assert!(msg.contains("table_format=iceberg"));
@@ -2242,7 +2242,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2271,7 +2271,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2305,7 +2305,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2346,7 +2346,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2367,7 +2367,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2395,7 +2395,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2432,7 +2432,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2459,7 +2459,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2490,7 +2490,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2521,7 +2521,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2550,7 +2550,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2582,7 +2582,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Databricks,
+                AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2606,7 +2606,7 @@ mod tests {
         ];
         for m in ms {
             let r =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Bigquery, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Bigquery, &m, None)
                     .unwrap();
 
             assert_eq!(r.table_format, BIGQUERY_DEFAULT_TABLE_FORMAT);
@@ -2633,7 +2633,7 @@ mod tests {
         ];
         for m in ms {
             let err =
-                CatalogRelation::from_model_config_and_catalogs(&AdapterType::Bigquery, &m, None)
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Bigquery, &m, None)
                     .unwrap_err();
 
             assert!(err.message().contains("Model specifies catalog_name"));
@@ -2660,7 +2660,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2700,7 +2700,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2732,7 +2732,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2765,7 +2765,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2817,7 +2817,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2866,7 +2866,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2917,7 +2917,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -2966,7 +2966,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -3012,7 +3012,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -3061,7 +3061,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -3106,7 +3106,7 @@ mod tests {
         ];
         for m in ms {
             let err = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
@@ -3144,7 +3144,7 @@ mod tests {
         ];
         for m in ms {
             let r = CatalogRelation::from_model_config_and_catalogs(
-                &AdapterType::Bigquery,
+                AdapterType::Bigquery,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )

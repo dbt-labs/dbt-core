@@ -142,7 +142,7 @@ pub(crate) fn get_table_options_value(
     // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
     let node_yml = node.as_internal_node().serialize();
     let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
-        &adapter_type,
+        adapter_type,
         &Value::from_object(convert_yml_to_value_map(node_yml)),
         load_catalogs::fetch_catalogs(),
     )?;

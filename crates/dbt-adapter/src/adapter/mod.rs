@@ -1192,7 +1192,7 @@ impl Adapter {
             }
             Parse(parse_adapter_state) => {
                 let relation = CatalogRelation::from_model_config_and_catalogs(
-                    &parse_adapter_state.adapter_type,
+                    parse_adapter_state.adapter_type,
                     model,
                     parse_adapter_state.catalogs.clone(),
                 )?;
