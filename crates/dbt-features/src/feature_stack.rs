@@ -18,6 +18,7 @@ use uuid::Uuid;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::adapter::AdapterFeature;
 use crate::compilation::CompilationConfig;
 use crate::tracing::TracingFeature;
 
@@ -143,6 +144,7 @@ pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
     pub cli_extension: CliExtensionFeature,
     pub tracing: TracingFeature,
+    pub adapter: AdapterFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).

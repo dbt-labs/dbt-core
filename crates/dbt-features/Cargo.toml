@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+dbt-adapter = { workspace = true }
 dbt-clap-core = { workspace = true }
 dbt-common = { workspace = true }
 dbt-dag = { workspace = true }

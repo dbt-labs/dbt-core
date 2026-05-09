@@ -5,6 +5,7 @@ pub mod feature_stack;
 pub mod sa;
 
 // All features:
+pub mod adapter;
 pub mod compilation;
 pub mod tracing;
 // add more features here...
