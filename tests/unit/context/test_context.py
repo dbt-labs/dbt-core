@@ -492,6 +492,79 @@ def test_model_runtime_context(config_postgres, manifest_fx, get_adapter, get_in
     assert_has_keys(REQUIRED_MODEL_KEYS, MAYBE_KEYS, ctx)
 
 
+def test_run_query_during_parse_emits_debug_event(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    """run_query() called during parse phase should fire JinjaLogDebug.
+
+    Reproduces dbt-labs/dbt-core#11070: silently returning None during the
+    parse phase confuses new users. We surface a debug-level hint pointing
+    at the {% if execute %} workaround, and we fire it at most once per
+    context to avoid log spam.
+    """
+    ctx = providers.generate_parser_model_context(
+        model=mock_model(),
+        config=config_postgres,
+        manifest=manifest_fx,
+        context_config=mock.MagicMock(),
+    )
+
+    events = []
+
+    def _capture(event):
+        events.append(event)
+
+    with mock.patch(
+        "dbt.context.providers.fire_event", side_effect=_capture
+    ):
+        # First call from inside run_query: should fire the debug event.
+        result1 = ctx["load_result"]("run_query_statement")
+        # Second call: should NOT fire again (one-shot).
+        result2 = ctx["load_result"]("run_query_statement")
+        # An unrelated missing key should never fire.
+        result3 = ctx["load_result"]("some_other_unrelated_key")
+
+    assert result1 is None
+    assert result2 is None
+    assert result3 is None
+
+    from dbt.events.types import JinjaLogDebug
+
+    debug_events = [e for e in events if isinstance(e, JinjaLogDebug)]
+    assert len(debug_events) == 1, (
+        f"expected exactly one JinjaLogDebug, got {len(debug_events)}: {events}"
+    )
+    msg = debug_events[0].msg
+    assert "run_query" in msg
+    assert "parse phase" in msg
+    assert "if execute" in msg
+    assert "docs.getdbt.com" in msg
+
+
+def test_run_query_during_runtime_does_not_emit_debug_event(
+    config_postgres, manifest_fx, get_adapter, get_include_paths
+):
+    """During the execute phase load_result for a missing key must stay silent."""
+    ctx = providers.generate_runtime_model_context(
+        model=mock_model(),
+        config=config_postgres,
+        manifest=manifest_fx,
+    )
+
+    events = []
+
+    with mock.patch(
+        "dbt.context.providers.fire_event", side_effect=lambda e: events.append(e)
+    ):
+        result = ctx["load_result"]("run_query_statement")
+
+    assert result is None
+
+    from dbt.events.types import JinjaLogDebug
+
+    assert not any(isinstance(e, JinjaLogDebug) for e in events)
+
+
 def test_docs_runtime_context(config_postgres):
     ctx = docs.generate_runtime_docs_context(config_postgres, mock_model(), [], "root")
     assert_has_keys(REQUIRED_DOCS_KEYS, MAYBE_KEYS, ctx)
