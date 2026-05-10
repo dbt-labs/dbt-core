@@ -5,7 +5,7 @@ import time
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
-from dbt.contracts.graph.nodes import SeedNode
+from dbt.contracts.graph.nodes import ManifestSQLNode, SeedNode
 from dbt.events.types import ShowNode
 from dbt.flags import get_flags
 from dbt.task.base import ConfiguredTask
@@ -17,12 +17,12 @@ from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 
 
-class ShowRunner(CompileRunner):
+class ShowRunner(CompileRunner[ManifestSQLNode]):
     def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
         super().__init__(config, adapter, node, node_index, num_nodes)
         self.run_ephemeral_models = True
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         start_time = time.time()
 
         # Allow passing in -1 (or any negative number) to get all rows
@@ -79,7 +79,15 @@ class ShowTask(CompileTask):
         else:
             matched_results = []
             for result in results:
-                if result.node.name in self.selection_arg[0]:
+                node_name = result.node.name
+                versioned_name = (
+                    f"{node_name}.v{result.node.version}"
+                    if hasattr(result.node, "version") and result.node.version
+                    else None
+                )
+                if node_name in self.selection_arg or (
+                    versioned_name and versioned_name in self.selection_arg
+                ):
                     matched_results.append(result)
                 else:
                     fire_event(

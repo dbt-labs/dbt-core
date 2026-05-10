@@ -198,10 +198,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install libsasl2-dev
 
-      - name: "Install Python Dependencies"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install hatch
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: "Bump Version To ${{ needs.cleanup_changelog.outputs.next-version }}"
         run: |

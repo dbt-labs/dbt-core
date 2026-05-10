@@ -1,0 +1,6 @@
+kind: Features
+body: Allow jinja suffixed extensions for markdown and sql files
+time: 2026-02-11T03:43:10.287041+05:30
+custom:
+    Author: ash2shukla
+    Issue: 11097 3484

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Sources and Semantic Model now raise a warning if name contains spaces. Use REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES to raise errors instead.
+time: 2026-04-16T12:42:51.4804+05:30
+custom:
+    Author: sriramr98
+    Issue: "12767"

@@ -7,8 +7,9 @@ import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
+from dbt_common.exceptions import DbtInternalError
 
 
 class DBTDeprecation:
@@ -51,7 +52,7 @@ class DBTDeprecation:
             flags = get_flags()
             if self.name not in active_deprecations or flags.show_all_deprecations:
                 event = self.event(**kwargs)
-                warn_or_error(event)
+                fire_event(event, force_warn_or_error_handling=True)
                 self.track_deprecation_warn()
 
             active_deprecations[self.name] += 1
@@ -268,7 +269,7 @@ def renamed_env_var(old_name: str, new_name: str):
 def warn(name: str, *args, **kwargs) -> None:
     if name not in deprecations:
         # this should (hopefully) never happen
-        raise RuntimeError("Error showing deprecation warning: {}".format(name))
+        raise DbtInternalError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
 
@@ -294,8 +295,9 @@ def show_deprecations_summary() -> None:
 
     if len(summaries) > 0:
         show_all_hint = not get_flags().show_all_deprecations
-        warn_or_error(
-            core_types.DeprecationsSummary(summaries=summaries, show_all_hint=show_all_hint)
+        fire_event(
+            core_types.DeprecationsSummary(summaries=summaries, show_all_hint=show_all_hint),
+            force_warn_or_error_handling=True,
         )
 
 

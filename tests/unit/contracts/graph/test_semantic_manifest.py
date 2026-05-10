@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 import pytest
+from metricflow_semantic_interfaces.type_enums import TimeGranularity
+from metricflow_semantic_interfaces.type_enums.metric_type import MetricType
 
 from core.dbt.contracts.graph.manifest import Manifest
 from dbt.artifacts.resources.types import NodeType
@@ -24,8 +26,6 @@ from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.types import TimeDimensionsRequireGranularityDeprecation
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from dbt_semantic_interfaces.type_enums import TimeGranularity
-from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 
 
 # Overwrite the default nods to construct the manifest

@@ -262,6 +262,8 @@ class BaseForeignKeyDeferState:
 
 
 class TestModelLevelForeignKeyConstraintRefToDeferRelation(BaseForeignKeyDeferState):
+    """Test FK constraint uses deferred relation when FK target is NOT selected."""
+
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -270,17 +272,33 @@ class TestModelLevelForeignKeyConstraintRefToDeferRelation(BaseForeignKeyDeferSt
             "my_model_to.sql": "select 1 as id",
         }
 
-    def test_model_level_fk_to_defer_relation(self, project):
+    def test_model_level_fk_to_defer_relation_when_target_not_selected(self, project):
+        """When FK target is NOT selected, use deferred (prod) relation."""
         results = run_dbt(["run", "--vars", "state: prod"])
         self.copy_state(project.project_root)
 
-        results = run_dbt(["compile", "--defer", "--state", "state"])
+        # Only select my_model, not my_model_to - FK should use deferred relation
+        results = run_dbt(["compile", "-s", "my_model", "--defer", "--state", "state"])
 
         my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
         assert my_model_node.constraints[0].to.split(".")[-1] == '"my_model_to_prod"'
 
+    def test_model_level_fk_to_current_relation_when_target_selected(self, project):
+        """When FK target IS selected (being built), use current relation, not deferred."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Select both models - FK should use current (dev) relation since target is being built
+        results = run_dbt(["compile", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        # When both models are selected, FK should point to current (dev) relation
+        assert my_model_node.constraints[0].to.split(".")[-1] == '"my_model_to_dev"'
+
 
 class TestColumnLevelForeignKeyConstraintToRefDeferRelation(BaseForeignKeyDeferState):
+    """Test column-level FK constraint uses deferred relation when FK target is NOT selected."""
+
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -289,11 +307,25 @@ class TestColumnLevelForeignKeyConstraintToRefDeferRelation(BaseForeignKeyDeferS
             "my_model_to.sql": "select 1 as id",
         }
 
-    def test_column_level_fk_to_defer_relation(self, project):
+    def test_column_level_fk_to_defer_relation_when_target_not_selected(self, project):
+        """When FK target is NOT selected, use deferred (prod) relation."""
         results = run_dbt(["run", "--vars", "state: prod"])
         self.copy_state(project.project_root)
 
-        results = run_dbt(["compile", "--defer", "--state", "state"])
+        # Only select my_model, not my_model_to - FK should use deferred relation
+        results = run_dbt(["compile", "-s", "my_model", "--defer", "--state", "state"])
 
         my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
         assert my_model_node.columns["id"].constraints[0].to.split(".")[-1] == '"my_model_to_prod"'
+
+    def test_column_level_fk_to_current_relation_when_target_selected(self, project):
+        """When FK target IS selected (being built), use current relation, not deferred."""
+        results = run_dbt(["run", "--vars", "state: prod"])
+        self.copy_state(project.project_root)
+
+        # Select both models - FK should use current (dev) relation since target is being built
+        results = run_dbt(["compile", "--defer", "--state", "state"])
+
+        my_model_node = [r.node for r in results.results if r.node.name == "my_model"][0]
+        # When both models are selected, FK should point to current (dev) relation
+        assert my_model_node.columns["id"].constraints[0].to.split(".")[-1] == '"my_model_to_dev"'

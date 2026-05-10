@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ResultNode
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import REFABLE_NODE_TYPES
 from dbt.task.base import BaseRunner, resource_types_from_args
@@ -16,11 +17,11 @@ from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.exceptions import CompilationError, DbtInternalError
 
 
-class CloneRunner(BaseRunner):
+class CloneRunner(BaseRunner[ResultNode, RunResult]):
     def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         pass
 
     def _build_run_model_result(self, model, context):
@@ -67,7 +68,7 @@ class CloneRunner(BaseRunner):
         )
         raise CompilationError(msg, node=model)
 
-    def execute(self, model, manifest):
+    def execute(self, model, manifest) -> RunResult:
         context = generate_runtime_model_context(model, self.config, manifest)
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, "clone", self.adapter.type()
@@ -155,6 +156,7 @@ class CloneTask(GraphRunnableTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=resource_types,
+            selectors=self.config.selectors,
         )
 
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:

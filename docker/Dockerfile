@@ -3,15 +3,26 @@ ARG py_version=3.11.2
 FROM python:$py_version-slim-bullseye AS base
 
 RUN apt-get update \
-  && apt-get dist-upgrade -y \
+  # Install version-pinned packages for reproducible builds
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
     ca-certificates=20210119 \
-    libpq-dev=13.23-0+deb11u1 \
+    libpq-dev=13.23-0+deb11u3 \
     make=4.3-4.1 \
     openssh-client=1:8.4p1-5+deb11u3 \
     software-properties-common=0.96.20.2-2.1 \
-    # Additional dependencies for building git from source
+  # Prevent dist-upgrade from changing pinned package versions
+  && apt-mark hold \
+    build-essential \
+    ca-certificates \
+    libpq-dev \
+    make \
+    openssh-client \
+    software-properties-common \
+  # Apply security updates to non-pinned base image packages
+  && apt-get dist-upgrade -y \
+  # Install temporary dependencies for building git from source (removed later)
+  && apt-get install -y --no-install-recommends \
     wget \
     libcurl4-gnutls-dev \
     libexpat1-dev \

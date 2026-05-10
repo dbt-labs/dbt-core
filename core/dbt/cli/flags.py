@@ -19,9 +19,11 @@ from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
 from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
+from dbt.events.types import SelectExcludeIgnoredWithSelectorWarning
 from dbt_common import ui
 from dbt_common.clients import jinja
 from dbt_common.events import functions
+from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.helper_types import WarnErrorOptionsV2
 
@@ -156,7 +158,7 @@ class Flags:
                     try:
                         assert isinstance(new_name, str)
                     except AssertionError:
-                        raise Exception(
+                        raise DbtInternalError(
                             f"No deprecated param name match in DEPRECATED_PARAMS from {dep_name} to {new_name}"
                         )
 
@@ -165,7 +167,7 @@ class Flags:
                         dep_param = [x for x in ctx.command.params if x.name == dep_name][0]
                         new_param = [x for x in ctx.command.params if x.name == new_name][0]
                     except IndexError:
-                        raise Exception(
+                        raise DbtInternalError(
                             f"No deprecated param name match in context from {dep_name} to {new_name}"
                         )
 
@@ -175,11 +177,30 @@ class Flags:
                         params_assigned_from_default.remove(new_name)
 
                     # Add the deprecation warning function to the set.
-                    assert isinstance(dep_param.envvar, str)
-                    assert isinstance(new_param.envvar, str)
+                    # Get the old and new env vars
+                    if isinstance(dep_param.envvar, list):
+                        dep_env_var_without_prefix = dep_param.envvar[1]
+                    elif isinstance(dep_param.envvar, str):
+                        dep_env_var_without_prefix = dep_param.envvar
+                    else:
+                        # Error raised as an assertion error to maintain history of how this was handled in the past
+                        assert (
+                            False
+                        ), f"Invalid envvar type: {type(dep_param.envvar)}, expected a list or string"
+
+                    if isinstance(new_param.envvar, list):
+                        new_env_var_with_prefix = new_param.envvar[0]
+                    elif isinstance(new_param.envvar, str):
+                        new_env_var_with_prefix = new_param.envvar
+                    else:
+                        # Error raised as an assertion error to maintain history of how this was handled in the past
+                        assert (
+                            False
+                        ), f"Invalid envvar type: {type(new_param.envvar)}, expected a list or string"
+
                     deprecated_env_vars[new_name] = renamed_env_var(
-                        old_name=dep_param.envvar,
-                        new_name=new_param.envvar,
+                        old_name=dep_env_var_without_prefix,
+                        new_name=new_env_var_with_prefix,
                     )
                 # end deprecated_params
 
@@ -390,6 +411,12 @@ class Flags:
     def fire_deprecations(self, ctx: Optional[Context] = None):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
+
+        # Warn when --selector is used together with --select or --exclude (they are ignored)
+        if getattr(self, "SELECTOR", None) and (
+            getattr(self, "SELECT", ()) or getattr(self, "EXCLUDE", ())
+        ):
+            fire_event(SelectExcludeIgnoredWithSelectorWarning())
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")
@@ -492,7 +519,9 @@ def command_params(command: CliCommand, args_dict: Dict[str, Any]) -> CommandPar
                 continue
 
         if k == "macro" and command == CliCommand.RUN_OPERATION:
-            add_fn(v)
+            if v is not None:
+                add_fn(v)
+            continue
         # None is a Singleton, False is a Flyweight, only one instance of each.
         elif (v is None or v is False) and k not in (
             # These are None by default but they do not support --no-{flag}

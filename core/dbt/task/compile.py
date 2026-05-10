@@ -1,8 +1,9 @@
 import threading
-from typing import Optional, Type
+from typing import Optional, Type, TypeVar
 
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ManifestSQLNode
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
@@ -18,15 +19,17 @@ from dbt_common.exceptions import CompilationError
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtInternalError
 
+CompilableNodeT = TypeVar("CompilableNodeT", bound=ManifestSQLNode)
 
-class CompileRunner(BaseRunner):
+
+class CompileRunner(BaseRunner[CompilableNodeT, RunResult]):
     def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result) -> None:
+    def after_execute(self, result: RunResult) -> None:
         pass
 
-    def execute(self, compiled_node, manifest):
+    def execute(self, compiled_node, manifest) -> RunResult:
         return RunResult(
             node=compiled_node,
             status=RunStatus.Success,
@@ -41,6 +44,16 @@ class CompileRunner(BaseRunner):
 
     def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {})
+
+    def get_node_representation(self):
+        display_quote_policy = {"database": False, "schema": False, "identifier": False}
+        relation = self.adapter.Relation.create_from(
+            self.config, self.node, quote_policy=display_quote_policy
+        )
+        # exclude the database from output if it's the default
+        if self.node.database == self.config.credentials.database:
+            relation = relation.include(database=False)
+        return str(relation)
 
 
 class CompileTask(GraphRunnableTask):
@@ -64,6 +77,7 @@ class CompileTask(GraphRunnableTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=resource_types,
+            selectors=self.config.selectors,
         )
 
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
@@ -78,7 +92,15 @@ class CompileTask(GraphRunnableTask):
         elif self.selection_arg:
             matched_results = []
             for result in results:
-                if result.node.name in self.selection_arg[0]:
+                node_name = result.node.name
+                versioned_name = (
+                    f"{node_name}.v{result.node.version}"
+                    if hasattr(result.node, "version") and result.node.version
+                    else None
+                )
+                if node_name in self.selection_arg or (
+                    versioned_name and versioned_name in self.selection_arg
+                ):
                     matched_results.append(result)
                 else:
                     fire_event(

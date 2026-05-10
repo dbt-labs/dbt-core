@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix case-insensitive env var lookup on Windows
+time: 2026-03-20T10:20:34.746838+05:30
+custom:
+    Author: aahel
+    Issue: "10422"

@@ -202,9 +202,17 @@
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "group": {
@@ -278,25 +286,22 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
     },
     "AnyValue": true,
-    "BigqueryClusterConfig": {
-      "description": "dbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      ]
-    },
     "BigqueryPartitionConfig": {
       "description": "reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13",
       "type": "object",
@@ -306,6 +311,10 @@
         },
         {
           "$ref": "#/definitions/TimeConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ],
       "required": [
@@ -313,8 +322,16 @@
       ],
       "properties": {
         "copy_partitions": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "data_type": {
           "default": "date",
@@ -326,9 +343,36 @@
       },
       "additionalProperties": false
     },
+    "ClusterConfig": {
+      "description": "Configuration for cluster by columns.\n\ndbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "ColumnConfig": {
       "type": "object",
       "properties": {
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "meta": {
           "type": [
             "object",
@@ -351,12 +395,40 @@
       },
       "additionalProperties": false
     },
+    "ColumnMask": {
+      "type": "object",
+      "required": [
+        "function"
+      ],
+      "properties": {
+        "function": {
+          "type": "string"
+        },
+        "using_columns": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ColumnProperties": {
       "type": "object",
       "required": [
         "name"
       ],
       "properties": {
+        "column_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnMask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -390,6 +462,15 @@
             "string",
             "null"
           ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "description": {
           "type": [
@@ -440,9 +521,17 @@
           }
         },
         "quote": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "tests": {
@@ -464,6 +553,10 @@
         },
         {
           "$ref": "#/definitions/ColumnPropertiesDimensionType"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -490,9 +583,17 @@
           ]
         },
         "is_partition": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -594,15 +695,31 @@
           "$ref": "#/definitions/ConstraintType"
         },
         "warn_unenforced": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_unsupported": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -636,6 +753,10 @@
           "additionalProperties": {
             "$ref": "#/definitions/CustomTestInner"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -764,33 +885,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -805,18 +966,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -840,10 +1023,24 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -851,9 +1048,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -863,9 +1064,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -889,6 +1114,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -901,16 +1132,47 @@
             "null"
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "error_if": {
@@ -937,6 +1199,21 @@
             "null"
           ]
         },
+        "full_refresh": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "grant_access_to": {
           "type": [
             "array",
@@ -953,32 +1230,97 @@
           ]
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -997,17 +1339,33 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "limit": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "liquid_clustered_by": {
           "anyOf": [
@@ -1041,6 +1399,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -1048,9 +1422,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -1080,6 +1462,22 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -1091,12 +1489,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -1108,15 +1514,21 @@
           }
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quoting": {
@@ -1130,11 +1542,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -1143,9 +1563,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -1166,11 +1594,17 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -1180,9 +1614,17 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "severity": {
@@ -1196,14 +1638,36 @@
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -1235,6 +1699,12 @@
             "null"
           ]
         },
+        "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
@@ -1245,10 +1715,31 @@
             }
           ]
         },
-        "store_failures": {
+        "storage_serialization_policy": {
           "type": [
-            "boolean",
+            "string",
             "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "store_failures": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "store_failures_as": {
@@ -1274,6 +1765,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1284,6 +1776,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -1304,6 +1802,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -1311,9 +1825,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_if": {
@@ -1355,6 +1891,17 @@
         },
         "name": {
           "type": "string"
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1366,6 +1913,10 @@
         },
         {
           "$ref": "#/definitions/CustomTest"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1382,8 +1933,16 @@
       "type": "object",
       "properties": {
         "alias_types": {
-          "default": true,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": true,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "checksum": {
           "anyOf": [
@@ -1396,8 +1955,16 @@
           ]
         },
         "enforced": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1515,27 +2082,62 @@
       "type": "object",
       "properties": {
         "database": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "identifier": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "schema": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "snowflake_ignore_case": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -1551,6 +2153,10 @@
           "items": {
             "type": "string"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1592,9 +2198,17 @@
           ]
         },
         "is_partition": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -1692,12 +2306,28 @@
       "type": "object",
       "properties": {
         "is_end": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "is_start": {
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1712,8 +2342,16 @@
           ]
         },
         "show": {
-          "default": true,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "default": true,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1725,6 +2363,10 @@
         },
         {
           "$ref": "#/definitions/ColumnPropertiesEntityType"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -1860,9 +2502,18 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -1875,6 +2526,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1939,7 +2591,7 @@
           "$ref": "#/definitions/DbtOwner"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/ExposureType"
         },
         "url": {
           "type": [
@@ -1950,6 +2602,16 @@
       },
       "additionalProperties": false
     },
+    "ExposureType": {
+      "type": "string",
+      "enum": [
+        "dashboard",
+        "notebook",
+        "analysis",
+        "ml",
+        "application"
+      ]
+    },
     "FloatOrString": {
       "anyOf": [
         {
@@ -1958,6 +2620,10 @@
         },
         {
           "type": "string"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -2021,13 +2687,23 @@
       "type": "object",
       "properties": {
         "count": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "period": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessPeriod"
@@ -2100,33 +2776,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -2141,18 +2857,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -2176,10 +2914,24 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -2187,9 +2939,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -2199,9 +2955,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -2225,6 +3005,18 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dist": {
           "type": [
             "string",
@@ -2241,15 +3033,51 @@
             }
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "entry_point": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -2275,13 +3103,7 @@
           }
         },
         "grants": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/StringOrArrayOfStrings"
-          }
+          "$ref": "#/definitions/GrantConfig"
         },
         "group": {
           "type": [
@@ -2290,32 +3112,97 @@
           ]
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -2334,15 +3221,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "language": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -2367,6 +3256,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -2374,9 +3279,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -2406,10 +3319,36 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "on_configuration_change": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "partition_by": {
@@ -2423,12 +3362,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -2440,15 +3387,21 @@
           }
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quoting": {
@@ -2462,11 +3415,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -2475,9 +3436,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -2495,14 +3464,26 @@
             "null"
           ]
         },
+        "runtime_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -2512,20 +3493,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -2567,6 +3578,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -2595,6 +3618,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -2610,6 +3639,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -2617,18 +3662,41 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "type": {
+          "default": "scalar",
           "anyOf": [
             {
               "$ref": "#/definitions/FunctionKind"
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -2653,6 +3721,44 @@
         "aggregate",
         "table"
       ]
+    },
+    "FunctionOverload": {
+      "description": "An overload of a function with different argument signatures. Each overload references a separate SQL file (via `defined_in`) that contains the function body for this overload.",
+      "type": "object",
+      "required": [
+        "defined_in"
+      ],
+      "properties": {
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionArgument"
+          }
+        },
+        "defined_in": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "FunctionProperties": {
       "type": "object",
@@ -2701,6 +3807,7 @@
           ]
         },
         "language": {
+          "default": "sql",
           "type": [
             "string",
             "null"
@@ -2709,10 +3816,30 @@
         "name": {
           "type": "string"
         },
+        "overloads": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionOverload"
+          }
+        },
         "returns": {
           "anyOf": [
             {
               "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
             },
             {
               "type": "null"
@@ -2727,16 +3854,6 @@
           "items": {
             "$ref": "#/definitions/DataTests"
           }
-        },
-        "type": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FunctionKind"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -2812,6 +3929,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "GrantConfig": {
+      "description": "Wrapper type for grant configurations that normalizes values to arrays during serialization.\n\nThis type handles grant configurations with the following behavior: - Normalizes string values to arrays during serialization - Preserves insertion order using IndexMap",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/StringOrArrayOfStrings"
+      }
     },
     "Granularity": {
       "type": "string",
@@ -2900,9 +4024,17 @@
           ]
         },
         "transaction": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -2927,8 +4059,22 @@
           "items": {
             "$ref": "#/definitions/HookConfig"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
+    },
+    "IndexesConfig": {
+      "description": "A wrapper type for the `indexes` config field that handles flexible deserialization.\n\ndbt-core accepts both list and dictionary formats for indexes. This type accepts either format on input but always serializes as a list.\n\n# Example\n\n```ignore // Input (list): [{columns: [\"id\"], unique: true}] // Serializes as: [{columns: [\"id\"], unique: true}]\n\n// Input (dict): {\"my_index\": {columns: [\"id\"], unique: true}} // Serializes as: [{columns: [\"id\"], unique: true}]  (keys are discarded) ```",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/PostgresIndex"
+      }
     },
     "MacrosArguments": {
       "type": "object",
@@ -2954,6 +4100,31 @@
       },
       "additionalProperties": false
     },
+    "MacrosConfig": {
+      "type": "object",
+      "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "MacrosProperties": {
       "type": "object",
       "required": [
@@ -2968,6 +4139,16 @@
           "items": {
             "$ref": "#/definitions/MacrosArguments"
           }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MacrosConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "description": {
           "type": [
@@ -2985,6 +4166,15 @@
             }
           ]
         },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "name": {
           "type": "string"
         }
@@ -2995,10 +4185,18 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "group": {
@@ -3017,6 +4215,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -3037,6 +4236,10 @@
         {
           "type": "integer",
           "format": "int32"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -3215,11 +4418,19 @@
           ]
         },
         "fill_nulls_with": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "filter": {
           "type": [
@@ -3238,10 +4449,18 @@
           ]
         },
         "hidden": {
-          "default": false,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": false,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "input_metric": {
@@ -3264,9 +4483,17 @@
           }
         },
         "join_to_timespine": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "label": {
@@ -3299,11 +4526,19 @@
           ]
         },
         "percentile": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "percentile_type": {
           "anyOf": [
@@ -3377,6 +4612,15 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "additional_libs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "alias": {
           "type": [
             "string",
@@ -3384,33 +4628,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -3420,6 +4704,12 @@
           ]
         },
         "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "batch_id": {
           "type": [
             "string",
             "null"
@@ -3442,17 +4732,33 @@
           ]
         },
         "bind": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -3476,20 +4782,44 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
             }
           ]
         },
-        "clustered_by": {
+        "cluster_id": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -3508,10 +4838,18 @@
           ]
         },
         "concurrent_batches": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "contract": {
@@ -3525,9 +4863,47 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "create_notebook": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -3551,6 +4927,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -3573,23 +4955,63 @@
             }
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "external_access_integrations": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "external_volume": {
@@ -3615,10 +5037,18 @@
           ]
         },
         "full_refresh": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -3631,13 +5061,7 @@
           }
         },
         "grants": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/StringOrArrayOfStrings"
-          }
+          "$ref": "#/definitions/GrantConfig"
         },
         "group": {
           "type": [
@@ -3646,12 +5070,48 @@
           ]
         },
         "hours_to_expiration": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "http_path": {
           "type": [
-            "integer",
+            "string",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          ]
+        },
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "imports": {
           "anyOf": [
@@ -3664,9 +5124,17 @@
           ]
         },
         "include_full_name_in_path": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "incremental_predicates": {
@@ -3688,19 +5156,61 @@
             }
           ]
         },
-        "indexes": {
+        "index_url": {
           "type": [
-            "array",
+            "string",
             "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          ]
+        },
+        "indexes": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_cluster_config": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -3719,9 +5229,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -3747,11 +5265,19 @@
           ]
         },
         "lookback": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "matched_condition": {
           "type": [
@@ -3766,6 +5292,22 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         },
@@ -3796,13 +5338,21 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
-          "default": null,
+          "default": {},
           "type": [
             "object",
             "null"
@@ -3829,10 +5379,36 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "on_configuration_change": {
           "anyOf": [
             {
               "$ref": "#/definitions/OnConfigurationChange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OnError"
             },
             {
               "type": "null"
@@ -3870,12 +5446,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -3926,15 +5510,36 @@
           }
         },
         "primary_key": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
+          ]
+        },
+        "python_job_config": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "python_version": {
           "type": [
             "string",
             "null"
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quoting": {
@@ -3948,11 +5553,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -3961,9 +5574,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -3984,11 +5605,17 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -3997,21 +5624,60 @@
             "null"
           ]
         },
-        "secure": {
+        "secrets": {
           "type": [
-            "boolean",
+            "object",
             "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "secure": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -4059,6 +5725,35 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submission_method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sync": {
+          "description": "Schema synchronization configuration",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SyncConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "table_format": {
           "type": [
             "string",
@@ -4078,6 +5773,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -4088,6 +5784,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -4108,6 +5810,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -4115,9 +5833,17 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "unique_key": {
@@ -4127,6 +5853,49 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "use_anonymous_sproc": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "user_folder_for_python": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
             }
           ]
         }
@@ -4141,6 +5910,7 @@
       ],
       "properties": {
         "columns": {
+          "default": null,
           "type": [
             "array",
             "null"
@@ -4169,6 +5939,7 @@
         },
         "to_columns": {
           "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
+          "default": null,
           "type": [
             "array",
             "null"
@@ -4181,15 +5952,31 @@
           "$ref": "#/definitions/ConstraintType"
         },
         "warn_unenforced": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "warn_unsupported": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4215,11 +6002,19 @@
       "type": "object",
       "properties": {
         "count": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "period": {
           "anyOf": [
@@ -4359,6 +6154,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -4407,7 +6213,15 @@
           ]
         },
         "enabled": {
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "group": {
           "type": [
@@ -4454,6 +6268,13 @@
         "unknown"
       ]
     },
+    "OnError": {
+      "type": "string",
+      "enum": [
+        "skip_children",
+        "continue"
+      ]
+    },
     "OnSchemaChange": {
       "type": "string",
       "enum": [
@@ -4465,7 +6286,7 @@
       ]
     },
     "PartitionConfig": {
-      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `into_bigquery()` method",
+      "description": "Configuration for partition by columns.\n\ndbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `into_bigquery()` method",
       "anyOf": [
         {
           "type": "string"
@@ -4478,6 +6299,10 @@
         },
         {
           "$ref": "#/definitions/BigqueryPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -4500,15 +6325,31 @@
       "type": "object",
       "properties": {
         "columns": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "relation": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4533,13 +6374,40 @@
           ]
         },
         "unique": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
       "additionalProperties": false
+    },
+    "PrimaryKeyConfig": {
+      "description": "A wrapper type for the `primary_key` config field that normalizes serialization.\n\nIn dbt-core, primary_key values are \"listified\" - single strings are converted to single-element arrays. This type accepts either format on input but always serializes as arrays.\n\n# Example\n\n```ignore // Input: \"id\" // Serializes as: [\"id\"]\n\n// Input: [\"id\", \"tenant_id\"] // Serializes as: [\"id\", \"tenant_id\"] ```",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArrayOfStrings"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
+    "QueryTag": {
+      "description": "A wrapper type for the `query_tag` config field that handles flexible deserialization.\n\nAccepts strings, dictionaries, or sequences for query_tag. Maps and sequences are JSON-serialized to strings.\n\n# Example\n\n```ignore // Input: \"my-tag\" // Stores as: \"my-tag\"\n\n// Input: {\"project\": \"foo\", \"env\": \"prod\"} // Stores as: \"{\\\"project\\\":\\\"foo\\\",\\\"env\\\":\\\"prod\\\"}\" ```",
+      "type": "string"
     },
     "Range": {
       "type": "object",
@@ -4550,19 +6418,40 @@
       ],
       "properties": {
         "end": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "interval": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "start": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": "integer",
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -4592,6 +6481,10 @@
               "$ref": "#/definitions/AnyValue"
             }
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -4679,9 +6572,17 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -4701,10 +6602,18 @@
           ]
         },
         "enabled": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "export_as": {
@@ -4739,6 +6648,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -4750,6 +6660,21 @@
         }
       },
       "additionalProperties": false
+    },
+    "Schedule": {
+      "description": "Schedule configuration that accepts both string and structured formats. This allows users to specify schedule as either: - A string: `schedule: \"USING CRON 0,15,30,45 * * * * UTC\"` - A structured config: `schedule: { cron: \"0 * * * *\", time_zone_value: \"UTC\" }`",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/ScheduleConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
     },
     "ScheduleConfig": {
       "type": "object",
@@ -4768,6 +6693,29 @@
         }
       },
       "additionalProperties": false
+    },
+    "SchemaOrigin": {
+      "description": "Indicates where schema metadata originates from.\n\n- `Remote` (default): Schema is fetched from the remote warehouse - `Local`: Schema is derived from YAML column definitions",
+      "oneOf": [
+        {
+          "description": "Schema metadata comes from the remote warehouse (default)",
+          "type": "string",
+          "enum": [
+            "remote"
+          ]
+        },
+        {
+          "description": "Schema metadata is derived from YAML column definitions",
+          "type": "string",
+          "enum": [
+            "local"
+          ]
+        }
+      ]
+    },
+    "SchemaRefreshInterval": {
+      "description": "Schema refresh interval: '30m', '2h', '1d', or 'never'",
+      "type": "string"
     },
     "SeedConfig": {
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
@@ -4789,33 +6737,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -4830,18 +6818,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -4865,10 +6875,24 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -4876,9 +6900,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -4897,9 +6925,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -4922,6 +6974,12 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "delimiter": {
           "type": [
@@ -4951,16 +7009,47 @@
             }
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -4982,9 +7071,17 @@
           ]
         },
         "full_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "grant_access_to": {
@@ -4997,13 +7094,12 @@
           }
         },
         "grants": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/StringOrArrayOfStrings"
-          }
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/GrantConfig"
+            }
+          ]
         },
         "group": {
           "type": [
@@ -5012,32 +7108,97 @@
           ]
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -5056,9 +7217,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -5093,6 +7262,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -5100,9 +7285,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -5132,6 +7325,22 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -5143,12 +7352,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -5190,21 +7407,36 @@
           ]
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quote_columns": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "quoting": {
@@ -5218,11 +7450,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -5231,9 +7471,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -5254,11 +7502,17 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -5268,20 +7522,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -5313,6 +7597,28 @@
             "null"
           ]
         },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -5326,6 +7632,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -5336,6 +7643,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -5356,6 +7669,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -5363,9 +7692,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -5414,6 +7765,17 @@
         "name": {
           "type": "string"
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -5444,8 +7806,8 @@
     "Severity": {
       "type": "string",
       "enum": [
-        "Error",
-        "Warn"
+        "error",
+        "warn"
       ]
     },
     "SnapshotConfig": {
@@ -5468,33 +7830,73 @@
           ]
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -5509,18 +7911,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -5544,6 +7968,20 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "check_cols": {
           "anyOf": [
             {
@@ -5557,7 +7995,7 @@
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -5565,9 +8003,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -5577,9 +8019,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "database": {
@@ -5602,6 +8068,12 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "dbt_valid_to_current": {
           "type": [
@@ -5631,16 +8103,47 @@
             }
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -5661,6 +8164,21 @@
             "null"
           ]
         },
+        "full_refresh": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "grant_access_to": {
           "type": [
             "array",
@@ -5671,13 +8189,12 @@
           }
         },
         "grants": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/StringOrArrayOfStrings"
-          }
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/GrantConfig"
+            }
+          ]
         },
         "group": {
           "type": [
@@ -5696,27 +8213,64 @@
           ]
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
@@ -5724,10 +8278,47 @@
             "null"
           ]
         },
-        "invalidate_hard_deletes": {
+        "intermediate_format": {
           "type": [
-            "boolean",
+            "string",
             "null"
+          ]
+        },
+        "invalidate_hard_deletes": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -5746,9 +8337,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -5783,6 +8382,22 @@
             }
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -5790,9 +8405,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -5822,6 +8445,22 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -5833,12 +8472,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -5880,21 +8527,36 @@
           ]
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quote_columns": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "quoting": {
@@ -5908,11 +8570,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -5921,9 +8591,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -5944,11 +8622,17 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "schema": {
@@ -5958,21 +8642,45 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "snapshot_meta_column_names": {
@@ -5983,6 +8691,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "snowflake_warehouse": {
@@ -6023,10 +8737,33 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "strategy": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "sync": {
+          "description": "Schema synchronization configuration",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SyncConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "table_tag": {
@@ -6042,6 +8779,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -6058,6 +8796,12 @@
           ]
         },
         "target_database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -6084,6 +8828,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -6091,9 +8851,17 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "unique_key": {
@@ -6110,6 +8878,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -6200,6 +8982,17 @@
             "null"
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tests": {
           "type": [
             "array",
@@ -6226,33 +9019,73 @@
           }
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -6267,18 +9100,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -6302,10 +9157,24 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -6313,9 +9182,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -6325,9 +9198,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "databricks_compute": {
@@ -6345,6 +9242,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -6357,16 +9260,47 @@
             "null"
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -6407,32 +9341,97 @@
           }
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -6451,9 +9450,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -6490,6 +9497,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -6497,9 +9520,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -6529,6 +9560,22 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -6540,12 +9587,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -6557,15 +9612,21 @@
           }
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "quoting": {
@@ -6579,11 +9640,19 @@
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -6592,9 +9661,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -6615,7 +9692,24 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_origin": {
+          "description": "Specifies where the schema metadata originates: 'remote' (default) or 'local'",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SchemaOrigin"
             },
             {
               "type": "null"
@@ -6623,20 +9717,50 @@
           ]
         },
         "secure": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -6678,6 +9802,29 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sync": {
+          "description": "Schema synchronization configuration",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SyncConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -6691,6 +9838,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -6701,6 +9849,12 @@
           ]
         },
         "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_file_size": {
           "type": [
             "string",
             "null"
@@ -6721,6 +9875,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -6728,9 +9898,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -6812,7 +10004,17 @@
       "enum": [
         "unsafe",
         "off",
+        "strict",
+        "baseline",
         "on"
+      ]
+    },
+    "StaticAnalysisOffReason": {
+      "type": "string",
+      "enum": [
+        "configuredoff",
+        "unabletofetchschema",
+        "nodownstream"
       ]
     },
     "StoreFailuresAs": {
@@ -6833,6 +10035,10 @@
           "items": {
             "type": "string"
           }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
     },
@@ -6843,8 +10049,30 @@
         },
         {
           "$ref": "#/definitions/MetricPropertiesMetricInput"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
         }
       ]
+    },
+    "SyncConfig": {
+      "description": "Configuration for schema synchronization behavior.\n\nThis can be specified at source level (default for all tables) or at individual table level (overrides source-level settings).",
+      "type": "object",
+      "properties": {
+        "schema_refresh_interval": {
+          "description": "How often to refresh the schema from the warehouse. Examples: \"30m\", \"2h\", \"1d\", \"never\"",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SchemaRefreshInterval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "Tables": {
       "type": "object",
@@ -6937,9 +10165,17 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "event_time": {
@@ -6979,6 +10215,26 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "schema_origin": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SchemaOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sync": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SyncConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tags": {
           "anyOf": [
             {
@@ -7000,9 +10256,17 @@
           "type": "string"
         },
         "time_ingestion_partitioning": {
-          "description": "When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp",
-          "default": false,
-          "type": "boolean"
+          "anyOf": [
+            {
+              "description": "When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp",
+              "default": false,
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -7039,33 +10303,73 @@
           }
         },
         "as_columnstore": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_liquid_cluster": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "auto_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "automatic_clustering": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "backup": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "base_location_root": {
@@ -7080,18 +10384,40 @@
             "null"
           ]
         },
-        "bind": {
+        "batch_id": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "bind": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "buckets": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "catalog": {
           "type": [
@@ -7115,10 +10441,24 @@
             }
           ]
         },
+        "change_tracking": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryClusterConfig"
+              "$ref": "#/definitions/ClusterConfig"
             },
             {
               "type": "null"
@@ -7126,9 +10466,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -7138,9 +10482,33 @@
           ]
         },
         "copy_grants": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "data_retention_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "databricks_compute": {
@@ -7158,6 +10526,12 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "dataproc_cluster_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -7170,16 +10544,46 @@
             "null"
           ]
         },
+        "enable_list_inference": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "enable_refresh": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "enabled": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "external_volume": {
@@ -7204,32 +10608,97 @@
           }
         },
         "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
-        "include_full_name_in_path": {
+        "iceberg_version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "immutable_where": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
+        "include_full_name_in_path": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "indexes": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/PostgresIndex"
-          }
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/IndexesConfig"
+            }
+          ]
         },
         "initialize": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "intermediate_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jar_file_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_execution_timeout_seconds": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "kms_key_name": {
@@ -7248,9 +10717,17 @@
           }
         },
         "labels_from_meta": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "liquid_clustered_by": {
@@ -7275,6 +10752,22 @@
             "null"
           ]
         },
+        "max_data_extension_time_in_days": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -7282,9 +10775,17 @@
           ]
         },
         "merge_with_schema_evolution": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "meta": {
@@ -7314,6 +10815,22 @@
             "null"
           ]
         },
+        "notebook_template_id": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "partition_by": {
           "anyOf": [
             {
@@ -7325,12 +10842,20 @@
           ]
         },
         "partition_expiration_days": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "partitions": {
           "type": [
@@ -7342,23 +10867,37 @@
           }
         },
         "primary_key": {
-          "type": [
-            "string",
-            "null"
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/PrimaryKeyConfig"
+            }
           ]
         },
         "query_tag": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/QueryTag"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "refresh_interval_minutes": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
         },
         "refresh_mode": {
           "type": [
@@ -7367,9 +10906,17 @@
           ]
         },
         "require_partition_filter": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "resource_tags": {
@@ -7390,28 +10937,64 @@
         "schedule": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ScheduleConfig"
+              "$ref": "#/definitions/Schedule"
             },
             {
               "type": "null"
             }
           ]
         },
-        "secure": {
+        "scheduler": {
           "type": [
-            "boolean",
+            "string",
             "null"
+          ]
+        },
+        "secure": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_matched_step": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "snowflake_initialization_warehouse": {
           "type": [
-            "boolean",
+            "string",
             "null"
           ]
         },
@@ -7453,6 +11036,18 @@
             }
           ]
         },
+        "storage_serialization_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "table_tag": {
           "type": [
             "string",
@@ -7481,6 +11076,12 @@
             "null"
           ]
         },
+        "target_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
           "type": [
             "string",
@@ -7496,6 +11097,22 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "tmp_relation_type": {
           "type": [
             "string",
@@ -7503,9 +11120,31 @@
           ]
         },
         "transient": {
-          "type": [
-            "boolean",
-            "null"
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "use_uniform": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         }
       },
@@ -7596,6 +11235,17 @@
             }
           ]
         },
+        "static_analysis_off_reason": {
+          "readOnly": true,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisOffReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "versions": {
           "anyOf": [
             {
@@ -7622,6 +11272,12 @@
         "v"
       ],
       "properties": {
+        "access": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -7631,6 +11287,51 @@
               "type": "null"
             }
           ]
+        },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ModelConstraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "defined_in": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deprecation_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
         },
         "v": {
           "$ref": "#/definitions/AnyValue"

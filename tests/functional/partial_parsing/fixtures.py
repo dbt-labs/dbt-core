@@ -777,6 +777,15 @@ select 1 as notfun
 
 """
 
+model_two_sql_missing_space = """
+select1asnotfun
+"""
+
+model_two_sql_extra_whitespace = """
+select 1        as notfun
+
+"""
+
 model_two_disabled_sql = """
 {{ config(
   enabled=false

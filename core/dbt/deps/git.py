@@ -10,12 +10,7 @@ from dbt.events.types import DepsScrubbedPackageName, DepsUnpinned, EnsureGitIns
 from dbt.exceptions import MultipleVersionGitDepsError
 from dbt.utils import md5
 from dbt_common.clients import system
-from dbt_common.events.functions import (
-    env_secrets,
-    fire_event,
-    scrub_secrets,
-    warn_or_error,
-)
+from dbt_common.events.functions import env_secrets, fire_event, scrub_secrets
 from dbt_common.exceptions import ExecutableError
 
 
@@ -61,7 +56,10 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
     def to_dict(self) -> Dict[str, str]:
         git_scrubbed = scrub_secrets(self.git_unrendered, env_secrets())
         if self.git_unrendered != git_scrubbed:
-            warn_or_error(DepsScrubbedPackageName(package_name=git_scrubbed))
+            fire_event(
+                DepsScrubbedPackageName(package_name=git_scrubbed),
+                force_warn_or_error_handling=True,
+            )
         ret = {
             "git": git_scrubbed,
             "revision": self.revision,
@@ -108,7 +106,10 @@ class GitPinnedPackage(GitPackageMixin, PinnedPackage):
 
         # raise warning (or error) if this package is not pinned
         if (self.revision == "HEAD" or self.revision in ("main", "master")) and self.warn_unpinned:
-            warn_or_error(DepsUnpinned(revision=self.revision, git=self.git))
+            fire_event(
+                DepsUnpinned(revision=self.revision, git=self.git),
+                force_warn_or_error_handling=True,
+            )
 
         # now overwrite 'revision' with actual commit SHA
         self.revision = git.get_current_sha(path)

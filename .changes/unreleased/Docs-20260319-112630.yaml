@@ -1,0 +1,6 @@
+kind: Docs
+body: Add support for UDF (function) resource type in lineage graph
+time: 2026-03-19T11:26:30.338385+05:30
+custom:
+    Author: aahel
+    Issue: "574"

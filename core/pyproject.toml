@@ -43,19 +43,19 @@ dependencies = [
     "protobuf>=6.0,<7.0",
     "requests<3.0.0",  # should match dbt-common
     "snowplow-tracker>=1.0.2,<2.0",
+    "pathspec>=0.9,<1.1",
     # ----
     # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
     # and check compatibility / bump in each new minor version of dbt-core.
-    "pathspec>=0.9,<0.13",
-    "sqlparse>=0.5.0,<0.5.5",
+    "sqlparse>=0.5.5,<0.6.0",
     # ----
     # These are major-version-0 packages also maintained by dbt-labs.
     # Accept patches but avoid automatically updating past a set minor version range.
     "dbt-extractor>=0.5.0,<=0.6",
-    "dbt-semantic-interfaces>=0.10.2,<0.11",
+    "metricflow>=0.210.0,<1.0",
     # Minor versions for these are expected to be backwards-compatible
-    "dbt-common>=1.37.2,<2.0",
-    "dbt-adapters>=1.15.5,<2.0",
+    "dbt-common>=1.37.5,<2.0",
+    "dbt-adapters>=1.22.8,<2.0",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",
     # ----
@@ -64,6 +64,7 @@ dependencies = [
     "pytz>=2015.7",
     "pyyaml>=6.0",
     "daff>=1.3.46",
+    "python-dotenv>=1.2",
     "typing-extensions>=4.4",
 ]
 

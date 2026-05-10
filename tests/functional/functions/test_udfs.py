@@ -134,6 +134,63 @@ sum_numbers_function_from_source_sql = """
 SELECT sum(number) as sum_numbers FROM {{ source('test_source', 'numbers_seed') }}
 """
 
+double_it_js = """
+return value * 2;
+"""
+
+double_it_deterministic_js = """
+{{ config(volatility='deterministic') }}
+return value * 2;
+"""
+
+double_it_js_with_jinja = """
+{% if 1 == 1 %}
+return value * 2;
+{% else %}
+return value * 3;
+{% endif %}
+"""
+
+double_it_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+double_it_non_deterministic_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      volatility: non-deterministic
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+double_it_stable_js_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      volatility: stable
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
 
 class BasicUDFSetup:
     @pytest.fixture(scope="class")
@@ -541,6 +598,88 @@ class TestFunctionsIncludeAndExcludeByResourceType:
         assert len(result.results) == 0
 
 
+double_it_py_with_packages = """
+{{ config(packages=['scikit-learn', 'pandas==1.5.0']) }}
+def entry(value):
+    return value * 2
+"""
+
+double_it_python_with_packages_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+        runtime_version: "3.11"
+        entry_point: entry
+        packages:
+          - scikit-learn
+          - pandas==1.5.0
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+
+class TestPythonFunctionPackagesViaJinjaConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py_with_packages,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    def test_packages_set_via_jinja_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn", "pandas==1.5.0"]
+
+
+class TestPythonFunctionPackagesViaYamlConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py,
+            "double_it.yml": double_it_python_with_packages_yml,
+        }
+
+    def test_packages_set_via_yaml_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn", "pandas==1.5.0"]
+
+
+class TestPythonFunctionPackagesViaProjectConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+packages": ["scikit-learn"]},
+        }
+
+    def test_packages_set_via_project_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn"]
+
+
 class TestFunctionsGetSchemaCreatedIfNecessary:
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
@@ -565,3 +704,138 @@ class TestFunctionsGetSchemaCreatedIfNecessary:
         function_node = result.results[0].node
         assert isinstance(function_node, FunctionNode)
         assert "alt_function_schema_" in function_node.schema
+
+
+model_sql = """select 1 as id"""
+
+
+class TestFunctionSchemasInOnRunEnd:
+    """Test that function schemas appear in the on-run-end `schemas` variable.
+
+    Regression test for https://github.com/dbt-labs/dbt-core/issues/12516
+    """
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {"my_model.sql": model_sql}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+schema": "udfs"},
+            "on-run-end": [
+                "create table if not exists {{ target.schema }}.on_run_end_schemas (schema_name text)",
+                "insert into {{ target.schema }}.on_run_end_schemas (schema_name) values "
+                "{% for schema in schemas %}('{{ schema }}'){% if not loop.last %},{% endif %}{% endfor %}",
+            ],
+        }
+
+    @pytest.fixture(scope="function")
+    def setUp(self, project):
+        project.run_sql(f"drop table if exists {project.test_schema}.on_run_end_schemas")
+
+    def test_function_schema_in_on_run_end_schemas(self, setUp, project):
+        run_dbt(["build"])
+
+        results = project.run_sql(
+            f"select schema_name from {project.test_schema}.on_run_end_schemas",
+            fetch="all",
+        )
+        schemas = {r[0] for r in results}
+
+        # The model's schema (target schema) should be present
+        assert (
+            project.test_schema in schemas
+        ), f"Expected model schema '{project.test_schema}' in schemas, got {schemas}"
+
+        # The function's custom schema should also be present
+        expected_fn_schema = f"{project.test_schema}_udfs"
+        assert (
+            expected_fn_schema in schemas
+        ), f"Expected function schema '{expected_fn_schema}' in schemas, got {schemas}"
+
+
+class TestJavaScriptUDFUnsupportedAdapter:
+    """Test that JS UDFs fail at parse time on unsupported adapters (e.g. postgres)."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.js": double_it_js,
+            "double_it.yml": double_it_js_yml,
+        }
+
+    def test_js_udf_fails_on_unsupported_adapter(self, project):
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert "Function 'double_it' uses JavaScript, which is not supported on 'postgres'" in str(
+            excinfo.value
+        )
+
+
+aggregate_js = """
+export function initialState() {
+  return {sum: 0}
+}
+export function aggregate(state, x) {
+  if (x > 0) { state.sum += x; }
+}
+export function merge(state, partialState) {
+  state.sum += partialState.sum;
+}
+export function finalize(state) {
+  return state.sum;
+}
+"""
+
+aggregate_js_yml = """
+functions:
+  - name: sum_positive
+    config:
+      type: aggregate
+    arguments:
+      - name: x
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+quote_args_js = """
+return price * quantity;
+"""
+
+quote_args_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    config:
+      snowflake:
+        quote_args: false
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""
+
+quote_args_default_js_yml = """
+functions:
+  - name: compute_total
+    description: Multiplies price by quantity
+    arguments:
+      - name: price
+        data_type: float
+      - name: quantity
+        data_type: float
+    returns:
+      data_type: float
+"""

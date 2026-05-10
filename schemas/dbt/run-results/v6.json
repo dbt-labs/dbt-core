@@ -12,7 +12,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.10.0a1"
+          "default": "1.12.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -227,6 +227,33 @@
                       ],
                       "maxItems": 2,
                       "minItems": 2
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "overload_results": {
+            "anyOf": [
+              {
+                "type": "object",
+                "title": "OverloadResults",
+                "properties": {
+                  "successful": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
                     }
                   }
                 },

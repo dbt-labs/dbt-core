@@ -195,6 +195,33 @@ class TestEnvVars:
         del os.environ["DBT_DEBUG"]
 
 
+class TestEnvVarCaseInsensitiveOnWindows:
+    """On Windows, env var names are case-insensitive (GH-10422).
+
+    env_var('dbt_test_env_var') should resolve an env var set as DBT_TEST_ENV_VAR.
+    This test only validates the behavior on Windows where os.name == 'nt'.
+    """
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setup(self):
+        os.environ["DBT_TEST_ENV_VAR"] = "1"
+        yield
+        del os.environ["DBT_TEST_ENV_VAR"]
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": """select '{{ env_var("dbt_test_env_var") }}' as val""",
+        }
+
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="Environment variables are only case-insensitive on Windows",
+    )
+    def test_env_var_case_insensitive_parse(self, project):
+        run_dbt(["parse"])
+
+
 class TestEnvVarInCreateSchema:
     """Test that the env_var() method works in overrides of the create_schema
     macro, which is called during a different phase of execution than most

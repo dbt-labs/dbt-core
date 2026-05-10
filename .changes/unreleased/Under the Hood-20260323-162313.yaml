@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Recategorize unhandled exceptions to DbtException subclasses
+time: 2026-03-23T16:23:13.247223-04:00
+custom:
+    Author: michelleark
+    Issue: "11191"
