@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.catalogs import CatalogIntegrationConfig
+from dbt.adapters.catalogs import CatalogIntegrationConfig, CatalogV2, V2TableFormat
 from dbt_common.dataclass_schema import dbtClassMixin
 
 
@@ -24,17 +23,4 @@ class Catalog(dbtClassMixin):
     write_integrations: List[CatalogWriteIntegrationConfig] = field(default_factory=list)
 
 
-# ===== catalogs.yml v2 types =====
-
-
-class V2TableFormat(str, Enum):
-    DEFAULT = "default"
-    ICEBERG = "iceberg"
-
-
-@dataclass
-class CatalogV2:
-    name: str
-    catalog_type: str
-    table_format: V2TableFormat
-    config: Dict[str, Dict[str, Any]]  # platform → fields, free dict
+__all__ = ["Catalog", "CatalogV2", "CatalogWriteIntegrationConfig", "V2TableFormat"]
