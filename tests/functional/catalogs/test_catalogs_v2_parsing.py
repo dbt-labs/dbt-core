@@ -85,7 +85,9 @@ class TestV2HappyPath:
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),
             mock.patch.object(
-                type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+                type(project.adapter),
+                "capabilities",
+                return_value=_AllSupportedCapabilityDict({}),
             ),
             mock.patch.object(
                 type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon"), create=True
@@ -132,7 +134,9 @@ class TestV2MultipleCatalogs:
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),
             mock.patch.object(
-                type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+                type(project.adapter),
+                "capabilities",
+                return_value=_AllSupportedCapabilityDict({}),
             ),
             mock.patch.object(
                 type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon"), create=True
@@ -150,7 +154,7 @@ class TestV2NoCatalogsFile:
 
     def test_no_catalogs_file_runs(self, project, adapter):
         with mock.patch.object(
-            type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+            type(project.adapter), "capabilities", return_value=_AllSupportedCapabilityDict({})
         ):
             run_dbt(["run"])
 
