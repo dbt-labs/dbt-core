@@ -3,19 +3,19 @@ use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
-use crate::relation::redshift::RedshiftRelation;
+use crate::relation::Relation;
 use crate::sql_types::make_arrow_field_v2;
 use crate::{AdapterEngine, AdapterResult};
 use arrow::array::*;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
-use dbt_adapter_core::ExecutionPhase;
+use dbt_adapter_core::{AdapterType, ExecutionPhase};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
-use dbt_schemas::schemas::relations::base::RelationPattern;
+use dbt_schemas::schemas::relations::base::{Policy, RelationPath, RelationPattern};
 use dbt_xdbc::*;
 use indexmap::IndexMap;
 
@@ -46,15 +46,23 @@ fn build_redshift_relation(
     name: String,
     relation_type: RelationType,
     quoting: ResolvedQuoting,
-) -> Arc<dyn BaseRelation> {
-    Arc::new(RedshiftRelation::new(
-        Some(database),
-        Some(schema),
-        Some(name),
+) -> AdapterResult<Arc<dyn BaseRelation>> {
+    let relation = Relation::new_with_policy(
+        AdapterType::Redshift,
+        RelationPath {
+            database: Some(database).filter(|s| !s.is_empty()),
+            schema: Some(schema),
+            identifier: Some(name),
+        },
         Some(relation_type),
-        None,
+        Policy::trues(),
         quoting,
-    )) as Arc<dyn BaseRelation>
+        None,
+        false,
+        false,
+    )
+    .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?;
+    Ok(Arc::new(relation) as Arc<dyn BaseRelation>)
 }
 
 fn list_relations_via_information_schema(
@@ -107,7 +115,7 @@ where table_schema ilike '{}'",
             table_name.value(i).to_string(),
             RelationType::from(table_type.value(i)),
             engine.quoting(),
-        ));
+        )?);
     }
 
     Ok(relations)
@@ -171,7 +179,7 @@ fn parse_show_tables_batch(
             table_name.value(i).to_string(),
             relation_type,
             quoting,
-        ));
+        )?);
     }
 
     Ok(relations)

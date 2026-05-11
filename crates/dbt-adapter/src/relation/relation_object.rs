@@ -15,8 +15,6 @@ use crate::relation::Relation;
 use crate::relation::bigquery::*;
 use crate::relation::databricks::typed_constraint::TypedConstraint;
 use crate::relation::duckdb_should_include_database;
-use crate::relation::redshift::RedshiftRelation;
-use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::value::none_value;
 
@@ -470,14 +468,20 @@ pub fn do_create_relation(
             None,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        Redshift => Box::new(RedshiftRelation::new(
-            Some(database),
-            Some(schema),
-            identifier,
+        Redshift => Box::new(Relation::new_with_policy(
+            Redshift,
+            RelationPath {
+                database: Some(database).filter(|s| !s.is_empty()),
+                schema: Some(schema),
+                identifier,
+            },
             relation_type,
-            None,
+            Policy::trues(),
             custom_quoting,
-        )) as Box<dyn BaseRelation>,
+            None,
+            false,
+            false,
+        )?) as Box<dyn BaseRelation>,
         Databricks | Spark | Fabric => Box::new(Relation::new(
             adapter_type,
             Some(database),
@@ -504,12 +508,20 @@ pub fn do_create_relation(
             false,
             false,
         )?) as Box<dyn BaseRelation>,
-        Salesforce => Box::new(SalesforceRelation::new(
-            Some(database),
-            Some(schema),
-            identifier,
+        Salesforce => Box::new(Relation::new_with_policy(
+            Salesforce,
+            RelationPath {
+                database: Some(database).filter(|s| !s.is_empty()),
+                schema: Some(schema),
+                identifier,
+            },
             relation_type,
-        )) as Box<dyn BaseRelation>,
+            Policy::new(false, false, true),
+            Policy::enabled(),
+            None,
+            false,
+            false,
+        )?) as Box<dyn BaseRelation>,
         ClickHouse => todo!("ClickHouse"),
         Starburst => todo!("Starburst"),
         Athena => todo!("Athena"),

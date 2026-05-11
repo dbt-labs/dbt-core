@@ -116,8 +116,12 @@ pub fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>
             // SAFETY: literal 63 is never 0
             Some(unsafe { NonZero::new_unchecked(63) })
         }
-        Snowflake | Bigquery | Databricks | Redshift | Spark | DuckDB | Salesforce | Fabric
-        | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => None,
+        Redshift => {
+            // SAFETY: literal 127 is never 0
+            Some(unsafe { NonZero::new_unchecked(127) })
+        }
+        Snowflake | Bigquery | Databricks | Spark | DuckDB | Salesforce | Fabric | ClickHouse
+        | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => None,
     }
 }
 

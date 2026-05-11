@@ -1,6 +1,11 @@
 use crate::information_schema::InformationSchema;
+use crate::relation::RelationChangeSet;
 use crate::relation::databricks;
 use crate::relation::duckdb_should_include_database;
+use crate::relation::redshift::materialized_view_config::{
+    DescribeMaterializedViewResults, RedshiftMaterializedViewConfig,
+    RedshiftMaterializedViewConfigChangeset,
+};
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use dbt_adapter_core::AdapterType;
@@ -8,6 +13,8 @@ use dbt_adapter_sql::ident::max_identifier_length;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
+use dbt_schemas::schemas::InternalDbtNodeWrapper;
+use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
@@ -16,6 +23,7 @@ use arrow::array::RecordBatch;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use minijinja::Value;
+use serde::Deserialize;
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -47,6 +55,7 @@ impl StaticBaseRelation for RelationStatic {
             ),
             // Exasol does not support 3-part db.schema.table names.
             AdapterType::Exasol => Policy::new(false, true, true),
+            AdapterType::Salesforce => Policy::new(false, false, true),
             _ => Policy::trues(),
         };
         Ok(RelationObject::new(Arc::new(Relation::new_with_policy(
@@ -112,26 +121,34 @@ impl BaseRelationProperties for Relation {
     fn get_database(&self) -> FsResult<String> {
         use AdapterType::*;
         match self.adapter_type {
-            Databricks | Fabric | Postgres => self.path.database.clone().ok_or_else(|| {
-                fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "database is required for {} relation",
-                    self.adapter_type.as_ref()
-                )
-            }),
+            Databricks | Fabric | Postgres | Redshift | Salesforce => {
+                self.path.database.clone().ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "database is required for {} relation",
+                        self.adapter_type.as_ref()
+                    )
+                })
+            }
             Spark => Ok(self.path.database.clone().unwrap_or_default()),
             _ => Ok(self.path.database.clone().unwrap_or_default()),
         }
     }
 
     fn get_schema(&self) -> FsResult<String> {
-        self.path.schema.clone().ok_or_else(|| {
-            fs_err!(
-                ErrorCode::InvalidConfig,
-                "schema is required for {} relation",
-                self.adapter_type.as_ref()
-            )
-        })
+        match self.adapter_type {
+            // FIXME: this will cause trouble in a few known places
+            // In unit_test.rs, where this sed to build SQL literals
+            // In schema_cache where we expect 3 part fqn, non-applicable for now since static analysis is unsupported for Salesforce
+            AdapterType::Salesforce => Ok(String::new()),
+            _ => self.path.schema.clone().ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "schema is required for {} relation",
+                    self.adapter_type.as_ref()
+                )
+            }),
+        }
     }
 
     fn get_identifier(&self) -> FsResult<String> {
@@ -145,33 +162,47 @@ impl BaseRelationProperties for Relation {
     }
 
     fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
-        match self.adapter_type {
-            AdapterType::Fabric => {
-                // Fabric is case sensitive, even if unquoted
-                let d = self.get_database().map(Identifier::new)?;
-                let s = self.get_schema().map(Identifier::new)?;
-                let i = self.get_identifier().map(Identifier::new)?;
-                Ok(CanonicalFqn::new(&d, &s, &i))
+        use AdapterType::*;
+
+        let db_str = self.get_database()?;
+        let schema_str = self.get_schema()?;
+        let ident_str = self.get_identifier()?;
+
+        let db = if self.quote_policy().database {
+            db_str
+        } else {
+            match self.adapter_type {
+                Fabric => db_str,
+                Salesforce => db_str.to_ascii_uppercase(),
+                _ => db_str.to_ascii_lowercase(),
             }
-            _ => {
-                let database = if self.quote_policy().database {
-                    Identifier::new(self.get_database()?)
-                } else {
-                    Identifier::new(self.get_database()?.to_ascii_lowercase())
-                };
-                let schema = if self.quote_policy().schema {
-                    Identifier::new(self.get_schema()?)
-                } else {
-                    Identifier::new(self.get_schema()?.to_ascii_lowercase())
-                };
-                let identifier = if self.quote_policy().identifier {
-                    Identifier::new(self.get_identifier()?)
-                } else {
-                    Identifier::new(self.get_identifier()?.to_ascii_lowercase())
-                };
-                Ok(CanonicalFqn::new(&database, &schema, &identifier))
+        };
+
+        let schema = if self.quote_policy().database {
+            schema_str
+        } else {
+            match self.adapter_type {
+                Fabric => schema_str,
+                Salesforce => schema_str.to_ascii_uppercase(),
+                _ => schema_str.to_ascii_lowercase(),
             }
-        }
+        };
+
+        let ident = if self.quote_policy().database {
+            ident_str
+        } else {
+            match self.adapter_type {
+                Fabric => ident_str,
+                Salesforce => ident_str.to_ascii_uppercase(),
+                _ => ident_str.to_ascii_lowercase(),
+            }
+        };
+
+        Ok(CanonicalFqn::new(
+            &Identifier::new(db),
+            &Identifier::new(schema),
+            &Identifier::new(ident),
+        ))
     }
 }
 
@@ -429,8 +460,33 @@ impl BaseRelation for Relation {
         result
     }
 
+    fn can_be_replaced(&self) -> bool {
+        match self.adapter_type {
+            AdapterType::Redshift => matches!(self.relation_type(), Some(RelationType::View)),
+            _ => matches!(
+                self.relation_type(),
+                Some(RelationType::Table) | Some(RelationType::View)
+            ),
+        }
+    }
+
+    fn from_config(&self, config: &Value) -> Result<Value, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Redshift => Ok(Value::from_object(
+                node_value_to_redshift_materialized_view(config)?,
+            )),
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "from_config: Only available for Snowflake and Redshift",
+            )),
+        }
+    }
+
     fn normalize_component(&self, component: &str) -> String {
-        component.to_lowercase()
+        match self.adapter_type {
+            AdapterType::Salesforce => component.to_string(),
+            _ => component.to_lowercase(),
+        }
     }
 
     fn create_relation(
@@ -448,6 +504,7 @@ impl BaseRelation for Relation {
                 true,
             ),
             AdapterType::Postgres => self.include_policy,
+            AdapterType::Salesforce => Policy::new(false, false, true),
             _ => Policy::trues(),
         };
         Ok(Arc::new(Relation::new_with_policy(
@@ -481,6 +538,94 @@ impl BaseRelation for Relation {
             .map(|v| v.get().try_into().unwrap_or(u32::MAX))
             .unwrap_or(u32::MAX))
     }
+
+    fn materialized_view_config_changeset(
+        &self,
+        relation_results_value: &Value,
+        new_config_value: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        match self.adapter_type {
+            // FIXME(serramatutu): port over to RelationConfig v2
+            AdapterType::Redshift => {
+                let relation_results = DescribeMaterializedViewResults::try_from(
+                    relation_results_value,
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "from_config: Failed to serialized DescribeMaterializedViewResults: {e}"
+                        ),
+                    )
+                })?;
+
+                let existing_config = RedshiftMaterializedViewConfig::try_from(relation_results)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!(
+                                "materialized_view_config_changeset: Failed to deserialize RedshiftMaterializedViewConfig: {e}"
+                            ),
+                        )
+                    })?;
+
+                let new_materialized_view_config =
+                    node_value_to_redshift_materialized_view(new_config_value)?;
+
+                let changeset = RedshiftMaterializedViewConfigChangeset::new(
+                    existing_config,
+                    new_materialized_view_config,
+                );
+
+                if changeset.has_changes() {
+                    Ok(Value::from_object(changeset))
+                } else {
+                    Ok(Value::from(None::<()>))
+                }
+            }
+            _ => unimplemented!("Available only for BigQuery and Redshift"),
+        }
+    }
+}
+
+// FIXME(serramatutu): this should be deleted from here once Redshift Materialized
+// Views are migrated to RelationConfig v2.
+fn node_value_to_redshift_materialized_view(
+    node_value: &Value,
+) -> Result<RedshiftMaterializedViewConfig, minijinja::Error> {
+    let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+        )
+    })?;
+
+    let model = match config_wrapper {
+        InternalDbtNodeWrapper::Model(model) => model,
+        _ => {
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Expected a model node",
+            ));
+        }
+    };
+
+    if model.__base_attr__.materialized != DbtMaterialization::MaterializedView {
+        return Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
+            format!(
+                "Unsupported operation for materialization type {}",
+                &model.__base_attr__.materialized
+            ),
+        ));
+    }
+
+    RedshiftMaterializedViewConfig::try_from(&*model).map_err(|e| {
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize RedshiftMaterializedViewConfig: {e}"),
+        )
+    })
 }
 
 #[cfg(test)]

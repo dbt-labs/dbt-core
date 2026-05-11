@@ -17,8 +17,6 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::Relation;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::do_create_relation;
-use crate::relation::redshift::RedshiftRelation;
-use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
 use dbt_common::cancellation::CancellationToken;
 
@@ -567,14 +565,22 @@ LEFT JOIN materialized_views mv
         _ => None,
     };
 
-    Ok(Some(Box::new(RedshiftRelation::new(
-        Some(database.to_string()),
-        Some(schema.to_string()),
-        Some(identifier.to_string()),
+    let relation = Relation::new_with_policy(
+        AdapterType::Redshift,
+        RelationPath {
+            database: Some(database.to_string()).filter(|s| !s.is_empty()),
+            schema: Some(schema.to_string()),
+            identifier: Some(identifier.to_string()),
+        },
         relation_type,
-        None,
+        Policy::trues(),
         adapter.quoting(),
-    ))))
+        None,
+        false,
+        false,
+    )
+    .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?;
+    Ok(Some(Box::new(relation)))
 }
 
 // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85
@@ -723,12 +729,23 @@ fn salesforce_get_relation(
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     // TODO: resolves relation_table based on the metadata to be returned in schema
     match conn.get_table_schema(Some(database), None, identifier) {
-        Ok(_) => Ok(Some(Box::new(SalesforceRelation::new(
-            Some(database.to_string()),
-            None,
-            Some(identifier.to_string()),
-            Some(RelationType::Table),
-        )))),
+        Ok(_) => Ok(Some(Box::new(
+            Relation::new_with_policy(
+                AdapterType::Salesforce,
+                RelationPath {
+                    database: Some(database.to_string()).filter(|s| !s.is_empty()),
+                    schema: None,
+                    identifier: Some(identifier.to_string()),
+                },
+                Some(RelationType::Table),
+                Policy::new(false, false, true),
+                Policy::enabled(),
+                None,
+                false,
+                false,
+            )
+            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?,
+        ))),
         Err(_) => Ok(None),
     }
 }

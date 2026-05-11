@@ -5,8 +5,6 @@ use dbt_adapter_core::AdapterType;
 use crate::relation::RelationStatic;
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
-use crate::relation::redshift::RedshiftRelationType;
-use crate::relation::salesforce::SalesforceRelationType;
 use crate::relation::snowflake::SnowflakeRelationType;
 
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -28,15 +26,7 @@ pub fn create_static_relation(
             let bigquery_relation_type = BigqueryRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(bigquery_relation_type))
         }
-        Redshift => {
-            let redshift_relation_type = RedshiftRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(redshift_relation_type))
-        }
-        Salesforce => {
-            let salesforce_relation_type = SalesforceRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
-        }
-        Databricks | Spark | Fabric | DuckDB | Exasol | Postgres => {
+        Databricks | Spark | Fabric | DuckDB | Exasol | Postgres | Redshift | Salesforce => {
             let relation_type = RelationStatic {
                 adapter_type,
                 quoting,

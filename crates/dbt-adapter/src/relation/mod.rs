@@ -8,7 +8,6 @@ pub mod bigquery;
 pub mod databricks;
 pub mod parse;
 pub mod redshift;
-pub mod salesforce;
 pub mod snowflake;
 
 pub mod factory;
@@ -126,13 +125,17 @@ mod tests {
     #[test]
     fn test_render_with_run_filter_redshift_adapter() {
         // relation impl in core doesn't seem to override this
-        let relation = redshift::RedshiftRelation::new(
+        let relation = Relation::new(
+            AdapterType::Redshift,
             None,
             None,
             Some("my_table".to_owned()),
             None,
             None,
             ResolvedQuoting::disabled(),
+            None,
+            false,
+            false,
         );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
