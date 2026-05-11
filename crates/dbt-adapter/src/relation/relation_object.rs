@@ -299,8 +299,6 @@ impl Object for RelationObject {
                 iter.finish()?;
                 self.from_config(&config)
             }
-            // Below are available for Snowflake
-            "is_iceberg_format" => Ok(Value::from(self.is_iceberg_format())),
             // Below are available for Databricks
             "is_hive_metastore" => Ok(Value::from(self.is_hive_metastore())),
             "enrich" => self.relation_enrich(args),
@@ -339,6 +337,7 @@ impl Object for RelationObject {
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
             Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
+            Some("is_iceberg_format") => Some(Value::from(self.is_iceberg_format())),
             Some("is_cte") => Some(Value::from(self.is_cte())),
             Some("is_pointer") => Some(Value::from(self.is_pointer())),
             Some("temporary") => Some(Value::from(self.is_temporary())),

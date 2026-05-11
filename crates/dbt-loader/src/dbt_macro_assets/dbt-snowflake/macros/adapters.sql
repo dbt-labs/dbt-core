@@ -106,7 +106,7 @@
         {%- set relation_type = relation.type -%}
     {%- endif -%}
 
-    {%- if relation.is_iceberg_format() -%} {# DIVERGENCE: in core is_iceberg_format is an attribute of the relation object, not a method #}
+    {%- if relation.is_iceberg_format -%}
         alter iceberg table {{ relation.render() }} set comment = $${{ relation_comment | replace('$', '[$]') }}$$;
     {%- else -%}
         comment on {{ relation_type }} {{ relation.render() }} IS $${{ relation_comment | replace('$', '[$]') }}$$;
@@ -184,7 +184,7 @@
     This fixes the bug where dbt generates VARCHAR(16777216) for new columns which
     is not supported by Snowflake Iceberg tables.
   #}
-  {% if relation.is_iceberg_format() and column.is_string() %} {# DIVERGENCE: in core is_iceberg_format is an attribute of the relation object, not a method #}
+  {% if relation.is_iceberg_format and column.is_string() %}
     {% set data_type = column.data_type.upper() %}
     {% if data_type.startswith('CHARACTER VARYING') or data_type.startswith('VARCHAR') %}
       {#
