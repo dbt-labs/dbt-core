@@ -426,6 +426,10 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
             "See https://github.com/dbt-labs/dbt-core/discussions/12723",
             stacklevel=2,
         )
+        # Parse + validate structurally before adapter registration — no adapter needed.
+        # Keeps validation errors consistent with v1 (fail before adapter is replaced).
+        catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
+        ctx.obj["catalogs"] = catalogs_v2
         register_adapter(runtime_config, get_mp_context())
         adapter = get_adapter(runtime_config)
         if not adapter.capabilities()[Capability.CatalogsV2]:  # type: ignore[attr-defined]
@@ -433,9 +437,7 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
                 f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
                 f"Use catalogs.yml v1 or upgrade to a supported adapter version."
             )
-        catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
         active_integrations = [adapter.bridge_v2_catalog(catalog) for catalog in catalogs_v2]
-        ctx.obj["catalogs"] = catalogs_v2
     else:
         catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
         active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
