@@ -496,6 +496,11 @@ impl FsError {
         *head
     }
 
+    /// Removes and returns the next error in a chain built with [`Self::with_chained_errors`].
+    pub fn pop_next(&mut self) -> Option<Box<FsError>> {
+        self.next.take()
+    }
+
     /// Flattens multiple errors into a single vector.
     ///
     /// If this error is a single error, the result will be a vector with a
