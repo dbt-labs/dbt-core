@@ -269,7 +269,31 @@ impl DbConfig {
                 "certificate_validation",
             ],
             DbConfig::ClickHouse(_) => &[
-                "host", "port", "user", "password", "database", "schema", "secure",
+                "schema",
+                "driver",
+                "host",
+                "port",
+                "user",
+                "cluster",
+                "verify",
+                "secure",
+                "client_cert",
+                "client_cert_key",
+                "retries",
+                "compression",
+                "connect_timeout",
+                "send_receive_timeout",
+                "cluster_mode",
+                "use_lw_deletes",
+                "check_exchange",
+                "local_suffix",
+                "local_db_prefix",
+                "allow_automatic_deduplication",
+                "custom_settings",
+                "database_engine",
+                "threads",
+                "sync_request_timeout",
+                "compress_block_size",
             ],
         }
     }
@@ -340,7 +364,7 @@ impl DbConfig {
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
-            DbConfig::ClickHouse(config) => config.database.as_ref(),
+            DbConfig::ClickHouse(_) => None,
         }
     }
 
@@ -1188,23 +1212,213 @@ pub struct ExasolDbConfig {
     pub threads: Option<StringOrInteger>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct ClickHouseDbConfig {
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_schema"
+    )]
+    pub schema: Option<String>,
+
+    /// Auto-detected from `port` and `secure` when not set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_host"
+    )]
     pub host: Option<String>,
+
+    /// Auto-detected from `driver` and `secure` when not set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<StringOrInteger>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_user"
+    )]
     pub user: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "pass")]
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        alias = "pass",
+        default = "default_clickhouse_empty_string"
+    )]
     pub password: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "dbname")]
-    pub database: Option<String>,
-    pub schema: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_empty_string"
+    )]
+    pub cluster: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_true"
+    )]
+    pub verify: Option<bool>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_false"
+    )]
     pub secure: Option<bool>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_cert_key: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_retries"
+    )]
+    pub retries: Option<i64>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_empty_string"
+    )]
+    pub compression: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_connect_timeout"
+    )]
+    pub connect_timeout: Option<i64>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_send_receive_timeout"
+    )]
+    pub send_receive_timeout: Option<i64>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_false"
+    )]
+    pub cluster_mode: Option<bool>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_false"
+    )]
+    pub use_lw_deletes: Option<bool>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_true"
+    )]
+    pub check_exchange: Option<bool>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_local_suffix"
+    )]
+    pub local_suffix: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_empty_string"
+    )]
+    pub local_db_prefix: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_false"
+    )]
+    pub allow_automatic_deduplication: Option<bool>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_custom_settings"
+    )]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub custom_settings: Option<HashMap<String, YmlValue>>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_empty_string"
+    )]
+    pub database_engine: Option<String>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_threads"
+    )]
     pub threads: Option<StringOrInteger>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_sync_request_timeout"
+    )]
+    pub sync_request_timeout: Option<i64>,
+
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_clickhouse_compress_block_size"
+    )]
+    pub compress_block_size: Option<i64>,
+}
+
+fn default_clickhouse_schema() -> Option<String> {
+    Some("default".to_string())
+}
+
+fn default_clickhouse_host() -> Option<String> {
+    Some("localhost".to_string())
+}
+
+fn default_clickhouse_user() -> Option<String> {
+    Some("default".to_string())
+}
+
+fn default_clickhouse_empty_string() -> Option<String> {
+    Some(String::new())
+}
+
+fn default_clickhouse_true() -> Option<bool> {
+    Some(true)
+}
+
+fn default_clickhouse_false() -> Option<bool> {
+    Some(false)
+}
+
+fn default_clickhouse_retries() -> Option<i64> {
+    Some(1)
+}
+
+fn default_clickhouse_connect_timeout() -> Option<i64> {
+    Some(10)
+}
+
+fn default_clickhouse_send_receive_timeout() -> Option<i64> {
+    Some(300)
+}
+
+fn default_clickhouse_local_suffix() -> Option<String> {
+    Some("_local".to_string())
+}
+
+fn default_clickhouse_custom_settings() -> Option<HashMap<String, YmlValue>> {
+    Some(HashMap::new())
+}
+
+fn default_clickhouse_threads() -> Option<StringOrInteger> {
+    Some(StringOrInteger::Integer(1))
+}
+
+fn default_clickhouse_sync_request_timeout() -> Option<i64> {
+    Some(5)
+}
+
+fn default_clickhouse_compress_block_size() -> Option<i64> {
+    Some(1_048_576)
 }
 
 #[derive(Serialize, DbtSchema)]
@@ -1406,10 +1620,27 @@ pub struct ExasolTargetEnv {
 #[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ClickHouseTargetEnv {
-    pub host: String,
-    pub user: String,
-    pub port: StringOrInteger,
-    pub secure: bool,
+    pub driver: Option<String>,
+    pub host: Option<String>,
+    pub port: Option<StringOrInteger>,
+    pub user: Option<String>,
+    pub retries: Option<i64>,
+    pub cluster: Option<String>,
+    pub database_engine: Option<String>,
+    pub cluster_mode: Option<bool>,
+    pub secure: Option<bool>,
+    pub verify: Option<bool>,
+    pub connect_timeout: Option<i64>,
+    pub send_receive_timeout: Option<i64>,
+    pub sync_request_timeout: Option<i64>,
+    pub compress_block_size: Option<i64>,
+    pub compression: Option<String>,
+    pub check_exchange: Option<bool>,
+    pub custom_settings: Option<HashMap<String, YmlValue>>,
+    pub use_lw_deletes: Option<bool>,
+    pub allow_automatic_deduplication: Option<bool>,
+    pub local_suffix: Option<String>,
+    pub local_db_prefix: Option<String>,
     pub __common__: CommonTargetContext,
 }
 
@@ -1781,33 +2012,43 @@ impl TryFrom<DbConfig> for TargetContext {
                 },
             })),
 
-            DbConfig::ClickHouse(config) => {
-                let secure = config.secure.unwrap_or(false);
-                let default_port: i64 = if secure { 8443 } else { 8123 };
-                let port = config
-                    .port
-                    .unwrap_or(StringOrInteger::Integer(default_port));
-                Ok(TargetContext::ClickHouse(ClickHouseTargetEnv {
-                    host: config.host.unwrap_or_else(|| "localhost".to_string()),
-                    user: config.user.unwrap_or_else(|| "default".to_string()),
-                    port,
-                    secure,
-                    __common__: CommonTargetContext {
-                        database: config.database.unwrap_or_default(),
-                        schema: config.schema.ok_or_else(|| missing("schema"))?,
-                        type_: adapter_type,
-                        threads: match config.threads {
-                            Some(StringOrInteger::String(threads)) => {
-                                Some(threads.parse::<u16>().map_err(|_| {
-                                    "threads must be a positive integer".to_string()
-                                })?)
-                            }
-                            Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
-                            None => None,
-                        },
+            DbConfig::ClickHouse(config) => Ok(TargetContext::ClickHouse(ClickHouseTargetEnv {
+                driver: config.driver.clone(),
+                host: config.host.clone(),
+                port: config.port.clone(),
+                user: config.user.clone(),
+                retries: config.retries,
+                cluster: config.cluster.clone(),
+                database_engine: config.database_engine.clone(),
+                cluster_mode: config.cluster_mode,
+                secure: config.secure,
+                verify: config.verify,
+                connect_timeout: config.connect_timeout,
+                send_receive_timeout: config.send_receive_timeout,
+                sync_request_timeout: config.sync_request_timeout,
+                compress_block_size: config.compress_block_size,
+                compression: config.compression.clone(),
+                check_exchange: config.check_exchange,
+                custom_settings: config.custom_settings.clone(),
+                use_lw_deletes: config.use_lw_deletes,
+                allow_automatic_deduplication: config.allow_automatic_deduplication,
+                local_suffix: config.local_suffix.clone(),
+                local_db_prefix: config.local_db_prefix.clone(),
+                __common__: CommonTargetContext {
+                    database: String::new(),
+                    schema: config.schema.clone().ok_or_else(|| missing("schema"))?,
+                    type_: adapter_type,
+                    threads: match config.threads {
+                        Some(StringOrInteger::String(threads)) => Some(
+                            threads
+                                .parse::<u16>()
+                                .map_err(|_| "threads must be a positive integer".to_string())?,
+                        ),
+                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                        None => None,
                     },
-                }))
-            }
+                },
+            })),
         }
     }
 }
@@ -2041,13 +2282,12 @@ extensions:
         let DbConfig::ClickHouse(clickhouse_config) = config else {
             panic!("Expected DbConfig::ClickHouse");
         };
-        assert_eq!(clickhouse_config.host, None);
+        assert_eq!(clickhouse_config.host, Some("localhost".to_string()));
         assert_eq!(clickhouse_config.port, None);
-        assert_eq!(clickhouse_config.user, None);
-        assert_eq!(clickhouse_config.password, None);
-        assert_eq!(clickhouse_config.database, None);
+        assert_eq!(clickhouse_config.user, Some("default".to_string()));
+        assert_eq!(clickhouse_config.password, Some(String::new()));
         assert_eq!(clickhouse_config.schema, Some("analytics".to_string()));
-        assert_eq!(clickhouse_config.secure, None);
+        assert_eq!(clickhouse_config.secure, Some(false));
     }
 
     #[test]
@@ -2058,7 +2298,6 @@ extensions:
              port: 9000\n\
              user: alice\n\
              password: secret\n\
-             database: warehouse\n\
              schema: analytics\n\
              secure: true\n\
              threads: 4\n",
@@ -2072,25 +2311,26 @@ extensions:
         assert_eq!(clickhouse_config.port, Some(StringOrInteger::Integer(9000)));
         assert_eq!(clickhouse_config.user, Some("alice".to_string()));
         assert_eq!(clickhouse_config.password, Some("secret".to_string()));
-        assert_eq!(clickhouse_config.database, Some("warehouse".to_string()));
         assert_eq!(clickhouse_config.schema, Some("analytics".to_string()));
         assert_eq!(clickhouse_config.secure, Some(true));
         assert_eq!(clickhouse_config.threads, Some(StringOrInteger::Integer(4)));
     }
 
     #[test]
-    fn test_clickhouse_dbname_alias() {
+    fn test_clickhouse_schema_is_target_database() {
         let config: DbConfig = dbt_yaml::from_str(
             "type: clickhouse\n\
-             dbname: warehouse\n\
              schema: analytics\n",
         )
         .unwrap();
 
-        let DbConfig::ClickHouse(clickhouse_config) = config else {
-            panic!("Expected DbConfig::ClickHouse");
+        assert_eq!(config.get_database(), None);
+        let target = TargetContext::try_from(config).expect("clickhouse target context");
+        let TargetContext::ClickHouse(target) = target else {
+            panic!("expected clickhouse target context");
         };
-        assert_eq!(clickhouse_config.database, Some("warehouse".to_string()));
+        assert_eq!(target.__common__.database, "");
+        assert_eq!(target.__common__.schema, "analytics");
     }
 
     #[test]
@@ -2104,5 +2344,162 @@ extensions:
 
         assert_eq!(config.adapter_type(), AdapterType::ClickHouse);
         assert_eq!(config.get_unique_field(), Some("ch.example.com"));
+    }
+
+    fn clickhouse_profile_parity_target_context() -> ClickHouseTargetEnv {
+        let yaml_str = r#"
+type: clickhouse
+driver: native
+host: ch.prod.internal
+port: 9000
+user: analytics
+password: secret
+schema: analytics
+cluster: my_cluster
+database_engine: Replicated
+cluster_mode: true
+secure: true
+verify: false
+client_cert: /path/to/cert.pem
+client_cert_key: /path/to/key.pem
+retries: 5
+compression: lz4
+connect_timeout: 30
+send_receive_timeout: 600
+sync_request_timeout: 10
+compress_block_size: 524288
+check_exchange: false
+use_lw_deletes: true
+allow_automatic_deduplication: true
+custom_settings:
+  async_insert: 1
+local_suffix: _shard
+local_db_prefix: shard_
+threads: 8
+"#;
+        let config: DbConfig = dbt_yaml::from_str(yaml_str).unwrap();
+        let target = TargetContext::try_from(config).expect("clickhouse target context");
+        let TargetContext::ClickHouse(target) = target else {
+            panic!("expected clickhouse target context");
+        };
+
+        target
+    }
+
+    #[test]
+    fn test_clickhouse_target_context_exposes_connection_fields() {
+        let t = clickhouse_profile_parity_target_context();
+
+        assert_eq!(t.driver.as_deref(), Some("native"));
+        assert_eq!(t.host.as_deref(), Some("ch.prod.internal"));
+        match t.port {
+            Some(StringOrInteger::Integer(p)) => assert_eq!(p, 9000),
+            other => panic!("expected Integer(9000), got {other:?}"),
+        }
+        assert_eq!(t.user.as_deref(), Some("analytics"));
+        assert_eq!(t.retries, Some(5));
+        assert_eq!(t.cluster.as_deref(), Some("my_cluster"));
+        assert_eq!(t.database_engine.as_deref(), Some("Replicated"));
+        assert_eq!(t.cluster_mode, Some(true));
+        assert_eq!(t.secure, Some(true));
+        assert_eq!(t.verify, Some(false));
+        assert_eq!(t.connect_timeout, Some(30));
+        assert_eq!(t.send_receive_timeout, Some(600));
+        assert_eq!(t.sync_request_timeout, Some(10));
+        assert_eq!(t.compress_block_size, Some(524_288));
+        assert_eq!(t.compression.as_deref(), Some("lz4"));
+        assert_eq!(t.check_exchange, Some(false));
+    }
+
+    #[test]
+    fn test_clickhouse_target_context_exposes_materialization_fields() {
+        let t = clickhouse_profile_parity_target_context();
+
+        assert_eq!(t.use_lw_deletes, Some(true));
+        assert_eq!(t.allow_automatic_deduplication, Some(true));
+        assert_eq!(t.local_suffix.as_deref(), Some("_shard"));
+        assert_eq!(t.local_db_prefix.as_deref(), Some("shard_"));
+        let custom_settings = t.custom_settings.as_ref().expect("custom_settings");
+        assert!(custom_settings.contains_key("async_insert"));
+        assert_eq!(t.__common__.database, "");
+        assert_eq!(t.__common__.schema, "analytics");
+        assert_eq!(t.__common__.threads, Some(8));
+
+        let serialized = dbt_yaml::to_value(&t).expect("serialize");
+        let mapping = serialized.as_mapping().expect("mapping");
+        assert!(!mapping.contains_key(YmlValue::string("client_cert".to_string())));
+        assert!(!mapping.contains_key(YmlValue::string("client_cert_key".to_string())));
+    }
+
+    #[test]
+    fn test_clickhouse_profile_parity_default_connection_fields() {
+        let config: DbConfig = dbt_yaml::from_str("type: clickhouse").unwrap();
+        let DbConfig::ClickHouse(ch) = &config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+        assert!(ch.driver.is_none());
+        assert!(ch.port.is_none());
+        assert!(ch.client_cert.is_none());
+        assert!(ch.client_cert_key.is_none());
+        assert_eq!(ch.host.as_deref(), Some("localhost"));
+        assert_eq!(ch.user.as_deref(), Some("default"));
+        assert_eq!(ch.password.as_deref(), Some(""));
+        assert_eq!(ch.schema.as_deref(), Some("default"));
+        assert_eq!(ch.cluster.as_deref(), Some(""));
+        assert_eq!(ch.database_engine.as_deref(), Some(""));
+        assert_eq!(ch.compression.as_deref(), Some(""));
+        assert_eq!(ch.local_suffix.as_deref(), Some("_local"));
+        assert_eq!(ch.local_db_prefix.as_deref(), Some(""));
+        let custom_settings = ch.custom_settings.as_ref().expect("custom_settings");
+        assert!(custom_settings.is_empty());
+    }
+
+    #[test]
+    fn test_clickhouse_profile_parity_default_boolean_fields() {
+        let config: DbConfig = dbt_yaml::from_str("type: clickhouse").unwrap();
+        let DbConfig::ClickHouse(ch) = &config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+
+        assert_eq!(ch.cluster_mode, Some(false));
+        assert_eq!(ch.secure, Some(false));
+        assert_eq!(ch.verify, Some(true));
+        assert_eq!(ch.check_exchange, Some(true));
+        assert_eq!(ch.use_lw_deletes, Some(false));
+        assert_eq!(ch.allow_automatic_deduplication, Some(false));
+    }
+
+    #[test]
+    fn test_clickhouse_profile_parity_default_numeric_and_target_fields() {
+        let config: DbConfig = dbt_yaml::from_str("type: clickhouse").unwrap();
+        let DbConfig::ClickHouse(ch) = &config else {
+            panic!("Expected DbConfig::ClickHouse");
+        };
+
+        assert_eq!(ch.retries, Some(1));
+        assert_eq!(ch.connect_timeout, Some(10));
+        assert_eq!(ch.send_receive_timeout, Some(300));
+        assert_eq!(ch.sync_request_timeout, Some(5));
+        assert_eq!(ch.compress_block_size, Some(1_048_576));
+
+        let target = TargetContext::try_from(config).expect("clickhouse target context");
+        let TargetContext::ClickHouse(t) = target else {
+            panic!("expected clickhouse target context");
+        };
+        assert_eq!(t.__common__.database, "");
+        assert_eq!(t.__common__.schema, "default");
+        assert_eq!(t.__common__.threads, Some(1));
+    }
+
+    #[test]
+    fn test_clickhouse_get_database_returns_none() {
+        let config: DbConfig = ClickHouseDbConfig {
+            schema: Some("analytics".to_string()),
+            ..Default::default()
+        }
+        .into();
+
+        assert_eq!(config.get_database(), None);
+        assert_eq!(config.get_database_or_default(), "");
     }
 }
