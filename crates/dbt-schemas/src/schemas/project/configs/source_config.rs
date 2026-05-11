@@ -1,4 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::serde_utils::Omissible;
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::{DbtSchema, ShouldBe, Spanned, Verbatim};
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
+use super::omissible_utils::handle_omissible_override;
 use crate::default_to;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{
@@ -32,8 +34,8 @@ pub struct ProjectSourceConfig {
     pub event_time: Option<String>,
     #[serde(rename = "+meta")]
     pub meta: Option<IndexMap<String, YmlValue>>,
-    #[serde(rename = "+freshness")]
-    pub freshness: Option<FreshnessDefinition>,
+    #[serde(default, rename = "+freshness")]
+    pub freshness: Omissible<Option<FreshnessDefinition>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+quoting")]
@@ -235,7 +237,8 @@ pub struct SourceConfig {
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
-    pub freshness: Option<FreshnessDefinition>,
+    #[serde(default)]
+    pub freshness: Omissible<Option<FreshnessDefinition>>,
     #[serde(
         default,
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
@@ -519,12 +522,14 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
 
+        // Handle Omissible fields for hierarchical overrides
+        handle_omissible_override(freshness, &parent.freshness);
+
         default_to!(
             parent,
             [
                 enabled,
                 event_time,
-                freshness,
                 loaded_at_field,
                 loaded_at_query,
                 static_analysis,

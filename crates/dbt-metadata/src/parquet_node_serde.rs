@@ -2,6 +2,7 @@ use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::hashing::code_hash;
 use dbt_common::io_args::{EvalArgs, FsCommand, IoArgs};
 use dbt_common::path::get_target_write_path;
+use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, FsResult, stdfs};
 use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::common::{
@@ -295,7 +296,10 @@ fn source_config_to_user_configs(config: &SourceConfig) -> UserConfigs {
         meta: config.meta.clone(),
         event_time: config.event_time.clone(),
         // Note: quoting, static_analysis are in WarehouseDetails
-        source_freshness: config.freshness.clone(),
+        source_freshness: match &config.freshness {
+            Omissible::Present(v) => v.clone(),
+            Omissible::Omitted => None,
+        },
         loaded_at_field: config.loaded_at_field.clone(),
         loaded_at_query: config.loaded_at_query.0.clone(),
         warehouse_specific_config: serialize_warehouse_specific_config(&Some(
@@ -536,7 +540,7 @@ fn user_configs_to_source_config(
         quoting: deserialize_quoting_to_dbt_quoting(
             &warehouse_details.as_ref().and_then(|w| w.quoting.clone()),
         ),
-        freshness: user_config.source_freshness.clone(),
+        freshness: Omissible::Present(user_config.source_freshness.clone()),
         loaded_at_field: user_config.loaded_at_field.clone(),
         loaded_at_query: user_config.loaded_at_query.clone().into(),
         schema_origin: user_config.schema_origin,
@@ -3362,10 +3366,7 @@ mod tests {
         let model_config =
             user_configs_to_model_config(&empty_user_configs, &empty_warehouse_details);
         assert_eq!(model_config.alias, None);
-        assert_eq!(
-            model_config.database,
-            dbt_common::serde_utils::Omissible::Omitted
-        );
+        assert_eq!(model_config.database, Omissible::Omitted);
 
         // Test with partially filled warehouse details
         let partial_warehouse_details = Some(WarehouseDetails {
@@ -3384,7 +3385,7 @@ mod tests {
             user_configs_to_model_config(&empty_user_configs, &partial_warehouse_details);
         assert_eq!(
             model_config.database,
-            dbt_common::serde_utils::Omissible::Present(Some("only_db".to_string()))
+            Omissible::Present(Some("only_db".to_string()))
         );
         assert_eq!(model_config.alias, Some("only_alias".to_string()));
     }

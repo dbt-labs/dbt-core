@@ -150,7 +150,8 @@ pub fn resolve_sources(
                         .enabled
                         .unwrap_or_else(|| c.enabled.unwrap_or(true)),
                 );
-                c.freshness = merge_freshness(c.freshness.as_ref(), &table_config.freshness);
+                c.freshness =
+                    Omissible::Present(merge_freshness(&c.freshness, &table_config.freshness));
                 c.event_time =
                     merge_event_time(c.event_time.clone(), table_config.event_time.clone());
                 c.schema_origin = Some(
@@ -259,7 +260,7 @@ pub fn resolve_sources(
             }
         }
 
-        if let Some(freshness) = source_config.freshness.as_ref() {
+        if let Omissible::Present(Some(freshness)) = &source_config.freshness {
             // F2: a partially-populated freshness rule (only one of
             // {count, period}) is tolerated by Mantle at parse time and only
             // enforced when `dbt source freshness` actually consumes the rule.
@@ -346,7 +347,10 @@ pub fn resolve_sources(
                 },
             },
             __source_attr__: DbtSourceAttr {
-                freshness: source_config.freshness.clone(),
+                freshness: match &source_config.freshness {
+                    Omissible::Present(f) => f.clone(),
+                    Omissible::Omitted => None,
+                },
                 identifier,
                 source_name: source_name.to_owned(),
                 source_description: source.description.clone().unwrap_or_default(), // needs to be some or empty string per dbt spec
@@ -472,17 +476,26 @@ fn merge_loaded_at_pair(
 }
 
 fn merge_freshness(
-    base: Option<&FreshnessDefinition>,
+    base: &Omissible<Option<FreshnessDefinition>>,
     update: &Omissible<Option<FreshnessDefinition>>,
 ) -> Option<FreshnessDefinition> {
     match update {
-        // A present but 'null' freshness does not inherit from the base and inhibits freshness by returning None.
+        // Table-level `freshness: null` inhibits inheritance.
         Omissible::Present(None) => None,
-        Omissible::Present(update) => update
-            .as_ref()
-            .and_then(|update| merge_freshness_unwrapped(base, Some(update))),
-        // If there is no freshness present in the update then it is inherited (merged) from the base.
-        Omissible::Omitted => merge_freshness_unwrapped(base, None),
+        Omissible::Present(Some(t)) => {
+            let base_inner = match base {
+                Omissible::Present(b) => b.as_ref(),
+                Omissible::Omitted => None,
+            };
+            merge_freshness_unwrapped(base_inner, Some(t))
+        }
+        // Table-level omitted: defer to project-level.
+        Omissible::Omitted => match base {
+            // Project-level `+freshness: null` inhibits (META-7188).
+            Omissible::Present(None) => None,
+            Omissible::Present(Some(b)) => merge_freshness_unwrapped(Some(b), None),
+            Omissible::Omitted => merge_freshness_unwrapped(None, None),
+        },
     }
 }
 
@@ -633,31 +646,31 @@ mod tests {
     #[test]
     fn test_merge_freshness_present_null_inhibits() {
         // Present but null freshness should return None (inhibits freshness)
-        let base = FreshnessDefinition {
+        let base = Omissible::Present(Some(FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
                 period: Some(FreshnessPeriod::hour),
             }),
             warn_after: None,
             filter: None,
-        };
+        }));
 
         let update = Omissible::Present(None);
-        let result = merge_freshness(Some(&base), &update);
+        let result = merge_freshness(&base, &update);
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_merge_freshness_present_with_value() {
         // Present with value should use the value
-        let base = FreshnessDefinition {
+        let base = Omissible::Present(Some(FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
                 period: Some(FreshnessPeriod::hour),
             }),
             warn_after: None,
             filter: None,
-        };
+        }));
 
         let update_value = FreshnessDefinition {
             error_after: Some(FreshnessRules {
@@ -672,14 +685,14 @@ mod tests {
         };
 
         let update = Omissible::Present(Some(update_value.clone()));
-        let result = merge_freshness(Some(&base), &update);
+        let result = merge_freshness(&base, &update);
         assert_eq!(result, Some(update_value));
     }
 
     #[test]
     fn test_merge_freshness_omitted_inherits_base() {
         // Omitted freshness should inherit from base
-        let base = FreshnessDefinition {
+        let base_value = FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
                 period: Some(FreshnessPeriod::hour),
@@ -687,25 +700,35 @@ mod tests {
             warn_after: None,
             filter: None,
         };
+        let base = Omissible::Present(Some(base_value.clone()));
 
         let update = Omissible::Omitted;
-        let result = merge_freshness(Some(&base), &update);
-        assert_eq!(result, Some(base));
+        let result = merge_freshness(&base, &update);
+        assert_eq!(result, Some(base_value));
     }
 
     #[test]
     fn test_merge_freshness_omitted_no_base() {
-        // Omitted freshness with no base should return None
+        // Omitted freshness with no base should return default (META-5461)
+        let base = Omissible::Omitted;
         let update = Omissible::Omitted;
-        let result = merge_freshness(None, &update);
+        let result = merge_freshness(&base, &update);
         assert_eq!(result, Some(FreshnessDefinition::default()));
     }
 
     #[test]
-    fn test_merge_freshness_partial_update_inherits_unset_fields() {
-        // Test that partial updates inherit unset fields from base (field-level merge).
-        // Matches Mantle's behavior where FreshnessThreshold.merged() uses last-non-None-wins.
-        let base = FreshnessDefinition {
+    fn test_merge_freshness_project_null_inhibits_when_table_omitted() {
+        // Project-level `+freshness: null` + table omitted → None (META-7188)
+        let base = Omissible::Present(None);
+        let update = Omissible::Omitted;
+        assert_eq!(merge_freshness(&base, &update), None);
+    }
+
+    #[test]
+    fn test_merge_freshness_partial_update_overrides_completely() {
+        // Test that partial updates in the update completely override base
+        // This validates the comment about mantle logic
+        let base = Omissible::Present(Some(FreshnessDefinition {
             error_after: Some(FreshnessRules {
                 count: Some(5),
                 period: Some(FreshnessPeriod::hour),
@@ -715,7 +738,7 @@ mod tests {
                 period: Some(FreshnessPeriod::hour),
             }),
             filter: Some("base_filter".to_string()),
-        };
+        }));
 
         // Update only has error_after; warn_after and filter should be inherited from base.
         let update_value = FreshnessDefinition {
@@ -728,7 +751,7 @@ mod tests {
         };
 
         let update = Omissible::Present(Some(update_value));
-        let result = merge_freshness(Some(&base), &update);
+        let result = merge_freshness(&base, &update);
 
         let merged = result.unwrap();
         // error_after comes from update
