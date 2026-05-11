@@ -211,7 +211,7 @@ class GitURL(str):
             return self.__class__(self.format(token=token, private_def=private_def))
 
         raise PrivatePackageResolutionError(
-            f"Unable to resolve the Git URL {self} with token {token} and repo {private_def.repo_name}"
+            f"Unable to resolve the Git URL {self} for repo {private_def.repo_name}"
         )
 
     def format(self, token: str, private_def: PrivatePackageName) -> str:  # type: ignore[override]
