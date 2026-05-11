@@ -5777,6 +5777,7 @@
           ]
         },
         "+freshness": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessDefinition"
