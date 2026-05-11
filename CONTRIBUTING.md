@@ -236,6 +236,15 @@ hatch run +py=3.11 ci:unit-tests
 
 [`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
 
+#### CodeScene (optional)
+
+The `codescene-delta` pre-commit hook runs [CodeScene](https://codescene.com/)'s delta analysis on staged Python changes via the [`cs` CLI](https://codescene.io/docs/cli/index.html). It blocks commits that introduce Code Health regressions. The hook is **opt-in** — it silently skips for any contributor who does not have both:
+
+1. The `cs` CLI installed and on `PATH` (see [install instructions](https://codescene.io/docs/cli/index.html)), and
+2. `CS_ACCESS_TOKEN` exported in the shell where you commit (or, for on-prem CodeScene: `CS_ONPREM_API_URL`, `CS_USERNAME`, `CS_PASSWORD`).
+
+Without both, no `cs` invocation occurs and no code leaves your machine. With both set, staged diffs are sent to CodeScene for delta analysis on every commit.
+
 #### `pytest`
 
 Finally, you can also run a specific test or group of tests using [`pytest`](https://docs.pytest.org/en/latest/) directly. After running `hatch run setup`, you can run pytest commands like:
