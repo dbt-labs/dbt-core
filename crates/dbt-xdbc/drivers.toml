@@ -6,6 +6,7 @@ drivers = [
   "bigquery-0.21.0.dev+dbt0.21.8",
   "bigquery-0.21.0.dev+dbt0.21.9",
   "bigquery-0.21.0.dev+dbt0.21.10",
+  "bigquery-0.21.0.dev+dbt0.21.11",
   "databricks-0.21.0+dbt0.21.5",
   "databricks-0.21.0+dbt0.21.6",
   "databricks-0.21.0+dbt0.21.7",
