@@ -382,6 +382,15 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "policy_tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "tags": {
           "anyOf": [
             {
@@ -9384,6 +9393,7 @@
           ]
         },
         "freshness": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessDefinition"
