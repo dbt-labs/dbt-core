@@ -4,15 +4,17 @@ from unittest import mock
 
 import pytest
 
-from dbt.adapters.capability import (
-    Capability,
-    CapabilityDict,
-    CapabilitySupport,
-    Support,
-)
+from dbt.adapters.capability import CapabilityDict, CapabilitySupport, Support
 from dbt.adapters.catalogs import CatalogIntegration, CatalogIntegrationConfig
 from dbt.tests.util import run_dbt, write_config_file
 from dbt_common.exceptions import DbtValidationError
+
+
+class _AllSupportedCapabilityDict(CapabilityDict):
+    """Returns Full support for any capability — used in tests to bypass capability checks."""
+
+    def __missing__(self, key):
+        return CapabilitySupport(support=Support.Full)
 
 
 class StubCatalogIntegration(CatalogIntegration):
@@ -25,10 +27,6 @@ class StubCatalogIntegration(CatalogIntegration):
         super().__init__(config)
         for key, value in config.adapter_properties.items():
             setattr(self, key, value)
-
-
-def _v2_capabilities():
-    return CapabilityDict({Capability.CatalogsV2: CapabilitySupport(support=Support.Full)})  # type: ignore[attr-defined]
 
 
 def _mock_bridge(catalog_type: str):
@@ -86,8 +84,12 @@ class TestV2HappyPath:
             mock.patch.object(
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),
-            mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),
-            mock.patch.object(type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon")),
+            mock.patch.object(
+                type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+            ),
+            mock.patch.object(
+                type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon"), create=True
+            ),
         ):
             run_dbt(["run"])
             integration = project.adapter.get_catalog_integration("my_catalog")
@@ -129,8 +131,12 @@ class TestV2MultipleCatalogs:
             mock.patch.object(
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),
-            mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),
-            mock.patch.object(type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon")),
+            mock.patch.object(
+                type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+            ),
+            mock.patch.object(
+                type(project.adapter), "bridge_v2_catalog", _mock_bridge("horizon"), create=True
+            ),
         ):
             run_dbt(["run"])
             assert project.adapter.get_catalog_integration("cat_a").external_volume == "vol_a"
@@ -143,7 +149,9 @@ class TestV2NoCatalogsFile:
         return {"flags": {"use_catalogs_v2": True}}
 
     def test_no_catalogs_file_runs(self, project, adapter):
-        with (mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),):
+        with mock.patch.object(
+            type(project.adapter), "_capabilities", _AllSupportedCapabilityDict({})
+        ):
             run_dbt(["run"])
 
 
@@ -174,9 +182,8 @@ class TestV2DuplicateCatalogNames:
     def test_duplicate_names_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
-        with (mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),):
-            with pytest.raises(DbtValidationError, match="Duplicate catalog name"):
-                run_dbt(["run"])
+        with pytest.raises(DbtValidationError, match="Duplicate catalog name"):
+            run_dbt(["run"])
 
 
 class TestV2InvalidTableFormat:
@@ -200,9 +207,8 @@ class TestV2InvalidTableFormat:
     def test_invalid_table_format_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
-        with (mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),):
-            with pytest.raises(DbtValidationError, match="Invalid table_format"):
-                run_dbt(["run"])
+        with pytest.raises(DbtValidationError, match="Invalid table_format"):
+            run_dbt(["run"])
 
 
 class TestV2MissingRequiredKey:
@@ -226,6 +232,5 @@ class TestV2MissingRequiredKey:
     def test_missing_config_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
-        with (mock.patch.object(type(project.adapter), "_capabilities", _v2_capabilities()),):
-            with pytest.raises(DbtValidationError, match="Missing required key 'config'"):
-                run_dbt(["run"])
+        with pytest.raises(DbtValidationError, match="Missing required key 'config'"):
+            run_dbt(["run"])
