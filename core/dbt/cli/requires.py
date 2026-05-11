@@ -8,11 +8,16 @@ from typing import Dict, Optional
 from click import Context
 
 import dbt.tracking
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.config.catalogs import get_active_write_integration, load_catalogs
+from dbt.config.catalogs import (
+    get_active_write_integration,
+    load_catalogs,
+    load_catalogs_v2,
+)
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
@@ -409,10 +414,32 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     runtime_config = ctx.obj["runtime_config"]
 
     flags = ctx.obj["flags"]
-    catalogs = load_catalogs(flags.PROJECT_DIR, ctx.obj["project"].project_name, flags.VARS)
-    active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+    project_name = ctx.obj["project"].project_name
+    use_v2 = getattr(flags, "USE_CATALOGS_V2", False)
 
-    ctx.obj["catalogs"] = catalogs
+    if use_v2:
+        import warnings
+
+        warnings.warn(
+            "catalogs.yml v2 schema validation is experimental, not officially supported yet, "
+            "and its spec is liable to change. "
+            "See https://github.com/dbt-labs/dbt-core/discussions/12723",
+            stacklevel=2,
+        )
+        register_adapter(runtime_config, get_mp_context())
+        adapter = get_adapter(runtime_config)
+        if not adapter.capabilities()[Capability.CatalogsV2]:  # type: ignore[attr-defined]
+            raise DbtProjectError(
+                f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
+                f"Use catalogs.yml v1 or upgrade to a supported adapter version."
+            )
+        catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
+        active_integrations = [adapter.bridge_v2_catalog(catalog) for catalog in catalogs_v2]
+        ctx.obj["catalogs"] = catalogs_v2
+    else:
+        catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
+        active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+        ctx.obj["catalogs"] = catalogs
 
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
