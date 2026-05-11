@@ -18,6 +18,7 @@ members = [
   "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
   "crates/dbt-features",
+  "crates/dbt-tasks-core",
   "crates/dbt-init",
   "crates/dbt-error",
   "crates/dbt-frontend-common",
