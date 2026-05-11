@@ -153,6 +153,7 @@ pub struct ColumnConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub policy_tags: Option<Vec<String>>,
 }
 
 /// Represents column inheritance rules for a model version
@@ -241,10 +242,10 @@ pub fn process_columns(
             // and a later definition silently overwrites an earlier one.
             let mut by_name: IndexMap<String, DbtColumnRef> = IndexMap::new();
             for cp in cols.iter() {
-                let (cp_meta, cp_tags, cp_databricks_tags) = cp
+                let (cp_meta, cp_tags, cp_databricks_tags, cp_policy_tags) = cp
                     .config
                     .clone()
-                    .map(|c| (c.meta, c.tags, c.databricks_tags))
+                    .map(|c| (c.meta, c.tags, c.databricks_tags, c.policy_tags))
                     .unwrap_or_default();
 
                 let col = Arc::new(DbtColumn {
@@ -257,7 +258,8 @@ pub fn process_columns(
                         .map(|t| t.into())
                         .or_else(|| tags.clone())
                         .unwrap_or_default(),
-                    policy_tags: cp.policy_tags.clone(),
+                    // Top-level policy_tags takes precedence over config.policy_tags
+                    policy_tags: cp.policy_tags.clone().or(cp_policy_tags),
                     databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
                     column_mask: cp.column_mask.clone(),
                     quote: cp.quote,

@@ -1958,9 +1958,9 @@ impl AdapterImpl {
                 let table = relation.identifier_as_str()?;
                 let schema = relation.schema_as_str()?;
 
-                let columns = self.do_nest_column_data_types(columns, None)?;
+                let nested_columns = self.do_nest_column_data_types(columns, None)?;
 
-                let column_to_description = columns
+                let column_to_description = nested_columns
                     .iter()
                     .filter_map(|(name, col)| {
                         col.description
@@ -1969,8 +1969,19 @@ impl AdapterImpl {
                     })
                     .collect::<BTreeMap<String, String>>();
 
+                let column_to_policy_tags = nested_columns
+                    .iter()
+                    .filter_map(|(name, col)| {
+                        col.policy_tags
+                            .as_ref()
+                            .map(|tags| (name.to_string(), tags.clone()))
+                    })
+                    .collect::<BTreeMap<String, Vec<String>>>();
+
                 // The heavy lift is delegated to the driver via googleapi Table.update
-                // since ALTER TABLE ... ALTER COLUMNS doesn't support updating a view
+                // since ALTER TABLE ... ALTER COLUMNS doesn't support updating a view.
+                // Descriptions and policy tags are applied in a single REST API call,
+                // mirroring dbt Core's update_columns behaviour.
                 let mut options = self.get_adbc_execute_options(state);
                 options.extend(vec![
                     (
@@ -1984,19 +1995,26 @@ impl AdapterImpl {
                                 .expect("Failed to serialize column_to_description"),
                         ),
                     ),
+                    (
+                        UPDATE_TABLE_COLUMNS_POLICY_TAGS.to_string(),
+                        OptionValue::String(
+                            serde_json::to_string(&column_to_policy_tags)
+                                .expect("Failed to serialize column_to_policy_tags"),
+                        ),
+                    ),
                 ]);
 
                 let ctx = query_ctx_from_state(state)?;
-                let sql = "none";
                 self.engine().execute_with_options(
                     Some(state),
                     &ctx,
                     conn,
-                    sql,
+                    "none",
                     options,
                     false,
                     token,
                 )?;
+
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | Fabric | DuckDB
