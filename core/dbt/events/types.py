@@ -2135,6 +2135,47 @@ class LogFunctionResult(DynamicLevel):
         )
 
 
+class LogStartOverload(InfoLevel):
+    def code(self) -> str:
+        return "Q048"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status="RUN",
+            index=self.overload_index,
+            total=self.total_overloads,
+        )
+        return f"Overload {formatted}"
+
+
+class LogOverloadResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q049"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status.upper())
+
+        msg = f"{info} {self.description}"
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.overload_index,
+            total=self.total_overloads,
+            execution_time=self.execution_time,
+        )
+        return f"Overload {formatted}"
+
+
 # =======================================================
 # W - Node testing
 # =======================================================

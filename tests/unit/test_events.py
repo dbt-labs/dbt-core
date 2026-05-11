@@ -472,6 +472,14 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
+    core_types.LogStartOverload(description="", overload_index=0, total_overloads=0),
+    core_types.LogOverloadResult(
+        description="",
+        status="",
+        overload_index=0,
+        total_overloads=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
