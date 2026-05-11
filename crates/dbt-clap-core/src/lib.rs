@@ -359,6 +359,7 @@ got {:?}, expected an instance of {}",
         }
     }
 
+    // TODO: Box the CommonArgs because it's a 1Kb struct
     pub fn common_args(&self) -> CommonArgs {
         match &self.command {
             Command::Core(core_cmd) => core_cmd.common_args().clone(),
