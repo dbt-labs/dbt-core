@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from dbt.adapters.catalogs import CatalogIntegrationConfig, CatalogV2, V2TableFormat
+from dbt.adapters.catalogs import CatalogIntegrationConfig
 from dbt_common.dataclass_schema import dbtClassMixin
 
 
@@ -23,4 +24,20 @@ class Catalog(dbtClassMixin):
     write_integrations: List[CatalogWriteIntegrationConfig] = field(default_factory=list)
 
 
-__all__ = ["Catalog", "CatalogV2", "CatalogWriteIntegrationConfig", "V2TableFormat"]
+# ===== catalogs.yml v2 types =====
+# Defined here (dbt-core) rather than dbt-adapters — these are YAML parsing types,
+# not adapter protocol types. dbt-adapters uses Any in bridge_v2_catalog to avoid
+# a circular dependency. Long-term home: dbt-common.
+
+
+class V2TableFormat(str, Enum):
+    DEFAULT = "default"
+    ICEBERG = "iceberg"
+
+
+@dataclass
+class CatalogV2:
+    name: str
+    catalog_type: str
+    table_format: V2TableFormat
+    config: Dict[str, Dict[str, Any]]  # platform → fields, free dict
