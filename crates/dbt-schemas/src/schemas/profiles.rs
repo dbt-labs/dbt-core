@@ -326,12 +326,6 @@ impl DbConfig {
         }
     }
 
-    /// Returns a hint string if the adapter is gated behind an environment variable.
-    /// Used by call sites to produce helpful error messages.
-    pub fn unsupported_adapter_hint(&self) -> Option<&'static str> {
-        None
-    }
-
     pub fn get_database(&self) -> Option<&String> {
         match self {
             DbConfig::Redshift(config) => config.database.as_ref(),

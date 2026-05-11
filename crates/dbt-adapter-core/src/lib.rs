@@ -140,6 +140,14 @@ pub fn adapter_type_supports_microbatch_concurrency(adapter_type: AdapterType) -
     matches!(adapter_type, AdapterType::Snowflake)
 }
 
+pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
+    AdapterType::Snowflake,
+    AdapterType::Bigquery,
+    AdapterType::Databricks,
+    AdapterType::Redshift,
+    AdapterType::DuckDB,
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;

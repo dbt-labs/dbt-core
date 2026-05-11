@@ -93,6 +93,18 @@ pub fn load_profiles(
         )
     })?;
 
+    let adapter = db_config.adapter_type();
+    if dbt_env::env_var_is_disabled("DBT_ALLOW_EXPERIMENTAL_ADAPTERS")
+        && !dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS.contains(&adapter)
+    {
+        return Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "The '{}' adapter is not yet supported by dbt Fusion. \
+             Supported adapters: snowflake, bigquery, databricks, redshift",
+            adapter
+        ));
+    }
+
     if db_config.has_removed_execute_field() {
         emit_warn_log_message(
             ErrorCode::DeprecatedOption,

@@ -87,6 +87,13 @@ impl InternalEnv {
 const TRUE_VALUES: [&str; 4] = ["1", "true", "yes", "on"];
 const FALSE_VALUES: [&str; 5] = ["0", "false", "no", "off", ""];
 
+/// Returns `true` if the environment variable is unset or set to a recognized falsy value.
+///
+/// Unrecognized values return `true` (treat as not enabled).
+pub fn env_var_is_disabled(var_name: &str) -> bool {
+    matches!(env_var_bool(var_name), Ok(false) | Err(_))
+}
+
 /// Parse a boolean from an environment variable.
 ///
 /// Returns `Ok(false)` if the variable is not set.
