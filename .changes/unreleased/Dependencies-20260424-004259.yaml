@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Update mashumaro requirement from <3.15,>=3.9 to >=3.9,<3.21 in /core"
+time: 2026-04-24T00:42:59.00000Z
+custom:
+  Author: dependabot[bot]
+  Issue: 12876
