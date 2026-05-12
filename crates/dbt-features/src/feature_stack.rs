@@ -12,11 +12,11 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
+use dbt_tasks_core::RunTasksOk;
 use std::borrow::Cow;
-use uuid::Uuid;
-// use dbt_tasks::task_runner::RunTasksOk;
 use std::fmt;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
@@ -96,7 +96,7 @@ pub trait CliExtensionHooks: Send + Sync {
         _arg: &EvalArgs,
         _cli: &Cli,
         _previous_state: Option<&PreviousState>,
-        // _run_tasks_ok: &RunTasksOk,
+        _run_tasks_ok: &RunTasksOk,
         _resolved_state: &ResolverState,
         _token: &CancellationToken,
     ) -> FsResult<()> {

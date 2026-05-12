@@ -21,6 +21,7 @@ dbt-dag = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-tasks-core = { workspace = true }
 
 uuid = { workspace = true }
 vortex-events = { workspace = true }
