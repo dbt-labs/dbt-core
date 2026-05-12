@@ -17,6 +17,7 @@
 //!         data_retention_time_in_days: <u32 in 0..=90>            # optional
 //!         max_data_extension_time_in_days: <u32 in 0..=90>        # optional
 //!         storage_serialization_policy: COMPATIBLE|OPTIMIZED      # optional, case-insensitive
+//!         iceberg_version: <u32>                                  # optional, e.g. 3 for Iceberg V3
 //!         base_location_root: <path string>                       # optional, non-empty if present
 //!
 //!         # model config only; specifying this in catalogs.yml is invalid
@@ -34,6 +35,7 @@
 //!         auto_refresh: <boolean>                                 # optional
 //!         max_data_extension_time_in_days: <u32 in 0..=90>        # optional
 //!         target_file_size: AUTO|16MB|32MB|64MB|128MB             # optional
+//!         iceberg_version: <u32>                                  # optional, e.g. 3 for Iceberg V3
 //!       duckdb:
 //!         endpoint|endpoint_type: <string>                        # exactly one required
 //!         warehouse: <string>                                     # optional, non-empty if present
@@ -61,6 +63,7 @@
 //!         auto_refresh: <boolean>                                 # optional
 //!         max_data_extension_time_in_days: <u32 in 0..=90>        # optional
 //!         target_file_size: AUTO|16MB|32MB|64MB|128MB             # optional
+//!         iceberg_version: <u32>                                  # optional, e.g. 3 for Iceberg V3
 //!       databricks:
 //!         file_format: delta                                      # required if databricks block exists
 //!         location_root: <path string>                            # optional, non-empty if present
@@ -592,6 +595,7 @@ const SNOWFLAKE_MANAGED_SNOWFLAKE_KEYS: &[&str] = &[
     "data_retention_time_in_days",
     "max_data_extension_time_in_days",
     "storage_serialization_policy",
+    "iceberg_version",
     "base_location_root",
 ];
 
@@ -600,6 +604,7 @@ const GLUE_SNOWFLAKE_KEYS: &[&str] = &[
     "auto_refresh",
     "max_data_extension_time_in_days",
     "target_file_size",
+    "iceberg_version",
 ];
 
 const UNITY_SNOWFLAKE_KEYS: &[&str] = &[
@@ -607,6 +612,7 @@ const UNITY_SNOWFLAKE_KEYS: &[&str] = &[
     "auto_refresh",
     "max_data_extension_time_in_days",
     "target_file_size",
+    "iceberg_version",
 ];
 
 const UNITY_DATABRICKS_KEYS: &[&str] = &["file_format", "location_root", "use_uniform"];

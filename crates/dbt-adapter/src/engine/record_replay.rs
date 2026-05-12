@@ -214,6 +214,7 @@ impl xdbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
         let collapsed = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
         collapsed
             .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
+            .replace("DBT_TESTING", "[MASKED_WH]")
             .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
             .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
     }

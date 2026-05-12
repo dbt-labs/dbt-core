@@ -89,6 +89,7 @@
         {{ optional('external_volume', catalog_relation.external_volume, "'") }}
         catalog = 'SNOWFLAKE'  -- required, and always SNOWFLAKE for built-in Iceberg tables
         base_location = '{{ catalog_relation.base_location }}'
+        {{ optional('iceberg_version', catalog_relation.iceberg_version) }}
         {{ optional('refresh_mode', dynamic_table.refresh_mode) }}
         {{ optional('initialize', dynamic_table.initialize) }}
         {% if dynamic_table.scheduler is not none %}

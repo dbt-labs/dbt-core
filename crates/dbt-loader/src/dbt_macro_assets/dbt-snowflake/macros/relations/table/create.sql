@@ -208,6 +208,7 @@ create or replace iceberg table {{ relation }}
     {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
     {{ optional('data_retention_time_in_days', catalog_relation.data_retention_time_in_days)}}
     {{ optional('change_tracking', catalog_relation.change_tracking)}}
+    {{ optional('iceberg_version', catalog_relation.iceberg_version)}}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     {% if copy_grants -%} copy grants {%- endif %}
@@ -296,6 +297,7 @@ create iceberg table {{ glue_relation }} (
 )
 {% if partition_by_string -%} partition by ({{ partition_by_string }}) {%- endif %}
 {{ optional('external_volume', catalog_relation.external_volume, "'") }}
+{{ optional('iceberg_version', catalog_relation.iceberg_version)}}
 {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
 {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
 {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
@@ -391,6 +393,7 @@ insert into {{ glue_relation }}
         {{ optional('base_location', catalog_relation.base_location, "'") }}
         {%- endif %}
         {% if partition_by_string -%} partition by ({{ partition_by_string }}) {%- endif %}
+        {{ optional('iceberg_version', catalog_relation.iceberg_version)}}
         {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
         {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
         {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}

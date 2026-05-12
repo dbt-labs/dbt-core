@@ -5245,6 +5245,7 @@ impl AdapterAttr {
                     data_retention_time_in_days: config.data_retention_time_in_days,
                     max_data_extension_time_in_days: config.max_data_extension_time_in_days,
                     storage_serialization_policy: config.storage_serialization_policy.clone(),
+                    iceberg_version: config.iceberg_version,
                     target_file_size: config.target_file_size.clone(),
                     target_lag: config.target_lag.clone(),
                     snowflake_initialization_warehouse: config
@@ -5347,6 +5348,7 @@ impl AdapterAttr {
                         data_retention_time_in_days: config.data_retention_time_in_days,
                         max_data_extension_time_in_days: config.max_data_extension_time_in_days,
                         storage_serialization_policy: config.storage_serialization_policy.clone(),
+                        iceberg_version: config.iceberg_version,
                         target_file_size: config.target_file_size.clone(),
                         target_lag: config.target_lag.clone(),
                         snowflake_initialization_warehouse: config
@@ -5448,6 +5450,7 @@ pub struct SnowflakeAttr {
     pub data_retention_time_in_days: Option<u64>,
     pub max_data_extension_time_in_days: Option<u64>,
     pub storage_serialization_policy: Option<String>,
+    pub iceberg_version: Option<u64>,
     pub target_file_size: Option<String>,
     pub target_lag: Option<String>,
     pub snowflake_initialization_warehouse: Option<String>,

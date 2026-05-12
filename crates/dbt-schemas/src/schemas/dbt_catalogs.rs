@@ -287,6 +287,7 @@ pub struct SnowflakeBuiltInPropsView<'a> {
     pub data_retention_time_in_days: Option<u32>,
     pub max_data_extension_time_in_days: Option<u32>,
     pub storage_serialization_policy: Option<SerializationPolicy>,
+    pub iceberg_version: Option<u32>,
 }
 
 #[derive(Debug, Default)]
@@ -296,6 +297,7 @@ pub struct SnowflakeRestPropsView<'a> {
     pub catalog_linked_database_type: Option<&'a str>,
     pub max_data_extension_time_in_days: Option<u32>,
     pub target_file_size: Option<TargetFileSize>,
+    pub iceberg_version: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1055,6 +1057,7 @@ fn parse_adapter_properties<'a>(
                     "data_retention_time_in_days",
                     "max_data_extension_time_in_days",
                     "storage_serialization_policy",
+                    "iceberg_version",
                     "base_location_root",
                     "base_location_subpath",
                 ],
@@ -1113,6 +1116,7 @@ fn parse_adapter_properties<'a>(
                     )?
                     .map(|(v, _)| v),
                     change_tracking: get_bool(properties, "change_tracking")?.map(|(v, _)| v),
+                    iceberg_version: get_u32(properties, "iceberg_version")?.map(|(v, _)| v),
                 },
             ))
         }
@@ -1125,6 +1129,7 @@ fn parse_adapter_properties<'a>(
                     "catalog_linked_database_type",
                     "max_data_extension_time_in_days",
                     "target_file_size",
+                    "iceberg_version",
                 ],
                 "adapter_properties(iceberg_rest)",
             )?;
@@ -1140,6 +1145,7 @@ fn parse_adapter_properties<'a>(
                     .map(|(s, _)| s),
                 catalog_linked_database_type: get_str(properties, "catalog_linked_database_type")?
                     .map(|(s, _)| s),
+                iceberg_version: get_u32(properties, "iceberg_version")?.map(|(v, _)| v),
             }))
         }
         CatalogType::BigqueryBuiltIn => {

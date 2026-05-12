@@ -891,6 +891,13 @@ impl CatalogRelation {
                     &identifier,
                 );
 
+                let mut adapter_properties = BTreeMap::new();
+                if let Some(v) =
+                    Self::get_model_config_value(model, "iceberg_version", AdapterType::Snowflake)
+                {
+                    adapter_properties.insert("iceberg_version".to_string(), v);
+                }
+
                 Ok(CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
@@ -899,7 +906,7 @@ impl CatalogRelation {
                     catalog_type: ICEBERG_BUILT_IN_CATALOG.to_string(),
                     external_volume,
                     base_location: Some(base_location),
-                    adapter_properties: BTreeMap::new(),
+                    adapter_properties,
                     is_transient: Some(false), // always FALSE for ICEBERG
                     file_format: None,
                 })
@@ -1043,8 +1050,15 @@ impl CatalogRelation {
         );
 
         // 4) adapter_properties from YAML write_integration.adapter_properties and model config overrides
-        let adapter_properties =
+        let mut adapter_properties =
             Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
+
+        // Model-level iceberg_version takes precedence over catalog adapter_properties
+        if let Some(v) =
+            Self::get_model_config_value(model, "iceberg_version", AdapterType::Snowflake)
+        {
+            adapter_properties.insert("iceberg_version".to_string(), v);
+        }
 
         // 5) transient handling
         let transient_spec =
@@ -1478,6 +1492,11 @@ impl Object for CatalogRelation {
             }
             "storage_serialization_policy" => {
                 Self::map_properties_str(&self.adapter_properties, "storage_serialization_policy")
+            }
+
+            // BUILT_IN + REST
+            "iceberg_version" => {
+                Self::map_properties_u32(&self.adapter_properties, "iceberg_version")
             }
 
             // REST
@@ -3115,6 +3134,116 @@ mod tests {
             assert!(err.message().contains(
                 "external_volume may only be specified in write integration entries of catalogs.yml"
             ));
+        }
+    }
+
+    // --- iceberg_version ---
+
+    #[test]
+    fn iceberg_version_from_model_config_legacy_path() {
+        let conf = json!({
+            "table_format": "ICEBERG",
+            "external_volume": "EV",
+            "schema": "S",
+            "identifier": "I",
+            "iceberg_version": 3,
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
+            assert_eq!(
+                r.adapter_properties
+                    .get("iceberg_version")
+                    .map(|s| s.as_str()),
+                Some("3")
+            );
+        }
+    }
+
+    #[test]
+    fn iceberg_version_absent_from_model_config_legacy_path() {
+        let conf = json!({
+            "table_format": "ICEBERG",
+            "external_volume": "EV",
+            "schema": "S",
+            "identifier": "I",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
+            assert!(!r.adapter_properties.contains_key("iceberg_version"));
+        }
+    }
+
+    #[test]
+    fn iceberg_version_model_config_overrides_catalog_adapter_properties() {
+        let cats = catalogs_yaml_one(
+            "CAT",
+            "WIN",
+            "BUILT_IN",
+            "ICEBERG",
+            &[
+                ("external_volume", s("EV")),
+                ("adapter_properties", map(&[("iceberg_version", i64v(1))])),
+            ],
+        );
+        let conf = json!({
+            "catalog_name": "CAT",
+            "schema": "S",
+            "identifier": "I",
+            "iceberg_version": 3,
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
+            // model-level iceberg_version=3 overrides catalog adapter_properties iceberg_version=1
+            assert_eq!(
+                r.adapter_properties
+                    .get("iceberg_version")
+                    .map(|s| s.as_str()),
+                Some("3")
+            );
+        }
+    }
+
+    #[test]
+    fn iceberg_version_falls_back_to_catalog_adapter_properties() {
+        let cats = catalogs_yaml_one(
+            "CAT",
+            "WIN",
+            "BUILT_IN",
+            "ICEBERG",
+            &[
+                ("external_volume", s("EV")),
+                ("adapter_properties", map(&[("iceberg_version", i64v(3))])),
+            ],
+        );
+        let conf = json!({
+            "catalog_name": "CAT",
+            "schema": "S",
+            "identifier": "I",
+        });
+        let ms = [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
+            assert_eq!(
+                r.adapter_properties
+                    .get("iceberg_version")
+                    .map(|s| s.as_str()),
+                Some("3")
+            );
         }
     }
 

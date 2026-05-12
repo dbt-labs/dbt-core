@@ -15,6 +15,7 @@ const FIELD_TRANSIENT: &str = "transient";
 const FIELD_CHANGE_TRACKING: &str = "change_tracking";
 const FIELD_DATA_RETENTION_TIME_IN_DAYS: &str = "data_retention_time_in_days";
 const FIELD_STORAGE_SERIALIZATION_POLICY: &str = "storage_serialization_policy";
+const FIELD_ICEBERG_VERSION: &str = "iceberg_version";
 const FIELD_FILE_FORMAT: &str = "file_format";
 const FIELD_LOCATION_ROOT: &str = "location_root";
 const FIELD_USE_UNIFORM: &str = "use_uniform";
@@ -518,6 +519,13 @@ impl CatalogRelation {
             adapter_properties.insert(ADAPTER_PROP_TARGET_FILE_SIZE.to_string(), target_file_size);
         }
 
+        let iceberg_version =
+            Self::get_model_config_value(model, FIELD_ICEBERG_VERSION, AdapterType::Snowflake)
+                .or_else(|| get_yaml_str(snowflake, FIELD_ICEBERG_VERSION).map(|s| s.to_string()));
+        if let Some(iceberg_version) = iceberg_version {
+            adapter_properties.insert(FIELD_ICEBERG_VERSION.to_string(), iceberg_version);
+        }
+
         Ok(CatalogRelation {
             adapter_type: AdapterType::Snowflake,
             catalog_name: Some(catalog_name.to_string()),
@@ -622,6 +630,13 @@ impl CatalogRelation {
                 FIELD_STORAGE_SERIALIZATION_POLICY.to_string(),
                 storage_serialization_policy,
             );
+        }
+
+        let iceberg_version =
+            Self::get_model_config_value(model, FIELD_ICEBERG_VERSION, AdapterType::Snowflake)
+                .or_else(|| get_yaml_str(snowflake, FIELD_ICEBERG_VERSION).map(|s| s.to_string()));
+        if let Some(iceberg_version) = iceberg_version {
+            adapter_properties.insert(FIELD_ICEBERG_VERSION.to_string(), iceberg_version);
         }
 
         Ok(CatalogRelation {
