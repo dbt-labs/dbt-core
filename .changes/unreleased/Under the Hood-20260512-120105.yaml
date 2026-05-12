@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Move doc parsing into separate parsing submodule
+time: 2026-05-12T12:01:05.842159-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12940"
