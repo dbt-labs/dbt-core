@@ -30,11 +30,11 @@ humantime = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 md5 = { workspace = true }
 merge = { workspace = true }
-minijinja = { workspace = true }
+minijinja = { workspace = true, features = ["unstable_machinery_serde"] }
 minijinja-contrib = { workspace = true }
 pathdiff = { workspace = true }
 schemars = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

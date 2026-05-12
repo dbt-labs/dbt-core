@@ -21,6 +21,12 @@ dbt-ident = { workspace = true }
 futures = { workspace = true }
 parquet = { workspace = true }
 scc = { workspace = true }
+serde = { workspace = true }
+serde_arrow = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

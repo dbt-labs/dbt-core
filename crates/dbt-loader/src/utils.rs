@@ -63,6 +63,16 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
         }) {
             let entry = entry_result?;
             if entry.file_type().is_file() {
+                // Skip macOS AppleDouble resource fork files (._*) — they are never dbt assets
+                // and contain binary metadata that causes UTF-8 read failures on Linux.
+                if entry
+                    .file_name()
+                    .to_str()
+                    .map(|n| n.starts_with("._"))
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
                 // Check if this file should be ignored by .dbtignore
                 if let Some(gitignore) = dbtignore {
                     let path = entry.path();

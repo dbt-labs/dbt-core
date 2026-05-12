@@ -20,7 +20,7 @@ use std::option::Option;
 use std::sync::Arc;
 
 /// A pattern to match relations
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct RelationPattern {
     /// The database
     pub database: String,

@@ -249,6 +249,8 @@ pub struct IoArgs {
     pub build_cache_cas_url: Option<String>,
     pub build_cache_mode: Option<BuildCacheMode>,
     pub beta_use_query_cache: bool,
+    pub use_parquet_schema_store: bool,
+    pub verify_parquet_schema_store: bool,
     pub host: String,
     pub port: u16,
 }

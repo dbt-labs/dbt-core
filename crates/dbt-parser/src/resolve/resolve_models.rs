@@ -71,6 +71,7 @@ use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::NodeResolverTracker;
+use dbt_schemas::state::ResourcePathKind;
 use dbt_yaml::Spanned;
 use minijinja::MacroSpans;
 
@@ -1168,13 +1169,28 @@ pub async fn resolve_models(
         }
     }
 
+    // In incremental and lazy-load runs, model_sql_files only contains changed/new
+    // files — unchanged models are skipped by the build cache. Build the full set of
+    // known model names from all_paths (always a complete filesystem scan, pre-filter)
+    // so we don't fire spurious NoNodeForYamlKey warnings for models that exist on
+    // disk but weren't re-parsed this run.
+    let all_known_model_names: HashSet<&str> = package
+        .all_paths
+        .get(&ResourcePathKind::ModelPaths)
+        .map(|paths| {
+            paths
+                .iter()
+                .filter_map(|(p, _)| p.as_path().file_stem()?.to_str())
+                .collect()
+        })
+        .unwrap_or_default();
+
     for (model_name, mpe) in models_properties_sans_semantics.iter() {
         // Skip until we support better error messages for versioned models
         if mpe.version_info.is_some() {
             continue;
         }
-        if !mpe.schema_value.is_null() {
-            // Validate that the model is not latest and flattened
+        if !mpe.schema_value.is_null() && !all_known_model_names.contains(model_name.as_str()) {
             let err = fs_err!(
                 code =>ErrorCode::NoNodeForYamlKey,
                 loc => mpe.relative_path.clone(),

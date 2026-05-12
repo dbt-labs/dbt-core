@@ -3641,7 +3641,7 @@ impl InternalDbtNode for DbtMacro {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Nodes {
     pub models: BTreeMap<String, Arc<DbtModel>>,
     pub seeds: BTreeMap<String, Arc<DbtSeed>>,

@@ -36,7 +36,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum ResourcePathKind {
     ProfilePaths,
     ModelPaths,
@@ -463,13 +463,13 @@ impl Default for DummyNodeResolverTracker {
         DummyNodeResolverTracker
     }
 }
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Macros {
     pub macros: BTreeMap<String, DbtMacro>,
     pub docs_macros: BTreeMap<String, DbtDocsMacro>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Operations {
     pub on_run_start: Vec<Spanned<DbtOperation>>,
     pub on_run_end: Vec<Spanned<DbtOperation>>,

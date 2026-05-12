@@ -29,7 +29,6 @@ pub struct DbtMacro {
     pub package_name: String,
     pub path: PathBuf,
     pub original_file_path: PathBuf,
-    #[serde(skip_serializing)]
     pub span: Option<Span>,
     pub unique_id: String,
     pub macro_sql: String,
@@ -44,7 +43,6 @@ pub struct DbtMacro {
     /// Macro arguments from YAML spec (used for manifest serialization via ManifestMacro)
     #[serde(skip)]
     pub arguments: Vec<MacroArgument>,
-    #[serde(skip_serializing)]
     pub macro_name_span: Option<Span>,
     pub __other__: BTreeMap<String, Value>,
 }

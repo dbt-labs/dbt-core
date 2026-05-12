@@ -28,6 +28,7 @@
 //! both production and mock backends.
 
 pub mod mock_store;
+pub mod parquet_cache;
 pub mod store;
 
 pub use store::read_cached_schema_from_parquet;
@@ -199,6 +200,15 @@ pub trait SchemaStoreTrait: std::fmt::Debug + Send + Sync {
         sdf_schema: SchemaRef,
         overwrite: bool,
     ) -> SchemaStoreResult<SchemaEntry>;
+
+    /// Re-registers a `Selected` schema as a `Frontier` entry so that downstream
+    /// models executed in the same run (Local execution mode) can find it.
+    ///
+    /// Default implementation is a no-op; overridden by [`SchemaStore`] for the
+    /// `ParquetCache` format where per-file copying no longer happens automatically.
+    fn promote_to_frontier(&self, _cfqn: &CanonicalFqn) -> SchemaStoreResult<()> {
+        Ok(())
+    }
 
     /// Returns the names of all catalogs tracked by this store.
     fn catalog_names(&self) -> Vec<CanonicalIdentifier>;
