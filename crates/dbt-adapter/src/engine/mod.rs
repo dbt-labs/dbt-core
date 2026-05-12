@@ -17,6 +17,7 @@ pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
 
 pub mod query_comment;
+pub mod retry;
 
 mod xdbc;
 pub use xdbc::XdbcEngine;

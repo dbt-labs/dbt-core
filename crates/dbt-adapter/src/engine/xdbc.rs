@@ -30,6 +30,7 @@ use crate::stmt_splitter::StmtSplitter;
 use super::adapter_engine::*;
 use super::make_behavior;
 use super::noop_connection::NoopConnection;
+use super::retry::ConnectionRetryPolicy;
 
 #[derive(Default)]
 pub struct DatabaseMap {
@@ -563,11 +564,11 @@ impl AdapterEngine for XdbcEngine {
             return Ok(Box::new(NoopConnection));
         }
         let mut database = self.load_driver_and_configure_database(config)?;
-        let connection_builder = connection::Builder::default();
-        let conn = connection_builder
-            .build(&mut database)
-            .map_err(|e| enrich_connection_error(self.adapter_type(), e, config))?;
-        Ok(conn)
+        let connect = || connection::Builder::default().build(&mut database);
+        let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
+        retry_policy
+            .execute(config, connect)
+            .map_err(|e| enrich_connection_error(self.adapter_type(), e, config))
     }
 
     fn execute_with_options(

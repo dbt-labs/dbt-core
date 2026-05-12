@@ -88,6 +88,12 @@ impl AdapterConfig {
         self.require(field).map(yml_value_to_string)
     }
 
+    /// Get a boolean value if the field exists and parses as a YAML bool.
+    pub fn get_bool(&self, field: &str) -> Option<bool> {
+        let value = self.get(field)?;
+        value.as_bool()
+    }
+
     /// Whether this config indicates that authentication should be handled by
     /// dbt Cloud credentials (via the flock/remote driver) instead of
     /// adapter-specific auth.

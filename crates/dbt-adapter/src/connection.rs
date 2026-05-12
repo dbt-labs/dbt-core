@@ -1,10 +1,3 @@
-use dbt_adapter_core::AdapterType;
-use dbt_common::AdapterResult;
-use dbt_common::cancellation::Cancellable;
-use dbt_xdbc::{Connection, ConnectionFactory};
-use minijinja::State;
-use tracy_client::span;
-
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -14,6 +7,13 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicIsize, AtomicU64, AtomicUsize, Ordering};
 use std::task::{Poll, Waker};
 use std::time::{Duration, Instant};
+
+use dbt_adapter_core::AdapterType;
+use dbt_common::AdapterResult;
+use dbt_common::cancellation::Cancellable;
+use dbt_xdbc::{Connection, ConnectionFactory};
+use minijinja::State;
+use tracy_client::span;
 
 use crossbeam_skiplist::SkipMap;
 use crossbeam_utils::CachePadded;
