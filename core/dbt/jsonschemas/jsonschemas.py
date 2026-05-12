@@ -15,6 +15,11 @@ from dbt_common.context import get_invocation_context
 
 _PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
 _RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
+_MODEL_CONFIG_SCHEMA: Optional[Dict[str, Any]] = None
+
+# Cache compiled validators keyed by schema object id. All schemas passed to
+# _validate_with_schema are module-level singletons whose ids are stable.
+_VALIDATOR_CACHE: Dict[int, Any] = {}
 
 _JSONSCHEMA_SUPPORTED_ADAPTERS = {
     "bigquery",
@@ -104,8 +109,10 @@ def _additional_properties_violation_keys(error: ValidationError) -> List[str]:
 def _validate_with_schema(
     schema: Dict[str, Any], json: Dict[str, Any]
 ) -> Iterator[ValidationError]:
-    validator = CustomDraft7Validator(schema)
-    return validator.iter_errors(json)
+    schema_id = id(schema)
+    if schema_id not in _VALIDATOR_CACHE:
+        _VALIDATOR_CACHE[schema_id] = CustomDraft7Validator(schema)
+    return _VALIDATOR_CACHE[schema_id].iter_errors(json)
 
 
 def _get_allowed_config_key_aliases() -> List[str]:
@@ -294,27 +301,31 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             )
 
 
+def _model_config_schema() -> Dict[str, Any]:
+    global _MODEL_CONFIG_SCHEMA
+    if _MODEL_CONFIG_SCHEMA is None:
+        resources_jsonschema = resources_schema()
+        nested_definition_name = "ModelConfig"
+        _MODEL_CONFIG_SCHEMA = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": nested_definition_name,
+            **resources_jsonschema["definitions"][nested_definition_name],
+            "definitions": {
+                k: v
+                for k, v in resources_jsonschema["definitions"].items()
+                if k != nested_definition_name
+            },
+        }
+    return _MODEL_CONFIG_SCHEMA
+
+
 def validate_model_config(
     config: Dict[str, Any], file_path: str, is_python_model: bool = False
 ) -> None:
     if not _can_run_validations():
         return
 
-    resources_jsonschema = resources_schema()
-    nested_definition_name = "ModelConfig"
-
-    model_config_schema = {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": nested_definition_name,
-        **resources_jsonschema["definitions"][nested_definition_name],
-        "definitions": {
-            k: v
-            for k, v in resources_jsonschema["definitions"].items()
-            if k != nested_definition_name
-        },
-    }
-
-    errors = _validate_with_schema(model_config_schema, config)
+    errors = _validate_with_schema(_model_config_schema(), config)
     for error in errors:
         error_path = list(error.path)
         if error.validator == "additionalProperties":
