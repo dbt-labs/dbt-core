@@ -1,5 +1,5 @@
 import threading
-from typing import Optional, Type, TypeVar
+from typing import Optional, Set, Type, TypeVar
 
 from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.contracts.graph.manifest import Manifest
@@ -7,6 +7,7 @@ from dbt.contracts.graph.nodes import ManifestSQLNode
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
+from dbt.graph.selector_spec import SelectionCriteria
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import process_node
 from dbt.parser.sql import SqlBlockParser
@@ -83,6 +84,20 @@ class CompileTask(GraphRunnableTask):
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return CompileRunner
 
+    def _get_directly_selected_unique_ids(self) -> Set[str]:
+        """unique_ids matched by --select before graph operator (+/@) expansion."""
+        if not self.selection_arg:
+            return set()
+        selector = self.get_node_selector()
+        graph_nodes = selector.graph.nodes()
+        return {
+            uid
+            for raw in self.selection_arg
+            for uid in selector.select_included(
+                graph_nodes, SelectionCriteria.from_single_spec(raw)
+            )
+        }
+
     def task_end_messages(self, results) -> None:
         is_inline = bool(getattr(self.args, "inline", None))
         output_format = getattr(self.args, "output", "text")
@@ -90,17 +105,10 @@ class CompileTask(GraphRunnableTask):
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
         elif self.selection_arg:
+            directly_selected = self._get_directly_selected_unique_ids()
             matched_results = []
             for result in results:
-                node_name = result.node.name
-                versioned_name = (
-                    f"{node_name}.v{result.node.version}"
-                    if hasattr(result.node, "version") and result.node.version
-                    else None
-                )
-                if node_name in self.selection_arg or (
-                    versioned_name and versioned_name in self.selection_arg
-                ):
+                if result.node.unique_id in directly_selected:
                     matched_results.append(result)
                 else:
                     fire_event(

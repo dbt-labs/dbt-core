@@ -302,3 +302,26 @@ class TestShowSubstringBug:
         )
         assert "Previewing node 'my_show_model'" in log_output
         assert "Previewing node 'second_model'" not in log_output
+
+
+class TestShowGraphOperatorSelectors(ShowBase):
+    """`--select` accepts graph operators (`+m`, `m+`, `@m`) and method
+    selectors (`tag:`, `fqn:`…). Operator-expanded neighbors execute, but
+    the streamed `ShowNode` preview should only include the anchors the
+    user named — never the ancestors/descendants pulled in by the operator,
+    and never unrelated nodes."""
+
+    @pytest.mark.parametrize("selector", ["+second_model", "@second_model", "fqn:second_model"])
+    def test_show_anchor_selectors(self, project, selector):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(["show", "--select", selector])
+        assert "Previewing node 'second_model'" in log_output
+        assert "Previewing node 'sample_model'" not in log_output
+        assert "Previewing node 'sample_number_model'" not in log_output
+
+    def test_show_descendants_operator(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(["show", "--select", "sample_model+"])
+        assert "Previewing node 'sample_model'" in log_output
+        assert "Previewing node 'second_model'" not in log_output
+        assert "Previewing node 'sample_number_model'" not in log_output

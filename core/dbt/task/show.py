@@ -77,17 +77,10 @@ class ShowTask(CompileTask):
         if is_inline:
             matched_results = [result for result in results if result.node.name == "inline_query"]
         else:
+            directly_selected = self._get_directly_selected_unique_ids()
             matched_results = []
             for result in results:
-                node_name = result.node.name
-                versioned_name = (
-                    f"{node_name}.v{result.node.version}"
-                    if hasattr(result.node, "version") and result.node.version
-                    else None
-                )
-                if node_name in self.selection_arg or (
-                    versioned_name and versioned_name in self.selection_arg
-                ):
+                if result.node.unique_id in directly_selected:
                     matched_results.append(result)
                 else:
                     fire_event(
