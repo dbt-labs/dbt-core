@@ -545,6 +545,7 @@ class ModelNode(ModelResource, CompiledNode):
             schema=args.schema,
             alias=args.identifier,
             deprecation_date=args.deprecation_date,
+            description=args.description,
             checksum=FileHash.from_contents(f"{unique_id},{args.generated_at}"),
             access=AccessType(args.access),
             original_file_path="",
@@ -552,6 +553,7 @@ class ModelNode(ModelResource, CompiledNode):
             unrendered_config=unrendered_config,
             depends_on=DependsOn(nodes=args.depends_on_nodes),
             config=ModelConfig(enabled=args.enabled),
+            columns=args.columns,
         )
 
     @property
