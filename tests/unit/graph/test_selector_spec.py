@@ -11,6 +11,8 @@ from dbt.graph.selector_spec import (
     SelectionDifference,
     SelectionIntersection,
     SelectionUnion,
+    _has_graph_operator,
+    _is_unaccompanied_graph_operator,
 )
 
 
@@ -219,3 +221,81 @@ def test_union():
         [{"model_a", "model_b"}, {"model_b", "model_c"}, {"model_d"}]
     )
     assert combined == {"model_a", "model_b", "model_c", "model_d"}
+
+
+# ── Unaccompanied graph operator detection ────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "groupdict,expected",
+    [
+        # No graph operator at all — not unaccompanied
+        ({"childrens_parents": None, "parents": None, "children": None, "value": ""}, False),
+        ({"childrens_parents": None, "parents": None, "children": None, "value": "mymodel"}, False),
+        # Has operator, empty value — unaccompanied
+        ({"childrens_parents": None, "parents": "+", "children": None, "value": ""}, True),
+        ({"childrens_parents": "@", "parents": None, "children": None, "value": ""}, True),
+        ({"childrens_parents": None, "parents": "1+", "children": None, "value": ""}, True),
+        # Has operator, numeric-only value — unaccompanied (looks like a depth modifier)
+        ({"childrens_parents": None, "parents": "1+", "children": None, "value": "1"}, True),
+        ({"childrens_parents": None, "parents": "+", "children": None, "value": "2"}, True),
+        # Has operator, real string value — NOT unaccompanied
+        ({"childrens_parents": None, "parents": "+", "children": None, "value": "mymodel"}, False),
+        ({"childrens_parents": "@", "parents": None, "children": None, "value": "mymodel"}, False),
+        ({"childrens_parents": None, "parents": "2+", "children": "+3", "value": "mymodel"}, False),
+        # Children-only with real value — not unaccompanied
+        ({"childrens_parents": None, "parents": None, "children": "+", "value": "mymodel"}, False),
+        # Children-only with numeric value — unaccompanied
+        ({"childrens_parents": None, "parents": None, "children": "+1", "value": "1"}, True),
+        # Alphanumeric value with operator — NOT unaccompanied (could be a model named "1abc")
+        ({"childrens_parents": None, "parents": "+", "children": None, "value": "1abc"}, False),
+    ],
+)
+def test_is_unaccompanied_graph_operator(groupdict, expected):
+    assert _is_unaccompanied_graph_operator(groupdict) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_spec",
+    [
+        "+",
+        "@",
+        "1+",
+        "1+1",
+        "+2",
+        "2+3",
+    ],
+)
+def test_from_single_spec_warns_on_unaccompanied_operator(raw_spec):
+    """from_single_spec emits a NoNodesForSelectionCriteria warning for bare operators."""
+    with patch("dbt.graph.selector_spec.warn_or_error") as mock_warn:
+        SelectionCriteria.from_single_spec(raw_spec)
+        mock_warn.assert_called_once()
+        event = mock_warn.call_args[0][0]
+        assert type(event).__name__ == "NoNodesForSelectionCriteria"
+
+
+@pytest.mark.parametrize(
+    "raw_spec",
+    [
+        "mymodel",
+        "+mymodel",
+        "mymodel+",
+        "@mymodel",
+        "2+mymodel+3",
+        "tag:my_tag",
+        "+tag:my_tag",
+        "path/to/models",
+        "+path/to/models",
+        # model names that start with digits are valid if they contain letters too
+        "1abc",
+        "+1abc",
+    ],
+)
+def test_from_single_spec_no_warning_for_valid_selectors(raw_spec):
+    """from_single_spec does not warn when a graph operator accompanies a real model name."""
+    with patch("dbt.graph.selector_spec.warn_or_error") as mock_warn:
+        with patch("dbt.graph.selector_spec.get_flags") as patched_flags:
+            patched_flags.return_value.INDIRECT_SELECTION = IndirectSelection.Eager
+            SelectionCriteria.from_single_spec(raw_spec)
+        mock_warn.assert_not_called()
