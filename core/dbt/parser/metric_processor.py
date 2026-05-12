@@ -213,6 +213,53 @@ def _process_conversion_metric(
         )
 
 
+def _resolve_and_propagate_input_metrics(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    input_metrics: List[MetricInput],
+) -> None:
+    for input_metric in input_metrics:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+        _process_metric_node(
+            manifest=manifest, current_project=current_project, metric=target_metric
+        )
+        for input_measure in target_metric.type_params.input_measures:
+            metric.add_input_measure(input_measure)
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
+def _process_derived_or_ratio_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    input_metrics = metric.input_metrics
+    if metric.type is MetricType.RATIO:
+        if metric.type_params.numerator is None or metric.type_params.denominator is None:
+            raise dbt.exceptions.ParsingError(
+                "Invalid ratio metric. Both a numerator and denominator must be specified",
+                node=metric,
+            )
+        input_metrics = [metric.type_params.numerator, metric.type_params.denominator]
+    _resolve_and_propagate_input_metrics(manifest, current_project, metric, input_metrics)
+
+
 def _process_simple_metric(
     manifest: Manifest,
     current_project: str,
@@ -267,37 +314,8 @@ def _process_metric_node(
             manifest=manifest, current_project=current_project, metric=metric
         )
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
-        input_metrics = metric.input_metrics
-        if metric.type is MetricType.RATIO:
-            if metric.type_params.numerator is None or metric.type_params.denominator is None:
-                raise dbt.exceptions.ParsingError(
-                    "Invalid ratio metric. Both a numerator and denominator must be specified",
-                    node=metric,
-                )
-            input_metrics = [metric.type_params.numerator, metric.type_params.denominator]
-
-        for input_metric in input_metrics:
-            target_metric = manifest.resolve_metric(
-                target_metric_name=input_metric.name,
-                target_metric_package=None,
-                current_project=current_project,
-                node_package=metric.package_name,
-            )
-            if target_metric is None:
-                raise dbt.exceptions.ParsingError(
-                    f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
-                    node=metric,
-                )
-            elif isinstance(target_metric, Disabled):
-                raise dbt.exceptions.ParsingError(
-                    f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
-                    node=metric,
-                )
-            _process_metric_node(
-                manifest=manifest, current_project=current_project, metric=target_metric
-            )
-            for input_measure in target_metric.type_params.input_measures:
-                metric.add_input_measure(input_measure)
-            metric.depends_on.add_node(target_metric.unique_id)
+        _process_derived_or_ratio_metric(
+            manifest=manifest, current_project=current_project, metric=metric
+        )
     else:
         assert_values_exhausted(metric.type)
