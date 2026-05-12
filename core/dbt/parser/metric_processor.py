@@ -10,6 +10,34 @@ from dbt.contracts.graph.nodes import Metric
 from dbt.node_types import NodeType
 
 
+def _resolve_and_process_input_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    input_metric: MetricInput,
+) -> Metric:
+    """Resolve a single input metric, recurse into it, and register the dependency."""
+    target_metric = manifest.resolve_metric(
+        target_metric_name=input_metric.name,
+        target_metric_package=None,
+        current_project=current_project,
+        node_package=metric.package_name,
+    )
+    if target_metric is None:
+        raise dbt.exceptions.ParsingError(
+            f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
+            node=metric,
+        )
+    elif isinstance(target_metric, Disabled):
+        raise dbt.exceptions.ParsingError(
+            f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+            node=metric,
+        )
+    _process_metric_node(manifest=manifest, current_project=current_project, metric=target_metric)
+    metric.depends_on.add_node(target_metric.unique_id)
+    return target_metric
+
+
 def _add_depends_on_metrics_to_v2_metric(
     metric: Metric,
     input_metrics: List[MetricInput],
@@ -18,30 +46,7 @@ def _add_depends_on_metrics_to_v2_metric(
 ) -> None:
     """Set the depends_on property for a v2 metric that depends on other metrics"""
     for input_metric in input_metrics:
-        target_metric = manifest.resolve_metric(
-            target_metric_name=input_metric.name,
-            target_metric_package=None,
-            current_project=current_project,
-            node_package=metric.package_name,
-        )
-
-        if target_metric is None:
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` does not exist but was referenced.",
-                node=metric,
-            )
-        elif isinstance(target_metric, Disabled):
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
-                node=metric,
-            )
-
-        _process_metric_node(
-            manifest=manifest,
-            current_project=current_project,
-            metric=target_metric,
-        )
-        metric.depends_on.add_node(target_metric.unique_id)
+        _resolve_and_process_input_metric(manifest, current_project, metric, input_metric)
 
 
 def _process_metric_depends_on_semantic_models_for_measures(
@@ -187,28 +192,11 @@ def _resolve_and_propagate_input_metrics(
     input_metrics: List[MetricInput],
 ) -> None:
     for input_metric in input_metrics:
-        target_metric = manifest.resolve_metric(
-            target_metric_name=input_metric.name,
-            target_metric_package=None,
-            current_project=current_project,
-            node_package=metric.package_name,
-        )
-        if target_metric is None:
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
-                node=metric,
-            )
-        elif isinstance(target_metric, Disabled):
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
-                node=metric,
-            )
-        _process_metric_node(
-            manifest=manifest, current_project=current_project, metric=target_metric
+        target_metric = _resolve_and_process_input_metric(
+            manifest, current_project, metric, input_metric
         )
         for input_measure in target_metric.type_params.input_measures:
             metric.add_input_measure(input_measure)
-        metric.depends_on.add_node(target_metric.unique_id)
 
 
 def _process_derived_or_ratio_metric(
