@@ -111,9 +111,18 @@ class TestRunner(CompileRunner):  # type: ignore[type-arg]
             result.node.attached_node if isinstance(result.node, GenericTestNode) else None
         )
 
+        name = self.describe_node_name()
+        if result.adapter_response:
+            adapter_msg = result.adapter_response.get("_message", "")
+            if adapter_msg:
+                # Extract parenthesized content, e.g. "(1.0 rows, 513.6 MiB processed)"
+                paren_match = re.search(r"\(.+\)", adapter_msg)
+                if paren_match:
+                    name = f"{name} {paren_match.group(0)}"
+
         fire_event(
             LogTestResult(
-                name=self.describe_node_name(),
+                name=name,
                 status=str(result.status),
                 index=self.node_index,
                 num_models=self.num_nodes,

@@ -1,0 +1,6 @@
+kind: Features
+body: Display adapter response message (e.g., bytes processed) in test result terminal output
+time: 2026-04-14T13:27:00.000000+00:00
+custom:
+  Author: TODO
+  Issue: "TODO"
