@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from jinja2.nodes import Call, Const
 
@@ -62,18 +62,25 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
     return doc_blocks
 
 
+def _render_description_and_columns(
+    context: Dict[str, Any],
+    obj: Union[ManifestNode, SourceDefinition],
+    manifest: Manifest,
+) -> None:
+    obj.doc_blocks = _get_doc_blocks(obj.description, manifest, obj.package_name)
+    obj.description = get_rendered(obj.description, context)
+    for column in obj.columns.values():
+        column.doc_blocks = _get_doc_blocks(column.description, manifest, obj.package_name)
+        column.description = get_rendered(column.description, context)
+
+
 # node and column descriptions
 def _process_docs_for_node(
     context: Dict[str, Any],
     node: ManifestNode,
     manifest: Manifest,
-):
-    node.doc_blocks = _get_doc_blocks(node.description, manifest, node.package_name)
-    node.description = get_rendered(node.description, context)
-
-    for column_name, column in node.columns.items():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, node.package_name)
-        column.description = get_rendered(column.description, context)
+) -> None:
+    _render_description_and_columns(context, node, manifest)
 
 
 # source and table descriptions, column descriptions
@@ -81,15 +88,9 @@ def _process_docs_for_source(
     context: Dict[str, Any],
     source: SourceDefinition,
     manifest: Manifest,
-):
-    source.doc_blocks = _get_doc_blocks(source.description, manifest, source.package_name)
-    source.description = get_rendered(source.description, context)
-
+) -> None:
+    _render_description_and_columns(context, source, manifest)
     source.source_description = get_rendered(source.source_description, context)
-
-    for column in source.columns.values():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, source.package_name)
-        column.description = get_rendered(column.description, context)
 
 
 # macro argument descriptions

@@ -61,7 +61,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    ResultNode,
     SavedQuery,
     SeedNode,
     SemanticManifestNode,
@@ -1859,9 +1858,6 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
     _check_function_language_support(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
-
-
-DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
 def _process_refs(
