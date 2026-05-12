@@ -231,7 +231,6 @@ class UnparsedColumnEntityV2(UnparsedEntityBase):
 class UnparsedDerivedEntityV2(UnparsedEntityBase):
     """Used for dbt Semantic Layer derived entities (v2 YAML)."""
 
-    name: str
     expr: str
 
 
