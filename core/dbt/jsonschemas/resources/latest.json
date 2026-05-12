@@ -640,6 +640,38 @@
         "unique"
       ]
     },
+    "ComputeArg": {
+      "oneOf": [
+        {
+          "description": "Execute on the remote warehouse (Snowflake, BigQuery, etc.)",
+          "type": "string",
+          "enum": [
+            "remote"
+          ]
+        },
+        {
+          "description": "Run computations in-process",
+          "type": "string",
+          "enum": [
+            "inline"
+          ]
+        },
+        {
+          "description": "Run computations in a separate, ephemeral worker process",
+          "type": "string",
+          "enum": [
+            "sidecar"
+          ]
+        },
+        {
+          "description": "Run via the remote compute service (persistent workers/cluster).",
+          "type": "string",
+          "enum": [
+            "service"
+          ]
+        }
+      ]
+    },
     "ConstantProperty": {
       "type": "object",
       "required": [
@@ -1061,6 +1093,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "copy_grants": {
@@ -4837,6 +4879,16 @@
             "null"
           ]
         },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "concurrent_batches": {
           "anyOf": [
             {
@@ -8018,6 +8070,16 @@
             "null"
           ]
         },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "copy_grants": {
           "anyOf": [
             {
@@ -10479,6 +10541,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "copy_grants": {

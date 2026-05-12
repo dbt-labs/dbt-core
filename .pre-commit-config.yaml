@@ -90,3 +90,13 @@ repos:
         files: ^core/dbt/
         types: [python]
         pass_filenames: true
+      # Optional: runs CodeScene `cs delta` on staged changes. The wrapper
+      # script silently exits 0 unless the `cs` CLI is installed AND CodeScene
+      # auth is configured, so this is a no-op for contributors who haven't
+      # opted in. See CONTRIBUTING.md.
+      - id: codescene-delta
+        name: codescene-delta
+        entry: python scripts/pre-commit-hooks/codescene_delta.py
+        language: system
+        types: [python]
+        pass_filenames: false
