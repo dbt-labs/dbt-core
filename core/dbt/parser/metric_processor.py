@@ -75,39 +75,6 @@ def _process_metric_depends_on_semantic_models_for_measures(
         metric.depends_on.add_node(target_semantic_model.unique_id)
 
 
-def _process_multiple_metric_inputs(
-    manifest: Manifest,
-    current_project: str,
-    metric: Metric,
-    metric_inputs: List[MetricInput],
-) -> None:
-    for input_metric in metric_inputs:
-        target_metric = manifest.resolve_metric(
-            target_metric_name=input_metric.name,
-            target_metric_package=None,
-            current_project=current_project,
-            node_package=metric.package_name,
-        )
-
-        if target_metric is None:
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` does not exist but was referenced.",
-                node=metric,
-            )
-        elif isinstance(target_metric, Disabled):
-            raise dbt.exceptions.ParsingError(
-                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
-                node=metric,
-            )
-
-        _process_metric_node(
-            manifest=manifest, current_project=current_project, metric=target_metric
-        )
-        for input_measure in target_metric.type_params.input_measures:
-            metric.add_input_measure(input_measure)
-        metric.depends_on.add_node(target_metric.unique_id)
-
-
 def _process_v2_cumulative_metric(
     manifest: Manifest,
     current_project: str,
