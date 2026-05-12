@@ -609,7 +609,7 @@ def build_node_edges(
     for node in nodes:
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
         for unique_id in backward_edges[node.unique_id]:
-            if unique_id in forward_edges.keys():
+            if unique_id in forward_edges:
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges), _sort_values(backward_edges)
 
@@ -621,7 +621,7 @@ def build_macro_edges(nodes: List[Any]) -> Dict[str, List[str]]:
     }
     for node in nodes:
         for unique_id in node.depends_on_macros:
-            if unique_id in forward_edges.keys():
+            if unique_id in forward_edges:
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges)
 
