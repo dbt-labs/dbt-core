@@ -24,6 +24,8 @@ use dirs::home_dir;
 
 use crate::args::LoadArgs;
 
+const ALLOW_EXPERIMENTAL_ADAPTERS_ENV: &str = "DBT_ALLOW_EXPERIMENTAL_ADAPTERS";
+
 pub fn load_profiles(
     arg: &LoadArgs,
     raw_dbt_project: &DbtProjectSimplified,
@@ -94,7 +96,7 @@ pub fn load_profiles(
     })?;
 
     let adapter = db_config.adapter_type();
-    if dbt_env::env_var_is_disabled("DBT_ALLOW_EXPERIMENTAL_ADAPTERS")
+    if !experimental_adapters_allowed()
         && !dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS.contains(&adapter)
     {
         return Err(fs_err!(
@@ -131,6 +133,14 @@ pub fn load_profiles(
         relative_profile_path,
         threads: arg.threads,
     })
+}
+
+fn experimental_adapters_allowed() -> bool {
+    if cfg!(debug_assertions) && std::env::var_os(ALLOW_EXPERIMENTAL_ADAPTERS_ENV).is_none() {
+        true
+    } else {
+        !dbt_env::env_var_is_disabled(ALLOW_EXPERIMENTAL_ADAPTERS_ENV)
+    }
 }
 
 /// Resolve the profile name to use.
