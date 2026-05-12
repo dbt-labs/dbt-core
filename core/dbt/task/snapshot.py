@@ -17,6 +17,25 @@ class SnapshotRunner(ModelRunner):
     def describe_node(self) -> str:
         return "snapshot {}".format(self.get_node_representation())
 
+    def execute(self, compiled_node, manifest):
+        try:
+            # Call the parent class (ModelRunner) execution logic
+            return super().execute(compiled_node, manifest)
+        except Exception as e:
+            # Intercept the specific database error for snapshots
+            if "Duplicate row detected during DML action" in str(e):
+                hint = "\n\nHint: Ensure the unique_key column(s) are really unique."
+
+                # dbt exceptions usually store their message in the 'msg' attribute
+                if hasattr(e, "msg"):
+                    e.msg += hint
+                # Fallback for standard Python exception arguments
+                elif hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], str):
+                    e.args = (e.args[0] + hint,) + e.args[1:]
+
+            # Re-raise the error so dbt's terminal logger prints it normally
+            raise e
+
     def print_result_line(self, result):
         model = result.node
         group = group_lookup.get(model.unique_id)
