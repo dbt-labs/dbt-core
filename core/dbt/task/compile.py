@@ -7,6 +7,7 @@ from dbt.contracts.graph.nodes import ManifestSQLNode
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
+from dbt.graph.graph import UniqueId
 from dbt.graph.selector_spec import SelectionCriteria
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
 from dbt.parser.manifest import process_node
@@ -84,8 +85,16 @@ class CompileTask(GraphRunnableTask):
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return CompileRunner
 
-    def _get_directly_selected_unique_ids(self) -> Set[str]:
-        """unique_ids matched by --select before graph operator (+/@) expansion."""
+    def _get_directly_selected_unique_ids(self) -> Set[UniqueId]:
+        """unique_ids matched by --select before graph operator (+/@) expansion.
+
+        Each entry in self.selection_arg is parsed as a single SelectionCriteria
+        — intersection tokens within one entry (e.g. ``tag:foo,tag:bar``) are
+        not split here and will resolve to nothing, matching the pre-existing
+        filter behavior for that grammar. The execution path still selects
+        nodes correctly via parse_difference; only end-of-task output filtering
+        is affected.
+        """
         if not self.selection_arg:
             return set()
         selector = self.get_node_selector()
