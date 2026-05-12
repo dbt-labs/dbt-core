@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from dbt.parser.manifest import _get_doc_blocks
+from dbt.parser.doc_processor import _get_doc_blocks
 
 
 class TestGetDocBlocks:

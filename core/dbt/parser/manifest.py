@@ -11,7 +11,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Typ
 
 import jinja2
 import msgpack
-from jinja2.nodes import Call, Const
 
 import dbt.deprecations
 import dbt.exceptions
@@ -34,7 +33,7 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources.types import BatchSize, FunctionLanguage, FunctionType
 from dbt.artifacts.schemas.base import Writable
-from dbt.clients.jinja import MacroStack, get_rendered
+from dbt.clients.jinja import MacroStack
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
@@ -103,6 +102,15 @@ from dbt.mp_context import get_mp_context
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
 from dbt.parser.base import Parser
+from dbt.parser.doc_processor import (
+    _process_docs_for_exposure,
+    _process_docs_for_macro,
+    _process_docs_for_metrics,
+    _process_docs_for_node,
+    _process_docs_for_saved_query,
+    _process_docs_for_semantic_model,
+    _process_docs_for_source,
+)
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
 from dbt.parser.functions import FunctionParser
@@ -128,7 +136,6 @@ from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.utils.artifact_upload import add_artifact_produced
 from dbt.version import __version__
-from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
@@ -1855,122 +1862,6 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 
 
 DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
-
-
-def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> List[str]:
-    ast = parse(description)
-    doc_blocks: List[str] = []
-
-    if not hasattr(ast, "body"):
-        return doc_blocks
-
-    for statement in ast.body:
-        for node in statement.nodes:
-            if (
-                isinstance(node, Call)
-                and hasattr(node, "node")
-                and hasattr(node, "args")
-                and hasattr(node.node, "name")
-                and node.node.name == "doc"
-            ):
-                # Only Const is statically resolvable to a block name at parse time.
-                #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
-                # Filter out Const values to avoid raising an unhandled exception attempting
-                # to statically parseother jinja expression nodes (ie Concat, CondExpr)
-                doc_args = [
-                    arg.value
-                    for arg in node.args
-                    if isinstance(arg, Const) and hasattr(arg, "value")
-                ]
-
-                if len(doc_args) == 1:
-                    package, name = None, doc_args[0]
-                elif len(doc_args) == 2:
-                    package, name = doc_args
-                else:
-                    continue
-
-                if not manifest.metadata.project_name:
-                    continue
-
-                resolved_doc = manifest.resolve_doc(
-                    name, package, manifest.metadata.project_name, node_package
-                )
-
-                if resolved_doc:
-                    doc_blocks.append(resolved_doc.unique_id)
-
-    return doc_blocks
-
-
-# node and column descriptions
-def _process_docs_for_node(
-    context: Dict[str, Any],
-    node: ManifestNode,
-    manifest: Manifest,
-):
-    node.doc_blocks = _get_doc_blocks(node.description, manifest, node.package_name)
-    node.description = get_rendered(node.description, context)
-
-    for column_name, column in node.columns.items():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, node.package_name)
-        column.description = get_rendered(column.description, context)
-
-
-# source and table descriptions, column descriptions
-def _process_docs_for_source(
-    context: Dict[str, Any],
-    source: SourceDefinition,
-    manifest: Manifest,
-):
-    source.doc_blocks = _get_doc_blocks(source.description, manifest, source.package_name)
-    source.description = get_rendered(source.description, context)
-
-    source.source_description = get_rendered(source.source_description, context)
-
-    for column in source.columns.values():
-        column.doc_blocks = _get_doc_blocks(column.description, manifest, source.package_name)
-        column.description = get_rendered(column.description, context)
-
-
-# macro argument descriptions
-def _process_docs_for_macro(context: Dict[str, Any], macro: Macro) -> None:
-    macro.description = get_rendered(macro.description, context)
-    for arg in macro.arguments:
-        arg.description = get_rendered(arg.description, context)
-
-
-# exposure descriptions
-def _process_docs_for_exposure(context: Dict[str, Any], exposure: Exposure) -> None:
-    exposure.description = get_rendered(exposure.description, context)
-
-
-def _process_docs_for_metrics(context: Dict[str, Any], metric: Metric) -> None:
-    metric.description = get_rendered(metric.description, context)
-
-
-def _process_docs_for_semantic_model(
-    context: Dict[str, Any], semantic_model: SemanticModel
-) -> None:
-    if semantic_model.description:
-        semantic_model.description = get_rendered(semantic_model.description, context)
-
-    for dimension in semantic_model.dimensions:
-        if dimension.description:
-            dimension.description = get_rendered(dimension.description, context)
-
-    for measure in semantic_model.measures:
-        if measure.description:
-            measure.description = get_rendered(measure.description, context)
-
-    for entity in semantic_model.entities:
-        if entity.description:
-            entity.description = get_rendered(entity.description, context)
-
-
-def _process_docs_for_saved_query(context: Dict[str, Any], saved_query: SavedQuery) -> None:
-    if saved_query.description:
-        saved_query.description = get_rendered(saved_query.description, context)
 
 
 def _process_refs(
