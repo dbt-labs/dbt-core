@@ -94,7 +94,7 @@ class UnitTestManifestLoader:
             raw_code=tested_node.raw_code,
             database=tested_node.database,
             schema=tested_node.schema,
-            alias=name,
+            alias=f"{test_case.model}__{name}",
             fqn=test_case.unique_id.split("."),
             checksum=FileHash.empty(),
             tested_node_unique_id=tested_node.unique_id,
