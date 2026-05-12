@@ -98,7 +98,7 @@ class SavedQuery(SavedQueryMandatory):
     depends_on: DependsOn = field(default_factory=DependsOn)
     created_at: float = field(default_factory=lambda: time.time())
     refs: List[RefArgs] = field(default_factory=list)
-    tags: Union[List[str], str] = field(
+    tags: Union[str, List[str]] = field(
         default_factory=list_str,
         metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
     )

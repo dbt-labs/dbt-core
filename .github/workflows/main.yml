@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     env:
       HATCH_PYTHON: ${{ matrix.python-version }}
 
@@ -168,7 +168,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         os: ["ubuntu-latest"]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
@@ -295,6 +295,14 @@ jobs:
       - name: Set up postgres (windows)
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-postgres-windows
+
+      # Required when pip installs dependencies from git sources (e.g. the
+      # temporary metricflow @ git+https://... pin): metricflow's snapshot
+      # filenames exceed Windows' 260-char MAX_PATH, so `git clone` aborts
+      # with "Filename too long" unless core.longpaths is enabled.
+      - name: Enable git long paths (windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
 
       - name: "Install hatch"
         uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install

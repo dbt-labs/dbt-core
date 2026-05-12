@@ -61,7 +61,7 @@ class NodeAndTestConfig(BaseConfig):
         default=None,
         metadata=CompareBehavior.Exclude.meta(),
     )
-    tags: Union[List[str], str] = field(
+    tags: Union[str, List[str]] = field(
         default_factory=list_str,
         metadata=metas(ShowBehavior.Hide, MergeBehavior.Append, CompareBehavior.Exclude),
     )
