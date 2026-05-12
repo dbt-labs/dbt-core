@@ -1,0 +1,6 @@
+kind: Fixes
+body: Preserve sources in sources.json when warn-error raises EventCompilationError during freshness after_execute
+time: 2026-04-15T12:00:00.000000-07:00
+custom:
+  Author: KamayaniR
+  Issue: "12812"
