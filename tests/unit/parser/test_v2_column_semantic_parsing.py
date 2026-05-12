@@ -11,6 +11,8 @@ from collections import OrderedDict
 from metricflow_semantic_interfaces.type_enums import DimensionType, EntityType
 
 from dbt.artifacts.resources import ColumnDimension, ColumnEntity, ColumnInfo
+from dbt.contracts.graph.unparsed import UnparsedColumn, UnparsedColumnEntityV2
+from dbt.parser.common import ParserRef
 from dbt.parser.schema_yaml_readers import SemanticModelParser
 
 
@@ -147,3 +149,51 @@ class TestParseV2ColumnEntitiesExpr:
         assert len(entities) == 1
         assert entities[0].name == "foreign_id_col"
         assert entities[0].expr is None
+
+
+class TestParserRefEntityAdd:
+    """Test that ParserRef._add handles column-level entities without an explicit name.
+
+    Before the fix, UnparsedColumnEntityV2 required a name — so entity: {type: foreign}
+    (no name) failed JSON-schema validation. These tests verify the full
+    UnparsedColumn → ColumnInfo path introduced by making the name optional.
+    """
+
+    def _add_column(self, name, entity):
+        """Run ParserRef._add on an UnparsedColumn and return the resulting ColumnInfo."""
+        col = UnparsedColumn(name=name, entity=entity)
+        refs = ParserRef()
+        refs._add(col)
+        return refs.column_info[name]
+
+    def test_entity_dict_without_name_falls_back_to_column_name(self):
+        """entity: {type: foreign} with no name must parse and default name to the column name."""
+        col_info = self._add_column(
+            name="property_id",
+            entity=UnparsedColumnEntityV2(type="foreign"),
+        )
+        assert isinstance(col_info.entity, ColumnEntity)
+        assert col_info.entity.name == "property_id"
+        assert col_info.entity.type == EntityType.FOREIGN
+
+    def test_entity_dict_without_name_expr_is_none_when_names_match(self):
+        """When the entity name falls back to the column name, _parse_v2_column_entities
+        should produce no expr (names are equal)."""
+        col = _make_column(
+            name="property_id",
+            entity=ColumnEntity(name="property_id", type=EntityType.FOREIGN),
+        )
+        entities = SemanticModelParser._parse_v2_column_entities(None, _make_columns_dict(col))
+        assert len(entities) == 1
+        assert entities[0].name == "property_id"
+        assert entities[0].expr is None
+
+    def test_entity_dict_without_name_with_description(self):
+        """entity: {type: foreign, description: ...} with no name — description flows through."""
+        col_info = self._add_column(
+            name="org_id",
+            entity=UnparsedColumnEntityV2(type="foreign", description="Foreign key to orgs"),
+        )
+        assert isinstance(col_info.entity, ColumnEntity)
+        assert col_info.entity.name == "org_id"
+        assert col_info.entity.description == "Foreign key to orgs"

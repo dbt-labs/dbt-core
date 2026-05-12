@@ -254,7 +254,7 @@ class ParserRef:
 
             if isinstance(column.entity, UnparsedColumnEntityV2):
                 entity = ColumnEntity(
-                    name=column.entity.name,
+                    name=column.entity.name or column.name,
                     type=EntityType(column.entity.type),
                     description=column.entity.description or column.description,
                     label=column.entity.label,

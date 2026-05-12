@@ -203,17 +203,18 @@ class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
 
 @dataclass
 class UnparsedEntityBase(dbtClassMixin):
-    name: str
     type: str  # EntityType enum
+    name: Optional[str] = None
     description: Optional[str] = None
     label: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnparsedEntity(UnparsedEntityBase):
     """Used for dbt Semantic Layer entities (v1 YAML only)."""
 
+    name: str
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -230,6 +231,7 @@ class UnparsedColumnEntityV2(UnparsedEntityBase):
 class UnparsedDerivedEntityV2(UnparsedEntityBase):
     """Used for dbt Semantic Layer derived entities (v2 YAML)."""
 
+    name: str
     expr: str
 
 
