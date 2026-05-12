@@ -19,6 +19,7 @@ use minijinja::{
     functions::debug,
     value::{Rest, Value as MinijinjaValue, ValueKind},
 };
+use regex::Regex;
 use serde::Deserialize;
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -48,6 +49,17 @@ pub static ENV_VARS: LazyLock<Mutex<HashMap<String, String>>> =
 /// Cache for template lookups per (current_project, root_project, component)
 static TEMPLATE_CACHE: LazyLock<Mutex<HashMap<(String, String), String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Matches local quoted or unquoted CTE definitions that use dbt's ephemeral CTE
+/// prefix, such as `with __dbt__cte__model as (...)` or
+/// `with "__dbt__cte__model" as (...)`, so they can be distinguished from refs.
+static LOCAL_EPHEMERAL_CTE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    let prefix = regex::escape(DBT_CTE_PREFIX);
+    Regex::new(&format!(
+        r#"(?i)(?:"{prefix}([[:alnum:]_]+)"|{prefix}([[:alnum:]_]+))\s*(?:\([^)]*\)\s*)?as\s*(?:(?:not\s+)?materialized\s+)?\("#
+    ))
+    .expect("valid local ephemeral CTE regex")
+});
 
 /// Converts a value to a boolean
 pub fn as_bool(args: Value) -> Result<Value, Error> {
@@ -169,6 +181,7 @@ pub fn inject_and_persist_ephemeral_models(
     }
 
     let mut final_sql = sql;
+    let local_ephemeral_cte_names = extract_local_ephemeral_cte_names(&final_sql);
     let ephemeral_model_names = extract_ephemeral_model_names(&final_sql);
 
     // Read ephemeral SQL from ephemeral dir and build cumulative CTEs
@@ -177,8 +190,18 @@ pub fn inject_and_persist_ephemeral_models(
     let mut all_ctes = Vec::new();
 
     for model_name in ephemeral_model_names {
-        let path = format!("{}/{}.sql", ephemeral_dir.to_str().unwrap(), model_name);
-        let ephemeral_sql = stdfs::read_to_string(&path)?;
+        let ephemeral_path = ephemeral_dir.join(format!("{model_name}.sql"));
+        let ephemeral_sql = match stdfs::read_to_string(&ephemeral_path) {
+            Ok(ephemeral_sql) => ephemeral_sql,
+            Err(err) if local_ephemeral_cte_names.contains(model_name) => {
+                match stdfs::exists(&ephemeral_path) {
+                    Ok(false) => continue,
+                    Ok(true) => return Err(err),
+                    Err(err) => return Err(err),
+                }
+            }
+            Err(err) => return Err(err),
+        };
 
         // Split existing CTEs and add any new ones
         let existing_ctes: Vec<String> = ephemeral_sql.split(sep).map(|s| s.to_string()).collect();
@@ -198,6 +221,10 @@ pub fn inject_and_persist_ephemeral_models(
         all_ctes.push(cte_line);
         stdfs::write(ephemeral_path, all_ctes.join(sep))?;
         all_ctes.pop();
+    }
+
+    if all_ctes.is_empty() {
+        return Ok(final_sql);
     }
 
     // Wrap the current SQL in a subquery and prepend CTEs
@@ -237,6 +264,20 @@ fn extract_ephemeral_model_names(sql: &str) -> Vec<&str> {
                 .next()
         })
         .filter(|&name| seen.insert(name)) // Deduplicate the extracted names
+        .collect()
+}
+
+/// Extract model names from locally defined `__dbt__cte__` CTEs.
+fn extract_local_ephemeral_cte_names(sql: &str) -> HashSet<&str> {
+    LOCAL_EPHEMERAL_CTE_RE
+        .captures_iter(sql)
+        .filter_map(|captures| {
+            // Capture 1 is the quoted CTE branch; capture 2 is the unquoted branch.
+            captures
+                .get(1)
+                .or_else(|| captures.get(2))
+                .map(|match_| match_.as_str())
+        })
         .collect()
 }
 
