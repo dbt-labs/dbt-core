@@ -34,10 +34,10 @@ from tests.functional.semantic_models.fixtures import (
     semantic_model_schema_yml_v2,
     semantic_model_schema_yml_v2_default_values,
     semantic_model_schema_yml_v2_disabled,
+    semantic_model_schema_yml_v2_entity_without_name,
     semantic_model_schema_yml_v2_false_config,
     semantic_model_schema_yml_v2_primary_entity_only_on_model,
     semantic_model_schema_yml_v2_renamed,
-    semantic_model_schema_yml_v2_entity_without_name,
     semantic_model_schema_yml_v2_with_primary_entity_only_on_column,
     semantic_model_test_groups_yml,
 )
