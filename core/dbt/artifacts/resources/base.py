@@ -54,9 +54,12 @@ class FileHash(dbtClassMixin):
     def from_contents(cls, contents: str, name="sha256") -> "FileHash":
         """Create a file hash from the given file contents. The hash is always
         the utf-8 encoding of the contents given, because dbt only reads files
-        as utf-8.
+        as utf-8. Line endings are normalized to LF before hashing so that
+        files with identical logical content produce the same hash regardless
+        of the platform they were created on (Windows CRLF vs Unix LF).
         """
-        data = contents.encode("utf-8")
+        normalized = contents.replace("\r\n", "\n").replace("\r", "\n")
+        data = normalized.encode("utf-8")
         checksum = hashlib.new(name, data).hexdigest()
         return cls(name=name, checksum=checksum)
 
