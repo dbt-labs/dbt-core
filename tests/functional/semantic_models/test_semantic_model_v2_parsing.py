@@ -37,6 +37,7 @@ from tests.functional.semantic_models.fixtures import (
     semantic_model_schema_yml_v2_false_config,
     semantic_model_schema_yml_v2_primary_entity_only_on_model,
     semantic_model_schema_yml_v2_renamed,
+    semantic_model_schema_yml_v2_entity_without_name,
     semantic_model_schema_yml_v2_with_primary_entity_only_on_column,
     semantic_model_test_groups_yml,
 )
@@ -1059,6 +1060,38 @@ class TestV2SemanticModelPartialParsingDisabled:
         result = runner.invoke(["parse"])
         assert result.success, result.exception
         assert len(result.result.semantic_models) == 0
+
+
+class TestSemanticModelEntityWithoutName:
+    """Regression test for DI-4133: entity: {type: foreign} without an explicit 'name'
+    must parse successfully and default the entity name to the column name."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2_entity_without_name,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_entity_without_name_defaults_to_column_name(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success, result.exception
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = list(manifest.semantic_models.values())[0]
+        entities = {entity.name: entity for entity in semantic_model.entities}
+
+        # Column "id" with entity: {type: primary} — name should default to "id"
+        assert "id" in entities
+        assert entities["id"].type == EntityType.PRIMARY
+        assert entities["id"].expr is None  # name matches column, no expr needed
+
+        # Column "foreign_key" with entity: {type: foreign} — name should default to "foreign_key"
+        assert "foreign_key" in entities
+        assert entities["foreign_key"].type == EntityType.FOREIGN
+        assert entities["foreign_key"].expr is None  # name matches column, no expr needed
 
 
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set
