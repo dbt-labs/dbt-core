@@ -1203,14 +1203,17 @@ pub struct Versions {
     pub constraints: Option<Vec<crate::schemas::properties::model_properties::ModelConstraint>>,
     pub data_tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
     pub tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
+    // Schema-only stub: exposes `columns` as a named typed property so the JSON Schema validator
+    // accepts array values. At runtime serde skips this field and `columns` arrives via
+    // __additional_properties__ as a raw YmlValue.
+    // TODO: remove skip_deserializing and delete the __additional_properties__ path for `columns`
+    // once ColumnInheritanceRules::from_version_columns is refactored to accept
+    // &[VersionColumnProperties] instead of &YmlValue.
+    #[serde(skip_deserializing, default)]
+    pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
     // TODO: promote `docs` to a typed field once we settle on the right struct (dbt-core uses
     // Docs { show: bool, node_color: Optional[str] } but we only have DocsConfig which may
     // not match exactly).
-    // TODO: promote `columns` to a typed field once ColumnInheritanceRules::from_version_columns
-    // is refactored to accept &[ColumnProperties] instead of &YmlValue. Currently the
-    // include/exclude inheritance directives in the columns list cannot round-trip through
-    // ColumnProperties (which requires `name`), so the raw value must stay in
-    // __additional_properties__ for now.
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
@@ -2224,6 +2227,74 @@ period: hour
         assert_eq!(
             default, mantle_form,
             "DbtChecksum::default() must equal the Mantle state-manifest form {{name:\"none\",checksum:\"\"}}"
+        );
+    }
+
+    // Regression: `columns:` inside a version block must survive deserialization and land in
+    // `__additional_properties__`, where `process_versioned_columns` reads it. The schema-only
+    // stub field (`#[serde(skip_deserializing)]`) must NOT cause serde to silently consume and
+    // discard the value before dbt_yaml's flatten-dunder mechanism can capture it.
+    #[test]
+    fn test_versions_columns_land_in_additional_properties() {
+        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n";
+        let value: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        // Use into_typed (the same path as into_typed_with_jinja) so dbt_yaml's
+        // dunder-flatten mechanism is active.
+        let versions: Versions = value
+            .into_typed::<Versions, _, _>(
+                |_, _, _| {},
+                |_| -> Result<
+                    Option<dbt_yaml::Value>,
+                    Box<dyn std::error::Error + 'static + Send + Sync>,
+                > { Ok(None) },
+            )
+            .unwrap();
+
+        assert!(
+            versions.__additional_properties__.contains_key("columns"),
+            "`columns` must reach __additional_properties__, but it was dropped. \
+             Check that serde's skip_deserializing does not prevent the value from \
+             falling through to the dbt_yaml flatten-dunder catch-all."
+        );
+
+        // Also confirm the schema-only `columns` field itself is always None at runtime.
+        assert!(
+            versions.columns.is_none(),
+            "`columns` schema-stub field must always be None after deserialization"
+        );
+    }
+
+    // Regression: the generated JSON Schema for Versions must expose `columns` as a named
+    // array property so YAML language servers do not reject `columns: [...]` with
+    // "Incorrect type. Expected 'object'".
+    #[test]
+    fn test_versions_schema_has_columns_as_array_property() {
+        use crate::man::deny_additional_properties_in_root;
+        use schemars::r#gen::SchemaSettings;
+
+        let generator = SchemaSettings::draft07().into_generator();
+        let mut root =
+            generator.into_root_schema_for::<crate::schemas::properties::DbtPropertiesFile>();
+        deny_additional_properties_in_root(&mut root);
+
+        let schema_json = serde_json::to_value(&root).unwrap();
+        let versions_def = &schema_json["definitions"]["Versions"];
+        let columns_schema = &versions_def["properties"]["columns"];
+
+        assert!(
+            !columns_schema.is_null(),
+            "`columns` must be a named property in the Versions schema definition"
+        );
+
+        let type_field = &columns_schema["type"];
+        let is_array = type_field == "array"
+            || type_field
+                .as_array()
+                .map(|arr| arr.iter().any(|v| v == "array"))
+                .unwrap_or(false);
+        assert!(
+            is_array,
+            "`columns` property must have type 'array' (got {type_field})"
         );
     }
 }

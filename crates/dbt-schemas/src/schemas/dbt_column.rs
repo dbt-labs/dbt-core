@@ -123,6 +123,31 @@ pub struct ColumnProperties {
     pub dimension: Option<ColumnPropertiesDimension>,
 }
 
+/// Column entry inside a model version block.
+///
+/// Unlike `ColumnProperties`, `name` is optional here because version column lists can contain
+/// include/exclude directives (e.g. `include: all, exclude: [col]`) that have no name.
+#[skip_serializing_none]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct VersionColumnProperties {
+    pub name: Option<String>,
+    pub include: Option<StringOrArrayOfStrings>,
+    pub exclude: Option<Vec<String>>,
+    pub data_type: Option<String>,
+    pub description: Option<String>,
+    pub constraints: Option<Vec<Constraint>>,
+    pub tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<DataTests>>,
+    pub granularity: Option<Granularity>,
+    pub policy_tags: Option<Vec<String>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub column_mask: Option<ColumnMask>,
+    pub quote: Option<bool>,
+    pub config: Option<ColumnConfig>,
+    pub entity: Option<Entity>,
+    pub dimension: Option<ColumnPropertiesDimension>,
+}
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone, DbtSchema, Eq, PartialEq)]
 pub struct ColumnMask {
     pub function: String,
