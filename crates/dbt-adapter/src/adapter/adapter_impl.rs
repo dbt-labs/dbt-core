@@ -4128,15 +4128,43 @@ impl AdapterImpl {
     }
 
     /// Get the default ADBC statement options
-    pub fn get_adbc_execute_options(&self, _state: &State) -> ExecuteOptions {
+    pub fn get_adbc_execute_options(&self, state: &State) -> ExecuteOptions {
         match self.adapter_type() {
-            Bigquery => vec![(
-                QUERY_LINK_FAILED_JOB.to_string(),
-                OptionValue::String("true".to_string()),
-            )],
+            Bigquery => {
+                let mut options = vec![(
+                    QUERY_LINK_FAILED_JOB.to_string(),
+                    OptionValue::String("true".to_string()),
+                )];
+
+                let timeout = bigquery_job_timeout_from_state(state).or_else(|| {
+                    self.get_db_config("job_execution_timeout_seconds")
+                        .and_then(|v| v.parse::<i64>().ok())
+                });
+
+                if let Some(t) = timeout {
+                    options.push((QUERY_JOB_TIMEOUT.to_string(), OptionValue::Int(t)));
+                }
+
+                options
+            }
             _ => Vec::new(),
         }
     }
+}
+
+/// Reads `job_execution_timeout_seconds` from the BigQuery adapter attr of the current
+/// model or snapshot in the Jinja state. Returns `None` if the state has no model or the
+/// model has no BigQuery timeout configured.
+///
+/// The `bigquery_attr` field lives at the top level of the model value because
+/// `dbt-yaml`'s `flatten_dunder` serialization merges `__adapter_attr__` into the parent.
+fn bigquery_job_timeout_from_state(state: &State) -> Option<i64> {
+    let model = state.lookup("model", &[])?;
+    let bq_attr = model.get_attr("bigquery_attr").ok()?;
+    bq_attr
+        .get_attr("job_execution_timeout_seconds")
+        .ok()?
+        .as_i64()
 }
 
 /// List of possible builtin strategies for adapters.
@@ -5109,5 +5137,94 @@ mod tests {
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let batch = record_batch_with_string_column("nspname", vec!["public"]);
         assert!(adapter.list_schemas(batch).is_err());
+    }
+
+    // -- BigQuery job_execution_timeout_seconds tests -------------------------
+
+    fn make_bigquery_model_with_timeout(timeout_seconds: u64) -> Value {
+        // Production models have bigquery_attr at the top level because dbt-yaml's
+        // flatten_dunder serialization merges __adapter_attr__ fields into the parent map.
+        use std::collections::BTreeMap;
+        let bq_attr = BTreeMap::from([("job_execution_timeout_seconds", timeout_seconds as i64)]);
+        let model = BTreeMap::from([("bigquery_attr", bq_attr)]);
+        Value::from_serialize(&model)
+    }
+
+    fn make_bigquery_snapshot_with_timeout(timeout_seconds: u64) -> Value {
+        // Same structure as model: bigquery_attr at top level.
+        make_bigquery_model_with_timeout(timeout_seconds)
+    }
+
+    fn find_job_timeout(options: &[(String, OptionValue)]) -> Option<i64> {
+        options.iter().find_map(|(k, v)| {
+            if k == QUERY_JOB_TIMEOUT {
+                if let OptionValue::Int(t) = v {
+                    Some(*t)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+    }
+
+    #[test]
+    fn test_bigquery_adbc_options_no_timeout_when_not_configured() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert!(find_job_timeout(&options).is_none());
+    }
+
+    #[test]
+    fn test_bigquery_adbc_options_model_level_timeout() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let mut env = Environment::new();
+        env.add_global("model", make_bigquery_model_with_timeout(300));
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert_eq!(find_job_timeout(&options), Some(300));
+    }
+
+    #[test]
+    fn test_bigquery_adbc_options_snapshot_model_level_timeout() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let mut env = Environment::new();
+        env.add_global("model", make_bigquery_snapshot_with_timeout(600));
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert_eq!(find_job_timeout(&options), Some(600));
+    }
+
+    #[test]
+    fn test_bigquery_adbc_options_connection_level_timeout_fallback() {
+        let config = Mapping::from_iter([("job_execution_timeout_seconds".into(), 120_i64.into())]);
+        let adapter = AdapterImpl::new(build_engine(Bigquery, config), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert_eq!(find_job_timeout(&options), Some(120));
+    }
+
+    #[test]
+    fn test_bigquery_adbc_options_model_level_overrides_connection_level() {
+        let config = Mapping::from_iter([("job_execution_timeout_seconds".into(), 120_i64.into())]);
+        let adapter = AdapterImpl::new(build_engine(Bigquery, config), None);
+        let mut env = Environment::new();
+        env.add_global("model", make_bigquery_model_with_timeout(900));
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert_eq!(find_job_timeout(&options), Some(900));
+    }
+
+    #[test]
+    fn test_non_bigquery_adapter_has_no_timeout_option() {
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let options = adapter.get_adbc_execute_options(&state);
+        assert!(find_job_timeout(&options).is_none());
     }
 }
