@@ -108,6 +108,34 @@ def _process_multiple_metric_inputs(
         metric.depends_on.add_node(target_metric.unique_id)
 
 
+def _process_simple_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    if metric.type_params.measure is None and metric.type_params.metric_aggregation_params is None:
+        raise dbt.exceptions.ParsingError(
+            f"Simple metric {metric} should have a measure or agg type defined, but it does not.",
+            node=metric,
+        )
+    if metric.type_params.measure is not None:
+        # v1: measure-based
+        metric.add_input_measure(metric.type_params.measure)
+        _process_metric_depends_on_semantic_models_for_measures(
+            manifest=manifest, current_project=current_project, metric=metric
+        )
+    else:
+        # v2: semantic model-based
+        semantic_model_dependency = metric.type_params.get_semantic_model_name()
+        if semantic_model_dependency is None:
+            raise dbt.exceptions.ParsingError(
+                f"Simple metric `{metric.name}` must be attached to a semantic model.",
+                node=metric,
+            )
+        unique_id = f"{NodeType.SemanticModel}.{current_project}.{semantic_model_dependency}"
+        metric.depends_on.add_node(unique_id)
+
+
 def _process_metric_node(
     manifest: Manifest,
     current_project: str,
@@ -123,23 +151,12 @@ def _process_metric_node(
         # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
         # probably require passing through / maintaining a "processed" set of metric names)
 
-    if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
-        if metric.type is MetricType.SIMPLE and (
-            metric.type_params.measure is None
-            and metric.type_params.metric_aggregation_params is None
-        ):
-            # This should be caught earlier, but just in case, we assert here to avoid
-            # any unexpected behaviors.
-            raise dbt.exceptions.ParsingError(
-                f"Simple metric {metric} should have a measure or agg type defined, but it does not.",
-                node=metric,
-            )
-        elif metric.type is MetricType.CUMULATIVE and (
-            metric.type_params.measure is None
-            and (
-                metric.type_params.cumulative_type_params is None
-                or metric.type_params.cumulative_type_params.metric is None
-            )
+    if metric.type is MetricType.SIMPLE:
+        _process_simple_metric(manifest=manifest, current_project=current_project, metric=metric)
+    elif metric.type is MetricType.CUMULATIVE:
+        if metric.type_params.measure is None and (
+            metric.type_params.cumulative_type_params is None
+            or metric.type_params.cumulative_type_params.metric is None
         ):
             raise dbt.exceptions.ParsingError(
                 f"Cumulative metric {metric} should have a measure or input_metric defined, but it does not.",
@@ -153,31 +170,19 @@ def _process_metric_node(
             )
         else:
             # v2 dependencies
-            if metric.type is MetricType.SIMPLE:
-                semantic_model_dependency = metric.type_params.get_semantic_model_name()
-                if semantic_model_dependency is None:
-                    raise dbt.exceptions.ParsingError(
-                        f"Simple metric `{metric.name}` must be attached to a semantic model.",
-                        node=metric,
-                    )
-                unique_id = (
-                    f"{NodeType.SemanticModel}.{current_project}.{semantic_model_dependency}"
-                )
-                metric.depends_on.add_node(unique_id)
-            if metric.type is MetricType.CUMULATIVE:
-                cumulative_type_params = metric.type_params.cumulative_type_params
-                input_metric = (
-                    cumulative_type_params.metric if cumulative_type_params is not None else None
-                )
-                assert (
-                    input_metric is not None
-                ), f"Cumulative metric `{metric.name}` must have a metric as an input."
-                _add_depends_on_metrics_to_v2_metric(
-                    metric,
-                    input_metrics=[input_metric],
-                    manifest=manifest,
-                    current_project=current_project,
-                )
+            cumulative_type_params = metric.type_params.cumulative_type_params
+            input_metric = (
+                cumulative_type_params.metric if cumulative_type_params is not None else None
+            )
+            assert (
+                input_metric is not None
+            ), f"Cumulative metric `{metric.name}` must have a metric as an input."
+            _add_depends_on_metrics_to_v2_metric(
+                metric,
+                input_metrics=[input_metric],
+                manifest=manifest,
+                current_project=current_project,
+            )
     elif metric.type is MetricType.CONVERSION:
         conversion_type_params = metric.type_params.conversion_type_params
         assert (
