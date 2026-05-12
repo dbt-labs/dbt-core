@@ -1,0 +1,14 @@
+kind: Fixes
+body: >-
+  Fix regression from #12562 where `dbt show` and `dbt compile` filtered out
+  every result when `--select` used a graph operator (`+model`, `model+`,
+  `@model`) or a method selector (e.g. `tag:foo`, `state:modified`,
+  `fqn:model`). The membership check ran against the raw `--select` strings,
+  so any non-bare selector matched nothing. Filter the streamed `ShowNode` /
+  `CompiledNode` events by the resolved set of directly-selected `unique_id`s
+  instead, using the same selector parser dbt already uses for execution. The
+  substring fix from #12562 (originally #12539) is preserved structurally.
+time: 2026-05-12T03:55:05.0000000Z
+custom:
+    Author: tauhidanjum
+    Issue: "12562"

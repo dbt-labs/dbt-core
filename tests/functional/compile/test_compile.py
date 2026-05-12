@@ -292,6 +292,36 @@ class TestCompile:
             assert "linked" in summary
 
 
+class TestCompileGraphOperatorSelectors:
+    """`--select` accepts graph operators (`+m`, `m+`, `@m`) and method
+    selectors (`tag:`, `fqn:`…). Operator-expanded neighbors are compiled,
+    but the streamed `CompiledNode` output should only include the anchors
+    the user named — never the ancestors/descendants pulled in by the
+    operator, and never unrelated nodes."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "unrelated_model.sql": "select 1 as id",
+            "schema.yml": schema_yml,
+        }
+
+    @pytest.mark.parametrize("selector", ["+second_model", "@second_model", "fqn:second_model"])
+    def test_compile_anchor_selectors(self, project, selector):
+        (_, log_output) = run_dbt_and_capture(["compile", "--select", selector])
+        assert "Compiled node 'second_model' is:" in log_output
+        assert "Compiled node 'first_model' is:" not in log_output
+        assert "Compiled node 'unrelated_model' is:" not in log_output
+
+    def test_compile_descendants_operator(self, project):
+        (_, log_output) = run_dbt_and_capture(["compile", "--select", "first_model+"])
+        assert "Compiled node 'first_model' is:" in log_output
+        assert "Compiled node 'second_model' is:" not in log_output
+        assert "Compiled node 'unrelated_model' is:" not in log_output
+
+
 class TestSqlParseGroupingTokenLimit:
     @pytest.fixture(scope="class")
     def models(self):
