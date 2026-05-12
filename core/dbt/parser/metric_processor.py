@@ -56,10 +56,6 @@ def _process_metric_depends_on_semantic_models_for_measures(
 ) -> None:
     """For a given v1 metric, set the `depends_on` property"""
 
-    assert (
-        len(metric.type_params.input_measures) > 0
-        or metric.type_params.metric_aggregation_params is not None
-    ), f"{metric} should have a measure or agg type defined, but it does not."
     for input_measure in metric.type_params.input_measures:
         target_semantic_model = manifest.resolve_semantic_model_for_measure(
             target_measure_name=input_measure.name,
@@ -162,6 +158,20 @@ def _process_v2_conversion_metric(
     )
 
 
+def _is_v1_conversion(conversion_type_params: Any) -> bool:
+    return (
+        conversion_type_params.base_measure is not None
+        or conversion_type_params.conversion_measure is not None
+    )
+
+
+def _is_v2_conversion(conversion_type_params: Any) -> bool:
+    return (
+        conversion_type_params.base_metric is not None
+        or conversion_type_params.conversion_metric is not None
+    )
+
+
 def _process_conversion_metric(
     manifest: Manifest,
     current_project: str,
@@ -173,9 +183,9 @@ def _process_conversion_metric(
             f"{metric.name} is a conversion metric and must have conversion_type_params defined.",
             node=metric,
         )
-    if conversion_type_params.base_measure is not None:
+    if _is_v1_conversion(conversion_type_params):
         _process_v1_conversion_metric(manifest, current_project, metric, conversion_type_params)
-    elif conversion_type_params.base_metric is not None:
+    elif _is_v2_conversion(conversion_type_params):
         _process_v2_conversion_metric(manifest, current_project, metric, conversion_type_params)
     else:
         raise dbt.exceptions.ParsingError(
@@ -253,10 +263,10 @@ def _process_metric_node(
     # we skip the work. This could happen either due to recursion or if multiple
     # metrics derive from another given metric.
     # NOTE: This does not protect against infinite loops
+    # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
+    # probably require passing through / maintaining a "processed" set of metric names)
     if len(metric.type_params.input_measures) > 0:
         return
-        # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
-        # probably require passing through / maintaining a "processed" set of metric names)
 
     if metric.type is MetricType.SIMPLE:
         _process_simple_metric(manifest=manifest, current_project=current_project, metric=metric)
