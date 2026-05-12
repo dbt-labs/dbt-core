@@ -1,0 +1,6 @@
+kind: Fixes
+body: Preserve partial parse cache when meta contains integer keys; promote ParsedFileLoadFailed to WarnLevel so users see why the cache was discarded
+time: 2026-04-03T19:17:24.000000+00:00
+custom:
+    Author: ujjwalredd
+    Issue: "12578"
