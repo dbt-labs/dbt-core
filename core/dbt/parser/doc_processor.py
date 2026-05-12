@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from jinja2.nodes import Call, Const
 
@@ -16,6 +16,39 @@ from dbt.contracts.graph.nodes import (
 from dbt_common.clients.jinja import parse
 
 
+def _is_doc_call(node: Any) -> bool:
+    return (
+        isinstance(node, Call)
+        and hasattr(node, "node")
+        and hasattr(node, "args")
+        and hasattr(node.node, "name")
+        and node.node.name == "doc"
+    )
+
+
+def _resolve_doc_unique_id(node: Any, manifest: Manifest, node_package: str) -> Optional[str]:
+    # Only Const is statically resolvable to a block name at parse time.
+    #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
+    # Filter out Const values to avoid raising an unhandled exception attempting
+    # to statically parse other jinja expression nodes (ie Concat, CondExpr)
+    doc_args = [arg.value for arg in node.args if isinstance(arg, Const) and hasattr(arg, "value")]
+
+    if len(doc_args) == 1:
+        package, name = None, doc_args[0]
+    elif len(doc_args) == 2:
+        package, name = doc_args
+    else:
+        return None
+
+    if not manifest.metadata.project_name:
+        return None
+
+    resolved_doc = manifest.resolve_doc(
+        name, package, manifest.metadata.project_name, node_package
+    )
+    return resolved_doc.unique_id if resolved_doc else None
+
+
 def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> List[str]:
     ast = parse(description)
     doc_blocks: List[str] = []
@@ -25,41 +58,19 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
 
     for statement in ast.body:
         for node in statement.nodes:
-            if (
-                isinstance(node, Call)
-                and hasattr(node, "node")
-                and hasattr(node, "args")
-                and hasattr(node.node, "name")
-                and node.node.name == "doc"
-            ):
-                # Only Const is statically resolvable to a block name at parse time.
-                #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
-                # Filter out Const values to avoid raising an unhandled exception attempting
-                # to statically parseother jinja expression nodes (ie Concat, CondExpr)
-                doc_args = [
-                    arg.value
-                    for arg in node.args
-                    if isinstance(arg, Const) and hasattr(arg, "value")
-                ]
-
-                if len(doc_args) == 1:
-                    package, name = None, doc_args[0]
-                elif len(doc_args) == 2:
-                    package, name = doc_args
-                else:
-                    continue
-
-                if not manifest.metadata.project_name:
-                    continue
-
-                resolved_doc = manifest.resolve_doc(
-                    name, package, manifest.metadata.project_name, node_package
-                )
-
-                if resolved_doc:
-                    doc_blocks.append(resolved_doc.unique_id)
+            if not _is_doc_call(node):
+                continue
+            unique_id = _resolve_doc_unique_id(node, manifest, node_package)
+            if unique_id:
+                doc_blocks.append(unique_id)
 
     return doc_blocks
+
+
+def _render_if_set(items: Iterable[Any], context: Dict[str, Any]) -> None:
+    for item in items:
+        if item.description:
+            item.description = get_rendered(item.description, context)
 
 
 def _render_description_and_columns(
@@ -114,18 +125,9 @@ def _process_docs_for_semantic_model(
 ) -> None:
     if semantic_model.description:
         semantic_model.description = get_rendered(semantic_model.description, context)
-
-    for dimension in semantic_model.dimensions:
-        if dimension.description:
-            dimension.description = get_rendered(dimension.description, context)
-
-    for measure in semantic_model.measures:
-        if measure.description:
-            measure.description = get_rendered(measure.description, context)
-
-    for entity in semantic_model.entities:
-        if entity.description:
-            entity.description = get_rendered(entity.description, context)
+    _render_if_set(semantic_model.dimensions, context)
+    _render_if_set(semantic_model.measures, context)
+    _render_if_set(semantic_model.entities, context)
 
 
 def _process_docs_for_saved_query(context: Dict[str, Any], saved_query: SavedQuery) -> None:
