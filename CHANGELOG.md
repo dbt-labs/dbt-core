@@ -139,6 +139,64 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.176
+
+Released May 12, 2026
+
+### Features
+
+- [dbt-fusion] Add `iceberg_version` config support for Snowflake Iceberg V3 tables — sets `ICEBERG_VERSION` in DDL for built-in catalog, iceberg REST catalog, and dynamic tables, with model-level config taking precedence over `catalogs.yml` defaults. ([#8898](https://github.com/dbt-labs/dbt-fusion/issues/8898))
+- [dbt-fusion] Adds PackageParsingCompatibility as a supported warn_error_options group for dependency package strict parsing compatibility diagnostics.
+- [dbt-fusion] BigQuery: support model-level job_execution_timeout_seconds config, passed as QUERY_JOB_TIMEOUT to the ADBC driver during execution
+- [dbt-fusion] Add ClickHouse profile parity settings to dbt-schemas
+
+### Fixes
+
+- [dbt-fusion] Implement jarowinkler_similarity() in DuckDB sidecar ([#9813](https://github.com/dbt-labs/dbt-fusion/issues/9813))
+- [dbt-fusion] Honor project-level `+freshness: null` for sources so it propagates as `freshness: null` in the manifest ([#7188](https://github.com/dbt-labs/dbt-fusion/issues/7188))
+- [dbt-fusion] Snapshot `state:modified.body` parity: strip `{% snapshot %}` blocks correctly from on-disk SQL after `normalize_sql`
+- [dbt-fusion] Replay no longer returns an empty AgateTable for on-run-end / on-run-start operation hooks. The execute path now normalizes the operation node id (Fusion underscores → Mantle hyphens) before lookup, so macros like apply_meta_as_tags that read load_result(...).table.columns work as recorded.
+- [dbt-fusion] Allow hand-written dbt-shaped CTE names to compile without treating them as ephemeral model refs. ([#1167](https://github.com/dbt-labs/dbt-fusion/issues/1167))
+- [dbt-extension] VS Code: 'Open project' step in the Get Started panel now completes when a dbt project lives in a workspace subdirectory, not only at the workspace root.
+- [dbt-fusion] Apply BigQuery policy tags to columns during persist_docs via ALTER COLUMN SET OPTIONS; also support config.policy_tags syntax in column definitions ([#1580](https://github.com/dbt-labs/dbt-fusion/issues/1580))
+- [dbt-fusion] Sidecar unit test parity for `format: sql` fixtures with mixed numeric/string literals ([#9754,9672](https://github.com/dbt-labs/dbt-fusion/issues/9754,9672))
+- [dbt-fusion] Fix state:modified selection detecting default quoting configs as modified
+- [dbt-extension] VS Code extension: retry transient network errors during auth and recover from VerificationError automatically when the underlying issue clears (previously required a manual window reload). ([#1691](https://github.com/dbt-labs/dbt-fusion/issues/1691))
+- [dbt-fusion] Bump default Snowflake LOGIN_TIMEOUT from 10s to 60s and add connect-on-retry with quadratic backoff, matching dbt-snowflake (Python) connect_retries / retry_all / retry_on_database_errors semantics
+- [dbt-fusion] Render embedded double quotes in DuckDB identifiers from the DataFusion unparser ([#10057](https://github.com/dbt-labs/dbt-fusion/issues/10057))
+- [dbt-fusion] JSON schema for model version blocks now accepts the `columns` field as an array, fixing VS Code YAML validation error 'Incorrect type. Expected object'
+- [dbt-fusion] release.fs.yml: grant code-quality:read to test-fs call site so GitHub Actions graph resolution succeeds when callee uses permissions: read-all
+- [internal] Fix build warnings
+
+### Under the Hood
+
+- [dbt-fusion] (dbt-adapter): more user friendly gating on attempts to use adapter not yet supported ([#1258](https://github.com/dbt-labs/dbt-fusion/issues/1258))
+- [dbt-fusion] Delete SalesforceRelation in favor of Relation(AdapterType::Salesforce)
+- [internal] Replace per-entry parquet schema files with epoch-append parquet cache under compiled_state/schemas_analyzed/ and warehouse_state/schemas_remote/ (no SQLite dependency)
+- [dbt-fusion] Added new specific error codes instead of generic error codes
+- [dbt-fusion] Add stale-thread-local Snowflake connection repro test (xdbc, opt-in via --ignored)
+- [dbt-fusion] Add Snowflake STATEMENT_TIMEOUT cancellation repro test (xdbc, opt-in via --ignored)
+- [dbt-fusion] Bump BigQuery ADBC driver to support per-column policy tag updates
+- [dbt-fusion] Delete RedshiftRelation in favor of Relation(AdapterType::Redshift)
+- [dbt-fusion] (compatibility) align is_iceberg_format on Snowflake relation to attribute access in Jinja, matching upstream dbt-adapters @property behavior
+- [internal] Replace dateadd macro with the extension
+- [dbt-fusion] Add sidecar unit test parity coverage for unmocked dependency failures. ([#9522](https://github.com/dbt-labs/dbt-fusion/issues/9522))
+
+### Contributors
+- [@HannanNaeem](https://github.com/HannanNaeem) ([#1167](https://github.com/dbt-labs/dbt-fusion/issues/1167))
+- [@aahel](https://github.com/aahel) ([#8898](https://github.com/dbt-labs/dbt-fusion/issues/8898))
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt)
+- [@ajnovice](https://github.com/ajnovice)
+- [@b-per](https://github.com/b-per) ([#1580](https://github.com/dbt-labs/dbt-fusion/issues/1580))
+- [@dataders](https://github.com/dataders) ([#1691](https://github.com/dbt-labs/dbt-fusion/issues/1691))
+- [@itsnamangoyal](https://github.com/itsnamangoyal)
+- [@jcserv](https://github.com/jcserv) ([#7188](https://github.com/dbt-labs/dbt-fusion/issues/7188))
+- [@koletzilla](https://github.com/koletzilla)
+- [@mach-kernel](https://github.com/mach-kernel) ([#9754,9672](https://github.com/dbt-labs/dbt-fusion/issues/9754,9672), [#10057](https://github.com/dbt-labs/dbt-fusion/issues/10057), [#9522](https://github.com/dbt-labs/dbt-fusion/issues/9522))
+- [@ragesh-g](https://github.com/ragesh-g)
+- [@serramatutu](https://github.com/serramatutu)
+
+
 ## 2.0.0-preview.175
 
 Released April 29, 2026
