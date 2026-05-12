@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Handle permission errors gracefully when writing package-lock.yml instead of surfacing a raw exception"
+time: 2026-03-30T15:27:05.000000+00:00
+custom:
+    Author: claygeo
+    Issue: "12729"
