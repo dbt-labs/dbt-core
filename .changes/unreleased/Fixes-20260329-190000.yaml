@@ -1,0 +1,6 @@
+kind: Fixes
+body: Reduce snowplow telemetry HTTP timeout from 5s to 1s so an unreachable collector does not stall dbt at the end of every invocation
+time: 2026-03-29T19:00:00.000000-04:00
+custom:
+  Author: claygeo
+  Issue: "9989"

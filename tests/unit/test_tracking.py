@@ -1,6 +1,7 @@
 import datetime
 import tempfile
 from unittest import mock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -228,3 +229,38 @@ class TestTrackModelRun:
         opts = mock_track.call_args[0][0]
         assert opts["catalog_type"] == "ICEBERG_REST"
         adapter.get_catalog_integration.assert_called_once_with("test_catalog")
+
+
+class TestTimeoutEmitter:
+    """Verify that the TimeoutEmitter uses short timeouts so an unreachable
+    collector doesn't stall dbt at the end of every invocation.
+    See https://github.com/dbt-labs/dbt-core/issues/9989
+    """
+
+    def test_http_post_uses_short_timeout(self):
+        emitter = dbt.tracking.TimeoutEmitter()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch("dbt.tracking.requests.post", return_value=mock_response) as mock_post:
+            emitter.http_post('{"test": "payload"}')
+            _, kwargs = mock_post.call_args
+            assert "timeout" in kwargs
+            assert kwargs["timeout"] <= 2.0, (
+                f"POST timeout {kwargs['timeout']}s is too long; keep it ≤ 2s so an unreachable "
+                "collector doesn't stall dbt at the end of every invocation."
+            )
+
+    def test_http_get_uses_short_timeout(self):
+        emitter = dbt.tracking.TimeoutEmitter()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch("dbt.tracking.requests.get", return_value=mock_response) as mock_get:
+            emitter.http_get({"test": "payload"})
+            _, kwargs = mock_get.call_args
+            assert "timeout" in kwargs
+            assert kwargs["timeout"] <= 2.0, (
+                f"GET timeout {kwargs['timeout']}s is too long; keep it ≤ 2s so an unreachable "
+                "collector doesn't stall dbt at the end of every invocation."
+            )
