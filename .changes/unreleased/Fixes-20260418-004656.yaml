@@ -1,0 +1,6 @@
+kind: Fixes
+body: Cache CustomDraft7Validator per schema object to prevent indefinite hang during full parse when project contains 100+ generic tests using deprecated top-lev
+time: 2026-04-18T00:46:56.318885+02:00
+custom:
+    Author: ahmedmajid22
+    Issue: "12832"
