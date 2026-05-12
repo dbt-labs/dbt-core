@@ -1308,11 +1308,55 @@ def model(dbt, session):
     return dbt.ref("some_model")
 """
 
+python_model_subscript_chained_ref = """
+def model(dbt, session):
+    spark_df = dbt.ref("some_model_dict_A")
+    pd_df_a = dbt.ref("some_model_dict_B").toPandas()[["colb","colc"]].reset_index()
+    result_df = spark_session.createDataFrame(pd_df_a).join(spark_df, on="id")
+    return result_df
+"""
+
 python_model_meta_get_too_many_args = """
 def model(dbt, session):
     dbt.config(materialized='table')
     value = dbt.config.meta_get('key', 'default', 'extra')
     return dbt.ref("some_model")
+"""
+
+python_model_conditional_chained_ref = """
+def model(dbt, session):
+    pd_df_a = (
+        dbt.ref("some_model_conditional_A")
+        if True
+        else dbt.ref("some_model_conditional_B")
+    ).toPandas()[["colb","colc"]].reset_index()
+    return pd_df_a
+"""
+
+python_model_call_arg_conditional_ref = """
+def model(dbt, session):
+    result_df = session.createDataFrame(
+        dbt.ref("some_model_arg_conditional_A")
+        if True
+        else dbt.ref("some_model_arg_conditional_B")
+    )
+    return result_df
+"""
+
+python_model_call_arg_subscript_comprehension_ref = """
+def model(dbt, session):
+    result_df = session.createDataFrame(
+        [dbt.ref("some_model_comprehension").limit(1) for _ in [1]][0]
+    )
+    return result_df
+"""
+
+python_model_nested_ref_not_duplicated = """
+def model(dbt, session):
+    result_df = session.createDataFrame(
+        dbt.ref("some_model_not_duplicated").toPandas()[["id"]]
+    )
+    return result_df
 """
 
 
@@ -1571,6 +1615,66 @@ class ModelParserTest(BaseParserTest):
         with self.assertRaises(ParsingError) as exc:
             self.parser.parse_file(block)
         self.assertIn("dbt.config.meta_get() takes at most 2 arguments", str(exc.exception))
+
+    def test_python_model_subscript_chained_ref(self):
+        """Refs chained through subscript access (e.g. ref(...)["col"].method()) must be detected."""
+        block = self.file_block_for(python_model_subscript_chained_ref, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(
+            node.refs,
+            [
+                RefArgs(name="some_model_dict_A"),
+                RefArgs(name="some_model_dict_B"),
+            ],
+        )
+
+    def test_python_model_conditional_chained_ref(self):
+        """Refs inside conditional chained expressions must be detected."""
+        block = self.file_block_for(python_model_conditional_chained_ref, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(
+            node.refs,
+            [
+                RefArgs(name="some_model_conditional_A"),
+                RefArgs(name="some_model_conditional_B"),
+            ],
+        )
+
+    def test_python_model_call_arg_conditional_ref(self):
+        """Refs inside conditional expressions used as call args must be detected."""
+        block = self.file_block_for(python_model_call_arg_conditional_ref, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(
+            node.refs,
+            [
+                RefArgs(name="some_model_arg_conditional_A"),
+                RefArgs(name="some_model_arg_conditional_B"),
+            ],
+        )
+
+    def test_python_model_call_arg_subscript_comprehension_ref(self):
+        """Refs inside comprehensions nested below call args must be detected."""
+        block = self.file_block_for(
+            python_model_call_arg_subscript_comprehension_ref, "nested/py_model.py"
+        )
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.refs, [RefArgs(name="some_model_comprehension")])
+
+    def test_python_model_nested_ref_not_duplicated(self):
+        """Nested refs should be visited once when traversing the AST generically."""
+        block = self.file_block_for(python_model_nested_ref_not_duplicated, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        self.assertEqual(node.refs, [RefArgs(name="some_model_not_duplicated")])
 
 
 class StaticModelParserTest(BaseParserTest):
