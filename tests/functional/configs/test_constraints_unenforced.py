@@ -1,0 +1,115 @@
+import pytest
+
+from dbt.cli.main import dbtRunner
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, update_config_file
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.types import Note
+
+my_model_sql = """
+select 1 as id, 'blue' as color
+"""
+
+schema_enforced_false_yml = """
+models:
+  - name: my_model
+    config:
+      contract:
+        enforced: false
+    constraints:
+      - type: primary_key
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+      - name: color
+        data_type: string
+"""
+
+schema_no_contract_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: primary_key
+        columns: [id]
+    columns:
+      - name: id
+        data_type: integer
+      - name: color
+        data_type: string
+"""
+
+schema_no_columns_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: primary_key
+        columns: [id]
+"""
+
+schema_invalid_constraint_type_yml = """
+models:
+  - name: my_model
+    constraints:
+      - type: primary_key
+        columns: [id]
+      - type: not_a_real_type
+        columns: [id]
+"""
+
+
+class TestModelConstraintsEnforcedFalse:
+    """model['constraints'] is populated even when contract.enforced is false."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "schema.yml": schema_enforced_false_yml,
+        }
+
+    def test_constraints_populated(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        node = manifest.nodes["model.test.my_model"]
+        assert node.contract.enforced is False
+        assert len(node.constraints) == 1
+        assert node.constraints[0].columns == ["id"]
+
+
+class TestModelConstraintsNoContract:
+    """model['constraints'] is populated when no contract config is set (defaults to unenforced)."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "schema.yml": schema_no_contract_yml,
+        }
+
+    def test_constraints_populated(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        node = manifest.nodes["model.test.my_model"]
+        assert node.contract.enforced is False
+        assert len(node.constraints) == 1
+        assert node.constraints[0].columns == ["id"]
+
+
+class TestModelConstraintsNoColumns:
+    """model-level constraints can be defined without specifying columns when unenforced."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_sql,
+            "schema.yml": schema_no_columns_yml,
+        }
+
+    def test_constraints_populated_without_columns(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        node = manifest.nodes["model.test.my_model"]
+        assert node.contract.enforced is False
+        assert len(node.constraints) == 1
+        assert node.constraints[0].columns == ["id"]

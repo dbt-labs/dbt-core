@@ -371,6 +371,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_valid_schema_from_generate_schema_name: bool = False
     allow_jinja_file_extensions: bool = False
     require_sql_header_in_test_configs: bool = False
+    require_valid_unenforced_constraint: bool = False
     support_custom_ref_kwargs: bool = False
     require_corrected_analysis_fqns: bool = False
     require_source_and_semantic_model_names_without_spaces: bool = False
@@ -396,6 +397,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
             "allow_jinja_file_extensions": self.allow_jinja_file_extensions,
             "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
+            "require_valid_unenforced_constraint": self.require_valid_unenforced_constraint,
             "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
             "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
             "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
