@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 
 from metricflow_semantic_interfaces.enum_extension import assert_values_exhausted
 from metricflow_semantic_interfaces.type_enums import MetricType
@@ -145,6 +145,74 @@ def _process_cumulative_metric(
         )
 
 
+def _process_v1_conversion_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    conversion_type_params: Any,
+) -> None:
+    base_measure = conversion_type_params.base_measure
+    conversion_measure = conversion_type_params.conversion_measure
+    if conversion_measure is None:
+        raise dbt.exceptions.ParsingError(
+            f"Conversion metric `{metric.name}` cannot have only one of base measure "
+            + "and conversion measure defined.",
+            node=metric,
+        )
+    metric.add_input_measure(base_measure)
+    metric.add_input_measure(conversion_measure)
+    _process_metric_depends_on_semantic_models_for_measures(
+        manifest=manifest,
+        current_project=current_project,
+        metric=metric,
+    )
+
+
+def _process_v2_conversion_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    conversion_type_params: Any,
+) -> None:
+    base_metric = conversion_type_params.base_metric
+    conversion_metric = conversion_type_params.conversion_metric
+    if conversion_metric is None:
+        raise dbt.exceptions.ParsingError(
+            f"Conversion metric `{metric.name}` cannot have only one of base metric "
+            + "and conversion metric defined.",
+            node=metric,
+        )
+    _add_depends_on_metrics_to_v2_metric(
+        metric,
+        input_metrics=[base_metric, conversion_metric],
+        manifest=manifest,
+        current_project=current_project,
+    )
+
+
+def _process_conversion_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    conversion_type_params = metric.type_params.conversion_type_params
+    if conversion_type_params is None:
+        raise dbt.exceptions.ParsingError(
+            f"{metric.name} is a conversion metric and must have conversion_type_params defined.",
+            node=metric,
+        )
+    if conversion_type_params.base_measure is not None:
+        _process_v1_conversion_metric(manifest, current_project, metric, conversion_type_params)
+    elif conversion_type_params.base_metric is not None:
+        _process_v2_conversion_metric(manifest, current_project, metric, conversion_type_params)
+    else:
+        raise dbt.exceptions.ParsingError(
+            f"Depending the version of YAML being used, conversion metric `{metric.name}` "
+            + "must have base and conversion measures or base and conversion metrics defined.",
+            node=metric,
+        )
+
+
 def _process_simple_metric(
     manifest: Manifest,
     current_project: str,
@@ -195,47 +263,9 @@ def _process_metric_node(
             manifest=manifest, current_project=current_project, metric=metric
         )
     elif metric.type is MetricType.CONVERSION:
-        conversion_type_params = metric.type_params.conversion_type_params
-        assert (
-            conversion_type_params
-        ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        # Handle old-style YAML measure inputs
-        base_measure = conversion_type_params.base_measure
-        conversion_measure = conversion_type_params.conversion_measure
-        base_metric = conversion_type_params.base_metric
-        conversion_metric = conversion_type_params.conversion_metric
-        if base_measure is not None or conversion_measure is not None:
-            # v1 dependencies
-            assert base_measure is not None and conversion_measure is not None, (
-                f"Conversion metric `{metric.name}` cannot have only one of base measure "
-                + "and conversion measure defined."
-            )
-            metric.add_input_measure(base_measure)
-            metric.add_input_measure(conversion_measure)
-            _process_metric_depends_on_semantic_models_for_measures(
-                manifest=manifest,
-                current_project=current_project,
-                metric=metric,
-            )
-        elif base_metric is not None or conversion_metric is not None:
-            # v2 dependencies
-            assert base_metric is not None and conversion_metric is not None, (
-                f"Conversion metric `{metric.name}` cannot have only one of base metric "
-                + "and conversion metric defined."
-            )
-            _add_depends_on_metrics_to_v2_metric(
-                metric,
-                input_metrics=[base_metric, conversion_metric],
-                manifest=manifest,
-                current_project=current_project,
-            )
-        else:
-            raise dbt.exceptions.ParsingError(
-                f"Depending the version of YAML being used, conversion metric `{metric.name}` "
-                + "must have base and conversion measures or base and conversion metrics defined.",
-                node=metric,
-            )
-
+        _process_conversion_metric(
+            manifest=manifest, current_project=current_project, metric=metric
+        )
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
         if metric.type is MetricType.RATIO:
