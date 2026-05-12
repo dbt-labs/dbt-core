@@ -1,0 +1,6 @@
+kind: Fixes
+body: Pass incremental_batch flag to all microbatch batch submissions, not just the first
+time: 2026-03-20T12:00:00.000000+00:00
+custom:
+    Author: TheRoot-1
+    Issue: "12682"
