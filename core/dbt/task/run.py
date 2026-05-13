@@ -957,13 +957,15 @@ class MicrobatchModelRunner(ModelRunner):
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
 
+        pointer_relations: List[BaseRelation] = []
         if result.status == RunStatus.Success and self._should_create_latest_version_view(model):
             context = generate_runtime_model_context(model, self.config, manifest)
-            relations = [self.adapter.Relation.create_from(self.config, model)]  # type: ignore[arg-type]
-            for relation in self._materialize_latest_version_view(
-                manifest, model, context, relations
-            ):
-                self.adapter.cache_added(relation.incorporate(dbt_created=True))
+            source_relations = [self.adapter.Relation.create_from(self.config, model)]  # type: ignore[arg-type]
+            pointer_relations = self._materialize_latest_version_view(
+                manifest, model, context, source_relations
+            )
+        for relation in pointer_relations:
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return result
 
