@@ -1,0 +1,6 @@
+kind: Fixes
+body: Surface descriptive ValidationError when a Hub package omits the `version` key, instead of a bare KeyError
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "12649"
