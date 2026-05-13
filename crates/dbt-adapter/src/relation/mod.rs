@@ -87,13 +87,17 @@ mod tests {
 
     #[test]
     fn test_render_with_run_filter_bigquery_adapter() {
-        let relation = bigquery::BigqueryRelation::new(
+        let relation = Relation::new(
+            AdapterType::Bigquery,
             None,
             None,
             Some("my_table".to_owned()),
             None,
             None,
             ResolvedQuoting::disabled(),
+            None,
+            false,
+            false,
         );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()

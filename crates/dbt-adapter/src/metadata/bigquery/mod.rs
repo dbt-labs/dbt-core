@@ -4,7 +4,7 @@ use crate::errors::*;
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
-use crate::relation::bigquery::BigqueryRelation;
+use crate::relation::Relation;
 use crate::{AdapterEngine, AdapterResult};
 
 use arrow_array::*;
@@ -58,13 +58,17 @@ FROM
         let relation_type =
             RelationType::from_adapter_type(AdapterType::Bigquery, table_types.value(i));
 
-        result.push(Arc::new(BigqueryRelation::new(
+        result.push(Arc::new(Relation::new(
+            AdapterType::Bigquery,
             Some(database.to_string()),
             Some(schema.to_string()),
             Some(identifier.to_string()),
             Some(relation_type),
             None,
             engine.quoting(),
+            None,
+            false,
+            false,
         )) as Arc<dyn BaseRelation>);
     }
     Ok(result)

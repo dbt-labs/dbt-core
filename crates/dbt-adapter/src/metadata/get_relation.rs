@@ -15,7 +15,6 @@ use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::Relation;
-use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::do_create_relation;
 use crate::relation::snowflake::SnowflakeRelation;
 use dbt_common::cancellation::CancellationToken;
@@ -269,13 +268,17 @@ fn bigquery_get_relation(
     let relation_type_name = string_array.value(0).to_uppercase();
     let relation_type = RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
 
-    let mut relation = Box::new(BigqueryRelation::new(
+    let mut relation = Box::new(Relation::new(
+        AdapterType::Bigquery,
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),
         Some(relation_type),
         None,
         adapter.quoting(),
+        None,
+        false,
+        false,
     ));
     let location = adapter.get_dataset_location(state, conn, relation.as_ref(), token)?;
     relation.location = location;

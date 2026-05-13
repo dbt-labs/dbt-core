@@ -12,7 +12,6 @@ use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::relation::Relation;
-use crate::relation::bigquery::*;
 use crate::relation::databricks::typed_constraint::TypedConstraint;
 use crate::relation::duckdb_should_include_database;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -460,14 +459,6 @@ pub fn do_create_relation(
             TableFormat::Default,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
-        Bigquery => Box::new(BigqueryRelation::new(
-            Some(database),
-            Some(schema),
-            identifier,
-            relation_type,
-            None,
-            custom_quoting,
-        )) as Box<dyn BaseRelation>,
         Redshift => Box::new(Relation::new_with_policy(
             Redshift,
             RelationPath {
@@ -482,7 +473,7 @@ pub fn do_create_relation(
             false,
             false,
         )?) as Box<dyn BaseRelation>,
-        Databricks | Spark | Fabric => Box::new(Relation::new(
+        Bigquery | Databricks | Spark | Fabric => Box::new(Relation::new(
             adapter_type,
             Some(database),
             Some(schema),
@@ -632,7 +623,8 @@ impl Object for StaticBaseRelationObject {
                     )
                 })?;
 
-                let loader = config::relation_types::materialized_view::new_loader();
+                let loader =
+                    crate::relation::bigquery::config::relation_types::materialized_view::new_loader();
                 let relation_config = loader
                     .from_local_config(local_config.as_internal_node())
                     .map_err(|err| {
