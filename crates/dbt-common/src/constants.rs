@@ -14,6 +14,7 @@ pub const DBT_CATALOGS_YML: &str = "catalogs.yml";
 pub const DBT_PROJECT_YML: &str = "dbt_project.yml";
 pub const DBT_PROFILES_YML: &str = "profiles.yml";
 pub const DBT_CLOUD_YML: &str = "dbt_cloud.yml";
+pub const DBT_VARS_YML: &str = "vars.yml";
 
 // ----------------------------------------------------------------------------------------------
 // dbt outputs

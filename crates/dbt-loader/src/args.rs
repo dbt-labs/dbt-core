@@ -23,6 +23,9 @@ pub struct LoadArgs {
     pub update_deps: bool,
     // The directory to load the dbt project from
     pub vars: BTreeMap<String, dbt_yaml::Value>,
+    /// Vars loaded from `vars.yml` at the root project (populated after the
+    /// initial project load). Empty when no `vars.yml` is present.
+    pub root_vars_from_file: BTreeMap<String, dbt_yaml::Value>,
     /// Whether this is the main command or a subcommand
     pub from_main: bool,
     /// threads
@@ -72,6 +75,7 @@ impl LoadArgs {
             upgrade: arg.upgrade,
             lock: arg.lock,
             vars: arg.vars.clone(),
+            root_vars_from_file: BTreeMap::new(),
             from_main: arg.from_main,
             threads: arg.num_threads,
             install_deps: arg.phase == Phases::Deps,

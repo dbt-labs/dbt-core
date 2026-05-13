@@ -4,7 +4,7 @@ use dbt_adapter::load_catalogs;
 use dbt_cloud_config::resolve_cloud_config;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
-    DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
+    DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML, DBT_VARS_YML,
 };
 use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::io_utils::StatusReporter;
@@ -54,7 +54,7 @@ use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, ResourcePathKind};
 
-use crate::args::LoadArgs;
+use crate::args::{IoArgs, LoadArgs};
 use crate::dbt_project_yml_loader::load_project_yml;
 use crate::download_publication::download_publication_artifacts;
 use crate::utils::{collect_file_info, identify_package_dependencies};
@@ -183,7 +183,7 @@ pub async fn load(
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
 ) -> FsResult<DbtState> {
-    let (simplified_dbt_project, mut dbt_profile) =
+    let (simplified_dbt_project, mut dbt_profile, vars_from_file) =
         load_simplified_project_and_profiles(arg).await?;
 
     // Parse dbt_cloud.yml (if it exists)
@@ -241,8 +241,17 @@ pub async fn load(
     if iarg.num_threads != final_threads {
         iarg.to_mut().num_threads = final_threads;
     }
+    // Preserve the original CLI vars for `dbt_state.cli_vars` (used for the
+    // partial-parse vars hash); arg.vars itself is replaced with the merged set
+    // (vars.yml + CLI, CLI wins) so all downstream Jinja rendering of YAML files
+    // (dbt_project.yml in any package, packages.yml, catalogs.yml, …) sees the
+    // vars declared in vars.yml.
+    let original_cli_vars = arg.vars.clone();
+    let merged_vars = merge_vars(&vars_from_file, &arg.vars);
     let arg = LoadArgs {
         threads: final_threads,
+        vars: merged_vars,
+        root_vars_from_file: vars_from_file,
         ..arg.clone()
     };
 
@@ -251,7 +260,7 @@ pub async fn load(
         run_started_at: run_started_at(),
         packages: vec![],
         vars: BTreeMap::new(),
-        cli_vars: arg.vars.clone(),
+        cli_vars: original_cli_vars,
         catalogs: load_catalogs::fetch_catalogs(),
         cloud_config,
         warn_error: iarg.warn_error,
@@ -441,7 +450,16 @@ pub async fn load(
     )
 )]
 pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
-    let (simplified_dbt_project, dbt_profile) = load_simplified_project_and_profiles(arg).await?;
+    let (simplified_dbt_project, dbt_profile, vars_from_file) =
+        load_simplified_project_and_profiles(arg).await?;
+
+    let original_cli_vars = arg.vars.clone();
+    let arg = LoadArgs {
+        vars: merge_vars(&vars_from_file, &arg.vars),
+        root_vars_from_file: vars_from_file,
+        ..arg.clone()
+    };
+
     let resolved_warn_error_options = resolve_and_reload_weo_from_project(
         &simplified_dbt_project,
         arg.cli_warn_error,
@@ -451,7 +469,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
     )?;
 
     let env = initialize_load_profile_jinja_environment();
-    load_catalogs(arg, &env, simplified_dbt_project.flags.as_ref()).await?;
+    load_catalogs(&arg, &env, simplified_dbt_project.flags.as_ref()).await?;
 
     // Create minimal DbtState - no packages, no vars
     let dbt_state = DbtState {
@@ -459,7 +477,7 @@ pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
         run_started_at: run_started_at(),
         packages: vec![],
         vars: BTreeMap::new(),
-        cli_vars: arg.vars.clone(),
+        cli_vars: original_cli_vars,
         catalogs: load_catalogs::fetch_catalogs(),
         cloud_config: None,
         warn_error: resolved_warn_error_options.warn_error,
@@ -507,13 +525,107 @@ pub async fn load_catalogs(
     }
 }
 
+/// Load `vars.yml` from the project root if it exists.
+///
+/// Returns the contents of the `vars` key as a map, or an empty map if the
+/// file is missing, empty, or has no top-level `vars` key. Invalid types
+/// inside `vars` (e.g. non-string keys, non-mapping `vars:`) surface as
+/// `dbt1013` YAML errors, matching how `dbt_project.yml` handles vars.
+pub fn vars_data_from_root(
+    io_args: &IoArgs,
+    project_root: &Path,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let vars_yml_path = project_root.join(DBT_VARS_YML);
+    if !vars_yml_path.exists() {
+        return Ok(BTreeMap::new());
+    }
+    let raw = value_from_file(io_args, &vars_yml_path, false, None)?;
+    let vars_value = match raw.get("vars") {
+        Some(v) if !v.is_null() => v.clone(),
+        _ => return Ok(BTreeMap::new()),
+    };
+    Deserialize::deserialize(vars_value).map_err(|e| yaml_to_fs_error(e, Some(&vars_yml_path)))
+}
+
+/// Error if vars are defined in both `vars.yml` and `dbt_project.yml`.
+fn validate_vars_not_in_both(
+    raw_dbt_project: &dbt_yaml::Value,
+    has_vars_file: bool,
+) -> FsResult<()> {
+    if !has_vars_file {
+        return Ok(());
+    }
+    let project_has_vars = raw_dbt_project
+        .get("vars")
+        .is_some_and(|v| !v.is_null() && v.as_mapping().is_some_and(|m| !m.is_empty()));
+    if project_has_vars {
+        return err!(
+            ErrorCode::InvalidConfig,
+            "Variables cannot be defined in both {} and {}.",
+            DBT_VARS_YML,
+            DBT_PROJECT_YML,
+        );
+    }
+    Ok(())
+}
+
+/// Merge vars from `vars.yml` and CLI `--vars`. CLI values take precedence,
+/// recursively merging mappings so a CLI override of a package-scoped block
+/// (e.g. `--vars '{pkg: {y: 2}}'` with `vars.yml` `pkg: {x: 1}`) preserves
+/// `x` from the file instead of replacing the whole `pkg` block.
+pub fn merge_vars(
+    vars_from_file: &BTreeMap<String, dbt_yaml::Value>,
+    cli_vars: &BTreeMap<String, dbt_yaml::Value>,
+) -> BTreeMap<String, dbt_yaml::Value> {
+    let mut merged: BTreeMap<String, dbt_yaml::Value> = vars_from_file.clone();
+    for (k, v) in cli_vars {
+        if let Some(existing) = merged.get_mut(k) {
+            deep_merge_yaml(existing, v);
+        } else {
+            merged.insert(k.clone(), v.clone());
+        }
+    }
+    merged
+}
+
+/// Recursively merge `overlay` into `base`. Mappings are merged key-by-key so
+/// nested keys present only in `base` survive; any non-mapping `overlay` (or
+/// a type mismatch) replaces `base` wholesale.
+fn deep_merge_yaml(base: &mut dbt_yaml::Value, overlay: &dbt_yaml::Value) {
+    match (base, overlay) {
+        (dbt_yaml::Value::Mapping(base_map, _), dbt_yaml::Value::Mapping(overlay_map, _)) => {
+            for (k, v) in overlay_map {
+                if let Some(existing) = base_map.get_mut(k) {
+                    deep_merge_yaml(existing, v);
+                } else {
+                    base_map.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        (base_slot, overlay) => {
+            *base_slot = overlay.clone();
+        }
+    }
+}
+
 pub async fn load_simplified_project_and_profiles(
     arg: &LoadArgs,
-) -> FsResult<(DbtProjectSimplified, DbtProfile)> {
+) -> FsResult<(
+    DbtProjectSimplified,
+    DbtProfile,
+    BTreeMap<String, dbt_yaml::Value>,
+)> {
     // Read the input file
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
 
     let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false, None)?;
+
+    // Load vars.yml (if present) and validate mutual exclusivity with dbt_project.yml's vars.
+    let vars_from_file = vars_data_from_root(&arg.io, &arg.io.in_dir)?;
+    validate_vars_not_in_both(&raw_dbt_project_in_val, !vars_from_file.is_empty())?;
+
+    // Merge for Jinja rendering: CLI overrides vars.yml.
+    let merged_vars = merge_vars(&vars_from_file, &arg.vars);
 
     let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
@@ -523,7 +635,7 @@ pub async fn load_simplified_project_and_profiles(
         ),
         (
             "var".to_owned(),
-            minijinja::Value::from_object(Var::new(arg.vars.clone())),
+            minijinja::Value::from_object(Var::new(merged_vars)),
         ),
         (
             // Add empty context object (mimics dbt-core's BaseContext.to_dict() pattern)
@@ -577,7 +689,7 @@ pub async fn load_simplified_project_and_profiles(
 
     let dbt_profile = load_profiles(arg, &simplified_dbt_project)?;
 
-    Ok((simplified_dbt_project, dbt_profile))
+    Ok((simplified_dbt_project, dbt_profile, vars_from_file))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -592,6 +704,8 @@ pub async fn load_inner(
     skip_dependencies: bool,
     collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
 ) -> FsResult<DbtPackage> {
+    // Vars loaded from `vars.yml` at the root project (set by the loader rebuild step).
+    let root_vars_from_file = &arg.root_vars_from_file;
     // all read files
     let mut all_files: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
@@ -622,15 +736,24 @@ pub async fn load_inner(
         dependency_package_name.as_deref(),
         arg.vars.clone(),
     )?;
-    load_vars(
-        &dbt_project.name,
-        (*dbt_project.vars)
-            .as_ref()
-            .map(|vars| Deserialize::deserialize(vars.clone()))
-            .transpose()
-            .map_err(|e| yaml_to_fs_error(e, Some(&dbt_project_path)))?,
-        collected_vars,
-    )?;
+    // For the root project, prefer vars.yml over dbt_project.yml's `vars` field when vars.yml is present.
+    let vars_for_load: Option<IndexMap<String, DbtVars>> =
+        if !is_dependency && !root_vars_from_file.is_empty() {
+            let mut map: IndexMap<String, DbtVars> = IndexMap::new();
+            for (k, v) in root_vars_from_file {
+                let parsed: DbtVars = Deserialize::deserialize(v.clone())
+                    .map_err(|e| yaml_to_fs_error(e, Some(&dbt_project_path)))?;
+                map.insert(k.clone(), parsed);
+            }
+            Some(map)
+        } else {
+            (*dbt_project.vars)
+                .as_ref()
+                .map(|vars| Deserialize::deserialize(vars.clone()))
+                .transpose()
+                .map_err(|e| yaml_to_fs_error(e, Some(&dbt_project_path)))?
+        };
+    load_vars(&dbt_project.name, vars_for_load, collected_vars)?;
     // Set dispatch config for future use
     if package_path == arg.io.in_dir {
         let dispatch_config_map = if let Some(dispatch_configs) = dbt_project.dispatch.clone() {
@@ -1110,6 +1233,7 @@ pub fn get_session_relative_file_paths() -> Vec<String> {
         DBT_PACKAGES_YML.into(),
         DBT_PACKAGES_LOCK_FILE.into(),
         DBT_CATALOGS_YML.into(),
+        DBT_VARS_YML.into(),
     ]
 }
 
@@ -1459,5 +1583,106 @@ mod tests {
         let included_paths: Vec<&PathBuf> = result.iter().map(|asset| &asset.path).collect();
         assert!(included_paths.contains(&&PathBuf::from("models/generic/my_model.sql")));
         assert!(included_paths.contains(&&PathBuf::from("models/other/model.sql")));
+    }
+
+    fn yaml_value(src: &str) -> dbt_yaml::Value {
+        dbt_yaml::from_str(src).expect("valid yaml")
+    }
+
+    #[test]
+    fn merge_vars_deep_merges_nested_mappings() {
+        // vars.yml: { pkg: { x: 1 } }, CLI: { pkg: { y: 2 } }
+        // Expected: { pkg: { x: 1, y: 2 } } — CLI must not clobber sibling keys
+        // inside a package-scoped block defined in vars.yml.
+        let mut file_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        file_vars.insert("pkg".into(), yaml_value("x: 1"));
+
+        let mut cli_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        cli_vars.insert("pkg".into(), yaml_value("y: 2"));
+
+        let merged = merge_vars(&file_vars, &cli_vars);
+        let pkg = merged.get("pkg").expect("pkg key present");
+        let mapping = pkg.as_mapping().expect("pkg is a mapping");
+        let x = mapping
+            .get(dbt_yaml::Value::from("x"))
+            .expect("x preserved from vars.yml");
+        let y = mapping
+            .get(dbt_yaml::Value::from("y"))
+            .expect("y added from CLI");
+        assert_eq!(x.as_i64(), Some(1));
+        assert_eq!(y.as_i64(), Some(2));
+    }
+
+    #[test]
+    fn merge_vars_cli_overrides_overlapping_inner_keys() {
+        // Same inner key in both → CLI wins.
+        let mut file_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        file_vars.insert("pkg".into(), yaml_value("x: 1\ny: from_file"));
+
+        let mut cli_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        cli_vars.insert("pkg".into(), yaml_value("y: from_cli"));
+
+        let merged = merge_vars(&file_vars, &cli_vars);
+        let mapping = merged.get("pkg").unwrap().as_mapping().unwrap();
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("x"))
+                .and_then(|v| v.as_i64()),
+            Some(1)
+        );
+        assert_eq!(
+            mapping
+                .get(dbt_yaml::Value::from("y"))
+                .and_then(|v| v.as_str()),
+            Some("from_cli")
+        );
+    }
+
+    #[test]
+    fn merge_vars_cli_scalar_replaces_file_mapping() {
+        // Type mismatch (CLI scalar vs file mapping) → CLI replaces wholesale.
+        let mut file_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        file_vars.insert("pkg".into(), yaml_value("x: 1"));
+
+        let mut cli_vars: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+        cli_vars.insert("pkg".into(), yaml_value("42"));
+
+        let merged = merge_vars(&file_vars, &cli_vars);
+        assert_eq!(merged.get("pkg").and_then(|v| v.as_i64()), Some(42));
+    }
+
+    #[test]
+    fn vars_data_from_root_errors_on_non_mapping_vars() {
+        // `vars: 1` should surface as a YAML type error rather than silently
+        // returning an empty map (mirrors how `dbt_project.yml` rejects this).
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join(DBT_VARS_YML);
+        fs::write(&path, "vars: 1\n").unwrap();
+
+        let io_args = IoArgs {
+            in_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let err = vars_data_from_root(&io_args, tmp.path())
+            .expect_err("non-mapping vars value should error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("invalid type") || msg.contains("expected"),
+            "expected a YAML type-mismatch error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn vars_data_from_root_returns_empty_when_no_vars_key() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join(DBT_VARS_YML);
+        fs::write(&path, "other: 1\n").unwrap();
+
+        let io_args = IoArgs {
+            in_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let map = vars_data_from_root(&io_args, tmp.path()).expect("no vars key is OK");
+        assert!(map.is_empty());
     }
 }
