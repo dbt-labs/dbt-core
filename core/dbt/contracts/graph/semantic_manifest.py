@@ -145,6 +145,13 @@ class SemanticManifest:
 
         return not validation_result_errors
 
+    def write_osi_document_to_file(self, file_path: str) -> None:
+        from metricflow.converters.msi_to_osi import MSIToOSIConverter
+
+        result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+        write_file(file_path, result.output.to_osi_json())
+        fire_event(ArtifactWritten(artifact_type="OsiDocument", artifact_path=file_path))
+
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
         json = semantic_manifest.json()
