@@ -51,6 +51,7 @@ from dbt_common.events.base_types import EventGroupType, EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_deferred_events, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
 from dbt_common.record import (
@@ -418,13 +419,12 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     use_v2 = getattr(flags, "USE_CATALOGS_V2", False)
 
     if use_v2:
-        import warnings
-
-        warnings.warn(
-            "catalogs.yml v2 schema validation is experimental, not officially supported yet, "
-            "and its spec is liable to change. "
-            "See https://github.com/dbt-labs/dbt-core/discussions/12723",
-            stacklevel=2,
+        fire_event(
+            Note(
+                msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
+                "and its spec is liable to change. "
+                "See https://github.com/dbt-labs/dbt-core/discussions/12723"
+            )
         )
         # Parse + validate structurally before adapter registration — no adapter needed.
         # Keeps validation errors consistent with v1 (fail before adapter is replaced).
