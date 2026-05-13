@@ -82,6 +82,18 @@ models:
 """
 
 
+def assert_relation_does_not_exist(project, relation_name: str) -> None:
+    """Assert that no relation with the given name exists in the test schema."""
+    relation = relation_from_name(project.adapter, relation_name)
+    with get_connection(project.adapter):
+        result = project.adapter.get_relation(
+            relation.database,
+            relation.schema,
+            relation.identifier,
+        )
+    assert result is None
+
+
 class TestLatestVersionPointer:
     @pytest.fixture(scope="class")
     def models(self):
@@ -140,16 +152,7 @@ class TestLatestVersionPointerDisabled:
 
     def test_run_skips_pointer_when_disabled(self, project):
         run_dbt(["run"])
-
-        pointer_relation = relation_from_name(project.adapter, "disabled_pointer_model")
-        with get_connection(project.adapter):
-            relation = project.adapter.get_relation(
-                pointer_relation.database,
-                pointer_relation.schema,
-                pointer_relation.identifier,
-            )
-
-        assert relation is None
+        assert_relation_does_not_exist(project, "disabled_pointer_model")
 
 
 class TestLatestVersionPointerOnlyLatestVersion:
@@ -165,16 +168,7 @@ class TestLatestVersionPointerOnlyLatestVersion:
 
     def test_running_non_latest_skips_pointer(self, project):
         run_dbt(["run", "--select", "versioned_model.v1"])
-
-        pointer_relation = relation_from_name(project.adapter, "versioned_model")
-        with get_connection(project.adapter):
-            relation = project.adapter.get_relation(
-                pointer_relation.database,
-                pointer_relation.schema,
-                pointer_relation.identifier,
-            )
-
-        assert relation is None
+        assert_relation_does_not_exist(project, "versioned_model")
 
 
 class TestLatestVersionPointerViewMaterialization:
@@ -243,13 +237,4 @@ class TestLatestVersionViewProjectDisabled:
 
     def test_project_level_disables_view(self, project):
         run_dbt(["run"])
-
-        pointer_relation = relation_from_name(project.adapter, "versioned_model")
-        with get_connection(project.adapter):
-            relation = project.adapter.get_relation(
-                pointer_relation.database,
-                pointer_relation.schema,
-                pointer_relation.identifier,
-            )
-
-        assert relation is None
+        assert_relation_does_not_exist(project, "versioned_model")

@@ -430,37 +430,37 @@ class ModelRunner(CompileRunner[ModelNode]):
 
         return self._build_run_model_result(model, context)
 
-    def execute(self, model, manifest) -> RunResult:
-        context = generate_runtime_model_context(model, self.config, manifest)
-
+    def _get_materialization_macro(self, model: ModelNode, manifest: Manifest) -> MacroProtocol:
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, model.get_materialization(), self.adapter.type()
         )
-
         if materialization_macro is None:
             raise MissingMaterializationError(
                 materialization=model.get_materialization(), adapter_type=self.adapter.type()
             )
+        supported_languages = getattr(materialization_macro, "supported_languages", None)
+        if supported_languages is not None:
+            if model.language not in supported_languages:
+                str_langs = [str(lang) for lang in supported_languages]
+                raise DbtValidationError(
+                    f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
+                    f'got "{model.language}"'
+                )
+        return materialization_macro
+
+    def execute(self, model, manifest) -> RunResult:
+        context = generate_runtime_model_context(model, self.config, manifest)
 
         if "config" not in context:
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
-        context_config = context["config"]
 
-        mat_has_supported_langs = hasattr(materialization_macro, "supported_languages")
-        model_lang_supported = model.language in materialization_macro.supported_languages
-        if mat_has_supported_langs and not model_lang_supported:
-            str_langs = [str(lang) for lang in materialization_macro.supported_languages]
-            raise DbtValidationError(
-                f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
-                f'got "{model.language}"'
-            )
-
-        hook_ctx = self.adapter.pre_model_hook(context_config)
+        materialization_macro = self._get_materialization_macro(model, manifest)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         return self._execute_model(
-            hook_ctx, context_config, model, context, materialization_macro, manifest
+            hook_ctx, context["config"], model, context, materialization_macro, manifest
         )
 
 
