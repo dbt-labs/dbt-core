@@ -170,10 +170,13 @@ pub(super) fn from_model_config_and_catalogs_v2(
         | (AdapterType::DuckDB, V2CatalogType::IcebergRest) => {
             CatalogRelation::build_duckdb_with_catalogs_v2(model, catalog, &catalog_name)
         }
+        (AdapterType::DuckDB, V2CatalogType::DuckLake) => {
+            CatalogRelation::build_duckdb_ducklake_with_catalogs_v2(model, catalog, &catalog_name)
+        }
         (AdapterType::DuckDB, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
-                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue' and 'iceberg_rest'",
+                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue', 'iceberg_rest', and 'ducklake'",
                 other.as_str()
             ),
         )),
@@ -800,6 +803,47 @@ impl CatalogRelation {
             adapter_properties.insert("secret".to_string(), secret.clone());
         }
         adapter_properties.insert("attached_database".to_string(), alias);
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::DuckDB,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: catalog.catalog_type.as_str().to_string(),
+            table_format,
+            file_format: None,
+            external_volume: None,
+            base_location: None,
+            adapter_properties,
+            is_transient: None,
+        })
+    }
+
+    fn build_duckdb_ducklake_with_catalogs_v2(
+        _model: &Value,
+        catalog: &CatalogSpecV2View<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let duckdb = require_platform_block(catalog, catalog_name, "duckdb")?;
+        let table_format = uppercase_table_format(catalog);
+
+        let metadata_path = get_yaml_str(duckdb, "metadata_path")
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Catalog '{catalog_name}' duckdb config requires 'metadata_path'"),
+                )
+            })?;
+
+        let attach_as = get_yaml_str(duckdb, "attach_as").map(|s| s.to_string());
+        let alias = sanitize_duckdb_identifier(attach_as.as_deref().unwrap_or(catalog_name));
+
+        let mut adapter_properties = BTreeMap::new();
+        adapter_properties.insert("metadata_path".to_string(), metadata_path);
+        if let Some(dp) = get_yaml_str(duckdb, "data_path") {
+            adapter_properties.insert("data_path".to_string(), dp.to_string());
+        }
+        adapter_properties.insert("catalog_linked_database".to_string(), alias);
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::DuckDB,
@@ -1522,7 +1566,8 @@ catalogs:
             .unwrap_err();
 
         assert!(
-            format!("{err}").contains("DuckDB v2 mapping supports only 'glue' and 'iceberg_rest'")
+            format!("{err}")
+                .contains("DuckDB v2 mapping supports only 'glue', 'iceberg_rest', and 'ducklake'")
         );
     }
 
@@ -1549,5 +1594,85 @@ catalogs:
         assert!(r.catalog_name.is_none());
         assert_eq!(r.catalog_type, "duckdb");
         assert_eq!(r.table_format, "default");
+    }
+
+    // ===== DuckLake v2 tests =====
+
+    #[test]
+    fn duckdb_v2_ducklake_builds_relation() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_lake" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("my_lake"));
+        assert_eq!(r.catalog_type, "ducklake");
+        assert_eq!(r.table_format, "DEFAULT");
+        assert_eq!(
+            r.adapter_properties
+                .get("metadata_path")
+                .map(|s| s.as_str()),
+            Some("metadata.ducklake")
+        );
+        assert_eq!(
+            r.adapter_properties
+                .get("catalog_linked_database")
+                .map(|s| s.as_str()),
+            Some("my_lake")
+        );
+        assert!(!r.adapter_properties.contains_key("data_path"));
+    }
+
+    #[test]
+    fn duckdb_v2_ducklake_with_data_path() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+        data_path: "s3://bucket/data/"
+        attach_as: "lake"
+"#,
+        );
+        let conf = json!({ "catalog_name": "my_lake" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("my_lake"));
+        assert_eq!(r.catalog_type, "ducklake");
+        assert_eq!(
+            r.adapter_properties
+                .get("metadata_path")
+                .map(|s| s.as_str()),
+            Some("metadata.ducklake")
+        );
+        assert_eq!(
+            r.adapter_properties.get("data_path").map(|s| s.as_str()),
+            Some("s3://bucket/data/")
+        );
+        assert_eq!(
+            r.adapter_properties
+                .get("catalog_linked_database")
+                .map(|s| s.as_str()),
+            Some("lake")
+        );
     }
 }

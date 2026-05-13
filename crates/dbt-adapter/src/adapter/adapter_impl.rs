@@ -56,6 +56,7 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
+use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
@@ -387,7 +388,10 @@ impl AdapterImpl {
                                 .unwrap_or(catalog.name);
                             let alias = crate::catalog_relation::sanitize_duckdb_identifier(alias);
                             if alias.eq_ignore_ascii_case(database) {
-                                return TableFormat::Iceberg;
+                                return match catalog.catalog_type {
+                                    V2CatalogType::DuckLake => TableFormat::DuckLake,
+                                    _ => TableFormat::Iceberg,
+                                };
                             }
                         }
                     }

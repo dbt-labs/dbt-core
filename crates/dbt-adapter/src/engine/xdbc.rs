@@ -326,7 +326,7 @@ impl XdbcEngine {
     }
 
     /// Build v2 catalog-driven `ATTACH IF NOT EXISTS` statements for DuckDB
-    /// iceberg REST catalogs.
+    /// Glue, Iceberg REST, and DuckLake catalogs.
     ///
     /// Reads the global catalogs v2 state, extracts every catalog that has a
     /// `config.duckdb` block, and emits one ATTACH per catalog. Duplicate
@@ -351,7 +351,7 @@ impl XdbcEngine {
         for catalog in &view.catalogs {
             if !matches!(
                 catalog.catalog_type,
-                V2CatalogType::Glue | V2CatalogType::IcebergRest
+                V2CatalogType::Glue | V2CatalogType::IcebergRest | V2CatalogType::DuckLake
             ) {
                 continue;
             }
@@ -359,7 +359,14 @@ impl XdbcEngine {
                 continue;
             };
 
-            let (alias, stmt) = build_duckdb_catalog_attach_stmt(catalog, duckdb)?;
+            let (alias, stmt) = if catalog.catalog_type == V2CatalogType::DuckLake {
+                if stmts.first().is_none_or(|stmt| stmt != "INSTALL ducklake") {
+                    stmts.insert(0, "INSTALL ducklake".to_string());
+                }
+                build_duckdb_ducklake_attach_stmt(catalog, duckdb)?
+            } else {
+                build_duckdb_catalog_attach_stmt(catalog, duckdb)?
+            };
             if let Some(prior) = seen_aliases.get(&alias) {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
@@ -375,6 +382,64 @@ impl XdbcEngine {
 
         Ok(stmts)
     }
+}
+
+fn build_duckdb_ducklake_attach_stmt(
+    catalog: &CatalogSpecV2View<'_>,
+    duckdb: &dbt_yaml::Mapping,
+) -> AdapterResult<(String, String)> {
+    let alias = crate::catalog_relation::sanitize_duckdb_identifier(
+        duckdb_get_str(duckdb, "attach_as").unwrap_or(catalog.name),
+    );
+    if alias.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{}' duckdb attach alias is empty after sanitization",
+                catalog.name
+            ),
+        ));
+    }
+
+    let metadata_path = duckdb_get_str(duckdb, "metadata_path").unwrap_or_default();
+    let mut opts = String::new();
+    let mut push_opt = |opt: String| {
+        if !opts.is_empty() {
+            opts.push_str(", ");
+        }
+        opts.push_str(&opt);
+    };
+    if let Some(data_path) = duckdb_get_str(duckdb, "data_path") {
+        push_opt(format!(
+            "DATA_PATH '{}'",
+            escape_duckdb_single_quotes(data_path)
+        ));
+    }
+    if let Some(metadata_schema) = duckdb_get_str(duckdb, "metadata_schema") {
+        push_opt(format!(
+            "METADATA_SCHEMA '{}'",
+            escape_duckdb_single_quotes(metadata_schema)
+        ));
+    }
+    for (key, sql_key) in [
+        ("create_if_not_exists", "CREATE_IF_NOT_EXISTS"),
+        ("read_only", "READ_ONLY"),
+        ("encrypted", "ENCRYPTED"),
+    ] {
+        if let Some(val) = duckdb_get_bool(duckdb, key) {
+            push_opt(format!("{sql_key} {val}"));
+        }
+    }
+
+    let source = format!("'ducklake:{}'", escape_duckdb_single_quotes(metadata_path));
+    let mut stmt = format!("ATTACH IF NOT EXISTS {source} AS {alias}");
+    if !opts.is_empty() {
+        stmt.push_str(" (");
+        stmt.push_str(&opts);
+        stmt.push(')');
+    }
+
+    Ok((alias, stmt))
 }
 
 fn build_duckdb_catalog_attach_stmt(

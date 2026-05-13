@@ -117,6 +117,22 @@
 //!         support_stage_create: <boolean>                         # optional
 //!         purge_requested: <boolean>                              # optional
 //!         encode_entire_prefix: <boolean>                         # optional
+//!
+//!   # type: ducklake
+//!   # supported platforms: duckdb
+//!   # a duckdb config block is required
+//!   - name: my_lake
+//!     type: ducklake
+//!     table_format: default
+//!     config:
+//!       duckdb:
+//!         metadata_path: <string>                                 # required, non-empty
+//!         data_path: <string>                                     # optional, non-empty if present
+//!         attach_as: <string>                                     # optional, non-empty if present
+//!         metadata_schema: <string>                               # optional, non-empty if present
+//!         create_if_not_exists: <boolean>                         # optional
+//!         read_only: <boolean>                                    # optional
+//!         encrypted: <boolean>                                    # optional
 //! ```
 //!
 //! Type-specific validation decides which platform blocks are supported for a particular
@@ -388,6 +404,7 @@ pub enum V2CatalogType {
     HiveMetastore,
     Unity,
     BiglakeMetastore,
+    DuckLake,
 }
 
 impl V2CatalogType {
@@ -404,11 +421,13 @@ impl V2CatalogType {
             Ok(Self::Unity)
         } else if raw.eq_ignore_ascii_case("biglake_metastore") {
             Ok(Self::BiglakeMetastore)
+        } else if raw.eq_ignore_ascii_case("ducklake") {
+            Ok(Self::DuckLake)
         } else {
             err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => Some(span.clone()),
-                "type '{}' invalid. choose one of (horizon|glue|iceberg_rest|unity|hive_metastore|biglake_metastore)",
+                "type '{}' invalid. choose one of (horizon|glue|iceberg_rest|unity|hive_metastore|biglake_metastore|ducklake)",
                 raw
             )
         }
@@ -422,6 +441,7 @@ impl V2CatalogType {
             Self::HiveMetastore => "hive_metastore",
             Self::Unity => "unity",
             Self::BiglakeMetastore => "biglake_metastore",
+            Self::DuckLake => "ducklake",
         }
     }
 }
@@ -626,6 +646,18 @@ const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duck
 // Credential-bearing values belong in profiles.yml `secrets`; catalogs.yml only
 // stores `secret`, the name of the DuckDB secret to reference during ATTACH.
 // See: https://duckdb.org/docs/stable/core_extensions/iceberg/iceberg_rest_catalogs#attach-options
+
+// Keys for DuckDB DuckLake catalogs.
+// See: https://duckdb.org/docs/extensions/ducklake
+const DUCKLAKE_DUCKDB_KEYS: &[&str] = &[
+    "metadata_path",
+    "data_path",
+    "attach_as",
+    "metadata_schema",
+    "create_if_not_exists",
+    "read_only",
+    "encrypted",
+];
 const DUCKDB_KEYS: &[&str] = &[
     "endpoint",
     "endpoint_type",
@@ -651,6 +683,7 @@ fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         V2CatalogType::Unity => &["snowflake", "databricks"],
         V2CatalogType::HiveMetastore => &["databricks"],
         V2CatalogType::BiglakeMetastore => &["bigquery"],
+        V2CatalogType::DuckLake => &["duckdb"],
     };
 
     for &platform in ALL_V2_PLATFORMS {
@@ -1282,6 +1315,70 @@ fn parse_iceberg_rest_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     Ok(())
 }
 
+fn parse_ducklake_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
+    validate_platform_support(catalog)?;
+    if catalog.table_format != V2TableFormat::Default {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("table_format").cloned(),
+            "Catalog '{}' type 'ducklake' requires table_format='default'",
+            catalog.name
+        );
+    }
+    let Some(duckdb) = catalog.config_block("duckdb") else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' type 'ducklake' requires config.duckdb",
+            catalog.name
+        );
+    };
+    check_unknown_keys(
+        duckdb,
+        DUCKLAKE_DUCKDB_KEYS,
+        "catalogs[].config.duckdb (ducklake)",
+    )?;
+
+    let Some(metadata_path) = get_str(duckdb, "metadata_path")? else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' ducklake/duckdb config requires 'metadata_path'",
+            catalog.name
+        );
+    };
+    if metadata_path.is_empty_or_whitespace() {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(duckdb, "metadata_path").cloned(),
+            "Catalog '{}' ducklake/duckdb 'metadata_path' must be non-empty",
+            catalog.name
+        );
+    }
+
+    // Optional string fields: non-empty if present
+    for key in ["data_path", "attach_as", "metadata_schema"] {
+        if let Some(val) = get_str(duckdb, key)?
+            && val.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, key).cloned(),
+                "Catalog '{}' ducklake/duckdb '{}' must be non-empty",
+                catalog.name,
+                key
+            );
+        }
+    }
+
+    // Optional boolean fields
+    for key in ["create_if_not_exists", "read_only", "encrypted"] {
+        validate_optional_bool(duckdb, key)?;
+    }
+
+    Ok(())
+}
+
 pub fn validate_catalogs_v2(spec: &DbtCatalogsV2View<'_>, _path: &Path) -> FsResult<()> {
     for catalog in &spec.catalogs {
         let () = match catalog.catalog_type {
@@ -1291,6 +1388,7 @@ pub fn validate_catalogs_v2(spec: &DbtCatalogsV2View<'_>, _path: &Path) -> FsRes
             V2CatalogType::Unity => parse_linked_catalog(catalog, "unity")?,
             V2CatalogType::HiveMetastore => parse_hive_metastore_catalog(catalog)?,
             V2CatalogType::BiglakeMetastore => parse_biglake_metastore_catalog(catalog)?,
+            V2CatalogType::DuckLake => parse_ducklake_catalog(catalog)?,
         };
     }
 
@@ -2210,6 +2308,99 @@ catalogs:
         assert!(
             format!("{res:?}").contains("'warehouse' must be non-empty"),
             "unexpected: {res:?}"
+        );
+    }
+
+    // ===== DuckLake tests =====
+
+    #[test]
+    fn ducklake_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+"#;
+        parse_and_validate(yaml).expect("ducklake minimal config should validate");
+    }
+
+    #[test]
+    fn ducklake_duckdb_v2_all_options() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+        data_path: "data/"
+        attach_as: "lake"
+        metadata_schema: "my_schema"
+        create_if_not_exists: true
+        read_only: false
+        encrypted: false
+"#;
+        parse_and_validate(yaml).expect("ducklake full config should validate");
+    }
+
+    #[test]
+    fn ducklake_missing_metadata_path() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        data_path: "data/"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("'metadata_path'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn ducklake_wrong_table_format() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: iceberg
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("requires table_format='default'"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn ducklake_snowflake_block_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      snowflake:
+        external_volume: "EV"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("does not support snowflake on the ducklake"),
+            "unexpected error: {msg}"
         );
     }
 }
