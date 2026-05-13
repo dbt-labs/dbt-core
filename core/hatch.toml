@@ -57,8 +57,6 @@ dependencies = [
     "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
-    "pytest-logbook~=1.2",
-    "logbook<2",
     "flaky",
     "freezegun>=1.5.1",
     "hypothesis",
