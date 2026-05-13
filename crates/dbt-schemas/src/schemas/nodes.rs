@@ -8,7 +8,7 @@ use chrono::Utc;
 use dbt_adapter_core::{AdapterType, adapter_type_supports_microbatch_concurrency};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::path::get_target_write_path;
+use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
@@ -317,7 +317,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         out_dir: &Path,
     ) -> std::borrow::Cow<'_, Path> {
         match (path_kind, self.resource_type()) {
-            (NodePathKind::Compiled, NodeType::Model | NodeType::Test | NodeType::UnitTest)
+            (
+                NodePathKind::Compiled,
+                NodeType::Model | NodeType::Test | NodeType::UnitTest | NodeType::Snapshot,
+            )
             | (NodePathKind::Executable, NodeType::Model | NodeType::Test | NodeType::UnitTest) => {
                 let abs = self.get_node_path_abs(path_kind, in_dir, out_dir);
                 pathdiff::diff_paths(&abs, in_dir).unwrap_or(abs).into()
@@ -342,6 +345,15 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         };
         match path_kind {
             NodePathKind::Compiled => {
+                if self.resource_type() == NodeType::Snapshot {
+                    // Snapshots always use the many-to-one nested path — see get_snapshot_compiled_path.
+                    return get_snapshot_compiled_path(
+                        &out_dir.join(DBT_COMPILED_DIR_NAME),
+                        &common.package_name,
+                        &common.original_file_path,
+                        &common.name,
+                    );
+                }
                 let mut abs = get_target_write_path(
                     in_dir,
                     &out_dir.join(DBT_COMPILED_DIR_NAME),

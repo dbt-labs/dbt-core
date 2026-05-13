@@ -4,6 +4,26 @@ use std::{
     path::{Component, Display, Path, PathBuf},
 };
 
+/// Compute the compiled output path for a snapshot node.
+///
+/// Snapshots always use the many-to-one nested layout: `out_dir/package/original_file_path/name.sql`.
+/// A single .sql file can contain multiple snapshot blocks, so the basename heuristic in
+/// `get_target_write_path` would create both a file and a directory at the same path (EISDIR)
+/// when one snapshot's name matches the source filename.
+///
+/// Mirrors dbt-core `SnapshotNode.get_target_write_path` (dbt-core#12693).
+pub fn get_snapshot_compiled_path(
+    out_dir: &Path,
+    package_name: &str,
+    original_file_path: &Path,
+    name: &str,
+) -> PathBuf {
+    out_dir
+        .join(package_name)
+        .join(original_file_path)
+        .join(format!("{name}.sql"))
+}
+
 /// Compute the absolute write path for a node inside `target/compiled` or `target/run`,
 /// matching dbt-core's `ParsedNode.get_target_write_path` behavior.
 ///
