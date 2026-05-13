@@ -37,6 +37,32 @@ class SnapshotRunner(ModelRunner):
             level=level,
         )
 
+    def handle_exception(self, e: Exception, ctx) -> str:
+        duplicate_row_indicators = [
+            "duplicate row detected during dml action",
+            "update/merge must match at most one source row",
+            "merge statement resulted in multiple rows",
+            "duplicate key value violates unique constraint",
+            "ora-30926",
+        ]
+
+        if hasattr(e, "msg") and any(indicator in str(e.msg).lower() for indicator in duplicate_row_indicators):
+            suggestion = (
+                "Suggestion: Ensure your unique_key column(s) are really unique. "
+                "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
+            )
+            if suggestion not in str(e.msg):
+                e.msg = f"{e.msg}\n\n{suggestion}"
+        elif hasattr(e, "args") and e.args and isinstance(e.args[0], str) and any(indicator in e.args[0].lower() for indicator in duplicate_row_indicators):
+            suggestion = (
+                "Suggestion: Ensure your unique_key column(s) are really unique. "
+                "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
+            )
+            if suggestion not in e.args[0]:
+                e.args = (f"{e.args[0]}\n\n{suggestion}",) + e.args[1:]
+
+        return super().handle_exception(e, ctx)
+
 
 class SnapshotTask(RunTask):
     def raise_on_first_error(self) -> bool:
