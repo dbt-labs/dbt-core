@@ -22,7 +22,7 @@ use dbt_schemas::{
     },
 };
 use dbt_telemetry::ProgressMessage;
-use dbt_yaml::{Value, Verbatim};
+use dbt_yaml::Value;
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
@@ -782,10 +782,6 @@ pub fn drop_all_unchanged_nodes(
             });
             !assets.is_empty()
         });
-
-        // Drop all operations.
-        package.dbt_project.on_run_start = Verbatim::from(None);
-        package.dbt_project.on_run_end = Verbatim::from(None);
     }
 
     let mut i = 0;
@@ -897,8 +893,8 @@ pub fn add_all_seen_nodes(
         .extend(operations.on_run_start.clone());
     resolved_state
         .operations
-        .on_run_start
-        .extend(operations.on_run_start.clone());
+        .on_run_end
+        .extend(operations.on_run_end.clone());
     Ok(())
 }
 

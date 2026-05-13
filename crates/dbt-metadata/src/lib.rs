@@ -1,10 +1,11 @@
 pub mod build_cache;
 pub mod file_registry;
 pub mod hashing;
+pub mod incremental_parse;
 pub mod node_state_writer;
-pub mod package_deps;
 pub mod parquet_cas;
 pub mod parquet_column;
+pub mod parquet_incremental;
 pub mod parquet_node;
 pub mod parquet_node_serde;
 pub mod parquet_project;

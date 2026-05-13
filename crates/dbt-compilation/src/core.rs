@@ -410,6 +410,18 @@ impl DbtLoadedProject {
         self.dbt_state.root_package()
     }
 
+    pub fn from_parts(
+        config: CompilationConfig,
+        adapter_factory: Arc<dyn AdapterFactory>,
+        dbt_state: Arc<DbtState>,
+    ) -> Self {
+        Self {
+            config,
+            adapter_factory,
+            dbt_state,
+        }
+    }
+
     pub fn adapter_factory(&self) -> Arc<dyn AdapterFactory> {
         self.adapter_factory.clone()
     }

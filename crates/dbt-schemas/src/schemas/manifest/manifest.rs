@@ -127,8 +127,8 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 dbt_version: env!("CARGO_PKG_VERSION").to_string(),
                 generated_at: Utc::now(),
                 invocation_id: Some(invocation_id.to_string()),
+                invocation_started_at: Some(resolver_state.run_started_at.with_timezone(&Utc)),
                 env: dbt_common::constants::collect_dbt_custom_envs(),
-                ..Default::default()
             },
             project_name: resolver_state.root_project_name.clone(),
             adapter_type: resolver_state

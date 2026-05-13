@@ -37,6 +37,7 @@ use serde::Serialize;
 use std::fmt;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ResourcePathKind {
     ProfilePaths,
     ModelPaths,

@@ -1617,6 +1617,17 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_PARTIAL_PARSE_FILE_PATH", hide = true)]
     pub partial_parse_file_path: Option<PathBuf>,
 
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_PARTIAL_LOAD", value_parser = BoolishValueParser::new(), hide = true)]
+    pub partial_load: bool,
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_PARTIAL_LOAD", value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_partial_load: bool,
+
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_VERIFY_PARTIAL_PARSE", value_parser = BoolishValueParser::new(), hide = true)]
+    pub verify_partial_parse: bool,
+
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_VERIFY_PARTIAL_LOAD", value_parser = BoolishValueParser::new(), hide = true)]
+    pub verify_partial_load: bool,
+
     // At start of run, use `show` or `information_schema` queries to populate a relational cache, which can speed up subsequent materializations.
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_POPULATE_CACHE", value_parser = BoolishValueParser::new(), hide = true)]
     pub populate_cache: bool,
@@ -1929,6 +1940,21 @@ impl CommonArgs {
                     .ok()
             })
         }
+    }
+
+    /// `--verify-partial-load` implies `--partial-load` implies `--partial-parse`.
+    /// `--verify-partial-load` → `--partial-load` → `--partial-parse`
+    /// `--verify-partial-parse` → `--partial-parse`
+    pub fn effective_partial_parse(&self) -> bool {
+        self.partial_parse
+            || self.partial_load
+            || self.verify_partial_load
+            || self.verify_partial_parse
+    }
+
+    /// `--verify-partial-load` implies `--partial-load`.
+    pub fn effective_partial_load(&self) -> bool {
+        self.partial_load || self.verify_partial_load
     }
 
     /// Resolve the effective value of `--quiet` / `--no-quiet`.
