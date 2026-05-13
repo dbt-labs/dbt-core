@@ -87,19 +87,20 @@ def _make_runner():
     return runner
 
 
-def _run_build_test(failures, should_error, should_warn, severity="ERROR", warn_error=False):
+def _run_build_test(result, node=None, warn_error=False):
     with patch("dbt.task.test.get_flags") as mock_get_flags:
         mock_get_flags.return_value.WARN_ERROR = warn_error
         mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
+        return _make_runner().build_test_run_result(node or _make_test_node(), result)
 
-        node = _make_test_node(severity=severity)
-        result = TestResultData(
-            failures=failures,
-            should_error=should_error,
-            should_warn=should_warn,
-            adapter_response={},
-        )
-        return _make_runner().build_test_run_result(node, result)
+
+def _make_result(failures, should_error, should_warn):
+    return TestResultData(
+        failures=failures,
+        should_error=should_error,
+        should_warn=should_warn,
+        adapter_response={},
+    )
 
 
 class TestBuildTestRunResult:
@@ -115,16 +116,18 @@ class TestBuildTestRunResult:
     def test_failures_always_preserved(
         self, failures, should_error, should_warn, expected_status
     ):
-        run_result = _run_build_test(failures, should_error, should_warn)
+        run_result = _run_build_test(_make_result(failures, should_error, should_warn))
         assert run_result.status == expected_status
         assert run_result.failures == failures
 
     def test_failures_preserved_with_warn_severity(self):
-        run_result = _run_build_test(5, False, True, severity="WARN")
+        run_result = _run_build_test(
+            _make_result(5, False, True), node=_make_test_node(severity="WARN")
+        )
         assert run_result.status == TestStatus.Warn
         assert run_result.failures == 5
 
     def test_warn_escalated_to_fail_with_warn_error(self):
-        run_result = _run_build_test(7, False, True, warn_error=True)
+        run_result = _run_build_test(_make_result(7, False, True), warn_error=True)
         assert run_result.status == TestStatus.Fail
         assert run_result.failures == 7
