@@ -5,6 +5,7 @@ import threading
 import time
 from copy import deepcopy
 from dataclasses import asdict
+from dataclasses import replace as dataclass_replace
 from datetime import datetime, timezone
 from typing import (
     AbstractSet,
@@ -22,7 +23,6 @@ from typing import (
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
-from dbt.adapters.base.relation import RelationType
 from dbt.adapters.capability import Capability
 from dbt.adapters.catalogs import DbtCatalogIntegrationNotFoundError
 from dbt.adapters.events.types import FinishedRunningStats
@@ -53,7 +53,6 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.events.types import (
     GenericExceptionOnRun,
-    JinjaLogInfo,
     LogBatchResult,
     LogHookEndLine,
     LogHookStartLine,
@@ -291,42 +290,40 @@ class ModelRunner(CompileRunner[ModelNode]):
                 f"Set `latest_version_view: enabled: false` or remove the conflicting alias."
             )
 
-        pointer_relation = self.adapter.Relation.create(
-            database=source_relation.database,
-            schema=source_relation.schema,
-            identifier=pointer_identifier,
-            type=RelationType.View,
-        )
-        existing_relation = self.adapter.get_relation(
-            pointer_relation.database,
-            pointer_relation.schema,
-            self._relation_identifier(pointer_relation),
+        # Build a runtime-only synthetic node for the pointer view.
+        # Never added to the manifest — only used to generate context for the
+        # view materialization macro so it runs with the right target relation,
+        # SQL, and config (grants inherited, hooks and persist_docs cleared).
+        pointer_node = dataclass_replace(
+            model,
+            alias=pointer_identifier,
+            raw_code=f"select * from {source_relation}",
+            compiled_code=f"select * from {source_relation}",
+            compiled=True,
+            unique_id=f"{model.unique_id}__latest_version_view",
+            config=dataclass_replace(
+                model.config,
+                pre_hook=[],
+                post_hook=[],
+                persist_docs={},
+            ),
         )
 
-        # Drop any existing relation (table, view, etc.) before creating the pointer view.
-        if existing_relation is not None:
-            self.adapter.drop_relation(existing_relation)
+        pointer_context = generate_runtime_model_context(pointer_node, self.config, manifest)
 
-        pointer_sql = f"select * from {source_relation}"
-        macro_name = "get_create_sql"
-        pointer_macro = manifest.find_macro_by_name(macro_name, self.config.project_name, None)
-        if pointer_macro is None:
-            raise DbtInternalError(f'Missing macro "{macro_name}" for latest version view')
+        view_materialization = manifest.find_materialization_macro_by_name(
+            self.config.project_name, "view", self.adapter.type()
+        )
+        if view_materialization is None:
+            raise DbtInternalError("Missing view materialization for latest version view")
 
-        macro_generator = MacroGenerator(
-            pointer_macro,
-            context,
-            stack=context["context_macro_stack"],
-        )
-        rendered_sql = macro_generator(pointer_relation, pointer_sql)
-        self.adapter.execute(rendered_sql, auto_begin=False, fetch=False)
-        fire_event(
-            JinjaLogInfo(
-                msg=f"Created latest version view {pointer_relation} for {source_relation}",
-                node_info=model.node_info,
-            )
-        )
-        return [pointer_relation]
+        result = MacroGenerator(
+            view_materialization,
+            pointer_context,
+            stack=pointer_context["context_macro_stack"],
+        )()
+
+        return self._materialization_relations(result, pointer_node)
 
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
