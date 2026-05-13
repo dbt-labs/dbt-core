@@ -785,6 +785,21 @@ pub async fn resolve_models(
             properties.constraints.clone().unwrap_or_default()
         };
 
+        let model_description = if let Some(versions) = &properties.versions {
+            versions
+                .iter()
+                .find(|v| {
+                    maybe_version
+                        .as_ref()
+                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
+                })
+                .and_then(|v| v.description.clone())
+                .or_else(|| properties.description.clone())
+                .unwrap_or_default()
+        } else {
+            properties.description.clone().unwrap_or_default()
+        };
+
         // Iterate over metrics and construct the dependencies
         let mut metrics = Vec::new();
         for (metric, package) in sql_file_info.metrics.iter() {
@@ -914,7 +929,7 @@ pub async fn resolve_models(
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''
-                description: Some(properties.description.clone().unwrap_or_default()),
+                description: Some(model_description),
                 checksum: sql_file_info.checksum.clone(),
                 // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
                 // hydrating it with get_original_file_contents would actually break dbt-evaluator
