@@ -77,7 +77,7 @@ HEALTHCHECK CMD dbt --version || exit 1
 WORKDIR /usr/app/dbt/
 ENTRYPOINT ["dbt"]
 
-RUN python -m pip install --no-cache-dir "dbt-postgres @ git+https://github.com/dbt-labs/dbt-core@${commit_ref}#subdirectory=plugins/postgres"
+RUN python -m pip install --no-cache-dir "dbt-postgres"
 
 
 FROM dbt-core AS dbt-third-party
