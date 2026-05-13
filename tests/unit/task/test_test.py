@@ -87,6 +87,21 @@ def _make_runner():
     return runner
 
 
+def _run_build_test(failures, should_error, should_warn, severity="ERROR", warn_error=False):
+    with patch("dbt.task.test.get_flags") as mock_get_flags:
+        mock_get_flags.return_value.WARN_ERROR = warn_error
+        mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
+
+        node = _make_test_node(severity=severity)
+        result = TestResultData(
+            failures=failures,
+            should_error=should_error,
+            should_warn=should_warn,
+            adapter_response={},
+        )
+        return _make_runner().build_test_run_result(node, result)
+
+
 class TestBuildTestRunResult:
     @pytest.mark.parametrize(
         "failures,should_error,should_warn,expected_status",
@@ -100,55 +115,16 @@ class TestBuildTestRunResult:
     def test_failures_always_preserved(
         self, failures, should_error, should_warn, expected_status
     ):
-        with patch("dbt.task.test.get_flags") as mock_get_flags:
-            mock_get_flags.return_value.WARN_ERROR = False
-            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
-
-            node = _make_test_node()
-            result = TestResultData(
-                failures=failures,
-                should_error=should_error,
-                should_warn=should_warn,
-                adapter_response={},
-            )
-
-            run_result = _make_runner().build_test_run_result(node, result)
-
-            assert run_result.status == expected_status
-            assert run_result.failures == failures
+        run_result = _run_build_test(failures, should_error, should_warn)
+        assert run_result.status == expected_status
+        assert run_result.failures == failures
 
     def test_failures_preserved_with_warn_severity(self):
-        with patch("dbt.task.test.get_flags") as mock_get_flags:
-            mock_get_flags.return_value.WARN_ERROR = False
-            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
-
-            node = _make_test_node(severity="WARN")
-            result = TestResultData(
-                failures=5,
-                should_error=False,
-                should_warn=True,
-                adapter_response={},
-            )
-
-            run_result = _make_runner().build_test_run_result(node, result)
-
-            assert run_result.status == TestStatus.Warn
-            assert run_result.failures == 5
+        run_result = _run_build_test(5, False, True, severity="WARN")
+        assert run_result.status == TestStatus.Warn
+        assert run_result.failures == 5
 
     def test_warn_escalated_to_fail_with_warn_error(self):
-        with patch("dbt.task.test.get_flags") as mock_get_flags:
-            mock_get_flags.return_value.WARN_ERROR = True
-            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
-
-            node = _make_test_node()
-            result = TestResultData(
-                failures=7,
-                should_error=False,
-                should_warn=True,
-                adapter_response={},
-            )
-
-            run_result = _make_runner().build_test_run_result(node, result)
-
-            assert run_result.status == TestStatus.Fail
-            assert run_result.failures == 7
+        run_result = _run_build_test(7, False, True, warn_error=True)
+        assert run_result.status == TestStatus.Fail
+        assert run_result.failures == 7
