@@ -12,6 +12,31 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
+DUPLICATE_ROW_INDICATORS = (
+    "duplicate row detected during dml action",
+    "update/merge must match at most one source row",
+    "merge statement resulted in multiple rows",
+    "duplicate key value violates unique constraint",
+    "ora-30926",
+)
+
+SNAPSHOT_UNIQUE_KEY_SUGGESTION = (
+    "Suggestion: Ensure your unique_key column(s) are really unique. "
+    "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
+)
+
+
+def _is_duplicate_row_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(indicator in lowered for indicator in DUPLICATE_ROW_INDICATORS)
+
+
+def _append_unique_key_suggestion(message: str) -> str:
+    if SNAPSHOT_UNIQUE_KEY_SUGGESTION in message:
+        return message
+
+    return f"{message}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}"
+
 
 class SnapshotRunner(ModelRunner):
     def describe_node(self) -> str:
@@ -37,31 +62,19 @@ class SnapshotRunner(ModelRunner):
             level=level,
         )
 
-    def handle_exception(self, e: Exception, ctx) -> str:
-        duplicate_row_indicators = [
-            "duplicate row detected during dml action",
-            "update/merge must match at most one source row",
-            "merge statement resulted in multiple rows",
-            "duplicate key value violates unique constraint",
-            "ora-30926",
-        ]
+    def handle_exception(self, exc: Exception, ctx) -> str:
+        if hasattr(exc, "msg") and isinstance(exc.msg, str):
+            if _is_duplicate_row_error(exc.msg):
+                exc.msg = _append_unique_key_suggestion(exc.msg)
 
-        if hasattr(e, "msg") and any(indicator in str(e.msg).lower() for indicator in duplicate_row_indicators):
-            suggestion = (
-                "Suggestion: Ensure your unique_key column(s) are really unique. "
-                "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
-            )
-            if suggestion not in str(e.msg):
-                e.msg = f"{e.msg}\n\n{suggestion}"
-        elif hasattr(e, "args") and e.args and isinstance(e.args[0], str) and any(indicator in e.args[0].lower() for indicator in duplicate_row_indicators):
-            suggestion = (
-                "Suggestion: Ensure your unique_key column(s) are really unique. "
-                "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
-            )
-            if suggestion not in e.args[0]:
-                e.args = (f"{e.args[0]}\n\n{suggestion}",) + e.args[1:]
+        elif exc.args and isinstance(exc.args[0], str):
+            if _is_duplicate_row_error(exc.args[0]):
+                exc.args = (
+                    _append_unique_key_suggestion(exc.args[0]),
+                    *exc.args[1:],
+                )
 
-        return super().handle_exception(e, ctx)
+        return super().handle_exception(exc, ctx)
 
 
 class SnapshotTask(RunTask):
