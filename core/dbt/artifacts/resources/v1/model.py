@@ -25,6 +25,12 @@ class ModelOnErrorOptions(enum.Enum):
     continue_ = "continue"
 
 
+@dataclass
+class LatestVersionView(dbtClassMixin):
+    enabled: Optional[bool] = None  # None = defer to latest_version_view_enabled_by_default flag
+    alias: Optional[str] = None
+
+
 class ModelFreshnessUpdatesOnOptions(enum.Enum):
     all = "all"
     any = "any"
@@ -84,6 +90,10 @@ class ModelConfig(NodeConfig):
     )
     freshness: Optional[ModelFreshness] = None
     on_error: Optional[ModelOnErrorOptions] = None
+    latest_version_view: LatestVersionView = field(
+        default_factory=LatestVersionView,
+        metadata=MergeBehavior.Update.meta(),
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -116,6 +126,9 @@ class ModelConfig(NodeConfig):
             data["freshness"] = ModelFreshness.from_dict(data["freshness"]).to_dict()
         else:
             data.pop("freshness", None)
+        # Allow shorthand: latest_version_view: false -> {enabled: false}
+        if "latest_version_view" in data and isinstance(data["latest_version_view"], bool):
+            data["latest_version_view"] = {"enabled": data["latest_version_view"]}
         return data
 
 
