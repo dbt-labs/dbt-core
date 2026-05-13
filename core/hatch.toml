@@ -65,7 +65,7 @@ dependencies = [
     "mocker",
     # Debugging
     "ipdb",
-    "ddtrace<3.18",
+    "ddtrace<3.17",
     # Documentation
     "docutils",
     "sphinx",
@@ -186,7 +186,7 @@ dependencies = [
     "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
-    "ddtrace<3.18",
+    "ddtrace<3.17",
     "flaky",
     "freezegun>=1.5.1",
     "hypothesis",
