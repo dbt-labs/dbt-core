@@ -22,6 +22,7 @@ from dbt.parser.manifest import (
     _warn_for_unused_resource_config_paths,
     extended_mashumaro_encoder,
     extended_msgpack_encoder,
+    version_to_str,
 )
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
@@ -496,3 +497,19 @@ class TestCheckFunctionLanguageSupport:
         }
         config = self._make_config("snowflake")
         _check_function_language_support(manifest, config)
+
+
+class TestVersionToStr:
+    @pytest.mark.parametrize(
+        "version,expected",
+        [
+            (None, ""),
+            (1, "1"),
+            ("1", "1"),
+            ("4.5", "4.5"),
+            (4.5, "4.5"),
+            ("test", "test"),
+        ],
+    )
+    def test_version_to_str(self, version, expected):
+        assert version_to_str(version) == expected

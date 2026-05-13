@@ -180,13 +180,12 @@ def extended_msgpack_decoder(code, data):
         return msgpack.ExtType(code, data)
 
 
-def version_to_str(version: Optional[Union[str, int]]) -> str:
-    if isinstance(version, int):
-        return str(version)
-    elif isinstance(version, str):
+def version_to_str(version: Optional[Union[str, int, float]]) -> str:
+    if version is None:
+        return ""
+    if isinstance(version, str):
         return version
-
-    return ""
+    return str(version)
 
 
 class ReparseReason(StrEnum):
