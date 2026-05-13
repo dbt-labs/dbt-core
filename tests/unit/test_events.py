@@ -317,6 +317,7 @@ sample_values = [
     core_types.PackageNodeDependsOnRootProjectNode(
         node_name="", node_package="", root_project_unique_id=""
     ),
+    core_types.MFConverterIssue(issue_type="", element_name="", converter_name=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
