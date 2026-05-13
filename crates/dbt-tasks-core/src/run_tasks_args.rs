@@ -15,7 +15,7 @@ use dbt_common::static_analysis::{
 use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_yaml::Spanned;
 
-#[derive(Clone, Default)]
+#[derive(Default)] // DO NOT ADD Clone HERE
 pub struct RunTasksArgs {
     pub command: FsCommand,
     // The io args
@@ -92,8 +92,8 @@ pub struct RunTasksArgs {
 }
 
 impl RunTasksArgs {
-    pub fn from_eval_args(arg: &EvalArgs, fail_fast: FailFast) -> Self {
-        Self {
+    pub fn from_eval_args(arg: &EvalArgs, fail_fast: FailFast) -> Box<Self> {
+        let run_tasks_args = Self {
             command: arg.command,
             io: arg.io.clone(),
             profile: arg.profile.clone(),
@@ -131,7 +131,8 @@ impl RunTasksArgs {
             fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
             warn_error_options: arg.warn_error_options.clone(),
-        }
+        };
+        Box::new(run_tasks_args)
     }
 
     /// Populate resolved profile fields from DbtProfile

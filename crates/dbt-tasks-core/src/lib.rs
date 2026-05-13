@@ -1,6 +1,10 @@
+pub mod context;
 pub mod pretty_table;
 mod run_tasks_args;
+pub mod span_manager;
 mod stats_to_results;
+pub mod test_aggregation;
+pub mod visitor;
 
 pub use run_tasks_args::RunTasksArgs;
 pub use stats_to_results::stats_to_results;

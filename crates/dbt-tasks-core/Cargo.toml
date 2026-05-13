@@ -13,9 +13,23 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-chrono = { workspace = true }
+dbt-adapter-core = { workspace = true }
 dbt-common = { workspace = true }
+dbt-dag = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-pretty-table = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
+
+arrow = { workspace = true }
+arrow-schema = { workspace = true }
+chrono = { workspace = true }
+minijinja = { workspace = true }
+parking_lot = { workspace = true }
+regex = { workspace = true }
+scc = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
