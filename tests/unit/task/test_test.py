@@ -89,61 +89,66 @@ def _make_runner():
 
 class TestBuildTestRunResult:
     @pytest.mark.parametrize(
-        "failures,should_error,should_warn,severity,expected_status,expected_failures",
+        "failures,should_error,should_warn,expected_status",
         [
-            # The bug fix: passing test with failures > 0 must preserve the count
-            (4, False, False, "ERROR", TestStatus.Pass, 4),
-            # Simple pass with 0 failures
-            (0, False, False, "ERROR", TestStatus.Pass, 0),
-            # Error path
-            (3, True, False, "ERROR", TestStatus.Fail, 3),
-            # Warn path (severity ERROR but should_warn triggers)
-            (2, False, True, "ERROR", TestStatus.Warn, 2),
-            # Warn severity
-            (5, False, True, "WARN", TestStatus.Warn, 5),
+            (4, False, False, TestStatus.Pass),
+            (0, False, False, TestStatus.Pass),
+            (3, True, False, TestStatus.Fail),
+            (2, False, True, TestStatus.Warn),
         ],
     )
-    @patch("dbt.task.test.get_flags")
     def test_failures_always_preserved(
-        self,
-        mock_get_flags,
-        failures,
-        should_error,
-        should_warn,
-        severity,
-        expected_status,
-        expected_failures,
+        self, failures, should_error, should_warn, expected_status
     ):
-        mock_get_flags.return_value.WARN_ERROR = False
-        mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
+        with patch("dbt.task.test.get_flags") as mock_get_flags:
+            mock_get_flags.return_value.WARN_ERROR = False
+            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
 
-        node = _make_test_node(severity=severity)
-        result = TestResultData(
-            failures=failures,
-            should_error=should_error,
-            should_warn=should_warn,
-            adapter_response={},
-        )
+            node = _make_test_node()
+            result = TestResultData(
+                failures=failures,
+                should_error=should_error,
+                should_warn=should_warn,
+                adapter_response={},
+            )
 
-        run_result = _make_runner().build_test_run_result(node, result)
+            run_result = _make_runner().build_test_run_result(node, result)
 
-        assert run_result.status == expected_status
-        assert run_result.failures == expected_failures
+            assert run_result.status == expected_status
+            assert run_result.failures == failures
 
-    @patch("dbt.task.test.get_flags")
-    def test_warn_escalated_to_fail_with_warn_error(self, mock_get_flags):
-        mock_get_flags.return_value.WARN_ERROR = True
-        mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
+    def test_failures_preserved_with_warn_severity(self):
+        with patch("dbt.task.test.get_flags") as mock_get_flags:
+            mock_get_flags.return_value.WARN_ERROR = False
+            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
 
-        node = _make_test_node(severity="ERROR")
-        result = TestResultData(
-            failures=7,
-            should_error=False,
-            should_warn=True,
-            adapter_response={},
-        )
+            node = _make_test_node(severity="WARN")
+            result = TestResultData(
+                failures=5,
+                should_error=False,
+                should_warn=True,
+                adapter_response={},
+            )
 
-        run_result = _make_runner().build_test_run_result(node, result)
+            run_result = _make_runner().build_test_run_result(node, result)
 
-        assert run_result.status == TestStatus.Fail
-        assert run_result.failures == 7
+            assert run_result.status == TestStatus.Warn
+            assert run_result.failures == 5
+
+    def test_warn_escalated_to_fail_with_warn_error(self):
+        with patch("dbt.task.test.get_flags") as mock_get_flags:
+            mock_get_flags.return_value.WARN_ERROR = True
+            mock_get_flags.return_value.WARN_ERROR_OPTIONS.includes.return_value = False
+
+            node = _make_test_node()
+            result = TestResultData(
+                failures=7,
+                should_error=False,
+                should_warn=True,
+                adapter_response={},
+            )
+
+            run_result = _make_runner().build_test_run_result(node, result)
+
+            assert run_result.status == TestStatus.Fail
+            assert run_result.failures == 7
