@@ -106,7 +106,6 @@ def populated_node_config_dict():
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
         "lookback": 1,
-        "latest_version_view": {},
     }
 
 
@@ -237,7 +236,6 @@ def base_parsed_model_dict():
             "packages": [],
             "access": "protected",
             "lookback": 1,
-            "latest_version_view": {},
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -352,7 +350,6 @@ def complex_parsed_model_dict():
             "packages": [],
             "access": "protected",
             "lookback": 1,
-            "latest_version_view": {},
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
