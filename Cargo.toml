@@ -20,6 +20,7 @@ members = [
   "crates/dbt-features",
   "crates/dbt-tasks-core",
   "crates/dbt-init",
+  "crates/dbt-index-core",
   "crates/dbt-error",
   "crates/dbt-frontend-common",
   "crates/dbt-jinja/minijinja",

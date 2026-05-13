@@ -1,0 +1,21 @@
+[package]
+name = "dbt-index-core"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Provider interfaces for dbt-index."
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+dbt-fusion-workspace-hack = { version = "0.1" }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
