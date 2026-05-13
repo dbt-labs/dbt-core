@@ -1,0 +1,6 @@
+kind: Fixes
+body: Stop hardcoding "model" in the ambiguous-relation error; derive the resource type from the node's unique_id
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "12629"
