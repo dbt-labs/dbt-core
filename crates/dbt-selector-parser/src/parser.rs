@@ -15,8 +15,8 @@ use dbt_common::{
 };
 
 use dbt_schemas::schemas::selectors::{
-    AtomExpr, CompositeExpr, CompositeKind, MethodAtomExpr, SelectorDefinition,
-    SelectorDefinitionValue, SelectorExpr,
+    AtomExpr, CompositeExpr, CompositeKind, MethodAtomExpr, SelectorDefaultSpec,
+    SelectorDefinition, SelectorDefinitionValue, SelectorExpr,
 };
 
 #[derive(Debug, Clone)]
@@ -42,6 +42,10 @@ impl<'a> SelectorParser<'a> {
         match def {
             SelectorDefinitionValue::String(s) => Ok(parse_model_specifiers(slice::from_ref(s))?),
             SelectorDefinitionValue::Full(expr) => self.parse_expr(expr),
+            SelectorDefinitionValue::Array(items) => {
+                let exprs = self.collect_definition_includes(items)?;
+                Ok(SelectExpression::Or(exprs))
+            }
         }
     }
 
@@ -126,9 +130,9 @@ impl<'a> SelectorParser<'a> {
                     // Note: Per the docs, graph operators (parents, children, etc.) are NOT
                     // supported for selector inheritance, so we ignore them and return the
                     // referenced selector's include expression as-is
-                    if expr.childrens_parents
-                        || expr.parents
-                        || expr.children
+                    if expr.childrens_parents.as_bool()
+                        || expr.parents.as_bool()
+                        || expr.children.as_bool()
                         || expr.parents_depth.is_some()
                         || expr.children_depth.is_some()
                     {
@@ -146,9 +150,9 @@ impl<'a> SelectorParser<'a> {
                     self.atom_to_select_expression(AtomExpr::Method(MethodAtomExpr {
                         method: expr.method.clone(),
                         value: expr.value.clone(),
-                        childrens_parents: expr.childrens_parents,
-                        parents: expr.parents,
-                        children: expr.children,
+                        childrens_parents: expr.childrens_parents.clone(),
+                        parents: expr.parents.clone(),
+                        children: expr.children.clone(),
                         parents_depth: expr.parents_depth,
                         children_depth: expr.children_depth,
                         indirect_selection: expr.indirect_selection,
@@ -168,9 +172,9 @@ impl<'a> SelectorParser<'a> {
                 let wrapper = AtomExpr::Method(MethodAtomExpr {
                     method: m.clone(),
                     value: v.clone(),
-                    childrens_parents: false,
-                    parents: false,
-                    children: false,
+                    childrens_parents: SelectorDefaultSpec::from(false),
+                    parents: SelectorDefaultSpec::from(false),
+                    children: SelectorDefaultSpec::from(false),
                     parents_depth: None,
                     children_depth: None,
                     indirect_selection: Some(IndirectSelection::default()),
@@ -200,9 +204,9 @@ impl<'a> SelectorParser<'a> {
             AtomExpr::Method(expr) => {
                 let method = expr.method.clone();
                 let value = expr.value.clone();
-                let childrens_parents = expr.childrens_parents;
-                let parents = expr.parents;
-                let children = expr.children;
+                let childrens_parents = expr.childrens_parents.as_bool();
+                let parents = expr.parents.as_bool();
+                let children = expr.children.as_bool();
                 let parents_depth = expr.parents_depth;
                 let children_depth = expr.children_depth;
                 let indirect_selection = expr.indirect_selection;
@@ -333,9 +337,9 @@ mod tests {
         let expr = SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: SelectorValue::from("nightly"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: Some(IndirectSelection::default()),
@@ -468,9 +472,9 @@ mod tests {
                             MethodAtomExpr {
                                 method: "tag".to_string(),
                                 value: SelectorValue::from("baz"),
-                                childrens_parents: false,
-                                parents: false,
-                                children: false,
+                                childrens_parents: SelectorDefaultSpec::from(false),
+                                parents: SelectorDefaultSpec::from(false),
+                                children: SelectorDefaultSpec::from(false),
                                 parents_depth: None,
                                 children_depth: None,
                                 indirect_selection: None,
@@ -536,9 +540,9 @@ mod tests {
         let single_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: SelectorValue::from("nightly"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: Some(IndirectSelection::default()),
@@ -570,9 +574,9 @@ mod tests {
         let multiple_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: SelectorValue::from("nightly"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: Some(IndirectSelection::default()),
@@ -998,9 +1002,9 @@ mod tests {
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: SelectorValue::from("nightly"),
-            childrens_parents: true,
-            parents: true,
-            children: true,
+            childrens_parents: SelectorDefaultSpec::from(true),
+            parents: SelectorDefaultSpec::from(true),
+            children: SelectorDefaultSpec::from(true),
             parents_depth: Some(2),
             children_depth: Some(3),
             indirect_selection: Some(IndirectSelection::Cautious),
@@ -1096,9 +1100,9 @@ mod tests {
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: SelectorValue::from("foo_and_bar"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: None,
@@ -1141,9 +1145,9 @@ mod tests {
                     MethodAtomExpr {
                         method: "tag".to_string(),
                         value: SelectorValue::from("production"),
-                        childrens_parents: false,
-                        parents: false,
-                        children: false,
+                        childrens_parents: SelectorDefaultSpec::from(false),
+                        parents: SelectorDefaultSpec::from(false),
+                        children: SelectorDefaultSpec::from(false),
                         parents_depth: None,
                         children_depth: None,
                         indirect_selection: None,
@@ -1162,9 +1166,9 @@ mod tests {
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: SelectorValue::from("base_with_exclude"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: None,
@@ -1247,9 +1251,9 @@ mod tests {
         let inheritance_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: SelectorValue::from("unknown_selector"),
-            childrens_parents: false,
-            parents: false,
-            children: false,
+            childrens_parents: SelectorDefaultSpec::from(false),
+            parents: SelectorDefaultSpec::from(false),
+            children: SelectorDefaultSpec::from(false),
             parents_depth: None,
             children_depth: None,
             indirect_selection: None,

@@ -167,11 +167,39 @@ pub struct SelectorDefinition {
 
 /// Parsed form of the selector `default:` field: either a literal bool
 /// or a still-unrendered Jinja template string.
+///
+/// Also reused for graph-walk flag fields (`children`, `parents`,
+/// `childrens_parents`) so the JSON schema correctly shows that those fields
+/// accept Jinja expressions.  At runtime those fields are always rendered
+/// before deserialization (`into_typed_with_jinja`), so `Template` is only
+/// ever populated for `default`.
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, DbtSchema)]
 #[serde(untagged)]
 pub enum SelectorDefaultSpec {
     Bool(bool),
     Template(String),
+}
+
+impl From<bool> for SelectorDefaultSpec {
+    fn from(b: bool) -> Self {
+        SelectorDefaultSpec::Bool(b)
+    }
+}
+
+impl Default for SelectorDefaultSpec {
+    fn default() -> Self {
+        false.into()
+    }
+}
+
+impl SelectorDefaultSpec {
+    pub fn as_bool(&self) -> bool {
+        match self {
+            SelectorDefaultSpec::Bool(b) => *b,
+            // Unrendered template — callers using as_bool() treat it as false.
+            SelectorDefaultSpec::Template(_) => false,
+        }
+    }
 }
 
 //
@@ -186,6 +214,19 @@ pub enum SelectorDefinitionValue {
 
     /// Full YAML tree (see `SelectorExpr` below).
     Full(SelectorExpr),
+
+    /// Bare YAML sequence — treated as an implicit union of the listed items.
+    ///
+    /// dbt-core allows writing:
+    /// ```yaml
+    /// definition:
+    ///   - method: tag
+    ///     value: nightly
+    ///   - method: config
+    ///     value: "materialized:table"
+    /// ```
+    /// which is semantically equivalent to `union: [...]`.
+    Array(Vec<SelectorDefinitionValue>),
 }
 
 /// Top‐level expression: either a boolean node or a single atom
@@ -323,12 +364,15 @@ pub struct MethodAtomExpr {
     pub value: SelectorValue,
 
     // graph-walk flags (all optional / default = false)
+    // SelectorDefaultSpec instead of bool so the JSON schema shows that
+    // Jinja expressions are accepted here (they are pre-rendered before
+    // deserialization, but authors write them in YAML).
     #[serde(default)]
-    pub childrens_parents: bool,
+    pub childrens_parents: SelectorDefaultSpec,
     #[serde(default)]
-    pub parents: bool,
+    pub parents: SelectorDefaultSpec,
     #[serde(default)]
-    pub children: bool,
+    pub children: SelectorDefaultSpec,
 
     // depth limits
     #[serde(default)]
