@@ -123,6 +123,11 @@ def load_catalogs_v2(
         )
 
     raw_catalogs = raw_yaml.get("catalogs", [])
+    if not isinstance(raw_catalogs, list):
+        raise DbtValidationError(
+            f"'catalogs' in catalogs.yml must be a list, got {type(raw_catalogs).__name__}"
+        )
+
     renderer = SecretRenderer(cli_vars)
 
     seen_names: set = set()
@@ -139,6 +144,11 @@ def load_catalogs_v2(
 
 
 def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -> CatalogV2:
+    if not isinstance(raw_catalog, dict):
+        raise DbtValidationError(
+            f"Each entry in catalogs.yml 'catalogs' must be a mapping, got {type(raw_catalog).__name__}"
+        )
+
     try:
         rendered = renderer.render_data(raw_catalog)
     except CompilationError as exc:
