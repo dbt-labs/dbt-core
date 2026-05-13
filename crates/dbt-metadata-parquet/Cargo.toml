@@ -25,6 +25,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lib]
 name = "dbt_metadata_parquet"
 path = "src/lib.rs"
