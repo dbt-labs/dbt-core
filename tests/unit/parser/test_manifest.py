@@ -500,6 +500,11 @@ class TestCheckFunctionLanguageSupport:
 
 
 class TestVersionToStr:
+    # Regression test for #12947: PR #12828 widened NodeVersion to
+    # Union[int, float, str], and mashumaro deserializes union members in
+    # declaration order — so YAML scalars like `v: 4.5` now arrive as Python
+    # floats. The float case (4.5 -> "4.5") guards against a future Union
+    # reorder silently dropping float versions back to the "" sentinel.
     @pytest.mark.parametrize(
         "version,expected",
         [

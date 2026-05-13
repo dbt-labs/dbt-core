@@ -180,7 +180,7 @@ def extended_msgpack_decoder(code, data):
         return msgpack.ExtType(code, data)
 
 
-def version_to_str(version: Optional[Union[str, int, float]]) -> str:
+def version_to_str(version: Optional[NodeVersion]) -> str:
     if version is None:
         return ""
     if isinstance(version, str):
