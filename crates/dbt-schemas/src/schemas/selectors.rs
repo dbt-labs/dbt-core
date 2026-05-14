@@ -360,6 +360,11 @@ pub struct SelectorEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct MethodAtomExpr {
+    /// Selector method name. Standard values: `access`, `config`, `exposure`, `file`, `fqn`,
+    /// `group`, `metric`, `package`, `path`, `resource_type`, `result`, `saved_query`,
+    /// `semantic_model`, `source`, `source_status`, `state`, `tag`, `test_name`, `test_type`,
+    /// `unit_test`, `version`. YAML-only: `selector` (references another named selector).
+    /// Dot-notation adds a sub-argument: `config.materialized`, `config.schema`, etc.
     pub method: String,
     pub value: SelectorValue,
 
