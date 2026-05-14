@@ -711,7 +711,8 @@ pub fn print(message: impl AsRef<str>) {
 /// Print an error to stderr only. This should be used instead of `eprintln!`.
 ///
 /// Takes a mandatory error code. The message will be formatted similarly
-/// to how error logs are formatted: `error: code: <message>`, error colored in red.
+/// to how error logs are formatted: `[error] [Name (dbt####)]: <message>`,
+/// error colored in red.
 #[track_caller]
 pub fn print_err(error_code: ErrorCode, message: impl AsRef<str>) {
     use super::private_events::print_event::StderrMessage;

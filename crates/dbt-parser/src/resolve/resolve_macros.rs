@@ -248,7 +248,7 @@ pub fn resolve_macros(
                     }
                     _ => {
                         return err!(
-                            ErrorCode::MacroSyntaxError,
+                            ErrorCode::MacroSyntaxInvalid,
                             "Refs, sources, configs and other resources are not allowed in macros. Path: {}",
                             macro_file.display()
                         );
@@ -515,7 +515,7 @@ pub fn apply_macro_patches(
         } else {
             // Emit a warning when YAML references a macro that doesn't exist
             emit_warn_log_message(
-                ErrorCode::MacroNotFoundForPatch,
+                ErrorCode::MacroPatchNotFound,
                 format!(
                     "Found patch for macro \"{}\" which was not found",
                     macro_name
@@ -596,7 +596,7 @@ mod tests {
             InvalidCase {
                 name: "missing_endblock",
                 files: vec![("missing_endblock.md", "{% docs broken %}missing endblock")],
-                expected_code: ErrorCode::MacroSyntaxError,
+                expected_code: ErrorCode::MacroSyntaxInvalid,
                 expected_warning_paths: vec!["models/missing_endblock.md"],
             },
             InvalidCase {

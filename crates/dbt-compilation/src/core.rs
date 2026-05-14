@@ -259,10 +259,7 @@ async fn compute_file_changeset(
     }
 
     if changed.is_empty() {
-        return Err(fs_err!(
-            ErrorCode::NoFilesChangedWarning,
-            "No files changed"
-        ));
+        return Err(fs_err!(ErrorCode::NoFilesChanged, "No files changed"));
     }
 
     Ok(FileChangeset { changed })

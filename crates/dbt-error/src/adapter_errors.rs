@@ -97,13 +97,13 @@ impl From<AdapterErrorKind> for ErrorCode {
     fn from(val: AdapterErrorKind) -> Self {
         match val {
             AdapterErrorKind::Internal => ErrorCode::Unexpected,
-            AdapterErrorKind::SqlExecution => ErrorCode::ExecutorError,
+            AdapterErrorKind::SqlExecution => ErrorCode::ExecutorFailed,
             AdapterErrorKind::Configuration => ErrorCode::InvalidConfig,
             AdapterErrorKind::Authentication => ErrorCode::DbAuthFailed,
             AdapterErrorKind::NotFound => ErrorCode::DbNotFound,
-            AdapterErrorKind::Driver => ErrorCode::DbDriverError,
+            AdapterErrorKind::Driver => ErrorCode::DbDriverFailed,
             AdapterErrorKind::Arrow => ErrorCode::ArrowError,
-            AdapterErrorKind::UnexpectedResult => ErrorCode::ExecutorError,
+            AdapterErrorKind::UnexpectedResult => ErrorCode::ExecutorFailed,
             AdapterErrorKind::ReplayDataInvalid => ErrorCode::ReplayDataInvalid,
             AdapterErrorKind::ReplayDataMissing => ErrorCode::ReplayDataMissing,
             AdapterErrorKind::SqlMismatch => ErrorCode::SqlMismatch,
@@ -112,8 +112,8 @@ impl From<AdapterErrorKind> for ErrorCode {
             AdapterErrorKind::Cancelled => ErrorCode::TaskCancelled,
             AdapterErrorKind::UnsupportedType => ErrorCode::InvalidType,
             AdapterErrorKind::Io => ErrorCode::IoError,
-            AdapterErrorKind::SerdeJSON => ErrorCode::JsonError,
-            AdapterErrorKind::SerdeYAML => ErrorCode::YamlError,
+            AdapterErrorKind::SerdeJSON => ErrorCode::JsonInvalid,
+            AdapterErrorKind::SerdeYAML => ErrorCode::YamlInvalid,
             AdapterErrorKind::NotSupported => ErrorCode::DbUnsupportedFeature,
             // Test framework related
             AdapterErrorKind::Replay => ErrorCode::Generic,
@@ -131,12 +131,12 @@ fn map_sqlstate_to_code(sqlstate: &str) -> Option<ErrorCode> {
     match class.as_str() {
         "08" => Some(ErrorCode::DbConnectionFailed),
         "28" => Some(ErrorCode::DbAuthFailed),
-        "42" => Some(ErrorCode::DbSyntaxError),
+        "42" => Some(ErrorCode::DbSyntaxInvalid),
         "53" => Some(ErrorCode::DbResourceExceeded),
         "57" | "58" => Some(ErrorCode::DbUnavailable),
         "40" => Some(ErrorCode::DbTxnConflict),
         "0A" => Some(ErrorCode::DbUnsupportedFeature),
-        "HY" => Some(ErrorCode::DbDriverError),
+        "HY" => Some(ErrorCode::DbDriverFailed),
         _ => None,
     }
 }

@@ -278,7 +278,7 @@ impl HubClient {
                 PackageVersionCompatibilityStatus::RequiredDbtVersionIncompatible
             ) {
                 emit_warn_log_message(
-                    ErrorCode::IncompatiblePackageVersion,
+                    ErrorCode::PackageVersionMismatch,
                     format!(
                         "Package '{package_name}' may not be compatible with your dbt version: {}. Check Package Hub (https://hub.getdbt.com) for compatible versions or contact the package maintainer.",
                         compatibility_status
@@ -326,7 +326,7 @@ impl HubClient {
                     };
 
                     emit_warn_log_message(
-                        ErrorCode::IncompatiblePackageVersion,
+                        ErrorCode::PackageVersionMismatch,
                         format!(
                             "Package '{}' requires dbt version {}, but current version is {}. \
                          This package may not be compatible with your dbt version.",

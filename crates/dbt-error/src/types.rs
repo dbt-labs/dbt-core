@@ -69,7 +69,7 @@ pub struct FsError {
 pub const MAX_DISPLAY_TOKENS: usize = 7;
 impl Debug for FsError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "dbt{}: {}", self.code, self)?;
+        writeln!(f, "[{}]: {}", self.code.name_and_code(), self)?;
         if let Some(loc) = &self.location {
             writeln!(f, " --> {loc}")?;
         }
@@ -86,7 +86,7 @@ static RE_ANTLR: LazyLock<Regex> =
 impl Display for FsError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self.code {
-            ErrorCode::SyntaxError => {
+            ErrorCode::SyntaxInvalid => {
                 // Truncate and prettify Antlr syntax error messages
                 let message = self.context.as_str();
                 let message = if let Some(caps) = RE_ANTLR.captures(message) {
@@ -268,7 +268,7 @@ impl FsError {
             return result;
         }
         let err_code = match err.kind() {
-            minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxError,
+            minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxInvalid,
             minijinja::ErrorKind::DisabledModel => ErrorCode::DisabledModel,
             minijinja::ErrorKind::Execution => ErrorCode::ExecutionError,
             _ => ErrorCode::JinjaError,
@@ -296,7 +296,7 @@ impl FsError {
     /// Returns a pretty-printed version of this error, including the error code
     /// and file location as a suffix.
     pub fn pretty(&self) -> String {
-        let mut s = format!("dbt{}: {}", self.code, self);
+        let mut s = format!("[{}]: {}", self.code.name_and_code(), self);
         if let Some(location) = &self.location {
             s.push_str(&format!("\n  --> {location}"));
         }
@@ -986,7 +986,7 @@ impl From<dbt_yaml::Error> for WrappedError {
 
 impl From<dbt_yaml::Error> for FsError {
     fn from(e: dbt_yaml::Error) -> Self {
-        FsError::new(ErrorCode::YamlError, "YAML error").with_cause(WrappedError::SerdeYml(e))
+        FsError::new(ErrorCode::YamlInvalid, "YAML error").with_cause(WrappedError::SerdeYml(e))
     }
 }
 
@@ -998,7 +998,7 @@ impl From<dbt_yaml::Error> for Box<FsError> {
 
 impl From<serde_json::Error> for FsError {
     fn from(e: serde_json::Error) -> Self {
-        FsError::new(ErrorCode::JsonError, "JSON error").with_cause(WrappedError::SerdeJson(e))
+        FsError::new(ErrorCode::JsonInvalid, "JSON error").with_cause(WrappedError::SerdeJson(e))
     }
 }
 
@@ -1022,7 +1022,7 @@ impl From<serde_json::Error> for WrappedError {
 //                 col,
 //                 file,
 //                 message,
-//             } => FsError::new(ErrorCode::MacroSyntaxError, message)
+//             } => FsError::new(ErrorCode::MacroSyntaxInvalid, message)
 //                 .with_location(CodeLocation::new(line, col, file)),
 //             sdf_preprocessor::error::PreprocError::Minijinja(e) => {
 //                 FsError::new(ErrorCode::JinjaError, "Macro error")

@@ -504,7 +504,7 @@ fn test_log_message() {
                 "name": "Generic",
                 "level": "error",
                 "extra": {},
-                "msg": "error: Test error message"
+                "msg": "[error]: Test error message"
             },
             "data": {}
         })],

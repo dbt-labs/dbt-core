@@ -75,9 +75,9 @@ pub const DBT_AGGREGATED_GENERIC_TEST_CONTEXT: &str = "aggregated_test_skip_colu
 
 // ----------------------------------------------------------------------------------------------
 // dbt console output
-pub const ERROR: &str = "error:";
-pub const WARNING: &str = "warning:";
-pub const PANIC: &str = "panic:";
+pub const ERROR: &str = "error";
+pub const WARNING: &str = "warning";
+pub const PANIC: &str = "panic";
 
 // ----------------------------------------------------------------------------------------------
 // actions in order of appearance

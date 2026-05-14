@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use dbt_proc_macros::include_frontend_error_codes;
 use int_enum::IntEnum;
+use strum_macros::EnumString;
 
 /// Error codes for the SDF CLI.
 ///
@@ -11,7 +12,7 @@ use int_enum::IntEnum;
 #[include_frontend_error_codes]
 #[repr(u16)]
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum, EnumString, Default)]
 pub enum ErrorCode {
     // ----------------- Frontend errors [0, 999] -----------------------------
     //
@@ -41,9 +42,9 @@ pub enum ErrorCode {
     InvalidPath = 1006,
     InvalidArgument = 1007,
     MissingArgument = 1008,
-    InferenceError = 1009,
+    InferenceFailed = 1009,
     InvalidTable = 1010,
-    AuthenticationError = 1011,
+    AuthenticationFailed = 1011,
     MissingClassifiers = 1012,
     SerializationError = 1013,
     RemoteError = 1014,
@@ -110,10 +111,10 @@ pub enum ErrorCode {
 
     AccessDenied = 1066,
 
-    GenericExecError = 1067,
+    GenericExecFailed = 1067,
     LicenseError = 1068,
     MangledRef = 1069,
-    BaselineIntrospectionSyntaxWarning = 1070,
+    BaselineIntrospectionSyntaxInvalid = 1070,
     JinjaWarn = 1071,
 
     // Warn-error-options: dedicated codes for dbt-core legacy event names.
@@ -122,13 +123,13 @@ pub enum ErrorCode {
     DeprecatedModel = 1085,
     DeprecatedReference = 1072,
     UpcomingReferenceDeprecation = 1073,
-    SnapshotTimestampWarning = 1075,
+    SnapshotTimestampMismatch = 1075,
     PackageRedirectDeprecation = 1076,
     DepsUnpinned = 1077,
-    FreshnessConfigProblem = 1078,
+    FreshnessConfigInvalid = 1078,
     FreshnessMetadataWarning = 1079,
-    IncompatiblePackageVersion = 1080,
-    SeedColumnMismatch = 1081,
+    PackageVersionMismatch = 1080,
+    SeedColumnTypeMismatch = 1081,
     CacheInvalidationWarning = 1082,
     UnexpectedApiResponse = 1083,
     WarnStateTargetEqual = 1084,
@@ -136,7 +137,7 @@ pub enum ErrorCode {
     NodeNotFoundOrDisabled = 1087,
     PackageUpdateAvailable = 1088,
     NoNodeForYamlKey = 1089,
-    MacroNotFoundForPatch = 1090,
+    MacroPatchNotFound = 1090,
     InvalidConcurrentBatchesConfig = 1091,
     NoNodesForSelectionCriteria = 1092,
     MicrobatchModelNoEventTimeInputs = 1093,
@@ -145,7 +146,7 @@ pub enum ErrorCode {
     HubPackageDeprecated = 1096,
     UnusedResourceConfigPath = 1097,
     DepsScrubbedPackageName = 1098,
-    DepsFoundDuplicatePackage = 1099,
+    DepsDuplicatePackage = 1099,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
@@ -165,9 +166,9 @@ pub enum ErrorCode {
     PackageDownloadFailed = 1152,
     ProfileLoadFailed = 1153,
     GitError = 1154,
-    DuplicateSourceTableDefinition = 1155,
-    SourceTableDefinitionMissing = 1156,
-    LegacySemanticLayerYaml = 1157,
+    DuplicateSourceTable = 1155,
+    NoTablesInSource = 1156,
+    SemanticModelDeprecated = 1157,
     PackageMissingProjectFile = 1158,
     DbtYamlValidationError = 1159,
 
@@ -188,48 +189,48 @@ pub enum ErrorCode {
     // Adapter/DB [1300–1399]
     DbConnectionFailed = 1300,
     DbAuthFailed = 1301,
-    DbSyntaxError = 1302,
+    DbSyntaxInvalid = 1302,
     DbResourceExceeded = 1303,
     DbUnavailable = 1304,
     DbTxnConflict = 1305,
     DbNotFound = 1306,
     DbUnsupportedFeature = 1307,
-    DbDriverError = 1308,
+    DbDriverFailed = 1308,
     ReplayDataInvalid = 1309,
     ReplayDataMissing = 1310,
 
     // Execution/runtime [1400–1449]
-    PlannerError = 1400,
-    ExecutorError = 1401,
+    PlannerFailed = 1400,
+    ExecutorFailed = 1401,
     ConcurrencyError = 1402,
     TaskTimeout = 1403,
     TaskCancelled = 1404,
     SqlMismatch = 1405,
     SidecarError = 1406,
-    NoDataToShow = 1407,
+    NoResultsToShow = 1407,
 
     // Serialization [1450–1460]
-    JsonError = 1450,
-    YamlError = 1451,
+    JsonInvalid = 1450,
+    YamlInvalid = 1451,
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,
     JinjaError = 1501,
-    MacroSyntaxError = 1502,
+    MacroSyntaxInvalid = 1502,
     MacroVarNotFound = 1503,
     InvalidSeedValue = 1504,
     MacroUseIllegal = 1505,
     /// Emitted when `validate_macro_args` is enabled and a YAML-documented
     /// macro argument name or type does not match the Jinja macro definition.
     ValidateMacroArgs = 1506,
-    JinjaTypecheckIssue = 1507,
+    JinjaTypeCheckFailed = 1507,
     JinjaTopLevelReturn = 1508,
 
     // --------------------------------------------------------------------------------------------
     // Local execution
     SelectorError = 1600,
     NoNodesSelected = 1601,
-    UnsupportedColumnSelector = 1602,
+    InvalidColumnSelector = 1602,
 
     // --------------------------------------------------------------------------------------------
     // CLI errors
@@ -272,8 +273,8 @@ pub enum ErrorCode {
     NotImplemented = 9003,
     InvalidTableNameInCLI = 9004,
     CoalesceHasOnlyNulls = 9005,
-    CacheWarning = 9010,
-    NoFilesChangedWarning = 9011,
+    CacheStale = 9010,
+    NoFilesChanged = 9011,
     // ExitRepl is not really an error, but a special error code that is used to
     // signal the repl to exit gracefully:
     ExitRepl = 9006,
@@ -302,6 +303,10 @@ impl Display for ErrorCode {
 }
 
 impl ErrorCode {
+    pub fn name_and_code(self) -> String {
+        format!("{self:?} (dbt{self})")
+    }
+
     pub fn is_bug(&self) -> bool {
         (*self as u16) >= (Self::NotSupported as u16)
     }
@@ -320,14 +325,14 @@ impl ErrorCode {
             self,
             ErrorCode::DbConnectionFailed
                 | ErrorCode::DbAuthFailed
-                | ErrorCode::DbSyntaxError
+                | ErrorCode::DbSyntaxInvalid
                 | ErrorCode::DbResourceExceeded
                 | ErrorCode::DbUnavailable
                 | ErrorCode::DbTxnConflict
                 | ErrorCode::DbNotFound
                 | ErrorCode::DbUnsupportedFeature
-                | ErrorCode::DbDriverError
-                | ErrorCode::ExecutorError
+                | ErrorCode::DbDriverFailed
+                | ErrorCode::ExecutorFailed
         )
     }
 }

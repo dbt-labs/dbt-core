@@ -485,7 +485,7 @@ where
 
                 let status = match err.code {
                     ErrorCode::DisabledModel => ModelStatus::Disabled,
-                    ErrorCode::MacroSyntaxError => {
+                    ErrorCode::MacroSyntaxInvalid => {
                         let err_with_loc = err.with_location(dbt_asset.path.clone());
                         emit_error_log_from_fs_error(
                             &err_with_loc,

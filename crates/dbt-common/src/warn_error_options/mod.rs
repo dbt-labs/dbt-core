@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ErrorCode;
-use crate::collections::HashMap;
+use crate::{ErrorCode, collections::HashMap};
 use dbt_yaml::{Value, Verbatim};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use strum::{AsRefStr, EnumMessage};
 
 mod legacy;
@@ -29,7 +28,7 @@ pub enum FusionWarnErrorGroupValue {
     PackageParsingCompatibilityErrors,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 #[serde(untagged)]
 pub enum WarnErrorOptionValue {
     FusionCode(u16),
@@ -39,6 +38,26 @@ pub enum WarnErrorOptionValue {
     NotYetSupportedLegacy(NotYetSupportedLegacyWarnError),
     WillNotSupportLegacy(WillNotSupportLegacyWarnError),
     Unsupported(String),
+}
+
+impl Serialize for WarnErrorOptionValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::FusionCode(code) => match ErrorCode::try_from(*code) {
+                Ok(code) => format!("{code:?}").serialize(serializer),
+                Err(_) => code.serialize(serializer),
+            },
+            Self::LegacyGroup(value) => value.serialize(serializer),
+            Self::FusionGroup(value) => value.serialize(serializer),
+            Self::SupportedLegacy(value) => value.serialize(serializer),
+            Self::NotYetSupportedLegacy(value) => value.serialize(serializer),
+            Self::WillNotSupportLegacy(value) => value.serialize(serializer),
+            Self::Unsupported(value) => value.serialize(serializer),
+        }
+    }
 }
 
 impl WarnErrorOptionValue {
@@ -259,7 +278,7 @@ impl WarnErrorOptions {
         if let Some(error_line) = match invalid_raw_values.len() {
             0 => None,
             1 => Some(format!(
-                "warn_error_options value `{}` is invalid because it is not a known Fusion error code, dbt-core event name, or supported warn-error group.",
+                "warn_error_options value `{}` is invalid because it is not a known Fusion error name, dbt-core event name, or supported warn-error group.",
                 invalid_raw_values.iter().next().unwrap()
             )),
             len if len <= MAX_CODES_IN_MSG => {
@@ -269,7 +288,7 @@ impl WarnErrorOptions {
                     .collect::<Vec<_>>()
                     .join(", ");
                 Some(format!(
-                    "warn_error_options values {values} are invalid because they are not known Fusion error codes, dbt-core event names, or supported warn-error groups."
+                    "warn_error_options values {values} are invalid because they are not known Fusion error names, dbt-core event names, or supported warn-error groups."
                 ))
             }
             // Too many, show at most MAX_CODES_IN_MSG and N others
@@ -281,7 +300,7 @@ impl WarnErrorOptions {
                     .collect::<Vec<_>>()
                     .join(", ");
                 Some(format!(
-                    "warn_error_options values {values} and {} others are invalid because they are not known Fusion error codes, dbt-core event names, or supported warn-error groups.",
+                    "warn_error_options values {values} and {} others are invalid because they are not known Fusion error names, dbt-core event names, or supported warn-error groups.",
                     len - MAX_CODES_IN_MSG
                 ))
             }
@@ -456,6 +475,10 @@ fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> 
         ));
     }
 
+    if let Ok(code) = raw.parse::<ErrorCode>() {
+        return Some(WarnErrorOptionValue::FusionCode(code as u16));
+    }
+
     if let Ok(legacy) = raw.try_into() {
         return Some(WarnErrorOptionValue::SupportedLegacy(legacy));
     }
@@ -577,10 +600,10 @@ impl WarnErrorOptions {
                         | ErrorCode::SerializationError
                         | ErrorCode::DbtYamlValidationError
                         | ErrorCode::JinjaError
-                        | ErrorCode::MacroSyntaxError
+                        | ErrorCode::MacroSyntaxInvalid
                         | ErrorCode::InvalidConfig
                         | ErrorCode::ExecutionError
-                        | ErrorCode::YamlError
+                        | ErrorCode::YamlInvalid
                 )
     }
 
@@ -630,7 +653,7 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         }
         SupportedLegacyWarnError::NoNodeForYamlKey => error_code == ErrorCode::NoNodeForYamlKey,
         SupportedLegacyWarnError::MacroNotFoundForPatch => {
-            error_code == ErrorCode::MacroNotFoundForPatch
+            error_code == ErrorCode::MacroPatchNotFound
         }
         SupportedLegacyWarnError::InvalidConcurrentBatchesConfig => {
             error_code == ErrorCode::InvalidConcurrentBatchesConfig
@@ -649,7 +672,7 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
             error_code == ErrorCode::UpcomingReferenceDeprecation
         }
         SupportedLegacyWarnError::SnapshotTimestampWarning => {
-            error_code == ErrorCode::SnapshotTimestampWarning
+            error_code == ErrorCode::SnapshotTimestampMismatch
         }
         SupportedLegacyWarnError::PackageRedirectDeprecation => {
             error_code == ErrorCode::PackageRedirectDeprecation
@@ -659,10 +682,10 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
             error_code == ErrorCode::DepsScrubbedPackageName
         }
         SupportedLegacyWarnError::DepsFoundDuplicatePackage => {
-            error_code == ErrorCode::DepsFoundDuplicatePackage
+            error_code == ErrorCode::DepsDuplicatePackage
         }
         SupportedLegacyWarnError::FreshnessConfigProblem => {
-            error_code == ErrorCode::FreshnessConfigProblem
+            error_code == ErrorCode::FreshnessConfigInvalid
         }
         SupportedLegacyWarnError::WarnStateTargetEqual => {
             error_code == ErrorCode::WarnStateTargetEqual
@@ -717,7 +740,7 @@ mod tests {
         );
 
         assert_eq!(
-            options.decision_for_error_code(ErrorCode::JsonError),
+            options.decision_for_error_code(ErrorCode::JsonInvalid),
             WarnErrorDecision::UpgradeToError,
             "All group in error should take precedence over all match in warn and all in silence"
         );
@@ -789,7 +812,7 @@ mod tests {
     #[test]
     fn parses_legacy_cli_shape_case_insensitively_and_deduplicates() {
         let parsed = parse_warn_error_options(
-            "{InClUdE: [all, '*', ALL, BogusWarningClass, BogusWarningClass, 17], ExClUdE: [foo, foo]}",
+            "{InClUdE: [all, '*', ALL, BogusWarningClass, BogusWarningClass, 17, DepsDuplicatePackage, 1099], ExClUdE: [foo, foo]}",
         )
         .unwrap();
 
@@ -800,6 +823,7 @@ mod tests {
                     WarnErrorOptionValue::all(),
                     WarnErrorOptionValue::Unsupported("BogusWarningClass".to_string()),
                     WarnErrorOptionValue::FusionCode(17),
+                    WarnErrorOptionValue::FusionCode(ErrorCode::DepsDuplicatePackage as u16),
                 ],
                 warn: vec![],
                 silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
@@ -814,7 +838,7 @@ mod tests {
     fn parses_v2_shape_and_ignores_unknown_keys() {
         let parsed = WarnErrorOptions::from_yaml_value(
             &dbt_yaml::from_str(
-                "{error: [1, all], WARN: NoNodesForSelectionCriteria, silence: [x, x], bogus: [2]}",
+                "{error: [Generic, 1000, all], WARN: NoNodesForSelectionCriteria, silence: [x, x], bogus: [2]}",
             )
             .unwrap(),
         );
@@ -823,11 +847,11 @@ mod tests {
             parsed,
             WarnErrorOptions {
                 error: vec![
-                    WarnErrorOptionValue::FusionCode(1),
+                    WarnErrorOptionValue::FusionCode(ErrorCode::Generic as u16),
                     WarnErrorOptionValue::all()
                 ],
-                warn: vec![WarnErrorOptionValue::SupportedLegacy(
-                    SupportedLegacyWarnError::NoNodesForSelectionCriteria,
+                warn: vec![WarnErrorOptionValue::FusionCode(
+                    ErrorCode::NoNodesForSelectionCriteria as u16,
                 )],
                 silence: vec![WarnErrorOptionValue::Unsupported("x".to_string())],
                 ..Default::default()
@@ -869,7 +893,7 @@ mod tests {
             (
                 "MacroNotFoundForPatch",
                 SupportedLegacyWarnError::MacroNotFoundForPatch,
-                ErrorCode::MacroNotFoundForPatch,
+                ErrorCode::MacroPatchNotFound,
             ),
             (
                 "InvalidConcurrentBatchesConfig",
@@ -904,7 +928,7 @@ mod tests {
             (
                 "SnapshotTimestampWarning",
                 SupportedLegacyWarnError::SnapshotTimestampWarning,
-                ErrorCode::SnapshotTimestampWarning,
+                ErrorCode::SnapshotTimestampMismatch,
             ),
             (
                 "PackageRedirectDeprecation",
@@ -924,12 +948,12 @@ mod tests {
             (
                 "DepsFoundDuplicatePackage",
                 SupportedLegacyWarnError::DepsFoundDuplicatePackage,
-                ErrorCode::DepsFoundDuplicatePackage,
+                ErrorCode::DepsDuplicatePackage,
             ),
             (
                 "FreshnessConfigProblem",
                 SupportedLegacyWarnError::FreshnessConfigProblem,
-                ErrorCode::FreshnessConfigProblem,
+                ErrorCode::FreshnessConfigInvalid,
             ),
             (
                 "WarnStateTargetEqual",
@@ -960,12 +984,16 @@ mod tests {
         ];
 
         for (name, expected_legacy, expected_code) in cases {
-            // Verify parsing: the name should parse as SupportedLegacy, not Unsupported
+            // Exact Fusion names parse as codes; legacy-only aliases still parse as supported legacy.
             let parsed = parse_warn_error_options(&format!("{{error: [{name}]}}")).unwrap();
+            let expected_value = name
+                .parse::<ErrorCode>()
+                .map(|code| WarnErrorOptionValue::FusionCode(code as u16))
+                .unwrap_or(WarnErrorOptionValue::SupportedLegacy(*expected_legacy));
             assert_eq!(
                 parsed.error,
-                vec![WarnErrorOptionValue::SupportedLegacy(*expected_legacy)],
-                "{name} should parse as SupportedLegacy",
+                vec![expected_value],
+                "{name} should parse as a supported warn-error option",
             );
 
             // Verify the legacy name maps to the expected ErrorCode
@@ -1001,9 +1029,10 @@ mod tests {
 
     #[test]
     fn package_parsing_compatibility_group_parse_and_resolve() {
-        let parsed =
-            parse_warn_error_options("{silence: [PackageParsingCompatibility], error: [1059]}")
-                .unwrap();
+        let parsed = parse_warn_error_options(
+            "{silence: [PackageParsingCompatibility], error: [DuplicateConfigKey]}",
+        )
+        .unwrap();
 
         assert_eq!(
             parsed.silence,
@@ -1014,7 +1043,7 @@ mod tests {
         assert_eq!(
             parsed.decision_for_error_code(ErrorCode::DuplicateConfigKey),
             WarnErrorDecision::UpgradeToError,
-            "specific visible code should match by numeric code",
+            "specific visible code should match by fusion error name",
         );
         assert_eq!(
             parsed.decision_for_error_code(ErrorCode::PackageParsingCompatibility),
@@ -1070,18 +1099,131 @@ mod tests {
     }
 
     #[test]
-    fn serializes_all_canonically() {
+    fn fusion_error_names_do_not_unintentionally_overlap_legacy_names() {
+        use std::collections::BTreeMap;
+        use strum::IntoEnumIterator;
+
+        let expected_overlaps = BTreeMap::from([
+            ("DeprecatedModel".to_string(), ErrorCode::DeprecatedModel),
+            (
+                "DeprecatedReference".to_string(),
+                ErrorCode::DeprecatedReference,
+            ),
+            (
+                "DepsScrubbedPackageName".to_string(),
+                ErrorCode::DepsScrubbedPackageName,
+            ),
+            ("DepsUnpinned".to_string(), ErrorCode::DepsUnpinned),
+            (
+                "InvalidConcurrentBatchesConfig".to_string(),
+                ErrorCode::InvalidConcurrentBatchesConfig,
+            ),
+            (
+                "MicrobatchModelNoEventTimeInputs".to_string(),
+                ErrorCode::MicrobatchModelNoEventTimeInputs,
+            ),
+            (
+                "NodeNotFoundOrDisabled".to_string(),
+                ErrorCode::NodeNotFoundOrDisabled,
+            ),
+            ("NoNodeForYamlKey".to_string(), ErrorCode::NoNodeForYamlKey),
+            (
+                "NoNodesForSelectionCriteria".to_string(),
+                ErrorCode::NoNodesForSelectionCriteria,
+            ),
+            ("NoNodesSelected".to_string(), ErrorCode::NoNodesSelected),
+            (
+                "PackageRedirectDeprecation".to_string(),
+                ErrorCode::PackageRedirectDeprecation,
+            ),
+            (
+                "UnversionedBreakingChange".to_string(),
+                ErrorCode::UnversionedBreakingChange,
+            ),
+            (
+                "UnsupportedConstraintMaterialization".to_string(),
+                ErrorCode::UnsupportedConstraintMaterialization,
+            ),
+            (
+                "UnusedResourceConfigPath".to_string(),
+                ErrorCode::UnusedResourceConfigPath,
+            ),
+            (
+                "UpcomingReferenceDeprecation".to_string(),
+                ErrorCode::UpcomingReferenceDeprecation,
+            ),
+            (
+                "WarnStateTargetEqual".to_string(),
+                ErrorCode::WarnStateTargetEqual,
+            ),
+            (
+                "WEOIncludeExcludeDeprecation".to_string(),
+                ErrorCode::WEOIncludeExcludeDeprecation,
+            ),
+        ]);
+
+        let mut actual_overlaps = BTreeMap::new();
+
+        for name in SupportedLegacyWarnError::iter()
+            .map(|variant| variant.as_ref().to_string())
+            .chain(
+                NotYetSupportedLegacyWarnError::iter().map(|variant| variant.as_ref().to_string()),
+            )
+            .chain(
+                WillNotSupportLegacyWarnError::iter().map(|variant| variant.as_ref().to_string()),
+            )
+            .chain(
+                NotAWarningInDbtCoreLegacyWarnError::iter()
+                    .map(|variant| variant.as_ref().to_string()),
+            )
+        {
+            if let Ok(code) = name.parse::<ErrorCode>() {
+                actual_overlaps.insert(name, code);
+            }
+        }
+
+        assert_eq!(
+            actual_overlaps, expected_overlaps,
+            concat!(
+                "Fusion ErrorCode variant names must not unintentionally overlap legacy ",
+                "dbt-core warn_error_options names.\n\n",
+                "This usually means a new ErrorCode variant in ",
+                "`fs/sa/crates/dbt-error/src/codes.rs` or a new frontend error code variant in ",
+                "`fs/sa/crates/dbt-frontend-common/src/error/codes.rs` reused a name that ",
+                "dbt-core already reserves for warn/error options. Prefer a distinct Fusion ",
+                "name unless the new code has exactly the same semantic meaning as the legacy ",
+                "dbt-core name.\n\n",
+                "If the overlap is intentional, update the legacy-to-Fusion mapping in ",
+                "`matches_legacy_error_code` in ",
+                "`fs/sa/crates/dbt-common/src/warn_error_options/mod.rs`, then add the ",
+                "intentional overlap to `expected_overlaps` in this test."
+            ),
+        );
+    }
+
+    #[test]
+    fn serializes_values_canonically() {
         let options = WarnErrorOptions {
-            error: vec![WarnErrorOptionValue::all()],
+            error: vec![
+                WarnErrorOptionValue::all(),
+                WarnErrorOptionValue::FusionCode(ErrorCode::SelectorError as u16),
+                WarnErrorOptionValue::FusionCode(17),
+            ],
+            warn: vec![WarnErrorOptionValue::FusionCode(
+                ErrorCode::NoNodesForSelectionCriteria as u16,
+            )],
+            silence: vec![WarnErrorOptionValue::SupportedLegacy(
+                SupportedLegacyWarnError::LogTestResult,
+            )],
             ..Default::default()
         };
 
         assert_eq!(
             serde_json::to_value(&options).unwrap(),
             serde_json::json!({
-                "error": ["all"],
-                "warn": [],
-                "silence": [],
+                "error": ["all", "SelectorError", 17],
+                "warn": ["NoNodesForSelectionCriteria"],
+                "silence": ["LogTestResult"],
             })
         );
     }

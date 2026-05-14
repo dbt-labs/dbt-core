@@ -355,7 +355,7 @@ impl TypecheckingEventListener for WarningPrinter {
         });
         warnings.iter().for_each(|(location, message)| {
             emit_warn_log_message(
-                ErrorCode::JinjaTypecheckIssue,
+                ErrorCode::JinjaTypeCheckFailed,
                 format!("{}\n  --> {}", message, location),
                 self.args.status_reporter.as_ref(),
             );

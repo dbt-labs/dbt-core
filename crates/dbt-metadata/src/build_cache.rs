@@ -136,7 +136,7 @@ fn determine_changeset_core(
     let session_pnode = pnodes.get(&session_unique_id);
     if session_pnode.is_none() {
         emit_warn_log_message(
-            ErrorCode::CacheWarning,
+            ErrorCode::CacheStale,
             format!(
                 "Cache inconsistency: No session node found for unique_id {session_unique_id}, skipping changeset check."
             ),
@@ -154,7 +154,7 @@ fn determine_changeset_core(
     // now_compare both input_file list, relative paths have to be the same and hashes have to be the same, if anoyhting differs we have to do a full build
     if session_pnode.input_files.len() != input_files.len() {
         emit_warn_log_message(
-            ErrorCode::CacheWarning,
+            ErrorCode::CacheStale,
             format!(
                 "Cache inconsistency: Input files count mismatch: expected {}, got {}",
                 session_pnode.input_files.len(),

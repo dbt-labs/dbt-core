@@ -126,7 +126,7 @@ pub async fn compute_package_lock(
         if seen.contains(&lookup_name) {
             // Warn about duplicate package - keeping the first occurrence
             emit_warn_log_message(
-                ErrorCode::DepsFoundDuplicatePackage,
+                ErrorCode::DepsDuplicatePackage,
                 format!(
                     "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
                      This will be an error in a future version of Fusion.",

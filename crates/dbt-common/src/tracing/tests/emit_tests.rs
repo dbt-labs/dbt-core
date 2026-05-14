@@ -513,7 +513,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
         })
         .entered();
 
-        let err = fs_err!(ErrorCode::MacroSyntaxError, "md parse error")
+        let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "md parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/README.md"));
         emit_error_log_from_fs_error(&err, None);
     });
@@ -561,7 +561,7 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
         })
         .entered();
 
-        let err = fs_err!(ErrorCode::MacroSyntaxError, "sql parse error")
+        let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "sql parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/view.sql"));
         emit_error_log_from_fs_error(&err, None);
     });

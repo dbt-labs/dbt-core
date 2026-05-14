@@ -2,7 +2,10 @@ use clap::error::ErrorKind;
 
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
-use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
+use dbt_common::{
+    constants::{ERROR, PANIC},
+    pretty_string::{GREEN, RED},
+};
 use dbt_error::FsError;
 use dbt_sa_lib::dbt_sa_clap::CliParser;
 use dbt_sa_lib::dbt_sa_clap::from_main;
@@ -100,7 +103,7 @@ fn main() -> ExitCode {
     // set to 1, in which case we want to see the backtrace):
     if std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
         std::panic::set_hook(Box::new(|info| {
-            eprintln!("{} {}", RED.apply_to(PANIC), info);
+            eprintln!("{} {}", RED.apply_to(format!("{PANIC}:")), info);
             let _ = io::stdout().flush();
             let _ = io::stderr().flush();
 
@@ -139,7 +142,7 @@ fn print_trimmed_error(msg: String) {
 
     for line in lines.by_ref() {
         if let Some(rest) = line.strip_prefix("error:") {
-            let _ = write!(stderr, "{}:", RED.apply_to("error"));
+            let _ = write!(stderr, "{}:", RED.apply_to(ERROR));
             let _ = writeln!(stderr, "{rest}");
         } else if let Some(rest) = line.trim_start().strip_prefix("tip:") {
             let prefix = if line.starts_with("tip:") { "" } else { "  " };

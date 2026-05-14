@@ -10,8 +10,8 @@ use int_enum::IntEnum;
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum)]
 pub enum ErrorCode {
-    SyntaxError = 101,
-    SchemaError = 102,
+    SyntaxInvalid = 101,
+    SqlSchemaInvalid = 102,
     MalformedExpression = 103,
     DanglingComma = 104,
     AmbiguousColumnReference = 105,
@@ -145,7 +145,7 @@ pub enum ErrorCode {
     InvalidFunctionName = 436,
     BadLateralView = 437,
     InvalidNamedStruct = 438,
-    ErrorInCustomFunctionBinder = 439,
+    CustomFunctionBinderFailed = 439,
     InvalidSampleSpecification = 440,
     // ----------------- PlanBuilder errors -----------------
     ProjectionFailed = 301,
@@ -180,7 +180,7 @@ pub enum ErrorCode {
     Unknown = 901,
     Unexpected = 902,
     NotImplemented = 903,
-    // This is Antlr internal failure, different from SyntaxError, usually
+    // This is Antlr internal failure, different from SyntaxInvalid, usually
     // indicates a bug in the grammar
     AntlrError = 904,
     ExecutionError = 905,

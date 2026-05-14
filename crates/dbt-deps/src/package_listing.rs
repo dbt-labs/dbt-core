@@ -251,7 +251,7 @@ impl PackageListing {
                 match self.packages.entry(package_key) {
                     Entry::Occupied(_) => {
                         emit_warn_log_message(
-                            ErrorCode::DepsFoundDuplicatePackage,
+                            ErrorCode::DepsDuplicatePackage,
                             format!(
                                 "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
                                  This will be an error in a future version of Fusion.",

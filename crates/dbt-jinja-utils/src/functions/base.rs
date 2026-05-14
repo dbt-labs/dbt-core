@@ -1271,7 +1271,7 @@ impl Object for Exceptions {
                 );
 
                 emit_warn_log_message(
-                    ErrorCode::SnapshotTimestampWarning,
+                    ErrorCode::SnapshotTimestampMismatch,
                     warning,
                     self.io_args.status_reporter.as_ref(),
                 );
