@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Regenerate manifest v12 JSON schema to match current WritableManifest output
+time: 2026-04-24T07:35:30.36351+09:00
+custom:
+    Author: yu-iskw
+    Issue: N/A

@@ -325,6 +325,17 @@
                     ],
                     "default": null
                   },
+                  "static_analysis": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
                   "materialized": {
                     "type": "string",
                     "default": "seed"
@@ -1189,6 +1200,17 @@
                                 ],
                                 "default": null
                               },
+                              "static_analysis": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
                               "materialized": {
                                 "type": "string",
                                 "default": "view"
@@ -1568,6 +1590,17 @@
                     }
                   },
                   "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "static_analysis": {
                     "anyOf": [
                       {
                         "type": "string"
@@ -2573,6 +2606,17 @@
                     ],
                     "default": null
                   },
+                  "static_analysis": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
                   "materialized": {
                     "type": "string",
                     "default": "test"
@@ -3421,6 +3465,17 @@
                     }
                   },
                   "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "static_analysis": {
                     "anyOf": [
                       {
                         "type": "string"
@@ -4427,6 +4482,17 @@
                     }
                   },
                   "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "static_analysis": {
                     "anyOf": [
                       {
                         "type": "string"
@@ -5629,6 +5695,17 @@
                                 ],
                                 "default": null
                               },
+                              "static_analysis": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
                               "materialized": {
                                 "type": "string",
                                 "default": "view"
@@ -6062,6 +6139,17 @@
                     }
                   },
                   "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "static_analysis": {
                     "anyOf": [
                       {
                         "type": "string"
@@ -7067,6 +7155,17 @@
                     ],
                     "default": null
                   },
+                  "static_analysis": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
                   "materialized": {
                     "type": "string",
                     "default": "test"
@@ -7976,6 +8075,17 @@
                     }
                   },
                   "group": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "static_analysis": {
                     "anyOf": [
                       {
                         "type": "string"
@@ -9123,6 +9233,17 @@
                                 ],
                                 "default": null
                               },
+                              "static_analysis": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
                               "materialized": {
                                 "type": "string",
                                 "default": "view"
@@ -9537,6 +9658,17 @@
                     ],
                     "default": null
                   },
+                  "static_analysis": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
                   "materialized": {
                     "type": "string",
                     "default": "function"
@@ -9786,6 +9918,17 @@
                       }
                     ],
                     "default": null
+                  },
+                  "snowflake": {
+                    "type": "object",
+                    "title": "SnowflakeFunctionConfig",
+                    "properties": {
+                      "quote_args": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": true
@@ -10736,6 +10879,17 @@
                                 ],
                                 "default": null
                               },
+                              "static_analysis": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
                               "materialized": {
                                 "type": "string",
                                 "default": "function"
@@ -10985,6 +11139,17 @@
                                   }
                                 ],
                                 "default": null
+                              },
+                              "snowflake": {
+                                "type": "object",
+                                "title": "SnowflakeFunctionConfig",
+                                "properties": {
+                                  "quote_args": {
+                                    "type": "boolean",
+                                    "default": true
+                                  }
+                                },
+                                "additionalProperties": false
                               }
                             },
                             "additionalProperties": true
@@ -11972,6 +12137,17 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "static_analysis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": true
@@ -12221,9 +12397,20 @@
               {
                 "type": "array",
                 "items": {
-                  "enum": [
-                    "python",
-                    "sql"
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "python",
+                        "sql"
+                      ]
+                    },
+                    {
+                      "enum": [
+                        "python",
+                        "javascript",
+                        "sql"
+                      ]
+                    }
                   ]
                 }
               },
@@ -14417,6 +14604,17 @@
                           ],
                           "default": null
                         },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
                         "materialized": {
                           "type": "string",
                           "default": "seed"
@@ -15281,6 +15479,17 @@
                                       ],
                                       "default": null
                                     },
+                                    "static_analysis": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
                                     "materialized": {
                                       "type": "string",
                                       "default": "view"
@@ -15660,6 +15869,17 @@
                           }
                         },
                         "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "static_analysis": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -16665,6 +16885,17 @@
                           ],
                           "default": null
                         },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
                         "materialized": {
                           "type": "string",
                           "default": "test"
@@ -17513,6 +17744,17 @@
                           }
                         },
                         "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "static_analysis": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -18519,6 +18761,17 @@
                           }
                         },
                         "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "static_analysis": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -19721,6 +19974,17 @@
                                       ],
                                       "default": null
                                     },
+                                    "static_analysis": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
                                     "materialized": {
                                       "type": "string",
                                       "default": "view"
@@ -20154,6 +20418,17 @@
                           }
                         },
                         "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "static_analysis": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -21159,6 +21434,17 @@
                           ],
                           "default": null
                         },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
                         "materialized": {
                           "type": "string",
                           "default": "test"
@@ -22068,6 +22354,17 @@
                           }
                         },
                         "group": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "static_analysis": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -23215,6 +23512,17 @@
                                       ],
                                       "default": null
                                     },
+                                    "static_analysis": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
                                     "materialized": {
                                       "type": "string",
                                       "default": "view"
@@ -23629,6 +23937,17 @@
                           ],
                           "default": null
                         },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
                         "materialized": {
                           "type": "string",
                           "default": "function"
@@ -23878,6 +24197,17 @@
                             }
                           ],
                           "default": null
+                        },
+                        "snowflake": {
+                          "type": "object",
+                          "title": "SnowflakeFunctionConfig",
+                          "properties": {
+                            "quote_args": {
+                              "type": "boolean",
+                              "default": true
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": true
@@ -24828,6 +25158,17 @@
                                       ],
                                       "default": null
                                     },
+                                    "static_analysis": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
                                     "materialized": {
                                       "type": "string",
                                       "default": "function"
@@ -25077,6 +25418,17 @@
                                         }
                                       ],
                                       "default": null
+                                    },
+                                    "snowflake": {
+                                      "type": "object",
+                                      "title": "SnowflakeFunctionConfig",
+                                      "properties": {
+                                        "quote_args": {
+                                          "type": "boolean",
+                                          "default": true
+                                        }
+                                      },
+                                      "additionalProperties": false
                                     }
                                   },
                                   "additionalProperties": true
@@ -26055,6 +26407,17 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -29423,6 +29786,17 @@
                         "enabled": {
                           "type": "boolean",
                           "default": true
+                        },
+                        "static_analysis": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -31070,6 +31444,17 @@
               "enabled": {
                 "type": "boolean",
                 "default": true
+              },
+              "static_analysis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": true
@@ -31354,6 +31739,17 @@
                 ],
                 "default": null
               },
+              "static_analysis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
               "materialized": {
                 "type": "string",
                 "default": "function"
@@ -31603,6 +31999,17 @@
                   }
                 ],
                 "default": null
+              },
+              "snowflake": {
+                "type": "object",
+                "title": "SnowflakeFunctionConfig",
+                "properties": {
+                  "quote_args": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": true
@@ -32553,6 +32960,17 @@
                             ],
                             "default": null
                           },
+                          "static_analysis": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
                           "materialized": {
                             "type": "string",
                             "default": "function"
@@ -32802,6 +33220,17 @@
                               }
                             ],
                             "default": null
+                          },
+                          "snowflake": {
+                            "type": "object",
+                            "title": "SnowflakeFunctionConfig",
+                            "properties": {
+                              "quote_args": {
+                                "type": "boolean",
+                                "default": true
+                              }
+                            },
+                            "additionalProperties": false
                           }
                         },
                         "additionalProperties": true
