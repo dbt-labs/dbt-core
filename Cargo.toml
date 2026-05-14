@@ -42,6 +42,7 @@ members = [
   "crates/dbt-schema-store",
   "crates/dbt-telemetry",
   "crates/dbt-selector-parser",
+  "crates/dbt-scheduler",
   "crates/dbt-proc-macros",
 
   "crates/dbt-adapter",
@@ -230,6 +231,7 @@ dbt-parser = { path = "crates/dbt-parser" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
+dbt-scheduler = { path = "crates/dbt-scheduler" }
 
 dbt-metadata = { path = "crates/dbt-metadata" }
 dbt-metadata-parquet = { path = "crates/dbt-metadata-parquet" }
