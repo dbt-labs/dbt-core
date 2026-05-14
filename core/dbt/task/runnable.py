@@ -570,6 +570,28 @@ class GraphRunnableTask(ConfiguredTask):
     def print_results_line(self, node_results, elapsed):
         pass
 
+    def _skip_remaining_nodes(self) -> List:
+        """Skip all not-yet-executed nodes when on-run-start hooks fail."""
+        executed_node_ids = {r.node.unique_id for r in self.node_results if hasattr(r, "node")}
+        for index, node in enumerate(self._flattened_nodes or []):
+            if node.unique_id not in executed_node_ids:
+                group = group_lookup.get(node.unique_id)
+                fire_event(
+                    SkippingDetails(
+                        resource_type=node.resource_type,
+                        schema=node.schema,
+                        node_name=node.name,
+                        index=index + 1,
+                        total=self.num_nodes,
+                        node_info=node.node_info,
+                        group=group,
+                    )
+                )
+                skipped = mark_node_as_skipped(node, executed_node_ids, None)
+                if skipped:
+                    self.node_results.append(skipped)
+        return []
+
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
 
@@ -591,30 +613,7 @@ class GraphRunnableTask(ConfiguredTask):
             ):
                 res = self.execute_nodes()
             else:
-                executed_node_ids = {
-                    r.node.unique_id for r in self.node_results if hasattr(r, "node")
-                }
-
-                res = []
-
-                for index, node in enumerate(self._flattened_nodes or []):
-                    group = group_lookup.get(node.unique_id)
-
-                    if node.unique_id not in executed_node_ids:
-                        fire_event(
-                            SkippingDetails(
-                                resource_type=node.resource_type,
-                                schema=node.schema,
-                                node_name=node.name,
-                                index=index + 1,
-                                total=self.num_nodes,
-                                node_info=node.node_info,
-                                group=group,
-                            )
-                        )
-                        skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
-                        if skipped_node_result:
-                            self.node_results.append(skipped_node_result)
+                res = self._skip_remaining_nodes()
 
             self.after_run(adapter, res)
         finally:
