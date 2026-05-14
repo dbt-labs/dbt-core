@@ -161,6 +161,14 @@ pub fn resolve_sources(
                         .unwrap_or_default(),
                 );
                 c.sync = table_config.sync.clone().or_else(|| c.sync.clone());
+                c.external_location = table_config
+                    .external_location
+                    .clone()
+                    .or_else(|| c.external_location.clone());
+                c.formatter = table_config
+                    .formatter
+                    .clone()
+                    .or_else(|| c.formatter.clone());
                 let source_tags: Option<Vec<String>> = c.tags.take().map(|t| t.into());
                 let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|t| t.into());
                 c.tags =

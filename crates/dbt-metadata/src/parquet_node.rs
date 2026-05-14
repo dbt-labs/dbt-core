@@ -602,6 +602,8 @@ pub struct UserConfigs {
     pub source_freshness: Option<FreshnessDefinition>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
+    pub external_location: Option<String>,
+    pub formatter: Option<String>,
     /// Specifies where the schema metadata originates: 'remote' (default) or 'local'
     pub schema_origin: Option<SchemaOrigin>,
     /// Schema synchronization configuration

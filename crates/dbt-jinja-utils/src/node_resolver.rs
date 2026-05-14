@@ -6,7 +6,9 @@ use std::{
 };
 
 use chrono::{NaiveDate, Utc};
-use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
+use dbt_adapter::relation::{
+    RelationObject, create_relation, create_relation_from_node, create_relation_from_source,
+};
 use dbt_adapter_core::AdapterType;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err,
@@ -403,13 +405,13 @@ impl NodeResolverTracker for NodeResolver {
             (database, schema, identifier) = mapper[&source.unique_id()].clone();
         }
 
-        let base_rel = create_relation(
+        let base_rel = create_relation_from_source(
             adapter_type,
             database,
             schema,
-            Some(identifier),
-            None,
+            identifier,
             source.quoting(),
+            source,
         )?;
         let relation = RelationObject::new_with_filter(
             base_rel.into(),

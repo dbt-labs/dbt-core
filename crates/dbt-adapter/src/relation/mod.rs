@@ -18,7 +18,7 @@ pub use relation_impl::{Relation, RelationStatic};
 mod relation_object;
 pub use relation_object::{
     RelationObject, StaticBaseRelation, StaticBaseRelationObject, create_relation,
-    create_relation_from_node, do_create_relation,
+    create_relation_from_node, create_relation_from_source, do_create_relation,
 };
 
 pub(crate) mod config_v2;

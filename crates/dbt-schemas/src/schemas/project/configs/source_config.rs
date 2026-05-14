@@ -109,6 +109,10 @@ pub struct ProjectSourceConfig {
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+external_location")]
+    pub external_location: Option<String>,
+    #[serde(rename = "+formatter")]
+    pub formatter: Option<String>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
@@ -255,6 +259,8 @@ pub struct SourceConfig {
     pub schema_origin: Option<SchemaOrigin>,
     /// Schema synchronization configuration
     pub sync: Option<SyncConfig>,
+    pub external_location: Option<String>,
+    pub formatter: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -273,6 +279,8 @@ impl From<ProjectSourceConfig> for SourceConfig {
             static_analysis: config.static_analysis,
             schema_origin: config.schema_origin,
             sync: config.sync,
+            external_location: config.external_location,
+            formatter: config.formatter,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Only for Bigquery Models
                 adapter_properties: None,
@@ -385,6 +393,8 @@ impl From<SourceConfig> for ProjectSourceConfig {
             static_analysis: config.static_analysis,
             schema_origin: config.schema_origin,
             sync: config.sync,
+            external_location: config.external_location,
+            formatter: config.formatter,
             // BigQuery fields
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
@@ -507,6 +517,8 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
             static_analysis,
             schema_origin,
             sync,
+            external_location,
+            formatter,
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
 
@@ -535,6 +547,8 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
                 static_analysis,
                 schema_origin,
                 sync,
+                external_location,
+                formatter,
             ]
         );
     }

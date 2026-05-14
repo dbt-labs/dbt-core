@@ -302,6 +302,8 @@ fn source_config_to_user_configs(config: &SourceConfig) -> UserConfigs {
         },
         loaded_at_field: config.loaded_at_field.clone(),
         loaded_at_query: config.loaded_at_query.0.clone(),
+        external_location: config.external_location.clone(),
+        formatter: config.formatter.clone(),
         warehouse_specific_config: serialize_warehouse_specific_config(&Some(
             config.__warehouse_specific_config__.clone(),
         )),
@@ -545,6 +547,8 @@ fn user_configs_to_source_config(
         loaded_at_query: user_config.loaded_at_query.clone().into(),
         schema_origin: user_config.schema_origin,
         sync: user_config.sync.clone(),
+        external_location: user_config.external_location.clone(),
+        formatter: user_config.formatter.clone(),
         __warehouse_specific_config__: deserialize_warehouse_specific_config(
             &user_config.warehouse_specific_config,
         )

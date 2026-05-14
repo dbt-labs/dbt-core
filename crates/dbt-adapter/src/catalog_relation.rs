@@ -1514,6 +1514,7 @@ impl Object for CatalogRelation {
             "target_file_size" => {
                 Self::map_properties_str(&self.adapter_properties, "target_file_size")
             }
+            "external_root" => Self::map_properties_str(&self.adapter_properties, "external_root"),
 
             // v2-only REST surface
             "catalog_database" => {
@@ -1533,10 +1534,14 @@ impl Object for CatalogRelation {
             }),
 
             // === Databricks
-            "file_format" => self
-                .gate_by_adapter(vec![AdapterType::Databricks, AdapterType::Bigquery], || {
-                    Self::map_opt_str(self.file_format.clone())
-                }),
+            "file_format" => self.gate_by_adapter(
+                vec![
+                    AdapterType::Databricks,
+                    AdapterType::Bigquery,
+                    AdapterType::DuckDB,
+                ],
+                || Self::map_opt_str(self.file_format.clone()),
+            ),
             "location" => self.gate_by_adapter(vec![AdapterType::Databricks], || {
                 Self::map_opt_str(self.external_volume.clone())
             }),

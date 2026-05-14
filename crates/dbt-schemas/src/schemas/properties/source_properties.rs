@@ -60,4 +60,6 @@ pub struct TablesConfig {
     pub loaded_at_query: Verbatim<Option<String>>,
     pub schema_origin: Option<SchemaOrigin>,
     pub sync: Option<SyncConfig>,
+    pub external_location: Option<String>,
+    pub formatter: Option<String>,
 }

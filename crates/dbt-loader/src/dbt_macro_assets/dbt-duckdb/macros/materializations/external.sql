@@ -1,6 +1,6 @@
 {% materialization external, adapter="duckdb", supported_languages=['sql', 'python'] %}
 
-  {%- set location = render(config.get('location', default=external_location(this, config))) -%})
+  {%- set location = render(config.get('location', default=external_location(this, config))) -%}
   {%- set rendered_options = render_write_options(config) -%}
 
   {%- set format = config.get('format') -%}

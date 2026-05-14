@@ -1,11 +1,13 @@
 use dbt_adapter_core::AdapterType;
-use dbt_common::{FsError, FsResult};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, RelationPath, TableFormat};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
-use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_yaml as yml;
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{State, Value, listener::RenderingEventListener};
@@ -17,6 +19,7 @@ use crate::relation::duckdb_should_include_database;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::value::none_value;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::{fmt, ops::Deref};
 
@@ -548,6 +551,52 @@ pub fn create_relation(
     Ok(result)
 }
 
+pub fn create_relation_from_source(
+    adapter_type: AdapterType,
+    database: String,
+    schema: String,
+    identifier: String,
+    custom_quoting: ResolvedQuoting,
+    source: &DbtSource,
+) -> FsResult<Box<dyn BaseRelation>> {
+    if adapter_type == AdapterType::DuckDB
+        && let Some(external) = duckdb_external_location_for_source(source)?
+    {
+        let include_policy = Policy::new(
+            duckdb_should_include_database(Some(database.as_str())),
+            true,
+            true,
+        );
+        return Ok(Box::new(
+            Relation::new_with_policy(
+                AdapterType::DuckDB,
+                RelationPath {
+                    database: Some(database).filter(|s| !s.is_empty()),
+                    schema: Some(schema),
+                    identifier: Some(identifier),
+                },
+                None,
+                include_policy,
+                custom_quoting,
+                None,
+                false,
+                false,
+            )
+            .map_err(|e| FsError::from_jinja_err(e, "Failed to create relation"))?
+            .with_external(external),
+        ));
+    }
+
+    create_relation(
+        adapter_type,
+        database,
+        schema,
+        Some(identifier),
+        None,
+        custom_quoting,
+    )
+}
+
 pub fn create_relation_from_node(
     adapter_type: AdapterType,
     node: &dyn InternalDbtNodeAttributes,
@@ -561,6 +610,150 @@ pub fn create_relation_from_node(
         Some(RelationType::from(node.materialized())),
         node.quoting(),
     )
+}
+
+fn duckdb_external_location_for_source(source: &DbtSource) -> FsResult<Option<String>> {
+    let Some(external_location) = source_config_value(source, "external_location") else {
+        return Ok(None);
+    };
+
+    let formatter = source_config_value(source, "formatter").unwrap_or_else(|| "newstyle".into());
+    let context = source_format_context(source);
+    let formatted = match formatter.as_str() {
+        "newstyle" => format_newstyle(&external_location, &context),
+        "oldstyle" => format_oldstyle(&external_location, &context),
+        "template" => format_template(&external_location, &context),
+        other => {
+            return Err(fs_err!(
+                ErrorCode::InvalidConfig,
+                "Formatter {other} not recognized. Must be one of 'newstyle', 'oldstyle', or 'template'."
+            ));
+        }
+    };
+
+    let with_root = prefix_local_filesystem_root(source, &formatted);
+    Ok(Some(quote_duckdb_external_location(&with_root)))
+}
+
+fn source_config_value(source: &DbtSource, key: &str) -> Option<String> {
+    let from_meta = source.common().meta.get(key).and_then(yml_value_as_string);
+    match key {
+        "external_location" => source
+            .deprecated_config
+            .external_location
+            .clone()
+            .or(from_meta),
+        "formatter" => source.deprecated_config.formatter.clone().or(from_meta),
+        _ => from_meta,
+    }
+}
+
+fn yml_value_as_string(value: &yml::Value) -> Option<String> {
+    value.as_str().map(ToString::to_string)
+}
+
+fn source_format_context(source: &DbtSource) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("name".to_string(), source.common().name.clone()),
+        (
+            "identifier".to_string(),
+            source.__source_attr__.identifier.clone(),
+        ),
+        ("schema".to_string(), source.base().schema.clone()),
+        ("database".to_string(), source.base().database.clone()),
+        (
+            "source_name".to_string(),
+            source.__source_attr__.source_name.clone(),
+        ),
+    ])
+}
+
+fn format_newstyle(template: &str, context: &BTreeMap<String, String>) -> String {
+    context
+        .iter()
+        .fold(template.to_string(), |acc, (key, value)| {
+            acc.replace(&format!("{{{key}}}"), value)
+        })
+}
+
+fn format_oldstyle(template: &str, context: &BTreeMap<String, String>) -> String {
+    context
+        .iter()
+        .fold(template.to_string(), |acc, (key, value)| {
+            acc.replace(&format!("%({key})s"), value)
+        })
+}
+
+fn format_template(template: &str, context: &BTreeMap<String, String>) -> String {
+    context
+        .iter()
+        .fold(template.to_string(), |acc, (key, value)| {
+            acc.replace(&format!("${{{key}}}"), value)
+                .replace(&format!("${key}"), value)
+        })
+}
+
+fn prefix_local_filesystem_root(source: &DbtSource, location: &str) -> String {
+    let Some(root) = duckdb_local_filesystem_root(source) else {
+        return location.to_string();
+    };
+    let trimmed = location.trim();
+    if trimmed.starts_with('\'')
+        || trimmed.starts_with('/')
+        || trimmed.contains("://")
+        || looks_like_function_call(trimmed)
+    {
+        return location.to_string();
+    }
+
+    format!(
+        "{}/{}",
+        root.trim_end_matches('/'),
+        trimmed.trim_start_matches('/')
+    )
+}
+
+fn duckdb_local_filesystem_root(source: &DbtSource) -> Option<String> {
+    let catalog_name = source
+        .deprecated_config
+        .__warehouse_specific_config__
+        .catalog_name
+        .as_deref()?;
+    let catalogs = crate::load_catalogs::fetch_catalogs()?;
+    let view = catalogs.view_v2().ok()?;
+    let catalog = view
+        .catalogs
+        .iter()
+        .find(|catalog| catalog.name.eq_ignore_ascii_case(catalog_name))?;
+    if catalog.catalog_type != V2CatalogType::LocalFilesystem {
+        return None;
+    }
+    let duckdb = catalog.config_block("duckdb")?;
+    duckdb
+        .get(yml::Value::from("root_path"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
+
+fn quote_duckdb_external_location(location: &str) -> String {
+    let trimmed = location.trim();
+    if trimmed.starts_with('\'') || looks_like_function_call(trimmed) {
+        trimmed.to_string()
+    } else {
+        format!("'{}'", trimmed.replace('\'', "''"))
+    }
+}
+
+fn looks_like_function_call(value: &str) -> bool {
+    let Some(open_idx) = value.find('(') else {
+        return false;
+    };
+    value.ends_with(')')
+        && value[..open_idx]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// A Wrapper type for StaticBaseRelation
@@ -723,5 +916,62 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         }
         scd_args.push(updated_at);
         Ok(Value::from(scd_args))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+    fn source_with_meta_location(location: &str) -> DbtSource {
+        let mut source = DbtSource::default();
+        source.__common_attr__.name = "orders".to_string();
+        source
+            .__common_attr__
+            .meta
+            .insert("external_location".to_string(), yml::Value::from(location));
+        source.__base_attr__.database = "main".to_string();
+        source.__base_attr__.schema = "raw".to_string();
+        source.__base_attr__.alias = "orders".to_string();
+        source.__base_attr__.quoting = DEFAULT_RESOLVED_QUOTING;
+        source.__source_attr__.identifier = "orders".to_string();
+        source.__source_attr__.source_name = "raw".to_string();
+        source
+    }
+
+    #[test]
+    fn duckdb_source_external_location_formats_and_quotes_path() {
+        let source = source_with_meta_location("data/{name}.csv");
+
+        let relation = create_relation_from_source(
+            AdapterType::DuckDB,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "'data/orders.csv'");
+    }
+
+    #[test]
+    fn duckdb_source_external_location_keeps_function_call_unquoted() {
+        let mut source = source_with_meta_location("ignored/{name}.csv");
+        source.deprecated_config.external_location = Some("read_csv('orders.csv')".to_string());
+
+        let relation = create_relation_from_source(
+            AdapterType::DuckDB,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "read_csv('orders.csv')");
     }
 }

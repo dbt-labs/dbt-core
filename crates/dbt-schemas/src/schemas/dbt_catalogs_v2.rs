@@ -133,6 +133,19 @@
 //!         create_if_not_exists: <boolean>                         # optional
 //!         read_only: <boolean>                                    # optional
 //!         encrypted: <boolean>                                    # optional
+//!
+//!   # type: local_filesystem
+//!   # supported platforms: duckdb
+//!   # a duckdb config block is required
+//!   # table_format remains default because local files are not catalog tables;
+//!   # file_format controls the local file extension / DuckDB COPY format.
+//!   - name: local_files
+//!     type: local_filesystem
+//!     table_format: default
+//!     config:
+//!       duckdb:
+//!         root_path: <path string>                                # required, non-empty
+//!         file_format: parquet|csv|json                           # optional, defaults to parquet
 //! ```
 //!
 //! Type-specific validation decides which platform blocks are supported for a particular
@@ -405,6 +418,7 @@ pub enum V2CatalogType {
     Unity,
     BiglakeMetastore,
     DuckLake,
+    LocalFilesystem,
 }
 
 impl V2CatalogType {
@@ -423,11 +437,13 @@ impl V2CatalogType {
             Ok(Self::BiglakeMetastore)
         } else if raw.eq_ignore_ascii_case("ducklake") {
             Ok(Self::DuckLake)
+        } else if raw.eq_ignore_ascii_case("local_filesystem") {
+            Ok(Self::LocalFilesystem)
         } else {
             err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => Some(span.clone()),
-                "type '{}' invalid. choose one of (horizon|glue|iceberg_rest|unity|hive_metastore|biglake_metastore|ducklake)",
+                "type '{}' invalid. choose one of (horizon|glue|iceberg_rest|unity|hive_metastore|biglake_metastore|ducklake|local_filesystem)",
                 raw
             )
         }
@@ -442,6 +458,7 @@ impl V2CatalogType {
             Self::Unity => "unity",
             Self::BiglakeMetastore => "biglake_metastore",
             Self::DuckLake => "ducklake",
+            Self::LocalFilesystem => "local_filesystem",
         }
     }
 }
@@ -658,6 +675,9 @@ const DUCKLAKE_DUCKDB_KEYS: &[&str] = &[
     "read_only",
     "encrypted",
 ];
+
+const LOCAL_FILESYSTEM_DUCKDB_KEYS: &[&str] = &["root_path", "file_format"];
+
 const DUCKDB_KEYS: &[&str] = &[
     "endpoint",
     "endpoint_type",
@@ -684,6 +704,7 @@ fn validate_platform_support(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         V2CatalogType::HiveMetastore => &["databricks"],
         V2CatalogType::BiglakeMetastore => &["bigquery"],
         V2CatalogType::DuckLake => &["duckdb"],
+        V2CatalogType::LocalFilesystem => &["duckdb"],
     };
 
     for &platform in ALL_V2_PLATFORMS {
@@ -1379,6 +1400,67 @@ fn parse_ducklake_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
     Ok(())
 }
 
+fn parse_local_filesystem_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
+    validate_platform_support(catalog)?;
+    if catalog.table_format != V2TableFormat::Default {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("table_format").cloned(),
+            "Catalog '{}' type 'local_filesystem' requires table_format='default'",
+            catalog.name
+        );
+    }
+    let Some(duckdb) = catalog.config_block("duckdb") else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' type 'local_filesystem' requires config.duckdb",
+            catalog.name
+        );
+    };
+    check_unknown_keys(
+        duckdb,
+        LOCAL_FILESYSTEM_DUCKDB_KEYS,
+        "catalogs[].config.duckdb (local_filesystem)",
+    )?;
+
+    let Some(root_path) = get_str(duckdb, "root_path")? else {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => catalog.field_span("type").cloned(),
+            "Catalog '{}' local_filesystem/duckdb config requires 'root_path'",
+            catalog.name
+        );
+    };
+    if root_path.is_empty_or_whitespace() {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(duckdb, "root_path").cloned(),
+            "Catalog '{}' local_filesystem/duckdb 'root_path' must be non-empty",
+            catalog.name
+        );
+    }
+
+    if let Some(file_format) = get_str(duckdb, "file_format")?
+        && !is_valid_duckdb_file_format(file_format)
+    {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(duckdb, "file_format").cloned(),
+            "Catalog '{}' local_filesystem/duckdb file_format must be one of (parquet|csv|json)",
+            catalog.name
+        );
+    }
+
+    Ok(())
+}
+
+fn is_valid_duckdb_file_format(v: &str) -> bool {
+    v.eq_ignore_ascii_case("parquet")
+        || v.eq_ignore_ascii_case("csv")
+        || v.eq_ignore_ascii_case("json")
+}
+
 pub fn validate_catalogs_v2(spec: &DbtCatalogsV2View<'_>, _path: &Path) -> FsResult<()> {
     for catalog in &spec.catalogs {
         let () = match catalog.catalog_type {
@@ -1389,6 +1471,7 @@ pub fn validate_catalogs_v2(spec: &DbtCatalogsV2View<'_>, _path: &Path) -> FsRes
             V2CatalogType::HiveMetastore => parse_hive_metastore_catalog(catalog)?,
             V2CatalogType::BiglakeMetastore => parse_biglake_metastore_catalog(catalog)?,
             V2CatalogType::DuckLake => parse_ducklake_catalog(catalog)?,
+            V2CatalogType::LocalFilesystem => parse_local_filesystem_catalog(catalog)?,
         };
     }
 
@@ -2400,6 +2483,60 @@ catalogs:
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
             msg.contains("does not support snowflake on the ducklake"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // ===== Local filesystem tests =====
+
+    #[test]
+    fn local_filesystem_duckdb_v2_valid() {
+        let yaml = r#"
+catalogs:
+  - name: local_files
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: "data/local_files"
+        file_format: parquet
+"#;
+        parse_and_validate(yaml).expect("local filesystem config should validate");
+    }
+
+    #[test]
+    fn local_filesystem_missing_root_path() {
+        let yaml = r#"
+catalogs:
+  - name: local_files
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        file_format: parquet
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(msg.contains("'root_path'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn local_filesystem_wrong_table_format() {
+        let yaml = r#"
+catalogs:
+  - name: local_files
+    type: local_filesystem
+    table_format: iceberg
+    config:
+      duckdb:
+        root_path: "data/local_files"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("requires table_format='default'"),
             "unexpected error: {msg}"
         );
     }

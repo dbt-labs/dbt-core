@@ -13,7 +13,7 @@ use crate::value::none_value;
 
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_sql::ident::max_identifier_length;
-use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_common::{ErrorCode, FsResult, constants::DBT_CTE_PREFIX, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
@@ -85,7 +85,10 @@ impl StaticBaseRelation for RelationStatic {
     }
 }
 
-/// A relation object for the adapter
+/// Generic relation implementation shared by Databricks, Spark, Fabric, and DuckDB.
+///
+/// The module path is historical; adapter-specific behavior must still be
+/// gated on `adapter_type`.
 #[derive(Clone, Debug)]
 pub struct Relation {
     /// The adapter type this relation instance is for.
@@ -113,6 +116,8 @@ pub struct Relation {
     pub temporary: bool,
     /// The location/region for this relation (BigQuery only, e.g., "US", "EU").
     pub location: Option<String>,
+    /// DuckDB external source location, rendered in place of schema/table.
+    pub external: Option<String>,
 }
 
 impl BaseRelationProperties for Relation {
@@ -252,6 +257,7 @@ impl Relation {
             alter_constraints: Vec::new(),
             temporary,
             location: None,
+            external: None,
         }
     }
 
@@ -316,6 +322,7 @@ impl Relation {
             alter_constraints: Vec::new(),
             temporary,
             location: None,
+            external: None,
         })
     }
 
@@ -331,6 +338,11 @@ impl Relation {
                 self.create_constraints.push(constraint);
             }
         }
+    }
+
+    pub fn with_external(mut self, external: String) -> Self {
+        self.external = Some(external);
+        self
     }
 
     /// Create a copy of the relation with the given constraints added.
@@ -440,6 +452,7 @@ impl BaseRelation for Relation {
         // Preserve constraints
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
+        relation.external = self.external.clone();
 
         Ok(Arc::new(relation))
     }
@@ -554,6 +567,60 @@ impl BaseRelation for Relation {
         }
     }
 
+    fn render_self_as_str(&self) -> String {
+        if self.adapter_type == AdapterType::DuckDB
+            && let Some(external) = &self.external
+        {
+            return external.clone();
+        }
+
+        if let Some(RelationType::Ephemeral) = self.relation_type {
+            return format!(
+                "{}{}",
+                DBT_CTE_PREFIX,
+                self.path.identifier.as_deref().unwrap_or_default()
+            );
+        }
+
+        let include_policy = self.include_policy;
+        let quote_policy = self.quote_policy;
+        let mut parts: Vec<String> = Vec::new();
+
+        let quote_part = |val: &str, quote_policy: bool| {
+            if quote_policy {
+                self.quoted(val)
+            } else {
+                val.to_string()
+            }
+        };
+
+        if include_policy.database
+            && let Some(database) = self.database()
+            && !database.is_empty()
+        {
+            parts.push(quote_part(database, quote_policy.database));
+        }
+
+        if include_policy.schema
+            && let Some(schema) = self.schema()
+        {
+            parts.push(quote_part(schema, quote_policy.schema));
+        }
+
+        if include_policy.identifier
+            && let Some(identifier) = self.identifier()
+        {
+            parts.push(quote_part(identifier, quote_policy.identifier));
+        }
+
+        let rendered = parts.join(".");
+
+        if matches!(self.adapter_type, AdapterType::Databricks) {
+            rendered.to_ascii_lowercase()
+        } else {
+            rendered
+        }
+    }
     fn create_relation(
         &self,
         database: Option<String>,
@@ -1276,5 +1343,24 @@ mod tests {
             let rendered = info_schema.render_self_as_str();
             assert_eq!(rendered, "test_schema.INFORMATION_SCHEMA");
         }
+    }
+
+    #[test]
+    fn test_duckdb_external_relation_renders_location() {
+        let relation = Relation::new(
+            AdapterType::DuckDB,
+            Some("main".to_string()),
+            Some("raw".to_string()),
+            Some("orders".to_string()),
+            None,
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+            false,
+        )
+        .with_external("'data/RawOrders.csv'".to_string());
+
+        assert_eq!(relation.render_self_as_str(), "'data/RawOrders.csv'");
     }
 }

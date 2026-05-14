@@ -33,6 +33,7 @@ const ADAPTER_PROP_CATALOG_DATABASE: &str = "catalog_database";
 const ADAPTER_PROP_AUTO_REFRESH: &str = "auto_refresh";
 const ADAPTER_PROP_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
+const ADAPTER_PROP_EXTERNAL_ROOT: &str = "external_root";
 
 const MODEL_NONE_SENTINEL: &str = "none";
 
@@ -173,10 +174,17 @@ pub(super) fn from_model_config_and_catalogs_v2(
         (AdapterType::DuckDB, V2CatalogType::DuckLake) => {
             CatalogRelation::build_duckdb_ducklake_with_catalogs_v2(model, catalog, &catalog_name)
         }
+        (AdapterType::DuckDB, V2CatalogType::LocalFilesystem) => {
+            CatalogRelation::build_duckdb_local_filesystem_with_catalogs_v2(
+                model,
+                catalog,
+                &catalog_name,
+            )
+        }
         (AdapterType::DuckDB, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
-                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue', 'iceberg_rest', and 'ducklake'",
+                "Catalog '{catalog_name}' has type '{}'; DuckDB v2 mapping supports only 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'",
                 other.as_str()
             ),
         )),
@@ -852,6 +860,46 @@ impl CatalogRelation {
             catalog_type: catalog.catalog_type.as_str().to_string(),
             table_format,
             file_format: None,
+            external_volume: None,
+            base_location: None,
+            adapter_properties,
+            is_transient: None,
+        })
+    }
+
+    fn build_duckdb_local_filesystem_with_catalogs_v2(
+        model: &Value,
+        catalog: &CatalogSpecV2View<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let duckdb = require_platform_block(catalog, catalog_name, "duckdb")?;
+        let table_format = uppercase_table_format(catalog);
+
+        let root_path = get_yaml_str(duckdb, "root_path")
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Catalog '{catalog_name}' duckdb config requires 'root_path'"),
+                )
+            })?;
+
+        let mut file_format =
+            Self::get_model_config_value(model, FIELD_FILE_FORMAT, AdapterType::DuckDB)
+                .or_else(|| get_yaml_str(duckdb, FIELD_FILE_FORMAT).map(|s| s.to_string()))
+                .unwrap_or_else(|| "parquet".to_string());
+        file_format.make_ascii_lowercase();
+
+        let mut adapter_properties = BTreeMap::new();
+        adapter_properties.insert(ADAPTER_PROP_EXTERNAL_ROOT.to_string(), root_path);
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::DuckDB,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: catalog.catalog_type.as_str().to_string(),
+            table_format,
+            file_format: Some(file_format),
             external_volume: None,
             base_location: None,
             adapter_properties,
@@ -1566,8 +1614,41 @@ catalogs:
             .unwrap_err();
 
         assert!(
-            format!("{err}")
-                .contains("DuckDB v2 mapping supports only 'glue', 'iceberg_rest', and 'ducklake'")
+            format!("{err}").contains(
+                "DuckDB v2 mapping supports only 'glue', 'iceberg_rest', 'ducklake', and 'local_filesystem'"
+            )
+        );
+    }
+
+    #[test]
+    fn duckdb_v2_local_filesystem_builds_relation() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: local_files
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: "data/local_files"
+        file_format: csv
+"#,
+        );
+        let conf = json!({ "catalog_name": "local_files" });
+        let m = model(AdapterType::DuckDB, conf);
+
+        let r =
+            from_model_config_and_catalogs_v2(AdapterType::DuckDB, &m, Arc::new(catalogs)).unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("local_files"));
+        assert_eq!(r.catalog_type, "local_filesystem");
+        assert_eq!(r.table_format, "DEFAULT");
+        assert_eq!(r.file_format.as_deref(), Some("csv"));
+        assert_eq!(
+            r.adapter_properties
+                .get("external_root")
+                .map(|s| s.as_str()),
+            Some("data/local_files")
         );
     }
 
