@@ -152,7 +152,17 @@ class SemanticManifest:
     def write_osi_document_to_file(self, file_path: str) -> None:
         from metricflow.converters.msi_to_osi import MSIToOSIConverter
 
-        result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+        try:
+            result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+        except RuntimeError as exc:
+            fire_event(
+                SemanticValidationFailure(
+                    msg=f"OSI document could not be generated: {exc}. "
+                    "The semantic manifest may contain metric types not yet supported "
+                    "by the MSI→OSI converter."
+                )
+            )
+            return
         for issue in result.issues:
             fire_event(
                 MFConverterIssue(
