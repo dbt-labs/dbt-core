@@ -11,11 +11,13 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
     Type,
     Union,
+    cast,
 )
 
 import dbt.exceptions
@@ -171,7 +173,6 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
-        # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
 
         preserve_edges = True
@@ -183,6 +184,26 @@ class GraphRunnableTask(ConfiguredTask):
     def get_run_mode(self) -> GraphRunnableMode:
         return GraphRunnableMode.Topological
 
+    def _resolve_node(self, uid: str) -> ResultNode:
+        """Look up a selected node UID across all manifest collections."""
+        assert self.manifest is not None
+        for collection in cast(
+            List[Mapping[str, ResultNode]],
+            [
+                self.manifest.nodes,
+                self.manifest.sources,
+                self.manifest.saved_queries,
+                self.manifest.unit_tests,
+                self.manifest.exposures,
+                self.manifest.functions,
+            ],
+        ):
+            if uid in collection:
+                return collection[uid]
+        raise DbtInternalError(
+            f"Node selection returned {uid}, expected an exposure, a function, a node, a saved query, a source, or a unit test"
+        )
+
     def _runtime_initialize(self):
         self.compile_manifest()
         if self.manifest is None or self.graph is None:
@@ -190,31 +211,13 @@ class GraphRunnableTask(ConfiguredTask):
 
         self.job_queue = self.get_graph_queue()
 
-        # Set selected node IDs on the compiler so FK constraint compilation
-        # can determine whether to use deferred relations or current relations.
-        # FK targets that ARE selected should use current relations (being built now).
-        # FK targets that are NOT selected should use deferred relations (from state).
+        # FK targets that ARE selected use current relations (being built now).
+        # FK targets that are NOT selected use deferred relations (from state).
         self.compiler.selected_node_ids = set(self.job_queue.get_selected_nodes())
 
-        # we use this a couple of times. order does not matter.
-        self._flattened_nodes = []
-        for uid in self.job_queue.get_selected_nodes():
-            if uid in self.manifest.nodes:
-                self._flattened_nodes.append(self.manifest.nodes[uid])
-            elif uid in self.manifest.sources:
-                self._flattened_nodes.append(self.manifest.sources[uid])
-            elif uid in self.manifest.saved_queries:
-                self._flattened_nodes.append(self.manifest.saved_queries[uid])
-            elif uid in self.manifest.unit_tests:
-                self._flattened_nodes.append(self.manifest.unit_tests[uid])
-            elif uid in self.manifest.exposures:
-                self._flattened_nodes.append(self.manifest.exposures[uid])
-            elif uid in self.manifest.functions:
-                self._flattened_nodes.append(self.manifest.functions[uid])
-            else:
-                raise DbtInternalError(
-                    f"Node selection returned {uid}, expected an exposure, a function, a node, a saved query, a source, or a unit test"
-                )
+        self._flattened_nodes = [
+            self._resolve_node(uid) for uid in self.job_queue.get_selected_nodes()
+        ]
 
         self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
 
