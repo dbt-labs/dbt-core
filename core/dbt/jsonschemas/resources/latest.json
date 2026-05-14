@@ -382,6 +382,15 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "policy_tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "tags": {
           "anyOf": [
             {
@@ -638,6 +647,38 @@
         "natural",
         "primary",
         "unique"
+      ]
+    },
+    "ComputeArg": {
+      "oneOf": [
+        {
+          "description": "Execute on the remote warehouse (Snowflake, BigQuery, etc.)",
+          "type": "string",
+          "enum": [
+            "remote"
+          ]
+        },
+        {
+          "description": "Run computations in-process",
+          "type": "string",
+          "enum": [
+            "inline"
+          ]
+        },
+        {
+          "description": "Run computations in a separate, ephemeral worker process",
+          "type": "string",
+          "enum": [
+            "sidecar"
+          ]
+        },
+        {
+          "description": "Run via the remote compute service (persistent workers/cluster).",
+          "type": "string",
+          "enum": [
+            "service"
+          ]
+        }
       ]
     },
     "ConstantProperty": {
@@ -1061,6 +1102,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "copy_grants": {
@@ -4837,6 +4888,16 @@
             "null"
           ]
         },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "concurrent_batches": {
           "anyOf": [
             {
@@ -8018,6 +8079,16 @@
             "null"
           ]
         },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "copy_grants": {
           "anyOf": [
             {
@@ -9322,6 +9393,7 @@
           ]
         },
         "freshness": {
+          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessDefinition"
@@ -10481,6 +10553,16 @@
             "null"
           ]
         },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComputeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "copy_grants": {
           "anyOf": [
             {
@@ -11266,6 +11348,159 @@
         "all"
       ]
     },
+    "VersionColumnProperties": {
+      "description": "Column entry inside a model version block.\n\nUnlike `ColumnProperties`, `name` is optional here because version column lists can contain include/exclude directives (e.g. `include: all, exclude: [col]`) that have no name.",
+      "type": "object",
+      "properties": {
+        "column_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnMask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Constraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "data_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnPropertiesDimension"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Entity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exclude": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Granularity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "include": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policy_tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "Versions": {
       "type": "object",
       "required": [
@@ -11277,6 +11512,16 @@
             "string",
             "null"
           ]
+        },
+        "columns": {
+          "readOnly": true,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/VersionColumnProperties"
+          }
         },
         "config": {
           "anyOf": [

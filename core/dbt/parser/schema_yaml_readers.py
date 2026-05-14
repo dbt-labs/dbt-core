@@ -1026,6 +1026,8 @@ class SemanticModelParser(YamlReader):
     ) -> List[Entity]:
         entities: List[Entity] = []
         for unparsed_entity in derived_semantics.entities:
+            if unparsed_entity.name is None:
+                raise ValidationError("Derived entity is missing a required 'name' field.")
             entities.append(
                 Entity(
                     name=unparsed_entity.name,

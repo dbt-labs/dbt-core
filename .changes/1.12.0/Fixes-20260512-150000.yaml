@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow column-level entity definitions in V2 semantic YAML to omit `name`, falling back to the column name to match the existing dimension behavior
+time: 2026-05-12T15:00:00.000000000Z
+custom:
+    Author: theyostalservice
+    Issue: "DI-4133"
