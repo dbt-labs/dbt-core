@@ -380,6 +380,32 @@ derived_metric_yml = """
       expr: simple_metric + 1
 """
 
+ratio_metric_missing_numerator_yml = """
+  - name: test_ratio_no_numerator
+    label: Ratio No Numerator
+    type: ratio
+    type_params:
+      denominator: simple_metric
+"""
+
+ratio_metric_missing_denominator_yml = """
+  - name: test_ratio_no_denominator
+    label: Ratio No Denominator
+    type: ratio
+    type_params:
+      numerator: simple_metric
+"""
+
+derived_metric_nonexistent_input_yml = """
+  - name: derived_metric_bad_ref
+    label: Derived Metric Bad Ref
+    type: derived
+    type_params:
+      metrics:
+        - nonexistent_metric
+      expr: nonexistent_metric
+"""
+
 schema_yml = base_schema_yml + conversion_metric_yml + ratio_metric_yml + derived_metric_yml
 
 schema_without_semantic_model_yml = """models:

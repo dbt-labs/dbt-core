@@ -16,10 +16,13 @@ from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml,
     conversion_metric_yml,
+    derived_metric_nonexistent_input_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
     models_people_sql,
     multi_sm_schema_yml,
+    ratio_metric_missing_denominator_yml,
+    ratio_metric_missing_numerator_yml,
     ratio_metric_yml,
     schema_without_semantic_model_yml,
     schema_yml,
@@ -237,6 +240,58 @@ class TestSemanticModelParsingForDerivedMetrics:
         assert len(metric.depends_on.nodes) == 2
         assert "metric.test.simple_metric" in metric.depends_on.nodes
         assert "metric.test.test_conversion_metric" in metric.depends_on.nodes
+
+
+class TestRatioMetricMissingNumeratorFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml + ratio_metric_missing_numerator_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_ratio_metric_missing_numerator(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "Invalid ratio metric. Both a numerator and denominator must be specified" in str(
+            result.exception
+        )
+
+
+class TestRatioMetricMissingDenominatorFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml + ratio_metric_missing_denominator_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_ratio_metric_missing_denominator(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "Invalid ratio metric. Both a numerator and denominator must be specified" in str(
+            result.exception
+        )
+
+
+class TestDerivedMetricReferencesNonexistentMetricFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml + derived_metric_nonexistent_input_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_derived_metric_nonexistent_input(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "does not exist but was referenced" in str(result.exception)
 
 
 # ------------------------------------------------------------------------------
