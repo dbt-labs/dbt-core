@@ -4,7 +4,7 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from dbt.contracts.project import PrivatePackage
@@ -381,13 +381,41 @@ def get_private_package_helper():
 
 
 class PrivatePinnedPackage(GitPinnedPackage):
+    def __init__(
+        self,
+        git: str,
+        git_unrendered: str,
+        revision: str,
+        warn_unpinned: bool = True,
+        subdirectory: Optional[str] = None,
+        # Preserved through the lock file round-trip so the URL can be
+        # reconstructed when dbt reads the lock file back for installation.
+        provider: Optional[str] = None,
+    ) -> None:
+        super().__init__(git, git_unrendered, revision, warn_unpinned, subdirectory)
+        self.provider = provider
+
     def to_dict(self) -> Dict[str, str]:
         git_dict = super().to_dict()
         git_dict["private"] = git_dict.pop("git")
+        if self.provider:
+            git_dict["provider"] = self.provider
         return git_dict
 
 
 class PrivateUnpinnedPackage(GitUnpinnedPackage):
+    def __init__(
+        self,
+        git: str,
+        git_unrendered: str,
+        revisions: List[str],
+        warn_unpinned: bool = True,
+        subdirectory: Optional[str] = None,
+        provider: Optional[str] = None,
+    ) -> None:
+        super().__init__(git, git_unrendered, revisions, warn_unpinned, subdirectory)
+        self.provider = provider
+
     def resolved(self) -> PrivatePinnedPackage:
         git_pinned = super().resolved()
         return PrivatePinnedPackage(
@@ -396,6 +424,7 @@ class PrivateUnpinnedPackage(GitUnpinnedPackage):
             revision=git_pinned.revision,
             warn_unpinned=git_pinned.warn_unpinned,
             subdirectory=git_pinned.subdirectory,
+            provider=self.provider,
         )
 
     def incorporate(self, other: "PrivateUnpinnedPackage") -> "PrivateUnpinnedPackage":  # type: ignore[override]
@@ -408,6 +437,7 @@ class PrivateUnpinnedPackage(GitUnpinnedPackage):
             revisions=self.revisions + other.revisions,
             warn_unpinned=warn_unpinned,
             subdirectory=self.subdirectory,
+            provider=self.provider,
         )
 
     @classmethod
@@ -422,4 +452,5 @@ class PrivateUnpinnedPackage(GitUnpinnedPackage):
             revisions=contract.get_revisions(),
             warn_unpinned=contract.warn_unpinned is not False,
             subdirectory=contract.subdirectory,
+            provider=contract.provider,
         )

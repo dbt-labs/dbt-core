@@ -1,7 +1,9 @@
 import json
+import os
 
 import pytest
 
+from dbt.contracts.project import PrivatePackage as PrivatePackageContract
 from dbt.deps.private_package import (
     ADOLegacyPrivatePackageName,
     GitProvider,
@@ -11,6 +13,8 @@ from dbt.deps.private_package import (
     PrivatePackageHelper,
     PrivatePackageName,
     PrivatePackageResolutionError,
+    PrivatePinnedPackage,
+    PrivateUnpinnedPackage,
     RepoName,
     _get_ssh_fallback_url,
 )
@@ -1218,3 +1222,59 @@ class TestPrivatePackageHelperDispatch:
         url = helper.get_resolved_url("dbt-labs/repo", "github")
         assert url == "https://abc123@github.com/dbt-labs/repo.git"
         assert "git@" not in url
+
+
+class TestPrivatePackageLockFileRoundTrip:
+    """Regression tests: provider must survive the lock-file round-trip.
+
+    Without this, `dbt deps` writes the lock file and immediately reads it
+    back via resolve_lock_packages(); a missing provider on the second pass
+    causes the SSH fallback to default to github regardless of the original
+    provider, producing wrong git URLs for ado/azure_devops/gitlab packages.
+    """
+
+    def test_provider_preserved_from_contract_through_resolved(self):
+        import dbt.deps.private_package as _pp_mod
+
+        # Force a fresh helper so the test doesn't depend on env-var state
+        # leaked from earlier tests in the same process.
+        old_helper = _pp_mod.PRIVATE_PACKAGE_HELPER
+        old_env = os.environ.pop("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO", None)
+        _pp_mod.PRIVATE_PACKAGE_HELPER = None
+        try:
+            contract = PrivatePackageContract(
+                private="org/project/repo",
+                provider="ado",
+                revision="main",
+            )
+            unpinned = PrivateUnpinnedPackage.from_contract(contract)
+            pinned = unpinned.resolved()
+            assert unpinned.provider == "ado"
+            assert pinned.provider == "ado"
+        finally:
+            if old_env is not None:
+                os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"] = old_env
+            _pp_mod.PRIVATE_PACKAGE_HELPER = old_helper
+
+    def test_provider_in_to_dict_output(self):
+        pinned = PrivatePinnedPackage(
+            git="git@ssh.dev.azure.com:v3/org/project/repo",
+            git_unrendered="org/project/repo",
+            revision="abc123",
+            provider="ado",
+        )
+        result = pinned.to_dict()
+        assert result["private"] == "org/project/repo"
+        assert result["provider"] == "ado"
+        assert result["revision"] == "abc123"
+
+    def test_to_dict_omits_provider_when_none(self):
+        # github-default packages have provider=None; the lock file entry
+        # should not contain a noisy `provider: null` line.
+        pinned = PrivatePinnedPackage(
+            git="git@github.com:org/repo.git",
+            git_unrendered="org/repo",
+            revision="abc123",
+        )
+        result = pinned.to_dict()
+        assert "provider" not in result
