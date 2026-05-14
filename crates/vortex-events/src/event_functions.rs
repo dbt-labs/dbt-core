@@ -175,6 +175,7 @@ pub fn invocation_end_event(invocation_id: String, result_string: String, shutdo
 }
 
 /// In dbt-core, this is in core/dbt/task/run.py::track_model_run
+#[allow(clippy::too_many_arguments)]
 pub fn run_model_event(
     invocation_id: String,
     run_stats: &DashMap<String, Stat>,
@@ -182,6 +183,8 @@ pub fn run_model_event(
     maybe_incremental_strategy: Option<String>,
     is_contract_enforced: bool,
     has_group: bool,
+    table_format: Option<String>,
+    catalog_name: Option<String>,
 ) {
     let unique_id = node.unique_id();
     if !run_stats.contains_key(&unique_id) {
@@ -282,6 +285,8 @@ pub fn run_model_event(
         enrichment: None,
         // The resource type of the node (model, test, etc.)
         resource_type,
+        table_format: table_format.unwrap_or_default(),
+        catalog_name: catalog_name.unwrap_or_default(),
     };
 
     let _ = log_proto(message);

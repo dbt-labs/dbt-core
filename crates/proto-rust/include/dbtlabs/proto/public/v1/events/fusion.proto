@@ -340,6 +340,14 @@ message RunModel {
 
   // The resource type of the node (model, test, etc.)
   string resource_type = 20;
+
+  // the table format used for the model (ex. "default", "iceberg")
+  // empty string when not applicable (non-model nodes)
+  string table_format = 21;
+
+  // the catalog name from catalogs.yml, if the model opted into a write integration.
+  // empty string when the model does not use catalogs.yml.
+  string catalog_name = 22;
 }
 
 message Onboarding {
@@ -381,8 +389,8 @@ enum OnboardingScreen {
   PARSE_ERROR_FAIL   = 9;
   COMPILE_NO_SA      = 10;
   COMPILE_NO_SA_FAIL = 11;
-  COMPILE_STRICT     = 12;
-  COMPILE_STRICT_FAIL = 13;
+  COMPILE            = 12;
+  COMPILE_FAIL       = 13;
   SUCCESS            = 14;
   AGENTIC_AUTOFIX    = 15;
   TRY_AGENTIC_AUTOFIX = 16;

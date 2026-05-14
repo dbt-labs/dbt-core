@@ -393,6 +393,14 @@ pub struct RunModel {
     /// The resource type of the node (model, test, etc.)
     #[prost(string, tag = "20")]
     pub resource_type: ::prost::alloc::string::String,
+    /// the table format used for the model (ex. "default", "iceberg")
+    /// empty string when not applicable (non-model nodes)
+    #[prost(string, tag = "21")]
+    pub table_format: ::prost::alloc::string::String,
+    /// the catalog name from catalogs.yml, if the model opted into a write integration.
+    /// empty string when the model does not use catalogs.yml.
+    #[prost(string, tag = "22")]
+    pub catalog_name: ::prost::alloc::string::String,
 }
 impl ::prost::Name for RunModel {
     const NAME: &'static str = "RunModel";
@@ -463,8 +471,8 @@ pub enum OnboardingScreen {
     ParseErrorFail = 9,
     CompileNoSa = 10,
     CompileNoSaFail = 11,
-    CompileStrict = 12,
-    CompileStrictFail = 13,
+    Compile = 12,
+    CompileFail = 13,
     Success = 14,
     AgenticAutofix = 15,
     TryAgenticAutofix = 16,
@@ -491,8 +499,8 @@ impl OnboardingScreen {
             Self::ParseErrorFail => "PARSE_ERROR_FAIL",
             Self::CompileNoSa => "COMPILE_NO_SA",
             Self::CompileNoSaFail => "COMPILE_NO_SA_FAIL",
-            Self::CompileStrict => "COMPILE_STRICT",
-            Self::CompileStrictFail => "COMPILE_STRICT_FAIL",
+            Self::Compile => "COMPILE",
+            Self::CompileFail => "COMPILE_FAIL",
             Self::Success => "SUCCESS",
             Self::AgenticAutofix => "AGENTIC_AUTOFIX",
             Self::TryAgenticAutofix => "TRY_AGENTIC_AUTOFIX",
@@ -516,8 +524,8 @@ impl OnboardingScreen {
             "PARSE_ERROR_FAIL" => Some(Self::ParseErrorFail),
             "COMPILE_NO_SA" => Some(Self::CompileNoSa),
             "COMPILE_NO_SA_FAIL" => Some(Self::CompileNoSaFail),
-            "COMPILE_STRICT" => Some(Self::CompileStrict),
-            "COMPILE_STRICT_FAIL" => Some(Self::CompileStrictFail),
+            "COMPILE" => Some(Self::Compile),
+            "COMPILE_FAIL" => Some(Self::CompileFail),
             "SUCCESS" => Some(Self::Success),
             "AGENTIC_AUTOFIX" => Some(Self::AgenticAutofix),
             "TRY_AGENTIC_AUTOFIX" => Some(Self::TryAgenticAutofix),
