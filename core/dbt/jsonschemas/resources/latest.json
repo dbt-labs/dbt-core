@@ -9380,6 +9380,12 @@
             "null"
           ]
         },
+        "external_location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "external_volume": {
           "type": [
             "string",
@@ -9387,6 +9393,12 @@
           ]
         },
         "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formatter": {
           "type": [
             "string",
             "null"
@@ -10251,6 +10263,18 @@
           ]
         },
         "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formatter": {
           "type": [
             "string",
             "null"
