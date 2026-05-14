@@ -138,25 +138,21 @@ class GraphRunnableTask(ConfiguredTask):
     def exclusion_arg(self):
         return self.args.exclude
 
+    def _no_explicit_selection(self) -> bool:
+        return not (self.selection_arg or self.exclusion_arg)
+
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
         spec: Union[SelectionSpec, bool]
         if hasattr(self.args, "inline") and self.args.inline:
-            # We want an empty selection spec.
             spec = parse_difference(None, None)
         elif self.args.selector:
-            # use pre-defined selector (--selector)
             spec = self.config.get_selector(self.args.selector)
-        elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
-            # use pre-defined selector (--selector) with default: true
+        elif self._no_explicit_selection() and default_selector_name:
             fire_event(DefaultSelector(name=default_selector_name))
             spec = self.config.get_selector(default_selector_name)
         else:
-            # This is what's used with no default selector and no selection
-            # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg)
-        # mypy complains because the return values of get_selector and parse_difference
-        # are different
         return spec  # type: ignore
 
     @abstractmethod
