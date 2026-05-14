@@ -60,6 +60,8 @@ pub mod auth_type {
     pub const JWT: &str = "auth_jwt";
     /// Username and password with mfa
     pub const USERNAME_PASSWORD_MFA: &str = "auth_mfa";
+    /// Snowflake Programmatic Access Token (PAT)
+    pub const PROGRAMMATIC_ACCESS_TOKEN: &str = "auth_pat";
 }
 
 // Names of Connection options --------------------------------------------

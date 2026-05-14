@@ -102,6 +102,10 @@ enum SnowflakeAuthIR<'a> {
         user: &'a str,
         password: &'a str,
     },
+    Pat {
+        user: &'a str,
+        token: &'a str,
+    },
 }
 
 impl<'a> SnowflakeAuthIR<'a> {
@@ -204,6 +208,16 @@ impl<'a> SnowflakeAuthIR<'a> {
             Self::Warehouse { user, password } => {
                 builder.with_username(user);
                 builder.with_password(password);
+            }
+            Self::Pat { user, token } => {
+                // PAT auth uses User + Token only when building the auth request body
+                // https://github.com/snowflakedb/gosnowflake/blob/v1.17.1/auth.go#L53
+                builder.with_username(user);
+                builder.with_named_option(
+                    snowflake::AUTH_TYPE,
+                    snowflake::auth_type::PROGRAMMATIC_ACCESS_TOKEN,
+                )?;
+                builder.with_named_option(snowflake::AUTH_TOKEN, token)?;
             }
         }
 
@@ -339,6 +353,18 @@ fn parse_auth_inner<'a>(
                     user: config.get_str("user").expect("validated above"),
                     password: config.get_str("password").expect("validated above"),
                 })
+            }
+            "programmatic_access_token" => {
+                let user = config.get_str("user").ok_or_else(|| {
+                    AuthError::config("Snowflake PAT authentication requires 'user'.")
+                })?;
+                let token = config.get_str("token").ok_or_else(|| {
+                    AuthError::config("Snowflake PAT authentication requires 'token'.")
+                })?;
+                if config.contains_key("password") {
+                    warn_ignored_auth_field(warnings, "PAT", "password");
+                }
+                Ok(SnowflakeAuthIR::Pat { user, token })
             }
             unsupported_method => Err(AuthError::config(format!(
                 "Profile has unsupported authentication method {unsupported_method}"
@@ -513,6 +539,17 @@ fn parse_auth_inner<'a>(
                                 user: config.get_str("user").expect("validated above"),
                                 password: config.get_str("password").expect("validated above"),
                             })
+                        } else if value == "programmatic_access_token" {
+                            let user = config.get_str("user").ok_or_else(|| {
+                                AuthError::config("Snowflake PAT authentication requires 'user'.")
+                            })?;
+                            let token = config.get_str("token").ok_or_else(|| {
+                                AuthError::config("Snowflake PAT authentication requires 'token'.")
+                            })?;
+                            if config.contains_key("password") {
+                                warn_ignored_auth_field(warnings, "PAT", "password");
+                            }
+                            Ok(SnowflakeAuthIR::Pat { user, token })
                         } else {
                             Err(AuthError::config(format!(
                                 "Unsupported authenticator: {value}"
@@ -1545,6 +1582,116 @@ mod tests {
             (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_pat_authentication() {
+        let mut config = base_config_without_password();
+        config.insert("authenticator".into(), "programmatic_access_token".into());
+        config.insert("token".into(), "my-pat-token".into());
+
+        // PAT auth: gosnowflake uses only User + Token for AuthTypePat; Password
+        // is never read or sent to Snowflake. The ADBC password field must not
+        // be set — neither real nor stubbed.
+        let expected = [
+            ("user", "U"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (
+                snowflake::AUTH_TYPE,
+                snowflake::auth_type::PROGRAMMATIC_ACCESS_TOKEN,
+            ),
+            (snowflake::AUTH_TOKEN, "my-pat-token"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, LOGIN_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_pat_authentication_with_method_param() {
+        let mut config = base_config_without_password();
+        config.insert("method".into(), "programmatic_access_token".into());
+        config.insert("token".into(), "my-pat-token".into());
+
+        // PAT auth: no password field should be present.
+        let expected = [
+            ("user", "U"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (
+                snowflake::AUTH_TYPE,
+                snowflake::auth_type::PROGRAMMATIC_ACCESS_TOKEN,
+            ),
+            (snowflake::AUTH_TOKEN, "my-pat-token"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, LOGIN_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_pat_authentication_ignores_password() {
+        // When user mistakenly includes a password in the profile alongside PAT,
+        // it must be dropped entirely (not replaced with a stub) — gosnowflake
+        // ignores cfg.Password for AuthTypePat, so leaking it would only add
+        // noise to logs.
+        let mut config = base_config();
+        config.insert("authenticator".into(), "programmatic_access_token".into());
+        config.insert("token".into(), "my-pat-token".into());
+
+        let expected = [
+            ("user", "U"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (
+                snowflake::AUTH_TYPE,
+                snowflake::auth_type::PROGRAMMATIC_ACCESS_TOKEN,
+            ),
+            (snowflake::AUTH_TOKEN, "my-pat-token"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, LOGIN_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_pat_authentication_requires_user() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "programmatic_access_token".into());
+        config.insert("token".into(), "my-pat-token".into());
+        assert_parse_auth_config_error(config, "Snowflake PAT authentication requires 'user'.");
+    }
+
+    #[test]
+    fn test_pat_authentication_requires_token() {
+        let mut config = base_config_without_password();
+        config.insert("authenticator".into(), "programmatic_access_token".into());
+        assert_parse_auth_config_error(config, "Snowflake PAT authentication requires 'token'.");
+    }
+
+    #[test]
+    fn test_pat_method_requires_user() {
+        let mut config = base_config_without_user_password();
+        config.insert("method".into(), "programmatic_access_token".into());
+        config.insert("token".into(), "my-pat-token".into());
+        assert_parse_auth_config_error(config, "Snowflake PAT authentication requires 'user'.");
+    }
+
+    #[test]
+    fn test_pat_method_requires_token() {
+        let mut config = base_config_without_password();
+        config.insert("method".into(), "programmatic_access_token".into());
+        assert_parse_auth_config_error(config, "Snowflake PAT authentication requires 'token'.");
     }
 
     #[test]
