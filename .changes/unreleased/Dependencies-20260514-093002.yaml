@@ -1,0 +1,8 @@
+kind: Dependencies
+body: Floor dbt-adapters to >=1.24.1 so dbt-core 1.12 always resolves into an adapter
+  version that supports the JS UDF macros and the FunctionLanguage parser changes
+  introduced in 1.12 (see dbt-labs/dbt-adapters#1926)
+time: 2026-05-14T09:30:02.000000-05:00
+custom:
+  Author: sriramk-dbt
+  Issue: "NA"
