@@ -623,6 +623,11 @@ class Compiler:
                 context,
                 node,
             )
+            # Stash rendered config values so materialization macros can access
+            # them via config.get_rendered() even though they run in a fresh context.
+            config_obj = context.get("config")
+            if config_obj is not None and hasattr(config_obj, "rendered_config_call_dict"):
+                node._rendered_config = config_obj.rendered_config_call_dict
 
         node.compiled = True
 

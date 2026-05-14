@@ -507,6 +507,24 @@ class Config(Protocol):
         return config
 
 
+def _make_parse_safe(value: Any) -> Any:
+    """Recursively convert non-msgpack-serializable values to strings.
+
+    parse-time ref() / source() calls return RelationProxy objects that cannot
+    be serialized to msgpack.  This helper converts them (and anything else not
+    representable as a primitive) to their string form so the manifest stays
+    serializable.  Callers that need the correctly-rendered runtime value should
+    use config.get_rendered() instead of config.get().
+    """
+    if isinstance(value, dict):
+        return {k: _make_parse_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_make_parse_safe(v) for v in value]
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return str(value)
+
+
 # Implementation of "config(..)" calls in models
 class ParseConfigObject(Config):
     def __init__(self, model, context_config: Optional[ContextConfig]):
@@ -534,8 +552,13 @@ class ParseConfigObject(Config):
             if unrendered_config:
                 self.context_config.add_unrendered_config_call(unrendered_config)
 
-        # Use rendered opts to populate context_config
-        self.context_config.add_config_call(opts)
+        # Use rendered opts to populate context_config.
+        # At parse time, ref() returns the current model's own relation, not the
+        # referenced model's, so any RelationProxy values in opts are already
+        # semantically incorrect for the parsed config.  Stringify non-primitive
+        # values so the manifest stays msgpack-serializable; callers that need
+        # the correctly-rendered value must use config.get_rendered() instead.
+        self.context_config.add_config_call(_make_parse_safe(opts))
         return ""
 
     def set(self, name, value):
@@ -2000,7 +2023,13 @@ def generate_runtime_model_context(
     manifest: Manifest,
 ) -> Dict[str, Any]:
     ctx = ModelContext(model, config, manifest, RuntimeProvider(), None)
-    return ctx.to_dict()
+    ctx_dict = ctx.to_dict()
+    # Rehydrate rendered config captured during compilation so that
+    # materialization macros can call config.get_rendered() correctly.
+    rendered_config = getattr(model, "_rendered_config", None)
+    if rendered_config:
+        ctx_dict["config"].rendered_config_call_dict.update(rendered_config)
+    return ctx_dict
 
 
 def generate_runtime_macro_context(
