@@ -719,72 +719,74 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
+    @staticmethod
+    def _list_schemas_for_db(adapter, db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
+        db_lowercase = dbt_common.utils.formatting.lowercase(db_only.database)
+        database_quoted = None if db_only.database is None else str(db_only)
+        return [
+            (db_lowercase, s.lower())
+            for s in adapter.list_schemas(database_quoted)
+            if s is not None
+        ]
+
+    @staticmethod
+    def _create_schema_for_relation(adapter, relation: BaseRelation) -> None:
+        db = relation.database or ""
+        with adapter.connection_named(f"create_{db}_{relation.schema}"):
+            adapter.create_schema(relation)
+
+    def _submit_list_schema_futures(
+        self, tpe, adapter, required_databases: Set[BaseRelation]
+    ) -> List:
+        futures = []
+        for req in required_databases:
+            name = "list_schemas" if req.database is None else f"list_{req.database}"
+            fut = tpe.submit_connected(adapter, name, self._list_schemas_for_db, adapter, req)
+            futures.append(fut)
+        return futures
+
+    def _submit_create_schema_futures(
+        self,
+        tpe,
+        adapter,
+        required_schemas: Set[BaseRelation],
+        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]],
+    ) -> List:
+        futures = []
+        for info in required_schemas:
+            if info.schema is None:
+                continue
+            db_lower = dbt_common.utils.formatting.lowercase(info.database)
+            db_schema = (db_lower, info.schema.lower())
+            if db_schema not in existing_schemas_lowered:
+                existing_schemas_lowered.add(db_schema)
+                fut = tpe.submit_connected(
+                    adapter,
+                    f'create_{info.database or ""}_{info.schema}',
+                    self._create_schema_for_relation,
+                    adapter,
+                    info,
+                )
+                futures.append(fut)
+        return futures
+
     def create_schemas(self, adapter, required_schemas: Set[BaseRelation]):
-        # we want the string form of the information schema database
-        required_databases: Set[BaseRelation] = set()
-        for required in required_schemas:
-            db_only = required.include(database=True, schema=False, identifier=False)
-            required_databases.add(db_only)
+        required_databases: Set[BaseRelation] = {
+            req.include(database=True, schema=False, identifier=False) for req in required_schemas
+        }
 
-        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
-        existing_schemas_lowered = set()
-
-        def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
-            # the database can be None on some warehouses that don't support it
-            database_quoted: Optional[str]
-            db_lowercase = dbt_common.utils.formatting.lowercase(db_only.database)
-            if db_only.database is None:
-                database_quoted = None
-            else:
-                database_quoted = str(db_only)
-
-            # we should never create a null schema, so just filter them out
-            return [
-                (db_lowercase, s.lower())
-                for s in adapter.list_schemas(database_quoted)
-                if s is not None
-            ]
-
-        def create_schema(relation: BaseRelation) -> None:
-            db = relation.database or ""
-            schema = relation.schema
-            with adapter.connection_named(f"create_{db}_{schema}"):
-                adapter.create_schema(relation)
-
-        list_futures = []
-        create_futures = []
+        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]] = set()
 
         # TODO: following has a mypy issue because profile and project config
         # defines threads as int and HasThreadingConfig defines it as Optional[int]
         with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
-            for req in required_databases:
-                if req.database is None:
-                    name = "list_schemas"
-                else:
-                    name = f"list_{req.database}"
-                fut = tpe.submit_connected(adapter, name, list_schemas, req)
-                list_futures.append(fut)
-
+            list_futures = self._submit_list_schema_futures(tpe, adapter, required_databases)
             for ls_future in as_completed(list_futures):
                 existing_schemas_lowered.update(ls_future.result())
 
-            for info in required_schemas:
-                if info.schema is None:
-                    # we are not in the business of creating null schemas, so
-                    # skip this
-                    continue
-                db: Optional[str] = info.database
-                db_lower: Optional[str] = dbt_common.utils.formatting.lowercase(db)
-                schema: str = info.schema
-
-                db_schema = (db_lower, schema.lower())
-                if db_schema not in existing_schemas_lowered:
-                    existing_schemas_lowered.add(db_schema)
-                    fut = tpe.submit_connected(
-                        adapter, f'create_{info.database or ""}_{info.schema}', create_schema, info
-                    )
-                    create_futures.append(fut)
-
+            create_futures = self._submit_create_schema_futures(
+                tpe, adapter, required_schemas, existing_schemas_lowered
+            )
             for create_future in as_completed(create_futures):
                 # trigger/re-raise any exceptions while creating schemas
                 create_future.result()
