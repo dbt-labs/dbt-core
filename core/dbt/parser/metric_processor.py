@@ -209,20 +209,30 @@ def _resolve_and_propagate_input_metrics(
             metric.add_input_measure(input_measure)
 
 
-def _process_derived_or_ratio_metric(
+def _process_ratio_metric(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
-    input_metrics = metric.input_metrics
-    if metric.type is MetricType.RATIO:
-        if metric.type_params.numerator is None or metric.type_params.denominator is None:
-            raise dbt.exceptions.ParsingError(
-                "Invalid ratio metric. Both a numerator and denominator must be specified",
-                node=metric,
-            )
-        input_metrics = [metric.type_params.numerator, metric.type_params.denominator]
-    _resolve_and_propagate_input_metrics(manifest, current_project, metric, input_metrics)
+    if metric.type_params.numerator is None or metric.type_params.denominator is None:
+        raise dbt.exceptions.ParsingError(
+            "Invalid ratio metric. Both a numerator and denominator must be specified",
+            node=metric,
+        )
+    _resolve_and_propagate_input_metrics(
+        manifest,
+        current_project,
+        metric,
+        [metric.type_params.numerator, metric.type_params.denominator],
+    )
+
+
+def _process_derived_metric(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+) -> None:
+    _resolve_and_propagate_input_metrics(manifest, current_project, metric, metric.input_metrics)
 
 
 def _process_simple_metric(
@@ -278,9 +288,9 @@ def _process_metric_node(
         _process_conversion_metric(
             manifest=manifest, current_project=current_project, metric=metric
         )
-    elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
-        _process_derived_or_ratio_metric(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+    elif metric.type is MetricType.DERIVED:
+        _process_derived_metric(manifest=manifest, current_project=current_project, metric=metric)
+    elif metric.type is MetricType.RATIO:
+        _process_ratio_metric(manifest=manifest, current_project=current_project, metric=metric)
     else:
         assert_values_exhausted(metric.type)
