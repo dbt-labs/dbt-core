@@ -1886,6 +1886,21 @@ pub struct CommonArgs {
         hide = true
     )]
     pub antlr_parser_cache_threshold_bytes: Option<usize>,
+
+    /// If set, the maximum depth of call stack that the ANTLR parser is allowed
+    /// to reach before it aborts with an error. This setting is intended to
+    /// prevent inputs with excessively deep nesting (e.g. from maliciously
+    /// crafted SQL) causing a denial-of-service on the host. Note that the this
+    /// value is usually 2x-10x the actual level of nesting ANTLR can handle,
+    /// depending on the grammar. Default is 20000. [env:
+    /// DBT_ANTLR_PARSER_RECURSION_LIMIT]
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_ANTLR_PARSER_RECURSION_LIMIT",
+        hide = true
+    )]
+    pub antlr_parser_recursion_limit: Option<u32>,
 }
 
 fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOptions> {

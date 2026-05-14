@@ -1,5 +1,6 @@
 use std::{cmp, ops};
 
+use dbt_antlr4::token::Token;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -100,6 +101,16 @@ impl CodeLocation {
             }
         }
         CodeLocation::new(line, col, self.index + (s.len() as u32))
+    }
+}
+
+impl From<&dyn Token> for CodeLocation {
+    fn from(token: &dyn Token) -> Self {
+        CodeLocation {
+            line: token.get_line(),
+            col: token.get_char_position_in_line() as u32 + 1,
+            index: token.get_start_index() as u32,
+        }
     }
 }
 

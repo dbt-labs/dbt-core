@@ -168,6 +168,10 @@ pub enum ErrorCode {
     RecursiveCTEFailed = 318,
     QualifyFailed = 319,
 
+    // ----------------- System errors -----------------
+    ASTSizeLimitExceeded = 801,
+    RecursionDepthLimitExceeded = 802,
+
     // ----------------- Legacy errors (for transition only) -----------------
     LegacyBinder = 892,
     LegacyParser = 893,

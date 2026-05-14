@@ -796,7 +796,7 @@ impl From<dbt_frontend_common::error::WrappedError> for WrappedError {
     fn from(e: dbt_frontend_common::error::WrappedError) -> Self {
         match e {
             dbt_frontend_common::error::WrappedError::Frontend(err) => Self::Frontend(err),
-            dbt_frontend_common::error::WrappedError::Antlr(err) => Self::Antlr(err),
+            dbt_frontend_common::error::WrappedError::Antlr(err) => Self::Antlr(err.to_string()),
             dbt_frontend_common::error::WrappedError::Arrow(err) => Self::Arrow(err),
             dbt_frontend_common::error::WrappedError::Datafusion(err) => Self::Datafusion(err),
             dbt_frontend_common::error::WrappedError::SerdeJson(err) => Self::SerdeJson(err),
