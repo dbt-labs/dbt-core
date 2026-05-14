@@ -1,8 +1,14 @@
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
+
 pub mod context;
+pub mod precompile;
 pub mod pretty_table;
 mod run_tasks_args;
 pub mod span_manager;
 mod stats_to_results;
+pub mod task;
 pub mod test_aggregation;
 pub mod visitor;
 

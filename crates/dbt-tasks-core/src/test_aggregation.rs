@@ -171,9 +171,9 @@ pub fn create_generic_test_aggregation(
     io: &dbt_common::io_args::IoArgs,
     schedule: &dbt_dag::schedule::Schedule<String>,
     nodes: &Nodes,
-    execute: &Execute,
+    execute: Execute,
 ) -> FsResult<Option<GenericTestAggregation>> {
-    if execute != &Execute::Remote {
+    if execute != Execute::Remote {
         return Ok(None);
     }
 
