@@ -15,14 +15,11 @@ arrow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
-clap = { workspace = true }
 dbt-cli-lib = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
-dbt-jinja-utils = { workspace = true }
-dbt-loader = { workspace = true }
 dbt-profile = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-telemetry = { workspace = true }
@@ -41,7 +38,6 @@ once_cell = { workspace = true }
 parquet = { workspace = true }
 pretty_assertions = { version = "1.4.1" }
 proto-rust = { workspace = true }
-rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
@@ -50,9 +46,6 @@ sha2 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-uuid = { workspace = true }
-vortex-events = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]

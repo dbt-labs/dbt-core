@@ -13,29 +13,17 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-arrow = { workspace = true }
 dbt-adapter = { workspace = true }
-dbt-adapter-core = { workspace = true }
-dbt-clap-core = { workspace = true }
 dbt-common = { workspace = true }
-dbt-dag = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
-dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-metadata = { workspace = true }
 dbt-parser = { workspace = true }
-dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
-dbt-telemetry = { workspace = true }
-minijinja = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
-vortex-events = { workspace = true }
 
 [lib]
 name = "dbt_compilation"

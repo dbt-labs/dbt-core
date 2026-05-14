@@ -25,12 +25,10 @@ md5 = { workspace = true }
 once_cell = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
-counter = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
-unicode-segmentation = { version = "1.12" }
 uuid = { workspace = true, features = ["v7"] }
 
 arrow = { workspace = true }
@@ -59,7 +57,6 @@ pathdiff = { workspace = true }
 normalize-path = { version = "0.2.1" }
 
 dbt-tui-progress = { workspace = true }
-indicatif = { workspace = true }
 rust-embed = { workspace = true }
 
 # Tracing

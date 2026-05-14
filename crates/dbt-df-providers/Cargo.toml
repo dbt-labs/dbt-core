@@ -11,11 +11,8 @@ version.workspace = true
 
 [dependencies]
 dbt-adapter-core = { workspace = true }
-dbt-common = { workspace = true }
 dbt-csv = { workspace = true }
-dbt-env = { workspace = true }
 dbt-frontend-common = { workspace = true }
-dbt-ident = { workspace = true }
 dbt-schema-store = { workspace = true }
 
 arrow = { workspace = true, features = ["json"] }

@@ -18,7 +18,6 @@ minijinja = { path = "../minijinja", default-features = false, features = [
 ] }
 rinja = "0.3.4"
 serde = { workspace = true }
-serde_json = { workspace = true }
 tera = "1.17.1"
 
 [dev-dependencies]

@@ -29,7 +29,6 @@ arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 atomic-wait = { version = "1.1.0" }
 base64 = { workspace = true }
-chrono = { workspace = true }
 dbt-base = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dirs = { workspace = true }

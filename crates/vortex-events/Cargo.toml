@@ -11,7 +11,6 @@ edition.workspace = true
 [dependencies]
 proto-rust = { path = "../proto-rust" }
 
-dashmap = { workspace = true }
 dbt-common = { workspace = true }
 dbt-env = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }

@@ -22,7 +22,6 @@ opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 pbjson = { workspace = true }
-pbjson-types = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 proto-rust-macros = { workspace = true }
