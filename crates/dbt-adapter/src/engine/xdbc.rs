@@ -12,7 +12,7 @@ use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::dbt_catalogs_v2::CatalogSpecV2View;
+use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::*;
@@ -333,7 +333,6 @@ impl XdbcEngine {
     /// aliases (after sanitization) are rejected with an error.
     fn generate_v2_catalog_attach_stmts(&self) -> AdapterResult<Vec<String>> {
         use crate::load_catalogs;
-        use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
 
         if !load_catalogs::fetch_use_catalogs_v2() {
             return Ok(Vec::new());
@@ -344,44 +343,65 @@ impl XdbcEngine {
         let Ok(view) = catalogs.view_v2() else {
             return Ok(Vec::new());
         };
+        compose_v2_catalog_attach_stmts(&view)
+    }
+}
 
-        let mut stmts = Vec::new();
-        let mut seen_aliases: HashMap<String, String> = HashMap::new(); // alias → catalog_name
+/// Pure: compose the DuckDB v2-catalog ATTACH statements for a parsed
+/// `DbtCatalogsV2View`. Returns the statements in emission order, with a
+/// leading `INSTALL ducklake` prelude when any DuckLake catalog is present.
+///
+/// Local filesystem catalogs intentionally do not emit ATTACH SQL; they provide
+/// file roots and defaults consumed by source rendering and external writes.
+///
+/// Errors when alias sanitization produces an empty alias or a duplicate
+/// alias across catalogs.
+fn compose_v2_catalog_attach_stmts(view: &DbtCatalogsV2View<'_>) -> AdapterResult<Vec<String>> {
+    // INSTALL ducklake must lead all ATTACHes but we can't know it's needed until we've seen the catalogs
+    let mut needs_ducklake = false;
+    let mut stmts: Vec<String> = Vec::new();
+    let mut seen_aliases: HashMap<String, &str> = HashMap::new();
 
-        for catalog in &view.catalogs {
-            if !matches!(
+    for (catalog, duckdb) in view
+        .catalogs
+        .iter()
+        .filter(|catalog| {
+            matches!(
                 catalog.catalog_type,
                 V2CatalogType::Glue | V2CatalogType::IcebergRest | V2CatalogType::DuckLake
-            ) {
-                continue;
-            }
-            let Some(duckdb) = catalog.config_block("duckdb") else {
-                continue;
-            };
-
-            let (alias, stmt) = if catalog.catalog_type == V2CatalogType::DuckLake {
-                if stmts.first().is_none_or(|stmt| stmt != "INSTALL ducklake") {
-                    stmts.insert(0, "INSTALL ducklake".to_string());
-                }
+            )
+        })
+        .filter_map(|catalog| {
+            catalog
+                .config_block("duckdb")
+                .map(|duckdb| (catalog, duckdb))
+        })
+    {
+        let (alias, stmt) = match catalog.catalog_type {
+            V2CatalogType::DuckLake => {
+                needs_ducklake = true;
                 build_duckdb_ducklake_attach_stmt(catalog, duckdb)?
-            } else {
-                build_duckdb_catalog_attach_stmt(catalog, duckdb)?
-            };
-            if let Some(prior) = seen_aliases.get(&alias) {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    format!(
-                        "Catalog '{}' duckdb attach alias '{alias}' collides with catalog '{prior}'",
-                        catalog.name
-                    ),
-                ));
             }
-            seen_aliases.insert(alias.clone(), catalog.name.to_string());
-            stmts.push(stmt);
+            _ => build_duckdb_catalog_attach_stmt(catalog, duckdb)?,
+        };
+        if let Some(prior) = seen_aliases.get(&alias) {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "Catalog '{}' duckdb attach alias '{alias}' collides with catalog '{prior}'",
+                    catalog.name
+                ),
+            ));
         }
-
-        Ok(stmts)
+        seen_aliases.insert(alias, catalog.name);
+        stmts.push(stmt);
     }
+
+    if needs_ducklake {
+        stmts.insert(0, "INSTALL ducklake".to_string());
+    }
+
+    Ok(stmts)
 }
 
 fn build_duckdb_ducklake_attach_stmt(
@@ -731,70 +751,48 @@ Original error: {}",
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod duckdb_attach_snapshot_tests {
+    //! File-driven snapshot tests for `compose_v2_catalog_attach_stmts`.
+    //!
+    //! Each fixture under `xdbc/fixtures/<scenario>/catalogs.yml` is parsed via
+    //! `DbtCatalogs::view_v2()` and the joined ATTACH (and optional
+    //! `INSTALL ducklake`) statements are snapshotted to a sibling
+    //! `output.snap` so input + expected output are reviewable side-by-side.
+    //! Update goldens with `cargo insta review` or `cargo insta accept`.
+    use super::compose_v2_catalog_attach_stmts;
     use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 
-    fn attach_stmt(yaml: &str) -> AdapterResult<String> {
+    fn render(yaml: &str) -> String {
         let parsed: dbt_yaml::Value = dbt_yaml::from_str(yaml).expect("valid YAML");
         let dbt_yaml::Value::Mapping(repr, span) = parsed else {
-            panic!("expected top-level mapping");
+            panic!("fixture must be a top-level mapping");
         };
         let catalogs = DbtCatalogs::new(repr, span);
-        let view = catalogs.view_v2().expect("valid v2 view");
-        let catalog = view.catalogs.first().expect("one catalog");
-        let duckdb = catalog.config_block("duckdb").expect("duckdb block");
-        build_duckdb_catalog_attach_stmt(catalog, duckdb).map(|(_, stmt)| stmt)
+        let view = catalogs.view_v2().expect("valid v2 catalog view");
+        match compose_v2_catalog_attach_stmts(&view) {
+            Ok(stmts) => stmts.join("\n"),
+            Err(e) => format!("error: {:?}: {}", e.kind(), e),
+        }
     }
 
     #[test]
-    fn duckdb_catalog_attach_uses_profile_secret_reference_and_safe_options() {
-        let stmt = attach_stmt(
-            r#"
-catalogs:
-  - name: rest_catalog
-    type: iceberg_rest
-    table_format: iceberg
-    config:
-      duckdb:
-        endpoint: "https://rest.example.com"
-        warehouse: "warehouse_name"
-        secret: "iceberg_secret"
-        attach_as: "iceberg_db"
-        default_schema: "demo"
-        max_table_staleness: "10 minutes"
-        support_nested_namespaces: false
-        support_stage_create: true
-        purge_requested: false
-"#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            stmt,
-            "ATTACH IF NOT EXISTS 'warehouse_name' AS iceberg_db (TYPE ICEBERG, SECRET iceberg_secret, ENDPOINT 'https://rest.example.com', DEFAULT_SCHEMA 'demo', MAX_TABLE_STALENESS '10 minutes', SUPPORT_NESTED_NAMESPACES false, SUPPORT_STAGE_CREATE true, PURGE_REQUESTED false)"
-        );
-    }
-
-    #[test]
-    fn duckdb_glue_endpoint_type_defaults_to_current_account_catalog() {
-        let stmt = attach_stmt(
-            r#"
-catalogs:
-  - name: glue_catalog
-    type: glue
-    table_format: iceberg
-    config:
-      duckdb:
-        endpoint_type: GLUE
-        secret: "aws_secret"
-"#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            stmt,
-            "ATTACH IF NOT EXISTS ':' AS glue_catalog (TYPE ICEBERG, SECRET aws_secret, ENDPOINT_TYPE GLUE)"
-        );
+    #[allow(clippy::disallowed_methods)]
+    fn duckdb_attach_fixtures() {
+        insta::glob!("xdbc/fixtures", "*/catalogs.yml", |path| {
+            let yaml = std::fs::read_to_string(path).expect("read fixture");
+            let scenario_dir = path
+                .parent()
+                .expect("fixture has a parent directory")
+                .to_path_buf();
+            insta::with_settings!(
+                {
+                    prepend_module_to_snapshot => false,
+                    snapshot_path => &scenario_dir,
+                    snapshot_suffix => "",
+                    omit_expression => true,
+                },
+                { insta::assert_snapshot!("output", render(&yaml)) }
+            );
+        });
     }
 }
