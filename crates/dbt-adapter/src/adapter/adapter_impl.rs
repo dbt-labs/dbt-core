@@ -4143,7 +4143,7 @@ impl AdapterImpl {
                 });
 
                 if let Some(t) = timeout {
-                    options.push((QUERY_JOB_TIMEOUT.to_string(), OptionValue::Int(t)));
+                    options.push((QUERY_JOB_TIMEOUT.to_string(), OptionValue::Int(t * 1000)));
                 }
 
                 options
@@ -5187,7 +5187,7 @@ mod tests {
         env.add_global("model", make_bigquery_model_with_timeout(300));
         let state = State::new_for_env(&env);
         let options = adapter.get_adbc_execute_options(&state);
-        assert_eq!(find_job_timeout(&options), Some(300));
+        assert_eq!(find_job_timeout(&options), Some(300 * 1000));
     }
 
     #[test]
@@ -5197,7 +5197,7 @@ mod tests {
         env.add_global("model", make_bigquery_snapshot_with_timeout(600));
         let state = State::new_for_env(&env);
         let options = adapter.get_adbc_execute_options(&state);
-        assert_eq!(find_job_timeout(&options), Some(600));
+        assert_eq!(find_job_timeout(&options), Some(600 * 1000));
     }
 
     #[test]
@@ -5207,7 +5207,7 @@ mod tests {
         let env = Environment::new();
         let state = State::new_for_env(&env);
         let options = adapter.get_adbc_execute_options(&state);
-        assert_eq!(find_job_timeout(&options), Some(120));
+        assert_eq!(find_job_timeout(&options), Some(120 * 1000));
     }
 
     #[test]
@@ -5218,7 +5218,7 @@ mod tests {
         env.add_global("model", make_bigquery_model_with_timeout(900));
         let state = State::new_for_env(&env);
         let options = adapter.get_adbc_execute_options(&state);
-        assert_eq!(find_job_timeout(&options), Some(900));
+        assert_eq!(find_job_timeout(&options), Some(900 * 1000));
     }
 
     #[test]
