@@ -105,10 +105,6 @@ fn filestamps_path(dir: &Path) -> PathBuf {
     dir.join("filestamps.parquet")
 }
 
-fn alive_path(dir: &Path) -> PathBuf {
-    dir.join("alive.parquet")
-}
-
 fn nodes_dir(dir: &Path) -> PathBuf {
     dir.join("nodes")
 }
@@ -171,14 +167,6 @@ struct FilestampRow {
     path_kind: String,
     path: String,
     mtime_ns: i64,
-    #[serde(default)]
-    ingested_at: i64,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct AliveRow {
-    unique_id: String,
-    resource_type: String,
     #[serde(default)]
     ingested_at: i64,
 }
@@ -301,14 +289,6 @@ fn filestamp_fields() -> Vec<FieldRef> {
         str_field("path_kind"),
         str_field("path"),
         i64_field("mtime_ns"),
-        i64_field("ingested_at"),
-    ]
-}
-
-fn alive_fields() -> Vec<FieldRef> {
-    vec![
-        str_field("unique_id"),
-        str_field("resource_type"),
         i64_field("ingested_at"),
     ]
 }
@@ -610,6 +590,66 @@ fn collect_delta_rows(
         if changed.contains(uid.as_str()) {
             rows.push(node_row_from_docs_macro(uid, node, 0));
         }
+    }
+    rows
+}
+
+// ── alive collection ─────────────────────────────────────────────────────────
+
+#[allow(clippy::cognitive_complexity)]
+fn collect_alive_rows(
+    nodes: &Nodes,
+    disabled_nodes: &Nodes,
+    macros: &Macros,
+    ingested_at: i64,
+) -> Vec<dbt_metadata_parquet::parquet_parse_alive::AliveRow> {
+    use dbt_metadata_parquet::parquet_parse_alive::AliveRow;
+    let mut rows = Vec::new();
+    macro_rules! push_alive {
+        ($map:expr, $kind:literal) => {
+            for uid in $map.keys() {
+                rows.push(AliveRow {
+                    unique_id: uid.clone(),
+                    resource_type: $kind.to_string(),
+                    ingested_at,
+                });
+            }
+        };
+    }
+    push_alive!(&nodes.models, "model");
+    push_alive!(&nodes.seeds, "seed");
+    push_alive!(&nodes.tests, "test");
+    push_alive!(&nodes.unit_tests, "unit_test");
+    push_alive!(&nodes.sources, "source");
+    push_alive!(&nodes.snapshots, "snapshot");
+    push_alive!(&nodes.analyses, "analysis");
+    push_alive!(&nodes.exposures, "exposure");
+    push_alive!(&nodes.semantic_models, "semantic_model");
+    push_alive!(&nodes.metrics, "metric");
+    push_alive!(&nodes.saved_queries, "saved_query");
+    push_alive!(&nodes.groups, "group");
+    push_alive!(&nodes.functions, "function");
+    push_alive!(&nodes.macros, "macro");
+    push_alive!(&disabled_nodes.models, "model");
+    push_alive!(&disabled_nodes.seeds, "seed");
+    push_alive!(&disabled_nodes.tests, "test");
+    push_alive!(&disabled_nodes.unit_tests, "unit_test");
+    push_alive!(&disabled_nodes.sources, "source");
+    push_alive!(&disabled_nodes.snapshots, "snapshot");
+    push_alive!(&disabled_nodes.analyses, "analysis");
+    push_alive!(&disabled_nodes.exposures, "exposure");
+    push_alive!(&disabled_nodes.semantic_models, "semantic_model");
+    push_alive!(&disabled_nodes.metrics, "metric");
+    push_alive!(&disabled_nodes.saved_queries, "saved_query");
+    push_alive!(&disabled_nodes.functions, "function");
+    push_alive!(&disabled_nodes.groups, "group");
+    push_alive!(&disabled_nodes.macros, "macro");
+    for uid in macros.docs_macros.keys() {
+        rows.push(AliveRow {
+            unique_id: uid.clone(),
+            resource_type: "doc".to_string(),
+            ingested_at,
+        });
     }
     rows
 }
@@ -1004,10 +1044,23 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
     }
     write_rows_with_fields(&project_path(&dir), &kv_fields(), &project);
 
-    // ── alive (snapshot: all currently-alive unique_ids) ──────────────────────
-    let alive_rows: Vec<AliveRow> =
-        collect_alive_rows(args.nodes, args.disabled_nodes, args.ingested_at);
-    write_rows_with_fields(&alive_path(&dir), &alive_fields(), &alive_rows);
+    // ── alive ────────────────────────────────────────────────────────────────
+    let ta = Instant::now();
+    let alive_rows = collect_alive_rows(
+        args.nodes,
+        args.disabled_nodes,
+        args.macros,
+        args.ingested_at,
+    );
+    let alive_path = dir.join("alive.parquet");
+    if let Err(e) = dbt_metadata_parquet::parquet_parse_alive::write_alive(&alive_path, &alive_rows)
+    {
+        eprintln!("[warning] Failed to write alive.parquet: {e}");
+    }
+    t(
+        &format!("write alive.parquet ({} rows)", alive_rows.len()),
+        ta,
+    );
 
     // Clean up legacy pkg_deps.parquet / pkg_kinds.parquet if still present.
     let _ = fs::remove_file(dir.join("pkg_deps.parquet"));
@@ -1015,51 +1068,6 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
 
     t("save total", t0);
     Ok(())
-}
-
-#[allow(clippy::cognitive_complexity)]
-fn collect_alive_rows(nodes: &Nodes, disabled_nodes: &Nodes, ingested_at: i64) -> Vec<AliveRow> {
-    let mut rows = Vec::new();
-    macro_rules! push_alive {
-        ($map:expr, $kind:literal) => {
-            for uid in $map.keys() {
-                rows.push(AliveRow {
-                    unique_id: uid.clone(),
-                    resource_type: $kind.to_string(),
-                    ingested_at,
-                });
-            }
-        };
-    }
-    push_alive!(&nodes.models, "model");
-    push_alive!(&nodes.seeds, "seed");
-    push_alive!(&nodes.tests, "test");
-    push_alive!(&nodes.unit_tests, "unit_test");
-    push_alive!(&nodes.sources, "source");
-    push_alive!(&nodes.snapshots, "snapshot");
-    push_alive!(&nodes.analyses, "analysis");
-    push_alive!(&nodes.exposures, "exposure");
-    push_alive!(&nodes.semantic_models, "semantic_model");
-    push_alive!(&nodes.metrics, "metric");
-    push_alive!(&nodes.saved_queries, "saved_query");
-    push_alive!(&nodes.functions, "function");
-    push_alive!(&nodes.groups, "group");
-    push_alive!(&nodes.macros, "macro");
-    push_alive!(&disabled_nodes.models, "model");
-    push_alive!(&disabled_nodes.seeds, "seed");
-    push_alive!(&disabled_nodes.tests, "test");
-    push_alive!(&disabled_nodes.unit_tests, "unit_test");
-    push_alive!(&disabled_nodes.sources, "source");
-    push_alive!(&disabled_nodes.snapshots, "snapshot");
-    push_alive!(&disabled_nodes.analyses, "analysis");
-    push_alive!(&disabled_nodes.exposures, "exposure");
-    push_alive!(&disabled_nodes.semantic_models, "semantic_model");
-    push_alive!(&disabled_nodes.metrics, "metric");
-    push_alive!(&disabled_nodes.saved_queries, "saved_query");
-    push_alive!(&disabled_nodes.functions, "function");
-    push_alive!(&disabled_nodes.groups, "group");
-    push_alive!(&disabled_nodes.macros, "macro");
-    rows
 }
 
 // ── load ──────────────────────────────────────────────────────────────────────
