@@ -13,7 +13,7 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use crate::formatter::SqlLiteralFormatter;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::relation::do_create_relation;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -149,7 +149,7 @@ fn snowflake_get_relation(
         return Ok(None);
     }
 
-    let kind_column = get_column_values::<StringArray>(&batch, "kind")?;
+    let kind_column = batch.column_values::<StringArray>("kind")?;
 
     if kind_column.len() != 1 {
         return Err(AdapterError::new(
@@ -160,7 +160,7 @@ fn snowflake_get_relation(
 
     // Reference: https://github.com/dbt-labs/dbt-adapters/blob/61221f455f5960daf80024febfae6d6fb4b46251/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L309
     // TODO: We'll have to revisit this when iceberg gets implemented.
-    let is_dynamic_column = get_column_values::<StringArray>(&batch, "is_dynamic")?;
+    let is_dynamic_column = batch.column_values::<StringArray>("is_dynamic")?;
 
     if is_dynamic_column.len() != 1 {
         return Err(AdapterError::new(
@@ -179,7 +179,7 @@ fn snowflake_get_relation(
         None
     };
 
-    let is_iceberg_column = get_column_values::<StringArray>(&batch, "is_iceberg")?;
+    let is_iceberg_column = batch.column_values::<StringArray>("is_iceberg")?;
 
     if is_iceberg_column.len() != 1 {
         return Err(AdapterError::new(
@@ -429,8 +429,8 @@ fn databricks_get_relation(
         // first, followed by an empty separator row, then metadata key-value pairs.
         // Some databases (e.g. hive_metastore) may be missing 'Type' and 'Provider'
         // rows, so we default gracefully.
-        let col_names = get_column_values::<StringArray>(&batch, "col_name")?;
-        let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
+        let col_names = batch.column_values::<StringArray>("col_name")?;
+        let data_types = batch.column_values::<StringArray>("data_type")?;
 
         let mut metadata_map = BTreeMap::new();
         let mut type_str = None;

@@ -1,6 +1,3 @@
-use crate::AdapterType;
-
-use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
@@ -27,46 +24,12 @@ pub struct AdapterResponse {
 }
 
 impl AdapterResponse {
-    //! TODO: find references via searching for keywords `def get_response` in the dbt-adapters repository.
-    //! These components all differ across adapters, implement as they're when necessary
-    pub fn new(batch: &RecordBatch, adapter_type: AdapterType) -> Self {
+    pub fn new(rows_affected: i64, query_id: Option<String>) -> Self {
         Self {
-            message: Self::message(batch, adapter_type),
-            code: Self::code(batch, adapter_type),
-            rows_affected: batch.num_rows() as i64,
-            query_id: Self::query_id(batch, adapter_type),
-        }
-    }
-
-    /// Get the message for the response from the batch.
-    fn message(batch: &RecordBatch, _adapter_type: AdapterType) -> String {
-        format!("{} {}", "SUCCESS", batch.num_rows())
-    }
-
-    /// Get the code for the response from the batch.
-    fn code(_batch: &RecordBatch, _adapter_type: AdapterType) -> String {
-        "SUCCESS".to_string()
-    }
-
-    /// Get the query ID for the response from the batch.
-    pub(crate) fn query_id(batch: &RecordBatch, adapter_type: AdapterType) -> Option<String> {
-        match adapter_type {
-            AdapterType::Snowflake => batch
-                .schema()
-                .metadata()
-                .get("SNOWFLAKE_QUERY_ID")
-                .map(|query_id: &String| query_id.to_string()),
-            AdapterType::Bigquery => batch
-                .schema()
-                .metadata()
-                .get("BIGQUERY:query_id")
-                .map(|query_id: &String| query_id.to_string()),
-            AdapterType::Databricks => batch
-                .schema()
-                .metadata()
-                .get("DATABRICKS_QUERY_ID")
-                .map(|query_id: &String| query_id.to_string()),
-            _ => None,
+            message: format!("SUCCESS {}", rows_affected),
+            code: "SUCCESS".to_string(),
+            rows_affected,
+            query_id,
         }
     }
 }
@@ -176,5 +139,69 @@ impl Object for ResultObject {
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
         Enumerator::Str(&["table", "data", "response"])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn metadata_to_yaml(resp: &AdapterResponse) -> BTreeMap<String, dbt_yaml::Value> {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "_message".to_string(),
+            dbt_yaml::Value::string(resp.message.clone()),
+        );
+        map.insert(
+            "code".to_string(),
+            dbt_yaml::Value::string(resp.code.clone()),
+        );
+        map.insert(
+            "rows_affected".to_string(),
+            dbt_yaml::to_value(resp.rows_affected).expect("i64 serialises to YAML"),
+        );
+        if let Some(qid) = &resp.query_id {
+            map.insert("query_id".to_string(), dbt_yaml::Value::string(qid.clone()));
+        }
+        map
+    }
+
+    #[test]
+    fn test_to_adapter_response_map_matches_core_format() {
+        let resp = AdapterResponse {
+            message: "SUCCESS 42".to_string(),
+            code: "SUCCESS".to_string(),
+            rows_affected: 42,
+            query_id: Some("01c2f954-abc".to_string()),
+        };
+        let map = metadata_to_yaml(&resp);
+
+        // Core uses `_message`, not `message`
+        assert_eq!(
+            map.get("_message").and_then(|v| v.as_str()),
+            Some("SUCCESS 42")
+        );
+        assert_eq!(map.get("code").and_then(|v| v.as_str()), Some("SUCCESS"));
+        assert_eq!(map.get("rows_affected").and_then(|v| v.as_i64()), Some(42));
+        assert_eq!(
+            map.get("query_id").and_then(|v| v.as_str()),
+            Some("01c2f954-abc")
+        );
+        // `message` key should NOT be present (Core uses `_message`)
+        assert!(!map.contains_key("message"));
+    }
+
+    #[test]
+    fn test_to_adapter_response_map_omits_null_query_id() {
+        let resp = AdapterResponse {
+            message: "SUCCESS 0".to_string(),
+            code: "SUCCESS".to_string(),
+            rows_affected: 0,
+            query_id: None,
+        };
+        let map = metadata_to_yaml(&resp);
+        assert!(!map.contains_key("query_id"));
+        assert_eq!(map.len(), 3); // _message, code, rows_affected
     }
 }

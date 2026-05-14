@@ -3,9 +3,7 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use crate::connection::AdapterConnectionFactory;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
-use crate::{
-    AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
-};
+use crate::{AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch::RecordBatchExt};
 use arrow_schema::Schema;
 
 use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
@@ -49,12 +47,12 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let comments = get_column_values::<StringArray>(&stats_sql_result, "table_comment")?;
-        let table_owners = get_column_values::<StringArray>(&stats_sql_result, "table_owner")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
 
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
@@ -113,16 +111,14 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&stats_sql_result, "column_name")?;
-        let column_indices =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&stats_sql_result, "column_type")?;
-        let column_comments =
-            get_column_values::<StringArray>(&stats_sql_result, "column_comment")?;
+        let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = stats_sql_result.column_values::<Decimal128Array>("column_index")?;
+        let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
 
         let mut columns_by_relation = BTreeMap::new();
 
@@ -317,10 +313,10 @@ pub fn list_relations(
         return Ok(Vec::new());
     }
 
-    let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
-    let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
-    let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
-    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+    let table_catalogs = batch.column_values::<StringArray>("table_catalog")?;
+    let table_schemas = batch.column_values::<StringArray>("table_schema")?;
+    let table_names = batch.column_values::<StringArray>("table_name")?;
+    let table_types = batch.column_values::<StringArray>("table_type")?;
 
     let mut relations = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
@@ -358,9 +354,9 @@ fn build_schema_from_duckdb_describe(
     describe_result: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let column_names = get_column_values::<StringArray>(&describe_result, "column_name")?;
-    let data_types = get_column_values::<StringArray>(&describe_result, "column_type")?;
-    let nullability = get_column_values::<StringArray>(&describe_result, "null")?;
+    let column_names = describe_result.column_values::<StringArray>("column_name")?;
+    let data_types = describe_result.column_values::<StringArray>("column_type")?;
+    let nullability = describe_result.column_values::<StringArray>("null")?;
 
     let mut fields = vec![];
     for i in 0..describe_result.num_rows() {

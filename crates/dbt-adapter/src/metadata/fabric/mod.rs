@@ -5,7 +5,7 @@ use crate::metadata::{
     CatalogAndSchema, MetadataAdapter, MetadataFreshness, RelationSchemaPair, RelationVec,
     create_schemas_if_not_exists,
 };
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
@@ -45,10 +45,10 @@ pub fn list_relations(
 
     let mut relations = Vec::new();
 
-    let table_name = get_column_values::<StringArray>(&batch, "TABLE_NAME")?;
-    let database_name = get_column_values::<StringArray>(&batch, "TABLE_QUALIFIER")?;
-    let schema_name = get_column_values::<StringArray>(&batch, "TABLE_OWNER")?;
-    let table_type = get_column_values::<StringArray>(&batch, "TABLE_TYPE")?;
+    let table_name = batch.column_values::<StringArray>("TABLE_NAME")?;
+    let database_name = batch.column_values::<StringArray>("TABLE_QUALIFIER")?;
+    let schema_name = batch.column_values::<StringArray>("TABLE_OWNER")?;
+    let table_type = batch.column_values::<StringArray>("TABLE_TYPE")?;
 
     for i in 0..batch.num_rows() {
         let table_type_value = table_type.value(i);
@@ -95,11 +95,11 @@ impl MetadataAdapter for FabricMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let table_owners = get_column_values::<StringArray>(&stats_sql_result, "table_owner")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
 
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
@@ -152,13 +152,13 @@ impl MetadataAdapter for FabricMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&stats_sql_result, "column_name")?;
-        let column_indices = get_column_values::<Int32Array>(&stats_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&stats_sql_result, "column_type")?;
+        let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = stats_sql_result.column_values::<Int32Array>("column_index")?;
+        let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
 
         let mut columns_by_relation = BTreeMap::new();
 
@@ -312,10 +312,10 @@ fn build_schema_from_sp_columns(
     sp_columns_result: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let column_names = get_column_values::<StringArray>(&sp_columns_result, "COLUMN_NAME")?;
-    let data_types = get_column_values::<StringArray>(&sp_columns_result, "TYPE_NAME")?;
-    let comments = get_column_values::<StringArray>(&sp_columns_result, "REMARKS")?;
-    let nullability = get_column_values::<StringArray>(&sp_columns_result, "IS_NULLABLE")?;
+    let column_names = sp_columns_result.column_values::<StringArray>("COLUMN_NAME")?;
+    let data_types = sp_columns_result.column_values::<StringArray>("TYPE_NAME")?;
+    let comments = sp_columns_result.column_values::<StringArray>("REMARKS")?;
+    let nullability = sp_columns_result.column_values::<StringArray>("IS_NULLABLE")?;
 
     let mut fields = vec![];
     for i in 0..sp_columns_result.num_rows() {

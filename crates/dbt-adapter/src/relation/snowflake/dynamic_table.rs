@@ -10,7 +10,7 @@ use dbt_agate::AgateTable;
 use dbt_schemas::schemas::DbtModel;
 use minijinja::{Value, value::Object};
 
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::{ComponentConfig, RelationChangeSet};
 
 /// Deserialization target for macro snowflake__describe_dynamic_table
@@ -542,7 +542,7 @@ impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
 // Returns None if the column is absent.
 fn get_bool_by_name_from_record_batch(batch: &Arc<RecordBatch>, col_name: &str) -> Option<bool> {
     use arrow::array::BooleanArray;
-    let col = get_column_values::<BooleanArray>(batch, col_name).ok()?;
+    let col = batch.column_values::<BooleanArray>(col_name).ok()?;
     if col.len() != 1 {
         return None;
     }
@@ -554,7 +554,7 @@ fn get_string_by_name_from_record_batch(
     batch: &Arc<RecordBatch>,
     col_name: &str,
 ) -> Result<String, String> {
-    if let Ok(column_values) = get_column_values::<StringArray>(batch, col_name) {
+    if let Ok(column_values) = batch.column_values::<StringArray>(col_name) {
         if column_values.len() != 1 {
             return Err(format!(
                 "Describe dynamic_table returned an unexpected number of values for {col_name}."

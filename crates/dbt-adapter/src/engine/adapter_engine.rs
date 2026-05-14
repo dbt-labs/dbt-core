@@ -22,15 +22,16 @@ use indexmap::IndexMap;
 use minijinja::State;
 use tracy_client::span;
 
+use crate::AdapterType;
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
 use crate::errors::{adbc_error_to_adapter_error, arrow_error_to_adapter_error};
 use crate::query_cache::QueryCache;
+use crate::record_batch::{RecordBatchExt, SchemaExt};
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
-use crate::{AdapterResponse, AdapterType};
 
 pub type Options = Vec<(String, OptionValue)>;
 
@@ -298,7 +299,11 @@ pub(crate) fn adbc_execute_with_options(
         let reader = stmt.execute()?;
         let schema = reader.schema();
         let mut batches = Vec::with_capacity(1);
-        if !fetch {
+
+        // Snowflake DML (MERGE/INSERT/UPDATE/DELETE) returns a one-row metadata batch
+        // with columns like "number of rows inserted". AdapterResponse needs that batch
+        // to compute rows_affected correctly, so we must drain even when fetch=false.
+        if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
             return Ok((schema, batches));
         }
 
@@ -374,7 +379,7 @@ pub(crate) fn adbc_execute_with_options(
         if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
             attrs.dbt_core_event_code = "E017".to_string();
             attrs.set_query_outcome(QueryOutcome::Success);
-            attrs.query_id = AdapterResponse::query_id(&total_batch, adapter_type)
+            attrs.query_id = total_batch.query_id(adapter_type)
         }
     });
 

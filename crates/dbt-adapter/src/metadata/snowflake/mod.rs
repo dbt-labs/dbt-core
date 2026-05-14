@@ -1,7 +1,7 @@
 use crate::adapter::adapter_impl::*;
 use crate::connection::AdapterConnectionFactory;
 use crate::metadata::{CatalogAndSchema, *};
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::snowflake::SnowflakeRelation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::{AdapterEngine, AdapterResult, AdapterType};
@@ -67,12 +67,12 @@ fn build_relations_from_show_objects(
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     let mut relations = Vec::new();
 
-    let name = get_column_values::<StringArray>(show_objects_result, "name")?;
-    let database_name = get_column_values::<StringArray>(show_objects_result, "database_name")?;
-    let schema_name = get_column_values::<StringArray>(show_objects_result, "schema_name")?;
-    let table_kind = get_column_values::<StringArray>(show_objects_result, "kind")?;
-    let is_dynamic = get_column_values::<StringArray>(show_objects_result, "is_dynamic")?;
-    let is_iceberg = get_column_values::<StringArray>(show_objects_result, "is_iceberg")?;
+    let name = show_objects_result.column_values::<StringArray>("name")?;
+    let database_name = show_objects_result.column_values::<StringArray>("database_name")?;
+    let schema_name = show_objects_result.column_values::<StringArray>("schema_name")?;
+    let table_kind = show_objects_result.column_values::<StringArray>("kind")?;
+    let is_dynamic = show_objects_result.column_values::<StringArray>("is_dynamic")?;
+    let is_iceberg = show_objects_result.column_values::<StringArray>("is_iceberg")?;
 
     for i in 0..show_objects_result.num_rows() {
         let name = name.value(i);
@@ -133,7 +133,7 @@ pub fn list_relations(
         let batch = engine.execute(None, conn, ctx, &sql, token.clone())?;
 
         // From the RecordBatch, get the last row of the vector of name 'name'
-        let names = get_column_values::<StringArray>(&batch, "name")?;
+        let names = batch.column_values::<StringArray>("name")?;
 
         let last_name = match batch.num_rows().checked_sub(1) {
             Some(idx) => names.value(idx).to_string(),
@@ -179,49 +179,46 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
 
         let stats_sql_result = lowercase_column_names(&stats_sql_result);
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let comments = get_column_values::<StringArray>(&stats_sql_result, "table_comment")?;
-        let table_owners = get_column_values::<StringArray>(&stats_sql_result, "table_owner")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
 
         let clustering_key_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:clustering_key:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:label")?;
         let clustering_key_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:clustering_key:value")?;
-        let clustering_key_description = get_column_values::<StringArray>(
-            &stats_sql_result,
-            "stats:clustering_key:description",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:value")?;
+        let clustering_key_description =
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:description")?;
         let clustering_key_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:clustering_key:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:clustering_key:include")?;
 
         let row_count_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:row_count:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:row_count:label")?;
         let row_count_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:row_count:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:row_count:value")?;
         let row_count_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:row_count:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:row_count:description")?;
         let row_count_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:row_count:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:row_count:include")?;
 
-        let bytes_label = get_column_values::<StringArray>(&stats_sql_result, "stats:bytes:label")?;
-        let bytes_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:bytes:value")?;
+        let bytes_label = stats_sql_result.column_values::<StringArray>("stats:bytes:label")?;
+        let bytes_value = stats_sql_result.column_values::<Decimal128Array>("stats:bytes:value")?;
         let bytes_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:bytes:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:bytes:description")?;
         let bytes_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:bytes:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:bytes:include")?;
 
         let last_modified_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:last_modified:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:label")?;
         let last_modified_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:last_modified:value")?;
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:value")?;
         let last_modified_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:last_modified:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:description")?;
         let last_modified_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:last_modified:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:last_modified:include")?;
 
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
@@ -355,16 +352,14 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let stats_sql_result = lowercase_column_names(&stats_sql_result);
 
         // Can probably zip these into a table metadata tuple array
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&stats_sql_result, "column_name")?;
-        let column_indices =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&stats_sql_result, "column_type")?;
-        let column_comments =
-            get_column_values::<StringArray>(&stats_sql_result, "column_comment")?;
+        let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = stats_sql_result.column_values::<Decimal128Array>("column_index")?;
+        let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
 
         let mut columns_by_relation = BTreeMap::new();
 
@@ -442,14 +437,14 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
                 return Ok(());
             }
 
-            let catalog_names = get_column_values::<StringArray>(&batch, "catalog_name")?;
-            let schema_names = get_column_values::<StringArray>(&batch, "schema_name")?;
-            let names = get_column_values::<StringArray>(&batch, "name")?;
-            let descriptions = get_column_values::<StringArray>(&batch, "description")?;
-            let is_table = get_column_values::<StringArray>(&batch, "is_table_function")?;
-            let is_aggregate = get_column_values::<StringArray>(&batch, "is_aggregate")?;
-            let language = get_column_values::<StringArray>(&batch, "language")?;
-            let arguments = get_column_values::<StringArray>(&batch, "arguments")?;
+            let catalog_names = batch.column_values::<StringArray>("catalog_name")?;
+            let schema_names = batch.column_values::<StringArray>("schema_name")?;
+            let names = batch.column_values::<StringArray>("name")?;
+            let descriptions = batch.column_values::<StringArray>("description")?;
+            let is_table = batch.column_values::<StringArray>("is_table_function")?;
+            let is_aggregate = batch.column_values::<StringArray>("is_aggregate")?;
+            let language = batch.column_values::<StringArray>("language")?;
+            let arguments = batch.column_values::<StringArray>("arguments")?;
 
             // possible values are either "Y" or "N"
             let is_true = |s: &str| s.to_uppercase() == "Y";
@@ -690,11 +685,10 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            let schemas = get_column_values::<StringArray>(&batch, "TABLE_SCHEMA")?;
-            let tables = get_column_values::<StringArray>(&batch, "TABLE_NAME")?;
-            let timestamps =
-                get_column_values::<TimestampMillisecondArray>(&batch, "LAST_ALTERED")?;
-            let is_views = get_column_values::<BooleanArray>(&batch, "IS_VIEW")?;
+            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
 
             let (database, _where_clauses) = &database_and_where_clauses;
             for i in 0..batch.num_rows() {
@@ -784,10 +778,10 @@ fn build_schema_from_desc_table(
     show_columns_result: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let column_names = get_column_values::<StringArray>(&show_columns_result, "name")?;
-    let data_types = get_column_values::<StringArray>(&show_columns_result, "type")?;
-    let comments = get_column_values::<StringArray>(&show_columns_result, "comment")?;
-    let nullability = get_column_values::<StringArray>(&show_columns_result, "null?")?;
+    let column_names = show_columns_result.column_values::<StringArray>("name")?;
+    let data_types = show_columns_result.column_values::<StringArray>("type")?;
+    let comments = show_columns_result.column_values::<StringArray>("comment")?;
+    let nullability = show_columns_result.column_values::<StringArray>("null?")?;
 
     let mut fields = vec![];
     for i in 0..show_columns_result.num_rows() {
@@ -823,19 +817,17 @@ fn build_schemas_from_information_schema(
         return Ok(Vec::new());
     }
 
-    let table_catalogs =
-        get_column_values::<StringArray>(&information_schema_result, "TABLE_CATALOG")?;
-    let table_schemas =
-        get_column_values::<StringArray>(&information_schema_result, "TABLE_SCHEMA")?;
-    let table_names = get_column_values::<StringArray>(&information_schema_result, "TABLE_NAME")?;
-    let column_names = get_column_values::<StringArray>(&information_schema_result, "COLUMN_NAME")?;
-    let data_types = get_column_values::<StringArray>(&information_schema_result, "DATA_TYPE")?;
-    let is_nullable = get_column_values::<StringArray>(&information_schema_result, "IS_NULLABLE")?;
+    let table_catalogs = information_schema_result.column_values::<StringArray>("TABLE_CATALOG")?;
+    let table_schemas = information_schema_result.column_values::<StringArray>("TABLE_SCHEMA")?;
+    let table_names = information_schema_result.column_values::<StringArray>("TABLE_NAME")?;
+    let column_names = information_schema_result.column_values::<StringArray>("COLUMN_NAME")?;
+    let data_types = information_schema_result.column_values::<StringArray>("DATA_TYPE")?;
+    let is_nullable = information_schema_result.column_values::<StringArray>("IS_NULLABLE")?;
     let numeric_precision =
-        get_column_values::<Decimal128Array>(&information_schema_result, "NUMERIC_PRECISION")?;
+        information_schema_result.column_values::<Decimal128Array>("NUMERIC_PRECISION")?;
     let numeric_scale =
-        get_column_values::<Decimal128Array>(&information_schema_result, "NUMERIC_SCALE")?;
-    let comments = get_column_values::<StringArray>(&information_schema_result, "COMMENT")?;
+        information_schema_result.column_values::<Decimal128Array>("NUMERIC_SCALE")?;
+    let comments = information_schema_result.column_values::<StringArray>("COMMENT")?;
 
     let mut result = Vec::<(String, AdapterResult<RelationSchemaPair>)>::new();
     let mut current_table = String::new();

@@ -49,8 +49,7 @@ pub mod parse;
 
 pub mod mock;
 
-/// Record batch utils
-pub mod record_batch_utils;
+pub mod record_batch;
 
 pub mod cast_util;
 

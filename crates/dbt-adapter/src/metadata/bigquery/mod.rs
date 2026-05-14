@@ -3,7 +3,7 @@ use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::*;
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::{AdapterEngine, AdapterResult};
 
@@ -45,10 +45,10 @@ FROM
     );
 
     let batch = engine.execute(None, conn, ctx, &sql, token)?;
-    let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
-    let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
-    let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
-    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+    let table_names = batch.column_values::<StringArray>("table_name")?;
+    let table_schemas = batch.column_values::<StringArray>("table_schema")?;
+    let table_catalogs = batch.column_values::<StringArray>("table_catalog")?;
+    let table_types = batch.column_values::<StringArray>("table_type")?;
 
     let mut result = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
@@ -568,86 +568,74 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let comments = get_column_values::<StringArray>(&stats_sql_result, "table_comment")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
 
         let date_shards_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shards__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shards__label")?;
         let date_shards_value =
-            get_column_values::<Int64Array>(&stats_sql_result, "stats__date_shards__value")?;
+            stats_sql_result.column_values::<Int64Array>("stats__date_shards__value")?;
         let date_shards_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shards__description")?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shards__description")?;
         let date_shards_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats__date_shards__include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats__date_shards__include")?;
 
         let date_shard_min_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shard_min__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_min__label")?;
         let date_shard_min_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shard_min__value")?;
-        let date_shard_min_description = get_column_values::<StringArray>(
-            &stats_sql_result,
-            "stats__date_shard_min__description",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_min__value")?;
+        let date_shard_min_description =
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_min__description")?;
         let date_shard_min_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats__date_shard_min__include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats__date_shard_min__include")?;
 
         let date_shard_max_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shard_max__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_max__label")?;
         let date_shard_max_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__date_shard_max__value")?;
-        let date_shard_max_description = get_column_values::<StringArray>(
-            &stats_sql_result,
-            "stats__date_shard_max__description",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_max__value")?;
+        let date_shard_max_description =
+            stats_sql_result.column_values::<StringArray>("stats__date_shard_max__description")?;
         let date_shard_max_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats__date_shard_max__include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats__date_shard_max__include")?;
 
         let num_rows_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__num_rows__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__num_rows__label")?;
         let num_rows_value =
-            get_column_values::<Int64Array>(&stats_sql_result, "stats__num_rows__value")?;
+            stats_sql_result.column_values::<Int64Array>("stats__num_rows__value")?;
         let num_rows_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__num_rows__description")?;
+            stats_sql_result.column_values::<StringArray>("stats__num_rows__description")?;
         let num_rows_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats__num_rows__include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats__num_rows__include")?;
 
         let bytes_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__num_bytes__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__num_bytes__label")?;
         let bytes_value =
-            get_column_values::<Int64Array>(&stats_sql_result, "stats__num_bytes__value")?;
+            stats_sql_result.column_values::<Int64Array>("stats__num_bytes__value")?;
         let bytes_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__num_bytes__description")?;
+            stats_sql_result.column_values::<StringArray>("stats__num_bytes__description")?;
         let bytes_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats__num_bytes__include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats__num_bytes__include")?;
 
         let partition_type_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__partitioning_type__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__partitioning_type__label")?;
         let partition_type_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__partitioning_type__value")?;
-        let partition_type_description = get_column_values::<StringArray>(
-            &stats_sql_result,
-            "stats__partitioning_type__description",
-        )?;
-        let partition_type_include = get_column_values::<BooleanArray>(
-            &stats_sql_result,
-            "stats__partitioning_type__include",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats__partitioning_type__value")?;
+        let partition_type_description = stats_sql_result
+            .column_values::<StringArray>("stats__partitioning_type__description")?;
+        let partition_type_include =
+            stats_sql_result.column_values::<BooleanArray>("stats__partitioning_type__include")?;
 
         let clustering_fields_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__clustering_fields__label")?;
+            stats_sql_result.column_values::<StringArray>("stats__clustering_fields__label")?;
         let clustering_fields_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats__clustering_fields__value")?;
-        let clustering_fields_description = get_column_values::<StringArray>(
-            &stats_sql_result,
-            "stats__clustering_fields__description",
-        )?;
-        let clustering_fields_include = get_column_values::<BooleanArray>(
-            &stats_sql_result,
-            "stats__clustering_fields__include",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats__clustering_fields__value")?;
+        let clustering_fields_description = stats_sql_result
+            .column_values::<StringArray>("stats__clustering_fields__description")?;
+        let clustering_fields_include =
+            stats_sql_result.column_values::<BooleanArray>("stats__clustering_fields__include")?;
 
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
@@ -829,16 +817,14 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs =
-            get_column_values::<StringArray>(&catalog_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&catalog_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&catalog_sql_result, "table_name")?;
+        let table_catalogs = catalog_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = catalog_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = catalog_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&catalog_sql_result, "column_name")?;
-        let column_indices = get_column_values::<Int64Array>(&catalog_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&catalog_sql_result, "column_type")?;
-        let column_comments =
-            get_column_values::<StringArray>(&catalog_sql_result, "column_comment")?;
+        let column_names = catalog_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = catalog_sql_result.column_values::<Int64Array>("column_index")?;
+        let column_types = catalog_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = catalog_sql_result.column_values::<StringArray>("column_comment")?;
 
         let mut columns_by_relation = BTreeMap::new();
 
@@ -1005,11 +991,10 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
-            let tables = get_column_values::<StringArray>(&batch, "table_name")?;
-            let timestamps =
-                get_column_values::<TimestampMicrosecondArray>(&batch, "last_altered")?;
-            let is_views = get_column_values::<BooleanArray>(&batch, "is_view")?;
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let tables = batch.column_values::<StringArray>("table_name")?;
+            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+            let is_views = batch.column_values::<BooleanArray>("is_view")?;
             let (database, _where_clauses) = &database_and_where_clauses;
             for i in 0..batch.num_rows() {
                 let schema = schemas.value(i);

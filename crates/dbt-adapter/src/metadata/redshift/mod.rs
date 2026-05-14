@@ -2,7 +2,7 @@ use crate::adapter::adapter_impl::{AdapterImpl, get_bool_config};
 use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::*;
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::sql_types::make_arrow_field_v2;
 use crate::{AdapterEngine, AdapterResult};
@@ -102,10 +102,10 @@ where table_schema ilike '{}'",
         return Ok(Vec::new());
     }
 
-    let table_name = get_column_values::<StringArray>(&batch, "name")?;
-    let database_name = get_column_values::<StringArray>(&batch, "database")?;
-    let schema_name = get_column_values::<StringArray>(&batch, "schema")?;
-    let table_type = get_column_values::<StringArray>(&batch, "type")?;
+    let table_name = batch.column_values::<StringArray>("name")?;
+    let database_name = batch.column_values::<StringArray>("database")?;
+    let schema_name = batch.column_values::<StringArray>("schema")?;
+    let table_type = batch.column_values::<StringArray>("type")?;
 
     let mut relations = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
@@ -155,10 +155,10 @@ fn parse_show_tables_batch(
         return Ok(Vec::new());
     }
 
-    let table_name = get_column_values::<StringArray>(batch, "table_name")?;
-    let database_name = get_column_values::<StringArray>(batch, "database_name")?;
-    let schema_name = get_column_values::<StringArray>(batch, "schema_name")?;
-    let table_type = get_column_values::<StringArray>(batch, "table_type")?;
+    let table_name = batch.column_values::<StringArray>("table_name")?;
+    let database_name = batch.column_values::<StringArray>("database_name")?;
+    let schema_name = batch.column_values::<StringArray>("schema_name")?;
+    let table_type = batch.column_values::<StringArray>("table_type")?;
     let table_subtype = batch
         .column_by_name("table_subtype")
         .and_then(|col| col.as_any().downcast_ref::<StringArray>());
@@ -248,11 +248,11 @@ AND table_name = '{identifier}'"
             let batch = table.original_record_batch();
             // Build fields from the response
             let mut fields = Vec::new();
-            let column_names = get_column_values::<StringArray>(&batch, "column_name")?;
-            let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
-            let is_nullables = get_column_values::<StringArray>(&batch, "is_nullable")?;
-            let comments = get_column_values::<StringArray>(&batch, "remarks")?;
-            let is_external_flags = get_column_values::<BooleanArray>(&batch, "is_external")?;
+            let column_names = batch.column_values::<StringArray>("column_name")?;
+            let data_types = batch.column_values::<StringArray>("data_type")?;
+            let is_nullables = batch.column_values::<StringArray>("is_nullable")?;
+            let comments = batch.column_values::<StringArray>("remarks")?;
+            let is_external_flags = batch.column_values::<BooleanArray>("is_external")?;
 
             let is_external = if batch.num_rows() > 0 {
                 is_external_flags.value(0)
@@ -453,10 +453,9 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            let schemas = get_column_values::<StringArray>(&batch, "schema")?;
-            let tables = get_column_values::<StringArray>(&batch, "identifier")?;
-            let timestamps =
-                get_column_values::<TimestampMicrosecondArray>(&batch, "last_modified")?;
+            let schemas = batch.column_values::<StringArray>("schema")?;
+            let tables = batch.column_values::<StringArray>("identifier")?;
+            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_modified")?;
 
             let (database, _where_clauses) = &database_and_where_clauses;
             for i in 0..batch.num_rows() {
@@ -510,12 +509,12 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             .collect::<Vec<&str>>();
         let contains_stats = columns.contains(&"stats:encoded:label");
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let comments = get_column_values::<StringArray>(&stats_sql_result, "table_comment")?;
-        let table_owners = get_column_values::<StringArray>(&stats_sql_result, "table_owner")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
 
         if !contains_stats {
             return build_schema_from_stats_sql_without_stats(
@@ -528,119 +527,114 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             );
         }
 
-        let encoded_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:encoded:label")?;
-        let encoded_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:encoded:value")?;
+        let encoded_label = stats_sql_result.column_values::<StringArray>("stats:encoded:label")?;
+        let encoded_value = stats_sql_result.column_values::<StringArray>("stats:encoded:value")?;
         let encoded_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:encoded:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:encoded:description")?;
         let encoded_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:encoded:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:encoded:include")?;
 
         let diststyle_label =
-            get_column_values::<StringArray>(&stats_sql_result, "`stats:diststyle:label")?;
+            stats_sql_result.column_values::<StringArray>("`stats:diststyle:label")?;
         let diststyle_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "`stats:diststyle:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("`stats:diststyle:value")?;
         let diststyle_description =
-            get_column_values::<StringArray>(&stats_sql_result, "`stats:diststyle:description")?;
+            stats_sql_result.column_values::<StringArray>("`stats:diststyle:description")?;
         let diststyle_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "`stats:diststyle:include")?;
+            stats_sql_result.column_values::<BooleanArray>("`stats:diststyle:include")?;
 
         let sortkey1_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey1:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey1:label")?;
         let sortkey1_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:sortkey1:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:sortkey1:value")?;
         let sortkey1_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey1:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey1:description")?;
         let sortkey1_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:sortkey1:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:sortkey1:include")?;
 
         let max_varchar_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:max_varchar:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:max_varchar:label")?;
         let max_varchar_value =
-            get_column_values::<Int32Array>(&stats_sql_result, "stats:max_varchar:value")?;
+            stats_sql_result.column_values::<Int32Array>("stats:max_varchar:value")?;
         let max_varchar_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:max_varchar:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:max_varchar:description")?;
         let max_varchar_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:max_varchar:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:max_varchar:include")?;
 
         let sortkey1_enc_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey1_enc:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey1_enc:label")?;
         let sortkey1_enc_value =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey1_enc:value")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey1_enc:value")?;
         let sortkey1_enc_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey1_enc:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey1_enc:description")?;
         let sortkey1_enc_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:sortkey1_enc:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:sortkey1_enc:include")?;
 
         let sortkey_num_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey_num:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey_num:label")?;
         let sortkey_num_value =
-            get_column_values::<Int32Array>(&stats_sql_result, "stats:sortkey_num:value")?;
+            stats_sql_result.column_values::<Int32Array>("stats:sortkey_num:value")?;
         let sortkey_num_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:sortkey_num:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:sortkey_num:description")?;
         let sortkey_num_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:sortkey_num:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:sortkey_num:include")?;
 
-        let size_label = get_column_values::<StringArray>(&stats_sql_result, "stats:size:label")?;
-        let size_value = get_column_values::<Int64Array>(&stats_sql_result, "stats:size:value")?;
+        let size_label = stats_sql_result.column_values::<StringArray>("stats:size:label")?;
+        let size_value = stats_sql_result.column_values::<Int64Array>("stats:size:value")?;
         let size_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:size:description")?;
-        let size_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:size:include")?;
+            stats_sql_result.column_values::<StringArray>("stats:size:description")?;
+        let size_include = stats_sql_result.column_values::<BooleanArray>("stats:size:include")?;
 
         let pct_used_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:pct_used:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:pct_used:label")?;
         let pct_used_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:pct_used:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:pct_used:value")?;
         let pct_used_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:pct_used:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:pct_used:description")?;
         let pct_used_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:pct_used:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:pct_used:include")?;
 
         let unsorted_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:unsorted:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:unsorted:label")?;
         let unsorted_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:unsorted:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:unsorted:value")?;
         let unsorted_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:unsorted:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:unsorted:description")?;
         let unsorted_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:unsorted:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:unsorted:include")?;
 
         let stats_off_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:stats_off:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:stats_off:label")?;
         let stats_off_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:stats_off:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:stats_off:value")?;
         let stats_off_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:stats_off:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:stats_off:description")?;
         let stats_off_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:stats_off:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:stats_off:include")?;
 
-        let rows_label = get_column_values::<StringArray>(&stats_sql_result, "stats:rows:label")?;
-        let rows_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:rows:value")?;
+        let rows_label = stats_sql_result.column_values::<StringArray>("stats:rows:label")?;
+        let rows_value = stats_sql_result.column_values::<Decimal128Array>("stats:rows:value")?;
         let rows_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:rows:description")?;
-        let rows_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:rows:include")?;
+            stats_sql_result.column_values::<StringArray>("stats:rows:description")?;
+        let rows_include = stats_sql_result.column_values::<BooleanArray>("stats:rows:include")?;
 
         let skew_sortkey1_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:skew_sortkey1:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:skew_sortkey1:label")?;
         let skew_sortkey1_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:skew_sortkey1:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:skew_sortkey1:value")?;
         let skew_sortkey1_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:skew_sortkey1:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:skew_sortkey1:description")?;
         let skew_sortkey1_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:skew_sortkey1:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:skew_sortkey1:include")?;
 
         let skew_rows_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:skew_rows:label")?;
+            stats_sql_result.column_values::<StringArray>("stats:skew_rows:label")?;
         let skew_rows_value =
-            get_column_values::<Decimal128Array>(&stats_sql_result, "stats:skew_rows:value")?;
+            stats_sql_result.column_values::<Decimal128Array>("stats:skew_rows:value")?;
         let skew_rows_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:skew_rows:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:skew_rows:description")?;
         let skew_rows_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:skew_rows:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:skew_rows:include")?;
 
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
@@ -937,16 +931,14 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs =
-            get_column_values::<StringArray>(&catalog_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&catalog_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&catalog_sql_result, "table_name")?;
+        let table_catalogs = catalog_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = catalog_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = catalog_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&catalog_sql_result, "column_name")?;
-        let column_indices = get_column_values::<Int32Array>(&catalog_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&catalog_sql_result, "column_type")?;
-        let column_comments =
-            get_column_values::<StringArray>(&catalog_sql_result, "column_comment")?;
+        let column_names = catalog_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = catalog_sql_result.column_values::<Int32Array>("column_index")?;
+        let column_types = catalog_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = catalog_sql_result.column_values::<StringArray>("column_comment")?;
 
         let mut columns_by_relation = BTreeMap::new();
 

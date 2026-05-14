@@ -24,9 +24,7 @@ use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::record_batch_utils::{
-    RenamedColumn, disambiguate_column_names, extract_first_value_as_i64, get_column_values,
-};
+use crate::record_batch::{RecordBatchExt, RenamedColumn};
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
@@ -595,14 +593,17 @@ impl AdapterImpl {
 
         let last_batch = last_batch.expect("last_batch should never be None");
 
-        let response = AdapterResponse::new(&last_batch, self.adapter_type());
+        let response = AdapterResponse::new(
+            last_batch.rows_affected(self.adapter_type()),
+            last_batch.query_id(self.adapter_type()),
+        );
 
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
         // BigQuery is the exception to this deduping
         let last_batch = if self.adapter_type() != Bigquery {
             let node_id = state.and_then(node_id_from_state);
-            disambiguate_column_names(last_batch, Some(warn_duplicate_columns(node_id)))
+            last_batch.disambiguate_column_names(Some(warn_duplicate_columns(node_id)))
         } else {
             last_batch
         };
@@ -920,7 +921,7 @@ impl AdapterImpl {
                 Dremio => todo!("Dremio"),
                 Oracle => todo!("Oracle"),
             };
-            get_column_values::<StringArray>(&result_set, col_name)?
+            result_set.column_values::<StringArray>(col_name)?
         };
 
         let n = result_set.num_rows();
@@ -1140,7 +1141,8 @@ impl AdapterImpl {
                     let tables = tables.rename(Some(tables.column_names()), None, false, false)?;
                     let tables_batch = tables.to_record_batch();
                     let is_transient = if tables_batch.num_rows() > 0 {
-                        get_column_values::<StringArray>(&tables_batch, "kind")
+                        tables_batch
+                            .column_values::<StringArray>("kind")
                             .ok()
                             .map(|col| col.value(0).eq_ignore_ascii_case("TRANSIENT"))
                             .unwrap_or(false)
@@ -1246,7 +1248,7 @@ impl AdapterImpl {
             &package_name,
         )?;
 
-        match extract_first_value_as_i64(&batch) {
+        match batch.first_value_as_i64() {
             Some(0) => Ok(Value::from(false)),
             Some(1) => Ok(Value::from(true)),
             _ => Err(minijinja::Error::new(
@@ -1672,10 +1674,9 @@ impl AdapterImpl {
                     }
                 };
 
-                let name_string_array = get_column_values::<StringArray>(&result, "col_name")?;
-                let dtype_string_array = get_column_values::<StringArray>(&result, "data_type")?;
-                let comment_string_array =
-                    get_column_values::<StringArray>(&result, "comment").ok();
+                let name_string_array = result.column_values::<StringArray>("col_name")?;
+                let dtype_string_array = result.column_values::<StringArray>("data_type")?;
+                let comment_string_array = result.column_values::<StringArray>("comment").ok();
 
                 // Filter out metadata rows (like "# Partition Information", "# Clustering Information")
                 // These are section headers in DESCRIBE TABLE output, not actual columns.
@@ -2304,9 +2305,8 @@ impl AdapterImpl {
 
         match self.adapter_type() {
             Postgres | Bigquery | Redshift | DuckDB => {
-                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
-                let privilege_cols =
-                    get_column_values::<StringArray>(&record_batch, "privilege_type")?;
+                let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
+                let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
                 let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
@@ -2320,10 +2320,9 @@ impl AdapterImpl {
                 Ok(result)
             }
             Snowflake => {
-                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee_name")?;
-                let granted_to_cols =
-                    get_column_values::<StringArray>(&record_batch, "granted_to")?;
-                let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege")?;
+                let grantee_cols = record_batch.column_values::<StringArray>("grantee_name")?;
+                let granted_to_cols = record_batch.column_values::<StringArray>("granted_to")?;
+                let privilege_cols = record_batch.column_values::<StringArray>("privilege")?;
 
                 let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
@@ -2343,10 +2342,9 @@ impl AdapterImpl {
                 Ok(result)
             }
             Databricks => {
-                let grantee_cols = get_column_values::<StringArray>(&record_batch, "Principal")?;
-                let privilege_cols = get_column_values::<StringArray>(&record_batch, "ActionType")?;
-                let object_type_cols =
-                    get_column_values::<StringArray>(&record_batch, "ObjectType")?;
+                let grantee_cols = record_batch.column_values::<StringArray>("Principal")?;
+                let privilege_cols = record_batch.column_values::<StringArray>("ActionType")?;
+                let object_type_cols = record_batch.column_values::<StringArray>("ObjectType")?;
 
                 let mut result = IndexMap::new();
                 for i in 0..record_batch.num_rows() {
@@ -2523,7 +2521,7 @@ impl AdapterImpl {
                     .engine()
                     .execute(Some(state), conn, &ctx, &sql, token)?;
 
-                let location = get_column_values::<StringArray>(&batch, "location")?;
+                let location = batch.column_values::<StringArray>("location")?;
                 debug_assert!(batch.num_rows() <= 1);
                 if batch.num_rows() == 1 {
                     let loc = location.value(0).to_owned();
@@ -2741,11 +2739,10 @@ impl AdapterImpl {
         let table = result.table.as_ref().expect("AgateTable exists");
         let record_batch = table.original_record_batch();
 
-        let identifier_column_values =
-            get_column_values::<StringArray>(&record_batch, "IDENTIFIER")?;
-        let schema_column_values = get_column_values::<StringArray>(&record_batch, "SCHEMA")?;
+        let identifier_column_values = record_batch.column_values::<StringArray>("IDENTIFIER")?;
+        let schema_column_values = record_batch.column_values::<StringArray>("SCHEMA")?;
         let last_modified_column_values =
-            get_column_values::<TimestampMillisecondArray>(&record_batch, "LAST_MODIFIED")?;
+            record_batch.column_values::<TimestampMillisecondArray>("LAST_MODIFIED")?;
 
         let mut result = BTreeMap::new();
         for i in 0..record_batch.num_rows() {
@@ -4642,6 +4639,7 @@ mod tests {
     use crate::column::Column;
     use crate::config::AdapterConfig;
     use crate::engine::XdbcEngine;
+
     use crate::engine::query_comment::QueryCommentConfig;
     use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;

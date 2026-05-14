@@ -1,7 +1,7 @@
 use crate::AdapterResult;
 use crate::metadata::databricks::schemas::DatabricksDescribeTableExtended;
 use crate::metadata::*;
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use arrow::array::{RecordBatch, StringArray};
 use arrow_schema::{Field, Schema};
@@ -45,7 +45,8 @@ impl MetadataProcessor for DatabricksTableMetadata {
 
     /// Create [DatabricksTableMetadata] from serialized [RecordBatch] query result
     fn from_record_batch(batch: Arc<RecordBatch>) -> AdapterResult<Self> {
-        let json_metadata = get_column_values::<StringArray>(&batch, "json_metadata")?
+        let json_metadata = batch
+            .column_values::<StringArray>("json_metadata")?
             .value(0)
             .to_string();
         let json_metadata =

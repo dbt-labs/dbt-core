@@ -31,7 +31,7 @@ use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -91,11 +91,11 @@ WHERE table_catalog = '{}'
 
     let mut relations = Vec::new();
 
-    let names = get_column_values::<StringArray>(&batch, "table_name")?;
-    let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
-    let catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
-    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
-    let file_formats = get_column_values::<StringArray>(&batch, "file_format")?;
+    let names = batch.column_values::<StringArray>("table_name")?;
+    let schemas = batch.column_values::<StringArray>("table_schema")?;
+    let catalogs = batch.column_values::<StringArray>("table_catalog")?;
+    let table_types = batch.column_values::<StringArray>("table_type")?;
+    let file_formats = batch.column_values::<StringArray>("file_format")?;
 
     for i in 0..batch.num_rows() {
         let name = names.value(i);
@@ -221,7 +221,7 @@ impl DatabricksMetadataAdapter {
                 let batch = table.original_record_batch();
 
                 // The result has two columns: "key" and "value"
-                let values = get_column_values::<StringArray>(&batch, "value")?;
+                let values = batch.column_values::<StringArray>("value")?;
                 debug_assert_eq!(values.len(), 1);
 
                 let version_str = values.value(0);
@@ -232,7 +232,7 @@ impl DatabricksMetadataAdapter {
                 let (_response, table) =
                     adapter.execute(None, conn, Some(ctx), sql, false, true, None, None, token)?;
                 let batch = table.original_record_batch();
-                let values = get_column_values::<StringArray>(&batch, "version")?;
+                let values = batch.column_values::<StringArray>("version")?;
                 debug_assert_eq!(values.len(), 1);
                 let version_str = values.value(0);
                 EngineVersion::from_str(version_str)
@@ -718,23 +718,21 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
-        let data_types = get_column_values::<StringArray>(&stats_sql_result, "table_type")?;
-        let comments = get_column_values::<StringArray>(&stats_sql_result, "table_comment")?;
-        let table_owners = get_column_values::<StringArray>(&stats_sql_result, "table_owner")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
 
         let last_modified_label =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:last_modified:label")?;
-        let last_modified_value = get_column_values::<TimestampMicrosecondArray>(
-            &stats_sql_result,
-            "stats:last_modified:value",
-        )?;
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:label")?;
+        let last_modified_value = stats_sql_result
+            .column_values::<TimestampMicrosecondArray>("stats:last_modified:value")?;
         let last_modified_description =
-            get_column_values::<StringArray>(&stats_sql_result, "stats:last_modified:description")?;
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:description")?;
         let last_modified_include =
-            get_column_values::<BooleanArray>(&stats_sql_result, "stats:last_modified:include")?;
+            stats_sql_result.column_values::<BooleanArray>("stats:last_modified:include")?;
         let mut result = BTreeMap::<String, CatalogTable>::new();
 
         for i in 0..table_catalogs.len() {
@@ -807,15 +805,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             return Ok(BTreeMap::new());
         }
 
-        let table_catalogs = get_column_values::<StringArray>(&stats_sql_result, "table_database")?;
-        let table_schemas = get_column_values::<StringArray>(&stats_sql_result, "table_schema")?;
-        let table_names = get_column_values::<StringArray>(&stats_sql_result, "table_name")?;
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
-        let column_names = get_column_values::<StringArray>(&stats_sql_result, "column_name")?;
-        let column_indices = get_column_values::<Int32Array>(&stats_sql_result, "column_index")?;
-        let column_types = get_column_values::<StringArray>(&stats_sql_result, "column_type")?;
-        let column_comments =
-            get_column_values::<StringArray>(&stats_sql_result, "column_comment")?;
+        let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = stats_sql_result.column_values::<Int32Array>("column_index")?;
+        let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
 
         let mut columns_by_relation = BTreeMap::new();
 
@@ -1024,11 +1021,10 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
-            let tables = get_column_values::<StringArray>(&batch, "table_name")?;
-            let timestamps =
-                get_column_values::<TimestampMicrosecondArray>(&batch, "last_altered")?;
-            let is_views = get_column_values::<BooleanArray>(&batch, "is_view")?;
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let tables = batch.column_values::<StringArray>("table_name")?;
+            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+            let is_views = batch.column_values::<BooleanArray>("is_view")?;
 
             let (database, _where_clauses) = &database_and_where_clauses;
             for i in 0..batch.num_rows() {
@@ -1107,9 +1103,9 @@ fn build_schema_from_basic_describe_table(
     batch: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let col_name = get_column_values::<StringArray>(&batch, "col_name")?;
-    let data_type = get_column_values::<StringArray>(&batch, "data_type")?;
-    let comments = get_column_values::<StringArray>(&batch, "comment")?;
+    let col_name = batch.column_values::<StringArray>("col_name")?;
+    let data_type = batch.column_values::<StringArray>("data_type")?;
+    let comments = batch.column_values::<StringArray>("comment")?;
 
     let mut fields: Vec<Field> = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
