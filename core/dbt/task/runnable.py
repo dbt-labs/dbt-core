@@ -523,32 +523,40 @@ class GraphRunnableTask(ConfiguredTask):
         for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
             self._skipped_children[dep_node_id] = cause
 
+    def _cachable_manifest_nodes(self) -> List:
+        if self.manifest is None:
+            raise DbtInternalError("manifest was None in populate_adapter_cache")
+        return [
+            node
+            for node in self.manifest.nodes.values()
+            if node.is_relational and not node.is_ephemeral_model and not node.is_external_node
+        ]
+
+    def _fill_adapter_cache(
+        self,
+        adapter,
+        cachable_nodes: List,
+        required_schemas: Optional[Set[BaseRelation]],
+        start_time: float,
+    ) -> None:
+        if get_flags().CACHE_SELECTED_ONLY is True:
+            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
+        else:
+            adapter.set_relations_cache(cachable_nodes)
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_runnable_timing(
+                {"adapter_cache_construction_elapsed": time.perf_counter() - start_time}
+            )
+
     def populate_adapter_cache(
         self, adapter, required_schemas: Optional[Set[BaseRelation]] = None
     ):
         if not self.args.populate_cache:
             return
 
-        if self.manifest is None:
-            raise DbtInternalError("manifest was None in populate_adapter_cache")
-
-        start_populate_cache = time.perf_counter()
-        # the cache only cares about executable nodes
-        cachable_nodes = [
-            node
-            for node in self.manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
-        ]
-
-        if get_flags().CACHE_SELECTED_ONLY is True:
-            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
-        else:
-            adapter.set_relations_cache(cachable_nodes)
-        cache_populate_time = time.perf_counter() - start_populate_cache
-        if dbt.tracking.active_user is not None:
-            dbt.tracking.track_runnable_timing(
-                {"adapter_cache_construction_elapsed": cache_populate_time}
-            )
+        start_time = time.perf_counter()
+        cachable_nodes = self._cachable_manifest_nodes()
+        self._fill_adapter_cache(adapter, cachable_nodes, required_schemas, start_time)
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
