@@ -253,6 +253,22 @@ class GraphRunnableTask(ConfiguredTask):
         runner.compiler.selected_node_ids = self.compiler.selected_node_ids
         return runner
 
+    def _check_fail_fast_or_raise(self, result: NodeResult) -> None:
+        """Set _raise_next_tick if the result warrants a fast failure or first-error raise."""
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and get_flags().FAIL_FAST
+        ):
+            self._raise_next_tick = FailFastError(
+                msg="Failing early due to test failure or runtime error",
+                result=result,
+                node=getattr(result, "node", None),
+            )
+        elif result.status == NodeStatus.Error and self.raise_on_first_error():
+            # If we raise inside a thread it'll just get silently swallowed; stash the error
+            # here and it will be checked on the next tick after the thread finishes.
+            self._raise_next_tick = DbtRuntimeError(result.message)
+
     def call_runner(self, runner: BaseRunner) -> NodeResult:
         with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
@@ -294,23 +310,7 @@ class GraphRunnableTask(ConfiguredTask):
             # it gets deleted when we're done with it
             runner.node.clear_event_status()
 
-        fail_fast = get_flags().FAIL_FAST
-
-        if (
-            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
-            and fail_fast
-        ):
-            self._raise_next_tick = FailFastError(
-                msg="Failing early due to test failure or runtime error",
-                result=result,
-                node=getattr(result, "node", None),
-            )
-        elif result.status == NodeStatus.Error and self.raise_on_first_error():
-            # if we raise inside a thread, it'll just get silently swallowed.
-            # stash the error message we want here, and it will check the
-            # next 'tick' - should be soon since our thread is about to finish!
-            self._raise_next_tick = DbtRuntimeError(result.message)
-
+        self._check_fail_fast_or_raise(result)
         return result
 
     def _submit(self, pool: DbtThreadPool, args: List[Any], callback: Callable) -> None:
@@ -349,17 +349,12 @@ class GraphRunnableTask(ConfiguredTask):
         while not self.job_queue.empty():
             self.handle_job_queue(pool, callback)
 
-        # block on completion
         if get_flags().FAIL_FAST:
-            # checkout for an errors after task completion in case of
-            # fast failure
             while self.job_queue.wait_until_something_was_done():
                 self._raise_set_error()
         else:
-            # wait until every task will be complete
             self.job_queue.join()
 
-        # if an error got set during join(), raise it.
         self._raise_set_error()
 
         return
