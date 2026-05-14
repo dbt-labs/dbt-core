@@ -6,13 +6,12 @@
 //!
 //! ```text
 //! target/parse_state/
-//!   project.parquet              — project-level key/value pairs (profile, vars, operations, …)
+//!   project.parquet              — project-level key/value pairs (profile, vars, deps, kinds, …)
 //!   filestamps.parquet           — per-package file timestamps
-//!   pkg_deps.parquet             — per-package dependency names
-//!   pkg_kinds.parquet            — per-package path kinds
-//!   nodes/0.parquet              — base epoch (or compacted)
-//!   nodes/1.parquet              — delta epoch
-//!   nodes/2.parquet              …
+//!   alive.parquet                — snapshot of all currently-alive unique_ids
+//!   nodes/v1_0.parquet           — base epoch (or compacted)
+//!   nodes/v1_1.parquet           — delta epoch
+//!   nodes/v1_2.parquet           …
 //! ```
 //!
 //! # Epoch append strategy for nodes
@@ -90,6 +89,8 @@ pub(crate) const CACHE_DIR_NAME: &str = "parse_state";
 /// Compact epoch files into one when this many delta files exist.
 const COMPACT_THRESHOLD: u32 = 8;
 
+const SCHEMA_VERSION: u32 = 1;
+
 // ── path helpers ──────────────────────────────────────────────────────────────
 
 pub(crate) fn cache_dir(out_dir: &Path) -> PathBuf {
@@ -104,20 +105,20 @@ fn filestamps_path(dir: &Path) -> PathBuf {
     dir.join("filestamps.parquet")
 }
 
-fn pkg_deps_path(dir: &Path) -> PathBuf {
-    dir.join("pkg_deps.parquet")
-}
-
-fn pkg_kinds_path(dir: &Path) -> PathBuf {
-    dir.join("pkg_kinds.parquet")
+fn alive_path(dir: &Path) -> PathBuf {
+    dir.join("alive.parquet")
 }
 
 fn nodes_dir(dir: &Path) -> PathBuf {
     dir.join("nodes")
 }
 
+fn version_prefix() -> String {
+    format!("v{}_", SCHEMA_VERSION)
+}
+
 fn node_epoch_path(dir: &Path, epoch: u32) -> PathBuf {
-    nodes_dir(dir).join(format!("{epoch}.parquet"))
+    nodes_dir(dir).join(format!("{}{epoch}.parquet", version_prefix()))
 }
 
 /// Return sorted list of existing epoch numbers from the nodes/ subdirectory.
@@ -126,12 +127,15 @@ fn existing_epochs(dir: &Path) -> Vec<u32> {
     let Ok(rd) = fs::read_dir(&nf_dir) else {
         return vec![];
     };
+    let prefix = version_prefix();
     let mut epochs: Vec<u32> = rd
         .filter_map(|e| e.ok())
         .filter_map(|e| {
             let name = e.file_name();
             let s = name.to_string_lossy();
-            s.strip_suffix(".parquet")?.parse::<u32>().ok()
+            let stem = s.strip_suffix(".parquet")?;
+            let rest = stem.strip_prefix(&prefix)?;
+            rest.parse::<u32>().ok()
         })
         .collect();
     epochs.sort_unstable();
@@ -167,18 +171,16 @@ struct FilestampRow {
     path_kind: String,
     path: String,
     mtime_ns: i64,
+    #[serde(default)]
+    ingested_at: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct PkgDepRow {
-    package_name: String,
-    dependency: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct PkgKindRow {
-    package_name: String,
-    path_kind: String,
+struct AliveRow {
+    unique_id: String,
+    resource_type: String,
+    #[serde(default)]
+    ingested_at: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -202,6 +204,17 @@ pub(crate) struct NodeRow {
     pub macro_arguments_json: String, // JSON array of MacroArgument — "" for non-macros
     pub macro_span_json: String,      // JSON-encoded Span (all 6 fields) — "" if absent
     pub macro_name_span_json: String, // JSON-encoded macro_name_span — "" if absent
+    // Promoted fields: redundant indexes into payload for DuckDB filter pushdown.
+    // Nullable (Option) — backward-compatible with old epoch files (serde_arrow reads NULL).
+    pub description: Option<String>,
+    pub database: Option<String>,
+    pub schema: Option<String>,
+    pub alias: Option<String>,
+    pub relation_name: Option<String>,
+    pub access: Option<String>,
+    pub group_name: Option<String>,
+    pub source_name: Option<String>,
+    pub identifier: Option<String>,
 }
 
 /// Index-only view of NodeRow — columns needed for selector evaluation, excluding `payload`.
@@ -288,15 +301,20 @@ fn filestamp_fields() -> Vec<FieldRef> {
         str_field("path_kind"),
         str_field("path"),
         i64_field("mtime_ns"),
+        i64_field("ingested_at"),
     ]
 }
 
-fn pkg_dep_fields() -> Vec<FieldRef> {
-    vec![str_field("package_name"), str_field("dependency")]
+fn alive_fields() -> Vec<FieldRef> {
+    vec![
+        str_field("unique_id"),
+        str_field("resource_type"),
+        i64_field("ingested_at"),
+    ]
 }
 
-fn pkg_kind_fields() -> Vec<FieldRef> {
-    vec![str_field("package_name"), str_field("path_kind")]
+fn nullable_str_field(name: &str) -> FieldRef {
+    Arc::new(Field::new(name, DataType::Utf8, true))
 }
 
 fn node_fields() -> Vec<FieldRef> {
@@ -318,6 +336,15 @@ fn node_fields() -> Vec<FieldRef> {
         str_field("macro_arguments_json"),
         str_field("macro_span_json"),
         str_field("macro_name_span_json"),
+        nullable_str_field("description"),
+        nullable_str_field("database"),
+        nullable_str_field("schema"),
+        nullable_str_field("alias"),
+        nullable_str_field("relation_name"),
+        nullable_str_field("access"),
+        nullable_str_field("group_name"),
+        nullable_str_field("source_name"),
+        nullable_str_field("identifier"),
     ]
 }
 
@@ -340,6 +367,23 @@ where
     };
     let materialization = b.materialized.to_string();
     let payload = serde_json::to_string(node).unwrap_or_else(|_| "{}".into());
+    let description = c.description.clone();
+    let database = if b.database.is_empty() {
+        None
+    } else {
+        Some(b.database.clone())
+    };
+    let schema = if b.schema.is_empty() {
+        None
+    } else {
+        Some(b.schema.clone())
+    };
+    let alias = if b.alias.is_empty() {
+        None
+    } else {
+        Some(b.alias.clone())
+    };
+    let group_name = node.get_group();
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
@@ -354,6 +398,12 @@ where
         materialization,
         payload,
         extended_model: node.is_extended_model() as i32,
+        description,
+        database,
+        schema,
+        alias,
+        relation_name: b.relation_name.clone(),
+        group_name,
         ..Default::default()
     }
 }
@@ -759,7 +809,49 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
     let dir = cache_dir(args.out_dir);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    // ── project ───────────────────────────────────────────────────────────────
+    // ── filestamps + pkg_deps/pkg_kinds ─────────────────────────────────────────
+    let mut filestamp_rows: Vec<FilestampRow> = Vec::new();
+    let mut pkg_deps_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut pkg_kinds_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for pkg in args.packages {
+        for dep in &pkg.dependencies {
+            pkg_deps_map
+                .entry(pkg.package_name.clone())
+                .or_default()
+                .insert(dep.clone());
+        }
+        for (path_kind, entries) in &pkg.all_paths {
+            let kind_str = serde_json::to_string(path_kind)
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string();
+            pkg_kinds_map
+                .entry(pkg.package_name.clone())
+                .or_default()
+                .insert(kind_str.clone());
+            for (path, mtime_ns) in entries {
+                filestamp_rows.push(FilestampRow {
+                    package_name: pkg.package_name.clone(),
+                    package_root: pkg.package_root_path.clone(),
+                    path_kind: kind_str.clone(),
+                    path: path.clone(),
+                    mtime_ns: *mtime_ns as i64,
+                    ingested_at: args.ingested_at,
+                });
+            }
+        }
+    }
+
+    let tfs = Instant::now();
+    write_rows_with_fields(&filestamps_path(&dir), &filestamp_fields(), &filestamp_rows);
+    t(
+        &format!("write filestamps.parquet ({} rows)", filestamp_rows.len()),
+        tfs,
+    );
+
+    // ── project (includes pkg_deps_json and pkg_kinds_json) ──────────────────
+    let pkg_deps_json = serde_json::to_string(&pkg_deps_map).unwrap_or_else(|_| "{}".into());
+    let pkg_kinds_json = serde_json::to_string(&pkg_kinds_map).unwrap_or_else(|_| "{}".into());
     let kv_rows: Vec<KvRow> = vec![
         ("version", args.version.to_string()),
         ("dbt_version", args.dbt_version.to_string()),
@@ -798,6 +890,8 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
             "git_is_dirty",
             if args.git_is_dirty { "1" } else { "0" }.to_string(),
         ),
+        ("pkg_deps_json", pkg_deps_json),
+        ("pkg_kinds_json", pkg_kinds_json),
     ]
     .into_iter()
     .map(|(k, v)| KvRow {
@@ -805,47 +899,6 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         value: v,
     })
     .collect();
-
-    // ── filestamps / pkg_deps / pkg_kinds ─────────────────────────────────────
-    let mut filestamp_rows: Vec<FilestampRow> = Vec::new();
-    let mut dep_rows: Vec<PkgDepRow> = Vec::new();
-    let mut kind_rows: Vec<PkgKindRow> = Vec::new();
-    for pkg in args.packages {
-        for dep in &pkg.dependencies {
-            dep_rows.push(PkgDepRow {
-                package_name: pkg.package_name.clone(),
-                dependency: dep.clone(),
-            });
-        }
-        for (path_kind, entries) in &pkg.all_paths {
-            let kind_str = serde_json::to_string(path_kind)
-                .unwrap_or_default()
-                .trim_matches('"')
-                .to_string();
-            kind_rows.push(PkgKindRow {
-                package_name: pkg.package_name.clone(),
-                path_kind: kind_str.clone(),
-            });
-            for (path, mtime_ns) in entries {
-                filestamp_rows.push(FilestampRow {
-                    package_name: pkg.package_name.clone(),
-                    package_root: pkg.package_root_path.clone(),
-                    path_kind: kind_str.clone(),
-                    path: path.clone(),
-                    mtime_ns: *mtime_ns as i64,
-                });
-            }
-        }
-    }
-
-    let tfs = Instant::now();
-    write_rows_with_fields(&filestamps_path(&dir), &filestamp_fields(), &filestamp_rows);
-    t(
-        &format!("write filestamps.parquet ({} rows)", filestamp_rows.len()),
-        tfs,
-    );
-    write_rows_with_fields(&pkg_deps_path(&dir), &pkg_dep_fields(), &dep_rows);
-    write_rows_with_fields(&pkg_kinds_path(&dir), &pkg_kind_fields(), &kind_rows);
 
     // ── project ───────────────────────────────────────────────────────────────
     let tm = Instant::now();
@@ -951,8 +1004,62 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
     }
     write_rows_with_fields(&project_path(&dir), &kv_fields(), &project);
 
+    // ── alive (snapshot: all currently-alive unique_ids) ──────────────────────
+    let alive_rows: Vec<AliveRow> =
+        collect_alive_rows(args.nodes, args.disabled_nodes, args.ingested_at);
+    write_rows_with_fields(&alive_path(&dir), &alive_fields(), &alive_rows);
+
+    // Clean up legacy pkg_deps.parquet / pkg_kinds.parquet if still present.
+    let _ = fs::remove_file(dir.join("pkg_deps.parquet"));
+    let _ = fs::remove_file(dir.join("pkg_kinds.parquet"));
+
     t("save total", t0);
     Ok(())
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn collect_alive_rows(nodes: &Nodes, disabled_nodes: &Nodes, ingested_at: i64) -> Vec<AliveRow> {
+    let mut rows = Vec::new();
+    macro_rules! push_alive {
+        ($map:expr, $kind:literal) => {
+            for uid in $map.keys() {
+                rows.push(AliveRow {
+                    unique_id: uid.clone(),
+                    resource_type: $kind.to_string(),
+                    ingested_at,
+                });
+            }
+        };
+    }
+    push_alive!(&nodes.models, "model");
+    push_alive!(&nodes.seeds, "seed");
+    push_alive!(&nodes.tests, "test");
+    push_alive!(&nodes.unit_tests, "unit_test");
+    push_alive!(&nodes.sources, "source");
+    push_alive!(&nodes.snapshots, "snapshot");
+    push_alive!(&nodes.analyses, "analysis");
+    push_alive!(&nodes.exposures, "exposure");
+    push_alive!(&nodes.semantic_models, "semantic_model");
+    push_alive!(&nodes.metrics, "metric");
+    push_alive!(&nodes.saved_queries, "saved_query");
+    push_alive!(&nodes.functions, "function");
+    push_alive!(&nodes.groups, "group");
+    push_alive!(&nodes.macros, "macro");
+    push_alive!(&disabled_nodes.models, "model");
+    push_alive!(&disabled_nodes.seeds, "seed");
+    push_alive!(&disabled_nodes.tests, "test");
+    push_alive!(&disabled_nodes.unit_tests, "unit_test");
+    push_alive!(&disabled_nodes.sources, "source");
+    push_alive!(&disabled_nodes.snapshots, "snapshot");
+    push_alive!(&disabled_nodes.analyses, "analysis");
+    push_alive!(&disabled_nodes.exposures, "exposure");
+    push_alive!(&disabled_nodes.semantic_models, "semantic_model");
+    push_alive!(&disabled_nodes.metrics, "metric");
+    push_alive!(&disabled_nodes.saved_queries, "saved_query");
+    push_alive!(&disabled_nodes.functions, "function");
+    push_alive!(&disabled_nodes.groups, "group");
+    push_alive!(&disabled_nodes.macros, "macro");
+    rows
 }
 
 // ── load ──────────────────────────────────────────────────────────────────────
@@ -1061,8 +1168,8 @@ pub fn load_filtered_with_unique_ids(
     let any_uses_graph = get_kv("any_uses_graph") == "1";
 
     let t2 = Instant::now();
-    let packages = load_packages(&dir)?;
-    t("load_packages (filestamps/pkg_deps/pkg_kinds)", t2);
+    let packages = load_packages(&dir, &project)?;
+    t("load_packages (filestamps + pkg from KV)", t2);
 
     let t3 = Instant::now();
     let (nodes, disabled_nodes, docs_macros) = load_nodes(&dir, allowed_kinds, allowed_unique_ids)?;
@@ -1105,7 +1212,15 @@ pub fn load_filtered_with_unique_ids(
     })
 }
 
-fn load_packages(dir: &Path) -> Option<Vec<PackageSnapshot>> {
+fn load_packages(dir: &Path, project: &[KvRow]) -> Option<Vec<PackageSnapshot>> {
+    let get_kv = |key: &str| -> String {
+        project
+            .iter()
+            .find(|r| r.key == key)
+            .map(|r| r.value.clone())
+            .unwrap_or_default()
+    };
+
     let mut pkg_roots: HashMap<String, String> = HashMap::new();
     let mut pkg_paths: HashMap<String, HashMap<ResourcePathKind, Vec<(String, u64)>>> =
         HashMap::new();
@@ -1122,22 +1237,53 @@ fn load_packages(dir: &Path) -> Option<Vec<PackageSnapshot>> {
             .push((row.path, row.mtime_ns as u64));
     }
 
-    let mut pkg_deps: HashMap<String, BTreeSet<String>> = HashMap::new();
-    for row in read_rows::<PkgDepRow>(&pkg_deps_path(dir)) {
-        pkg_deps
-            .entry(row.package_name)
-            .or_default()
-            .insert(row.dependency);
+    // Read pkg_deps and pkg_kinds from project KV (folded in from separate files).
+    let mut pkg_deps: HashMap<String, BTreeSet<String>> =
+        serde_json::from_str(&get_kv("pkg_deps_json")).unwrap_or_default();
+
+    let pkg_kinds_raw: BTreeMap<String, BTreeSet<String>> =
+        serde_json::from_str(&get_kv("pkg_kinds_json")).unwrap_or_default();
+    for (pkg_name, kinds) in &pkg_kinds_raw {
+        for kind_str in kinds {
+            let kind: ResourcePathKind = serde_json::from_str(&format!("\"{kind_str}\""))
+                .unwrap_or(ResourcePathKind::ModelPaths);
+            pkg_paths
+                .entry(pkg_name.clone())
+                .or_default()
+                .entry(kind)
+                .or_default();
+        }
     }
 
-    for row in read_rows::<PkgKindRow>(&pkg_kinds_path(dir)) {
-        let kind: ResourcePathKind = serde_json::from_str(&format!("\"{}\"", row.path_kind))
-            .unwrap_or(ResourcePathKind::ModelPaths);
-        pkg_paths
-            .entry(row.package_name)
-            .or_default()
-            .entry(kind)
-            .or_default();
+    // Fallback: read legacy separate files if KV entries are empty (first run after upgrade).
+    if pkg_deps.is_empty() {
+        #[derive(Deserialize)]
+        struct PkgDepRow {
+            package_name: String,
+            dependency: String,
+        }
+        for row in read_rows::<PkgDepRow>(&dir.join("pkg_deps.parquet")) {
+            pkg_deps
+                .entry(row.package_name)
+                .or_default()
+                .insert(row.dependency);
+        }
+    }
+    if pkg_kinds_raw.is_empty() {
+        #[derive(Deserialize)]
+        struct PkgKindRow {
+            package_name: String,
+            path_kind: String,
+        }
+        for row in read_rows::<PkgKindRow>(&dir.join("pkg_kinds.parquet")) {
+            let kind: ResourcePathKind = serde_json::from_str(&format!("\"{}\"", row.path_kind))
+                .unwrap_or(ResourcePathKind::ModelPaths);
+            pkg_paths
+                .entry(row.package_name)
+                .or_default()
+                .entry(kind)
+                .or_default();
+        }
     }
 
     let mut snapshots: Vec<PackageSnapshot> = pkg_roots
@@ -1436,7 +1582,8 @@ pub fn resolve_dirty_unique_ids_from_index(
     }
 
     // Detect which (package_name, rel_path) pairs have a changed mtime.
-    let packages = load_packages(&dir)?;
+    let project: Vec<KvRow> = read_rows(&project_path(&dir));
+    let packages = load_packages(&dir, &project)?;
     let mut touched: HashSet<(String, String)> = HashSet::new();
     for pkg in &packages {
         let root = Path::new(&pkg.package_root_path);
@@ -2012,19 +2159,29 @@ mod tests {
                     path_kind: "ModelPaths".to_string(),
                     path: rel_path.to_string(),
                     mtime_ns: mtime as i64,
+                    ingested_at: 1_700_000_000_000,
                 }
             })
             .collect();
         write_rows_with_fields(&filestamps_path(&dir), &filestamp_fields(), &filestamp_rows);
 
-        // Write pkg_deps and pkg_kinds (empty is fine for these tests).
-        let pkg_dep_rows: Vec<PkgDepRow> = vec![];
-        write_rows_with_fields(&pkg_deps_path(&dir), &pkg_dep_fields(), &pkg_dep_rows);
-        let pkg_kind_rows: Vec<PkgKindRow> = vec![PkgKindRow {
-            package_name: "pkg".to_string(),
-            path_kind: "ModelPaths".to_string(),
-        }];
-        write_rows_with_fields(&pkg_kinds_path(&dir), &pkg_kind_fields(), &pkg_kind_rows);
+        // Write project.parquet with pkg_deps_json and pkg_kinds_json KV entries.
+        let mut pkg_kinds_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        pkg_kinds_map
+            .entry("pkg".to_string())
+            .or_default()
+            .insert("ModelPaths".to_string());
+        let project_rows: Vec<KvRow> = vec![
+            KvRow {
+                key: "pkg_deps_json".to_string(),
+                value: "{}".to_string(),
+            },
+            KvRow {
+                key: "pkg_kinds_json".to_string(),
+                value: serde_json::to_string(&pkg_kinds_map).unwrap(),
+            },
+        ];
+        write_rows_with_fields(&project_path(&dir), &kv_fields(), &project_rows);
 
         (tmp, pkg_root)
     }
