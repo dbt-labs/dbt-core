@@ -628,6 +628,30 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
+    def _maybe_fire_end_run_event(self, result) -> None:
+        if isinstance(result, RunExecutionResult):
+            result_msgs = [r.to_msg_dict() for r in result.results]
+            fire_event(
+                EndRunResult(
+                    results=result_msgs,
+                    generated_at=result.generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    elapsed_time=result.elapsed_time,
+                    success=GraphRunnableTask.interpret_results(result.results),
+                )
+            )
+
+    def _write_run_results(self, result) -> None:
+        assert self.manifest is not None
+        write_manifest(self.manifest, self.config.project_target_path)
+        if hasattr(result, "write"):
+            result.write(self.result_path())
+            add_artifact_produced(self.result_path())
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                )
+            )
+
     def run(self):
         """
         Run dbt for the query, based on the graph.
@@ -654,27 +678,10 @@ class GraphRunnableTask(ConfiguredTask):
                 result = self.execute_with_hooks(selected_uids)
 
         # We have other result types here too, including FreshnessResult
-        if isinstance(result, RunExecutionResult):
-            result_msgs = [result.to_msg_dict() for result in result.results]
-            fire_event(
-                EndRunResult(
-                    results=result_msgs,
-                    generated_at=result.generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    elapsed_time=result.elapsed_time,
-                    success=GraphRunnableTask.interpret_results(result.results),
-                )
-            )
+        self._maybe_fire_end_run_event(result)
 
         if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
-            if hasattr(result, "write"):
-                result.write(self.result_path())
-                add_artifact_produced(self.result_path())
-                fire_event(
-                    ArtifactWritten(
-                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
-                    )
-                )
+            self._write_run_results(result)
 
         self.task_end_messages(result.results)
         return result
