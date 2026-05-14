@@ -1,0 +1,8 @@
+kind: Features
+body: Warn when `load_result` is called during the parse phase and returns None,
+  pointing users at the `{% if execute %}` guard so introspective-query mistakes
+  surface before the downstream "'None' has no attribute 'table'" error
+time: 2026-04-11T18:45:00.000000+00:00
+custom:
+  Author: SarthakB11
+  Issue: "11070"
