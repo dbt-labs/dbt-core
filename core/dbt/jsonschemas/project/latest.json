@@ -5770,7 +5770,19 @@
             "null"
           ]
         },
+        "+external_location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+formatter": {
           "type": [
             "string",
             "null"
