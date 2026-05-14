@@ -380,6 +380,14 @@ derived_metric_yml = """
       expr: simple_metric + 1
 """
 
+simple_metric_nonexistent_measure_yml = """
+  - name: metric_nonexistent_measure
+    label: Metric Nonexistent Measure
+    type: simple
+    type_params:
+      measure: nonexistent_measure
+"""
+
 ratio_metric_missing_numerator_yml = """
   - name: test_ratio_no_numerator
     label: Ratio No Numerator

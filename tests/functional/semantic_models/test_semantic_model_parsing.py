@@ -27,6 +27,7 @@ from tests.functional.semantic_models.fixtures import (
     schema_without_semantic_model_yml,
     schema_yml,
     semantic_model_with_disabled_ref_yml,
+    simple_metric_nonexistent_measure_yml,
 )
 
 
@@ -240,6 +241,23 @@ class TestSemanticModelParsingForDerivedMetrics:
         assert len(metric.depends_on.nodes) == 2
         assert "metric.test.simple_metric" in metric.depends_on.nodes
         assert "metric.test.test_conversion_metric" in metric.depends_on.nodes
+
+
+class TestSimpleMetricReferencesNonexistentMeasureFails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml + simple_metric_nonexistent_measure_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_simple_metric_nonexistent_measure(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert not result.success
+        assert "A semantic model having a measure" in str(result.exception)
+        assert "does not exist but was referenced" in str(result.exception)
 
 
 class TestRatioMetricMissingNumeratorFails:
