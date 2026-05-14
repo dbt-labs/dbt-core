@@ -16,6 +16,7 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+arrow-array = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }

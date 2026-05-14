@@ -1,0 +1,37 @@
+[package]
+name = "dbt-docs-server"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "HTTP server that powers dbt docs v2 from parquet artifacts written by --use-index"
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Intentionally NO dependency on `dbt-index` or any other proprietary
+# (`crates/`) crate. The SA `dbt-index-core` crate provides the DuckDB-
+# views-over-parquet backend; proprietary feature surfaces (column lineage,
+# sample data, etc.) are layered on via dyn-compatible Provider traits and
+# wired in by the proprietary `dbt-docs-server-impl` crate.
+dbt-clap-core = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-index-core = { workspace = true }
+
+arrow-array = { workspace = true }
+arrow-json = { workspace = true }
+axum = { workspace = true }
+mime_guess = "2.0"
+rust-embed = { workspace = true, features = ["interpolate-folder-path"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

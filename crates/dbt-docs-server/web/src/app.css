@@ -1,0 +1,3235 @@
+/* @dbt-labs/biga ships the design tokens (CSS custom properties for
+   every color, spacing, and typography value). Sourdough and dbt-dag
+   both reference these via `var(--bgBrand)` etc.; without them every
+   color renders as missing. Cloud-ui imports in the same order. */
+@import "@dbt-labs/biga/tokens.css";
+/* @dbt-labs/dbt-dag bundles react-flow under the hood; its CSS provides
+   node positioning, zoom transforms, and viewport styles. Without this
+   import, nodes overlap in a tight cluster and zoom is broken. */
+@import "@dbt-labs/dbt-dag/dist/dbt-dag.css";
+/* Sourdough's design-system tokens + component styles. */
+@import "@dbt-labs/sourdough/dist/sourdough.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   dbt docs v2 — app-level styles
+   Colors, surfaces, and borders all come from biga tokens
+   (loaded above). Light/dark flip is driven by useTheme adding
+   `.light` / `.dark` to <html>.
+   ============================================================ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: var(--fgMain);
+  background: var(--bgBackground);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---------- App layout ---------- */
+
+.app {
+  display: grid;
+  grid-template-rows: 64px 1fr;
+  height: 100vh;
+  background: var(--bgBackground);
+  color: var(--fgMain);
+}
+
+/* ---------- Topbar v2 ----------
+   Aurora gradient bar inspired by the catalog Figma. Translucent brand
+   tints stacked on a dark base; magnify icon + search field + ⌘K hint. */
+
+.topbar-v2 {
+  position: relative;
+  display: grid;
+  /* Search column shrinks first (min 240px) before the brand block does.
+     `auto` left/right tracks size to their contents and only get squeezed
+     when the search has already hit its min — protects "fishtown_internal_…"
+     from collapsing to "f.." while the search hogs 600+ px. */
+  grid-template-columns: auto minmax(240px, 640px) auto;
+  align-items: center;
+  padding: 0 16px;
+  gap: 16px;
+  border-bottom: 1px solid var(--borderMuted);
+  overflow: hidden;
+  isolation: isolate;
+}
+.topbar-v2__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.topbar-v2__mode {
+  display: flex;
+  align-items: center;
+}
+.topbar-v2__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 8px;
+}
+.topbar-v2__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fgMain);
+  min-width: 0;
+}
+.topbar-v2__brand-text {
+  display: flex;
+  flex-direction: column;
+  /* Don't compress below the natural label width — search shrinks first. */
+  min-width: max-content;
+  max-width: 280px;
+}
+.topbar-v2__brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fgMain);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.topbar-v2__brand-sub {
+  font-size: 11px;
+  color: var(--fgAlt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.topbar-v2__brand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: inherit;
+  transition: background 120ms ease;
+}
+.topbar-v2__brand-btn:hover {
+  background: var(--bgMainHover);
+}
+.topbar-v2__brand-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focusHalo);
+}
+
+/* Brief spin when a parent-level filter changes. Element is remounted via
+   a React `key` change, replaying the animation each transition. */
+.topbar-v2__brand-anim {
+  display: inline-flex;
+  transform-origin: 50% 50%;
+  animation: brand-spin 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@keyframes brand-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topbar-v2__brand-anim { animation: none; }
+}
+.topbar-v2__brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fgMain);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-v2__bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    /* aurora tints, bottom-anchored */
+    linear-gradient(178.84deg, rgba(254, 103, 2, 0) 78.15%, rgba(254, 103, 2, 0.30) 98.7%),
+    linear-gradient(181.69deg, rgba(99, 47, 245, 0) 71.10%, rgba(99, 47, 245, 0.30) 96.95%),
+    linear-gradient(179.59deg, rgba(255, 204, 37, 0) 67.02%, rgba(255, 204, 37, 0.20) 94.05%),
+    /* dark base */
+    var(--bgNavHeader);
+}
+.topbar-v2__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(560px, 100%);
+  height: 32px;
+  padding: 0 10px 0 12px;
+  border-radius: 6px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMain);
+  color: var(--fgAlt);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.topbar-v2__search:focus-within {
+  border-color: var(--borderBrand);
+  box-shadow: 0 0 0 3px var(--focusHalo);
+}
+.topbar-v2__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fgMain);
+  font-size: 13px;
+  font-family: inherit;
+}
+.topbar-v2__search input::placeholder {
+  color: var(--fgAlt);
+}
+.topbar-v2__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fgAlt);
+  background: var(--bgMainHover);
+  border: 1px solid var(--borderMuted);
+  border-radius: 4px;
+}
+.topbar-v2__kbd-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.topbar-v2__kbd-btn:hover .topbar-v2__kbd {
+  color: var(--fgMain);
+  border-color: var(--borderMain);
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
+  padding: 0 16px;
+  gap: 16px;
+}
+
+.topbar .brand-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar .logo {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 6px;
+  flex: none;
+}
+.topbar .brand-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar .brand-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar .search {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  color: var(--text-faint);
+}
+.topbar .search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+}
+
+.topbar .right-block {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--locate-pane-w, 320px) minmax(0, 1fr);
+  height: calc(100vh - 64px);
+  min-height: 0;
+  position: relative;
+}
+
+/* Locate-pane resize handle. Lives on the boundary between locate pane
+   and main content; drag horizontally to widen/narrow the pane. */
+.shell__resize {
+  position: absolute;
+  top: 0;
+  left: var(--locate-pane-w, 320px);
+  transform: translateX(-3px);
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 20;
+  transition: background 120ms ease;
+}
+.shell__resize:hover,
+.shell__resize:active {
+  background: var(--borderBrand);
+}
+/* When the peek drawer is open AND viewport is wide enough, it occupies a
+   third column. Most laptop widths get this; only narrow viewports overlay. */
+@media (min-width: 960px) {
+  .shell.has-preview {
+    grid-template-columns: var(--locate-pane-w, 320px) minmax(0, 1fr) 360px;
+  }
+}
+@media (min-width: 960px) {
+  .preview-drawer__backdrop {
+    display: none !important;
+  }
+  .preview-drawer {
+    position: static;
+    box-shadow: none;
+    animation: none;
+  }
+}
+
+/* ---------- PreviewDrawer (peek panel) ---------- */
+
+.preview-drawer__backdrop {
+  display: none;
+  position: fixed;
+  inset: 64px 0 0 0; /* below topbar */
+  background: var(--bgOverlayTinted, rgba(0, 0, 0, 0.5));
+  border: 0;
+  cursor: pointer;
+  z-index: 40;
+}
+.preview-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 20px;
+  background: var(--bgMain);
+  border-left: 1px solid var(--borderMuted);
+  overflow-y: auto;
+}
+
+@media (max-width: 959px) {
+  .preview-drawer__backdrop {
+    display: block;
+  }
+  .preview-drawer {
+    position: fixed;
+    top: 64px;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100vw);
+    z-index: 50;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.2);
+    animation: drawer-slide-in 180ms ease-out;
+  }
+}
+@media (max-width: 640px) {
+  .preview-drawer {
+    width: 100vw;
+  }
+}
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.preview-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.preview-drawer__crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fgAlt);
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-drawer__crumb > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-drawer__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.preview-drawer__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--fgAlt);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.preview-drawer__action:hover {
+  background: var(--bgMainHover);
+  color: var(--fgMain);
+}
+/* Favorite star inside PreviewDrawer title — no box, just the duotone star
+   icon. When favorited, color reflects the duotone fill naturally. */
+.preview-drawer__fav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fgAlt);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.preview-drawer__fav:hover {
+  background: var(--bgMainHover);
+  color: var(--fgMain);
+}
+.preview-drawer__fav.is-on,
+.preview-drawer__fav.is-on:hover {
+  color: var(--fgBrand);
+  background: transparent;
+}
+
+.preview-drawer__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
+  min-width: 0;
+}
+/* Type icon — fixed size, never shrinks below its natural footprint. */
+.preview-drawer__title-row > .icon,
+.preview-drawer__title-row > .icon-wrapper,
+.preview-drawer__title-row > svg {
+  flex-shrink: 0;
+}
+.preview-drawer__title-link {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fgBrand);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.preview-drawer__title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Long monospace identifiers ellipsize so the trailing favorite + open
+     icons keep their own slots. Hover/focus reveals full title via `title`. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-drawer__title-link:hover,
+.preview-drawer__title-link:focus-visible {
+  text-decoration-color: var(--fgBrand);
+}
+.preview-drawer__title-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focusHalo);
+  border-radius: 2px;
+}
+.preview-drawer__title-open {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+}
+.preview-drawer__title-link:hover .preview-drawer__title-open,
+.preview-drawer__title-link:focus-visible .preview-drawer__title-open {
+  opacity: 1;
+}
+
+.preview-drawer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-drawer__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fgMain);
+  padding: 12px 14px;
+  background: var(--bgBackground);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+
+.preview-drawer__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.preview-drawer__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.preview-drawer__cell-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.preview-drawer__cell-value {
+  font-size: 13px;
+  color: var(--fgMain);
+  word-break: break-word;
+}
+.preview-drawer__skeleton {
+  display: inline-block;
+  height: 14px;
+  width: 80%;
+  background: var(--bgMainHover);
+  border-radius: 3px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.preview-drawer__pending {
+  border-top: 1px solid var(--borderMuted);
+  padding-top: 12px;
+}
+.preview-drawer__pending h4 {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+.preview-drawer__pending ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-drawer__pending li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.preview-drawer__pending-label {
+  font-size: 12px;
+  color: var(--fgMain);
+  font-weight: 500;
+}
+.preview-drawer__pending-hint {
+  font-size: 11px;
+  color: var(--fgDecorative);
+}
+.preview-drawer__pending code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bgMainHover);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+
+/* Active row highlight in AssetListView when the row is being previewed.
+   Subtle brand tint with a left border so it reads as "current" without
+   dominating the page. */
+.asset-list__row.is-active td {
+  background: var(--bgBrandMuted);
+}
+.asset-list__row.is-active td:first-child {
+  box-shadow: inset 3px 0 0 var(--fgBrand);
+}
+.asset-list__row.is-active:hover td {
+  background: var(--bgBrandMuted);
+}
+
+/* Screen-reader-only utility (used by CatalogHome project anchor) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- LocatePane (left rail) ----------
+   Matches the Figma at node 18457:38309 — Favorites card (bgRaised,
+   rounded top), SegmentedButton tabs, type rows with Ryecon + label +
+   count (all body/small/12px), brand-indigo active state, theme toggle
+   in the footer. */
+
+.locate-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--borderMuted);
+  background: var(--bgBackground);
+  overflow: hidden;
+  padding: 20px;
+  gap: 8px;
+}
+
+/* Body/Small in biga is 12px / 18px line-height. */
+.locate-pane,
+.locate-pane button,
+.locate-pane span,
+.locate-pane p {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* ----- Favorites card ----- */
+.locate-pane__fav-card {
+  background: var(--bgNavRaised, var(--bgRaised));
+  border: 1px solid var(--borderMuted);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.locate-pane__fav-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  font-weight: 700;
+  color: var(--fgMain);
+}
+.locate-pane__fav-count {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--fgMain);
+  font-variant-numeric: tabular-nums;
+}
+.locate-pane__fav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 8px;
+}
+.locate-pane__progress {
+  margin: 0;
+  padding: 0 12px 10px;
+  color: var(--fgDecorative);
+}
+
+/* ----- Tabs row ----- */
+.locate-pane__tabs {
+  display: flex;
+  justify-content: stretch;
+  padding: 4px 0;
+}
+.locate-pane__tabs > * {
+  flex: 1;
+}
+
+/* ----- Body wrap ----- */
+.locate-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -8px;
+  padding: 0 8px 12px;
+}
+
+/* ----- Asset mode ----- */
+.locate-pane__asset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* "All Assets" group header — bold white text, optionally a button.
+   Padding matches `.locate-pane__pkg-head` so "All assets" and the
+   project name align at the same left edge. */
+.locate-pane__hgroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-weight: 700;
+  color: var(--fgMain);
+  border-radius: 4px;
+}
+.locate-pane__hgroup-count {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--fgMain);
+  font-variant-numeric: tabular-nums;
+}
+.locate-pane__hgroup--secondary {
+  margin-top: 16px;
+  border-top: 1px solid var(--borderMuted);
+  padding-top: 12px;
+}
+.locate-pane__hgroup--button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.locate-pane__hgroup--button:hover {
+  background: var(--bgMainHover);
+}
+.locate-pane__hint {
+  margin: 12px 0 0;
+  padding: 8px 0;
+  font-size: 11px;
+  color: var(--fgDecorative);
+  border-top: 1px solid var(--borderMuted);
+}
+
+/* Project/package header. Top-level (the user's project) is bold brand-indigo;
+   nested packages in Tree mode are regular weight so visual hierarchy reads.
+   Padding matches `.locate-pane__hgroup` so siblings share a left edge. */
+.locate-pane__pkg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  font-weight: 400;
+  color: var(--fgMain);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+/* Title-only brand color: keep carets / Ryecons / counts in fgMain (white),
+   only the project title text takes the brand indigo. */
+.locate-pane__pkg-head.is-project .locate-pane__pkg-name {
+  font-weight: 700;
+  color: var(--fgBrand);
+}
+.locate-pane__pkg-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.locate-pane__pkg-head .locate-pane__type-count {
+  color: var(--fgMain);
+}
+/* Chevron orientation — collapsed = up (▴), expanded = down (▾). */
+.locate-pane__caret {
+  display: inline-flex;
+  align-items: center;
+  transition: transform 120ms ease;
+}
+.locate-pane__pkg-head[aria-expanded="false"] .locate-pane__caret,
+.locate-pane__bucket-head[aria-expanded="false"] .locate-pane__caret {
+  transform: rotate(180deg);
+}
+
+/* ----- Type rows ----- */
+.locate-pane__type-list,
+.locate-pane__pkg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.locate-pane__type-row,
+.locate-pane__pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px 4px 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fgMain);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.locate-pane__type-row:hover,
+.locate-pane__pkg-row:hover {
+  background: var(--bgMainHover);
+}
+.locate-pane__type-row.is-active,
+.locate-pane__type-row.is-active .locate-pane__type-label,
+.locate-pane__type-row.is-active .locate-pane__type-count {
+  color: var(--fgBrand);
+}
+.locate-pane__type-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fgMain);
+}
+.locate-pane__type-count {
+  color: var(--fgMain);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- Tree mode ----- */
+.locate-pane__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.locate-pane__tree-section {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__tree-types {
+  padding-left: 16px;
+}
+.locate-pane__bucket {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__bucket-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fgMain);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.locate-pane__bucket-head:hover {
+  background: var(--bgMainHover);
+}
+
+/* ----- Node rows ----- */
+.locate-pane__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 24px;
+}
+.locate-pane__list--scrollable {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.locate-pane__row {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+.locate-pane__row.is-active {
+  background: var(--bgBrandSelection);
+}
+.locate-pane__row:hover {
+  background: var(--bgMainHover);
+}
+.locate-pane__row.is-active:hover {
+  background: var(--bgBrandSelection);
+}
+.locate-pane__row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fgMain);
+  text-align: left;
+  cursor: pointer;
+}
+.locate-pane__row-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.locate-pane__row-fav {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--fgDecorative);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.locate-pane__row:hover .locate-pane__row-fav,
+.locate-pane__row-fav.is-on,
+.locate-pane__row-fav:focus-visible {
+  opacity: 1;
+}
+.locate-pane__row-fav.is-on {
+  color: var(--fgBrand);
+}
+
+/* ----- Filter mode ----- */
+.locate-pane__filter {
+  padding: 4px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.locate-pane__filter-section {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__filter-section-head {
+  padding: 0 0 6px;
+}
+.locate-pane__filter-section-head h4 {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgMain);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+.locate-pane__filter-options {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__filter-section-foot {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--borderMuted);
+  margin-top: 6px;
+}
+.locate-pane__filter-action {
+  font-size: 11px;
+  color: var(--fgBrand);
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.locate-pane__filter-action:hover {
+  text-decoration: underline;
+}
+.locate-pane__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  color: var(--fgMain);
+}
+.locate-pane__checkbox-row:hover {
+  color: var(--fgBrand);
+}
+/* Custom-styled checkbox — uniform across filter sections, tuned for dark
+   mode (subtle border vs. native bright white box). */
+.locate-pane__checkbox {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--borderMain);
+  background: var(--bgBackground);
+  border-radius: 3px;
+  position: relative;
+  margin: 0;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.locate-pane__checkbox:hover {
+  border-color: var(--borderBrand);
+}
+.locate-pane__checkbox:checked {
+  background: var(--fgBrand);
+  border-color: var(--fgBrand);
+}
+.locate-pane__checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--bgMain);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.locate-pane__checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focusHalo);
+}
+.locate-pane__checkbox-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.locate-pane__checkbox-label.is-emphasis {
+  font-weight: 600;
+}
+.locate-pane__checkbox-count {
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+.locate-pane__checkbox-row.is-checked .locate-pane__checkbox-label,
+.locate-pane__checkbox-row.is-checked .locate-pane__checkbox-count {
+  color: var(--fgBrand);
+  font-weight: 600;
+}
+.locate-pane__filter-hint {
+  margin: 8px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--borderMuted);
+  color: var(--fgDecorative);
+}
+
+/* ----- Schema section (Query mode only) -----
+   Stacks under the asset nav with the same visual rhythm: bold section
+   head, collapsible groups (dbt / dbt_rt / other), monospace table rows
+   with column-count badges, expandable inline column list. */
+.locate-pane__schema-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borderMuted);
+  min-height: 0;
+}
+/* Query mode promotion: Schema becomes the primary rail content, so it
+   drops the divider and gains scrollable freedom. */
+.locate-pane__schema-section.is-elevated {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.locate-pane__schema-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-weight: 700;
+  color: var(--fgMain);
+}
+.locate-pane__schema-muted {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--fgDecorative);
+}
+.locate-pane__schema-group {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__schema-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--fgMain);
+}
+.locate-pane__schema-group-head:hover {
+  background: var(--bgMainHover);
+}
+.locate-pane__schema-group-head.is-brand .locate-pane__schema-group-title {
+  font-weight: 700;
+  color: var(--fgBrand);
+}
+.locate-pane__schema-group-title {
+  flex: 1;
+  min-width: 0;
+}
+.locate-pane__schema-group-count {
+  color: var(--fgMain);
+  font-variant-numeric: tabular-nums;
+}
+.locate-pane__schema-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.locate-pane__schema-item {
+  display: flex;
+  flex-direction: column;
+}
+.locate-pane__schema-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  padding-left: 16px;
+}
+.locate-pane__schema-row:hover {
+  background: var(--bgMainHover);
+}
+.locate-pane__schema-row.is-active,
+.locate-pane__schema-row.is-active:hover {
+  background: var(--bgBrandMuted, color-mix(in srgb, var(--fgBrand) 16%, transparent));
+}
+.locate-pane__schema-row.is-active .locate-pane__schema-name-text,
+.locate-pane__schema-row.is-active .locate-pane__schema-name-count {
+  color: var(--fgBrand);
+  font-weight: 600;
+}
+.locate-pane__schema-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--fgAlt);
+  cursor: pointer;
+  padding: 0;
+}
+.locate-pane__schema-toggle[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+  transition: transform 120ms ease;
+}
+.locate-pane__schema-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  /* Match the Docs nav type-row treatment: Inter, 12px, regular weight,
+     fgMain — no mono. Reads as a navigation label, not a code identifier. */
+  font: inherit;
+  color: var(--fgMain);
+}
+.locate-pane__schema-name-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.locate-pane__schema-name-count {
+  color: var(--fgMain);
+  font-variant-numeric: tabular-nums;
+}
+.locate-pane__schema-cols {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 4px 48px;
+}
+.locate-pane__schema-cols li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.locate-pane__schema-col-name {
+  color: var(--fgMain);
+}
+.locate-pane__schema-col-type {
+  color: var(--fgAlt);
+  font-size: 11px;
+}
+
+/* ----- Muted "Browse N docs assets" link (Query mode only) ----- */
+.locate-pane__docs-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--fgAlt);
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.locate-pane__docs-link:hover {
+  background: var(--bgMainHover);
+  color: var(--fgMain);
+}
+.locate-pane__docs-link-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fgDecorative);
+}
+
+/* ----- Footer (branch + theme toggle) ----- */
+.locate-pane__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--borderMuted);
+}
+.locate-pane__branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fgMain);
+  background: transparent;
+  border: 1px solid var(--borderMuted);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.locate-pane__dirty {
+  color: var(--fgWarning);
+}
+.locate-pane__theme {
+  margin-left: auto;
+}
+
+/* ---------- Main content ---------- */
+
+.main {
+  overflow-y: auto;
+  background: var(--bgBackground);
+  color: var(--fgMain);
+  min-height: 0;
+}
+
+/* ---------- CatalogHome ----------
+   The empty/home state. Hero w/ project name → Quick access
+   (Favorites/Recents chips) → Explore grid (resource type tiles)
+   → Column lineage capability surface. */
+
+.catalog-home {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 32px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.catalog-home__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.catalog-home__hero-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.catalog-home__title {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0;
+  color: var(--fgMain);
+}
+.catalog-home__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.catalog-home__hero-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--borderMain);
+  background: var(--bgMain);
+  color: var(--fgMain);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.catalog-home__hero-action:hover {
+  border-color: var(--borderBrand);
+  background: var(--bgMainHover);
+}
+.catalog-home__hero-action.is-on {
+  color: var(--fgBrand);
+  border-color: var(--borderBrand);
+  background: var(--bgBrandMuted);
+}
+.catalog-home__lede {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fgMain);
+  max-width: 640px;
+}
+
+/* Panel that holds the tabs, chips, and the dynamic preview pane. */
+.catalog-home__panel {
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Tabs row */
+.catalog-home__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--borderMuted);
+  margin: -4px -4px 0;
+  padding: 0 4px;
+}
+.catalog-home__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fgAlt);
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.catalog-home__tab:hover {
+  color: var(--fgMain);
+}
+.catalog-home__tab.is-active {
+  color: var(--fgMain);
+  border-bottom-color: var(--fgMain);
+  font-weight: 600;
+}
+.catalog-home__tab-count {
+  font-size: 11px;
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chip row */
+.catalog-home__chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.catalog-home__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--borderMain);
+  background: var(--bgBackground);
+  color: var(--fgMain);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  cursor: pointer;
+  max-width: 280px;
+}
+.catalog-home__chip:hover {
+  background: var(--bgMainHover);
+  border-color: var(--borderBrand);
+}
+.catalog-home__chip.is-active {
+  border-color: var(--borderBrand);
+  color: var(--fgBrand);
+  background: var(--bgBrandMuted);
+}
+.catalog-home__chip-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.catalog-home__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fgAlt);
+  padding: 12px 0;
+}
+
+/* Preview pane (mini NodeDetail) */
+.catalog-home__preview {
+  border-top: 1px solid var(--borderMuted);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.catalog-home__preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.catalog-home__preview-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.catalog-home__preview-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgBrand);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.catalog-home__preview-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fgMain);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.catalog-home__preview-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fgAlt);
+}
+.catalog-home__preview-crumb-current {
+  color: var(--fgMain);
+}
+.catalog-home__preview-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fgMain);
+  padding: 10px 12px;
+  background: var(--bgBackground);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+.catalog-home__preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: var(--bgBackground);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+.catalog-home__preview-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.catalog-home__preview-cell-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.catalog-home__preview-cell-value {
+  font-size: 13px;
+  color: var(--fgMain);
+  word-break: break-word;
+}
+.catalog-home__preview-cell-hint {
+  font-size: 11px;
+  color: var(--fgDecorative);
+}
+
+.catalog-home__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 12px;
+}
+
+/* Tighter 4-column grid inspired by Claude's metric-tile pattern.
+   Drops to 2 columns on narrow screens. */
+.catalog-home__tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 720px) {
+  .catalog-home__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.catalog-home__tile-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--borderMuted);
+  background: var(--bgMain);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+  overflow: hidden;
+}
+.catalog-home__tile-button:hover {
+  border-color: var(--borderBrand);
+  background: var(--bgMainHover);
+}
+.catalog-home__tile-button:focus-visible {
+  outline: none;
+  border-color: var(--borderBrand);
+  box-shadow: 0 0 0 3px var(--focusHalo);
+}
+.catalog-home__metric-tile {
+  background: transparent !important;
+  padding: 12px 14px !important;
+  gap: 4px !important;
+}
+
+.catalog-home__capability {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+.catalog-home__capability.is-locked {
+  border-color: var(--borderBrand);
+  background: var(--bgBrandMuted);
+}
+.catalog-home__capability-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--borderMain);
+  margin-top: 7px;
+  flex: none;
+}
+.catalog-home__capability.is-available .catalog-home__capability-status {
+  background: var(--fgSuccess);
+}
+.catalog-home__capability.is-locked .catalog-home__capability-status {
+  background: var(--fgBrand);
+}
+.catalog-home__capability h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fgMain);
+}
+.catalog-home__capability p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fgAlt);
+  line-height: 1.5;
+}
+.catalog-home__capability code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  background: var(--bgBackground);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--fgMain);
+}
+
+/* ---------- AssetListView (table view) ----------
+   Opened when a user clicks a type in the locate pane ("Models", "Sources")
+   or "All assets". Shows a table of nodes with metadata columns, chip-based
+   filters, and "Load more" pagination. */
+
+.asset-list {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--fgMain);
+}
+.asset-list__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fgAlt);
+}
+.asset-list__breadcrumb-current {
+  color: var(--fgMain);
+  font-weight: 500;
+}
+.asset-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.asset-list__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.asset-list__title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--fgMain);
+}
+.asset-list__count {
+  font-size: 12px;
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+
+.asset-list__filter-caption {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--fgDecorative);
+}
+
+/* Toolbar: sort segmented group */
+.asset-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.asset-list__sort {
+  display: inline-flex;
+  border: 1px solid var(--borderMain);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bgMain);
+}
+.asset-list__sort-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--fgMain);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  border-right: 1px solid var(--borderMuted);
+}
+.asset-list__sort-btn:last-child {
+  border-right: 0;
+}
+.asset-list__sort-btn:hover {
+  background: var(--bgMainHover);
+}
+.asset-list__sort-btn.is-active {
+  background: var(--bgBrandMuted);
+  color: var(--fgBrand);
+  font-weight: 600;
+}
+.asset-list__sort-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focusHalo) inset;
+}
+
+/* Resize handle in TH */
+.asset-list__th-label {
+  display: inline-block;
+}
+/* Wider hit target than the visible border so the handle is easy to grab.
+   The transparent overlay extends past the column edge into both sides. */
+.asset-list__th-resize {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 120ms ease;
+  z-index: 1;
+}
+.asset-list__th-resize:hover,
+.asset-list__th-resize:active {
+  background: var(--borderBrand);
+}
+.asset-list__table th {
+  position: relative;
+}
+.asset-list__table tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Active filter summary — shown when locate-pane Filter mode has any
+   non-default filter set, so the user knows what's narrowing the table. */
+.asset-list__active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.asset-list__active-filters-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.asset-list__active-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: var(--bgBrandMuted);
+  color: var(--fgBrand);
+  border-radius: 999px;
+}
+.asset-list__active-filter-key {
+  color: var(--fgAlt);
+  font-weight: 600;
+}
+.asset-list__active-filter-val {
+  font-weight: 600;
+}
+.asset-list__active-filters-hint {
+  color: var(--fgDecorative);
+  margin-left: auto;
+  font-size: 11px;
+}
+
+/* Table */
+.asset-list__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.asset-list__table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--fgAlt);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  background: var(--bgBackground);
+  border-bottom: 1px solid var(--borderMuted);
+  position: sticky;
+  top: 0;
+}
+/* Column dividers — makes the table feel like a grid and signals where
+   the resize handles live without requiring the user to hunt for them. */
+.asset-list__table th:not(:last-child),
+.asset-list__table td:not(:last-child) {
+  border-right: 1px solid var(--borderMuted);
+}
+.asset-list__row {
+  cursor: pointer;
+}
+.asset-list__row td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--borderMuted);
+  color: var(--fgMain);
+}
+.asset-list__row:last-child td {
+  border-bottom: 0;
+}
+.asset-list__row:hover td {
+  background: var(--bgMainHover);
+}
+.asset-list__row:focus {
+  outline: none;
+}
+.asset-list__row:focus td {
+  background: var(--bgBrandSelection);
+}
+.asset-list__col-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgMain);
+}
+.asset-list__name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.asset-list__pkg-self {
+  color: var(--fgBrand);
+  font-weight: 500;
+}
+.asset-list__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgAlt);
+}
+.asset-list__desc {
+  color: var(--fgAlt);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-list__empty {
+  padding: 32px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  color: var(--fgAlt);
+  text-align: center;
+  margin: 0;
+}
+
+/* Pagination */
+.asset-list__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.asset-list__load-more {
+  padding: 8px 14px;
+  border: 1px solid var(--borderMain);
+  background: var(--bgMain);
+  color: var(--fgMain);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.asset-list__load-more:hover {
+  background: var(--bgMainHover);
+  border-color: var(--borderBrand);
+}
+.asset-list__progress {
+  font-size: 12px;
+  color: var(--fgDecorative);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- NodeDetail ----------
+   Asset detail page. Breadcrumb → Header (Ryecon + name + Badge + Action) →
+   Status row → Context row → Tags → Description → Columns table → References
+   → Lineage → Column lineage → Source (Accordion). */
+
+.node-detail {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--fgMain);
+}
+
+.node-detail__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fgAlt);
+}
+.node-detail__breadcrumb-current {
+  color: var(--fgMain);
+  font-weight: 500;
+}
+
+.node-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.node-detail__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.node-detail__title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--fgMain);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.node-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.node-detail__fav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fgAlt);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.node-detail__fav:hover {
+  background: var(--bgMainHover);
+  color: var(--fgMain);
+}
+.node-detail__fav.is-on,
+.node-detail__fav.is-on:hover {
+  color: var(--fgBrand);
+  background: transparent;
+}
+.node-detail__fav:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focusHalo);
+}
+
+.node-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--fgMain);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--borderMuted);
+}
+.node-detail__meta .muted-label {
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.node-detail__uid {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--fgAlt);
+  background: var(--bgMainHover);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.node-detail__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.node-detail__count {
+  font-weight: 400;
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status row */
+.node-detail__status-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.node-detail__status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+.node-detail__status-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.node-detail__status-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.node-detail__status-hint {
+  font-size: 11px;
+  color: var(--fgDecorative);
+}
+
+/* Context row */
+.node-detail__context-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+}
+.node-detail__context-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.node-detail__context-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.node-detail__context-value {
+  font-size: 13px;
+  color: var(--fgMain);
+  word-break: break-word;
+}
+
+/* Tags */
+.node-detail__tags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.node-detail__tags-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fgDecorative);
+}
+
+/* Description */
+.node-detail__desc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.node-detail__desc-body {
+  padding: 14px 16px;
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  background: var(--bgRaised, var(--bgMain));
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fgMain);
+}
+
+/* Columns */
+.node-detail__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.node-detail__columns-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.node-detail__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fgAlt);
+}
+.node-detail__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.node-detail__table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--fgAlt);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  background: var(--bgBackground);
+  border-bottom: 1px solid var(--borderMuted);
+  position: sticky;
+  top: 0;
+}
+.node-detail__table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--borderMuted);
+}
+.node-detail__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.node-detail__table tbody tr:hover td {
+  background: var(--bgMainHover);
+}
+.node-detail__col-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgMain);
+}
+.node-detail__col-type {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgAlt);
+}
+
+/* References */
+.node-detail__refs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .node-detail__refs {
+    grid-template-columns: 1fr;
+  }
+}
+.node-detail__ref-block {
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.node-detail__ref-block h3 {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgAlt);
+  background: var(--bgBackground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--borderMuted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.node-detail__ref-block ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.node-detail__ref-block li button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgMain);
+  border-bottom: 1px solid var(--borderMuted);
+}
+.node-detail__ref-block li:last-child button {
+  border-bottom: 0;
+}
+.node-detail__ref-block li button:hover {
+  background: var(--bgMainHover);
+}
+.node-detail__ref-empty {
+  padding: 14px;
+  font-size: 12px;
+  color: var(--fgDecorative);
+  margin: 0;
+}
+
+/* Lineage */
+.node-detail__lineage,
+.node-detail__column-lineage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Source code (inside Accordion) */
+.node-detail__code-block {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--fgMain);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ---------- Error state ---------- */
+
+.err {
+  border: 1px solid var(--borderDanger);
+  background: var(--bgDangerMuted);
+  color: var(--fgDanger);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+/* ---------- Misc utility ---------- */
+
+.muted {
+  color: var(--fgAlt);
+}
+.faint {
+  color: var(--fgDecorative);
+}
+.main-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+}
+
+code.inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bgMainHover);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* ============================================================
+   Query mode (.qq-*) — SQL editor + results. Renders inside the
+   catalog shell's <main>; schema browser lives in LocatePane.
+   ============================================================ */
+
+.qq {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bgBackground);
+  color: var(--fgMain);
+}
+
+/* ---------- Main work surface ----------
+   Editor + starters at top with intrinsic height; results card fills the
+   remaining vertical space and owns its own scrollbars. This keeps the
+   horizontal scrollbar pinned to the viewport bottom when the result has
+   many columns. */
+.qq-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---------- Card primitive ---------- */
+.qq-card {
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.qq-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--borderMuted);
+  background: var(--bgBackground);
+  flex-wrap: wrap;
+}
+.qq-card-foot {
+  padding: 6px 12px;
+  border-top: 1px solid var(--borderMuted);
+  background: var(--bgBackground);
+}
+
+/* ---------- Editor card ---------- */
+.qq-editor-card {
+  min-height: 180px;
+}
+.qq-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bgMain);
+  background: var(--fgBrand);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.qq-run:hover {
+  filter: brightness(1.05);
+}
+.qq-run:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* Shortcut hint inside the Run button — dark fill + white stroke so it
+   reads as a kbd glyph on the brand-indigo button. */
+.qq-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 18px;
+  font-size: 11px;
+  font-family: inherit;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bgMain);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+}
+.qq-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+.qq-stats-elapsed {
+  color: var(--fgAlt);
+}
+.qq-stats-warn {
+  color: var(--fgWarning);
+}
+.qq-editor {
+  min-height: 140px;
+  max-height: 360px;
+  padding: 0 12px;
+  background: var(--bgMain);
+  overflow: auto;
+}
+
+/* Recent queries chip row */
+.qq-history {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.qq-history-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fgMain);
+  margin-right: 4px;
+}
+/* Recent SQL chips render as sourdough Buttons now; only the inner text
+   needs ellipsis + mono treatment. */
+.qq-history-chip-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ---------- Starter cards (empty state) ---------- */
+.qq-starters {
+  padding: 16px 4px 8px;
+}
+/* Header row with the white-stroke dbt icon + dual-line copy ("Try it out"
+   + subtitle). Icon re-mounts on starter-chip click to replay the spin
+   animation, signalling "we kicked off another one". */
+.qq-starters-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.qq-starters-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--fgMain);
+  transform-origin: 50% 50%;
+  animation: qq-starter-spin 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@keyframes qq-starter-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qq-starters-icon { animation: none; }
+}
+.qq-starters-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* Use the dbt product UI scale — 16px section heading, 13px secondary body. */
+.qq-starters-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--fgMain);
+}
+.qq-starters-subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fgAlt);
+}
+.qq-starters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.qq-starter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--bgMain);
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.qq-starter:hover {
+  border-color: var(--borderBrand);
+  background: var(--bgMainHover);
+}
+.qq-starter-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fgMain);
+}
+.qq-starter-sub {
+  font-size: 11px;
+  color: var(--fgAlt);
+  line-height: 1.4;
+}
+.qq-starter-sql {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--fgAlt);
+  background: var(--bgBackground);
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact mode after the first query — keeps the dbt icon + dual-line
+   header but collapses the cards to chip pills. */
+.qq-starters.is-compact {
+  padding: 0 4px;
+}
+.qq-starters.is-compact .qq-starters-head {
+  margin-bottom: 8px;
+}
+.qq-starters.is-compact .qq-starters-icon {
+  width: 24px;
+  height: 24px;
+}
+.qq-starters.is-compact .qq-starters-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.qq-starters.is-compact .qq-starters-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qq-starters.is-compact .qq-starter {
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex: none;
+}
+.qq-starters.is-compact .qq-starter-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fgMain);
+}
+
+/* ---------- Error card ----------
+   Banner-style: header strip carries the SQL error badge + a fix hint
+   in danger tones; body stays on bgMain with monospace error text.
+   Less aggressive than flooding the whole card red. */
+.qq-error-card {
+  border-color: var(--borderDanger, var(--borderMuted));
+}
+.qq-error-head {
+  background: var(--bgDangerMuted, var(--bgBackground));
+  border-bottom: 1px solid var(--borderDanger, var(--borderMuted));
+}
+.qq-error-hint {
+  font-size: 11px;
+  color: var(--fgDanger, var(--fgMain));
+}
+.qq-error-body {
+  margin: 0;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgMain);
+  background: var(--bgMain);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- Results caption + table ----------
+   Caption sits ABOVE the table (not in a card head). Sourdough Table
+   provides its own table chrome. */
+.qq-results-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qq-results-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+.qq-results-meta {
+  font-size: 12px;
+  color: var(--fgAlt);
+  font-variant-numeric: tabular-nums;
+}
+/* Bounded scroll-box: both horizontal AND vertical scrollbars stay within
+   the viewport. Horizontal scrollbar lives at the bottom of this box, which
+   the outer flex layout pins to the viewport bottom. */
+.qq-results-scroll {
+  /* Bounded height so both scrollbars stay within the viewport. The Run
+     button + editor + starters + caption sum to ~360px on most screens; the
+     remainder is the scrollbox. */
+  max-height: calc(100vh - 360px);
+  min-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--borderMuted);
+  border-radius: 8px;
+  background: var(--bgMain);
+}
+/* Force the scrollbars to be visible across browsers (Chrome/Safari hide
+   them by default in some themes — make them obvious so the user can see
+   their position when there are many columns). */
+.qq-results-scroll::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+.qq-results-scroll::-webkit-scrollbar-track {
+  background: var(--bgBackground);
+}
+.qq-results-scroll::-webkit-scrollbar-thumb {
+  background: var(--borderMain);
+  border-radius: 8px;
+  border: 2px solid var(--bgBackground);
+}
+.qq-results-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--fgAlt);
+}
+/* Suppress sourdough Table's row-hover cursor since rows aren't clickable
+   in query results (cells handle their own clicks). */
+.qq-results-scroll tbody tr {
+  cursor: default;
+}
+.qq-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.qq-results-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bgBackground);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--borderMuted);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fgAlt);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.qq-results-table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--borderMuted);
+  vertical-align: top;
+}
+.qq-results-table th:not(:last-child),
+.qq-results-table td:not(:last-child) {
+  border-right: 1px solid var(--borderMuted);
+}
+.qq-results-table tbody tr:hover td {
+  background: var(--bgMainHover);
+}
+.qq-col-type {
+  margin-left: 8px;
+  color: var(--fgAlt);
+  font-size: 11px;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.qq-row-link {
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--fgBrand);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
+}
+.qq-row-link:hover {
+  text-decoration-color: var(--fgBrand);
+}
+.qq-results-empty {
+  padding: 16px;
+  color: var(--fgDecorative);
+  font-size: 12px;
+}
+
+/* ---------- Inline lineage preview ---------- */
+.qq-lineage-card {
+  min-height: 320px;
+}
+.qq-lineage-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fgBrand);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.qq-lineage-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fgDecorative);
+}
+.qq-lineage-canvas {
+  height: 460px;
+  position: relative;
+  background: var(--bgCanvasBackground, var(--bgBackground));
+}
+/* Dark-mode legibility: the dbt-dag package was built for light canvas
+   by default. In dark mode, non-primary node text washes into the bg.
+   Force a darker node-fill + brighter text so labels are readable. */
+.dark .qq-lineage-canvas .react-flow__node {
+  color: var(--fgMain);
+}
+.dark .qq-lineage-canvas .react-flow__node [class*="text-"],
+.dark .qq-lineage-canvas .react-flow__node text {
+  fill: var(--fgMain);
+  color: var(--fgMain);
+}
+/* Edges + connection lines stay visible against the dark background. */
+.dark .qq-lineage-canvas .react-flow__edge-path {
+  stroke: var(--borderMain);
+}
+.dark .qq-lineage-canvas .react-flow__edge.selected .react-flow__edge-path,
+.dark .qq-lineage-canvas .react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--fgBrand);
+}
+.qq-lineage-error,
+.qq-lineage-loading,
+.qq-lineage-empty {
+  padding: 16px;
+  color: var(--fgAlt);
+  font-size: 12px;
+  margin: 0;
+}
+
+/* ============================================================
+   Upgrade panel — "Get more from dbt".
+   Mirrors Catalog Figma (OMejLgivWDSbjaEpEdWmf6 #18484:44009): one
+   bordered card, three status rows (dot · title · description · 3×2 sigil).
+   ============================================================ */
+.upgrade-panel {
+  position: relative;
+  padding: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+.upgrade-panel__bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  pointer-events: none;
+  background:
+    linear-gradient(172deg, rgba(24, 148, 248, 0) 78%, rgba(24, 148, 248, 0.6) 99%),
+    linear-gradient(185deg, rgba(99, 47, 245, 0) 68%, rgba(99, 47, 245, 0.6) 97%),
+    var(--bgMain);
+}
+.upgrade-panel__title {
+  position: relative;
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--fgMain);
+}
+.upgrade-panel__rows {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.upgrade-panel__tips-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fgDecorative);
+}
+.upgrade-panel__tips-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.upgrade-panel__tips-hint {
+  font-size: 12px;
+  color: var(--fgDecorative);
+}
+
+/* Rail-footer Connect → expandable inline panel. Click the button to
+   reveal the dbt login CLI option without leaving the rail. */
+.upgrade-hook-inline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.upgrade-hook-inline-wrap > .upgrade-hook--inline {
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+}
+.upgrade-hook__chev.is-open {
+  color: var(--fgMain);
+}
+.upgrade-hook-inline-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 8px 28px;
+  border-left: 2px solid var(--borderMuted);
+  margin-left: 10px;
+  font-size: 11px;
+  color: var(--fgAlt);
+}
+.upgrade-hook-inline-detail__line {
+  margin: 0;
+  line-height: 16px;
+}
+
+/* ----- Single row as a sub-card (per Figma v2) ----- */
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  background: rgba(28, 26, 25, 0.6);
+  border: 1px solid var(--borderMuted);
+  border-radius: 4px;
+  backdrop-filter: blur(2px);
+}
+.upgrade-row--tips {
+  padding-left: 40px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.upgrade-row__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.upgrade-row__dot.is-on {
+  background: var(--bgDuotoneSuccess, #45d170);
+}
+.upgrade-row__dot.is-off {
+  background: var(--fgDecorative);
+}
+.upgrade-row__lead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1;
+}
+.upgrade-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+/* Tips variant — defined AFTER base so the row layout wins (same
+   specificity; source order determines which rule applies). */
+.upgrade-row__body--tips {
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.upgrade-row__title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--fgMain);
+}
+.upgrade-row__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--fgDecorative);
+}
+.upgrade-row__link {
+  color: var(--fgBrand);
+  text-decoration: underline;
+}
+.upgrade-row__link:hover {
+  filter: brightness(1.15);
+}
+.upgrade-row__code {
+  display: inline-block;
+  padding: 0 6px;
+  margin: 0 2px;
+  background: var(--bgMainHover);
+  border: 1px solid var(--borderMuted);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fgMain);
+  font-weight: 500;
+}
+
+/* ----- 3×2 sigil glyph: 8px squares, 5px x-gap, 6px y-gap (per Figma) ----- */
+.upgrade-row__sigil {
+  display: grid;
+  grid-template-columns: repeat(3, 8px);
+  grid-template-rows: repeat(2, 8px);
+  column-gap: 5px;
+  row-gap: 6px;
+  flex-shrink: 0;
+}
+.upgrade-row__sigil-cell {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: transparent;
+}
+.upgrade-row__sigil-cell.is-on {
+  background: var(--fgAlt);
+}
+
+/* ----- Inline rail-footer affordance (unchanged) ----- */
+.upgrade-hook {
+  display: flex;
+}
+.upgrade-hook--inline {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--fgAlt);
+  font-size: 12px;
+  text-align: left;
+}
+.upgrade-hook--inline:hover {
+  background: var(--bgMainHover);
+  color: var(--fgMain);
+}
+.upgrade-hook__title-inline {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.upgrade-hook__chev {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fgDecorative);
+}
+
+/* CatalogHome + NodeDetail hook clusters — stack vertically with breathing
+   room. On wider screens we could 2-up these as a grid; for v0 the column
+   layout is calmer and reads as a discrete "platform features" zone. */
+.catalog-home__hooks,
+.node-detail__hooks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.node-detail__hook {
+  margin-top: 12px;
+}
+
+/* ============================================================
+   Resource badge — Pumpernickel-style soft pastel chips, driven by
+   biga `--brand*Tinted` tokens so the look auto-adapts between light
+   and dark mode. Replaces the saturated sourdough Badge for
+   resource_type labels (table rows, peek drawer, node detail header,
+   query result `resource_type` cells).
+   ============================================================ */
+.resource-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 14px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--fgMain);
+  background: var(--bgMainHover);
+  white-space: nowrap;
+}
+.resource-badge--sm {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+/* Color variants — `Tinted` token is the soft pastel bg, text stays as
+   fgMain (high contrast). In dark mode biga remaps the tinted alpha,
+   so both modes read correctly without per-mode overrides. */
+.resource-badge--blue   { background: var(--brandBlueTinted); }
+.resource-badge--green  { background: var(--brandGreenTinted); }
+.resource-badge--orange { background: var(--brandOrangeTinted); }
+.resource-badge--yellow { background: var(--brandYellowTinted); }
+.resource-badge--pink   { background: var(--brandPinkTinted); }
+.resource-badge--purple { background: var(--brandPurpleTinted); }
+.resource-badge--neutral { background: var(--bgMainHover); }
+
+/* ============================================================
+   Command palette (⌘K) — Notion-style quick find. Anchored
+   slightly above center so eyes land on the input fast.
+   ============================================================ */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 88px;
+  z-index: 1000;
+}
+
+.palette {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 160px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bgMain);
+  color: var(--fgMain);
+  border: 1px solid var(--borderMain);
+  border-radius: 10px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.palette__input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--borderMuted);
+  color: var(--fgAlt);
+}
+
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--fgMain);
+  font-size: 15px;
+  line-height: 22px;
+  padding: 0;
+}
+.palette__input::placeholder {
+  color: var(--fgDecorative);
+}
+
+.palette__input-row .palette__kbd,
+.palette__foot kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fgAlt);
+  background: var(--bgMainHover);
+  border: 1px solid var(--borderMuted);
+  border-radius: 4px;
+}
+
+.palette__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 0 4px;
+}
+
+.palette__empty {
+  padding: 24px 16px;
+  color: var(--fgAlt);
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+.palette__empty kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--borderMuted);
+  border-radius: 3px;
+}
+
+.palette__group {
+  padding: 4px 4px 8px;
+}
+.palette__group-title {
+  margin: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fgAlt);
+}
+.palette__group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--fgMain);
+  border-radius: 6px;
+}
+.palette__row:hover,
+.palette__row.is-selected {
+  background: var(--bgMainHover);
+}
+.palette__row.is-selected {
+  outline: 1px solid var(--borderBrand);
+}
+.palette__row-primary {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette__row-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 400;
+}
+.palette__row-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fgAlt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.palette__row-hint {
+  margin-left: 8px;
+  color: var(--fgAlt);
+  font-size: 12px;
+}
+
+.palette__foot {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 16px;
+  border-top: 1px solid var(--borderMuted);
+  color: var(--fgAlt);
+  font-size: 11px;
+  background: var(--bgBackground);
+}
+.palette__foot > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

@@ -1,0 +1,11 @@
+# Dependencies — pulled by `npm install`.
+node_modules/
+
+# Vite build cache.
+.vite/
+
+# Build output. The Rust crate's `build.rs` picks `web/dist/` when it
+# exists (real SPA, after `npm run build`) and falls back to
+# `web/placeholder/` otherwise (tiny page telling devs to build the SPA).
+# `dist/` is fully gitignored so build output never lands in commits.
+dist/

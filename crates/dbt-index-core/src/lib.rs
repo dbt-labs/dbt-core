@@ -25,10 +25,12 @@
 //! 2. Provide a real `DuckDbFooProvider` impl in `dbt-index`.
 //! 3. Wire it from `dbt-cli` at the call sites.
 
+pub mod backend;
 pub mod column_impact;
 pub mod column_lineage;
 pub mod provider;
 
+pub use backend::{Backend, BackendError, UnavailableBackend};
 pub use column_impact::{
     ColumnImpactArgs, ColumnImpactNode, ColumnImpactProvider, UnavailableColumnImpact,
 };

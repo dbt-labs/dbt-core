@@ -1301,10 +1301,44 @@ impl DocsArgs {
 pub enum DocsSubcommand {
     /// Generate docs catalog (deprecated: use `dbt compile --write-catalog` instead)
     Generate,
-    /// Serve docs (deprecated: no longer supported in Fusion)
-    Serve,
+    /// Start the dbt docs v2 server backed by parquet artifacts in the target directory.
+    ///
+    /// Reads parquet artifacts written by `--use-index` (or `--write-index`) and
+    /// exposes a local HTTP server. Does not require a dbt project.
+    Serve(DocsServeArgs),
     #[command(external_subcommand)]
     Other(Vec<String>),
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct DocsServeArgs {
+    /// Path to the dbt target directory containing the `index/` subdirectory of
+    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
+    pub target_path: Option<PathBuf>,
+
+    /// Host to bind the HTTP server to.
+    #[arg(long, default_value = "127.0.0.1", env = "DBT_DOCS_HOST")]
+    pub host: String,
+
+    /// Port to listen on.
+    #[arg(long, default_value_t = 8580, env = "DBT_DOCS_PORT")]
+    pub port: u16,
+
+    /// Don't auto-open a browser tab on startup.
+    #[arg(long, default_value_t = false)]
+    pub no_open: bool,
+}
+
+impl Default for DocsServeArgs {
+    fn default() -> Self {
+        Self {
+            target_path: None,
+            host: "127.0.0.1".to_string(),
+            port: 8580,
+            no_open: false,
+        }
+    }
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
