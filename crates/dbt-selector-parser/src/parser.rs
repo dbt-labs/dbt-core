@@ -15,8 +15,8 @@ use dbt_common::{
 };
 
 use dbt_schemas::schemas::selectors::{
-    AtomExpr, CompositeExpr, CompositeKind, MethodAtomExpr, SelectorDefaultSpec,
-    SelectorDefinition, SelectorDefinitionValue, SelectorExpr,
+    AtomExpr, CompositeExpr, MethodAtomExpr, SelectorDefaultSpec, SelectorDefinition,
+    SelectorDefinitionValue, SelectorExpr,
 };
 
 #[derive(Debug, Clone)]
@@ -60,19 +60,22 @@ impl<'a> SelectorParser<'a> {
         let mut includes = Vec::new();
         let mut exclude_exprs = Vec::new();
 
-        // Get the operator and values from the single entry map
-        let (op_kind, values) = comp
-            .kind
-            .iter()
-            .next()
-            .map(|(_k, kind)| {
-                let vals = match kind {
-                    CompositeKind::Union(vals) => vals,
-                    CompositeKind::Intersection(vals) => vals,
-                };
-                (kind, vals)
-            })
-            .ok_or_else(|| fs_err!(ErrorCode::SelectorError, "Empty composite expression"))?;
+        let (is_union, values) = match (&comp.union, &comp.intersection) {
+            (Some(vals), None) => (true, vals),
+            (None, Some(vals)) => (false, vals),
+            (Some(_), Some(_)) => {
+                return Err(fs_err!(
+                    ErrorCode::SelectorError,
+                    "selector definition has both union and intersection — use one"
+                ));
+            }
+            (None, None) => {
+                return Err(fs_err!(
+                    ErrorCode::SelectorError,
+                    "selector definition is missing union or intersection"
+                ));
+            }
+        };
 
         for value in values {
             // Check if this value is an exclude expression
@@ -94,16 +97,28 @@ impl<'a> SelectorParser<'a> {
             }
         }
 
-        // Build the boolean operator over includes
-        let include_expr = match op_kind {
-            CompositeKind::Union(_) => SelectExpression::Or(includes),
-            CompositeKind::Intersection(_) => SelectExpression::And(includes),
+        let include_expr = if is_union {
+            SelectExpression::Or(includes)
+        } else {
+            SelectExpression::And(includes)
         };
+
+        // Collect top-level exclude: [...] (sibling of union/intersection at definition level).
+        // dbt-core semantics: all items are combined with OR into a single exclusion.
+        if let Some(top_excludes) = &comp.exclude {
+            if !top_excludes.is_empty() {
+                let excl_exprs = self.collect_definition_includes(top_excludes)?;
+                let combined = if excl_exprs.len() == 1 {
+                    excl_exprs.into_iter().next().unwrap()
+                } else {
+                    SelectExpression::Or(excl_exprs)
+                };
+                exclude_exprs.push(combined);
+            }
+        }
 
         // If we have exclude expressions, combine them
         if !exclude_exprs.is_empty() {
-            // If there are multiple excludes, we treat them as a union of exclusions
-            // i.e., exclude (A or B or C)
             let combined_exclude = if exclude_exprs.len() == 1 {
                 exclude_exprs.into_iter().next().unwrap()
             } else {
@@ -419,19 +434,10 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         // Test union
-        let union_result = parser.parse_composite(&CompositeExpr {
-            kind: {
-                let mut m = BTreeMap::new();
-                m.insert(
-                    "union".to_string(),
-                    CompositeKind::Union(vec![
-                        SelectorDefinitionValue::String("model_a".to_string()),
-                        SelectorDefinitionValue::String("model_b".to_string()),
-                    ]),
-                );
-                m
-            },
-        })?;
+        let union_result = parser.parse_composite(&CompositeExpr::union(vec![
+            SelectorDefinitionValue::String("model_a".to_string()),
+            SelectorDefinitionValue::String("model_b".to_string()),
+        ]))?;
 
         if let SelectExpression::Or(exprs) = union_result {
             assert_eq!(exprs.len(), 2);
@@ -440,19 +446,10 @@ mod tests {
         }
 
         // Test intersection
-        let intersection_result = parser.parse_composite(&CompositeExpr {
-            kind: {
-                let mut m = BTreeMap::new();
-                m.insert(
-                    "intersection".to_string(),
-                    CompositeKind::Intersection(vec![
-                        SelectorDefinitionValue::String("model_a".to_string()),
-                        SelectorDefinitionValue::String("model_b".to_string()),
-                    ]),
-                );
-                m
-            },
-        })?;
+        let intersection_result = parser.parse_composite(&CompositeExpr::intersection(vec![
+            SelectorDefinitionValue::String("model_a".to_string()),
+            SelectorDefinitionValue::String("model_b".to_string()),
+        ]))?;
 
         if let SelectExpression::And(exprs) = intersection_result {
             assert_eq!(exprs.len(), 2);
@@ -461,33 +458,22 @@ mod tests {
         }
 
         // Test composite with excludes - excludes should be nested within the include
-        let composite_with_exclude = parser.parse_composite(&CompositeExpr {
-            kind: {
-                let mut m = BTreeMap::new();
-                m.insert(
-                    "union".to_string(),
-                    CompositeKind::Union(vec![
-                        SelectorDefinitionValue::String("tag:bar".to_string()),
-                        SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
-                            MethodAtomExpr {
-                                method: "tag".to_string(),
-                                value: SelectorValue::from("baz"),
-                                childrens_parents: SelectorDefaultSpec::from(false),
-                                parents: SelectorDefaultSpec::from(false),
-                                children: SelectorDefaultSpec::from(false),
-                                parents_depth: None,
-                                children_depth: None,
-                                indirect_selection: None,
-                                exclude: Some(vec![SelectorDefinitionValue::String(
-                                    "single_exclude".to_string(),
-                                )]),
-                            },
-                        ))),
-                    ]),
-                );
-                m
-            },
-        })?;
+        let composite_with_exclude = parser.parse_composite(&CompositeExpr::union(vec![
+            SelectorDefinitionValue::String("tag:bar".to_string()),
+            SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
+                method: "tag".to_string(),
+                value: SelectorValue::from("baz"),
+                childrens_parents: SelectorDefaultSpec::from(false),
+                parents: SelectorDefaultSpec::from(false),
+                children: SelectorDefaultSpec::from(false),
+                parents_depth: None,
+                children_depth: None,
+                indirect_selection: None,
+                exclude: Some(vec![SelectorDefinitionValue::String(
+                    "single_exclude".to_string(),
+                )]),
+            }))),
+        ]))?;
 
         // The result should be an Or with one regular atom and one atom with nested exclude
         if let SelectExpression::Or(exprs) = composite_with_exclude {
@@ -653,14 +639,12 @@ mod tests {
 
     // Helper to create a composite selector
     fn composite(kind: &str, items: Vec<SelectorDefinitionValue>) -> SelectorDefinitionValue {
-        let mut m = BTreeMap::new();
-        let k = match kind {
-            "union" => CompositeKind::Union(items),
-            "intersection" => CompositeKind::Intersection(items),
+        let expr = match kind {
+            "union" => CompositeExpr::union(items),
+            "intersection" => CompositeExpr::intersection(items),
             _ => panic!("Unknown kind"),
         };
-        m.insert(kind.to_string(), k);
-        SelectorDefinitionValue::Full(SelectorExpr::Composite(CompositeExpr { kind: m }))
+        SelectorDefinitionValue::Full(SelectorExpr::Composite(expr))
     }
 
     #[test]
@@ -1032,19 +1016,10 @@ mod tests {
         let io_args = IoArgs::default();
         let parser = SelectorParser::new(defs, &io_args);
 
-        let expr = SelectorExpr::Composite(CompositeExpr {
-            kind: {
-                let mut m = BTreeMap::new();
-                m.insert(
-                    "intersection".to_string(),
-                    CompositeKind::Intersection(vec![
-                        SelectorDefinitionValue::String("model_a".to_string()),
-                        SelectorDefinitionValue::String("model_b".to_string()),
-                    ]),
-                );
-                m
-            },
-        });
+        let expr = SelectorExpr::Composite(CompositeExpr::intersection(vec![
+            SelectorDefinitionValue::String("model_a".to_string()),
+            SelectorDefinitionValue::String("model_b".to_string()),
+        ]));
 
         let mut result = parser.parse_expr(&expr)?;
 
@@ -1077,19 +1052,12 @@ mod tests {
                 name: "foo_and_bar".to_string(),
                 description: None,
                 default: None.into(),
-                definition: SelectorDefinitionValue::Full(SelectorExpr::Composite(CompositeExpr {
-                    kind: {
-                        let mut m = BTreeMap::new();
-                        m.insert(
-                            "intersection".to_string(),
-                            CompositeKind::Intersection(vec![
-                                SelectorDefinitionValue::String("tag:foo".to_string()),
-                                SelectorDefinitionValue::String("tag:bar".to_string()),
-                            ]),
-                        );
-                        m
-                    },
-                })),
+                definition: SelectorDefinitionValue::Full(SelectorExpr::Composite(
+                    CompositeExpr::intersection(vec![
+                        SelectorDefinitionValue::String("tag:foo".to_string()),
+                        SelectorDefinitionValue::String("tag:bar".to_string()),
+                    ]),
+                )),
             },
         );
 

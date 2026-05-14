@@ -237,11 +237,28 @@ pub enum SelectorExpr {
     Atom(AtomExpr),
 }
 
-/// A boolean composition of other selectors
+/// A boolean composition of other selectors.
+///
+/// Supports three forms from dbt-core's YAML spec:
+/// - `union: [...]`
+/// - `intersection: [...]`
+/// - `union: [...]\nexclude: [...]` — top-level exclude applied after the union
+///
+/// Exactly one of `union` / `intersection` must be present; `exclude` is always optional.
+/// The generated JSON schema allows all three keys (no `oneOf` constraint) to avoid
+/// false-positive IDE squiggles on the common `union + exclude` pattern.
+#[skip_serializing_none]
 #[derive(Serialize, Debug, Clone, DbtSchema)]
-#[serde(rename_all = "lowercase")]
 pub struct CompositeExpr {
-    pub kind: BTreeMap<String, CompositeKind>,
+    /// OR of all listed selectors.
+    #[serde(default)]
+    pub union: Option<Vec<SelectorDefinitionValue>>,
+    /// AND of all listed selectors.
+    #[serde(default)]
+    pub intersection: Option<Vec<SelectorDefinitionValue>>,
+    /// Models excluded from the composite result.
+    #[serde(default)]
+    pub exclude: Option<Vec<SelectorDefinitionValue>>,
 }
 
 impl<'de> Deserialize<'de> for CompositeExpr {
@@ -255,63 +272,42 @@ impl<'de> Deserialize<'de> for CompositeExpr {
             type Value = CompositeExpr;
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(
-                    f,
-                    "a map with exactly one of the keys 'union' or 'intersection'"
-                )
+                write!(f, "a map with keys from 'union', 'intersection', 'exclude'")
             }
 
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: MapAccess<'de>,
             {
-                let mut composite_kind: Option<CompositeKind> = None;
-                let mut found_key: Option<String> = None;
+                let mut union: Option<Vec<SelectorDefinitionValue>> = None;
+                let mut intersection: Option<Vec<SelectorDefinitionValue>> = None;
+                let mut exclude: Option<Vec<SelectorDefinitionValue>> = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
-                        "union" => {
-                            if composite_kind.is_some() {
-                                let _: IgnoredAny = map.next_value()?;
-                                return Err(de::Error::custom(
-                                    "multiple keys provided; expected only one of 'union' or 'intersection'",
-                                ));
-                            }
-                            let values: Vec<SelectorDefinitionValue> = map.next_value()?;
-                            composite_kind = Some(CompositeKind::Union(values));
-                            found_key = Some("union".to_string());
-                        }
-                        "intersection" => {
-                            if composite_kind.is_some() {
-                                let _: IgnoredAny = map.next_value()?;
-                                return Err(de::Error::custom(
-                                    "multiple keys provided; expected only one of 'union' or 'intersection'",
-                                ));
-                            }
-                            let values: Vec<SelectorDefinitionValue> = map.next_value()?;
-                            composite_kind = Some(CompositeKind::Intersection(values));
-                            found_key = Some("intersection".to_string());
-                        }
+                        "union" => union = Some(map.next_value()?),
+                        "intersection" => intersection = Some(map.next_value()?),
+                        "exclude" => exclude = Some(map.next_value()?),
                         other => {
                             let _: IgnoredAny = map.next_value()?;
                             return Err(de::Error::unknown_field(
                                 other,
-                                &["union", "intersection"],
+                                &["union", "intersection", "exclude"],
                             ));
                         }
                     }
                 }
 
-                match (found_key, composite_kind) {
-                    (Some(key), Some(kind)) => {
-                        let mut m = BTreeMap::new();
-                        m.insert(key, kind);
-                        Ok(CompositeExpr { kind: m })
-                    }
-                    _ => Err(de::Error::custom(
-                        "expected a map with a 'union' or 'intersection' key",
-                    )),
+                // Require union or intersection — exclude-only maps are AtomExpr::Exclude.
+                if union.is_none() && intersection.is_none() {
+                    return Err(de::Error::custom("expected 'union' or 'intersection' key"));
                 }
+
+                Ok(CompositeExpr {
+                    union,
+                    intersection,
+                    exclude,
+                })
             }
         }
 
@@ -319,13 +315,25 @@ impl<'de> Deserialize<'de> for CompositeExpr {
     }
 }
 
-/// Is this an `OR` or an `AND`?
-#[derive(Serialize, Deserialize, Debug, Clone, DbtSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum CompositeKind {
-    Union(Vec<SelectorDefinitionValue>),
-    Intersection(Vec<SelectorDefinitionValue>),
+impl CompositeExpr {
+    pub fn union(items: Vec<SelectorDefinitionValue>) -> Self {
+        Self {
+            union: Some(items),
+            intersection: None,
+            exclude: None,
+        }
+    }
+    pub fn intersection(items: Vec<SelectorDefinitionValue>) -> Self {
+        Self {
+            union: None,
+            intersection: Some(items),
+            exclude: None,
+        }
+    }
 }
+
+/// Alias kept for compatibility with callers that name `CompositeKind`.
+pub type CompositeKind = CompositeExpr;
 
 //
 // ---- full YAML selector AST -----------------------------------------------------------------
