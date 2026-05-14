@@ -1,7 +1,0 @@
-kind: Dependencies
-body: Cap dbt-adapters to <1.24 to prevent KeyError on dbt parse when older dbt-core
-  encounters the JS UDF macro change shipped in dbt-adapters 1.24.0 (see dbt-labs/dbt-adapters#1926)
-time: 2026-05-14T09:30:00.000000-05:00
-custom:
-  Author: sriramr98
-  Issue: "NA"
