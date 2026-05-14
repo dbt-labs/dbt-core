@@ -40,11 +40,10 @@ include = [
 # CI uses [envs.ci] which doesn't set python, allowing matrix testing
 python = "3.11"
 dependencies = [
-    # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    "dbt-adapters<1.24",
+    "dbt-tests-adapter",
+    "dbt-common",
+    "dbt-postgres",
     # Code quality
     "pre-commit~=3.7.0",
     "black>=24.3,<25.0",
@@ -174,11 +173,10 @@ check-sdist = [
 # CI environment - isolated environment with test dependencies
 [envs.ci]
 dependencies = [
-    # Git dependencies for development against main branches
-    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
-    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
-    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
-    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    "dbt-adapters<1.24",
+    "dbt-tests-adapter",
+    "dbt-common",
+    "dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
     "pytest>=7.0,<8.0",

@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Pinned dbt-adapters<1.24 to avoid breaking changes in 1.24 JS UDFs. Ref https://github.com/dbt-labs/dbt-adapters/issues/1926
+time: 2026-05-14T13:58:48.288009+05:30
+custom:
+    Author: sriramr98
+    Issue: "12960"
