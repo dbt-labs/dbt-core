@@ -770,35 +770,9 @@ pub async fn resolve_models(
             }
         }
 
-        let model_constraints = if let Some(versions) = &properties.versions {
-            versions
-                .iter()
-                .find(|v| {
-                    maybe_version
-                        .as_ref()
-                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
-                })
-                .and_then(|v| v.constraints.as_ref().filter(|c| !c.is_empty()).cloned())
-                .or_else(|| properties.constraints.clone())
-                .unwrap_or_default()
-        } else {
-            properties.constraints.clone().unwrap_or_default()
-        };
-
-        let model_description = if let Some(versions) = &properties.versions {
-            versions
-                .iter()
-                .find(|v| {
-                    maybe_version
-                        .as_ref()
-                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
-                })
-                .and_then(|v| v.description.clone())
-                .or_else(|| properties.description.clone())
-                .unwrap_or_default()
-        } else {
-            properties.description.clone().unwrap_or_default()
-        };
+        let resolved_versioned = resolve_versioned_fields(maybe_version.as_ref(), &properties);
+        let model_constraints = resolved_versioned.constraints;
+        let model_description = resolved_versioned.description;
 
         // Iterate over metrics and construct the dependencies
         let mut metrics = Vec::new();
@@ -843,21 +817,7 @@ pub async fn resolve_models(
             );
         }
 
-        // For versioned models, use the per-version deprecation_date if present,
-        // falling back to the model-level deprecation_date.
-        let deprecation_date = if let Some(versions) = &properties.versions {
-            versions
-                .iter()
-                .find(|v| {
-                    maybe_version
-                        .as_ref()
-                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
-                })
-                .and_then(|v| v.deprecation_date.clone())
-                .or_else(|| properties.deprecation_date.clone())
-        } else {
-            properties.deprecation_date.clone()
-        };
+        let deprecation_date = resolved_versioned.deprecation_date;
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
         validate_compute(model_config.compute, &dbt_asset.path)?;
@@ -1263,6 +1223,68 @@ pub async fn resolve_models(
             .map(|(v, _)| (v.__common_attr__.unique_id.to_string(), Arc::new(v))),
     );
     Ok((models, rendering_results, disabled_models))
+}
+
+/// Per-version overrides for a versioned model, resolved against the top-level
+/// `ModelProperties` using dbt-core's `ParsedNodePatch` semantics
+/// (see `core/dbt/parser/schemas.py`, `versioned_model_patch` construction).
+///
+/// Override-or-fallback fields only. Fields with other resolution rules stay
+/// outside this struct:
+///   - `columns` -> `process_versioned_columns` (include/exclude merge)
+///   - `config`  -> `VersionInfo.version_config` (deep merge)
+///   - `meta`    -> top-level only, no per-version semantics
+///   - `access`, `docs`, `data_tests` -> not yet wired (flow through other
+///     pipelines; see follow-up issues)
+struct ResolvedVersionedFields {
+    description: String,
+    constraints: Vec<ModelConstraint>,
+    /// Per-version only; no fallback to top-level (dbt-core parity).
+    deprecation_date: Option<String>,
+}
+
+fn resolve_versioned_fields(
+    maybe_version: Option<&String>,
+    properties: &ModelProperties,
+) -> ResolvedVersionedFields {
+    let version_match =
+        maybe_version
+            .zip(properties.versions.as_deref())
+            .and_then(|(mv, versions)| {
+                versions
+                    .iter()
+                    .find(|v| v.get_version().as_ref() == Some(mv))
+            });
+
+    // dbt-core: `unparsed_version.description or target.description`.
+    // Python `or` treats `""` as falsy, so an empty per-version description
+    // falls through to the top-level value.
+    let description = version_match
+        .and_then(|v| v.description.clone().filter(|s| !s.is_empty()))
+        .or_else(|| properties.description.clone())
+        .unwrap_or_default();
+
+    // dbt-core: `unparsed_version.constraints or target.constraints`. Empty
+    // list is falsy in Python -> fall through.
+    let constraints = version_match
+        .and_then(|v| v.constraints.clone().filter(|c| !c.is_empty()))
+        .or_else(|| properties.constraints.clone())
+        .unwrap_or_default();
+
+    // dbt-core: top-level `deprecation_date` applies to the unversioned model
+    // itself; for versioned children only the per-version value applies (no
+    // inheritance from the top-level).
+    let deprecation_date = if maybe_version.is_some() {
+        version_match.and_then(|v| v.deprecation_date.clone())
+    } else {
+        properties.deprecation_date.clone()
+    };
+
+    ResolvedVersionedFields {
+        description,
+        constraints,
+        deprecation_date,
+    }
 }
 
 fn process_versioned_columns(
