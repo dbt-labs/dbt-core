@@ -446,6 +446,19 @@ impl<'source> Environment<'source> {
         name: &'source str,
         source: &'source str,
     ) -> Result<Template<'_, 'source>, Error> {
+        self.template_from_named_str_with_profile(name, source, self.profile.clone())
+    }
+
+    /// Like [`template_from_named_str`](Self::template_from_named_str) but uses the supplied
+    /// `profile` instead of `self.profile`.  Use this to compile a template with a different
+    /// profile (e.g. [`CodeGenerationProfile::TypeCheck`]) without mutating or cloning the
+    /// environment.
+    pub fn template_from_named_str_with_profile(
+        &self,
+        name: &'source str,
+        source: &'source str,
+        profile: CodeGenerationProfile,
+    ) -> Result<Template<'_, 'source>, Error> {
         Ok(Template::new(
             self,
             CompiledTemplateRef::Owned(Arc::new(ok!(CompiledTemplate::new(
@@ -453,7 +466,7 @@ impl<'source> Environment<'source> {
                 source,
                 &self.templates.template_config,
                 None,
-                self.profile.clone(),
+                profile,
             )))),
         ))
     }

@@ -17,7 +17,7 @@ use std::{
 };
 
 #[allow(clippy::too_many_arguments)]
-/// Typecheck a batch of files.
+/// Typecheck a single template against the given Jinja environment.
 ///
 /// When `skip_redundant_template_syntax_error_log` is true, template parse failures
 /// ([`ErrorKind::SyntaxError`]) are not logged: use this when the same `content` is rendered
@@ -38,7 +38,6 @@ pub fn typecheck(
     skip_redundant_template_syntax_error_log: bool,
 ) -> FsResult<()> {
     let function_signatures = env.jinja_function_registry.clone();
-    let mut jinja_typecheck_env = env.env.clone();
     let macro_namespace_registry = env.env.get_macro_namespace_registry();
     let builtins = load_builtins_with_namespace(macro_namespace_registry)
         .map_err(|e| FsError::from_jinja_err(e, "Failed to load built-ins"))?;
@@ -52,23 +51,19 @@ pub fn typecheck(
             Value::from(target_package_name),
         );
     }
-
     typecheck_resolved_context.insert(
         ROOT_PACKAGE_NAME.to_string(),
         Value::from(root_package_name.to_string()),
     );
-
     typecheck_resolved_context.insert(
         DBT_AND_ADAPTERS_NAMESPACE.to_string(),
         dbt_and_adapters_namespace,
     );
 
-    jinja_typecheck_env.profile = CodeGenerationProfile::TypeCheck(
+    let profile = CodeGenerationProfile::TypeCheck(
         function_signatures.clone(),
         typecheck_resolved_context.clone(),
     );
-
-    let _absolute_file_path = arg_io.in_dir.join(relative_file_path);
 
     let listener = jinja_typechecking_listener_factory.create_listener(
         arg_io,
@@ -80,9 +75,11 @@ pub fn typecheck(
     );
 
     let source = content.to_string();
-    let tmpl = match jinja_typecheck_env
-        .template_from_named_str(relative_file_path.to_str().unwrap(), &source)
-    {
+    let tmpl = match env.env.template_from_named_str_with_profile(
+        relative_file_path.to_str().unwrap(),
+        &source,
+        profile,
+    ) {
         Ok(tmpl) => tmpl,
         Err(e) => {
             if skip_redundant_template_syntax_error_log && e.kind() == ErrorKind::SyntaxError {
@@ -97,29 +94,13 @@ pub fn typecheck(
         }
     };
 
-    match tmpl.typecheck(
+    let _ = tmpl.typecheck(
         function_signatures,
         builtins,
         listener.clone(),
-        typecheck_resolved_context.clone(),
-    ) {
-        Ok(_) => {
-            listener.flush();
-        }
-        Err(_e) => {
-            listener.flush();
-
-            // emit_error_log_message(
-            //     ErrorCode::Generic,
-            //     format!(
-            //         "Type checking failed for file {}: {}",
-            //         absolute_file_path.display(),
-            //         e
-            //     ),
-            //     arg_io.status_reporter.as_ref(),
-            // );
-        }
-    }
+        typecheck_resolved_context,
+    );
+    listener.flush();
     jinja_typechecking_listener_factory.destroy_listener(relative_file_path, listener);
 
     Ok(())
