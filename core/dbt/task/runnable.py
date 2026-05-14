@@ -432,6 +432,41 @@ class GraphRunnableTask(ConfiguredTask):
                 continue
             fire_event(LogCancelLine(conn_name=conn_name))
 
+    def _handle_fail_fast_skips(self, failure: FailFastError) -> List[BaseResult]:
+        """Mark all not-yet-executed nodes as skipped and return the full result list."""
+        executed_node_ids = {
+            r.node.unique_id for r in self.node_results if isinstance(r, NodeResult)
+        }
+        assert self._flattened_nodes is not None
+        message = "Skipping due to fail_fast"
+        for node in self._flattened_nodes:
+            if node.unique_id not in executed_node_ids:
+                skipped = mark_node_as_skipped(node, executed_node_ids, message)
+                if skipped:
+                    self.node_results.append(skipped)
+        print_run_result_error(failure.result)
+        # ensure information about all nodes is propagated to run results when failing fast
+        return self.node_results
+
+    def _write_interrupt_run_results(self, pool) -> None:
+        """Write partial run results to disk on KeyboardInterrupt/SystemExit."""
+        run_result = self.get_result(
+            results=self.node_results,
+            elapsed_time=time.time() - self.started_at,
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        if self.args.write_json and hasattr(run_result, "write"):
+            run_result.write(self.result_path())
+            add_artifact_produced(self.result_path())
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=run_result.__class__.__name__,
+                    artifact_path=self.result_path(),
+                )
+            )
+        self._cancel_connections(pool)
+        print_run_end_messages(self.node_results, keyboard_interrupt=True)
+
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
         runners gentle terminates.
@@ -459,39 +494,9 @@ class GraphRunnableTask(ConfiguredTask):
             self.run_queue(pool)
         except FailFastError as failure:
             self._cancel_connections(pool)
-
-            executed_node_ids = {r.node.unique_id for r in self.node_results}
-            message = "Skipping due to fail_fast"
-
-            for node in self._flattened_nodes:
-                if node.unique_id not in executed_node_ids:
-                    self.node_results.append(
-                        mark_node_as_skipped(node, executed_node_ids, message)
-                    )
-
-            print_run_result_error(failure.result)
-            # ensure information about all nodes is propagated to run results when failing fast
-            return self.node_results
+            return self._handle_fail_fast_skips(failure)
         except (KeyboardInterrupt, SystemExit):
-            run_result = self.get_result(
-                results=self.node_results,
-                elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            )
-
-            if self.args.write_json and hasattr(run_result, "write"):
-                run_result.write(self.result_path())
-                add_artifact_produced(self.result_path())
-                fire_event(
-                    ArtifactWritten(
-                        artifact_type=run_result.__class__.__name__,
-                        artifact_path=self.result_path(),
-                    )
-                )
-
-            self._cancel_connections(pool)
-            print_run_end_messages(self.node_results, keyboard_interrupt=True)
-
+            self._write_interrupt_run_results(pool)
             raise
 
         pool.close()
