@@ -420,14 +420,17 @@ class GraphRunnableTask(ConfiguredTask):
         ):
             return
 
-        # If result.status == NodeStatus.Error, plus Fail for build command
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
-            if is_ephemeral:
-                cause = result
-            else:
-                cause = None
-
+            cause = result if is_ephemeral else None
             self._mark_dependent_errors(node.unique_id, result, cause)
+
+    def _cancel_open_connections(self, adapter) -> None:
+        """Cancel all open adapter connections, logging each one that isn't ephemeral."""
+        for conn_name in adapter.cancel_open_connections():
+            node = self.manifest.nodes.get(conn_name) if self.manifest is not None else None
+            if node is not None and node.is_ephemeral_model:
+                continue
+            fire_event(LogCancelLine(conn_name=conn_name))
 
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
@@ -442,14 +445,7 @@ class GraphRunnableTask(ConfiguredTask):
             fire_event(QueryCancelationUnsupported(type=adapter.type()))
         else:
             with adapter.connection_named("master"):
-                for conn_name in adapter.cancel_open_connections():
-                    if self.manifest is not None:
-                        node = self.manifest.nodes.get(conn_name)
-                        if node is not None and node.is_ephemeral_model:
-                            continue
-                    # if we don't have a manifest/don't have a node, print
-                    # anyway.
-                    fire_event(LogCancelLine(conn_name=conn_name))
+                self._cancel_open_connections(adapter)
 
         pool.join()
 
