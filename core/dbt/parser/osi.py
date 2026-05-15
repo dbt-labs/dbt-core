@@ -1,5 +1,4 @@
 import dataclasses
-import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -25,10 +24,10 @@ class _OsiFileContext:
 
 
 def _scan_osi_directory(project_root: str) -> List[Path]:
-    osi_dir = os.path.join(project_root, OSI_DIRECTORY_NAME)
-    if not os.path.isdir(osi_dir):
+    osi_dir = Path(project_root) / OSI_DIRECTORY_NAME
+    if not osi_dir.is_dir():
         return []
-    return sorted(Path(osi_dir) / f for f in os.listdir(osi_dir) if f.endswith(".json"))
+    return sorted(osi_dir.rglob("*.json"))
 
 
 def _build_model_lookup(manifest: Manifest) -> Dict[Tuple[str, str, str], ModelNode]:
@@ -123,21 +122,20 @@ def _inject_one_metric(
 
 
 def _process_osi_file(
-    path: Path,
-    package_name: str,
+    ctx: _OsiFileContext,
     manifest: Manifest,
     model_lookup: Dict[Tuple[str, str, str], ModelNode],
 ) -> None:
     from metricflow.converters.models import OSIDocument
 
     try:
-        doc = OSIDocument.parse_raw(path.read_text(encoding="utf-8"))
+        doc = OSIDocument.parse_raw(ctx.path.read_text(encoding="utf-8"))
     except Exception as exc:
-        raise ParsingError(f"Failed to parse OSI file '{path}': {exc}") from exc
+        raise ParsingError(f"Failed to parse OSI file '{ctx.path}': {exc}") from exc
 
     if doc.version not in SUPPORTED_OSI_VERSIONS:
         raise ParsingError(
-            f"OSI file '{path}' uses unsupported version '{doc.version}'. "
+            f"OSI file '{ctx.path}' uses unsupported version '{doc.version}'. "
             f"Supported versions: {sorted(SUPPORTED_OSI_VERSIONS)}"
         )
 
@@ -151,14 +149,6 @@ def _process_osi_file(
                 converter_name="OSIToMSIConverter",
             )
         )
-
-    ctx = _OsiFileContext(
-        path=path,
-        rel_path=os.path.join(OSI_DIRECTORY_NAME, path.name),
-        original_file_path=str(path),
-        now=time.time(),
-        package_name=package_name,
-    )
 
     for pydantic_sm in result.output.semantic_models:
         _inject_one_semantic_model(manifest, ctx, model_lookup, pydantic_sm)
@@ -175,7 +165,16 @@ def load_osi_into_manifest(
     if not files:
         return
 
+    project_root_path = Path(project_root)
     model_lookup = _build_model_lookup(manifest)
+    now = time.time()
 
     for path in files:
-        _process_osi_file(path, package_name, manifest, model_lookup)
+        ctx = _OsiFileContext(
+            path=path,
+            rel_path=str(path.relative_to(project_root_path)),
+            original_file_path=str(path),
+            now=now,
+            package_name=package_name,
+        )
+        _process_osi_file(ctx, manifest, model_lookup)

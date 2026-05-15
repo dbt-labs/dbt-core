@@ -64,6 +64,15 @@ class TestScanOsiDirectory:
         result = _scan_osi_directory(str(tmp_path))
         assert [p.name for p in result] == ["a.json", "m.json", "z.json"]
 
+    def test_recurses_into_subdirectories(self, tmp_path):
+        osi_dir = tmp_path / "OSI"
+        (osi_dir / "subdir").mkdir(parents=True)
+        (osi_dir / "top.json").write_text("{}")
+        (osi_dir / "subdir" / "nested.json").write_text("{}")
+        (osi_dir / "subdir" / "ignored.yaml").write_text("{}")
+        result = _scan_osi_directory(str(tmp_path))
+        assert {p.name for p in result} == {"top.json", "nested.json"}
+
 
 class TestBuildModelLookup:
     def test_indexes_model_by_alias_schema_database(self):
