@@ -4796,6 +4796,35 @@
                       }
                     ],
                     "default": null
+                  },
+                  "latest_version_view": {
+                    "type": "object",
+                    "title": "LatestVersionView",
+                    "properties": {
+                      "enabled": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "alias": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": true
@@ -19126,6 +19155,35 @@
                             }
                           ],
                           "default": null
+                        },
+                        "latest_version_view": {
+                          "type": "object",
+                          "title": "LatestVersionView",
+                          "properties": {
+                            "enabled": {
+                              "anyOf": [
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            },
+                            "alias": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": true
