@@ -1,0 +1,7 @@
+kind: Fixes
+body: Handle `Reused` node status in on-run-end summary printer so plugins that
+    emit `RunResult(status=Reused, ...)` don't crash with `unhandled result`.
+time: 2026-05-15T12:00:00.000000-05:00
+custom:
+    Author: colin-rogers-dbt
+    Issue: "12972"

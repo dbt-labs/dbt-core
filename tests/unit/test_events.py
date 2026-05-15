@@ -506,7 +506,7 @@ sample_values = [
     core_types.RunResultWarning(resource_type="", node_name="", path=""),
     core_types.RunResultFailure(resource_type="", node_name="", path=""),
     core_types.StatsLine(
-        stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "noop": 0, "total": 0}
+        stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "noop": 0, "reused": 0, "total": 0}
     ),
     core_types.RunResultError(msg=""),
     core_types.RunResultErrorNoMessage(status=""),
@@ -658,4 +658,44 @@ def test_single_run_error():
         # Set an empty event manager unconditionally on exit. This is an early
         # attempt at unit testing events, and we need to think about how it
         # could be done in a thread safe way in the long run.
+        ctx_set_event_manager(EventManager())
+
+
+def test_reused_run_status():
+    try:
+        event_mgr = TestEventManager()
+        ctx_set_event_manager(event_mgr)
+
+        class MockNode:
+            unique_id: str = ""
+            node_info = None
+            resource_type: str = "model"
+            name: str = "my_model"
+            original_file_path: str = "path/to/model.sql"
+
+        reused_result = RunResult(
+            status=RunStatus.Reused,
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            node=MockNode(),
+            adapter_response=dict(),
+            message=None,
+            failures=0,
+            batch_results=None,
+        )
+
+        print_run_end_messages([reused_result])
+
+        stats_events = [
+            e for e in event_mgr.event_history if isinstance(e[0], core_types.StatsLine)
+        ]
+        assert len(stats_events) == 1
+        stats = stats_events[0][0].stats
+        assert stats["reused"] == 1
+        assert stats["total"] == 1
+        assert stats["error"] == 0
+        assert "REUSED=1" in stats_events[0][0].message()
+
+    finally:
         ctx_set_event_manager(EventManager())
