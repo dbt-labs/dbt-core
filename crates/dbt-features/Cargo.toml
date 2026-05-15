@@ -23,6 +23,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
 
+minijinja = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }
 

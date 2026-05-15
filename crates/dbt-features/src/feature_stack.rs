@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use dbt_adapter::Adapter;
 use dbt_clap_core::Cli;
 use dbt_clap_core::InitArgs;
 use dbt_common::DiscreteEventEmitter;
@@ -13,12 +14,15 @@ use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::RunTasksOk;
+use minijinja::Value as MinijinjaValue;
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::adapter::AdapterFeature;
+
 use crate::antlr_parser::AntlrParserFeature;
 use crate::compilation::CompilationConfig;
 use crate::tracing::TracingFeature;
@@ -122,6 +126,26 @@ pub trait CliExtensionHooks: Send + Sync {
         Ok(())
     }
 
+    /// Called after all compile-time setup (adapter init, defer, schema hydration)
+    /// and before the task runner starts.
+    ///
+    /// Returns per-node data that the task runner consumes, or `None` if this
+    /// hook has nothing to contribute. An `Err` with an exit status signals that
+    /// the hook handled the command fully and execution should terminate.
+    async fn did_pre_run(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _jinja_env: Cow<'_, JinjaEnv>,
+        _augmented_resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _adapter: Arc<Adapter>,
+        _base_context: &BTreeMap<String, MinijinjaValue>,
+        _token: &CancellationToken,
+    ) -> FsResult<Option<Box<dyn PreTaskRunData>>> {
+        Ok(None)
+    }
+
     async fn did_handle_defer(
         &self,
         _arg: &EvalArgs,
@@ -162,4 +186,10 @@ impl fmt::Debug for FeatureStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FeatureStack").finish()
     }
+}
+
+/// Per-node data returned by pre-run hooks.
+pub trait PreTaskRunData: Send + Sync {
+    /// Returns a value for `node_id`, or `None` if not present.
+    fn get(&self, node_id: &str) -> Option<String>;
 }
