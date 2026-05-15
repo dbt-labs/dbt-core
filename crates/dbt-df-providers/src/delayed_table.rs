@@ -1,15 +1,20 @@
 //! Table provider that defers data registration until execution time.
 
+use datafusion::{
+    datasource::listing::{ListingTable, ListingTableConfig, ListingTableUrl},
+    execution::options::ReadOptions,
+    prelude::{NdJsonReadOptions, ParquetReadOptions},
+};
 use datafusion_catalog::{Session, TableProvider};
 use datafusion_common::error::DataFusionError;
 use datafusion_expr::Expr;
 use dbt_schema_store::{CanonicalFqn, DataStoreTrait, SchemaStoreTrait};
 use std::any::Any;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use crate::listing_table::TableFormat;
-use crate::listing_table::make_listing_table_provider;
+use crate::seed_io::TableFormat;
 
 // Ref to cache_state in delayed data table provider?
 
@@ -151,4 +156,45 @@ pub fn is_schema_compat(source: &arrow_schema::Schema, target: &arrow_schema::Sc
         .zip(target.fields())
         .all(|(a, b)| a.name() == b.name())
         && source.fields().len() == target.fields().len()
+}
+
+/// Build a [`ListingTable`] over a single on-disk parquet/JSON file, inferring
+/// the schema from the file. Used by [`DelayedDataTableProvider::scan`] to
+/// lazily materialize a `TableProvider` over the upstream's persisted parquet
+/// at scan time.
+async fn make_listing_table_provider(
+    ctx: &dyn Session,
+    table_path: &Path,
+    table_format: TableFormat,
+) -> Result<Arc<ListingTable>, DataFusionError> {
+    let listing_options = match table_format {
+        TableFormat::Parquet => {
+            ParquetReadOptions::new().to_listing_options(ctx.config(), ctx.table_options().clone())
+        }
+        TableFormat::Csv => {
+            return Err(DataFusionError::Internal(
+                "TableFormat::Csv is not supported in make_listing_table_provider".to_string(),
+            ));
+        }
+        TableFormat::Json => NdJsonReadOptions::default()
+            .to_listing_options(ctx.config(), ctx.table_options().clone()),
+    };
+    let (table_path, schema) =
+        infer_schema_for_listing_options(ctx, table_path, &listing_options).await?;
+
+    let config = ListingTableConfig::new(table_path)
+        .with_listing_options(listing_options)
+        .with_schema(schema);
+    let provider = Arc::new(ListingTable::try_new(config).unwrap());
+    Ok(provider)
+}
+
+async fn infer_schema_for_listing_options(
+    ctx: &dyn Session,
+    table_path: &Path,
+    listing_options: &datafusion::datasource::listing::ListingOptions,
+) -> Result<(ListingTableUrl, Arc<arrow_schema::Schema>), DataFusionError> {
+    let table_url = ListingTableUrl::parse(table_path.to_string_lossy().as_ref())?;
+    let schema = listing_options.infer_schema(ctx, &table_url).await?;
+    Ok((table_url, schema))
 }

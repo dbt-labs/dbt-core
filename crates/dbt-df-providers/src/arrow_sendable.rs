@@ -1,7 +1,5 @@
 use arrow_schema::ArrowError;
-use datafusion::{
-    arrow::array::RecordBatch, execution::SendableRecordBatchStream, prelude::DataFrame,
-};
+use datafusion::{arrow::array::RecordBatch, prelude::DataFrame};
 use datafusion_common::DataFusionError;
 use futures::StreamExt;
 
@@ -31,22 +29,6 @@ impl ArrowSendable for DataFrame {
         Ok(self
             .execute_stream()
             .await?
-            .map(|res| res.map_err(|e| ArrowError::ExternalError(Box::new(e))))
-            .boxed())
-    }
-}
-
-#[async_trait::async_trait]
-impl ArrowSendable for SendableRecordBatchStream {
-    async fn arrow_sendable(
-        self,
-    ) -> Result<
-        std::pin::Pin<
-            Box<dyn futures::Stream<Item = Result<RecordBatch, ArrowError>> + Send + 'static>,
-        >,
-        DataFusionError,
-    > {
-        Ok(self
             .map(|res| res.map_err(|e| ArrowError::ExternalError(Box::new(e))))
             .boxed())
     }
