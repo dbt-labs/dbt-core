@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use dbt_common::{FsResult, hashing::code_hash, io_args::IoArgs, stdfs};
 use dbt_schemas::state::{DbtAsset, DbtState};
 
-use crate::parquet_node::InputKind;
+use crate::types::InputKind;
 
 // Helper function to convert asset path to project-relative path
 fn asset_to_relative_path(io: &IoArgs, asset: &DbtAsset) -> std::path::PathBuf {

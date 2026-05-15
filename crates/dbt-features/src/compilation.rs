@@ -5,8 +5,6 @@ use dbt_common::io_args::FsCommand;
 pub struct CompilationConfig {
     /// Whether to use the build cache to determine the schedule
     pub use_build_cache_for_scheduling: bool,
-    /// Whether to save build cache
-    pub save_build_cache: bool,
     /// Commands that support caching
     pub cacheable_commands: Vec<FsCommand>,
     /// Disables local compute checks
@@ -24,7 +22,6 @@ impl Default for CompilationConfig {
     fn default() -> Self {
         Self {
             use_build_cache_for_scheduling: true,
-            save_build_cache: false,
             cacheable_commands: vec![
                 FsCommand::Parse,
                 FsCommand::Compile,

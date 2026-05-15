@@ -321,7 +321,7 @@ fn nanos_to_system_time(nanos: u64) -> SystemTime {
 }
 
 fn snapshot_packages(dbt_state: &DbtState) -> Vec<PackageSnapshot> {
-    crate::parquet_incremental::snapshot_packages(&dbt_state.packages)
+    crate::parse_state::snapshot_packages(&dbt_state.packages)
 }
 
 fn snapshot_relation_calls(
@@ -456,7 +456,7 @@ pub fn save_parse_state(
     let git_info =
         read_git_info(project_file_path.parent().unwrap_or(&project_file_path)).unwrap_or_default();
 
-    crate::parquet_incremental::save(&crate::parquet_incremental::SaveArgs {
+    crate::parse_state::save(&crate::parse_state::SaveArgs {
         out_dir: &io.out_dir,
         version: INCREMENTAL_STATE_VERSION,
         dbt_version: &current_dbt_version(),
@@ -492,7 +492,7 @@ pub fn save_parse_state(
 
 /// Read only the `any_uses_graph` meta flag from the SQLite cache without loading nodes.
 pub fn peek_any_uses_graph(io: &IoArgs) -> bool {
-    crate::parquet_incremental::peek_any_uses_graph(&io.out_dir)
+    crate::parse_state::peek_any_uses_graph(&io.out_dir)
 }
 
 // ── selector payload guard ────────────────────────────────────────────────────
@@ -650,7 +650,7 @@ fn resolve_expr(
     out_dir: &Path,
     default_indirect: IndirectSelection,
 ) -> Option<HashSet<String>> {
-    use crate::parquet_incremental::{
+    use crate::index_resolution::{
         IndexLookupMethod, resolve_dirty_unique_ids_from_index, resolve_unique_ids_from_index,
     };
     match expr {
@@ -818,7 +818,7 @@ pub fn load_parse_state_filtered_with_unique_ids(
     allowed_kinds: Option<&HashSet<&'static str>>,
     allowed_unique_ids: Option<&HashSet<String>>,
 ) -> Option<IncrementalState> {
-    let loaded = crate::parquet_incremental::load_filtered_with_unique_ids(
+    let loaded = crate::parse_state::load_filtered_with_unique_ids(
         &io.out_dir,
         allowed_kinds,
         allowed_unique_ids,
@@ -1186,7 +1186,7 @@ mod tests {
     fn load_corrupted_file_returns_none() {
         let tmp = tempfile::tempdir().expect("tempdir");
         // Write garbage bytes into project.parquet; the reader will fail gracefully.
-        let cache_dir = tmp.path().join(crate::parquet_incremental::CACHE_DIR_NAME);
+        let cache_dir = tmp.path().join(crate::parse_state::CACHE_DIR_NAME);
         std::fs::create_dir_all(&cache_dir).unwrap();
         std::fs::write(
             cache_dir.join("project.parquet"),
@@ -1202,7 +1202,7 @@ mod tests {
 
     #[test]
     fn load_version_mismatch_returns_none() {
-        use crate::parquet_incremental::{SaveArgs, save};
+        use crate::parse_state::{SaveArgs, save};
         let tmp = tempfile::tempdir().expect("tempdir");
         let io = IoArgs {
             out_dir: tmp.path().to_path_buf(),
@@ -1246,7 +1246,7 @@ mod tests {
 
     #[test]
     fn load_dbt_version_mismatch_returns_none() {
-        use crate::parquet_incremental::{SaveArgs, save};
+        use crate::parse_state::{SaveArgs, save};
         let tmp = tempfile::tempdir().expect("tempdir");
         let io = IoArgs {
             out_dir: tmp.path().to_path_buf(),
@@ -1663,7 +1663,7 @@ mod tests {
     // 1+a (1 hop parents)  = {a, b}
 
     fn write_graph_cache(out_dir: &Path) {
-        use crate::parquet_incremental::{SaveArgs, save};
+        use crate::parse_state::{SaveArgs, save};
         use dbt_schemas::schemas::DbtModel;
         use dbt_schemas::schemas::common::NodeDependsOn;
         use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
@@ -1922,7 +1922,7 @@ mod tests {
     //   test.p.unique_b    depends_on: [model.p.b]
 
     fn write_graph_cache_with_tests(out_dir: &Path) {
-        use crate::parquet_incremental::{SaveArgs, save};
+        use crate::parse_state::{SaveArgs, save};
         use dbt_schemas::schemas::common::NodeDependsOn;
         use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
         use dbt_schemas::schemas::{DbtModel, DbtTest};
@@ -2257,7 +2257,7 @@ mod tests {
     /// returns the exact same seed nodes as a full load would, i.e. no false negatives.
     #[test]
     fn differential_seed_lazy_vs_full_same_nodes() {
-        use crate::parquet_incremental::{SaveArgs, save};
+        use crate::parse_state::{SaveArgs, save};
         use dbt_schemas::schemas::{
             DbtSeed,
             nodes::{CommonAttributes, NodeBaseAttributes},
@@ -3064,7 +3064,7 @@ mod tests {
     // leaving the old epoch-0 row in place (stale but corrected on next full run).
     #[test]
     fn delta_write_skips_node_not_in_resolved_set() {
-        use crate::parquet_incremental::{SaveArgs, load_filtered_with_unique_ids, save};
+        use crate::parse_state::{SaveArgs, load_filtered_with_unique_ids, save};
 
         let tmp = tempfile::tempdir().unwrap();
         let profile = test_profile();

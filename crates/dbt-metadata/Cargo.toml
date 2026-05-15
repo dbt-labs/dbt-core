@@ -19,7 +19,6 @@ dbt-common = { workspace = true }
 dbt-jinja-vars = { workspace = true }
 dbt-metadata-parquet = { workspace = true }
 dbt-schemas = { workspace = true }
-dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
 
 arrow = { workspace = true }

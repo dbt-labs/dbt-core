@@ -20,10 +20,9 @@ use dbt_loader::{
     args::{IoArgs, LoadArgs},
     load,
 };
-use dbt_metadata::build_cache::{
+use dbt_metadata::parse_cache::{
     PreviousResolvedState, add_all_unchanged_nodes,
     determine_cache_state_from_previous_previous_resolved_nodes, drop_all_unchanged_nodes,
-    hydrate_cache,
 };
 use dbt_parser::args::ResolveArgs;
 use dbt_schemas::{
@@ -292,32 +291,10 @@ async fn try_load_cache_state_and_changeset_by_last_write(
     }
 }
 
-async fn try_load_cache_state(
-    command: FsCommand,
-    io: &IoArgs,
-    config: &CompilationConfig,
-    dbt_state: &DbtState,
-) -> FsResult<Option<CacheState>> {
-    // Hydrate cache if enabled
-    if io.should_use_build_cache() && config.cacheable_commands.contains(&command) {
-        Ok(hydrate_cache(
-            command,
-            io,
-            &dbt_state.dbt_profile.target,
-            dbt_state.root_project_name(),
-            dbt_state,
-        )?)
-    } else {
-        Ok(None)
-    }
-}
-
-/// Loads the cache state.
-/// When given a previous resolved project,
-/// the cache state is based on that instead of reading from disk.
+/// Loads the cache state from previous resolved state (LSP/incremental path).
 async fn load_cache(
     loaded_project: &DbtLoadedProject,
-    cache_command: FsCommand,
+    _cache_command: FsCommand,
     io: &IoArgs,
     prev_resolved_state: Option<(&DbtLoadedProject, &ResolverState)>,
     token: &CancellationToken,
@@ -338,13 +315,7 @@ async fn load_cache(
             Ok(None)
         }
     } else {
-        Ok(try_load_cache_state(
-            cache_command,
-            io,
-            &loaded_project.config,
-            &loaded_project.dbt_state,
-        )
-        .await?)
+        Ok(None)
     }
 }
 

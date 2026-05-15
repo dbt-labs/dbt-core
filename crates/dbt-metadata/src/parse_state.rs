@@ -58,16 +58,8 @@ fn t(label: &str, start: Instant) {
 }
 
 use arrow::datatypes::{DataType, Field, FieldRef};
-use parquet::{
-    arrow::{
-        ArrowWriter, ProjectionMask,
-        arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
-    },
-    basic::{Compression, ZstdLevel},
-    file::properties::WriterProperties,
-    schema::types::SchemaDescriptor,
-};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use parquet::arrow::{ProjectionMask, arrow_reader::ParquetRecordBatchReaderBuilder};
+use serde::{Deserialize, Serialize};
 
 use dbt_schemas::{
     schemas::{
@@ -80,11 +72,11 @@ use dbt_schemas::{
     state::{DbtPackage, Macros, ResourcePathKind},
 };
 
-use crate::incremental_parse::PackageSnapshot;
+use crate::partial_parse::PackageSnapshot;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-pub(crate) const CACHE_DIR_NAME: &str = "parse_state";
+pub const CACHE_DIR_NAME: &str = "parse_state";
 
 /// Compact epoch files into one when this many delta files exist.
 const COMPACT_THRESHOLD: u32 = 8;
@@ -93,11 +85,11 @@ const SCHEMA_VERSION: u32 = 1;
 
 // ── path helpers ──────────────────────────────────────────────────────────────
 
-pub(crate) fn cache_dir(out_dir: &Path) -> PathBuf {
+pub fn cache_dir(out_dir: &Path) -> PathBuf {
     out_dir.join(CACHE_DIR_NAME)
 }
 
-fn project_path(dir: &Path) -> PathBuf {
+pub(crate) fn project_path(dir: &Path) -> PathBuf {
     dir.join("project.parquet")
 }
 
@@ -105,7 +97,7 @@ fn filestamps_path(dir: &Path) -> PathBuf {
     dir.join("filestamps.parquet")
 }
 
-fn nodes_dir(dir: &Path) -> PathBuf {
+pub(crate) fn nodes_dir(dir: &Path) -> PathBuf {
     dir.join("nodes")
 }
 
@@ -119,34 +111,25 @@ fn node_epoch_path(dir: &Path, epoch: u32) -> PathBuf {
 
 /// Return sorted list of existing epoch numbers from the nodes/ subdirectory.
 fn existing_epochs(dir: &Path) -> Vec<u32> {
-    let nf_dir = nodes_dir(dir);
-    let Ok(rd) = fs::read_dir(&nf_dir) else {
-        return vec![];
-    };
     let prefix = version_prefix();
-    let mut epochs: Vec<u32> = rd
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let name = e.file_name();
-            let s = name.to_string_lossy();
-            let stem = s.strip_suffix(".parquet")?;
-            let rest = stem.strip_prefix(&prefix)?;
-            rest.parse::<u32>().ok()
-        })
-        .collect();
-    epochs.sort_unstable();
-    epochs
+    dbt_metadata_parquet::epoch_io::existing_epochs(&nodes_dir(dir), &prefix)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect()
+}
+
+/// Returns `(epoch_number, path)` pairs for the nodes directory.
+pub(crate) fn existing_epoch_paths(dir: &Path) -> Vec<(u32, PathBuf)> {
+    let prefix = version_prefix();
+    dbt_metadata_parquet::epoch_io::existing_epochs(&nodes_dir(dir), &prefix)
 }
 
 fn next_epoch(dir: &Path) -> u32 {
-    existing_epochs(dir)
-        .into_iter()
-        .next_back()
-        .map(|n| n + 1)
-        .unwrap_or(0)
+    let prefix = version_prefix();
+    dbt_metadata_parquet::epoch_io::next_epoch(&nodes_dir(dir), &prefix)
 }
 
-fn system_time_to_nanos(t: SystemTime) -> u64 {
+pub(crate) fn system_time_to_nanos(t: SystemTime) -> u64 {
     t.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_nanos() as u64
@@ -155,9 +138,9 @@ fn system_time_to_nanos(t: SystemTime) -> u64 {
 // ── row types (Serialize + Deserialize → serde_arrow) ────────────────────────
 
 #[derive(Serialize, Deserialize, Clone)]
-struct KvRow {
-    key: String,
-    value: String,
+pub(crate) struct KvRow {
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -237,45 +220,13 @@ fn i64_field(name: &str) -> FieldRef {
     Arc::new(Field::new(name, DataType::Int64, false))
 }
 
-fn write_rows_with_fields<T: Serialize>(path: &Path, fields: &[FieldRef], rows: &Vec<T>) -> bool {
-    let batch = match serde_arrow::to_record_batch(fields, rows) {
-        Ok(b) => b,
-        Err(_) => return false,
-    };
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).ok();
-    }
-    let file = match fs::File::create(path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
-        .build();
-    let mut writer = match ArrowWriter::try_new(file, batch.schema(), Some(props)) {
-        Ok(w) => w,
-        Err(_) => return false,
-    };
-    writer.write(&batch).ok();
-    writer.close().is_ok()
+fn write_rows_with_fields<T: Serialize>(path: &Path, fields: &[FieldRef], rows: &[T]) -> bool {
+    let plain_fields: Vec<Field> = fields.iter().map(|f| f.as_ref().clone()).collect();
+    dbt_metadata_parquet::epoch_io::write_rows(path, &plain_fields, rows).is_ok()
 }
 
-fn read_rows<T: DeserializeOwned>(path: &Path) -> Vec<T> {
-    let Ok(file) = fs::File::open(path) else {
-        return vec![];
-    };
-    let Ok(reader) = ParquetRecordBatchReader::try_new(file, 4096) else {
-        return vec![];
-    };
-    let mut out = Vec::new();
-    for batch in reader {
-        let Ok(batch) = batch else { return vec![] };
-        match serde_arrow::from_record_batch::<Vec<T>>(&batch) {
-            Ok(rows) => out.extend(rows),
-            Err(_) => return vec![],
-        }
-    }
-    out
+fn read_rows<T: serde::de::DeserializeOwned>(path: &Path) -> Vec<T> {
+    dbt_metadata_parquet::epoch_io::read_rows(path)
 }
 
 fn kv_fields() -> Vec<FieldRef> {
@@ -602,8 +553,8 @@ fn collect_alive_rows(
     disabled_nodes: &Nodes,
     macros: &Macros,
     ingested_at: i64,
-) -> Vec<dbt_metadata_parquet::parquet_parse_alive::AliveRow> {
-    use dbt_metadata_parquet::parquet_parse_alive::AliveRow;
+) -> Vec<dbt_metadata_parquet::parse_alive::AliveRow> {
+    use dbt_metadata_parquet::parse_alive::AliveRow;
     let mut rows = Vec::new();
     macro_rules! push_alive {
         ($map:expr, $kind:literal) => {
@@ -694,73 +645,6 @@ fn read_node_rows(dir: &Path) -> Vec<NodeRow> {
     let mut by_id: HashMap<String, NodeRow> = HashMap::new();
     for epoch in &epochs {
         for row in read_rows::<NodeRow>(&node_epoch_path(dir, *epoch)) {
-            by_id.insert(row.unique_id.clone(), row);
-        }
-    }
-    by_id.into_values().collect()
-}
-
-/// Index column names — columns needed for selector evaluation, excluding `payload`.
-const INDEX_COLUMNS: &[&str] = &[
-    "unique_id",
-    "original_path",
-    "kind",
-    "name",
-    "package_name",
-    "fqn",
-    "tags",
-    "depends_on",
-    "materialization",
-];
-
-/// Read index rows from a single epoch file, projecting away the `payload` column.
-fn read_index_rows_from_file(path: &Path) -> Vec<NodeIndexRow> {
-    let Ok(file) = fs::File::open(path) else {
-        return vec![];
-    };
-    let Ok(builder) = ParquetRecordBatchReaderBuilder::try_new(file) else {
-        return vec![];
-    };
-
-    // Build ProjectionMask from column names.
-    let schema_desc: &SchemaDescriptor = builder.parquet_schema();
-    let col_indices: Vec<usize> = INDEX_COLUMNS
-        .iter()
-        .filter_map(|name| {
-            (0..schema_desc.num_columns()).find(|&i| schema_desc.column(i).name() == *name)
-        })
-        .collect();
-    let mask = ProjectionMask::leaves(schema_desc, col_indices);
-
-    let Ok(reader) = builder.with_projection(mask).build() else {
-        return vec![];
-    };
-    let mut out = Vec::new();
-    for batch in reader {
-        let Ok(batch) = batch else { return vec![] };
-        match serde_arrow::from_record_batch::<Vec<NodeIndexRow>>(&batch) {
-            Ok(rows) => out.extend(rows),
-            Err(_) => return vec![],
-        }
-    }
-    out
-}
-
-/// Read index-only rows across all epochs, latest epoch wins by unique_id.
-fn read_node_index_rows(dir: &Path) -> Vec<NodeIndexRow> {
-    let epochs = existing_epochs(dir);
-    if epochs.is_empty() {
-        return vec![];
-    }
-    if epochs.len() == 1 {
-        return read_index_rows_from_file(&node_epoch_path(dir, epochs[0]));
-    }
-    // Multiple epochs: later epoch wins. Use a map keyed by unique_id.
-    // We can't use NodeIndexRow directly as map value since it doesn't have a simple
-    // unique_id extraction without cloning — collect into vec then dedup.
-    let mut by_id: HashMap<String, NodeIndexRow> = HashMap::new();
-    for epoch in &epochs {
-        for row in read_index_rows_from_file(&node_epoch_path(dir, *epoch)) {
             by_id.insert(row.unique_id.clone(), row);
         }
     }
@@ -1053,8 +937,7 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         args.ingested_at,
     );
     let alive_path = dir.join("alive.parquet");
-    if let Err(e) = dbt_metadata_parquet::parquet_parse_alive::write_alive(&alive_path, &alive_rows)
-    {
+    if let Err(e) = dbt_metadata_parquet::parse_alive::write_alive(&alive_path, &alive_rows) {
         eprintln!("[warning] Failed to write alive.parquet: {e}");
     }
     t(
@@ -1220,7 +1103,7 @@ pub fn load_filtered_with_unique_ids(
     })
 }
 
-fn load_packages(dir: &Path, project: &[KvRow]) -> Option<Vec<PackageSnapshot>> {
+pub(crate) fn load_packages(dir: &Path, project: &[KvRow]) -> Option<Vec<PackageSnapshot>> {
     let get_kv = |key: &str| -> String {
         project
             .iter()
@@ -1427,338 +1310,6 @@ fn deserialize_into(
     }
 }
 
-// ── index-based selector resolution ──────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IndexLookupMethod {
-    Fqn,
-    Tag,
-    Package,
-    ResourceType,
-}
-
-#[allow(clippy::cognitive_complexity)]
-pub fn resolve_unique_ids_from_index(
-    out_dir: &Path,
-    method: IndexLookupMethod,
-    value: &str,
-    parents_depth: Option<u32>,
-    children_depth: Option<u32>,
-    include_indirect: bool,
-) -> Option<HashSet<String>> {
-    if value.contains(['*', '?', '[', ']']) {
-        return None;
-    }
-    let dir = cache_dir(out_dir);
-    if !dir.exists() {
-        return None;
-    }
-
-    // Use index-only projection — payload column is never read from disk.
-    let all_rows = read_node_index_rows(&dir);
-    if all_rows.is_empty() {
-        return None;
-    }
-
-    // Match seed set by method.
-    let seed_ids: HashSet<String> = all_rows
-        .iter()
-        .filter(|row| match method {
-            IndexLookupMethod::Fqn => {
-                row.name == value || row.unique_id == value || fqn_contains(&row.fqn, value)
-            }
-            IndexLookupMethod::Tag => tags_contains(&row.tags, value),
-            IndexLookupMethod::Package => row.package_name == value,
-            IndexLookupMethod::ResourceType => row.kind == value,
-        })
-        .map(|row| row.unique_id.clone())
-        .collect();
-
-    // Build edge maps.
-    let mut parents_of: HashMap<String, Vec<String>> = HashMap::new();
-    for row in &all_rows {
-        let deps: Vec<String> = serde_json::from_str(&row.depends_on).unwrap_or_default();
-        parents_of.insert(row.unique_id.clone(), deps);
-    }
-
-    // Build reverse map for children walk.
-    let mut children_of: HashMap<String, Vec<String>> = HashMap::new();
-    if children_depth.is_some() || include_indirect {
-        for (uid, deps) in &parents_of {
-            for dep in deps {
-                children_of
-                    .entry(dep.clone())
-                    .or_default()
-                    .push(uid.clone());
-            }
-        }
-    }
-
-    let mut result: HashSet<String> = seed_ids.clone();
-
-    // Walk parents.
-    if let Some(max_depth) = parents_depth {
-        let mut frontier: Vec<String> = seed_ids.iter().cloned().collect();
-        let mut depth = 0u32;
-        while !frontier.is_empty() && depth < max_depth {
-            let mut next = Vec::new();
-            for uid in &frontier {
-                if let Some(deps) = parents_of.get(uid.as_str()) {
-                    for dep in deps {
-                        if result.insert(dep.clone()) {
-                            next.push(dep.clone());
-                        }
-                    }
-                }
-            }
-            frontier = next;
-            depth += 1;
-        }
-    }
-
-    // Walk children.
-    if let Some(max_depth) = children_depth {
-        let mut frontier: Vec<String> = seed_ids.iter().cloned().collect();
-        let mut depth = 0u32;
-        while !frontier.is_empty() && depth < max_depth {
-            let mut next = Vec::new();
-            for uid in &frontier {
-                if let Some(kids) = children_of.get(uid.as_str()) {
-                    for kid in kids {
-                        if result.insert(kid.clone()) {
-                            next.push(kid.clone());
-                        }
-                    }
-                }
-            }
-            frontier = next;
-            depth += 1;
-        }
-    }
-
-    // Indirect selection.
-    if include_indirect {
-        let primary: Vec<String> = result.iter().cloned().collect();
-        for uid in &primary {
-            if let Some(kids) = children_of.get(uid.as_str()) {
-                for kid in kids {
-                    if kid.starts_with("test.") || kid.starts_with("unit_test.") {
-                        result.insert(kid.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    // Transitively include all ancestors of the result set so that all_deps_present()
-    // passes when the loaded subset is handed to the scheduler. A single frontier hop
-    // was enough for ephemeral-only chains but misses multi-hop non-ephemeral deps.
-    let mut queue: Vec<String> = result.iter().cloned().collect();
-    while let Some(uid) = queue.pop() {
-        if let Some(deps) = parents_of.get(uid.as_str()) {
-            for dep in deps {
-                if result.insert(dep.clone()) {
-                    queue.push(dep.clone());
-                }
-            }
-        }
-    }
-
-    // Always include all macros.
-    for uid in parents_of.keys().filter(|uid| uid.starts_with("macro.")) {
-        result.insert(uid.clone());
-    }
-
-    Some(result)
-}
-
-/// Resolve the set of unique_ids to load for `state:dirty` — nodes whose source file
-/// mtime has changed since the last parse cache save.
-///
-/// Returns `Some(ids)` always when the cache exists (even if the set is empty — meaning
-/// nothing is dirty). Returns `None` only when the cache directory doesn't exist.
-#[allow(clippy::cognitive_complexity)]
-pub fn resolve_dirty_unique_ids_from_index(
-    out_dir: &Path,
-    parents_depth: Option<u32>,
-    children_depth: Option<u32>,
-    include_indirect: bool,
-) -> Option<HashSet<String>> {
-    let dir = cache_dir(out_dir);
-    if !dir.exists() {
-        return None;
-    }
-
-    // Detect which (package_name, rel_path) pairs have a changed mtime.
-    let project: Vec<KvRow> = read_rows(&project_path(&dir));
-    let packages = load_packages(&dir, &project)?;
-    let mut touched: HashSet<(String, String)> = HashSet::new();
-    for pkg in &packages {
-        let root = Path::new(&pkg.package_root_path);
-        for (kind, files) in &pkg.all_paths {
-            let safe = matches!(
-                kind,
-                ResourcePathKind::ModelPaths | ResourcePathKind::AnalysisPaths
-            );
-            if !safe {
-                continue;
-            }
-            for (rel_path, saved_nanos) in files {
-                let is_sql = Path::new(rel_path)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.eq_ignore_ascii_case("sql"))
-                    .unwrap_or(false);
-                if !is_sql {
-                    continue;
-                }
-                let current_nanos = fs::metadata(root.join(rel_path))
-                    .and_then(|m| m.modified())
-                    .map(system_time_to_nanos)
-                    .unwrap_or(0);
-                if current_nanos != *saved_nanos {
-                    touched.insert((pkg.package_name.clone(), rel_path.clone()));
-                }
-            }
-        }
-    }
-
-    if touched.is_empty() {
-        // Nothing dirty — return an empty set (not None; cache exists, just clean).
-        // Still include all macros so the scheduler can resolve macro deps.
-        let all_rows = read_node_index_rows(&dir);
-        let mut result = HashSet::new();
-        for uid in all_rows
-            .iter()
-            .filter(|r| r.unique_id.starts_with("macro."))
-            .map(|r| r.unique_id.clone())
-        {
-            result.insert(uid);
-        }
-        return Some(result);
-    }
-
-    let all_rows = read_node_index_rows(&dir);
-    if all_rows.is_empty() {
-        return None;
-    }
-
-    // Seed: nodes whose source file is dirty.
-    let seed_ids: HashSet<String> = all_rows
-        .iter()
-        .filter(|row| touched.contains(&(row.package_name.clone(), row.original_path.clone())))
-        .map(|row| row.unique_id.clone())
-        .collect();
-
-    // Build edge maps (same logic as resolve_unique_ids_from_index).
-    let mut parents_of: HashMap<String, Vec<String>> = HashMap::new();
-    for row in &all_rows {
-        let deps: Vec<String> = serde_json::from_str(&row.depends_on).unwrap_or_default();
-        parents_of.insert(row.unique_id.clone(), deps);
-    }
-
-    let mut children_of: HashMap<String, Vec<String>> = HashMap::new();
-    if children_depth.is_some() || include_indirect {
-        for (uid, deps) in &parents_of {
-            for dep in deps {
-                children_of
-                    .entry(dep.clone())
-                    .or_default()
-                    .push(uid.clone());
-            }
-        }
-    }
-
-    let mut result: HashSet<String> = seed_ids.clone();
-
-    // Walk parents (prefix +).
-    if let Some(max_depth) = parents_depth {
-        let mut frontier: Vec<String> = seed_ids.iter().cloned().collect();
-        let mut depth = 0u32;
-        while !frontier.is_empty() && depth < max_depth {
-            let mut next = Vec::new();
-            for uid in &frontier {
-                if let Some(deps) = parents_of.get(uid.as_str()) {
-                    for dep in deps {
-                        if result.insert(dep.clone()) {
-                            next.push(dep.clone());
-                        }
-                    }
-                }
-            }
-            frontier = next;
-            depth += 1;
-        }
-    }
-
-    // Walk children (postfix +).
-    if let Some(max_depth) = children_depth {
-        let mut frontier: Vec<String> = seed_ids.iter().cloned().collect();
-        let mut depth = 0u32;
-        while !frontier.is_empty() && depth < max_depth {
-            let mut next = Vec::new();
-            for uid in &frontier {
-                if let Some(kids) = children_of.get(uid.as_str()) {
-                    for kid in kids {
-                        if result.insert(kid.clone()) {
-                            next.push(kid.clone());
-                        }
-                    }
-                }
-            }
-            frontier = next;
-            depth += 1;
-        }
-    }
-
-    // Indirect selection: include tests/unit_tests that depend on any selected node.
-    if include_indirect {
-        let primary: Vec<String> = result.iter().cloned().collect();
-        for uid in &primary {
-            if let Some(kids) = children_of.get(uid.as_str()) {
-                for kid in kids {
-                    if kid.starts_with("test.") || kid.starts_with("unit_test.") {
-                        result.insert(kid.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    // Transitively include all ancestors so all_deps_present() passes.
-    let mut queue: Vec<String> = result.iter().cloned().collect();
-    while let Some(uid) = queue.pop() {
-        if let Some(deps) = parents_of.get(uid.as_str()) {
-            for dep in deps {
-                if result.insert(dep.clone()) {
-                    queue.push(dep.clone());
-                }
-            }
-        }
-    }
-
-    // Always include all macros.
-    for uid in parents_of.keys().filter(|uid| uid.starts_with("macro.")) {
-        result.insert(uid.clone());
-    }
-
-    Some(result)
-}
-
-fn fqn_contains(fqn_json: &str, value: &str) -> bool {
-    let Ok(parts) = serde_json::from_str::<Vec<String>>(fqn_json) else {
-        return false;
-    };
-    parts.iter().any(|p| p == value)
-}
-
-fn tags_contains(tags_json: &str, value: &str) -> bool {
-    let Ok(parts) = serde_json::from_str::<Vec<String>>(tags_json) else {
-        return false;
-    };
-    parts.iter().any(|p| p == value)
-}
-
 // ── PackageSnapshot ↔ DbtPackage ─────────────────────────────────────────────
 
 pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
@@ -1791,6 +1342,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::index_resolution::resolve_dirty_unique_ids_from_index;
     use minijinja::machinery::Span;
     use tempfile::TempDir;
 
@@ -1922,7 +1474,7 @@ mod tests {
         write_rows_with_fields(
             &node_epoch_path(&dir, 0),
             &node_fields(),
-            &vec![row.clone()],
+            std::slice::from_ref(&row),
         );
         let rows: Vec<NodeRow> = read_rows(&node_epoch_path(&dir, 0));
         assert_eq!(rows.len(), 1);
@@ -1979,7 +1531,7 @@ mod tests {
             payload,
             ..make_row("model.pkg.orders", "{}")
         };
-        write_rows_with_fields(&node_epoch_path(&dir, 0), &node_fields(), &vec![row]);
+        write_rows_with_fields(&node_epoch_path(&dir, 0), &node_fields(), &[row]);
 
         let mut nodes = Nodes::default();
         let rows: Vec<NodeRow> = read_rows(&node_epoch_path(&dir, 0));
@@ -2064,7 +1616,7 @@ mod tests {
             ..make_row("macro.pkg.cents_to_dollars", "{}")
         };
 
-        write_rows_with_fields(&node_epoch_path(&dir, 0), &node_fields(), &vec![row]);
+        write_rows_with_fields(&node_epoch_path(&dir, 0), &node_fields(), &[row]);
 
         let mut nodes = Nodes::default();
         let rows: Vec<NodeRow> = read_rows(&node_epoch_path(&dir, 0));

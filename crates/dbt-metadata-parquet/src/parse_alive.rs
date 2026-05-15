@@ -12,17 +12,13 @@
 //!   All other tables may contain stale rows for deleted nodes;
 //!   compaction uses this table as the filter.
 
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
-use arrow::datatypes::{DataType, Field, Schema};
-use dbt_common::{ErrorCode, FsError, FsResult, stdfs};
-use parquet::{
-    arrow::ArrowWriter,
-    basic::{Compression, ZstdLevel},
-    file::properties::WriterProperties,
-};
+use arrow::datatypes::{DataType, Field};
+use dbt_common::FsResult;
 use serde::{Deserialize, Serialize};
-use serde_arrow::to_record_batch;
+
+use crate::epoch_io;
 
 // ── row schema ────────────────────────────────────────────────────────────────
 
@@ -44,50 +40,13 @@ fn alive_fields() -> Vec<Field> {
 // ── write ─────────────────────────────────────────────────────────────────────
 
 pub fn write_alive(path: &Path, rows: &[AliveRow]) -> FsResult<()> {
-    if let Some(parent) = path.parent() {
-        stdfs::create_dir_all(parent)?;
-    }
-    let file = stdfs::File::create(path)?;
-    let fields = alive_fields();
-    let arrow_schema = Arc::new(Schema::new(fields));
-    let field_refs: Vec<_> = arrow_schema.fields().iter().map(Arc::clone).collect();
-    let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
-        .build();
-    let mut writer = ArrowWriter::try_new(file, arrow_schema, Some(props))
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("Alive ArrowWriter: {e}")))?;
-    let row_refs: Vec<&AliveRow> = rows.iter().collect();
-    let batch = to_record_batch(&field_refs, &row_refs)
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("Alive serde_arrow: {e}")))?;
-    writer
-        .write(&batch)
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("Alive write: {e}")))?;
-    writer
-        .close()
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("Alive close: {e}")))?;
-    Ok(())
+    epoch_io::write_rows(path, &alive_fields(), rows)
 }
 
 // ── read ──────────────────────────────────────────────────────────────────────
 
 pub fn read_alive(path: &Path) -> Vec<AliveRow> {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-    let Ok(file) = std::fs::File::open(path) else {
-        return Vec::new();
-    };
-    let Ok(builder) = ParquetRecordBatchReaderBuilder::try_new(file) else {
-        return Vec::new();
-    };
-    let Ok(reader) = builder.build() else {
-        return Vec::new();
-    };
-    let mut rows = Vec::new();
-    for batch in reader.flatten() {
-        if let Ok(mut chunk) = serde_arrow::from_record_batch::<Vec<AliveRow>>(&batch) {
-            rows.append(&mut chunk);
-        }
-    }
-    rows
+    epoch_io::read_rows::<AliveRow>(path)
 }
 
 #[cfg(test)]

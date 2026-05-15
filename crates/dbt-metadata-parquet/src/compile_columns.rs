@@ -14,26 +14,19 @@
 //! * **Compaction** — when epoch count exceeds [`COMPACT_THRESHOLD`], epochs are
 //!   merged into `v1_0.parquet`. Optional `valid_ids` prunes dead nodes.
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field, Schema};
-use dbt_common::{ErrorCode, FsError, FsResult, stdfs};
-use parquet::{
-    arrow::ArrowWriter,
-    basic::{Compression, ZstdLevel},
-    file::properties::WriterProperties,
-};
+use arrow::datatypes::{DataType, Field};
+use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
-use serde_arrow::to_record_batch;
+
+use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
 const COMPACT_THRESHOLD: usize = 8;
-const SCHEMA_VERSION: u32 = 1;
+const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
 
@@ -60,89 +53,8 @@ fn column_fields() -> Vec<Field> {
 
 // ── epoch helpers ─────────────────────────────────────────────────────────────
 
-fn version_prefix() -> String {
-    format!("v{}_", SCHEMA_VERSION)
-}
-
 fn existing_epochs(dir: &Path) -> Vec<(u32, PathBuf)> {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let prefix = version_prefix();
-    let mut epochs: Vec<(u32, PathBuf)> = rd
-        .flatten()
-        .filter_map(|e| {
-            let p = e.path();
-            let stem = p.file_stem()?.to_str()?;
-            if p.extension()?.to_str()? != "parquet" {
-                return None;
-            }
-            let rest = stem.strip_prefix(&prefix)?;
-            let n: u32 = rest.parse().ok()?;
-            Some((n, p))
-        })
-        .collect();
-    epochs.sort_by_key(|(n, _)| *n);
-    epochs
-}
-
-fn next_epoch(dir: &Path) -> u32 {
-    existing_epochs(dir).last().map(|(n, _)| n + 1).unwrap_or(0)
-}
-
-// ── write / read ──────────────────────────────────────────────────────────────
-
-fn write_rows(path: &Path, rows: &[CompileColumnRow]) -> FsResult<()> {
-    if let Some(parent) = path.parent() {
-        stdfs::create_dir_all(parent)?;
-    }
-    let file = stdfs::File::create(path)?;
-    let fields = column_fields();
-    let arrow_schema = Arc::new(Schema::new(fields));
-    let field_refs: Vec<_> = arrow_schema.fields().iter().map(Arc::clone).collect();
-    let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
-        .build();
-    let mut writer = ArrowWriter::try_new(file, arrow_schema, Some(props)).map_err(|e| {
-        FsError::new(
-            ErrorCode::IoError,
-            format!("CompileColumn ArrowWriter: {e}"),
-        )
-    })?;
-    let row_refs: Vec<&CompileColumnRow> = rows.iter().collect();
-    let batch = to_record_batch(&field_refs, &row_refs).map_err(|e| {
-        FsError::new(
-            ErrorCode::IoError,
-            format!("CompileColumn serde_arrow: {e}"),
-        )
-    })?;
-    writer
-        .write(&batch)
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("CompileColumn write: {e}")))?;
-    writer
-        .close()
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("CompileColumn close: {e}")))?;
-    Ok(())
-}
-
-fn read_rows(path: &Path) -> Vec<CompileColumnRow> {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-    let Ok(file) = std::fs::File::open(path) else {
-        return Vec::new();
-    };
-    let Ok(builder) = ParquetRecordBatchReaderBuilder::try_new(file) else {
-        return Vec::new();
-    };
-    let Ok(reader) = builder.build() else {
-        return Vec::new();
-    };
-    let mut rows = Vec::new();
-    for batch in reader.flatten() {
-        if let Ok(mut chunk) = serde_arrow::from_record_batch::<Vec<CompileColumnRow>>(&batch) {
-            rows.append(&mut chunk);
-        }
-    }
-    rows
+    epoch_io::existing_epochs(dir, VERSION_PREFIX)
 }
 
 // ── compaction ────────────────────────────────────────────────────────────────
@@ -153,10 +65,9 @@ fn compact_epochs(dir: &Path, valid_ids: Option<&HashSet<String>>) -> FsResult<(
         return Ok(());
     }
 
-    // Latest-wins per unique_id: collect all rows, keep latest set per node.
     let mut best: HashMap<String, (i64, Vec<CompileColumnRow>)> = HashMap::new();
     for (_, path) in &epochs {
-        for row in read_rows(path) {
+        for row in epoch_io::read_rows::<CompileColumnRow>(path) {
             let entry = best.entry(row.unique_id.clone()).or_insert((0, Vec::new()));
             if row.ingested_at > entry.0 {
                 entry.0 = row.ingested_at;
@@ -183,9 +94,9 @@ fn compact_epochs(dir: &Path, valid_ids: Option<&HashSet<String>>) -> FsResult<(
             .then(a.column_index.cmp(&b.column_index))
     });
 
-    let consolidated = dir.join(format!("{}0.parquet", version_prefix()));
-    let tmp = dir.join(format!("{}.tmp.parquet", version_prefix()));
-    write_rows(&tmp, &merged)?;
+    let consolidated = dir.join(format!("{VERSION_PREFIX}0.parquet"));
+    let tmp = dir.join(format!("{VERSION_PREFIX}.tmp.parquet"));
+    epoch_io::write_rows(&tmp, &column_fields(), &merged)?;
     stdfs::rename(&tmp, &consolidated)?;
 
     for (n, path) in &epochs {
@@ -214,13 +125,12 @@ pub fn write_compile_columns(
     }
 
     let epoch = if recomputed_nodes.is_some() {
-        next_epoch(dir)
+        epoch_io::next_epoch(dir, VERSION_PREFIX)
     } else {
         0
     };
-    let filename = format!("{}{}.parquet", version_prefix(), epoch);
-    let path = dir.join(&filename);
-    write_rows(&path, &rows)?;
+    let path = dir.join(format!("{VERSION_PREFIX}{epoch}.parquet"));
+    epoch_io::write_rows(&path, &column_fields(), &rows)?;
 
     if recomputed_nodes.is_none() {
         for (n, p) in existing_epochs(dir) {
@@ -242,7 +152,7 @@ pub fn read_compile_columns(dir: &Path) -> Vec<CompileColumnRow> {
     let epochs = existing_epochs(dir);
     let mut best: HashMap<String, (i64, Vec<CompileColumnRow>)> = HashMap::new();
     for (_, path) in &epochs {
-        for row in read_rows(path) {
+        for row in epoch_io::read_rows::<CompileColumnRow>(path) {
             let entry = best.entry(row.unique_id.clone()).or_insert((0, Vec::new()));
             if row.ingested_at > entry.0 {
                 entry.0 = row.ingested_at;

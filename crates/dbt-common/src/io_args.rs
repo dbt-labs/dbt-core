@@ -245,9 +245,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub build_cache_url: Option<String>,
-    pub build_cache_cas_url: Option<String>,
-    pub build_cache_mode: Option<BuildCacheMode>,
     pub beta_use_query_cache: bool,
     pub use_parquet_schema_store: bool,
     pub verify_parquet_schema_store: bool,
@@ -383,20 +380,6 @@ impl IoArgs {
             && (option != ShowOptions::Completed
                 || !self.is_compile
                 || self.debug)
-    }
-
-    /// Returns true if the build cache should be used (read or readwrite mode, or --use-build-cache flag).
-    pub fn should_use_build_cache(&self) -> bool {
-        self.build_cache_mode
-            .map(|c| matches!(c, BuildCacheMode::Read | BuildCacheMode::ReadWrite))
-            .unwrap_or_default()
-    }
-
-    /// Returns true if the build cache should be saved (write or readwrite mode).
-    pub fn should_save_build_cache(&self) -> bool {
-        self.build_cache_mode
-            .map(|c| matches!(c, BuildCacheMode::Write | BuildCacheMode::ReadWrite))
-            .unwrap_or_default()
     }
 }
 // ----------------------------------------------------------------------------------------------
@@ -1177,15 +1160,6 @@ pub enum StaticAnalysisOffReason {
     ConfiguredOff,
     UnableToFetchSchema,
     NoDownstream,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum BuildCacheMode {
-    Read,
-    Write,
-    #[default]
-    ReadWrite,
 }
 
 impl FromStr for StaticAnalysisKind {

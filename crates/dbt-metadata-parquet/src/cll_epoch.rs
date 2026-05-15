@@ -34,29 +34,19 @@
 //!   from a previous successful compile survive until the next successful
 //!   recompile or compaction.  `ingested_at` lets consumers detect staleness.
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field, Schema};
-use dbt_common::{ErrorCode, FsError, FsResult, stdfs};
-use parquet::{
-    arrow::ArrowWriter,
-    basic::{Compression, ZstdLevel},
-    file::properties::WriterProperties,
-};
+use arrow::datatypes::{DataType, Field};
+use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
-use serde_arrow::to_record_batch;
+
+use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
 const COMPACT_THRESHOLD: usize = 8;
-
-/// Filename prefix for the current CLL row schema.  Bump when `CllRow` changes.
-/// Files with a different prefix are silently ignored (old schema, wrong version).
-const CLL_SCHEMA_VERSION: &str = "v1";
+const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
 
@@ -91,85 +81,12 @@ fn cll_row_fields() -> Vec<Field> {
 
 // ── epoch helpers ─────────────────────────────────────────────────────────────
 
-/// Returns all versioned epoch files in `dir`, sorted ascending by file number.
-/// Only files matching `{CLL_SCHEMA_VERSION}_{N}.parquet` are returned.
 fn existing_epochs(dir: &Path) -> Vec<(u32, PathBuf)> {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let prefix = format!("{CLL_SCHEMA_VERSION}_");
-    let mut epochs: Vec<(u32, PathBuf)> = rd
-        .flatten()
-        .filter_map(|e| {
-            let p = e.path();
-            if p.extension()?.to_str()? != "parquet" {
-                return None;
-            }
-            let stem = p.file_stem()?.to_str()?;
-            let n_str = stem.strip_prefix(prefix.as_str())?;
-            let n: u32 = n_str.parse().ok()?;
-            Some((n, p))
-        })
-        .collect();
-    epochs.sort_by_key(|(n, _)| *n);
-    epochs
-}
-
-fn next_epoch(dir: &Path) -> u32 {
-    existing_epochs(dir).last().map(|(n, _)| n + 1).unwrap_or(0)
+    epoch_io::existing_epochs(dir, VERSION_PREFIX)
 }
 
 fn epoch_filename(n: u32) -> String {
-    format!("{CLL_SCHEMA_VERSION}_{n}.parquet")
-}
-
-// ── parquet write / read helpers ──────────────────────────────────────────────
-
-fn write_rows(path: &Path, rows: &[CllRow]) -> FsResult<()> {
-    if let Some(parent) = path.parent() {
-        stdfs::create_dir_all(parent)?;
-    }
-    let file = stdfs::File::create(path)?;
-    let fields = cll_row_fields();
-    let arrow_schema = Arc::new(Schema::new(fields));
-    let field_refs: Vec<_> = arrow_schema.fields().iter().map(Arc::clone).collect();
-    let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
-        .build();
-    let mut writer = ArrowWriter::try_new(file, arrow_schema, Some(props))
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("CLL ArrowWriter: {e}")))?;
-    for chunk in rows.chunks(256) {
-        let chunk_refs: Vec<&CllRow> = chunk.iter().collect();
-        let batch = to_record_batch(&field_refs, &chunk_refs)
-            .map_err(|e| FsError::new(ErrorCode::IoError, format!("CLL serde_arrow: {e}")))?;
-        writer
-            .write(&batch)
-            .map_err(|e| FsError::new(ErrorCode::IoError, format!("CLL write batch: {e}")))?;
-    }
-    writer
-        .close()
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("CLL close: {e}")))?;
-    Ok(())
-}
-
-fn read_rows(path: &Path) -> Vec<CllRow> {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-    let Ok(file) = std::fs::File::open(path) else {
-        return Vec::new();
-    };
-    let Ok(builder) = ParquetRecordBatchReaderBuilder::try_new(file) else {
-        return Vec::new();
-    };
-    let Ok(reader) = builder.build() else {
-        return Vec::new();
-    };
-    let mut rows = Vec::new();
-    for batch in reader.flatten() {
-        if let Ok(mut chunk) = serde_arrow::from_record_batch::<Vec<CllRow>>(&batch) {
-            rows.append(&mut chunk);
-        }
-    }
-    rows
+    format!("{VERSION_PREFIX}{n}.parquet")
 }
 
 // ── latest-wins merge ─────────────────────────────────────────────────────────
@@ -184,7 +101,7 @@ fn merge_latest(epochs: &[(u32, PathBuf)], alive_ids: Option<&HashSet<String>>) 
     // Key: to_node_unique_id → (ingested_at, file_number)
     let mut best: HashMap<String, (i64, u32)> = HashMap::new();
     for (n, path) in epochs {
-        for row in read_rows(path) {
+        for row in epoch_io::read_rows::<CllRow>(path) {
             best.entry(row.to_node_unique_id.clone())
                 .and_modify(|(best_ts, best_n)| {
                     if row.ingested_at > *best_ts || (row.ingested_at == *best_ts && n > best_n) {
@@ -199,7 +116,7 @@ fn merge_latest(epochs: &[(u32, PathBuf)], alive_ids: Option<&HashSet<String>>) 
     // Pass 2: collect winning rows, optionally filtering to alive nodes.
     let mut result = Vec::new();
     for (n, path) in epochs {
-        for row in read_rows(path) {
+        for row in epoch_io::read_rows::<CllRow>(path) {
             if let Some(&(best_ts, best_n)) = best.get(&row.to_node_unique_id) {
                 if row.ingested_at == best_ts && *n == best_n {
                     if alive_ids.is_none_or(|ids| ids.contains(&row.to_node_unique_id)) {
@@ -237,7 +154,7 @@ fn compact_epochs(dir: &Path, alive_ids: Option<&HashSet<String>>) -> FsResult<(
     });
 
     let out = dir.join(epoch_filename(0));
-    write_rows(&out, &best)?;
+    epoch_io::write_rows(&out, &cll_row_fields(), &best)?;
 
     for (n, path) in &epochs {
         if *n != 0 {
@@ -289,7 +206,7 @@ pub fn write_cll_epoch(
 
     stdfs::create_dir_all(cll_dir)?;
 
-    let epoch = next_epoch(cll_dir);
+    let epoch = epoch_io::next_epoch(cll_dir, VERSION_PREFIX);
     for row in &mut filtered {
         row.ingested_at = ingested_at;
     }
@@ -301,7 +218,7 @@ pub fn write_cll_epoch(
     });
 
     let path = cll_dir.join(epoch_filename(epoch));
-    write_rows(&path, &filtered)?;
+    epoch_io::write_rows(&path, &cll_row_fields(), &filtered)?;
 
     let epoch_count = existing_epochs(cll_dir).len();
     if epoch_count > COMPACT_THRESHOLD {

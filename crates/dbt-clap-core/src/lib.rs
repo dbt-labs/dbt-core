@@ -28,13 +28,13 @@ use dbt_common::constants::{
     DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
 };
 use dbt_common::io_args::FsCommand;
-use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, ComputeArg, EvalArgs, InternalPackageMode, IoArgs,
     LocalExecutionBackendKind, LogFormat, LogLevel, OptimizeTestsOptions, Phases, RunCacheMode,
     ShowOptions, SystemArgs, TimeMachineModeKind, TimeMachineReplayOrdering,
     check_key_value_cli_arg, check_selector, check_target, validate_project_name,
 };
+use dbt_common::io_args::{DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::row_limit::RowLimit;
 use dbt_common::warn_error_options::{WarnErrorOptions, parse_warn_error_options};
 
@@ -1516,21 +1516,6 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_INDEX_DIR")]
     pub index_dir: Option<PathBuf>,
 
-    // support of build cache
-    //
-    /// Enable the build cache with default settings (equivalent to --build-cache-mode=readwrite)
-    #[arg(global = true, long, hide = true)]
-    pub use_build_cache: bool,
-    /// The mode to use for the build cache (read, write, readwrite, or noop) [default: noop]
-    #[arg(global = true, long, env = "DBT_BUILD_CACHE_MODE", hide = true)]
-    pub build_cache_mode: Option<BuildCacheMode>,
-    /// The URL for the build cache nodes Parquet file (e.g., s3://my-bucket/build-cache/nodes.parquet) [default: target/build_cache/nodes.parquet]
-    #[arg(global = true, long, env = "DBT_BUILD_CACHE_NODES_URL", hide = true)]
-    pub build_cache_nodes_url: Option<String>,
-    /// The URL for the build cache CAS Parquet file (e.g., s3://my-bucket/build-cache/cas.parquet) [default: target/build_cache/cas.parquet]
-    #[arg(global = true, long, env = "DBT_BUILD_CACHE_CAS_URL", hide = true)]
-    pub build_cache_cas_url: Option<String>,
-
     // Support for query cache
     #[arg(global = true, long, env = "DBT_BETA_USE_QUERY_CACHE", hide = true)]
     pub beta_use_query_cache: bool,
@@ -2034,11 +2019,6 @@ impl CommonArgs {
         });
         let show = resolve_show_arg(self.show.as_slice(), self.get_quiet());
         let replay = pick_replay_mode(self, arg.io.invocation_id, out_dir);
-        let build_cache_mode = if self.use_build_cache {
-            Some(BuildCacheMode::ReadWrite)
-        } else {
-            self.build_cache_mode
-        };
         EvalArgs {
             command: arg.command,
             io: IoArgs {
@@ -2062,9 +2042,6 @@ impl CommonArgs {
                 export_to_otlp: self.export_to_otlp,
                 show_all_deprecations: self.show_all_deprecations,
                 show_timings: arg.io.show_timings,
-                build_cache_mode,
-                build_cache_url: arg.io.build_cache_url.clone(),
-                build_cache_cas_url: arg.io.build_cache_cas_url.clone(),
                 beta_use_query_cache: self.beta_use_query_cache,
                 use_parquet_schema_store: self.use_parquet_schema_store,
                 verify_parquet_schema_store: self.verify_parquet_schema_store,
@@ -2341,9 +2318,6 @@ impl InitArgs {
                 otel_parquet_file_name: self.common_args.otel_parquet_file_name.clone(),
                 show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
-                build_cache_mode: self.common_args.build_cache_mode,
-                build_cache_url: self.common_args.build_cache_nodes_url.clone(),
-                build_cache_cas_url: self.common_args.build_cache_cas_url.clone(),
                 export_to_otlp: self.common_args.export_to_otlp,
                 beta_use_query_cache: self.common_args.beta_use_query_cache,
                 use_parquet_schema_store: self.common_args.use_parquet_schema_store,
@@ -2398,9 +2372,6 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: true,
-            build_cache_mode: common_args.build_cache_mode,
-            build_cache_url: common_args.build_cache_nodes_url,
-            build_cache_cas_url: common_args.build_cache_cas_url,
             beta_use_query_cache: common_args.beta_use_query_cache,
             use_parquet_schema_store: common_args.use_parquet_schema_store,
             verify_parquet_schema_store: common_args.verify_parquet_schema_store,
@@ -2444,9 +2415,6 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: false,
-            build_cache_mode: common_args.build_cache_mode,
-            build_cache_url: common_args.build_cache_nodes_url,
-            build_cache_cas_url: common_args.build_cache_cas_url,
             beta_use_query_cache: common_args.beta_use_query_cache,
             use_parquet_schema_store: common_args.use_parquet_schema_store,
             verify_parquet_schema_store: common_args.verify_parquet_schema_store,

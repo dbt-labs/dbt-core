@@ -12,25 +12,18 @@
 //!   all files are merged into a single file preserving all rows.
 //! * **Schema versioning** — filename prefix `v1_` allows future schema changes.
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field, Schema};
-use dbt_common::{ErrorCode, FsError, FsResult, stdfs};
-use parquet::{
-    arrow::ArrowWriter,
-    basic::{Compression, ZstdLevel},
-    file::properties::WriterProperties,
-};
+use arrow::datatypes::{DataType, Field};
+use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
-use serde_arrow::to_record_batch;
+
+use crate::epoch_io;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
 const CONSOLIDATE_THRESHOLD: usize = 32;
-const SCHEMA_VERSION: u32 = 1;
+const VERSION_PREFIX: &str = "v1_";
 
 // ── row schema ────────────────────────────────────────────────────────────────
 
@@ -69,89 +62,8 @@ fn result_fields() -> Vec<Field> {
 
 // ── epoch helpers ─────────────────────────────────────────────────────────────
 
-fn version_prefix() -> String {
-    format!("v{}_", SCHEMA_VERSION)
-}
-
 fn existing_files(dir: &Path) -> Vec<(u32, PathBuf)> {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let prefix = version_prefix();
-    let mut files: Vec<(u32, PathBuf)> = rd
-        .flatten()
-        .filter_map(|e| {
-            let p = e.path();
-            let stem = p.file_stem()?.to_str()?;
-            if p.extension()?.to_str()? != "parquet" {
-                return None;
-            }
-            let rest = stem.strip_prefix(&prefix)?;
-            let n: u32 = rest.parse().ok()?;
-            Some((n, p))
-        })
-        .collect();
-    files.sort_by_key(|(n, _)| *n);
-    files
-}
-
-fn next_file_number(dir: &Path) -> u32 {
-    existing_files(dir).last().map(|(n, _)| n + 1).unwrap_or(0)
-}
-
-// ── write ─────────────────────────────────────────────────────────────────────
-
-fn write_rows(path: &Path, rows: &[RuntimeResultRow]) -> FsResult<()> {
-    if let Some(parent) = path.parent() {
-        stdfs::create_dir_all(parent)?;
-    }
-    let file = stdfs::File::create(path)?;
-    let fields = result_fields();
-    let arrow_schema = Arc::new(Schema::new(fields));
-    let field_refs: Vec<_> = arrow_schema.fields().iter().map(Arc::clone).collect();
-    let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(1).unwrap()))
-        .build();
-    let mut writer = ArrowWriter::try_new(file, arrow_schema, Some(props)).map_err(|e| {
-        FsError::new(
-            ErrorCode::IoError,
-            format!("RuntimeResult ArrowWriter: {e}"),
-        )
-    })?;
-    let row_refs: Vec<&RuntimeResultRow> = rows.iter().collect();
-    let batch = to_record_batch(&field_refs, &row_refs).map_err(|e| {
-        FsError::new(
-            ErrorCode::IoError,
-            format!("RuntimeResult serde_arrow: {e}"),
-        )
-    })?;
-    writer
-        .write(&batch)
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("RuntimeResult write: {e}")))?;
-    writer
-        .close()
-        .map_err(|e| FsError::new(ErrorCode::IoError, format!("RuntimeResult close: {e}")))?;
-    Ok(())
-}
-
-fn read_rows(path: &Path) -> Vec<RuntimeResultRow> {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-    let Ok(file) = std::fs::File::open(path) else {
-        return Vec::new();
-    };
-    let Ok(builder) = ParquetRecordBatchReaderBuilder::try_new(file) else {
-        return Vec::new();
-    };
-    let Ok(reader) = builder.build() else {
-        return Vec::new();
-    };
-    let mut rows = Vec::new();
-    for batch in reader.flatten() {
-        if let Ok(mut chunk) = serde_arrow::from_record_batch::<Vec<RuntimeResultRow>>(&batch) {
-            rows.append(&mut chunk);
-        }
-    }
-    rows
+    epoch_io::existing_epochs(dir, VERSION_PREFIX)
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
@@ -161,10 +73,9 @@ pub fn write_runtime_results(dir: &Path, rows: &[RuntimeResultRow]) -> FsResult<
     if rows.is_empty() {
         return Ok(());
     }
-    let n = next_file_number(dir);
-    let filename = format!("{}{}.parquet", version_prefix(), n);
-    let path = dir.join(&filename);
-    write_rows(&path, rows)?;
+    let n = epoch_io::next_epoch(dir, VERSION_PREFIX);
+    let path = dir.join(format!("{VERSION_PREFIX}{n}.parquet"));
+    epoch_io::write_rows(&path, &result_fields(), rows)?;
 
     let files = existing_files(dir);
     if files.len() > CONSOLIDATE_THRESHOLD {
@@ -178,7 +89,7 @@ pub fn read_runtime_results(dir: &Path) -> Vec<RuntimeResultRow> {
     let files = existing_files(dir);
     let mut all_rows = Vec::new();
     for (_, path) in &files {
-        all_rows.extend(read_rows(path));
+        all_rows.extend(epoch_io::read_rows::<RuntimeResultRow>(path));
     }
     all_rows.sort_by_key(|r| r.ingested_at);
     all_rows
@@ -189,13 +100,13 @@ pub fn read_runtime_results(dir: &Path) -> Vec<RuntimeResultRow> {
 fn consolidate(dir: &Path, files: &[(u32, PathBuf)]) -> FsResult<()> {
     let mut all_rows = Vec::new();
     for (_, path) in files {
-        all_rows.extend(read_rows(path));
+        all_rows.extend(epoch_io::read_rows::<RuntimeResultRow>(path));
     }
     all_rows.sort_by_key(|r| r.ingested_at);
 
-    let consolidated_path = dir.join(format!("{}0.parquet", version_prefix()));
-    let tmp_path = dir.join(format!("{}.tmp.parquet", version_prefix()));
-    write_rows(&tmp_path, &all_rows)?;
+    let consolidated_path = dir.join(format!("{VERSION_PREFIX}0.parquet"));
+    let tmp_path = dir.join(format!("{VERSION_PREFIX}.tmp.parquet"));
+    epoch_io::write_rows(&tmp_path, &result_fields(), &all_rows)?;
 
     stdfs::rename(&tmp_path, &consolidated_path)?;
     for (n, path) in files {
