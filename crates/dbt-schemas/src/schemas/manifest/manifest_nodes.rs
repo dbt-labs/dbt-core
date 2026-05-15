@@ -18,6 +18,7 @@ use crate::schemas::common::{DocsConfig, HardDeletes, OnConfigurationChange, OnE
 use crate::schemas::common::{HookConfig, Hooks, OnSchemaChange};
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
+use crate::schemas::project::configs::model_config::LatestVersionView;
 use crate::schemas::properties::ModelFreshness;
 
 use crate::schemas::serde::{bool_or_string_bool, default_type};
@@ -820,6 +821,7 @@ pub struct ManifestModelConfig {
     pub table_format: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
+    pub latest_version_view: Option<LatestVersionView>,
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
@@ -996,6 +998,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             table_format: config.table_format,
             static_analysis: config.static_analysis,
             freshness: config.freshness,
+            latest_version_view: config.latest_version_view,
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
@@ -1067,6 +1070,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             table_format: config.table_format,
             static_analysis: config.static_analysis,
             freshness: config.freshness,
+            latest_version_view: config.latest_version_view,
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,

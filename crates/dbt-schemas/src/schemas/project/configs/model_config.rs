@@ -51,6 +51,16 @@ use crate::schemas::serde::{
 };
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::ShouldBe;
+use serde_with::skip_serializing_none;
+
+/// Represents the latest version view configuration for versioned models.
+/// Supports shorthand (bool) and full form ({enabled: bool, alias: string}).
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
+pub struct LatestVersionView {
+    pub enabled: Option<bool>,
+    pub alias: Option<String>,
+}
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -189,6 +199,8 @@ pub struct ProjectModelConfig {
     pub file_format: Option<String>,
     #[serde(rename = "+freshness")]
     pub freshness: Option<ModelFreshness>,
+    #[serde(rename = "+latest_version_view")]
+    pub latest_version_view: Option<LatestVersionView>,
     #[serde(
         default,
         rename = "+full_refresh",
@@ -556,6 +568,7 @@ pub struct ModelConfig {
     #[resolved(promote, expect = "static_analysis set by apply_resolve_defaults")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
+    pub latest_version_view: Option<LatestVersionView>,
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
@@ -620,6 +633,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             enabled: config.enabled,
             event_time: config.event_time,
             freshness: config.freshness,
+            latest_version_view: config.latest_version_view,
             full_refresh: config.full_refresh,
             grants: config.grants,
             group: config.group,
@@ -774,6 +788,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             enabled: config.enabled,
             event_time: config.event_time,
             freshness: config.freshness,
+            latest_version_view: config.latest_version_view,
             full_refresh: config.full_refresh,
             grants: config.grants,
             group: config.group,
@@ -982,6 +997,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
             table_format,
             static_analysis,
             freshness,
+            latest_version_view,
             sql_header,
             location,
             predicates,
@@ -1063,6 +1079,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
                 table_format,
                 static_analysis,
                 freshness,
+                latest_version_view,
                 sql_header,
                 location,
                 predicates,
@@ -1194,6 +1211,7 @@ impl ModelConfig {
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
         let table_format_eq = self.table_format == other.table_format;
         let freshness_eq = self.freshness == other.freshness;
+        let latest_version_view_eq = self.latest_version_view == other.latest_version_view;
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
@@ -1232,6 +1250,7 @@ impl ModelConfig {
             && access_eq_result
             && table_format_eq
             && freshness_eq
+            && latest_version_view_eq
             && sql_header_eq
             && location_eq
             && predicates_eq
@@ -1448,6 +1467,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.freshness),
                             format!("{:?}", &other.freshness),
+                        )),
+                    ),
+                    (
+                        "latest_version_view",
+                        latest_version_view_eq,
+                        Some((
+                            format!("{:?}", &self.latest_version_view),
+                            format!("{:?}", &other.latest_version_view),
                         )),
                     ),
                     (
