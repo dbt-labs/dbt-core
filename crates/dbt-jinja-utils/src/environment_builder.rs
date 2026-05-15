@@ -596,7 +596,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -683,7 +683,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -745,7 +745,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -865,7 +865,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
 
@@ -916,7 +916,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
 
@@ -961,7 +961,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             None,
         );
 

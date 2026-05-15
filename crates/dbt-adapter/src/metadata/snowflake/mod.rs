@@ -526,7 +526,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             }
             let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
-            let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops())?;
+            let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops().as_ref())?;
             Ok(schema)
         };
         let reduce_f = |acc: &mut Acc,
@@ -614,8 +614,11 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
             let batch = batch_res?;
-            let mut schemas_from_batch =
-                build_schemas_from_information_schema(batch, quoting, adapter.engine().type_ops())?;
+            let mut schemas_from_batch = build_schemas_from_information_schema(
+                batch,
+                quoting,
+                adapter.engine().type_ops().as_ref(),
+            )?;
             acc.append(&mut schemas_from_batch);
             Ok(())
         };

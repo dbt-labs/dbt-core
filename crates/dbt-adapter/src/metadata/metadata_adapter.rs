@@ -216,7 +216,7 @@ pub trait MetadataAdapter: Send + Sync {
                     map.into_iter()
                         .map(|(k, v)| {
                             let v = v.and_then(|schema| {
-                                arrow_schema_to_sdf_schema(schema, engine.type_ops())
+                                arrow_schema_to_sdf_schema(schema, engine.type_ops().as_ref())
                             });
                             (k, v)
                         })

@@ -942,10 +942,10 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             let batch = table.original_record_batch();
 
             let schema = if as_json_unsupported {
-                build_schema_from_basic_describe_table(batch, adapter.engine().type_ops())?
+                build_schema_from_basic_describe_table(batch, adapter.engine().type_ops().as_ref())?
             } else {
                 let json_metadata = DatabricksTableMetadata::from_record_batch(batch)?;
-                json_metadata.to_arrow_schema(adapter.engine().type_ops())?
+                json_metadata.to_arrow_schema(adapter.engine().type_ops().as_ref())?
             };
             Ok(schema)
         };

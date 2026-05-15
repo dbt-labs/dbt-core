@@ -53,7 +53,7 @@ impl SidecarEngine {
         client: Arc<dyn SidecarClient>,
         quoting: ResolvedQuoting,
         config: AdapterConfig,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         relation_cache: Arc<RelationCache>,
@@ -65,7 +65,7 @@ impl SidecarEngine {
             client,
             quoting,
             config: Arc::new(config),
-            type_ops: Arc::from(type_ops),
+            type_ops,
             stmt_splitter,
             query_comment: Arc::new(query_comment),
             relation_cache,
@@ -91,8 +91,8 @@ impl AdapterEngine for SidecarEngine {
         self.stmt_splitter.as_ref()
     }
 
-    fn type_ops(&self) -> &dyn TypeOps {
-        self.type_ops.as_ref()
+    fn type_ops(&self) -> &Arc<dyn TypeOps> {
+        &self.type_ops
     }
 
     fn query_comment(&self) -> &QueryCommentConfig {

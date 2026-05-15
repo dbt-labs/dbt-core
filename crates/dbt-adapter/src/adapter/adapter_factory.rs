@@ -1,5 +1,6 @@
 use crate::Adapter;
 use crate::query_cache::QueryCache;
+use crate::sql_types::TypeOpsFactory;
 use crate::stmt_splitter::StmtSplitter;
 use dbt_adapter_core::AdapterType;
 
@@ -51,6 +52,7 @@ pub trait AdapterFactory: Send + Sync {
         &self,
         adapter_type: AdapterType,
         config: dbt_yaml::Mapping,
+        type_ops_factory: Arc<dyn TypeOpsFactory>,
         replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
         schema_cache: Option<Arc<dyn SchemaStoreTrait>>,

@@ -67,7 +67,7 @@ pub fn initialize_parse_jinja_environment(
 
     let invocation_args_dict = invocation_args_to_dict(invocation_args, &prj_flags);
 
-    let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
+    let type_formatter = Arc::new(SATypeOpsImpl::new(adapter_type));
     let adapter = Arc::new(Adapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,

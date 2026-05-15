@@ -55,7 +55,7 @@ pub trait AdapterEngine: Send + Sync {
     fn splitter(&self) -> &dyn StmtSplitter;
 
     /// Get the type operations for this engine
-    fn type_ops(&self) -> &dyn TypeOps;
+    fn type_ops(&self) -> &Arc<dyn TypeOps>;
 
     /// Get the query comment config for this engine
     fn query_comment(&self) -> &QueryCommentConfig;

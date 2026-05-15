@@ -162,7 +162,7 @@ impl Adapter {
         adapter_type: AdapterType,
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -184,7 +184,7 @@ impl Adapter {
         adapter_type: AdapterType,
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {

@@ -46,13 +46,14 @@ pub fn initialize_load_jinja_environment(
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
-    let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
+    let type_ops = Arc::new(SATypeOpsImpl::new(adapter_type));
 
+    // TODO: change this to use the AdapterFactory instead
     let adapter = Adapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,
         package_quoting,
-        type_formatter,
+        type_ops,
         catalogs,
     );
 

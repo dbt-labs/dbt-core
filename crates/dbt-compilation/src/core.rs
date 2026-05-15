@@ -6,7 +6,7 @@ use std::{
     time::SystemTime,
 };
 
-use dbt_adapter::{AdapterType, adapter::AdapterFactory};
+use dbt_adapter::{AdapterType, adapter::AdapterFactory, sql_types::TypeOpsFactory};
 use dbt_common::{
     cancellation::CancellationToken, io_args::FsCommand, path::DbtPath,
     tracing::TracingConfigProvider,
@@ -38,6 +38,7 @@ use dbt_schemas::{
 
 pub struct DbtLoadedProject {
     config: CompilationConfig,
+    type_ops_factory: Arc<dyn TypeOpsFactory>,
     adapter_factory: Arc<dyn AdapterFactory>,
     dbt_state: Arc<DbtState>,
 }
@@ -47,6 +48,7 @@ async fn load_phase(
     config: CompilationConfig,
     mut load_args: LoadArgs,
     invocation_args: Cow<'_, dbt_jinja_utils::invocation_args::InvocationArgs>,
+    type_ops_factory: Arc<dyn TypeOpsFactory>,
     adapter_factory: Arc<dyn AdapterFactory>,
     maybe_prev_loaded_project: Option<&DbtLoadedProject>,
     tracing_config: Option<&dyn TracingConfigProvider>,
@@ -66,6 +68,7 @@ async fn load_phase(
 
     Ok(DbtLoadedProject {
         config,
+        type_ops_factory,
         adapter_factory,
         dbt_state: Arc::new(dbt_state),
     })
@@ -324,6 +327,7 @@ impl DbtLoadedProject {
         config: CompilationConfig,
         load_args: LoadArgs,
         invocation_args: Cow<'_, dbt_jinja_utils::invocation_args::InvocationArgs>,
+        type_ops_factory: Arc<dyn TypeOpsFactory>,
         adapter_factory: Arc<dyn AdapterFactory>,
         prev_loaded_project: Option<&DbtLoadedProject>,
         tracing_config: Option<&dyn TracingConfigProvider>,
@@ -333,6 +337,7 @@ impl DbtLoadedProject {
             config,
             load_args,
             invocation_args,
+            type_ops_factory,
             adapter_factory,
             prev_loaded_project,
             tracing_config,
@@ -380,18 +385,24 @@ impl DbtLoadedProject {
 
     pub fn from_parts(
         config: CompilationConfig,
+        type_ops_factory: Arc<dyn TypeOpsFactory>,
         adapter_factory: Arc<dyn AdapterFactory>,
         dbt_state: Arc<DbtState>,
     ) -> Self {
         Self {
             config,
+            type_ops_factory,
             adapter_factory,
             dbt_state,
         }
     }
 
-    pub fn adapter_factory(&self) -> Arc<dyn AdapterFactory> {
-        self.adapter_factory.clone()
+    pub fn type_ops_factory(&self) -> &Arc<dyn TypeOpsFactory> {
+        &self.type_ops_factory
+    }
+
+    pub fn adapter_factory(&self) -> &Arc<dyn AdapterFactory> {
+        &self.adapter_factory
     }
 
     pub fn create_jinja_env(

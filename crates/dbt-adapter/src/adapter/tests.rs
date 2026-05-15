@@ -27,7 +27,7 @@ fn make_duckdb_adapter() -> Arc<Adapter> {
         AdapterType::DuckDB,
         BTreeMap::new(),
         DEFAULT_RESOLVED_QUOTING,
-        Box::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
+        Arc::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
         Arc::new(NaiveStmtSplitter),
     );
     let adapter = Adapter::new(Arc::new(concrete), None, never_cancels());
@@ -40,7 +40,7 @@ fn make_duckdb_parse_adapter() -> Arc<Adapter> {
         AdapterType::DuckDB,
         dbt_yaml::Mapping::new(),
         DEFAULT_DBT_QUOTING,
-        Box::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
+        Arc::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
         None,
     );
     Arc::new(adapter)

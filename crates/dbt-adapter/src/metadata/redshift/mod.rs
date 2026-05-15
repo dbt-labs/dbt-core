@@ -270,7 +270,7 @@ AND table_name = '{identifier}'"
                 };
 
                 let field = make_arrow_field_v2(
-                    adapter.engine().type_ops(),
+                    adapter.engine().type_ops().as_ref(),
                     String::from(name),
                     data_type,
                     Some(is_nullable),
@@ -284,7 +284,7 @@ AND table_name = '{identifier}'"
             // See: https://docs.aws.amazon.com/redshift/latest/dg/c_join_PG.html
             if schema == "pg_catalog" && TABLES_WITH_OID.contains(&identifier.as_str()) {
                 let field = make_arrow_field_v2(
-                    adapter.engine().type_ops(),
+                    adapter.engine().type_ops().as_ref(),
                     String::from("oid"),
                     "oid",
                     Some(false),

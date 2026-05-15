@@ -517,7 +517,7 @@ impl MacroTestHarnessBuilder {
             self.adapter_type,
             dbt_yaml::Mapping::default(),
             quoting,
-            Box::new(SATypeOpsImpl::new(self.adapter_type)),
+            Arc::new(SATypeOpsImpl::new(self.adapter_type)),
             None,
         ));
 

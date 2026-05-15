@@ -188,7 +188,8 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
             }
             let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
             let batch = table.original_record_batch();
-            let schema = build_schema_from_duckdb_describe(batch, adapter.engine().type_ops())?;
+            let schema =
+                build_schema_from_duckdb_describe(batch, adapter.engine().type_ops().as_ref())?;
             Ok(schema)
         };
 

@@ -399,7 +399,7 @@ mod tests {
                 AdapterType::Postgres,
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
-                Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
+                Arc::new(SATypeOpsImpl::new(AdapterType::Postgres)),
                 None,
             ));
             env.add_global("adapter", adapter.as_value());

@@ -99,7 +99,7 @@ impl AdapterEngine for RecordReplayEngine {
         self.inner.splitter()
     }
 
-    fn type_ops(&self) -> &dyn TypeOps {
+    fn type_ops(&self) -> &Arc<dyn TypeOps> {
         self.inner.type_ops()
     }
 

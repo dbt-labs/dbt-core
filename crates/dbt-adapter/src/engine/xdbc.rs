@@ -70,7 +70,7 @@ pub struct XdbcEngine {
     /// Query comment config
     query_comment: QueryCommentConfig,
     /// Type operations (e.g. parsing, formatting) for the dialect this engine is for
-    pub type_ops: Box<dyn TypeOps>,
+    pub type_ops: Arc<dyn TypeOps>,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
     /// Query cache
@@ -95,7 +95,7 @@ impl XdbcEngine {
         config: AdapterConfig,
         quoting: ResolvedQuoting,
         query_comment: QueryCommentConfig,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
@@ -135,7 +135,7 @@ impl XdbcEngine {
         config: AdapterConfig,
         quoting: ResolvedQuoting,
         query_comment: QueryCommentConfig,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
@@ -168,7 +168,7 @@ impl XdbcEngine {
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
         quoting: ResolvedQuoting,
-        type_ops: Box<dyn TypeOps>,
+        type_ops: Arc<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
@@ -583,8 +583,8 @@ impl AdapterEngine for XdbcEngine {
         self.splitter.as_ref()
     }
 
-    fn type_ops(&self) -> &dyn TypeOps {
-        self.type_ops.as_ref()
+    fn type_ops(&self) -> &Arc<dyn TypeOps> {
+        &self.type_ops
     }
 
     fn query_comment(&self) -> &QueryCommentConfig {

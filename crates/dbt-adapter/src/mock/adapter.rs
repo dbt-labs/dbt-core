@@ -15,7 +15,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
             Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
         );
         assert_eq!(adapter.adapter_type(), AdapterType::Snowflake);
@@ -27,7 +27,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
-            Box::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
+            Arc::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
             Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
         );
         assert_eq!(adapter.quote("abc"), "\"abc\"");

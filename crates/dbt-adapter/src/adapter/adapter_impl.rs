@@ -1,7 +1,10 @@
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
+use crate::config::AdapterConfig;
 use crate::connection::{ConnectionGuard, borrow_tlocal_connection};
-use crate::engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
+use crate::engine::{
+    AdapterEngine, Options as ExecuteOptions, XdbcEngine, execute_query_with_retry,
+};
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
@@ -32,6 +35,8 @@ use crate::relation::snowflake::SnowflakeRelation;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
+use crate::sql_types::TypeOps;
+use crate::stmt_splitter::StmtSplitter;
 use crate::value::*;
 use crate::{AdapterResult, load_catalogs, python};
 
@@ -2776,7 +2781,7 @@ impl AdapterImpl {
         let fields = schema.fields();
         let mut columns = Vec::<Column>::with_capacity(fields.len());
         for field in fields {
-            let column = builder.build(field, type_formatter)?;
+            let column = builder.build(field, type_formatter.as_ref())?;
             columns.push(column);
         }
         Ok(columns)
@@ -2798,7 +2803,7 @@ impl AdapterImpl {
                 let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
                 let schema = batch.schema();
 
-                let type_ops = engine.type_ops();
+                let type_ops = engine.type_ops().as_ref();
                 let builder = ColumnBuilder::new(self.adapter_type());
 
                 let fields = schema.fields();
@@ -4347,15 +4352,15 @@ impl AdapterImpl {
         adapter_type: AdapterType,
         flags: BTreeMap<String, Value>,
         quoting: ResolvedQuoting,
-        type_ops: Box<dyn crate::sql_types::TypeOps>,
-        stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
+        type_ops: Arc<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
     ) -> Self {
         let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
         let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
-        let engine: Arc<dyn AdapterEngine> = Arc::new(crate::engine::XdbcEngine::new_mock(
+        let engine: Arc<dyn AdapterEngine> = Arc::new(XdbcEngine::new_mock(
             adapter_type,
             auth,
-            crate::config::AdapterConfig::default(),
+            AdapterConfig::default(),
             quoting,
             type_ops,
             stmt_splitter,
@@ -4701,7 +4706,7 @@ mod tests {
             AdapterConfig::new(config),
             resolved_quoting,
             QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
-            Box::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
+            Arc::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,
             Arc::new(RelationCache::default()),
@@ -4813,7 +4818,7 @@ mod tests {
             Databricks,
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
-            Box::new(SATypeOpsImpl::new(Databricks)),
+            Arc::new(SATypeOpsImpl::new(Databricks)),
             Arc::new(NaiveStmtSplitter),
         );
 

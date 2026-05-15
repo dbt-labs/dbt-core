@@ -98,6 +98,10 @@ pub trait TypeOps: Send + Sync {
     fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType>;
 }
 
+pub trait TypeOpsFactory: Send + Sync {
+    fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps>;
+}
+
 /// Source-available [TypeOps] implementation.
 pub struct SATypeOpsImpl(AdapterType);
 
