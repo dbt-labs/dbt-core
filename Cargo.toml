@@ -64,6 +64,7 @@ members = [
   "crates/dbt-sql-keywords",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
+  "crates/dbt-sql/dbt-lexer-bigqueryuntyped",
   "crates/dbt-sql/dbt-lexer-databricks",
   "crates/dbt-sql/dbt-lexer-duckdb",
   "crates/dbt-sql/dbt-lexer-redshift",
@@ -250,6 +251,7 @@ vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
 dbt-lexer-bigquery = { path = "crates/dbt-sql/dbt-lexer-bigquery" }
+dbt-lexer-bigqueryuntyped = { path = "crates/dbt-sql/dbt-lexer-bigqueryuntyped" }
 dbt-lexer-databricks = { path = "crates/dbt-sql/dbt-lexer-databricks" }
 dbt-lexer-duckdb = { path = "crates/dbt-sql/dbt-lexer-duckdb" }
 dbt-lexer-redshift = { path = "crates/dbt-sql/dbt-lexer-redshift" }
