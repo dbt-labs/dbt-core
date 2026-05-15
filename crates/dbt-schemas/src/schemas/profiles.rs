@@ -591,6 +591,10 @@ pub struct RedshiftDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iam_profile: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_key_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_access_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
@@ -1919,7 +1923,7 @@ impl TryFrom<DbConfig> for TargetContext {
                         threads: None,
                     },
                     retry_all: false,
-                    access_key_id: None,
+                    access_key_id: config.access_key_id,
                     is_serverless: None,
                     serverless_work_group: None,
                     serverless_acct_id: None,

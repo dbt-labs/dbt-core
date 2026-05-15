@@ -196,6 +196,8 @@ pub fn setup_redshift_profile(
         user: None,
         password: None,
         iam_profile: None,
+        access_key_id: None,
+        secret_access_key: None,
         cluster_id: None,
         region: None,
         threads: None,
