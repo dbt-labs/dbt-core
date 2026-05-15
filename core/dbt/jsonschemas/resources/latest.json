@@ -4127,6 +4127,33 @@
         "$ref": "#/definitions/PostgresIndex"
       }
     },
+    "LatestVersionView": {
+      "description": "Represents the latest version view configuration for versioned models. Supports shorthand (bool) and full form ({enabled: bool, alias: string}).",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "MacrosArguments": {
       "type": "object",
       "required": [
@@ -5300,6 +5327,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "latest_version_view": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LatestVersionView"
+            },
+            {
+              "type": "null"
             }
           ]
         },
