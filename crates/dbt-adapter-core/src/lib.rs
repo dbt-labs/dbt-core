@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_iter_with_names() {
-        let entries: Vec<_> = AdapterType::iter_with_names().take(7).collect();
+        let entries: Vec<_> = AdapterType::iter_with_names().collect();
         assert_eq!(
             entries,
             vec![
@@ -206,7 +206,84 @@ mod tests {
                 (AdapterType::Spark, "spark"),
                 (AdapterType::DuckDB, "duckdb"),
                 (AdapterType::Postgres, "postgresql"),
+                (AdapterType::Salesforce, "salesforce"),
+                (AdapterType::Fabric, "fabric"),
+                (AdapterType::ClickHouse, "clickhouse"),
+                (AdapterType::Exasol, "exasol"),
+                (AdapterType::Athena, "athena"),
+                (AdapterType::Starburst, "starburst"),
+                (AdapterType::Trino, "trino"),
+                (AdapterType::Datafusion, "datafusion"),
+                (AdapterType::Dremio, "dremio"),
+                (AdapterType::Oracle, "oracle"),
             ]
         );
+    }
+
+    #[test]
+    fn test_quote_char_by_adapter() {
+        for adapter_type in [
+            AdapterType::Bigquery,
+            AdapterType::Databricks,
+            AdapterType::Spark,
+        ] {
+            assert_eq!(quote_char(adapter_type), '`', "{adapter_type:?}");
+        }
+
+        for adapter_type in [
+            AdapterType::Snowflake,
+            AdapterType::Redshift,
+            AdapterType::Postgres,
+            AdapterType::Salesforce,
+            AdapterType::Fabric,
+            AdapterType::DuckDB,
+            AdapterType::Athena,
+            AdapterType::Trino,
+            AdapterType::Starburst,
+            AdapterType::Datafusion,
+            AdapterType::ClickHouse,
+            AdapterType::Exasol,
+        ] {
+            assert_eq!(quote_char(adapter_type), '"', "{adapter_type:?}");
+        }
+    }
+
+    #[test]
+    fn test_execution_phase_strings() {
+        assert_eq!(ExecutionPhase::Render.as_str(), "render");
+        assert_eq!(ExecutionPhase::Analyze.as_str(), "analyze");
+        assert_eq!(ExecutionPhase::Run.as_str(), "run");
+        assert_eq!(DBT_EXECUTION_PHASES, ["render", "analyze", "run"]);
+    }
+
+    #[test]
+    fn test_static_analysis_support_matrix() {
+        let supported = [
+            AdapterType::Snowflake,
+            AdapterType::Bigquery,
+            AdapterType::Redshift,
+            AdapterType::Databricks,
+            AdapterType::Spark,
+            AdapterType::DuckDB,
+        ];
+
+        for adapter_type in AdapterType::iter() {
+            assert_eq!(
+                adapter_type_supports_static_analysis(adapter_type),
+                supported.contains(&adapter_type),
+                "{adapter_type:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_microbatch_concurrency_support_matrix() {
+        for adapter_type in AdapterType::iter() {
+            assert_eq!(
+                adapter_type_supports_microbatch_concurrency(adapter_type),
+                adapter_type == AdapterType::Snowflake,
+                "{adapter_type:?}",
+            );
+        }
     }
 }
