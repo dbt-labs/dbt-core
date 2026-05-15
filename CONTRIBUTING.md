@@ -42,6 +42,7 @@ If you get stuck, we're happy to help! Drop us a line in the `#dbt-core-developm
 
 - **Adapters:** Is your issue or proposed code change related to a specific [database adapter](https://docs.getdbt.com/docs/available-adapters)? If so, please open issues, PRs, and discussions in that adapter's repository instead.
 - **CLA:** Please note that anyone contributing code to `dbt-core` must sign the [Contributor License Agreement](https://docs.getdbt.com/docs/contributor-license-agreements). If you are unable to sign the CLA, the `dbt-core` maintainers will unfortunately be unable to merge any of your Pull Requests. We welcome you to participate in discussions, open issues, and comment on existing ones.
+- **Commit Signing:** Contributors to `dbt-core` must submit commits with verified signatures. To set up a GPG key via Github, follow their guides on (1) [generating a new GPG key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key), (2) [adding a GPG key to your GitHub account](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account), and (3) [telling Git about your GPG key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key). If you need to sign existing commits on a branch, [this Stack Overflow post](https://stackoverflow.com/questions/41882919/is-there-a-way-to-gpg-sign-all-previous-commits/41883164#41883164) contains helpful guidance.
 - **Branches:** All pull requests from community contributors should target the `main` branch (default). If the change is needed as a patch for a minor version of dbt that has already been released (or is already a release candidate), a maintainer will backport the changes in your PR to the relevant "latest" release branch (`1.0.latest`, `1.1.latest`, ...). If an issue fix applies to a release branch, that fix should be first committed to the development branch and then to the release branch (rarely release-branch fixes may not apply to `main`).
 - **Releases**: Before releasing a new minor version of Core, we prepare a series of alphas and release candidates to allow users (especially employees of dbt Labs!) to test the new version in live environments. This is an important quality assurance step, as it exposes the new code to a wide variety of complicated deployments and can surface bugs before official release. Releases are accessible via our [supported installation methods](https://docs.getdbt.com/docs/core/installation-overview#install-dbt-core).
 
@@ -191,6 +192,12 @@ hatch run test
 # Run integration tests
 hatch run integration-tests
 
+# Run integration tests for test class
+hatch run integration-tests -k TestVerifyArtifacts
+
+# Run integration tests for test method name
+hatch run integration-tests -k test_load_artifact
+
 # Run integration tests in fail-fast mode
 hatch run integration-tests-fail-fast
 
@@ -228,6 +235,15 @@ hatch run +py=3.11 ci:unit-tests
 #### `pre-commit`
 
 [`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
+
+#### CodeScene (optional)
+
+The `codescene-delta` pre-commit hook runs [CodeScene](https://codescene.com/)'s delta analysis on staged Python changes via the [`cs` CLI](https://codescene.io/docs/cli/index.html). It blocks commits that introduce Code Health regressions. The hook is **opt-in** — it silently skips for any contributor who does not have both:
+
+1. The `cs` CLI installed and on `PATH` (see [install instructions](https://codescene.io/docs/cli/index.html)), and
+2. `CS_ACCESS_TOKEN` exported in the shell where you commit (or, for on-prem CodeScene: `CS_ONPREM_API_URL`, `CS_USERNAME`, `CS_PASSWORD`).
+
+Without both, no `cs` invocation occurs and no code leaves your machine. With both set, staged diffs are sent to CodeScene for delta analysis on every commit.
 
 #### `pytest`
 

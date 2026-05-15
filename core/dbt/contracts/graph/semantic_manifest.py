@@ -1,5 +1,39 @@
 from typing import List, Optional, Set
 
+from metricflow_semantic_interfaces.implementations.metric import PydanticMetric
+from metricflow_semantic_interfaces.implementations.node_relation import (
+    PydanticNodeRelation,
+)
+from metricflow_semantic_interfaces.implementations.project_configuration import (
+    PydanticProjectConfiguration,
+)
+from metricflow_semantic_interfaces.implementations.saved_query import (
+    PydanticSavedQuery,
+)
+from metricflow_semantic_interfaces.implementations.semantic_manifest import (
+    PydanticSemanticManifest,
+)
+from metricflow_semantic_interfaces.implementations.semantic_model import (
+    PydanticSemanticModel,
+)
+from metricflow_semantic_interfaces.implementations.time_spine import (
+    PydanticTimeSpine,
+    PydanticTimeSpineCustomGranularityColumn,
+    PydanticTimeSpinePrimaryColumn,
+)
+from metricflow_semantic_interfaces.implementations.time_spine_table_configuration import (
+    PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
+)
+from metricflow_semantic_interfaces.type_enums import TimeGranularity
+from metricflow_semantic_interfaces.validations.semantic_manifest_validator import (
+    SemanticManifestValidator,
+)
+from metricflow_semantic_interfaces.validations.validator_helpers import (
+    FileContext,
+    ValidationError,
+    ValidationIssueContext,
+)
+
 from dbt import deprecations
 from dbt.constants import (
     LEGACY_TIME_SPINE_GRANULARITY,
@@ -8,39 +42,16 @@ from dbt.constants import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
-from dbt.events.types import ArtifactWritten, SemanticValidationFailure
+from dbt.events.types import (
+    ArtifactWritten,
+    MFConverterIssue,
+    SemanticValidationFailure,
+)
 from dbt.exceptions import ParsingError
 from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_semantic_interfaces.implementations.metric import PydanticMetric
-from dbt_semantic_interfaces.implementations.node_relation import PydanticNodeRelation
-from dbt_semantic_interfaces.implementations.project_configuration import (
-    PydanticProjectConfiguration,
-)
-from dbt_semantic_interfaces.implementations.saved_query import PydanticSavedQuery
-from dbt_semantic_interfaces.implementations.semantic_manifest import (
-    PydanticSemanticManifest,
-)
-from dbt_semantic_interfaces.implementations.semantic_model import PydanticSemanticModel
-from dbt_semantic_interfaces.implementations.time_spine import (
-    PydanticTimeSpine,
-    PydanticTimeSpineCustomGranularityColumn,
-    PydanticTimeSpinePrimaryColumn,
-)
-from dbt_semantic_interfaces.implementations.time_spine_table_configuration import (
-    PydanticTimeSpineTableConfiguration as LegacyTimeSpine,
-)
-from dbt_semantic_interfaces.type_enums import TimeGranularity
-from dbt_semantic_interfaces.validations.semantic_manifest_validator import (
-    SemanticManifestValidator,
-)
-from dbt_semantic_interfaces.validations.validator_helpers import (
-    FileContext,
-    ValidationError,
-    ValidationIssueContext,
-)
 
 
 class SemanticManifest:
@@ -113,10 +124,55 @@ class SemanticManifest:
         for warning in validation_results.warnings:
             fire_event(SemanticValidationFailure(msg=warning.message))
 
+        for deprecation in validation_results.future_errors:
+            if (
+                "time dimension" in deprecation.message
+                and "must have a time granularity set" in deprecation.message
+            ):
+                deprecations.warn(
+                    "time-dimensions-require-granularity-deprecation", deprecation.message
+                )
+            else:
+                # We have three options for this case:
+                # 1. Swallow it (don't send any event)
+                # 2. Raise a generic deprecation
+                # 3. Raise an error about an unknown SL future error
+                #
+                # (1) is the easiest, but useless to the user and also to us for debugging.
+                # (3) is not safe because if a new deprecation is added in a DSI patch, then
+                # suddenly dbt core would be broken.
+                # This leaves (2) only remaining option, which is what we do.
+                deprecations.warn("generic-semantic-layer-deprecation", deprecation.message)
+
         for error in validation_result_errors:
             fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
 
         return not validation_result_errors
+
+    def write_osi_document_to_file(self, file_path: str) -> None:
+        from metricflow.converters.msi_to_osi import MSIToOSIConverter
+
+        try:
+            result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+        except RuntimeError as exc:
+            fire_event(
+                SemanticValidationFailure(
+                    msg=f"OSI document could not be generated: {exc}. "
+                    "The semantic manifest may contain metric types not yet supported "
+                    "by the MSI→OSI converter."
+                )
+            )
+            return
+        for issue in result.issues:
+            fire_event(
+                MFConverterIssue(
+                    issue_type=issue.issue_type.value,
+                    element_name=issue.element_name,
+                    converter_name="MSIToOSIConverter",
+                )
+            )
+        write_file(file_path, result.output.to_osi_json())
+        fire_event(ArtifactWritten(artifact_type="OsiDocument", artifact_path=file_path))
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
@@ -195,7 +251,7 @@ class SemanticManifest:
 
         legacy_time_spine_model: Optional[ModelNode] = None
         if self.manifest.semantic_models:
-            legacy_time_spine_model = self.manifest.ref_lookup.find(
+            legacy_time_spine_model = self.manifest.ref_lookup.find(  # type: ignore[assignment]
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
             )
             if legacy_time_spine_model:

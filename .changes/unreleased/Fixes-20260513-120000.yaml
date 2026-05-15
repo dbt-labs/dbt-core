@@ -1,0 +1,8 @@
+kind: Fixes
+body: "Fix `version_to_str` returning empty string for float `NodeVersion` values,
+    causing unquoted YAML version scalars (e.g. `v: 4.5`) to be silently dropped
+    and mis-routed as non-versioned models"
+time: 2026-05-13T12:00:00.000000-05:00
+custom:
+    Author: tauhid621
+    Issue: "12947"

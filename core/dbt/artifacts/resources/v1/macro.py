@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
 from dbt.artifacts.resources.base import BaseResource, Docs
-from dbt.artifacts.resources.types import ModelLanguage, NodeType
+from dbt.artifacts.resources.types import FunctionLanguage, ModelLanguage, NodeType
 from dbt.artifacts.resources.v1.components import MacroDependsOn
+from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.dataclass_schema import dbtClassMixin
 
 
@@ -16,6 +17,12 @@ class MacroArgument(dbtClassMixin):
 
 
 @dataclass
+class MacroConfig(BaseConfig):
+    meta: Dict[str, Any] = field(default_factory=dict)
+    docs: Docs = field(default_factory=Docs)
+
+
+@dataclass
 class Macro(BaseResource):
     macro_sql: str
     resource_type: Literal[NodeType.Macro]
@@ -23,7 +30,8 @@ class Macro(BaseResource):
     description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
+    config: MacroConfig = field(default_factory=MacroConfig)
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
-    supported_languages: Optional[List[ModelLanguage]] = None
+    supported_languages: Optional[List[ModelLanguage | FunctionLanguage]] = None

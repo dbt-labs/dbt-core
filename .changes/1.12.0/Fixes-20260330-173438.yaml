@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure property depr checks check for aliases with plus prefix
+time: 2026-03-30T17:34:38.089092+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12327"

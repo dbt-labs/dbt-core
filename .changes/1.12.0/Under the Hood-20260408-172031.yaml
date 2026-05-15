@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Improve type hinting for BaseRunner so that more type errors are caught during
+  development
+time: 2026-04-08T17:20:31.601232-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12803"

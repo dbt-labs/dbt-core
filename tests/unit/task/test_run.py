@@ -1,5 +1,6 @@
 from argparse import Namespace
 from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from typing import Optional, Type, Union
 from unittest import mock
@@ -15,8 +16,8 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
 from dbt.artifacts.resources.types import NodeType, RunHookType
 from dbt.artifacts.resources.v1.components import DependsOn
-from dbt.artifacts.resources.v1.config import NodeConfig
-from dbt.artifacts.resources.v1.model import ModelConfig
+from dbt.artifacts.resources.v1.config import Hook, NodeConfig
+from dbt.artifacts.resources.v1.model import LatestVersionView, ModelConfig
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
@@ -157,6 +158,295 @@ class TestModelRunner:
     ) -> None:
         model_runner.execute(model=table_model, manifest=manifest)
         # TODO: Assert that the model was executed
+
+    def test_materialize_latest_version_view_for_latest_version(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+            def __str__(self) -> str:
+                return f'"{self.database}"."{self.schema}"."{self.identifier}"'
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True),
+        )
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model", type="view"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = None  # alias macro not found
+        manifest.find_materialization_macro_by_name.return_value = (
+            mocker.sentinel.view_materialization
+        )
+
+        mocker.patch(
+            "dbt.task.run.generate_runtime_model_context", return_value={"context_macro_stack": []}
+        )
+        mocker.patch(
+            "dbt.task.run.MacroGenerator", return_value=mocker.Mock(return_value={"relations": []})
+        )
+        mocker.patch.object(
+            model_runner, "_materialization_relations", return_value=[pointer_relation]
+        )
+
+        pointer_relations = model_runner._materialize_latest_version_view(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        assert pointer_relations == [pointer_relation]
+        manifest.find_materialization_macro_by_name.assert_called_once_with(
+            model_runner.config.project_name, "view", model_runner.adapter.type()
+        )
+
+    def test_materialize_latest_version_view_uses_custom_alias(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+            def __str__(self) -> str:
+                return f'"{self.database}"."{self.schema}"."{self.identifier}"'
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True, alias="latest_alias"),
+        )
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+        pointer_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="latest_alias", type="view"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = (
+            None  # alias macro not found, uses custom_alias_name
+        )
+        manifest.find_materialization_macro_by_name.return_value = (
+            mocker.sentinel.view_materialization
+        )
+
+        mock_context = {"context_macro_stack": []}
+        mock_generate_context = mocker.patch(
+            "dbt.task.run.generate_runtime_model_context", return_value=mock_context
+        )
+        mocker.patch(
+            "dbt.task.run.MacroGenerator", return_value=mocker.Mock(return_value={"relations": []})
+        )
+        mocker.patch.object(
+            model_runner, "_materialization_relations", return_value=[pointer_relation]
+        )
+
+        pointer_relations = model_runner._materialize_latest_version_view(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        assert pointer_relations == [pointer_relation]
+        # Verify the synthetic node passed to context generation has the right alias
+        call_args = mock_generate_context.call_args
+        synthetic_node = call_args[0][0]
+        assert synthetic_node.alias == "latest_alias"
+
+    @pytest.mark.parametrize(
+        "version,latest_version,latest_version_view_enabled",
+        [
+            (1, 2, True),
+            (2, 2, False),
+        ],
+    )
+    def test_materialize_latest_version_view_skips_when_not_needed(
+        self,
+        mocker: MockerFixture,
+        model_runner: ModelRunner,
+        version: int,
+        latest_version: int,
+        latest_version_view_enabled: bool,
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = version
+        model.latest_version = latest_version
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=latest_version_view_enabled),
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+
+        pointer_relations = model_runner._materialize_latest_version_view(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[
+                FakeRelation(
+                    database="dbt",
+                    schema="dbt_schema",
+                    identifier="versioned_model_v2",
+                    type="table",
+                )
+            ],
+        )
+
+        assert pointer_relations == []
+        model_runner.adapter.Relation.create.assert_not_called()
+        manifest.find_macro_by_name.assert_not_called()
+
+    def test_materialize_latest_version_view_synthetic_node_clears_hooks_and_docs(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        """Synthetic node passed to view materialization has hooks cleared and
+        persist_docs empty — pointer is an internal detail, not a model lifecycle event."""
+
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+            def __str__(self) -> str:
+                return f'"{self.database}"."{self.schema}"."{self.identifier}"'
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True),
+            pre_hook=[Hook(sql="select 1")],
+            post_hook=[Hook(sql="select 2")],
+        )
+        model.config.persist_docs = {"relation": True}
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = None
+        manifest.find_materialization_macro_by_name.return_value = (
+            mocker.sentinel.view_materialization
+        )
+
+        mock_generate_context = mocker.patch(
+            "dbt.task.run.generate_runtime_model_context", return_value={"context_macro_stack": []}
+        )
+        mocker.patch(
+            "dbt.task.run.MacroGenerator", return_value=mocker.Mock(return_value={"relations": []})
+        )
+        mocker.patch.object(model_runner, "_materialization_relations", return_value=[])
+
+        model_runner._materialize_latest_version_view(
+            manifest=manifest,
+            model=model,
+            context={"context_macro_stack": []},
+            relations=[source_relation],
+        )
+
+        synthetic_node = mock_generate_context.call_args[0][0]
+        assert synthetic_node.config.pre_hook == []
+        assert synthetic_node.config.post_hook == []
+        assert synthetic_node.config.persist_docs == {}
+        assert synthetic_node.unique_id == f"{model.unique_id}__latest_version_view"
+
+    def test_materialize_latest_version_view_errors_on_alias_collision(
+        self, mocker: MockerFixture, model_runner: ModelRunner
+    ) -> None:
+        @dataclass
+        class FakeRelation:
+            database: str
+            schema: str
+            identifier: str
+            type: str
+
+            @property
+            def name(self) -> str:
+                return self.identifier
+
+        model = model_runner.node
+        model.name = "versioned_model"
+        model.version = 2
+        model.latest_version = 2
+        model.config = ModelConfig(
+            materialized="table",
+            latest_version_view=LatestVersionView(enabled=True, alias="versioned_model_v2"),
+        )
+
+        source_relation = FakeRelation(
+            database="dbt", schema="dbt_schema", identifier="versioned_model_v2", type="table"
+        )
+
+        model_runner.adapter = mocker.Mock()
+        manifest = mocker.Mock(spec=Manifest)
+        manifest.find_macro_by_name.return_value = (
+            None  # alias macro not found, falls back to custom_alias_name
+        )
+
+        with pytest.raises(DbtRuntimeError, match="already aliased"):
+            model_runner._materialize_latest_version_view(
+                manifest=manifest,
+                model=model,
+                context={"context_macro_stack": []},
+                relations=[source_relation],
+            )
 
 
 class TestMicrobatchModelRunner:
@@ -303,6 +593,78 @@ class TestMicrobatchModelRunner:
 
         # Assert result of should_run_in_parallel
         assert batch_runner.should_run_in_parallel() == expectation
+
+    def test_get_microbatch_builder_uses_original_invocation_time_on_retry(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+    ) -> None:
+        """When retrying, get_microbatch_builder should use the original invocation
+        time from the previous run rather than the current invocation time."""
+        original_time = datetime(2025, 3, 21, 7, 55, 0)
+        current_time = datetime(2025, 3, 25, 1, 4, 0)
+
+        # Set up a mock parent task with original_invocation_started_at
+        mock_parent = mocker.Mock(spec=RunTask)
+        mock_parent.original_invocation_started_at = original_time
+        model_runner._parent_task = mock_parent
+
+        # Mock _is_incremental to avoid adapter calls
+        mocker.patch.object(model_runner, "_is_incremental", return_value=True)
+
+        # Mock get_invocation_started_at to return the "current" (retry) time
+        mocker.patch(
+            "dbt.task.run.get_invocation_started_at",
+            return_value=current_time,
+        )
+
+        model = model_runner.node
+        model.config.materialized = "incremental"
+        model.config.incremental_strategy = "microbatch"
+        model.config.batch_size = "day"
+        model.config.begin = "2024-12-01"
+        model.config.event_time = "_event_date"
+        model_runner.config.args = Namespace(
+            EVENT_TIME_START=None, EVENT_TIME_END=None, SAMPLE=None
+        )
+
+        builder = model_runner.get_microbatch_builder(model)
+        assert builder.default_end_time == original_time
+
+    def test_get_microbatch_builder_uses_current_time_without_retry(
+        self,
+        mocker: MockerFixture,
+        model_runner: MicrobatchModelRunner,
+    ) -> None:
+        """When not retrying (normal run), get_microbatch_builder should use
+        the current invocation time."""
+        current_time = datetime(2025, 3, 25, 1, 4, 0)
+
+        # Set up a mock parent task with no original_invocation_started_at
+        mock_parent = mocker.Mock(spec=RunTask)
+        mock_parent.original_invocation_started_at = None
+        model_runner._parent_task = mock_parent
+
+        # Mock _is_incremental to avoid adapter calls
+        mocker.patch.object(model_runner, "_is_incremental", return_value=True)
+
+        mocker.patch(
+            "dbt.task.run.get_invocation_started_at",
+            return_value=current_time,
+        )
+
+        model = model_runner.node
+        model.config.materialized = "incremental"
+        model.config.incremental_strategy = "microbatch"
+        model.config.batch_size = "day"
+        model.config.begin = "2024-12-01"
+        model.config.event_time = "_event_date"
+        model_runner.config.args = Namespace(
+            EVENT_TIME_START=None, EVENT_TIME_END=None, SAMPLE=None
+        )
+
+        builder = model_runner.get_microbatch_builder(model)
+        assert builder.default_end_time == current_time
 
 
 class TestRunTask:

@@ -3,6 +3,7 @@ import pathlib
 import re
 
 import pytest
+import sqlparse
 
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
 from dbt_common.exceptions import DbtBaseException as DbtException
@@ -289,3 +290,91 @@ class TestCompile:
             summary = json.load(summary_file)
             assert "_invocation_id" in summary
             assert "linked" in summary
+
+
+class TestCompileGraphOperatorSelectors:
+    """`--select` accepts graph operators (`+m`, `m+`, `@m`) and method
+    selectors (`tag:`, `fqn:`…). Operator-expanded neighbors are compiled,
+    but the streamed `CompiledNode` output should only include the anchors
+    the user named — never the ancestors/descendants pulled in by the
+    operator, and never unrelated nodes."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_model.sql": first_model_sql,
+            "second_model.sql": second_model_sql,
+            "unrelated_model.sql": "select 1 as id",
+            "schema.yml": schema_yml,
+        }
+
+    @pytest.mark.parametrize("selector", ["+second_model", "@second_model", "fqn:second_model"])
+    def test_compile_anchor_selectors(self, project, selector):
+        (_, log_output) = run_dbt_and_capture(["compile", "--select", selector])
+        assert "Compiled node 'second_model' is:" in log_output
+        assert "Compiled node 'first_model' is:" not in log_output
+        assert "Compiled node 'unrelated_model' is:" not in log_output
+
+    def test_compile_descendants_operator(self, project):
+        (_, log_output) = run_dbt_and_capture(["compile", "--select", "first_model+"])
+        assert "Compiled node 'first_model' is:" in log_output
+        assert "Compiled node 'second_model' is:" not in log_output
+        assert "Compiled node 'unrelated_model' is:" not in log_output
+
+
+class TestSqlParseGroupingTokenLimit:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model.sql": first_ephemeral_model_sql,
+            "second_ephemeral_model.sql": second_ephemeral_model_sql,
+            "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
+        }
+
+    def test_sqlparse_grouping_token_limit(self, project):
+        # No flag: compile succeeds (default is no limit)
+        run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None
+
+        # Flag set to 0: compile fails because token limit is exceeded
+        with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):
+            run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "0"}'])
+
+        # Flag set to 10000: compile succeeds
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "10000"}'])
+
+
+class TestSqlParseGroupingDepthLimit:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model.sql": first_ephemeral_model_sql,
+            "second_ephemeral_model.sql": second_ephemeral_model_sql,
+            "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
+        }
+
+    def test_sqlparse_grouping_depth_limit(self, project):
+        # No flag: compile succeeds (default is no limit)
+        run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
+
+        # Flag set to 0: compile fails because depth limit is exceeded
+        with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):
+            run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "0"}'])
+
+        # Flag set to 10000: compile succeeds
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+
+
+class TestSqlParseOnlyTokensLeavesDepthNone:
+    def test_only_tokens_set_leaves_depth_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_TOKENS": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
+
+
+class TestSqlParseOnlyDepthLeavesTokensNone:
+    def test_only_depth_set_leaves_tokens_none(self, project):
+        run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None

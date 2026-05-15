@@ -1,7 +1,7 @@
 import os
 import pathlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, MutableMapping, Optional, Protocol
+from typing import Dict, List, Literal, Mapping, MutableMapping, Optional, Protocol
 
 import pathspec  # type: ignore
 
@@ -17,6 +17,7 @@ from dbt.contracts.files import (
 )
 from dbt.events.types import InputFileDiffError
 from dbt.exceptions import ParsingError
+from dbt.flags import get_flags
 from dbt.parser.common import schema_file_keys
 from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import filesystem_search
@@ -39,6 +40,13 @@ class FileDiff(dbtClassMixin):
     # added and changed files, but we would lose some error handling.
     changed: List[InputFile]
     added: List[InputFile]
+
+
+def normalize_file_contents(contents: str) -> str:
+    """Normalize file contents by compacting whitespace and newlines to a single whitespace.
+    This ensures consistent checksums regardless of formatting differences.
+    """
+    return " ".join(contents.split())
 
 
 # This loads the files contents and creates the SourceFile object
@@ -83,7 +91,8 @@ def load_source_file(
         # the checksum to match the stored file contents
         file_contents = load_file_contents(path.absolute_path, strip=True)
         source_file.contents = file_contents
-        source_file.checksum = FileHash.from_contents(file_contents)
+        normalized_contents = normalize_file_contents(file_contents)
+        source_file.checksum = FileHash.from_contents(normalized_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file=source_file, validate=True)
@@ -384,36 +393,44 @@ class ReadFilesFromDiff:
         return file_type_lookup
 
 
+def _get_extensions(base_ext: Literal[".sql", ".md"]) -> List[str]:
+    """Given a base extension, returns a list of aliased extensions"""
+    if not getattr(get_flags(), "ALLOW_JINJA_FILE_EXTENSIONS", False):
+        return [base_ext]
+
+    return [base_ext, f"{base_ext}.j2", f"{base_ext}.jinja2", f"{base_ext}.jinja"]
+
+
 def get_file_types_for_project(project):
     file_types = {
         ParseFileType.Macro: {
             "paths": project.macro_paths,
-            "extensions": [".sql"],
+            "extensions": _get_extensions(".sql"),
             "parser": "MacroParser",
         },
         ParseFileType.Model: {
             "paths": project.model_paths,
-            "extensions": [".sql", ".py"],
+            "extensions": [".py"] + _get_extensions(".sql"),
             "parser": "ModelParser",
         },
         ParseFileType.Snapshot: {
             "paths": project.snapshot_paths,
-            "extensions": [".sql"],
+            "extensions": _get_extensions(".sql"),
             "parser": "SnapshotParser",
         },
         ParseFileType.Analysis: {
             "paths": project.analysis_paths,
-            "extensions": [".sql"],
+            "extensions": _get_extensions(".sql"),
             "parser": "AnalysisParser",
         },
         ParseFileType.SingularTest: {
             "paths": project.test_paths,
-            "extensions": [".sql"],
+            "extensions": _get_extensions(".sql"),
             "parser": "SingularTestParser",
         },
         ParseFileType.GenericTest: {
             "paths": project.generic_test_paths,
-            "extensions": [".sql"],
+            "extensions": _get_extensions(".sql"),
             "parser": "GenericTestParser",
         },
         ParseFileType.Seed: {
@@ -423,7 +440,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Documentation: {
             "paths": project.docs_paths,
-            "extensions": [".md"],
+            "extensions": _get_extensions(".md"),
             "parser": "DocumentationParser",
         },
         ParseFileType.Schema: {
@@ -433,12 +450,12 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Fixture: {
             "paths": project.fixture_paths,
-            "extensions": [".csv", ".sql"],
+            "extensions": [".csv"] + _get_extensions(".sql"),
             "parser": "FixtureParser",
         },
         ParseFileType.Function: {
             "paths": project.function_paths,
-            "extensions": [".sql", ".py"],
+            "extensions": [".py", ".js"] + _get_extensions(".sql"),
             "parser": "FunctionParser",
         },
     }

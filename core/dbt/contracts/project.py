@@ -368,6 +368,14 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_generic_test_arguments_property: bool = True
     require_unique_project_resource_names: bool = False
     require_ref_searches_node_package_before_root: bool = False
+    require_valid_schema_from_generate_schema_name: bool = False
+    allow_jinja_file_extensions: bool = False
+    require_sql_header_in_test_configs: bool = False
+    support_custom_ref_kwargs: bool = False
+    require_corrected_analysis_fqns: bool = False
+    require_source_and_semantic_model_names_without_spaces: bool = False
+    enable_grouped_warn_error_parser_logs: bool = False
+    latest_version_view_enabled_by_default: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -386,6 +394,14 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_generic_test_arguments_property": self.require_generic_test_arguments_property,
             "require_unique_project_resource_names": self.require_unique_project_resource_names,
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
+            "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "allow_jinja_file_extensions": self.allow_jinja_file_extensions,
+            "require_sql_header_in_test_configs": self.require_sql_header_in_test_configs,
+            "support_custom_ref_kwargs": self.support_custom_ref_kwargs,
+            "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
+            "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
+            "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
+            "latest_version_view_enabled_by_default": self.latest_version_view_enabled_by_default,
         }
 
 

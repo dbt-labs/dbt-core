@@ -397,3 +397,120 @@ class TestProfileSecretEnvVars:
         assert not ("I020" in log_output)
         manifest = get_manifest(project.project_root)
         assert env_vars_checksum == manifest.state_check.profile_env_vars_hash.checksum
+
+
+# Model that uses a var with a default value
+model_with_var_sql = """
+select '{{ var("my_var", "default_value") }}' as var_value
+"""
+
+
+class TestVarsFilePartialParsing:
+    """Tests for partial parsing behavior when vars.yml file changes."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_with_var.sql": model_with_var_sql,
+        }
+
+    def test_vars_file_partial_parsing(self, project, logs_dir):
+        # Initial run without vars.yml - uses default value
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        initial_vars_hash = manifest.state_check.vars_hash.checksum
+
+        # Add vars.yml file - should trigger full reparse
+        vars_yml_content = """
+vars:
+  my_var: "from_vars_file"
+"""
+        write_file(vars_yml_content, project.project_root, "vars.yml")
+        (results, log_output) = run_dbt_and_capture(["--partial-parse", "run"])
+        assert len(results) == 1
+        assert "Unable to do partial parsing" in log_output
+
+        manifest = get_manifest(project.project_root)
+        current_vars_hash = manifest.state_check.vars_hash.checksum
+        assert current_vars_hash != initial_vars_hash
+
+        # Run again with no changes - should use partial parsing (no reparse message)
+        (results, log_output) = run_dbt_and_capture(["--partial-parse", "run"])
+        assert len(results) == 1
+        assert "Unable to do partial parsing" not in log_output
+
+        manifest = get_manifest(project.project_root)
+        previous_vars_hash = current_vars_hash
+        current_vars_hash = manifest.state_check.vars_hash.checksum
+        assert current_vars_hash == previous_vars_hash
+
+        # Modify vars.yml - should trigger full reparse
+        vars_yml_content_modified = """
+vars:
+  my_var: "modified_value"
+"""
+        write_file(vars_yml_content_modified, project.project_root, "vars.yml")
+        (results, log_output) = run_dbt_and_capture(["--partial-parse", "run"])
+        assert len(results) == 1
+        assert "Unable to do partial parsing" in log_output
+
+        manifest = get_manifest(project.project_root)
+        previous_vars_hash = current_vars_hash
+        current_vars_hash = manifest.state_check.vars_hash.checksum
+
+        assert previous_vars_hash != current_vars_hash
+
+        # Delete vars.yml - should trigger full reparse
+        os.remove(os.path.join(project.project_root, "vars.yml"))
+        (results, log_output) = run_dbt_and_capture(["--partial-parse", "run"])
+        assert len(results) == 1
+        assert "Unable to do partial parsing" in log_output
+
+        manifest = get_manifest(project.project_root)
+        previous_vars_hash = current_vars_hash
+        current_vars_hash = manifest.state_check.vars_hash.checksum
+
+        assert previous_vars_hash != current_vars_hash
+
+
+class TestVarsFileBackwardCompatibility:
+    """Tests that users not using vars.yml are unaffected by the feature."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_one.sql": model_one_sql,
+        }
+
+    def test_no_vars_file_hash_unchanged(self, project):
+        # First run - no vars.yml
+        results, output = run_dbt_and_capture(["run"])
+        assert len(results) == 1
+
+        # Second run - still no vars.yml, hash should remain empty
+        results, output = run_dbt_and_capture(["--partial-parse", "run"])
+        assert len(results) == 1
+        assert "Unable to do partial parsing" not in output
+
+    def test_cli_vars_still_trigger_reparse(self, project, logs_dir):
+        # First run with no CLI vars
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        initial_vars_hash = manifest.state_check.vars_hash.checksum
+
+        # Second run with CLI vars - should trigger reparse due to vars_hash change
+        (results, log_output) = run_dbt_and_capture(
+            [
+                "--partial-parse",
+                "run",
+                "--vars",
+                '{"cli_var": "value"}',
+            ]
+        )
+        assert len(results) == 1
+        assert "Unable to do partial parsing" in log_output
+
+        manifest = get_manifest(project.project_root)
+        assert manifest.state_check.vars_hash.checksum != initial_vars_hash

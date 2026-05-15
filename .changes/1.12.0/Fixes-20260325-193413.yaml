@@ -1,0 +1,6 @@
+kind: Fixes
+body: We can now enable/disable analyses from dbt_project.yml on a project level or a folder level
+time: 2026-03-25T19:34:13.15847+05:30
+custom:
+    Author: sriramr98
+    Issue: "11427"

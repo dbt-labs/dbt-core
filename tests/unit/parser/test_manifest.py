@@ -2,16 +2,28 @@ from argparse import Namespace
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import jinja2
+import msgpack
 import pytest
 from pytest_mock import MockerFixture
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
+from dbt.artifacts.resources.types import FunctionLanguage, FunctionType
+from dbt.artifacts.resources.v1.semantic_model import NodeRelation
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
+from dbt.exceptions import ParsingError
 from dbt.flags import set_from_args
-from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
+from dbt.parser.manifest import (
+    ManifestLoader,
+    _check_function_language_support,
+    _warn_for_unused_resource_config_paths,
+    extended_mashumaro_encoder,
+    extended_msgpack_encoder,
+    version_to_str,
+)
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_catcher import EventCatcher
@@ -258,7 +270,7 @@ class TestCheckForcingConcurrentBatches:
 
     @pytest.fixture
     def event_catcher(self) -> EventCatcher:
-        return EventCatcher(InvalidConcurrentBatchesConfig)  # type: ignore
+        return EventCatcher(InvalidConcurrentBatchesConfig)
 
     @pytest.mark.parametrize(
         "adapter_support,concurrent_batches_config,expect_warning",
@@ -296,3 +308,213 @@ class TestCheckForcingConcurrentBatches:
             assert "Batches will be run sequentially" in event_catcher.caught_events[0].info.msg  # type: ignore
         else:
             assert len(event_catcher.caught_events) == 0
+
+
+class TestUpdateSemanticModel:
+    """Tests for ManifestLoader.update_semantic_model."""
+
+    @pytest.fixture
+    @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
+    @patch("dbt.parser.manifest.os.path.exists")
+    @patch("dbt.parser.manifest.open")
+    def loader(self, patched_open, patched_os_exist, patched_state_check):
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.project_target_path = "mock_target_path"
+        return ManifestLoader(mock_project, {})
+
+    def test_no_index_error_when_depends_on_nodes_is_empty(self, loader):
+        """Regression: update_semantic_model must not raise IndexError when
+        depends_on_nodes is empty (e.g. referenced model is disabled)."""
+        semantic_model = MagicMock()
+        semantic_model.depends_on_nodes = []
+
+        # Before the fix this raised: IndexError: list index out of range
+        loader.update_semantic_model(semantic_model)
+
+        # node_relation must not have been assigned
+        assert "node_relation" not in semantic_model.__dict__
+
+    def test_node_relation_set_when_depends_on_nodes_has_entry(self, loader):
+        """When depends_on_nodes is non-empty, node_relation is populated."""
+        refd_node = MagicMock()
+        refd_node.relation_name = '"db"."schema"."my_model"'
+        refd_node.alias = "my_model"
+        refd_node.schema = "schema"
+        refd_node.database = "db"
+        loader.manifest.nodes["model.pkg.my_model"] = refd_node
+
+        semantic_model = MagicMock()
+        semantic_model.depends_on_nodes = ["model.pkg.my_model"]
+
+        loader.update_semantic_model(semantic_model)
+
+        assert semantic_model.node_relation == NodeRelation(
+            relation_name='"db"."schema"."my_model"',
+            alias="my_model",
+            schema_name="schema",
+            database="db",
+        )
+
+
+class TestExtendedMsgpackEncoder:
+    """
+    Unit tests for extended_msgpack_encoder and extended_mashumaro_encoder.
+
+    The key regression being guarded: jinja2.Undefined objects that end up in
+    manifest node fields (e.g. meta values rendered from schema.yml with an
+    undefined Jinja variable) must be serialisable to msgpack.  Without the
+    isinstance(obj, jinja2.Undefined) branch in extended_msgpack_encoder the
+    packer raises:
+        TypeError: can not serialize 'Undefined' object
+    """
+
+    def test_undefined_returns_none(self):
+        """extended_msgpack_encoder converts jinja2.Undefined to None."""
+        undefined = jinja2.Undefined(name="some_undefined_var")
+        result = extended_msgpack_encoder(undefined)
+        assert result is None
+
+    def test_undefined_subclass_returns_none(self):
+        """extended_msgpack_encoder handles jinja2.Undefined subclasses."""
+
+        class MyUndefined(jinja2.Undefined):
+            pass
+
+        result = extended_msgpack_encoder(MyUndefined())
+        assert result is None
+
+    def test_non_undefined_passthrough(self):
+        """extended_msgpack_encoder passes through unknown types unchanged."""
+        # msgpack itself will raise for truly unserializable objects; the
+        # encoder just returns them so msgpack can raise its own error.
+        obj = object()
+        assert extended_msgpack_encoder(obj) is obj
+
+    def test_mashumaro_encoder_with_undefined_in_dict(self):
+        """
+        extended_mashumaro_encoder can pack a dict containing jinja2.Undefined.
+
+        This is the direct reproduction of the production traceback: a manifest
+        node with a meta dict like {"key": <jinja2.Undefined>} must serialise
+        without raising TypeError.
+        """
+        undefined = jinja2.Undefined(name="undefined_jinja_var")
+        data = {"meta": {"key": undefined}}
+        # Must not raise TypeError
+        packed = extended_mashumaro_encoder(data)
+        unpacked = msgpack.unpackb(packed, raw=False)
+        assert unpacked == {"meta": {"key": None}}
+
+    def test_mashumaro_encoder_without_undefined_unchanged(self):
+        """extended_mashumaro_encoder round-trips plain data correctly."""
+        data = {"meta": {"key": "value"}, "count": 42}
+        packed = extended_mashumaro_encoder(data)
+        unpacked = msgpack.unpackb(packed, raw=False)
+        assert unpacked == data
+
+
+class TestCheckFunctionLanguageSupport:
+    def _make_function_node(self, name, language, function_type=FunctionType.Scalar):
+        node = MagicMock()
+        node.name = name
+        node.language = language
+        node.config = MagicMock()
+        node.config.type = function_type
+        return node
+
+    def _make_config(self, adapter_type):
+        config = MagicMock(spec=RuntimeConfig)
+        config.credentials = MagicMock()
+        config.credentials.type = adapter_type
+        return config
+
+    def test_js_udf_on_unsupported_adapter_raises(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("postgres")
+        with pytest.raises(ParsingError) as excinfo:
+            _check_function_language_support(manifest, config)
+        assert "Function 'my_func' uses JavaScript, which is not supported on 'postgres'" in str(
+            excinfo.value
+        )
+
+    def test_js_udf_on_bigquery_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("bigquery")
+        # Test passes if this function doesn't throw an error
+        _check_function_language_support(manifest, config)
+
+    def test_js_udf_on_snowflake_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript
+            )
+        }
+        config = self._make_config("snowflake")
+        _check_function_language_support(manifest, config)
+
+    def test_js_aggregate_on_snowflake_raises(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_agg": self._make_function_node(
+                "my_agg", FunctionLanguage.javascript, FunctionType.Aggregate
+            )
+        }
+        config = self._make_config("snowflake")
+        with pytest.raises(ParsingError) as excinfo:
+            _check_function_language_support(manifest, config)
+        assert (
+            "Function 'my_agg' is a JavaScript aggregate function and not supported on 'snowflake'"
+            in str(excinfo.value)
+        )
+
+    def test_js_aggregate_on_bigquery_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_agg": self._make_function_node(
+                "my_agg", FunctionLanguage.javascript, FunctionType.Aggregate
+            )
+        }
+        config = self._make_config("bigquery")
+        _check_function_language_support(manifest, config)
+
+    def test_js_scalar_on_snowflake_passes(self):
+        manifest = MagicMock(spec=Manifest)
+        manifest.functions = {
+            "function.test.my_func": self._make_function_node(
+                "my_func", FunctionLanguage.javascript, FunctionType.Scalar
+            )
+        }
+        config = self._make_config("snowflake")
+        _check_function_language_support(manifest, config)
+
+
+class TestVersionToStr:
+    # Regression test for #12947: PR #12828 widened NodeVersion to
+    # Union[int, float, str], and mashumaro deserializes union members in
+    # declaration order — so YAML scalars like `v: 4.5` now arrive as Python
+    # floats. The float case (4.5 -> "4.5") guards against a future Union
+    # reorder silently dropping float versions back to the "" sentinel.
+    @pytest.mark.parametrize(
+        "version,expected",
+        [
+            (None, ""),
+            (1, "1"),
+            ("1", "1"),
+            ("4.5", "4.5"),
+            (4.5, "4.5"),
+            ("test", "test"),
+        ],
+    )
+    def test_version_to_str(self, version, expected):
+        assert version_to_str(version) == expected

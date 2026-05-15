@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Remove unused `pytest-logbook` and `logbook` test dependencies from both the default and `ci` hatch envs. dbt-core dropped its logbook-based logger in #10119 (May 2024); the deps were carried over by mistake during the hatch migration in #12192. logbook 1.9.0 (Nov 2025) removed the auto-import of `logbook.compat` from its package init, breaking the auto-loaded `pytest-logbook` plugin at pytest collection time and failing the nightly release workflow once transitive resolution landed on 1.9.x.
+time: 2026-05-13T12:00:00.000000-04:00
+custom:
+  Author: tauhid621
+  Issue: NA

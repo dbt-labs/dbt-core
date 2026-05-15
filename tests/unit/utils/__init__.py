@@ -172,6 +172,20 @@ class ContractTestCase(TestCase):
             cls.validate(dct)
             cls.from_dict(dct)
 
+    def assert_fails_validation_with_message(self, dct, expected_message, cls=None):
+        """Assert that validation fails and the error message contains expected_message.
+
+        Use this instead of assert_fails_validation when you want to verify that
+        the user-facing error is actionable (e.g. names the offending field).
+        """
+        if cls is None:
+            cls = self.ContractType
+
+        with self.assertRaises(ValidationError) as ctx:
+            cls.validate(dct)
+            cls.from_dict(dct)
+        self.assertIn(expected_message, str(ctx.exception))
+
 
 def compare_dicts(dict1, dict2):
     first_set = set(dict1.keys())

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve partial parsing of semantic models using new-style yaml.
+time: 2026-04-01T14:39:34.253273-07:00
+custom:
+    Author: theyostalservice
+    Issue: "12763"

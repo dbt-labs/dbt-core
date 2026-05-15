@@ -9,12 +9,14 @@ from typing import (
     ClassVar,
     DefaultDict,
     Dict,
+    FrozenSet,
     Generic,
     List,
     Mapping,
     MutableMapping,
     Optional,
     Set,
+    SupportsIndex,
     Tuple,
     TypeVar,
     Union,
@@ -34,6 +36,7 @@ from dbt.adapters.factory import get_adapter_package_names
 # to preserve import paths
 from dbt.artifacts.resources import (
     BaseResource,
+    DeferFunction,
     DeferRelation,
     NodeConfig,
     NodeVersion,
@@ -119,21 +122,23 @@ class DocLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, key, package: Optional[PackageName]):
+    def get_unique_id(self, key: str, package: Optional[PackageName]) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, key, package)
 
-    def find(self, key, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, key: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[Documentation]:
         unique_id = self.get_unique_id(key, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_doc(self, doc: Documentation):
+    def add_doc(self, doc: Documentation) -> None:
         if doc.name not in self.storage:
             self.storage[doc.name] = {}
         self.storage[doc.name][doc.package_name] = doc.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for doc in manifest.docs.values():
             self.add_doc(doc)
 
@@ -150,22 +155,26 @@ class SourceLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SourceDefinition]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_source(self, source: SourceDefinition):
+    def add_source(self, source: SourceDefinition) -> None:
         if source.search_name not in self.storage:
             self.storage[source.search_name] = {}
 
         self.storage[source.search_name][source.package_name] = source.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for source in manifest.sources.values():
             if hasattr(source, "source_name"):
                 self.add_source(source)
@@ -183,22 +192,26 @@ class FunctionLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[FunctionNode]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_function(self, function: FunctionNode):
+    def add_function(self, function: FunctionNode) -> None:
         if function.search_name not in self.storage:
             self.storage[function.search_name] = {}
 
         self.storage[function.search_name][function.package_name] = function.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for function in manifest.functions.values():
             if hasattr(function, "name"):
                 self.add_function(function)
@@ -226,7 +239,7 @@ class RefableLookup(dbtClassMixin):
         package: Optional[PackageName],
         version: Optional[NodeVersion],
         node: Optional[GraphMemberNode] = None,
-    ):
+    ) -> Optional[UniqueID]:
         if version:
             key = f"{key}.v{version}"
 
@@ -243,7 +256,7 @@ class RefableLookup(dbtClassMixin):
         version: Optional[NodeVersion],
         manifest: "Manifest",
         source_node: Optional[GraphMemberNode] = None,
-    ):
+    ) -> Optional[ManifestNode]:
         unique_id = self.get_unique_id(key, package, version, source_node)
         if unique_id is not None:
             node = self.perform_lookup(unique_id, manifest)
@@ -282,7 +295,7 @@ class RefableLookup(dbtClassMixin):
             return node
         return None
 
-    def add_node(self, node: ManifestNode):
+    def add_node(self, node: ManifestNode) -> None:
         if node.resource_type in self._lookup_types:
             if node.name not in self.storage:
                 self.storage[node.name] = {}
@@ -296,11 +309,11 @@ class RefableLookup(dbtClassMixin):
             else:
                 self.storage[node.name][node.package_name] = node.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for node in manifest.nodes.values():
             self.add_node(node)
 
-    def perform_lookup(self, unique_id: UniqueID, manifest) -> ManifestNode:
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> ManifestNode:
         if unique_id in manifest.nodes:
             node = manifest.nodes[unique_id]
         else:
@@ -309,7 +322,7 @@ class RefableLookup(dbtClassMixin):
             )
         return node
 
-    def _find_unique_ids_for_package(self, key, package: Optional[PackageName]) -> List[str]:
+    def _find_unique_ids_for_package(self, key: str, package: Optional[PackageName]) -> List[str]:
         if key not in self.storage:
             return []
 
@@ -331,22 +344,26 @@ class MetricLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[Metric]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_metric(self, metric: Metric):
+    def add_metric(self, metric: Metric) -> None:
         if metric.search_name not in self.storage:
             self.storage[metric.search_name] = {}
 
         self.storage[metric.search_name][metric.package_name] = metric.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for metric in manifest.metrics.values():
             if hasattr(metric, "name"):
                 self.add_metric(metric)
@@ -366,22 +383,26 @@ class SavedQueryLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
-    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+    def find(
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SavedQuery]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add_saved_query(self, saved_query: SavedQuery):
+    def add_saved_query(self, saved_query: SavedQuery) -> None:
         if saved_query.search_name not in self.storage:
             self.storage[saved_query.search_name] = {}
 
         self.storage[saved_query.search_name][saved_query.package_name] = saved_query.unique_id
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest") -> None:
         for saved_query in manifest.saved_queries.values():
             if hasattr(saved_query, "name"):
                 self.add_saved_query(saved_query)
@@ -405,7 +426,9 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
         self.storage: DefaultDict[str, Dict[PackageName, UniqueID]] = defaultdict(dict)
         self.populate(manifest)
 
-    def get_unique_id(self, search_name: str, package: Optional[PackageName]):
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
     def find(
@@ -417,12 +440,12 @@ class SemanticModelByMeasureLookup(dbtClassMixin):
             return self.perform_lookup(unique_id, manifest)
         return None
 
-    def add(self, semantic_model: SemanticModel):
+    def add(self, semantic_model: SemanticModel) -> None:
         """Sets all measures for a SemanticModel as paths to the SemanticModel's `unique_id`"""
         for measure in semantic_model.measures:
             self.storage[measure.name][semantic_model.package_name] = semantic_model.unique_id
 
-    def populate(self, manifest: "Manifest"):
+    def populate(self, manifest: "Manifest") -> None:
         """Populate storage with all the measure + package paths to the Manifest's SemanticModels"""
         for semantic_model in manifest.semantic_models.values():
             self.add(semantic_model=semantic_model)
@@ -454,7 +477,7 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest: "Manifest"):
+    def populate(self, manifest: "Manifest") -> None:
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
@@ -469,7 +492,7 @@ class DisabledLookup(dbtClassMixin):
     # the other Lookup functions in that it returns full nodes, not just unique_ids
     def find(
         self,
-        search_name,
+        search_name: str,
         package: Optional[PackageName],
         version: Optional[NodeVersion] = None,
         resource_types: Optional[List[NodeType]] = None,
@@ -516,11 +539,13 @@ class SingularTestLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
         self.populate(manifest)
 
-    def get_unique_id(self, search_name, package: Optional[PackageName]) -> Optional[UniqueID]:
+    def get_unique_id(
+        self, search_name: str, package: Optional[PackageName]
+    ) -> Optional[UniqueID]:
         return find_unique_id_for_package(self.storage, search_name, package)
 
     def find(
-        self, search_name, package: Optional[PackageName], manifest: "Manifest"
+        self, search_name: str, package: Optional[PackageName], manifest: "Manifest"
     ) -> Optional[SingularTestNode]:
         unique_id = self.get_unique_id(search_name, package)
         if unique_id is not None:
@@ -564,14 +589,16 @@ def _packages_to_search(
             return [current_project, node_package, None]
 
 
-def _sort_values(dct):
+def _sort_values(dct: Dict[str, List[str]]) -> Dict[str, List[str]]:
     """Given a dictionary, sort each value. This makes output deterministic,
     which helps for tests.
     """
     return {k: sorted(v) for k, v in dct.items()}
 
 
-def build_node_edges(nodes: List[ManifestNode]):
+def build_node_edges(
+    nodes: List[GraphMemberNode],
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Build the forward and backward edges on the given list of ManifestNodes
     and return them as two separate dictionaries, each mapping unique IDs to
     lists of edges.
@@ -588,7 +615,7 @@ def build_node_edges(nodes: List[ManifestNode]):
 
 
 # Build a map of children of macros and generic tests
-def build_macro_edges(nodes: List[Any]):
+def build_macro_edges(nodes: List[Any]) -> Dict[str, List[str]]:
     forward_edges: Dict[str, List[str]] = {
         n.unique_id: [] for n in nodes if n.unique_id.startswith("macro") or n.depends_on_macros
     }
@@ -599,7 +626,7 @@ def build_macro_edges(nodes: List[Any]):
     return _sort_values(forward_edges)
 
 
-def _deepcopy(value):
+def _deepcopy(value: Any) -> Any:
     return value.from_dict(value.to_dict(omit_none=True))
 
 
@@ -753,11 +780,11 @@ T = TypeVar("T", bound=GraphMemberNode)
 # and the MacroManifest
 class MacroMethods:
     # Just to make mypy happy. There must be a better way.
-    def __init__(self):
-        self.macros = []
-        self.metadata = {}
-        self._macros_by_name = {}
-        self._macros_by_package = {}
+    def __init__(self) -> None:
+        self.macros: MutableMapping[str, Macro] = {}
+        self.metadata: ManifestMetadata
+        self._macros_by_name: Optional[Dict[str, List[Macro]]] = None
+        self._macros_by_package: Optional[Dict[str, Dict[str, Macro]]] = None
 
     def find_macro_candidate_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
@@ -937,6 +964,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     unit_tests: MutableMapping[str, UnitTestDefinition] = field(default_factory=dict)
     saved_queries: MutableMapping[str, SavedQuery] = field(default_factory=dict)
     fixtures: MutableMapping[str, UnitTestFileFixture] = field(default_factory=dict)
+    # Maps overload function file_id → root function unique_id.
+    # Used by partial parsing to invalidate the root when an overload file changes.
+    function_overload_owners: MutableMapping[str, str] = field(default_factory=dict)
 
     _doc_lookup: Optional[DocLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
@@ -985,18 +1015,18 @@ class Manifest(MacroMethods, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
-    def __pre_serialize__(self, context: Optional[Dict] = None):
+    def __pre_serialize__(self, context: Optional[Dict[str, Any]] = None) -> "Manifest":
         # serialization won't work with anything except an empty source_patches because
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}
         return self
 
     @classmethod
-    def __post_deserialize__(cls, obj):
+    def __post_deserialize__(cls, obj: "Manifest") -> "Manifest":
         obj._lock = get_mp_context().Lock()
         return obj
 
-    def build_flat_graph(self):
+    def build_flat_graph(self) -> None:
         """This attribute is used in context.common by each node, so we want to
         only build it once and avoid any concurrency issues around it.
         Make sure you don't call this until you're done with building your
@@ -1015,10 +1045,11 @@ class Manifest(MacroMethods, dbtClassMixin):
             "saved_queries": {
                 k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
             },
+            "unit_tests": {k: v.to_dict(omit_none=False) for k, v in self.unit_tests.items()},
         }
 
-    def build_disabled_by_file_id(self):
-        disabled_by_file_id = {}
+    def build_disabled_by_file_id(self) -> Dict[str, GraphMemberNode]:
+        disabled_by_file_id: Dict[str, GraphMemberNode] = {}
         for node_list in self.disabled.values():
             for node in node_list:
                 disabled_by_file_id[node.file_id] = node
@@ -1113,7 +1144,9 @@ class Manifest(MacroMethods, dbtClassMixin):
             resource_fqns[resource_type_plural].add(tuple(resource.fqn))
         return resource_fqns
 
-    def get_used_schemas(self, resource_types=None):
+    def get_used_schemas(
+        self, resource_types: Optional[List[NodeType]] = None
+    ) -> FrozenSet[Tuple[Optional[str], str]]:
         return frozenset(
             {
                 (node.database, node.schema)
@@ -1122,10 +1155,10 @@ class Manifest(MacroMethods, dbtClassMixin):
             }
         )
 
-    def get_used_databases(self):
+    def get_used_databases(self) -> FrozenSet[Optional[str]]:
         return frozenset(x.database for x in chain(self.nodes.values(), self.sources.values()))
 
-    def deepcopy(self):
+    def deepcopy(self) -> "Manifest":
         copy = Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
             sources={k: _deepcopy(v) for k, v in self.sources.items()},
@@ -1143,11 +1176,12 @@ class Manifest(MacroMethods, dbtClassMixin):
             semantic_models={k: _deepcopy(v) for k, v in self.semantic_models.items()},
             unit_tests={k: _deepcopy(v) for k, v in self.unit_tests.items()},
             saved_queries={k: _deepcopy(v) for k, v in self.saved_queries.items()},
+            function_overload_owners=dict(self.function_overload_owners),
         )
         copy.build_flat_graph()
         return copy
 
-    def build_parent_and_child_maps(self):
+    def build_parent_and_child_maps(self) -> None:
         edge_members = list(
             chain(
                 self.nodes.values(),
@@ -1164,7 +1198,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.child_map = forward_edges
         self.parent_map = backward_edges
 
-    def build_macro_child_map(self):
+    def build_macro_child_map(self) -> Dict[str, List[str]]:
         edge_members = list(
             chain(
                 self.nodes.values(),
@@ -1174,7 +1208,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         forward_edges = build_macro_edges(edge_members)
         return forward_edges
 
-    def build_group_map(self):
+    def build_group_map(self) -> None:
         groupable_nodes = list(
             chain(
                 self.nodes.values(),
@@ -1183,7 +1217,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.metrics.values(),
             )
         )
-        group_map = {group.name: [] for group in self.groups.values()}
+        group_map: Dict[str, List[str]] = {group.name: [] for group in self.groups.values()}
         for node in groupable_nodes:
             if node.group is not None:
                 # group updates are not included with state:modified and
@@ -1196,7 +1230,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                     group_map[node.group].append(node.unique_id)
         self.group_map = group_map
 
-    def fill_tracking_metadata(self):
+    def fill_tracking_metadata(self) -> None:
         self.metadata.user_id = tracking.active_user.id if tracking.active_user else None
         self.metadata.send_anonymous_usage_stats = get_flags().SEND_ANONYMOUS_USAGE_STATS
 
@@ -1224,19 +1258,23 @@ class Manifest(MacroMethods, dbtClassMixin):
 
         return manifest
 
-    def _map_nodes_to_map_resources(cls, nodes_map: MutableMapping[str, NodeClassT]):
+    def _map_nodes_to_map_resources(
+        cls, nodes_map: MutableMapping[str, NodeClassT]
+    ) -> Dict[str, Any]:
         return {node_id: node.to_resource() for node_id, node in nodes_map.items()}
 
     def _map_list_nodes_to_map_list_resources(
         cls, nodes_map: MutableMapping[str, List[NodeClassT]]
-    ):
+    ) -> Dict[str, Any]:
         return {
             node_id: [node.to_resource() for node in node_list]
             for node_id, node_list in nodes_map.items()
         }
 
     @classmethod
-    def _map_resources_to_map_nodes(cls, resources_map: Mapping[str, ResourceClassT]):
+    def _map_resources_to_map_nodes(
+        cls, resources_map: Mapping[str, ResourceClassT]
+    ) -> Dict[str, Any]:
         return {
             node_id: RESOURCE_CLASS_TO_NODE_CLASS[type(resource)].from_resource(resource)
             for node_id, resource in resources_map.items()
@@ -1245,7 +1283,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     @classmethod
     def _map_list_resources_to_map_list_nodes(
         cls, resources_map: Optional[Mapping[str, List[ResourceClassT]]]
-    ):
+    ) -> Dict[str, Any]:
         if resources_map is None:
             return {}
 
@@ -1282,7 +1320,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             saved_queries=self._map_nodes_to_map_resources(self.saved_queries),
         )
 
-    def write(self, path):
+    def write(self, path: str) -> None:
         writable = self.writable_manifest()
         writable.write(path)
         fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
@@ -1318,7 +1356,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._doc_lookup = DocLookup(self)
         return self._doc_lookup
 
-    def rebuild_doc_lookup(self):
+    def rebuild_doc_lookup(self) -> None:
         self._doc_lookup = DocLookup(self)
 
     @property
@@ -1327,7 +1365,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._source_lookup = SourceLookup(self)
         return self._source_lookup
 
-    def rebuild_source_lookup(self):
+    def rebuild_source_lookup(self) -> None:
         self._source_lookup = SourceLookup(self)
 
     @property
@@ -1356,7 +1394,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._semantic_model_by_measure_lookup = SemanticModelByMeasureLookup(self)
         return self._semantic_model_by_measure_lookup
 
-    def rebuild_ref_lookup(self):
+    def rebuild_ref_lookup(self) -> None:
         self._ref_lookup = RefableLookup(self)
 
     @property
@@ -1365,7 +1403,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self._disabled_lookup = DisabledLookup(self)
         return self._disabled_lookup
 
-    def rebuild_disabled_lookup(self):
+    def rebuild_disabled_lookup(self) -> None:
         self._disabled_lookup = DisabledLookup(self)
 
     @property
@@ -1387,7 +1425,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self._function_lookup
 
     @property
-    def external_node_unique_ids(self):
+    def external_node_unique_ids(self) -> List[str]:
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
 
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
@@ -1584,6 +1622,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
@@ -1610,6 +1650,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
@@ -1624,6 +1666,8 @@ class Manifest(MacroMethods, dbtClassMixin):
         with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
+        Function nodes from the deferred manifest are merged so that models
+        depending on functions can resolve them via deferral.
         """
         refables = set(REFABLE_NODE_TYPES)
         for unique_id, node in other.nodes.items():
@@ -1645,11 +1689,34 @@ class Manifest(MacroMethods, dbtClassMixin):
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
+        for unique_id, function in other.functions.items():
+            current = self.functions.get(unique_id)
+            if current:
+                defer_fn = DeferFunction(
+                    database=function.database,
+                    schema=function.schema,
+                    alias=function.alias,
+                    arguments=function.arguments,
+                    returns=function.returns,
+                    resource_type=function.resource_type,
+                    name=function.name,
+                    description=function.description,
+                    compiled_code=function.compiled_code,
+                    meta=function.meta,
+                    tags=function.tags,
+                    config=function.config,
+                )
+                self.functions[unique_id] = replace(current, defer_function=defer_fn)
+            else:
+                self.functions[unique_id] = function
+        # invalidate function lookup cache
+        self._function_lookup = None
+
         # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()
 
     # Methods that were formerly in ParseResult
-    def add_macro(self, source_file: SourceFile, macro: Macro):
+    def add_macro(self, source_file: SourceFile, macro: Macro) -> None:
         if macro.unique_id in self.macros:
             # detect that the macro exists and emit an error
             raise DuplicateMacroInPackageError(macro=macro, macro_mapping=self.macros)
@@ -1683,18 +1750,23 @@ class Manifest(MacroMethods, dbtClassMixin):
         my_checksum = self.files[key].checksum
         return my_checksum == source_file.checksum
 
-    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition):
+    def add_source(self, source_file: SchemaSourceFile, source: UnpatchedSourceDefinition) -> None:
         # sources can't be overwritten!
         _check_duplicates(source, self.sources)
         self.sources[source.unique_id] = source  # type: ignore
         source_file.sources.append(source.unique_id)
 
-    def add_node_nofile(self, node: ManifestNode):
+    def add_node_nofile(self, node: ManifestNode) -> None:
         # nodes can't be overwritten!
         _check_duplicates(node, self.nodes)
         self.nodes[node.unique_id] = node
 
-    def add_node(self, source_file: AnySourceFile, node: ManifestNode, test_from=None):
+    def add_node(
+        self,
+        source_file: AnySourceFile,
+        node: ManifestNode,
+        test_from: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.add_node_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1713,19 +1785,19 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_exposure(self, source_file: SchemaSourceFile, exposure: Exposure):
+    def add_exposure(self, source_file: SchemaSourceFile, exposure: Exposure) -> None:
         _check_duplicates(exposure, self.exposures)
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_function(self, source_file: SourceFile, function: FunctionNode):
+    def add_function(self, source_file: SourceFile, function: FunctionNode) -> None:
         _check_duplicates(function, self.functions)
         self.functions[function.unique_id] = function
         source_file.functions.append(function.unique_id)
 
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
-    ):
+    ) -> None:
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
         if not generated_from:
@@ -1733,19 +1805,24 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.add_metrics_from_measures(generated_from, metric.unique_id)
 
-    def add_group(self, source_file: SchemaSourceFile, group: Group):
+    def add_group(self, source_file: SchemaSourceFile, group: Group) -> None:
         _check_duplicates(group, self.groups)
         self.groups[group.unique_id] = group
         source_file.groups.append(group.unique_id)
 
-    def add_disabled_nofile(self, node: GraphMemberNode):
+    def add_disabled_nofile(self, node: GraphMemberNode) -> None:
         # There can be multiple disabled nodes for the same unique_id
         if node.unique_id in self.disabled:
             self.disabled[node.unique_id].append(node)
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: GraphMemberNode, test_from=None):
+    def add_disabled(
+        self,
+        source_file: AnySourceFile,
+        node: GraphMemberNode,
+        test_from: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1768,23 +1845,25 @@ class Manifest(MacroMethods, dbtClassMixin):
         else:
             source_file.nodes.append(node.unique_id)
 
-    def add_doc(self, source_file: SourceFile, doc: Documentation):
+    def add_doc(self, source_file: SourceFile, doc: Documentation) -> None:
         _check_duplicates(doc, self.docs)
         self.docs[doc.unique_id] = doc
         source_file.docs.append(doc.unique_id)
 
-    def add_semantic_model(self, source_file: SchemaSourceFile, semantic_model: SemanticModel):
+    def add_semantic_model(
+        self, source_file: SchemaSourceFile, semantic_model: SemanticModel
+    ) -> None:
         _check_duplicates(semantic_model, self.semantic_models)
         self.semantic_models[semantic_model.unique_id] = semantic_model
         source_file.semantic_models.append(semantic_model.unique_id)
 
-    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition):
+    def add_unit_test(self, source_file: SchemaSourceFile, unit_test: UnitTestDefinition) -> None:
         if unit_test.unique_id in self.unit_tests:
             raise DuplicateResourceNameError(unit_test, self.unit_tests[unit_test.unique_id])
         self.unit_tests[unit_test.unique_id] = unit_test
         source_file.unit_tests.append(unit_test.unique_id)
 
-    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture):
+    def add_fixture(self, source_file: FixtureSourceFile, fixture: UnitTestFileFixture) -> None:
         if fixture.unique_id in self.fixtures:
             raise DuplicateResourceNameError(fixture, self.fixtures[fixture.unique_id])
         self.fixtures[fixture.unique_id] = fixture
@@ -1799,10 +1878,10 @@ class Manifest(MacroMethods, dbtClassMixin):
 
     def find_node_from_ref_or_source(
         self, expression: str
-    ) -> Optional[Union[ModelNode, SourceDefinition]]:
+    ) -> Optional[Union[ManifestNode, SourceDefinition]]:
         ref_or_source = statically_parse_ref_or_source(expression)
 
-        node = None
+        node: Optional[Union[ManifestNode, SourceDefinition]] = None
         if isinstance(ref_or_source, RefArgs):
             node = self.ref_lookup.find(
                 ref_or_source.name, ref_or_source.package, ref_or_source.version, self
@@ -1820,7 +1899,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     # The order of the arguments must match the order of the attributes
     # in the Manifest class declaration, because they are used as
     # positional arguments to construct a Manifest.
-    def __reduce_ex__(self, protocol):
+    def __reduce_ex__(self, protocol: SupportsIndex) -> Any:
         args = (
             self.nodes,
             self.sources,
@@ -1841,6 +1920,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.semantic_models,
             self.unit_tests,
             self.saved_queries,
+            self.fixtures,
+            self.function_overload_owners,
             self._doc_lookup,
             self._source_lookup,
             self._ref_lookup,
@@ -1872,7 +1953,7 @@ class Manifest(MacroMethods, dbtClassMixin):
 
 
 class MacroManifest(MacroMethods):
-    def __init__(self, macros) -> None:
+    def __init__(self, macros: MutableMapping[str, Macro]) -> None:
         self.macros = macros
         self.metadata = ManifestMetadata(
             user_id=tracking.active_user.id if tracking.active_user else None,
@@ -1890,7 +1971,7 @@ class MacroManifest(MacroMethods):
 AnyManifest = Union[Manifest, MacroManifest]
 
 
-def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]):
+def _check_duplicates(value: BaseNode, src: Mapping[str, BaseNode]) -> None:
     if value.unique_id in src:
         raise DuplicateResourceNameError(value, src[value.unique_id])
 

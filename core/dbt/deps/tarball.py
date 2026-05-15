@@ -9,7 +9,7 @@ from dbt.deps.base import PinnedPackage, UnpinnedPackage, get_downloads_path
 from dbt.events.types import DepsScrubbedPackageName
 from dbt.exceptions import DependencyError, env_secrets, scrub_secrets
 from dbt_common.clients import system
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.utils.connection import connection_exception_retry
 
 
@@ -42,7 +42,10 @@ class TarballPinnedPackage(TarballPackageMixin, PinnedPackage):
     def to_dict(self) -> Dict[str, str]:
         tarball_scrubbed = scrub_secrets(self.tarball_unrendered, env_secrets())
         if self.tarball_unrendered != tarball_scrubbed:
-            warn_or_error(DepsScrubbedPackageName(package_name=tarball_scrubbed))
+            fire_event(
+                DepsScrubbedPackageName(package_name=tarball_scrubbed),
+                force_warn_or_error_handling=True,
+            )
         return {
             "tarball": tarball_scrubbed,
             "name": self.package,

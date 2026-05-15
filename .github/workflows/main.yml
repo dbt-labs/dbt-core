@@ -38,7 +38,7 @@ defaults:
 # top-level adjustments can be made here
 env:
   # number of parallel processes to spawn for python integration testing
-  PYTHON_INTEGRATION_TEST_WORKERS: 5
+  PYTHON_INTEGRATION_TEST_WORKERS: 15
 
 jobs:
   code-quality:
@@ -46,6 +46,8 @@ jobs:
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      HATCH_PYTHON: "3.11"
 
     steps:
       - name: Check out the repository
@@ -54,13 +56,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Install python dependencies
         run: |
-          python -m pip install --user --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
           cd core
           hatch -v run setup
 
@@ -83,7 +85,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Check out the repository
@@ -94,12 +98,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install python dependencies
-        run: |
-          python -m pip install --user --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Run unit tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
@@ -162,16 +162,17 @@ jobs:
     name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs:
       - integration-metadata
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         os: ["ubuntu-latest"]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -217,12 +218,8 @@ jobs:
           PGPORT: 5432
           PGPASSWORD: password
 
-      - name: Install python tools
-        run: |
-          python -m pip install --user --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
@@ -257,7 +254,7 @@ jobs:
     name: (${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs:
       - integration-metadata
     strategy:
@@ -266,6 +263,7 @@ jobs:
         # already includes split group and runs mac + windows
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
+      HATCH_PYTHON: ${{ matrix.python-version }}
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -298,12 +296,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-postgres-windows
 
-      - name: Install python tools
-        run: |
-          python -m pip install --user --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
@@ -363,21 +357,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
+
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Install python dependencies
         run: |
           python -m pip install --user --upgrade pip
-          python -m pip install --upgrade hatch twine check-wheel-contents
+          python -m pip install --upgrade twine check-wheel-contents
           python -m pip --version
 
-      - name: Build distributions
-        run: ./scripts/build-dist.sh
+      - name: "Build Distributions"
+        working-directory: core
+        run: hatch build
 
-      - name: Show distributions
+      - name: "Show Distributions"
+        working-directory: core
         run: ls -lh dist/
 
-      - name: Check and verify distributions
-        run: |
-          cd core
-          hatch -v run build:check-all
+      - name: "Check and Verify Distributions"
+        working-directory: core
+        run: hatch -v run build:check-all

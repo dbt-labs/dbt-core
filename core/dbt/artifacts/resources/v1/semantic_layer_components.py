@@ -1,13 +1,14 @@
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
-from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.call_parameter_sets import JinjaCallParameterSets
-from dbt_semantic_interfaces.parsing.where_filter.jinja_object_parser import (
+from metricflow_semantic_interfaces.call_parameter_sets import JinjaCallParameterSets
+from metricflow_semantic_interfaces.parsing.where_filter.jinja_object_parser import (
     JinjaObjectParser,
     QueryItemLocation,
 )
-from dbt_semantic_interfaces.type_enums import AggregationType
+from metricflow_semantic_interfaces.type_enums import AggregationType
+
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass

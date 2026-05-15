@@ -1,0 +1,6 @@
+kind: Features
+body: Add unit tests to the Jinja `graph` object, enabling tools like dbt-project-evaluator to run checks on unit tests.
+time: 2026-01-29T11:00:00.000000-08:00
+custom:
+    Author: b-per
+    Issue: "12033"

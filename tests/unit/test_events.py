@@ -179,6 +179,9 @@ sample_values = [
     core_types.DuplicateNameDistinctNodeTypesDeprecation(
         resource_name="", package_name="", unique_id1="", unique_id2=""
     ),
+    core_types.TimeDimensionsRequireGranularityDeprecation(msg=""),
+    core_types.GenericSemanticLayerDeprecation(msg=""),
+    core_types.GenerateSchemaNameNullValueDeprecation(resource_unique_id=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -314,6 +317,7 @@ sample_values = [
     core_types.PackageNodeDependsOnRootProjectNode(
         node_name="", node_package="", root_project_unique_id=""
     ),
+    core_types.MFConverterIssue(issue_type="", element_name="", converter_name=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -469,6 +473,14 @@ sample_values = [
         total=0,
         execution_time=0,
     ),
+    core_types.LogStartOverload(description="", overload_index=0, total_overloads=0),
+    core_types.LogOverloadResult(
+        description="",
+        status="",
+        overload_index=0,
+        total_overloads=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
@@ -522,6 +534,7 @@ sample_values = [
     core_types.ArtifactUploadSuccess(),
     core_types.ArtifactUploadError(),
     core_types.ArtifactUploadSkipped(),
+    core_types.SelectExcludeIgnoredWithSelectorWarning(),
 ]
 
 

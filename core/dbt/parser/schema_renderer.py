@@ -62,14 +62,45 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
-        # versions
         if len(keypath) == 5 and keypath[4] == "description":
+            return True
+
+        # versions: tests/data_tests, descriptions, and column tests/data_tests/descriptions
+        # keypath looks like ("versions", <idx>, "tests" or "data_tests", ...) or
+        # ("versions", <idx>, "columns", <idx>, "tests" or "data_tests", ...)
+        if (
+            len(keypath) >= 3
+            and keypath[0] == "versions"
+            and keypath[2]
+            in (
+                "tests",
+                "data_tests",
+                "description",
+            )
+        ):
+            return True
+
+        if (
+            len(keypath) >= 5
+            and keypath[0] == "versions"
+            and keypath[2] == "columns"
+            and keypath[4] in ("tests", "data_tests", "description")
+        ):
             return True
 
         if (
             len(keypath) >= 3
-            and keypath[0] in ("columns", "dimensions", "measures", "entities")
+            and keypath[0] in ("columns", "dimensions", "measures", "entities", "metrics")
             and keypath[2] in ("tests", "data_tests", "description")
+        ):
+            return True
+
+        # derived_semantics descriptions (v2 semantic layer)
+        if (
+            len(keypath) >= 4
+            and keypath[0] == "derived_semantics"
+            and keypath[1] in ("dimensions", "entities")
+            and keypath[3] in ("tests", "data_tests", "description")
         ):
             return True
 
@@ -106,6 +137,14 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
+            # Skip metric filters — consistent with the "metrics" branch above,
+            # using positional checks to avoid over-matching.
+            # metrics is always at keypath[0] in this branch (model-relative path),
+            # and filter is always at [-1] (string) or [-2] (list item).
+            if keypath[0] == "metrics" and (
+                keypath[-1] == "filter" or (len(keypath) > 1 and keypath[-2] == "filter")
+            ):
+                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True

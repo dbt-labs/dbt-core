@@ -47,3 +47,15 @@ class TestAddPackageWithWarnUnpinnedInYaml:
         assert "dbt-labs/dbt_utils" in contents or "dbt_utils" in contents
         # The warn-unpinned should still be there
         assert "warn-unpinned:" in contents or "warn_unpinned:" in contents
+
+
+class TestNullPackages:
+    """Regression test: `packages: null` (explicit null) in packages.yml should not raise TypeError."""
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": None}
+
+    def test_null_packages_parses_without_error(self, project):
+        # Should not raise "TypeError: object of type 'NoneType' has no len()"
+        run_dbt(["parse"])
