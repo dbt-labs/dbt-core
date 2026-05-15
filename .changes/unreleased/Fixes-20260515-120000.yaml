@@ -4,4 +4,4 @@ body: Handle `Reused` node status in on-run-end summary printer so plugins that
 time: 2026-05-15T12:00:00.000000-05:00
 custom:
     Author: colin-rogers-dbt
-    Issue: "0"
+    Issue: "12972"
