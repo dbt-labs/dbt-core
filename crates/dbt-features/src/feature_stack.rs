@@ -13,6 +13,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
+use dbt_tasks_core::PreTaskRunData;
 use dbt_tasks_core::RunTasksOk;
 use minijinja::Value as MinijinjaValue;
 use std::borrow::Cow;
@@ -186,10 +187,4 @@ impl fmt::Debug for FeatureStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FeatureStack").finish()
     }
-}
-
-/// Per-node data returned by pre-run hooks.
-pub trait PreTaskRunData: Send + Sync {
-    /// Returns a value for `node_id`, or `None` if not present.
-    fn get(&self, node_id: &str) -> Option<String>;
 }

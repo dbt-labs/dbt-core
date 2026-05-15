@@ -18,6 +18,12 @@ pub use stats_to_results::stats_to_results;
 use dbt_common::FsResult;
 use dbt_schemas::stats::Stats;
 
+/// Per-node data returned by pre-run hooks.
+pub trait PreTaskRunData: Send + Sync {
+    /// Returns a value for `node_id`, or `None` if not present.
+    fn get(&self, node_id: &str) -> Option<String>;
+}
+
 /// Abstract storage for task results. Implementations write serialized output
 /// on demand. `None` storage on `RunTasksOk` means nothing to write.
 pub trait TaskResultStorage: Send + Sync + std::fmt::Debug {
