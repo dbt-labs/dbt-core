@@ -483,11 +483,7 @@ class ManifestLoader:
             if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
 
-            # Load any OSI documents from <project_root>/OSI/*.json and inject
-            # the converted semantic models and metrics into the manifest.  This
-            # must happen after all dbt model nodes are parsed (so the model
-            # lookup is complete) and before process_refs (so that update_semantic_model
-            # resolves node_relation for the injected nodes).
+            # Must run after model parsing (lookup complete) and before process_refs.
             load_osi_into_manifest(
                 self.root_project.project_root,
                 self.root_project.project_name,
