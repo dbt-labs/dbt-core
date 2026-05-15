@@ -42,6 +42,7 @@ from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
     MANIFEST_FILE_NAME,
+    OSI_DOCUMENT_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
@@ -2489,9 +2490,9 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
-    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
     semantic_manifest = SemanticManifest(manifest)
-    semantic_manifest.write_json_to_file(path)
+    semantic_manifest.write_json_to_file(os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME))
+    semantic_manifest.write_osi_document_to_file(os.path.join(target_path, OSI_DOCUMENT_FILE_NAME))
 
 
 def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):

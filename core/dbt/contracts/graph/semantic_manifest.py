@@ -42,7 +42,11 @@ from dbt.constants import (
 )
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ModelNode
-from dbt.events.types import ArtifactWritten, SemanticValidationFailure
+from dbt.events.types import (
+    ArtifactWritten,
+    MFConverterIssue,
+    SemanticValidationFailure,
+)
 from dbt.exceptions import ParsingError
 from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
@@ -144,6 +148,31 @@ class SemanticManifest:
             fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
 
         return not validation_result_errors
+
+    def write_osi_document_to_file(self, file_path: str) -> None:
+        from metricflow.converters.msi_to_osi import MSIToOSIConverter
+
+        try:
+            result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+        except RuntimeError as exc:
+            fire_event(
+                SemanticValidationFailure(
+                    msg=f"OSI document could not be generated: {exc}. "
+                    "The semantic manifest may contain metric types not yet supported "
+                    "by the MSI→OSI converter."
+                )
+            )
+            return
+        for issue in result.issues:
+            fire_event(
+                MFConverterIssue(
+                    issue_type=issue.issue_type.value,
+                    element_name=issue.element_name,
+                    converter_name="MSIToOSIConverter",
+                )
+            )
+        write_file(file_path, result.output.to_osi_json())
+        fire_event(ArtifactWritten(artifact_type="OsiDocument", artifact_path=file_path))
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
