@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Union
 
@@ -63,6 +64,8 @@ class LocalPackage(Package):
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
 RawVersion = Union[str, float]
 
+_REV_SPECIFIER_RE = re.compile(r"^(?P<op>>=|<=|>|<|=)")
+
 
 @dataclass
 class TarballPackage(Package):
@@ -74,17 +77,32 @@ class TarballPackage(Package):
 @dataclass
 class GitPackage(Package):
     git: str
-    revision: Optional[RawVersion] = None
+    revision: Optional[Union[RawVersion, List[RawVersion]]] = None
+    revision_range: Optional[List[RawVersion]] = None
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
+        if self.revision is None or isinstance(self.revision, list):
+            return []
+        return [str(self.revision)]
+
+    def get_revision_ranges(self) -> List[str]:
+        if self.revision_range is not None:
+            return [str(v) for v in self.revision_range]
+
         if self.revision is None:
             return []
-        else:
-            return [str(self.revision)]
+
+        if isinstance(self.revision, list):
+            return [str(v) for v in self.revision]
+
+        revision_str = str(self.revision)
+        if _REV_SPECIFIER_RE.match(revision_str):
+            return [revision_str]
+        return []
 
 
 @dataclass
@@ -136,6 +154,20 @@ class PackageConfig(dbtClassMixin):
                 if package.get("git") == "":
                     raise ValidationError(
                         "A git package is missing the value. It is a required property."
+                    )
+                if (
+                    package.get("git")
+                    and package.get("revision") is not None
+                    and package.get("revision_range") is not None
+                ):
+                    raise ValidationError(
+                        "A git package may specify only one of revision or revision_range."
+                    )
+                if package.get("revision_range") is not None and not isinstance(
+                    package["revision_range"], list
+                ):
+                    raise ValidationError(
+                        "revision_range must be specified as a list of version specifiers."
                     )
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:

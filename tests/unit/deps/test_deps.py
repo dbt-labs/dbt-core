@@ -200,6 +200,46 @@ class TestGitPackage(unittest.TestCase):
         a_pinned_dict = a_pinned.to_dict()
         self.assertEqual(a_pinned_dict, {"git": "http://example.com", "revision": "0.0.1"})
 
+    @mock.patch("dbt.deps.git.git.list_remote_tags")
+    def test_resolve_revision_range(self, mock_list_remote_tags):
+        mock_list_remote_tags.return_value = [
+            "v1.0.0",
+            "v1.0.1",
+            "v1.0.10",
+            "v1.0.11",
+            "v1.1.0",
+        ]
+
+        a_contract = GitPackage.from_dict(
+            {
+                "git": "http://example.com",
+                "revision": [">=v1.0.0", "<v1.1.0"],
+            }
+        )
+        a = GitUnpinnedPackage.from_contract(a_contract)
+
+        a_pinned = a.resolved()
+
+        self.assertEqual(a_pinned.revision, "v1.0.11")
+        self.assertEqual(a_pinned.name, "http://example.com")
+
+    @mock.patch("dbt.deps.git.git.list_remote_tags")
+    def test_resolve_revision_range_no_match(self, mock_list_remote_tags):
+        mock_list_remote_tags.return_value = ["v1.1.0"]
+
+        a_contract = GitPackage.from_dict(
+            {
+                "git": "http://example.com",
+                "revision": [">=v1.0.0", "<v1.1.0"],
+            }
+        )
+        a = GitUnpinnedPackage.from_contract(a_contract)
+
+        with self.assertRaises(dbt.exceptions.DependencyError) as exc:
+            a.resolved()
+
+        self.assertIn("Could not find a matching semantic tag", str(exc.exception))
+
     def test_init_with_unrendered(self):
         contract = GitPackage(
             git="http://example.com", revision="0.0.1", unrendered={"git": "git_unrendered"}
