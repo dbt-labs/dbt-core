@@ -146,9 +146,7 @@ class TestGetDirectlySelectedUniqueIds:
         """Space-separated tokens within a single --select entry are unioned,
         mirroring parse_union semantics."""
         task = _make_task(("model_a model_b",))
-        selector = _selector_returning(
-            {"model_a": ["model.test.a"], "model_b": ["model.test.b"]}
-        )
+        selector = _selector_returning({"model_a": ["model.test.a"], "model_b": ["model.test.b"]})
         with patch.object(CompileTask, "get_node_selector", return_value=selector):
             result = task._get_directly_selected_unique_ids()
         assert result == {"model.test.a", "model.test.b"}
