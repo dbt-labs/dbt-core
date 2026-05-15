@@ -137,8 +137,13 @@ impl Serialize for DbtManifestV12 {
             },
         )?;
 
-        let docs = dbt_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?;
-        m.serialize_entry("docs", &docs)?;
+        m.serialize_entry(
+            "docs",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "doc",
+                map: &self.docs,
+            },
+        )?;
 
         m.serialize_entry(
             "semantic_models",

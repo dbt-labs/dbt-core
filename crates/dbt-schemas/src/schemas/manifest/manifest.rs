@@ -25,8 +25,9 @@ use crate::{
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
-                ManifestAnalysis, ManifestDataTest, ManifestFunction, ManifestModel,
-                ManifestOperation, ManifestSeed, ManifestSnapshot,
+                ManifestAnalysis, ManifestDataTest, ManifestFunction, ManifestMetric,
+                ManifestModel, ManifestOperation, ManifestSeed, ManifestSemanticModel,
+                ManifestSnapshot, ManifestSource,
             },
             saved_query::DbtSavedQueryAttr,
             semantic_model::NodeRelation,
@@ -274,9 +275,10 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
         .map(|(id, model)| {
             (
                 id.clone(),
-                vec![
+                vec![serialize_with_resource_type(
                     dbt_yaml::to_value(ManifestModel::from((**model).clone())).unwrap_or_default(),
-                ],
+                    "model",
+                )],
             )
         })
         .chain(
@@ -287,10 +289,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, test)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestDataTest::from((**test).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "test",
+                        )],
                     )
                 }),
         )
@@ -302,10 +305,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, snapshot)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestSnapshot::from((**snapshot).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "snapshot",
+                        )],
                     )
                 }),
         )
@@ -317,10 +321,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, seed)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestSeed::from((**seed).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "seed",
+                        )],
                     )
                 }),
         )
@@ -332,10 +337,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, analysis)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestAnalysis::from((**analysis).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "analysis",
+                        )],
                     )
                 }),
         )
@@ -347,10 +353,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, function)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestFunction::from((**function).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "function",
+                        )],
                     )
                 }),
         )
@@ -362,10 +369,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, exposure)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestExposure::from((**exposure).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "exposure",
+                        )],
                     )
                 }),
         )
@@ -377,10 +385,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, saved_query)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestSavedQuery::from((**saved_query).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "saved_query",
+                        )],
                     )
                 }),
         )
@@ -392,10 +401,11 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, unit_test)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestUnitTest::from((**unit_test).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "unit_test",
+                        )],
                     )
                 }),
         )
@@ -407,15 +417,64 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                 .map(|(id, group)| {
                     (
                         id.clone(),
-                        vec![
+                        vec![serialize_with_resource_type(
                             dbt_yaml::to_value(ManifestGroup::from((**group).clone()))
                                 .unwrap_or_default(),
-                        ],
+                            "group",
+                        )],
                     )
                 }),
         )
-        //.chain(resolver_state.disabled_nodes.metrics.iter().map(|(id, metric)| (id.clone(), vec![dbt_yaml::to_value(ManifestMetric::from((**metric).clone())).unwrap_or_default()])))
-        //.chain(resolver_state.disabled_nodes.semantic_models.iter().map(|(id, semantic_model)| (id.clone(), vec![dbt_yaml::to_value(ManifestSemanticModel::from((**semantic_model).clone())).unwrap_or_default()])))
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .sources
+                .iter()
+                .map(|(id, source)| {
+                    (
+                        id.clone(),
+                        vec![serialize_with_resource_type(
+                            dbt_yaml::to_value(ManifestSource::from((**source).clone()))
+                                .unwrap_or_default(),
+                            "source",
+                        )],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .metrics
+                .iter()
+                .map(|(id, metric)| {
+                    (
+                        id.clone(),
+                        vec![serialize_with_resource_type(
+                            dbt_yaml::to_value(ManifestMetric::from((**metric).clone()))
+                                .unwrap_or_default(),
+                            "metric",
+                        )],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .semantic_models
+                .iter()
+                .map(|(id, semantic_model)| {
+                    (
+                        id.clone(),
+                        vec![serialize_with_resource_type(
+                            dbt_yaml::to_value(ManifestSemanticModel::from(
+                                (**semantic_model).clone(),
+                            ))
+                            .unwrap_or_default(),
+                            "semantic_model",
+                        )],
+                    )
+                }),
+        )
         .collect();
     disabled
 }
