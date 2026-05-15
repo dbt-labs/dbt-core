@@ -2,8 +2,9 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
-use dbt_common::FsResult;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::tracing::emit::emit_error_log_message;
+use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtChecksum, Dimension, DimensionTypeParams, NodeDependsOn};
@@ -94,18 +95,33 @@ pub async fn resolve_semantic_models(
 
         let mpe = minimal_model_properties
             .get(model_name)
-            .unwrap_or_else(|| panic!("ModelPropertiesEntry must exist for model '{model_name}'"));
+            .expect("ModelPropertiesEntry guaranteed to exist for model");
+
+        // For versioned models, `typed_models_properties` contains one entry per
+        // version plus a canonical entry keyed by `mpe.name` pointing at the
+        // latest version. Process only the canonical entry to avoid creating
+        // duplicate semantic models per version.
+        if mpe.version_info.is_some() && model_name != &mpe.name {
+            continue;
+        }
 
         // TODO: These are reused from resolve_models, can probably refactor to implement methods in MinimalPropertiesEntry
         let model_maybe_version = mpe.version_info.as_ref().map(|v| v.version.clone());
-        let model_unique_id = get_unique_id(model_name, package_name, model_maybe_version, "model");
+        let model_unique_id = get_unique_id(&mpe.name, package_name, model_maybe_version, "model");
 
-        // TODO: should we be panicking if model cannot be found?
-        // This would for example happen if you declare model yaml properties but not the sql itself
-        // or should we just silently skip hydrating the fields that depend on resolved_model?
-        let resolved_model = resolved_models
-            .get(&model_unique_id)
-            .unwrap_or_else(|| panic!("Cannot find resolved model '{model_unique_id}'"));
+        // If a semantic_model is declared in YAML but the underlying model SQL
+        // is missing (or the unique_id was built incorrectly), skip with an
+        // error rather than panicking.
+        let Some(resolved_model) = resolved_models.get(&model_unique_id) else {
+            emit_error_log_message(
+                ErrorCode::NodeNotFoundOrDisabled,
+                format!(
+                    "Cannot find resolved model '{model_unique_id}' referenced by semantic_model in package '{package_name}'"
+                ),
+                args.io.status_reporter.as_ref(),
+            );
+            continue;
+        };
 
         // TODO: semantic_model_name may not always be equal to model_name in the future
         // TODO: if the underlying model has versions, which version is the semantic_model tied to?
@@ -114,7 +130,7 @@ pub async fn resolve_semantic_models(
             .clone()
             .unwrap()
             .name
-            .unwrap_or_else(|| model_name.clone());
+            .unwrap_or_else(|| mpe.name.clone());
         let semantic_model_unique_id =
             get_unique_id(&semantic_model_name, package_name, None, "semantic_model");
         let semantic_model_fqn = get_node_fqn(

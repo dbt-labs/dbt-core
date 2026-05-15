@@ -138,7 +138,15 @@ pub fn resolve_nested_model_metrics(
 
         let mpe = minimal_model_properties
             .get(model_name)
-            .unwrap_or_else(|| panic!("ModelPropertiesEntry must exist for model '{model_name}'"));
+            .expect("ModelPropertiesEntry guaranteed to exist for model");
+
+        // For versioned models, `typed_models_properties` contains one entry per
+        // version plus a canonical entry keyed by `mpe.name` pointing at the
+        // latest version. Process only the canonical entry to avoid emitting
+        // duplicate-metric-name errors for a single YAML declaration.
+        if mpe.version_info.is_some() && model_name != &mpe.name {
+            continue;
+        }
 
         let mut semantic_model_name = model_props.name.clone();
         if let Some(semantic_model) = &model_props.semantic_model
