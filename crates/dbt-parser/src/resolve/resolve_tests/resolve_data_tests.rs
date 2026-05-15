@@ -8,6 +8,7 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_compute};
 use crate::utils::RelationComponents;
 use crate::utils::generate_relation_components;
@@ -513,11 +514,21 @@ pub async fn resolve_data_tests(
             },
             __test_attr__: {
                 let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
-                let attached_node = test_asset.map(|ta| {
-                    format!(
-                        "{}.{}.{}",
-                        ta.resource_type, ta.dbt_asset.package_name, ta.resource_name
-                    )
+                // Match dbt-core's _lookup_attached_node: source tests get no attached_node;
+                // model/seed/snapshot tests get the parent's unique_id (with .v<version> for
+                // versioned models).
+                let attached_node = test_asset.and_then(|ta| {
+                    if ta.resource_type == "source" {
+                        None
+                    } else {
+                        Some(format_node_unique_id(
+                            &ta.resource_type,
+                            &ta.dbt_asset.package_name,
+                            &ta.resource_name,
+                            None,
+                            ta.version.as_deref(),
+                        ))
+                    }
                 });
                 let group = attached_node
                     .as_deref()
@@ -643,6 +654,7 @@ mod tests {
             test_metadata_kwargs: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
+            version: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -692,6 +704,7 @@ mod tests {
             test_metadata_kwargs: BTreeMap::new(),
             original_name: Some(full_name.to_string()),
             unique_id_hash: None,
+            version: None,
         };
 
         let unique_id = compute_generic_test_unique_id("my_project", &asset);
@@ -729,6 +742,7 @@ mod tests {
             test_metadata_kwargs: BTreeMap::new(),
             original_name: None,
             unique_id_hash: None,
+            version: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

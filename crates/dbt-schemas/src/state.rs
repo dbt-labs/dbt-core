@@ -142,6 +142,10 @@ pub struct GenericTestAsset {
     /// Pre-computed unique_id hash suffix (last 10 hex chars of md5(fqn_name + metadata_repr)).
     /// Computed in persist_generic_data_tests using full kwargs, matching dbt-core/Mantle's algorithm.
     pub unique_id_hash: Option<String>,
+    /// Version of the attached model for tests on versioned models (e.g. "1"). None for
+    /// unversioned models and non-model resources. Used to build `attached_node` with the
+    /// correct `.v<version>` suffix, matching dbt-core's `RefableLookup.get_unique_id`.
+    pub version: Option<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

@@ -258,6 +258,7 @@ fn persist_inner(
     Ok(GenericTestAsset {
         dbt_asset,
         resource_name: test_config.resource_name.clone(),
+        version: test_config.version_num.clone(),
         resource_type: test_config.resource_type.clone(),
         test_name: full_name,
         defined_at: test.span().clone().into(),
@@ -1370,6 +1371,30 @@ fn collect_versioned_model_tests(
     Ok(version_tests)
 }
 
+/// Format a node `unique_id` the way dbt-core does.
+///
+/// Shapes (mirrors `RefableLookup.get_unique_id` and source unique_id format):
+/// - versioned model:    `model.<pkg>.<name>.v<version>`
+/// - source:             `source.<pkg>.<source_name>.<name>`
+/// - everything else:    `<resource_type>.<pkg>.<name>`
+///
+/// `version` takes precedence over `source_name` (versioned sources don't exist).
+pub fn format_node_unique_id(
+    resource_type: &str,
+    package_name: &str,
+    resource_name: &str,
+    source_name: Option<&str>,
+    version: Option<&str>,
+) -> String {
+    if let Some(v) = version {
+        format!("{resource_type}.{package_name}.{resource_name}.v{v}")
+    } else if let Some(s) = source_name {
+        format!("{resource_type}.{package_name}.{s}.{resource_name}")
+    } else {
+        format!("{resource_type}.{package_name}.{resource_name}")
+    }
+}
+
 /// The minimal info we need to generate generic tests for a single dbt resource.
 pub trait TestableNodeTrait {
     /// "model", "seed", "snapshot", or "source".
@@ -1378,30 +1403,13 @@ pub trait TestableNodeTrait {
     fn resource_name(&self) -> &str;
 
     fn unique_id(&self, project_name: &str, version: Option<&str>) -> String {
-        if let Some(version) = version {
-            format!(
-                "{}.{}.{}.v{}",
-                self.resource_type(),
-                project_name,
-                self.resource_name(),
-                version
-            )
-        } else if let Some(source) = &self.source_name() {
-            format!(
-                "{}.{}.{}.{}",
-                self.resource_type(),
-                project_name,
-                source,
-                self.resource_name()
-            )
-        } else {
-            format!(
-                "{}.{}.{}",
-                self.resource_type(),
-                project_name,
-                self.resource_name()
-            )
-        }
+        format_node_unique_id(
+            self.resource_type(),
+            project_name,
+            self.resource_name(),
+            self.source_name().as_deref(),
+            version,
+        )
     }
 
     /// For _Tables from _Sources, return its corresponding source name.
@@ -1536,6 +1544,30 @@ mod tests {
     use dbt_schemas::schemas::data_tests::{CustomTestInner, CustomTestMultiKey};
     use serde_json::Value;
     use std::collections::{BTreeMap, HashMap};
+
+    #[test]
+    fn test_format_node_unique_id_shapes() {
+        // Versioned model wins over source_name (versioned sources don't exist).
+        assert_eq!(
+            format_node_unique_id("model", "pkg", "m", None, Some("1")),
+            "model.pkg.m.v1"
+        );
+        // Unversioned model.
+        assert_eq!(
+            format_node_unique_id("model", "pkg", "m", None, None),
+            "model.pkg.m"
+        );
+        // Source: source_name slot.
+        assert_eq!(
+            format_node_unique_id("source", "pkg", "tbl", Some("src"), None),
+            "source.pkg.src.tbl"
+        );
+        // Seed / snapshot fall through to the default shape.
+        assert_eq!(
+            format_node_unique_id("seed", "pkg", "s", None, None),
+            "seed.pkg.s"
+        );
+    }
 
     #[test]
     fn test_no_double_quoting() {
