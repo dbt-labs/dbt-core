@@ -448,8 +448,13 @@ fn parse_warn_error_option_values(value: &Value) -> Vec<WarnErrorOptionValue> {
 }
 
 fn parse_warn_error_option_value(value: &Value) -> Option<WarnErrorOptionValue> {
-    if let Some(code) = value.as_u64().and_then(|value| u16::try_from(value).ok()) {
-        return Some(WarnErrorOptionValue::FusionCode(code));
+    // Fusion errors are configured by name, not by numeric dbt code.
+    if let Some(code) = value.as_i64() {
+        return Some(WarnErrorOptionValue::Unsupported(code.to_string()));
+    }
+
+    if let Some(code) = value.as_u64() {
+        return Some(WarnErrorOptionValue::Unsupported(code.to_string()));
     }
 
     let raw = value.as_str()?;
@@ -822,8 +827,9 @@ mod tests {
                 error: vec![
                     WarnErrorOptionValue::all(),
                     WarnErrorOptionValue::Unsupported("BogusWarningClass".to_string()),
-                    WarnErrorOptionValue::FusionCode(17),
+                    WarnErrorOptionValue::Unsupported("17".to_string()),
                     WarnErrorOptionValue::FusionCode(ErrorCode::DepsDuplicatePackage as u16),
+                    WarnErrorOptionValue::Unsupported("1099".to_string()),
                 ],
                 warn: vec![],
                 silence: vec![WarnErrorOptionValue::Unsupported("foo".to_string())],
@@ -838,7 +844,7 @@ mod tests {
     fn parses_v2_shape_and_ignores_unknown_keys() {
         let parsed = WarnErrorOptions::from_yaml_value(
             &dbt_yaml::from_str(
-                "{error: [Generic, 1000, all], WARN: NoNodesForSelectionCriteria, silence: [x, x], bogus: [2]}",
+                "{error: [Generic, IoError, all], WARN: NoNodesForSelectionCriteria, silence: [x, x], bogus: [2]}",
             )
             .unwrap(),
         );
@@ -848,6 +854,7 @@ mod tests {
             WarnErrorOptions {
                 error: vec![
                     WarnErrorOptionValue::FusionCode(ErrorCode::Generic as u16),
+                    WarnErrorOptionValue::FusionCode(ErrorCode::IoError as u16),
                     WarnErrorOptionValue::all()
                 ],
                 warn: vec![WarnErrorOptionValue::FusionCode(
@@ -1051,9 +1058,10 @@ mod tests {
             "package compatibility group should match the aggregate code",
         );
 
-        let aggregate =
-            parse_warn_error_options("{error: [PackageParsingCompatibility], silence: [1059]}")
-                .unwrap();
+        let aggregate = parse_warn_error_options(
+            "{error: [PackageParsingCompatibility], silence: [DuplicateConfigKey]}",
+        )
+        .unwrap();
         assert_eq!(
             aggregate.decision_for_error_code(ErrorCode::PackageParsingCompatibility),
             WarnErrorDecision::UpgradeToError,
@@ -1062,7 +1070,7 @@ mod tests {
         assert_eq!(
             aggregate.decision_for_error_code(ErrorCode::DuplicateConfigKey),
             WarnErrorDecision::Silence,
-            "ordinary code matching should still match explicit numeric codes",
+            "ordinary code matching should still match explicit Fusion error names",
         );
 
         let group_only =
