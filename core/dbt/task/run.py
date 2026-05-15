@@ -385,8 +385,9 @@ class MicrobatchBatchRunner(ModelRunner):
 
     def describe_batch(self) -> str:
         batch_start = self.batches[self.batch_idx][0]
+        week_start = getattr(self.node.config, "week_start", None) or 0
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
-            batch_start, self.node.config.batch_size
+            batch_start, self.node.config.batch_size, week_start
         )
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
@@ -471,6 +472,7 @@ class MicrobatchBatchRunner(ModelRunner):
 
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
+        week_start = getattr(self.node.config, "week_start", None) or 0
 
         # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
         # TODO: REMOVE before 1.10 GA
@@ -478,7 +480,7 @@ class MicrobatchBatchRunner(ModelRunner):
         self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
         # Create batch context on model node prior to re-compiling
         self.node.batch = BatchContext(
-            id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),
+            id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size, week_start),
             event_time_start=batch[0],
             event_time_end=batch[1],
         )
@@ -488,7 +490,7 @@ class MicrobatchBatchRunner(ModelRunner):
             manifest,
             {},
             split_suffix=MicrobatchBuilder.format_batch_start(
-                batch[0], self.node.config.batch_size
+                batch[0], self.node.config.batch_size, week_start
             ),
         )
 

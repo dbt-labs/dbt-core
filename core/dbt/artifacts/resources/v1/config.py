@@ -135,6 +135,7 @@ class NodeConfig(NodeAndTestConfig):
     )
     event_time: Any = None
     concurrent_batches: Any = None
+    week_start: Any = None
 
     def __post_init__(self):
         super().__post_init__()

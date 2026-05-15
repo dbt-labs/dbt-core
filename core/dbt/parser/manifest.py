@@ -1590,6 +1590,17 @@ class ManifestLoader:
                             f"Microbatch model '{node.name}' optional 'concurrent_batches' config must be of type `bool` if specified, but got: {type(concurrent_batches)})."
                         )
 
+                    # optional config: week_start (int 0-6, only meaningful for batch_size='week')
+                    week_start = node.config.week_start
+                    if week_start is not None and not isinstance(week_start, int):
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' optional 'week_start' config must be of type `int` (0=Monday through 6=Sunday) if specified, but got: {type(week_start)})."
+                        )
+                    if isinstance(week_start, int) and not (0 <= week_start <= 6):
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' optional 'week_start' config must be an integer between 0 (Monday) and 6 (Sunday), but got: {week_start}."
+                        )
+
     def check_forcing_batch_concurrency(self) -> None:
         if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
             adapter = get_adapter(self.root_project)
