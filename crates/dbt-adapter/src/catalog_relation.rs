@@ -324,6 +324,7 @@ impl CatalogRelation {
         //    - base_location_root (optional)
         //    - base_location_subpath (optional)
         //    - storage_uri
+        //    - connection_id
         let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
         let model_adapter_props = Self::get_model_adapter_properties(model, AdapterType::Bigquery);
 
@@ -1552,6 +1553,9 @@ impl Object for CatalogRelation {
             // === Bigquery
             "storage_uri" => self.gate_by_adapter(vec![AdapterType::Bigquery], || {
                 Self::map_properties_str(&self.adapter_properties, "storage_uri")
+            }),
+            "connection_id" => self.gate_by_adapter(vec![AdapterType::Bigquery], || {
+                Self::map_properties_str(&self.adapter_properties, "connection_id")
             }),
 
             _ => Value::from(()),
@@ -3295,6 +3299,55 @@ mod tests {
             assert_eq!(
                 r.adapter_properties.get("storage_uri").map(|s| s.as_str()),
                 Some("gs://other_bucket/other/path")
+            );
+        }
+    }
+
+    #[test]
+    fn bigquery_with_catalogs_biglake_override_connection_ok() {
+        let cats = catalogs_yaml_one(
+            "cat_name",
+            "wi_name",
+            "biglake_metastore",
+            "iceberg",
+            &[
+                ("file_format", s("parquet")),
+                ("external_volume", s("gs://bucket")),
+            ],
+        );
+        let conf = json!({
+            "catalog_name": "cat_name",
+            "schema": "schema_name",
+            "identifier": "identifier_name",
+            "adapter_properties": {
+                "connection_id": "cool_connection",
+            }
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::from_model_config_and_catalogs(
+                AdapterType::Bigquery,
+                &m,
+                Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_name.as_deref(), Some("cat_name"));
+            assert_eq!(r.integration_name.as_deref(), Some("wi_name"));
+            assert_eq!(r.catalog_type, "biglake_metastore");
+            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert!(r.external_volume.is_none());
+            assert!(r.base_location.is_none());
+            assert!(r.is_transient.is_none());
+            assert_eq!(
+                r.adapter_properties
+                    .get("connection_id")
+                    .map(|s| s.as_str()),
+                Some("cool_connection")
             );
         }
     }

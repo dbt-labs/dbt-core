@@ -22,7 +22,10 @@ const FIELD_USE_UNIFORM: &str = "use_uniform";
 const FIELD_AUTO_REFRESH: &str = "auto_refresh";
 const FIELD_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const FIELD_TARGET_FILE_SIZE: &str = "target_file_size";
+
+// bigquery
 const FIELD_STORAGE_URI: &str = "storage_uri";
+const FIELD_CONNECTION_ID: &str = "connection_id";
 
 // databricks
 const ADAPTER_PROP_LOCATION_ROOT: &str = "location_root";
@@ -750,11 +753,19 @@ impl CatalogRelation {
             &identifier,
         );
 
+        let connection_id =
+            Self::get_model_config_value(model, FIELD_CONNECTION_ID, AdapterType::Bigquery)
+                .or_else(|| get_yaml_str(bigquery, FIELD_CONNECTION_ID).map(|s| s.to_string()));
+
         let storage_uri =
             Self::get_model_config_value(model, FIELD_STORAGE_URI, AdapterType::Bigquery)
                 .unwrap_or_else(|| format!("{external_volume}/{base_location}"));
 
         let mut adapter_properties = BTreeMap::new();
+
+        if let Some(connection_id) = connection_id {
+            adapter_properties.insert(FIELD_CONNECTION_ID.to_string(), connection_id);
+        }
         adapter_properties.insert(FIELD_STORAGE_URI.to_string(), storage_uri);
 
         Ok(CatalogRelation {
@@ -1282,6 +1293,55 @@ catalogs:
             assert_eq!(
                 r.adapter_properties.get("storage_uri").map(|s| s.as_str()),
                 Some("gs://other-bucket/override/analytics/events/leaf")
+            );
+        }
+    }
+
+    #[test]
+    fn bigquery_v2_biglake_catalog_connection_id_ok() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: BQ
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: gs://bucket
+        file_format: parquet
+        connection_id: cool_connection
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "BQ",
+            "schema": "analytics",
+            "alias": "events"
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Bigquery,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_name.as_deref(), Some("BQ"));
+            assert!(r.integration_name.is_none());
+            assert_eq!(r.catalog_type, "biglake_metastore");
+            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert!(r.external_volume.is_none());
+            assert!(r.base_location.is_none());
+            assert_eq!(
+                r.adapter_properties
+                    .get("connection_id")
+                    .map(|s| s.as_str()),
+                Some("cool_connection")
             );
         }
     }

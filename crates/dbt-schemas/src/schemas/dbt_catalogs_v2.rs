@@ -90,6 +90,7 @@
 //!         external_volume: gs://<bucket_name>                     # required, non-empty
 //!         file_format: parquet                                    # required
 //!         base_location_root: <path string>                       # optional, non-empty if present
+//!         connection_id: <string>                                 # optional, non-empty if present
 //!
 //!   # type: iceberg_rest
 //!   # supported platforms: snowflake, duckdb
@@ -656,7 +657,12 @@ const UNITY_DATABRICKS_KEYS: &[&str] = &["file_format", "location_root", "use_un
 
 const HIVE_METASTORE_DATABRICKS_KEYS: &[&str] = &["file_format"];
 
-const BIGLAKE_BIGQUERY_KEYS: &[&str] = &["external_volume", "file_format", "base_location_root"];
+const BIGLAKE_BIGQUERY_KEYS: &[&str] = &[
+    "external_volume",
+    "file_format",
+    "base_location_root",
+    "connection_id",
+];
 const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb"];
 
 // Keys map to safe DuckDB ATTACH options for iceberg REST catalogs.
@@ -1269,6 +1275,16 @@ fn parse_biglake_metastore_catalog(catalog: &CatalogSpecV2View<'_>) -> FsResult<
             catalog.name
         );
     }
+    if let Some(connection_id) = get_str(bigquery, "connection_id")?
+        && connection_id.is_empty_or_whitespace()
+    {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => field_span(bigquery, "connection_id").cloned(),
+            "Catalog '{}' BigLake connection_id cannot be blank",
+            catalog.name
+        );
+    }
 
     Ok(())
 }
@@ -1641,6 +1657,23 @@ catalogs:
         external_volume: "gs://bucket"
         file_format: parquet
         base_location_root: "root1"
+"#;
+        parse_and_validate(yaml).expect("v2 bigquery should validate");
+    }
+
+    #[test]
+    fn biglake_accepts_connection_id() {
+        let yaml = r#"
+catalogs:
+  - name: cat1
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: "gs://bucket"
+        file_format: parquet
+        base_location_root: "root1"
+        connection_id: "cool_connection"
 "#;
         parse_and_validate(yaml).expect("v2 bigquery should validate");
     }

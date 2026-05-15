@@ -53,6 +53,7 @@
 //!             base_location_root: <string>                            // optional; if present, non-empty
 //!             base_location_subpath: <string>                         // model config only; optional; if present, non-empty
 //!             storage_uri: <string>                                   // model config only; optional; if present, non-empty
+//!             connection_id: <string>                                 // optional; if present, non-empty
 //!
 
 use std::collections::HashSet;
@@ -320,6 +321,7 @@ pub enum TargetFileSize {
 #[derive(Debug)]
 pub struct BigqueryBuiltInPropsView<'a> {
     pub base_location_root: Option<&'a str>,
+    pub connection_id: Option<&'a str>,
 }
 
 // Databricks Properties
@@ -1151,7 +1153,12 @@ fn parse_adapter_properties<'a>(
         CatalogType::BigqueryBuiltIn => {
             check_unknown_keys(
                 properties,
-                &["base_location_root", "base_location_subpath", "storage_uri"],
+                &[
+                    "base_location_root",
+                    "base_location_subpath",
+                    "storage_uri",
+                    "connection_id",
+                ],
                 "adapter_properties(biglake_metastore)",
             )?;
             // Throw explicit errors for model-config-only keys 'base_location_subpath' and 'storage_uri'
@@ -1178,9 +1185,21 @@ fn parse_adapter_properties<'a>(
                     "adapter_properties.base_location_root cannot be blank"
                 );
             }
+            if let Some((loc, span)) = get_str(properties, "connection_id")?
+                && loc.trim().is_empty()
+            {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "adapter_properties.connection_id cannot be blank"
+                );
+            }
             Ok(AdapterPropsView::BigqueryBuiltIn(
                 BigqueryBuiltInPropsView {
                     base_location_root: get_str(properties, "base_location_root")?
+                        .filter(|(s, _)| !s.trim().is_empty())
+                        .map(|(s, _)| s),
+                    connection_id: get_str(properties, "connection_id")?
                         .filter(|(s, _)| !s.trim().is_empty())
                         .map(|(s, _)| s),
                 },
