@@ -1,0 +1,9 @@
+kind: Fixes
+body: "Fix RuntimeError when using comma-separated intersection selectors (e.g.
+    `state:modified+,+state:modified`) with `dbt show` or `dbt compile` — the
+    task_end_messages filter now correctly splits on the intersection delimiter
+    before parsing each criterion"
+time: 2026-05-15T20:15:00.000000+05:30
+custom:
+    Author: aahelguha
+    Issue: "12937"

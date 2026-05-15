@@ -1,3 +1,4 @@
+import itertools
 import threading
 from typing import Optional, Set, Type, TypeVar
 
@@ -7,6 +8,7 @@ from dbt.contracts.graph.nodes import ManifestSQLNode
 from dbt.events.types import CompiledNode, ParseInlineNodeError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
+from dbt.graph.cli import INTERSECTION_DELIMITER
 from dbt.graph.graph import UniqueId
 from dbt.graph.selector_spec import SelectionCriteria
 from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
@@ -88,24 +90,27 @@ class CompileTask(GraphRunnableTask):
     def _get_directly_selected_unique_ids(self) -> Set[UniqueId]:
         """unique_ids matched by --select before graph operator (+/@) expansion.
 
-        Each entry in self.selection_arg is parsed as a single SelectionCriteria
-        — intersection tokens within one entry (e.g. ``tag:foo,tag:bar``) are
-        not split here and will resolve to nothing, matching the pre-existing
-        filter behavior for that grammar. The execution path still selects
-        nodes correctly via parse_difference; only end-of-task output filtering
-        is affected.
+        Mirrors the tokenization logic in ``parse_union``: space-splits each
+        entry into independent specs, then comma-splits each spec into an
+        intersection group.  Each criterion is resolved independently via
+        ``select_included`` (the no-operator-expansion path); intersection
+        groups are intersected, and the results are unioned.
         """
         if not self.selection_arg:
             return set()
         selector = self.get_node_selector()
         graph_nodes = selector.graph.nodes()
-        return {
-            uid
-            for raw in self.selection_arg
-            for uid in selector.select_included(
-                graph_nodes, SelectionCriteria.from_single_spec(raw)
-            )
-        }
+        result: Set[UniqueId] = set()
+        raw_specs = itertools.chain.from_iterable(r.split(" ") for r in self.selection_arg)
+        for raw_spec in raw_specs:
+            parts = raw_spec.split(INTERSECTION_DELIMITER)
+            part_sets = [
+                selector.select_included(graph_nodes, SelectionCriteria.from_single_spec(part))
+                for part in parts
+            ]
+            if part_sets:
+                result |= set.intersection(*part_sets)
+        return result
 
     def task_end_messages(self, results) -> None:
         is_inline = bool(getattr(self.args, "inline", None))

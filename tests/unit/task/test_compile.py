@@ -116,3 +116,39 @@ class TestGetDirectlySelectedUniqueIds:
         selector = _selector_returning({})  # select_included returns set() for anything
         with patch.object(CompileTask, "get_node_selector", return_value=selector):
             assert task._get_directly_selected_unique_ids() == set()
+
+    def test_intersection_selector_comma_split(self):
+        """Comma-separated selectors like ``state:modified+,+state:modified``
+        must be split on the comma before being passed to from_single_spec.
+        Regression test for #12937 — without splitting, the raw string is
+        parsed as a single criterion with value='modified+,+state:modified'
+        which raises in StateSelectorMethod.search."""
+        task = _make_task(("state:modified+,+state:modified",))
+        selector = MagicMock()
+        selector.graph.nodes.return_value = {"model.test.a", "model.test.b", "model.test.c"}
+
+        def fake_select_included(nodes, criteria):
+            if criteria.value == "modified" and criteria.children:
+                return {"model.test.a", "model.test.b"}
+            elif criteria.value == "modified" and criteria.parents:
+                return {"model.test.b", "model.test.c"}
+            return set()
+
+        selector.select_included.side_effect = fake_select_included
+        with patch.object(CompileTask, "get_node_selector", return_value=selector):
+            result = task._get_directly_selected_unique_ids()
+
+        # Intersection of {a, b} and {b, c} = {b}
+        assert result == {"model.test.b"}
+        assert selector.select_included.call_count == 2
+
+    def test_space_separated_selectors_unioned(self):
+        """Space-separated tokens within a single --select entry are unioned,
+        mirroring parse_union semantics."""
+        task = _make_task(("model_a model_b",))
+        selector = _selector_returning(
+            {"model_a": ["model.test.a"], "model_b": ["model.test.b"]}
+        )
+        with patch.object(CompileTask, "get_node_selector", return_value=selector):
+            result = task._get_directly_selected_unique_ids()
+        assert result == {"model.test.a", "model.test.b"}
