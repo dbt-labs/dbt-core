@@ -4127,7 +4127,7 @@
         "$ref": "#/definitions/PostgresIndex"
       }
     },
-    "LatestVersionPointer": {
+    "LatestVersionView": {
       "description": "Represents the latest version view configuration for versioned models. Supports shorthand (bool) and full form ({enabled: bool, alias: string}).",
       "type": "object",
       "properties": {
@@ -5330,10 +5330,10 @@
             }
           ]
         },
-        "latest_version_pointer": {
+        "latest_version_view": {
           "anyOf": [
             {
-              "$ref": "#/definitions/LatestVersionPointer"
+              "$ref": "#/definitions/LatestVersionView"
             },
             {
               "type": "null"
