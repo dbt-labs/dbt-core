@@ -649,6 +649,12 @@ fn collect_ephemeral_upstream(
     nodes: &Nodes,
     ephemeral_nodes: &mut BTreeSet<String>,
 ) {
+    if let Some(unit_test) = nodes.unit_tests.get(node_id) {
+        for dep in &unit_test.base().depends_on.nodes {
+            collect_ephemeral_upstream(dep, deps, nodes, ephemeral_nodes);
+        }
+    }
+
     if let Some(node_deps) = deps.get(node_id) {
         for dep in node_deps {
             if let Some(node) = nodes.get_node(dep)
