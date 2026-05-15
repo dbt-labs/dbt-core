@@ -1,6 +1,0 @@
-kind: Fixes
-body: Rename latest_version_view config to latest_version_pointer
-time: 2026-05-15T23:35:21.338554+05:30
-custom:
-    Author: aahel
-    Issue: "7442"
