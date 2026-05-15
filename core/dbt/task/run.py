@@ -238,16 +238,16 @@ class ModelRunner(CompileRunner[ModelNode]):
             return identifier
         return relation.name or ""
 
-    def _latest_version_view_identifier(
+    def _latest_version_pointer_identifier(
         self,
         model: ModelNode,
         manifest: Manifest,
         context: Dict[str, Any],
     ) -> str:
-        lvv = getattr(model.config, "latest_version_view", None)
+        lvv = getattr(model.config, "latest_version_pointer", None)
         custom_alias_name = str(lvv.alias).strip() if (lvv and lvv.alias) else None
         alias_macro = manifest.find_macro_by_name(
-            "generate_latest_version_view_alias", self.config.project_name, None
+            "generate_latest_version_pointer_alias", self.config.project_name, None
         )
         if alias_macro is not None:
             return MacroGenerator(alias_macro, context, stack=context["context_macro_stack"])(
@@ -255,14 +255,16 @@ class ModelRunner(CompileRunner[ModelNode]):
             ).strip()
         return custom_alias_name or model.name
 
-    def _should_create_latest_version_view(self, model: ModelNode) -> bool:
-        lvv = getattr(model.config, "latest_version_view", None)
+    def _should_create_latest_version_pointer(self, model: ModelNode) -> bool:
+        lvv = getattr(model.config, "latest_version_pointer", None)
         if lvv is not None and lvv.enabled is not None:
             # User explicitly set enabled — respect it regardless of flag
             enabled = lvv.enabled
         else:
             # Not explicitly set — defer to project flag (default: False)
-            enabled = bool(getattr(get_flags(), "latest_version_view_enabled_by_default", False))
+            enabled = bool(
+                getattr(get_flags(), "latest_version_pointer_enabled_by_default", False)
+            )
         return (
             isinstance(model, ModelNode)
             and model.version is not None
@@ -270,24 +272,24 @@ class ModelRunner(CompileRunner[ModelNode]):
             and enabled
         )
 
-    def _materialize_latest_version_view(
+    def _materialize_latest_version_pointer(
         self,
         manifest: Manifest,
         model: ModelNode,
         context: Dict[str, Any],
         relations: List[BaseRelation],
     ) -> List[BaseRelation]:
-        if not relations or not self._should_create_latest_version_view(model):
+        if not relations or not self._should_create_latest_version_pointer(model):
             return []
 
         source_relation = relations[0]
-        pointer_identifier = self._latest_version_view_identifier(model, manifest, context)
+        pointer_identifier = self._latest_version_pointer_identifier(model, manifest, context)
 
         if self._relation_identifier(source_relation) == pointer_identifier:
             raise DbtRuntimeError(
-                f"Cannot create latest version view: the latest version of '{model.name}' "
+                f"Cannot create latest version pointer: the latest version of '{model.name}' "
                 f"is already aliased to '{pointer_identifier}'. "
-                f"Set `latest_version_view: enabled: false` or remove the conflicting alias."
+                f"Set `latest_version_pointer: enabled: false` or remove the conflicting alias."
             )
 
         # Build a runtime-only synthetic node for the pointer view.
@@ -300,7 +302,7 @@ class ModelRunner(CompileRunner[ModelNode]):
             raw_code=f"select * from {source_relation}",
             compiled_code=f"select * from {source_relation}",
             compiled=True,
-            unique_id=f"{model.unique_id}__latest_version_view",
+            unique_id=f"{model.unique_id}__latest_version_pointer",
             config=dataclass_replace(
                 model.config,
                 pre_hook=[],
@@ -315,7 +317,7 @@ class ModelRunner(CompileRunner[ModelNode]):
             self.config.project_name, "view", self.adapter.type()
         )
         if view_materialization is None:
-            raise DbtInternalError("Missing view materialization for latest version view")
+            raise DbtInternalError("Missing view materialization for latest version pointer")
 
         result = MacroGenerator(
             view_materialization,
@@ -420,7 +422,7 @@ class ModelRunner(CompileRunner[ModelNode]):
             )()
             relations = self._materialization_relations(result, model)
             relations.extend(
-                self._materialize_latest_version_view(manifest, model, context, relations)
+                self._materialize_latest_version_pointer(manifest, model, context, relations)
             )
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
@@ -958,10 +960,12 @@ class MicrobatchModelRunner(ModelRunner):
         self.merge_batch_results(result, batch_results)
 
         pointer_relations: List[BaseRelation] = []
-        if result.status == RunStatus.Success and self._should_create_latest_version_view(model):
+        if result.status == RunStatus.Success and self._should_create_latest_version_pointer(
+            model
+        ):
             context = generate_runtime_model_context(model, self.config, manifest)
             source_relations = [self.adapter.Relation.create_from(self.config, model)]  # type: ignore[arg-type]
-            pointer_relations = self._materialize_latest_version_view(
+            pointer_relations = self._materialize_latest_version_pointer(
                 manifest, model, context, source_relations
             )
         for relation in pointer_relations:
