@@ -183,7 +183,7 @@ fn need_quotes_approx(id: &Ident<'_>, dialect: &Dialect) -> bool {
         || id.name().chars().any(|c| !dialect.is_valid_identifier_char(c)
             // BigQuery allows hyphens in unquoted identifiers in certain
             // contexts (e.g. table names), but we still quote them here
-            || (dialect == &Dialect::Bigquery && c == '-'))
+            || (matches!(dialect, &Dialect::Bigquery | &Dialect::BigqueryUntyped) && c == '-'))
         // In Snowflake, unquoted identifiers are normalized to uppercase,
         // therefore if the identifier contains any lowercase characters, it
         // needs to be quoted to preserve the original casing.

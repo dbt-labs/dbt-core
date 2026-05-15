@@ -4,6 +4,7 @@
 mod generated;
 
 pub mod bigquery;
+pub mod bigqueryuntyped;
 pub mod databricks;
 pub mod duckdb;
 pub mod mssql;

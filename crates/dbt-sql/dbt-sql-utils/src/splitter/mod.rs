@@ -43,6 +43,9 @@ fn do_sql_find_statement_delimiters<'input, 'arena>(
 
     let (token_stream, semi_colon, unpaired_token) = match dialect {
         Dialect::Bigquery => dialect_dispatch!(dbt_lexer_bigquery, bigquerylexer),
+        Dialect::BigqueryUntyped => {
+            dialect_dispatch!(dbt_lexer_bigqueryuntyped, bigqueryuntypedlexer)
+        }
         Dialect::Redshift => dialect_dispatch!(dbt_lexer_redshift, redshiftlexer),
         Dialect::Snowflake => dialect_dispatch!(dbt_lexer_snowflake, snowflakelexer),
         Dialect::Databricks => dialect_dispatch!(dbt_lexer_databricks, databrickslexer),
@@ -314,6 +317,9 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
 
     match dialect {
         Dialect::Bigquery => dialect_dispatch!(dbt_lexer_bigquery, bigquerylexer),
+        Dialect::BigqueryUntyped => {
+            dialect_dispatch!(dbt_lexer_bigqueryuntyped, bigqueryuntypedlexer)
+        }
         Dialect::Redshift => dialect_dispatch!(dbt_lexer_redshift, redshiftlexer),
         Dialect::Snowflake => dialect_dispatch!(dbt_lexer_snowflake, snowflakelexer),
         Dialect::Databricks => dialect_dispatch!(dbt_lexer_databricks, databrickslexer),

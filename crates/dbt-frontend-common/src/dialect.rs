@@ -36,6 +36,7 @@ pub enum Dialect {
     Snowflake,
     Postgresql,
     Bigquery,
+    BigqueryUntyped,
     DataFusion,
     SparkSql,
     SparkLp,
@@ -52,6 +53,7 @@ impl Display for Dialect {
             Dialect::Snowflake => write!(f, "snowflake"),
             Dialect::Postgresql => write!(f, "postgresql"),
             Dialect::Bigquery => write!(f, "bigquery"),
+            Dialect::BigqueryUntyped => write!(f, "bigqueryuntyped"),
             Dialect::DataFusion => write!(f, "datafusion"),
             Dialect::SparkSql => write!(f, "sparksql"),
             Dialect::SparkLp => write!(f, "spark-lp"),
@@ -73,6 +75,7 @@ impl FromStr for Dialect {
             "snowflake" => Ok(Dialect::Snowflake),
             "postgresql" | "postgres" | "salesforce" => Ok(Dialect::Postgresql),
             "bigquery" => Ok(Dialect::Bigquery),
+            "bigqueryuntyped" => Ok(Dialect::BigqueryUntyped),
             "datafusion" => Ok(Dialect::DataFusion),
             "sparksql" => Ok(Dialect::SparkSql),
             "sparklp" => Ok(Dialect::SparkLp),
@@ -123,7 +126,7 @@ impl Dialect {
         match self {
             Dialect::Trino | Dialect::Redshift => "_sdf::col".to_string(), // this column is not seen by the user
             Dialect::Snowflake => "c".to_string(),
-            Dialect::Bigquery => "_field_".to_string(),
+            Dialect::Bigquery | Dialect::BigqueryUntyped => "_field_".to_string(),
             Dialect::Databricks | Dialect::Duckdb => "col".to_string(),
             _ => todo!("get_default_col not implemented for {self}"),
         }
@@ -132,7 +135,10 @@ impl Dialect {
     pub fn get_default_col_start(&self) -> usize {
         match self {
             Dialect::Snowflake | Dialect::Trino | Dialect::Redshift => 0,
-            Dialect::Bigquery | Dialect::Databricks | Dialect::Duckdb => 1,
+            Dialect::Bigquery
+            | Dialect::BigqueryUntyped
+            | Dialect::Databricks
+            | Dialect::Duckdb => 1,
             _ => todo!("get_default_col_start not implemented for {self}"),
         }
     }
@@ -157,7 +163,7 @@ impl Dialect {
     pub const fn quote_char(&self) -> char {
         match self {
             Dialect::Sdf | Dialect::Trino => '"',
-            Dialect::Bigquery | Dialect::Databricks => '`',
+            Dialect::Bigquery | Dialect::BigqueryUntyped | Dialect::Databricks => '`',
             Dialect::Snowflake => '"',
             Dialect::Redshift => '"',
             // TODO: SparkSQL, SparkLP
@@ -170,7 +176,7 @@ impl Dialect {
     pub const fn escape_char(&self) -> char {
         match self {
             Dialect::Sdf | Dialect::Trino => '"',
-            Dialect::Bigquery => '\\',
+            Dialect::Bigquery | Dialect::BigqueryUntyped => '\\',
             Dialect::Snowflake => '"',
             Dialect::Redshift => '"',
             _ => '"',
@@ -180,7 +186,7 @@ impl Dialect {
     const fn escaped_quote(&self) -> &'static str {
         match self {
             Dialect::Sdf | Dialect::Trino => "\"\"",
-            Dialect::Bigquery => "\\`",
+            Dialect::Bigquery | Dialect::BigqueryUntyped => "\\`",
             Dialect::Snowflake => "\"\"",
             Dialect::Redshift => "\"\"",
             _ => "\"\"",
@@ -190,7 +196,7 @@ impl Dialect {
     /// Returns the escaped form of the given identifier in this dialect.
     pub fn escape_identifier(&self, name: &str) -> String {
         match self {
-            Dialect::Bigquery => {
+            Dialect::Bigquery | Dialect::BigqueryUntyped => {
                 let mut result = String::new();
 
                 let chars = name.chars();
@@ -213,7 +219,7 @@ impl Dialect {
 
     fn unescape_identifier_char(&self, escaped_char: char) -> char {
         match self {
-            Dialect::Bigquery => match escaped_char {
+            Dialect::Bigquery | Dialect::BigqueryUntyped => match escaped_char {
                 '\\' => '\\',
                 'n' => '\n',
                 't' => '\t',
@@ -227,7 +233,7 @@ impl Dialect {
 
     fn is_escape_special_identifier_char(&self, c: char) -> bool {
         match self {
-            Dialect::Bigquery => ['\\', 'n', 't', 'r', '`'].contains(&c),
+            Dialect::Bigquery | Dialect::BigqueryUntyped => ['\\', 'n', 't', 'r', '`'].contains(&c),
             _ => self.quote_char() == c,
         }
     }
@@ -237,7 +243,9 @@ impl Dialect {
     pub fn is_valid_identifier_char(&self, c: char) -> bool {
         match self {
             Dialect::Sdf | Dialect::Trino => c.is_alphanumeric() || c == '_',
-            Dialect::Bigquery => c.is_alphanumeric() || ['_', '-', '$', ':'].contains(&c),
+            Dialect::Bigquery | Dialect::BigqueryUntyped => {
+                c.is_alphanumeric() || ['_', '-', '$', ':'].contains(&c)
+            }
             Dialect::Snowflake => {
                 // TODO: revert this once
                 // https://github.com/sdf-labs/sdf/issues/3328 is fixed:
@@ -298,7 +306,9 @@ impl Dialect {
         &self,
         sql: &'input str,
     ) -> InternalResult<(Identifier, &'input str)> {
-        if !matches!(self, Dialect::Bigquery) || sql.starts_with(self.quote_char()) {
+        if !matches!(self, Dialect::Bigquery | Dialect::BigqueryUntyped)
+            || sql.starts_with(self.quote_char())
+        {
             return self.parse_identifier_partial(sql);
         }
 
@@ -375,7 +385,7 @@ impl Dialect {
         // BigQuery INFORMATION_SCHEMA queries can be region-qualified, producing
         // 4 idents: [catalog, region, "information_schema", table]. Collapse the
         // region into the catalog so we get 3.
-        if matches!(self, Dialect::Bigquery)
+        if matches!(self, Dialect::Bigquery | Dialect::BigqueryUntyped)
             && idents.len() == 4
             && idents[2].matches("information_schema")
         {
