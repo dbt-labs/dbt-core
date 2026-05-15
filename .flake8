@@ -1,14 +1,16 @@
 [flake8]
+# W503, W504, E203, E704: make Flake8 work like black
+# E501: long line checking is done in black
 select =
     E
     W
     F
 ignore =
-    W503 # makes Flake8 work like black
+    W503
     W504
-    E203 # makes Flake8 work like black
-    E704 # makes Flake8 work like black
+    E203
+    E704
     E741
-    E501 # long line checking is done in black
+    E501
 per-file-ignores =
     */__init__.py: F401
