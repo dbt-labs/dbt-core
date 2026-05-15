@@ -208,6 +208,7 @@ pub enum ErrorCode {
     SqlMismatch = 1405,
     SidecarError = 1406,
     NoResultsToShow = 1407,
+    SidecarUnsupportedFeature = 1408,
 
     // Serialization [1450–1460]
     JsonInvalid = 1450,
