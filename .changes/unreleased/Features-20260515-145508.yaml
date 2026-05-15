@@ -1,0 +1,7 @@
+kind: Features
+body: Support parsing OSI semantic layer documents from a project's OSI/ directory
+  into the dbt manifest
+time: 2026-05-15T14:55:08.80971-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12787"
