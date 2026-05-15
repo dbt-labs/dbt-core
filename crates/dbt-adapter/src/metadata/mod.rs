@@ -30,11 +30,13 @@ pub(crate) mod postgres;
 pub(crate) mod redshift;
 pub(crate) mod salesforce;
 pub mod snowflake; // XXX: temporarily pub before the refactor is complete
+pub(crate) mod view_definition;
 
 // Re-export `metadata_adapter` symbols
 // NOTE: this is temporary until all the metadata-releated code
 // is verticalized and moved to the metadata module.
 pub use metadata_adapter::*;
+pub use view_definition::ViewDefinition;
 
 /// Implementation of the `get_relation` function for all adapters.
 pub(crate) mod get_relation;

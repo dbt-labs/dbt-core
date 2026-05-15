@@ -87,6 +87,8 @@ pub struct RunTasksArgs {
     pub fail_fast: FailFast,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
+    /// Whether the gRPC run-cache service is explicitly requested via CLI flag.
+    pub run_cache_service: bool,
     /// Per-invocation warn-error options resolved before task execution.
     pub warn_error_options: WarnErrorOptions,
 }
@@ -130,6 +132,7 @@ impl RunTasksArgs {
             event_time_end: arg.event_time_end.clone(),
             fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
+            run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
         };
         Box::new(run_tasks_args)

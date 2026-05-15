@@ -65,7 +65,7 @@ impl ::prost::Name for SourceFreshnessDetail {
 }
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(crate::macros::ProtoNew)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NodeCacheDetail {
     #[prost(enumeration = "NodeCacheReason", tag = "1")]
     #[cfg_attr(
@@ -81,6 +81,17 @@ pub struct NodeCacheDetail {
     /// time since last update in seconds.
     #[prost(uint64, optional, tag = "3")]
     pub last_updated_seconds: ::core::option::Option<u64>,
+    /// Optional human-readable description of the cache decision. When set, the
+    /// formatter prefers this string over the enum-derived default text.
+    ///
+    /// TODO: this field is a stopgap so the cache service's "Cloned
+    /// from cached relation" decision renders correctly in the terminal without
+    /// committing to a NodeCacheReason variant. Per discussion on
+    /// PR #10184, the longer-term plan is to move clone into NodeOutcome as a
+    /// sub-outcome of Success (not Skipped). Once that lands, this field can
+    /// likely be removed.
+    #[prost(string, optional, tag = "4")]
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl crate::StaticName for NodeCacheDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeCacheDetail";

@@ -484,6 +484,7 @@ pub struct EvalArgs {
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,
+    pub run_cache_service: bool,
     pub run_cache_mode: RunCacheMode,
     pub optimize_tests: HashSet<OptimizeTestsOptions>,
     pub show_scans: bool,

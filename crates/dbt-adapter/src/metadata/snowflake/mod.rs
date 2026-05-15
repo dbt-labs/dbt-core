@@ -21,9 +21,97 @@ use dbt_schemas::schemas::relations::base::*;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
+use once_cell::sync::Lazy;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+
+/// Detect a `CREATE [<modifiers>] TABLE <name>` DDL.
+///
+/// Used to filter out tables from `GET_DDL('VIEW', ...)` results, since
+/// Snowflake returns `CREATE TABLE` for tables instead of an error.
+fn is_table_ddl(ddl: &str) -> bool {
+    static TABLE_REGEX: Lazy<fancy_regex::Regex> = Lazy::new(|| {
+        fancy_regex::Regex::new(
+            r"(?ix)
+                ^\s*create\b
+                (?:\s+(?!table\b)\w+)*
+                \s+table\b
+                ",
+        )
+        .expect("valid regex")
+    });
+
+    if ddl.trim().is_empty() {
+        return false;
+    }
+    // `is_match` returns Result because fancy-regex's backtracking engine
+    // can fail on pathological inputs; treat any engine error as "not a
+    // table" so a malformed DDL doesn't get cached as a view by mistake.
+    TABLE_REGEX.is_match(ddl).unwrap_or(false)
+}
+
+/// Render the anonymous block (the body that goes inside `EXECUTE IMMEDIATE $$...$$`)
+/// that calls `GET_DDL` over a list of FQNs and captures per-object errors as
+/// part of the result set.
+///
+/// The caller is responsible for wrapping the returned string in
+/// `EXECUTE IMMEDIATE $$ ... $$`. The rendered block accepts no parameters
+/// and returns a result set with columns (fqn, view_definition, error).
+fn build_view_definition_script(fqns: &[String]) -> String {
+    let array_literals = fqns
+        .iter()
+        .map(|fqn| format!("'{}'", fqn.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        r#"
+begin
+    let objects array := array_construct(
+        {array_literals}
+    );
+
+    let i integer := 0;
+    let results array := array_construct();
+
+    while (i < array_size(objects)) do
+        let obj_name string := objects[i]::string;
+
+        begin
+            let ddl_text string := (select get_ddl('VIEW', :obj_name));
+
+            results := array_append(results, object_construct(
+                'OBJECT_NAME', :obj_name,
+                'DEFINITION', :ddl_text,
+                'ERROR', null
+            ));
+
+        exception
+            when other then
+                results := array_append(results, object_construct(
+                    'OBJECT_NAME', :obj_name,
+                    'DEFINITION', null,
+                    'ERROR', :sqlerrm
+                ));
+        end;
+
+        i := i + 1;
+    end while;
+
+    let rs resultset := (
+        select
+            f.value['OBJECT_NAME']::string as fqn,
+            f.value['DEFINITION']::string as view_definition,
+            f.value['ERROR']::string as error
+        from table(flatten(input => :results)) f
+        order by 1
+    );
+
+    return table(rs);
+end;"#
+    )
+}
 
 pub const ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY: &str = "SNOWFLAKE:field_width";
 
@@ -169,6 +257,10 @@ impl SnowflakeMetadataAdapter {
 }
 
 impl MetadataAdapter for SnowflakeMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -774,6 +866,92 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         // 02000: does not exist or not authorized error
         e.sqlstate() == "42501" || e.sqlstate() == "02000"
     }
+
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        type Acc = Vec<ViewDefinition>;
+
+        if relations.is_empty() {
+            return Box::pin(async { Ok(vec![]) });
+        }
+
+        // Dedupe FQNs while preserving an order; Snowflake fans them out itself.
+        let fqns: Vec<String> = {
+            let mut seen = std::collections::HashSet::new();
+            let mut out = Vec::with_capacity(relations.len());
+            for r in relations {
+                let f = r.semantic_fqn();
+                if seen.insert(f.clone()) {
+                    out.push(f);
+                }
+            }
+            out
+        };
+
+        let script = build_view_definition_script(&fqns);
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          script: &String|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let ctx = QueryCtx::default().with_desc("Fetch view definitions");
+            let sql = format!("EXECUTE IMMEDIATE $${script}$$");
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+            Ok(table.original_record_batch())
+        };
+
+        let reduce_f = |acc: &mut Acc,
+                        _key: String,
+                        batch_res: AdapterResult<Arc<RecordBatch>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            // Snowflake may uppercase result-set column names depending on
+            // account settings, even though the EXECUTE IMMEDIATE block aliases
+            // them lowercase. Normalize the schema before name-based lookups.
+            let batch = lowercase_column_names(&batch);
+            // Result schema: (fqn STRING, view_definition STRING, error STRING)
+            let fqns_arr = batch.column_values::<StringArray>("fqn")?;
+            let defs_arr = batch.column_values::<StringArray>("view_definition")?;
+
+            for i in 0..batch.num_rows() {
+                let fqn = fqns_arr.value(i).to_string();
+                if defs_arr.is_null(i) {
+                    continue;
+                }
+                let definition = defs_arr.value(i);
+
+                if is_table_ddl(definition) {
+                    continue;
+                }
+
+                let parsed = match dbt_frontend_common::Dialect::Snowflake.parse_fqn(&fqn) {
+                    Ok(p) => p,
+                    Err(_) => continue, // unparseable — skip
+                };
+
+                acc.push(ViewDefinition {
+                    fqn,
+                    definition: definition.to_string(),
+                    dialect: dbt_frontend_common::Dialect::Snowflake,
+                    default_catalog: parsed.catalog().name().to_string(),
+                    default_schema: parsed.schema().name().to_string(),
+                });
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![script]), token)
+    }
 }
 
 /// reference: https://github.com/sdf-labs/sdf/blob/main/crates/sdf-cli/src/providers/database/snowflake.rs#L177-L178
@@ -921,4 +1099,91 @@ fn build_schemas_from_information_schema(
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_table_ddl_recognizes_create_table() {
+        assert!(is_table_ddl("CREATE TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_transient_table() {
+        assert!(is_table_ddl("CREATE TRANSIENT TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_or_replace_table() {
+        assert!(is_table_ddl("CREATE OR REPLACE TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_create_view() {
+        assert!(!is_table_ddl("CREATE VIEW foo AS SELECT 1"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_or_replace_view() {
+        assert!(!is_table_ddl("CREATE OR REPLACE VIEW foo AS SELECT 1"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_empty() {
+        assert!(!is_table_ddl(""));
+        assert!(!is_table_ddl("   "));
+    }
+    #[test]
+    fn is_table_ddl_rejects_view_with_table_function_in_body() {
+        // The TABLE keyword appears in the body of the view's SELECT — the
+        // header still says VIEW, so this must not be misclassified as a table.
+        assert!(!is_table_ddl(
+            "CREATE VIEW foo AS SELECT * FROM TABLE(generator(rowcount => 10))"
+        ));
+        assert!(!is_table_ddl(
+            "CREATE OR REPLACE VIEW foo AS SELECT * FROM TABLE(generator(rowcount => 10))"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_rejects_view_referencing_table_in_from() {
+        // Same idea but with a plain FROM clause — `tables` here is part of
+        // an INFORMATION_SCHEMA reference, not a header keyword.
+        assert!(!is_table_ddl(
+            "CREATE VIEW foo AS SELECT * FROM information_schema.tables"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_dynamic_table() {
+        assert!(is_table_ddl(
+            "CREATE OR REPLACE DYNAMIC TABLE foo TARGET_LAG = '1 minute' WAREHOUSE = w AS SELECT 1"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_external_table() {
+        assert!(is_table_ddl(
+            "CREATE EXTERNAL TABLE foo WITH LOCATION = '@stage' FILE_FORMAT = (TYPE = CSV)"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_rejects_materialized_view() {
+        assert!(!is_table_ddl(
+            "CREATE MATERIALIZED VIEW foo AS SELECT * FROM bar"
+        ));
+    }
+
+    #[test]
+    fn build_view_definition_script_default_get_ddl() {
+        let fqns = vec![
+            r#""DB"."S"."V1""#.to_string(),
+            r#""DB"."S"."V2""#.to_string(),
+        ];
+        let script = build_view_definition_script(&fqns);
+        assert!(
+            script.contains("get_ddl('VIEW', :obj_name)"),
+            "got: {script}"
+        );
+        assert!(script.contains(r#""DB"."S"."V1""#));
+        assert!(script.contains(r#""DB"."S"."V2""#));
+        assert!(script.contains("array_construct"));
+        assert!(script.contains("OBJECT_NAME"));
+        assert!(script.contains("DEFINITION"));
+        assert!(script.contains("ERROR"));
+    }
 }

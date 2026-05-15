@@ -13,6 +13,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
+use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::legacy_catalog::*;
@@ -548,6 +549,33 @@ fn make_map_f(
     }
 }
 
+/// Render the SQL for fetching view definitions from
+/// `<project>.<dataset>.INFORMATION_SCHEMA.VIEWS` for a list of table identifiers.
+///
+/// Both `project` and `dataset` are wrapped in backticks unconditionally — BQ
+/// requires them for identifiers containing `-`, and unconditional quoting is
+/// simpler than detecting the "needs quotes" case.
+///
+/// Identifiers are interpolated into a `IN ('...', '...')` list with `'`
+/// escaped to `''` defensively.
+fn build_views_query(project: &str, dataset: &str, identifiers: &[String]) -> String {
+    let literals = identifiers
+        .iter()
+        .map(|id| format!("'{}'", id.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        "SELECT
+    table_catalog,
+    table_schema,
+    table_name,
+    view_definition
+FROM `{project}`.`{dataset}`.INFORMATION_SCHEMA.VIEWS
+WHERE table_name IN ({literals})"
+    )
+}
+
 pub struct BigqueryMetadataAdapter {
     adapter: AdapterImpl,
 }
@@ -560,6 +588,10 @@ impl BigqueryMetadataAdapter {
 }
 
 impl MetadataAdapter for BigqueryMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -1080,6 +1112,120 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn is_permission_error(&self, _e: &AdapterError) -> bool {
         false
     }
+
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        type Acc = Vec<ViewDefinition>;
+
+        if relations.is_empty() {
+            return Box::pin(async { Ok(vec![]) });
+        }
+
+        let mut by_triple: HashMap<(String, String, String), Arc<dyn BaseRelation>> =
+            HashMap::new();
+        let mut by_dataset: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+
+        for rel in relations {
+            let project = match rel.database_as_resolved_str() {
+                Ok(p) => p,
+                Err(e) => {
+                    let err = AdapterError::from(e);
+                    return Box::pin(async move { Err(Cancellable::Error(err)) });
+                }
+            };
+            let dataset = match rel.schema_as_resolved_str() {
+                Ok(s) => s,
+                Err(e) => {
+                    let err = AdapterError::from(e);
+                    return Box::pin(async move { Err(Cancellable::Error(err)) });
+                }
+            };
+            let table = match rel.identifier_as_resolved_str() {
+                Ok(t) => t,
+                Err(e) => {
+                    let err = AdapterError::from(e);
+                    return Box::pin(async move { Err(Cancellable::Error(err)) });
+                }
+            };
+
+            by_triple.insert(
+                (
+                    project.to_lowercase(),
+                    dataset.to_lowercase(),
+                    table.to_lowercase(),
+                ),
+                rel.clone(),
+            );
+            by_dataset
+                .entry((project, dataset))
+                .or_default()
+                .push(table);
+        }
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          key: &((String, String), Vec<String>)|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let ((project, dataset), identifiers) = key;
+            let sql = build_views_query(project, dataset, identifiers);
+            let ctx = QueryCtx::default().with_desc("Fetch view definitions");
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+            Ok(table.original_record_batch())
+        };
+
+        let by_triple = Arc::new(by_triple);
+        let reduce_f = move |acc: &mut Acc,
+                             _key: ((String, String), Vec<String>),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let catalogs = batch.column_values::<StringArray>("table_catalog")?;
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let names = batch.column_values::<StringArray>("table_name")?;
+            let defs = batch.column_values::<StringArray>("view_definition")?;
+
+            for i in 0..batch.num_rows() {
+                if defs.is_null(i) {
+                    continue;
+                }
+                let catalog = catalogs.value(i);
+                let schema = schemas.value(i);
+                let name = names.value(i);
+                let definition = defs.value(i);
+
+                let key = (
+                    catalog.to_lowercase(),
+                    schema.to_lowercase(),
+                    name.to_lowercase(),
+                );
+                let Some(input_rel) = by_triple.get(&key) else {
+                    continue;
+                };
+
+                acc.push(ViewDefinition {
+                    fqn: input_rel.semantic_fqn(),
+                    definition: definition.to_string(),
+                    dialect: Dialect::Bigquery,
+                    default_catalog: catalog.to_string(),
+                    default_schema: schema.to_string(),
+                });
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        let keys = by_dataset.into_iter().collect::<Vec<_>>();
+        map_reduce.run(Arc::new(keys), token)
+    }
 }
 
 #[cfg(test)]
@@ -1219,5 +1365,37 @@ mod tests {
                 "struct<key1 string, key2 integer>"
             );
         }
+    }
+
+    #[test]
+    fn build_views_query_renders_basic_select() {
+        let sql = build_views_query(
+            "my-project",
+            "analytics",
+            &["users".to_string(), "orders".to_string()],
+        );
+        assert!(
+            sql.contains("FROM `my-project`.`analytics`.INFORMATION_SCHEMA.VIEWS"),
+            "got: {sql}"
+        );
+        assert!(
+            sql.contains("table_name IN ('users', 'orders')"),
+            "got: {sql}"
+        );
+        assert!(sql.contains("table_catalog"));
+        assert!(sql.contains("table_schema"));
+        assert!(sql.contains("view_definition"));
+    }
+
+    #[test]
+    fn build_views_query_quotes_hyphenated_project() {
+        let sql = build_views_query("my-project-123", "ds", &["t".to_string()]);
+        assert!(sql.contains("`my-project-123`.`ds`"), "got: {sql}");
+    }
+
+    #[test]
+    fn build_views_query_escapes_single_quotes_in_identifiers() {
+        let sql = build_views_query("p", "d", &["weird'name".to_string()]);
+        assert!(sql.contains("'weird''name'"), "got: {sql}");
     }
 }

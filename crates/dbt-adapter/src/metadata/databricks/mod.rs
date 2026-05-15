@@ -11,8 +11,11 @@ use arrow_schema::{Field, Schema};
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
 use dbt_agate::AgateTable;
+use dbt_common::ErrorCode;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_frontend_common::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
@@ -710,6 +713,10 @@ impl DatabricksMetadataAdapter {
 }
 
 impl MetadataAdapter for DatabricksMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -1096,6 +1103,153 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         // check out data/repros/databricks_create_schema_no_catalog_access on how to repro this error
         e.sqlstate() == "42501" || e.message().contains("PERMISSION_DENIED")
     }
+
+    /// Fetch view definitions for the given relations.
+    ///
+    /// We use `DESCRIBE EXTENDED <fqn>` rather than `information_schema.views`
+    /// because only the former exposes the `View Catalog and Namespace` field,
+    /// which records the catalog/schema that were the *session defaults at
+    /// view creation time*. In Databricks, unqualified table references inside
+    /// a view's body resolve against those session defaults, not against the
+    /// view's own catalog/schema, so this is the only authoritative source for
+    /// the `default_catalog`/`default_schema` we hand back on `ViewDefinition`.
+    /// Re-parsing the view body with the view's own FQN as the default would
+    /// silently misqualify any unqualified reference.
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        type Acc = Vec<ViewDefinition>;
+
+        if self.adapter.adapter_type() != AdapterType::Databricks {
+            let err = AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "fetch_view_definitions is not supported for Spark",
+            );
+            return Box::pin(future::ready(Err(Cancellable::Error(err))));
+        }
+
+        if relations.is_empty() {
+            return Box::pin(async { Ok(vec![]) });
+        }
+
+        // Dedupe FQNs while preserving insertion order.
+        let fqns: Vec<String> = {
+            let mut seen = std::collections::HashSet::new();
+            let mut out = Vec::with_capacity(relations.len());
+            for r in relations {
+                let f = r.semantic_fqn();
+                if seen.insert(f.clone()) {
+                    out.push(f);
+                }
+            }
+            out
+        };
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f =
+            move |conn: &'_ mut dyn Connection, fqn: &String| -> AdapterResult<Arc<RecordBatch>> {
+                let sql = format!("DESCRIBE EXTENDED {fqn}");
+                let ctx = QueryCtx::default().with_desc("Fetch view definition");
+                let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+                Ok(table.original_record_batch())
+            };
+
+        let reduce_f = |acc: &mut Acc,
+                        fqn: String,
+                        batch_res: AdapterResult<Arc<RecordBatch>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let (view_text, catalog_and_ns) = parse_describe_extended_view_info(&batch)?;
+            let Some(view_text) = view_text else {
+                // Not a view (or row-based DESCRIBE EXTENDED omitted the field).
+                return Ok(());
+            };
+            let Some((default_catalog, default_schema)) =
+                parse_view_catalog_and_namespace(catalog_and_ns.as_deref(), &fqn)
+            else {
+                // Both the `View Catalog and Namespace` row and the view's own
+                // FQN failed to parse. Skip rather than emit a ViewDefinition
+                // with empty defaults that would misqualify unqualified
+                // references downstream.
+                emit_warn_log_message(
+                    ErrorCode::RunCacheServiceWarn,
+                    format!(
+                        "Skipping view definition: could not parse `View Catalog and Namespace` ({catalog_and_ns:?}) or fqn ({fqn})"
+                    ),
+                    None,
+                );
+                return Ok(());
+            };
+
+            acc.push(ViewDefinition {
+                fqn,
+                definition: view_text,
+                dialect: Dialect::Databricks,
+                default_catalog,
+                default_schema,
+            });
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(fqns), token)
+    }
+}
+
+/// Extract `View Text` and `View Catalog and Namespace` from the row-based
+/// `DESCRIBE EXTENDED <fqn>` output (columns: `col_name`, `data_type`, `comment`).
+///
+/// For non-view relations these rows are absent, in which case both returned
+/// options are `None` and the caller should skip the relation.
+fn parse_describe_extended_view_info(
+    batch: &RecordBatch,
+) -> AdapterResult<(Option<String>, Option<String>)> {
+    let col_names = batch.column_values::<StringArray>("col_name")?;
+    let data_types = batch.column_values::<StringArray>("data_type")?;
+
+    let mut view_text: Option<String> = None;
+    let mut catalog_and_ns: Option<String> = None;
+    for i in 0..batch.num_rows() {
+        match col_names.value(i) {
+            "View Text" => view_text = Some(data_types.value(i).to_string()),
+            "View Catalog and Namespace" => catalog_and_ns = Some(data_types.value(i).to_string()),
+            _ => {}
+        }
+    }
+    Ok((view_text, catalog_and_ns))
+}
+
+/// Resolve `(default_catalog, default_schema)` from the `View Catalog and Namespace`
+/// row, falling back to the view's own FQN if the row is missing or unparseable.
+///
+/// The Databricks value comes back as a backtick-quoted two-part name like
+/// `` `cat`.`schema` ``. The FQN fallback matches the dbt-databricks behavior of
+/// preferring the view's own qualification over connection defaults when the
+/// authoritative session-default record is unavailable. Returns `None` only
+/// when both sources fail to parse, so the caller can log and skip the view
+/// rather than emit a `ViewDefinition` with empty defaults.
+fn parse_view_catalog_and_namespace(value: Option<&str>, fqn: &str) -> Option<(String, String)> {
+    if let Some(s) = value {
+        if let Ok(idents) = Dialect::Databricks.parse_dot_separated_identifiers(s) {
+            if idents.len() == 2 {
+                return Some((idents[0].name().to_string(), idents[1].name().to_string()));
+            }
+        }
+    }
+
+    let parsed = Dialect::Databricks.parse_fqn(fqn).ok()?;
+    Some((
+        parsed.catalog().name().to_string(),
+        parsed.schema().name().to_string(),
+    ))
 }
 
 /// Build a schema from `describe table [table]` (without extended ... as json)
@@ -1315,5 +1469,125 @@ mod tests {
         // This matches Python's (16, sys.maxsize) behavior
         let result = extract_dbr_version("16.x-scala2.12").unwrap();
         assert_eq!(result, EngineVersion::Full(16, i64::MAX));
+    }
+
+    #[test]
+    fn parse_view_catalog_and_namespace_parses_quoted_pair() {
+        let parsed = parse_view_catalog_and_namespace(
+            Some("`my_catalog`.`my_schema`"),
+            "`my_catalog`.`my_schema`.`my_view`",
+        );
+        assert_eq!(
+            parsed,
+            Some(("my_catalog".to_string(), "my_schema".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_view_catalog_and_namespace_parses_unquoted_pair() {
+        let parsed = parse_view_catalog_and_namespace(
+            Some("my_catalog.my_schema"),
+            "`my_catalog`.`my_schema`.`my_view`",
+        );
+        assert_eq!(
+            parsed,
+            Some(("my_catalog".to_string(), "my_schema".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_view_catalog_and_namespace_falls_back_to_fqn_on_garbage_value() {
+        let parsed = parse_view_catalog_and_namespace(
+            Some("not a valid name"),
+            "`fallback_cat`.`fallback_schema`.`my_view`",
+        );
+        assert_eq!(
+            parsed,
+            Some(("fallback_cat".to_string(), "fallback_schema".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_view_catalog_and_namespace_falls_back_to_fqn_on_missing_value() {
+        let parsed =
+            parse_view_catalog_and_namespace(None, "`fallback_cat`.`fallback_schema`.`my_view`");
+        assert_eq!(
+            parsed,
+            Some(("fallback_cat".to_string(), "fallback_schema".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_view_catalog_and_namespace_returns_none_when_both_unparseable() {
+        // Value cannot be parsed AND the fqn cannot be parsed either, so the
+        // helper has nothing to fall back to.
+        assert_eq!(parse_view_catalog_and_namespace(None, ""), None);
+    }
+
+    #[test]
+    fn parse_describe_extended_view_info_extracts_view_rows() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("col_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+            Field::new("comment", DataType::Utf8, true),
+        ]));
+        let col_names = StringArray::from(vec![
+            "id",
+            "name",
+            "# Detailed Table Information",
+            "Catalog",
+            "View Text",
+            "View Catalog and Namespace",
+            "View Query Output Columns",
+        ]);
+        let data_types = StringArray::from(vec![
+            "bigint",
+            "string",
+            "",
+            "main",
+            "SELECT 1 AS x",
+            "`main`.`default`",
+            "[\"x\"]",
+        ]);
+        let comments = StringArray::from(vec!["", "", "", "", "", "", ""]);
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(col_names),
+                Arc::new(data_types),
+                Arc::new(comments),
+            ],
+        )
+        .unwrap();
+
+        let (view_text, catalog_and_ns) = parse_describe_extended_view_info(&batch).unwrap();
+        assert_eq!(view_text.as_deref(), Some("SELECT 1 AS x"));
+        assert_eq!(catalog_and_ns.as_deref(), Some("`main`.`default`"));
+    }
+
+    #[test]
+    fn parse_describe_extended_view_info_returns_none_for_table_output() {
+        // Table DESCRIBE EXTENDED has no `View Text` row.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("col_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+            Field::new("comment", DataType::Utf8, true),
+        ]));
+        let col_names = StringArray::from(vec!["id", "# Detailed Table Information", "Catalog"]);
+        let data_types = StringArray::from(vec!["bigint", "", "main"]);
+        let comments = StringArray::from(vec!["", "", ""]);
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(col_names),
+                Arc::new(data_types),
+                Arc::new(comments),
+            ],
+        )
+        .unwrap();
+
+        let (view_text, catalog_and_ns) = parse_describe_extended_view_info(&batch).unwrap();
+        assert!(view_text.is_none());
+        assert!(catalog_and_ns.is_none());
     }
 }

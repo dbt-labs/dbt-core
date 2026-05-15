@@ -209,6 +209,9 @@ pub enum ErrorCode {
     SidecarError = 1406,
     NoResultsToShow = 1407,
     SidecarUnsupportedFeature = 1408,
+    /// Run-cache service degraded into fail-open: config/init/decision/cache
+    /// errors that don't abort the command but indicate degraded behavior.
+    RunCacheServiceWarn = 1410,
 
     // Serialization [1450–1460]
     JsonInvalid = 1450,

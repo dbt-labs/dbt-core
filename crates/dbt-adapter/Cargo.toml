@@ -42,6 +42,7 @@ crossbeam-skiplist = { workspace = true }
 crossbeam-utils = { workspace = true }
 dashmap = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+fancy-regex = { workspace = true }
 flate2 = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 md5 = { workspace = true }

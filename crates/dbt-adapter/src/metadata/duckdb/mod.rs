@@ -39,6 +39,10 @@ impl DuckDBMetadataAdapter {
 }
 
 impl MetadataAdapter for DuckDBMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

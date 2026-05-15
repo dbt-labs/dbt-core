@@ -398,11 +398,10 @@ impl Object for RefFunction {
                 self.validate_dependency(&unique_id, &package_name, &model_name)?;
                 // Use phase-aware defer logic: check if we should use the deferred
                 // (production) relation for this specific upstream node.
-                let resolved_relation = match (
-                    self.node_resolver
-                        .prefers_deferred(&self.current_node_unique_id, &unique_id),
-                    deferred_relation,
-                ) {
+                let prefers = self
+                    .node_resolver
+                    .prefers_deferred(&self.current_node_unique_id, &unique_id);
+                let resolved_relation = match (prefers, deferred_relation) {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };

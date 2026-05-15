@@ -677,13 +677,13 @@ impl SeedArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.resource_types = vec![ClapResourceType::Seed];
-        if self.common_args.task_cache_url != NOOP && !self.no_run_cache {
-            if self.force_node_selection {
-                eval_args.run_cache_mode = RunCacheMode::WriteOnly;
-            } else {
-                eval_args.run_cache_mode = self.run_cache_mode.clone();
-            }
-        }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            self.no_run_cache,
+            self.force_node_selection,
+            &self.run_cache_mode,
+        );
         eval_args.static_analysis = self.static_analysis;
         eval_args.full_refresh = self.full_refresh;
         eval_args
@@ -859,13 +859,13 @@ impl SnapshotArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
 
-        if self.common_args.task_cache_url != NOOP && !self.no_run_cache {
-            if self.force_node_selection {
-                eval_args.run_cache_mode = RunCacheMode::WriteOnly;
-            } else {
-                eval_args.run_cache_mode = self.run_cache_mode.clone();
-            }
-        }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            self.no_run_cache,
+            self.force_node_selection,
+            &self.run_cache_mode,
+        );
         eval_args.resource_types = vec![ClapResourceType::Snapshot];
         eval_args.static_analysis = self.static_analysis;
         eval_args
@@ -931,13 +931,13 @@ impl TestArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
         eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
-        if self.common_args.task_cache_url != NOOP && !self.no_run_cache {
-            if self.force_node_selection {
-                eval_args.run_cache_mode = RunCacheMode::WriteOnly;
-            } else {
-                eval_args.run_cache_mode = self.run_cache_mode.clone();
-            }
-        }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            self.no_run_cache,
+            self.force_node_selection,
+            &self.run_cache_mode,
+        );
         eval_args.limit = self.limit.into();
         eval_args.static_analysis = self.static_analysis;
         eval_args.format = self.output.unwrap_or(DEFAULT_FORMAT);
@@ -1036,13 +1036,13 @@ impl BuildArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
-        if self.common_args.task_cache_url != NOOP && !self.no_run_cache {
-            if self.force_node_selection {
-                eval_args.run_cache_mode = RunCacheMode::WriteOnly;
-            } else {
-                eval_args.run_cache_mode = self.run_cache_mode.clone();
-            }
-        }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            self.no_run_cache,
+            self.force_node_selection,
+            &self.run_cache_mode,
+        );
         eval_args.full_refresh = self.full_refresh;
         eval_args.static_analysis = self.static_analysis;
         eval_args.empty = self.common_args.empty;
@@ -1158,13 +1158,13 @@ impl RunArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::All;
 
-        if self.common_args.task_cache_url != NOOP && !self.no_run_cache {
-            if self.force_node_selection {
-                eval_args.run_cache_mode = RunCacheMode::WriteOnly;
-            } else {
-                eval_args.run_cache_mode = self.run_cache_mode.clone();
-            }
-        }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            self.no_run_cache,
+            self.force_node_selection,
+            &self.run_cache_mode,
+        );
 
         eval_args.resource_types = vec![ClapResourceType::Model];
         eval_args.limit = self.limit.into();
@@ -1190,6 +1190,28 @@ impl RunArgs {
         // }
         eval_args.format = self.output.unwrap_or(DEFAULT_FORMAT);
         eval_args
+    }
+}
+
+fn configure_run_cache(
+    eval_args: &mut EvalArgs,
+    common_args: &CommonArgs,
+    no_run_cache: bool,
+    force_node_selection: bool,
+    run_cache_mode: &RunCacheMode,
+) {
+    if no_run_cache {
+        eval_args.run_cache_service = false;
+        return;
+    }
+
+    if common_args.task_cache_url != NOOP || common_args.run_cache_service {
+        eval_args.run_cache_service = common_args.run_cache_service;
+        eval_args.run_cache_mode = if force_node_selection {
+            RunCacheMode::WriteOnly
+        } else {
+            run_cache_mode.clone()
+        };
     }
 }
 
@@ -1751,6 +1773,10 @@ pub struct CommonArgs {
     #[clap(long, env = "DBT_TASK_CACHE_URL", default_value = "noop", hide = true)]
     pub task_cache_url: String,
 
+    /// Enable service-backed Run Cache without legacy task-cache coordination
+    #[arg(global = true, long = "run-cache-service", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    pub run_cache_service: bool,
+
     // --------------------------------------------------------------------------------------------
     // internal only
     /// The directory to install fs_internal packages
@@ -2145,6 +2171,7 @@ impl CommonArgs {
                 self.favor_state
             },
             refresh_sources: false,
+            run_cache_service: false,
             run_cache_mode: RunCacheMode::Noop,
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: None,

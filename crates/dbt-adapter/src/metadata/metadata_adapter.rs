@@ -1,17 +1,18 @@
 use crate::adapter::adapter_impl::AdapterImpl;
-use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
+use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult};
 use crate::macro_exec::execute_macro;
 use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
-    args_freshness, args_list_relations_in_parallel, args_list_relations_schemas,
-    args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
+    args_fetch_view_definitions, args_freshness, args_list_relations_in_parallel,
+    args_list_relations_schemas, args_list_relations_schemas_by_patterns, args_list_udfs,
+    with_time_machine_metadata_wrapper,
 };
 use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::ExecutionPhase;
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -49,6 +50,12 @@ use std::sync::Arc;
 /// }
 /// ```
 pub trait MetadataAdapter: Send + Sync {
+    /// The adapter type backing this metadata adapter (Snowflake, BigQuery, ...).
+    /// Used by callers (e.g. `ViewDefinitionTraverser`) that need to construct
+    /// dialect-shaped relations without an external mapping table.
+    fn adapter_type(&self) -> AdapterType; // TODO: remove this and pass Arc 
+    // into ViewDefinitionTraverser instead
+
     fn build_schemas_from_stats_sql(
         &self,
         _: Arc<RecordBatch>,
@@ -286,6 +293,58 @@ pub trait MetadataAdapter: Send + Sync {
         )
     }
 
+    /// Check whether each relation exists, keyed by semantic FQN.
+    ///
+    /// The default implementation uses `list_relations_in_parallel`, which is
+    /// already implemented by supported metadata adapters. Adapters that
+    /// cannot list relations should return an adapter error from that method;
+    /// callers may treat that as fail-open.
+    fn relations_exist_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, bool>> {
+        let db_schemas = relations
+            .iter()
+            .map(CatalogAndSchema::from)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let future = async move {
+            let listed = self.list_relations_in_parallel(&db_schemas, token).await?;
+            let mut result = BTreeMap::new();
+
+            for relation in relations {
+                let semantic_fqn = relation.semantic_fqn();
+                let catalog_schema = CatalogAndSchema::from(relation);
+                let Some(schema_relations) = listed.get(&catalog_schema) else {
+                    result.insert(semantic_fqn, false);
+                    continue;
+                };
+
+                let schema_relations = schema_relations.as_ref().map_err(|err| {
+                    Cancellable::Error(AdapterError::new(err.kind(), err.message().to_string()))
+                })?;
+                let exists = schema_relations
+                    .iter()
+                    .any(|candidate| candidate.semantic_fqn() == semantic_fqn);
+                result.insert(semantic_fqn, exists);
+            }
+
+            Ok(result)
+        };
+        Box::pin(future)
+    }
+
+    fn relations_exist<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, bool>> {
+        self.relations_exist_inner(relations, token)
+    }
+
     /// List relations in the specified [CatalogAndSchema] in parallel (implementation).
     ///
     /// Override this method with your adapter's implementation.
@@ -320,6 +379,49 @@ pub trait MetadataAdapter: Send + Sync {
                     .map(|s| (s.resolved_catalog.clone(), s.resolved_schema.clone())),
             ),
             self.list_relations_in_parallel_inner(db_schemas, token),
+        )
+    }
+
+    /// Fetch view definitions for a batch of fully-qualified table references.
+    ///
+    /// Implementations are responsible for:
+    /// - Issuing a single (or minimal-count) database query for the entire batch.
+    /// - Returning a `ViewDefinition` for each input that *is* a view.
+    /// - Omitting tables, missing objects, and permission failures from the
+    ///   result. The orchestrator caches those omissions so they are not re-fetched.
+    ///
+    /// This method must be safe to call concurrently from multiple async tasks;
+    /// each call acquires its own connection via the engine's connection factory.
+    ///
+    /// The default implementation returns `NotSupported`; adapters that
+    /// support view-definition fetching override it.
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        _relations: &'a [Arc<dyn BaseRelation>],
+        _token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        Box::pin(async {
+            Err(Cancellable::Error(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "fetch_view_definitions is not supported by this adapter",
+            )))
+        })
+    }
+
+    /// Public, time-machine-recorded wrapper around `fetch_view_definitions_inner`.
+    ///
+    /// Mirrors the existing `*_inner`/public pattern used by `freshness`,
+    /// `list_relations_schemas`, `list_user_defined_functions`, etc.
+    fn fetch_view_definitions<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        with_time_machine_metadata_wrapper(
+            "global",
+            "fetch_view_definitions",
+            args_fetch_view_definitions(relations.iter().map(|r| r.semantic_fqn())),
+            self.fetch_view_definitions_inner(relations, token),
         )
     }
 }

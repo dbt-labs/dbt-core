@@ -41,6 +41,7 @@ pub struct TaskRunnerCtxInner {
     pub rendered_sql: DashMap<String, RenderedNodeInfo>,
     pub freshness_seconds: SccHashMap<String, i64>,
     pub updates_on: SccHashMap<String, UpdatesOn>,
+    pub execute: dbt_schemas::schemas::profiles::Execute,
     // TODO: Use SIPHash128 for fingerprinting the sets
     pub runnable_set: BTreeSet<String>,
     pub extended_ctx: Box<dyn ExtendedCtx>,
@@ -69,6 +70,7 @@ impl TaskRunnerCtxInner {
         resolver_state: &Arc<ResolverState>,
         generic_test_relationships: GenericTestRelationships,
         span_manager: Arc<SpanManager<FsResult<NodeStatus>, SkipReason>>,
+        execute: dbt_schemas::schemas::profiles::Execute,
     ) -> Self {
         let runnable_set = schedule
             .selected_nodes
@@ -100,6 +102,7 @@ impl TaskRunnerCtxInner {
             rendered_sql: DashMap::default(),
             freshness_seconds: SccHashMap::default(),
             updates_on: SccHashMap::default(),
+            execute,
             runnable_set,
             extended_ctx,
             materialization_resolver: Arc::new(materialization_resolver),

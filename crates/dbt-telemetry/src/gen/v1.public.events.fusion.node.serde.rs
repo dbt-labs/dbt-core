@@ -15,6 +15,9 @@ impl serde::Serialize for NodeCacheDetail {
         if self.last_updated_seconds.is_some() {
             len += 1;
         }
+        if self.message.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.NodeCacheDetail", len)?;
         if self.node_cache_reason != 0 {
             let v = NodeCacheReason::try_from(self.node_cache_reason)
@@ -30,6 +33,9 @@ impl serde::Serialize for NodeCacheDetail {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("last_updated_seconds", ToString::to_string(&v).as_str())?;
+        }
+        if let Some(v) = self.message.as_ref() {
+            struct_ser.serialize_field("message", v)?;
         }
         struct_ser.end()
     }
@@ -47,6 +53,7 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
             "buildAfterSeconds",
             "last_updated_seconds",
             "lastUpdatedSeconds",
+            "message",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -54,6 +61,7 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
             NodeCacheReason,
             BuildAfterSeconds,
             LastUpdatedSeconds,
+            Message,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -79,6 +87,7 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                             "nodeCacheReason" | "node_cache_reason" => Ok(GeneratedField::NodeCacheReason),
                             "buildAfterSeconds" | "build_after_seconds" => Ok(GeneratedField::BuildAfterSeconds),
                             "lastUpdatedSeconds" | "last_updated_seconds" => Ok(GeneratedField::LastUpdatedSeconds),
+                            "message" => Ok(GeneratedField::Message),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -101,6 +110,7 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                 let mut node_cache_reason__ = None;
                 let mut build_after_seconds__ = None;
                 let mut last_updated_seconds__ = None;
+                let mut message__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NodeCacheReason => {
@@ -125,6 +135,12 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::Message => {
+                            if message__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("message"));
+                            }
+                            message__ = map_.next_value()?;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -134,6 +150,7 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                     node_cache_reason: node_cache_reason__.unwrap_or_default(),
                     build_after_seconds: build_after_seconds__,
                     last_updated_seconds: last_updated_seconds__,
+                    message: message__,
                 })
             }
         }

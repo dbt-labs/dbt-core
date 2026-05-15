@@ -1,4 +1,3 @@
-use crate::AdapterEngine;
 use crate::adapter::adapter_impl::*;
 use crate::connection::AdapterConnectionFactory;
 use crate::metadata::{
@@ -8,6 +7,7 @@ use crate::metadata::{
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
+use crate::{AdapterEngine, AdapterType};
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
@@ -87,6 +87,10 @@ impl FabricMetadataAdapter {
 }
 
 impl MetadataAdapter for FabricMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

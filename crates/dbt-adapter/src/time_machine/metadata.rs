@@ -496,6 +496,68 @@ impl MetadataResultDeserialize for Vec<UDF> {
     }
 }
 
+impl MetadataResultSerialize for Vec<crate::metadata::ViewDefinition> {
+    fn to_recording_json(&self) -> serde_json::Value {
+        let entries: Vec<serde_json::Value> = self
+            .iter()
+            .map(|v| {
+                serde_json::json!({
+                    "fqn": v.fqn,
+                    "definition": v.definition,
+                    "dialect": v.dialect.to_string(),
+                    "default_catalog": v.default_catalog,
+                    "default_schema": v.default_schema,
+                })
+            })
+            .collect();
+        serde_json::Value::Array(entries)
+    }
+}
+
+impl MetadataResultDeserialize for Vec<crate::metadata::ViewDefinition> {
+    fn from_recording_json(json: &serde_json::Value) -> Result<Self, String> {
+        let arr = json.as_array().ok_or("Expected array")?;
+        let mut out = Vec::with_capacity(arr.len());
+        for entry in arr {
+            let fqn = entry
+                .get("fqn")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing 'fqn'")?
+                .to_string();
+            let definition = entry
+                .get("definition")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing 'definition'")?
+                .to_string();
+            let dialect_str = entry
+                .get("dialect")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing 'dialect'")?;
+            let dialect: dbt_frontend_common::Dialect = dialect_str
+                .parse()
+                .map_err(|_| format!("Invalid dialect '{dialect_str}'"))?;
+            let default_catalog = entry
+                .get("default_catalog")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing 'default_catalog'")?
+                .to_string();
+            let default_schema = entry
+                .get("default_schema")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing 'default_schema'")?
+                .to_string();
+            out.push(crate::metadata::ViewDefinition {
+                fqn,
+                definition,
+                dialect,
+                default_catalog,
+                default_schema,
+            });
+        }
+        Ok(out)
+    }
+}
+
 impl MetadataResultSerialize for Vec<(String, String, AdapterResult<()>)> {
     fn to_recording_json(&self) -> serde_json::Value {
         let entries: Vec<serde_json::Value> = self
@@ -591,6 +653,18 @@ pub fn args_list_relations_in_parallel(
 /// Create MetadataCallArgs for freshness.
 pub fn args_freshness(relations: impl IntoIterator<Item = impl AsRef<str>>) -> MetadataCallArgs {
     MetadataCallArgs::Freshness {
+        relations: relations
+            .into_iter()
+            .map(|r| r.as_ref().to_string())
+            .collect(),
+    }
+}
+
+/// Create MetadataCallArgs for fetch_view_definitions.
+pub fn args_fetch_view_definitions(
+    relations: impl IntoIterator<Item = impl AsRef<str>>,
+) -> MetadataCallArgs {
+    MetadataCallArgs::FetchViewDefinitions {
         relations: relations
             .into_iter()
             .map(|r| r.as_ref().to_string())
@@ -762,5 +836,34 @@ mod tests {
             }
             _ => panic!("Expected Freshness"),
         }
+    }
+
+    #[test]
+    fn test_args_fetch_view_definitions() {
+        let args = args_fetch_view_definitions(["a.b.c", "d.e.f"]);
+        assert!(matches!(
+            args,
+            MetadataCallArgs::FetchViewDefinitions { relations } if relations == vec!["a.b.c", "d.e.f"]
+        ));
+    }
+
+    #[test]
+    fn test_view_definition_vec_round_trips_via_recording_json() {
+        use crate::metadata::ViewDefinition;
+        let original = vec![ViewDefinition {
+            fqn: r#""DB"."S"."V""#.to_string(),
+            definition: "SELECT 1".to_string(),
+            dialect: dbt_frontend_common::Dialect::Snowflake,
+            default_catalog: "DB".to_string(),
+            default_schema: "S".to_string(),
+        }];
+        let json = original.to_recording_json();
+        let restored = <Vec<ViewDefinition>>::from_recording_json(&json).expect("ok");
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].fqn, original[0].fqn);
+        assert_eq!(restored[0].definition, original[0].definition);
+        assert_eq!(restored[0].dialect, original[0].dialect);
+        assert_eq!(restored[0].default_catalog, original[0].default_catalog);
+        assert_eq!(restored[0].default_schema, original[0].default_schema);
     }
 }

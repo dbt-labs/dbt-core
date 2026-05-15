@@ -18,6 +18,7 @@ const FUSION_INVOCATION_METRIC_FAMILY: u8 = 1;
 const FUSION_NODE_COUNTS_METRIC_FAMILY: u8 = 2;
 const FUSION_OUTCOME_COUNTS_METRIC_FAMILY: u8 = 3;
 const FUSION_HOOK_COUNTS_METRIC_FAMILY: u8 = 4;
+const FUSION_RUN_CACHE_SERVICE_METRIC_FAMILY: u8 = 5;
 
 const OUTCOME_KIND_NODE: u8 = 1;
 const OUTCOME_KIND_HOOK: u8 = 2;
@@ -106,6 +107,30 @@ pub enum InvocationMetricKey {
     NodeTotalsNoOp,
 }
 
+#[repr(u8)]
+#[cfg_attr(test, derive(strum::EnumIter))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromRepr)]
+pub enum RunCacheServiceMetricKey {
+    Enabled = 0,
+    Disabled,
+    ClientInitSuccess,
+    ClientInitFailure,
+    ValidationSupported,
+    ValidationUnsupported,
+    ValidationSkipped,
+    SubmitAttempt,
+    SubmitSuccess,
+    SubmitFailure,
+    DecisionReadyToExecute,
+    DecisionSkipExecution,
+    DecisionReadyToClone,
+    DecisionUnknown,
+    MetadataCacheHit,
+    MetadataCacheMiss,
+    MetadataLookupFailure,
+    UnsupportedNode,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OutcomeKind {
     Node(NodeOutcome),
@@ -180,6 +205,7 @@ impl OutcomeCountsKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FusionMetricKey {
     InvocationMetric(InvocationMetricKey),
+    RunCacheService(RunCacheServiceMetricKey),
     NodeCounts(NodeType),
     OutcomeCounts(OutcomeCountsKey),
     HookCounts,
@@ -191,6 +217,11 @@ impl From<FusionMetricKey> for MetricKey {
             FusionMetricKey::InvocationMetric(metric) => pack_metric_key(
                 FUSION_METRIC_NAMESPACE,
                 FUSION_INVOCATION_METRIC_FAMILY,
+                [metric as u8, 0, 0, 0],
+            ),
+            FusionMetricKey::RunCacheService(metric) => pack_metric_key(
+                FUSION_METRIC_NAMESPACE,
+                FUSION_RUN_CACHE_SERVICE_METRIC_FAMILY,
                 [metric as u8, 0, 0, 0],
             ),
             FusionMetricKey::NodeCounts(node_type) => pack_metric_key(
@@ -291,6 +322,15 @@ impl TryFrom<MetricKey> for FusionMetricKey {
                 let node_type = NodeType::try_from(i32::from(key_lane_0(key))).map_err(|_| ())?;
                 Ok(Self::NodeCounts(node_type))
             }
+            FUSION_RUN_CACHE_SERVICE_METRIC_FAMILY => {
+                if key_lane_1(key) != 0 || key_lane_2(key) != 0 || key_lane_3(key) != 0 {
+                    return Err(());
+                }
+
+                Ok(Self::RunCacheService(
+                    RunCacheServiceMetricKey::from_repr(key_lane_0(key)).ok_or(())?,
+                ))
+            }
             FUSION_OUTCOME_COUNTS_METRIC_FAMILY => {
                 let outcome = match key_lane_0(key) {
                     OUTCOME_KIND_NODE => OutcomeKind::Node(
@@ -368,6 +408,7 @@ mod tests {
             .map(FusionMetricKey::InvocationMetric)
             .collect::<Vec<_>>();
 
+        keys.extend(RunCacheServiceMetricKey::iter().map(FusionMetricKey::RunCacheService));
         keys.extend(NodeType::iter().map(FusionMetricKey::NodeCounts));
         keys.push(FusionMetricKey::HookCounts);
 

@@ -121,6 +121,14 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
     }
 
     if let Some(cache_detail) = get_cache_detail(node.into()) {
+        // Task-supplied message wins when present so callers can render
+        // decision-specific text (e.g. "Cloned from cached relation") without
+        // needing a dedicated NodeCacheReason variant.
+        if let Some(message) = cache_detail.message.as_deref()
+            && !message.is_empty()
+        {
+            return Some(message.to_string());
+        }
         return Some(match cache_detail.node_cache_reason() {
             dbt_telemetry::NodeCacheReason::NoChanges => {
                 "No new changes on any upstreams".to_string()

@@ -568,6 +568,8 @@ syn = { version = "2", features = ["full"] }
 # gRPC dependencies
 tonic = "0.14.1"
 tonic-build = "0.14.1"
+tonic-prost = "0.14.1"
+tonic-prost-build = "0.14.1"
 
 # Security and cryptography dependencies
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }

@@ -381,7 +381,12 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Ephemeral => RelationType::Ephemeral,
             DbtMaterialization::External => RelationType::External,
             DbtMaterialization::Test => RelationType::External, // TODO Validate this
-            DbtMaterialization::Incremental => RelationType::External, // TODO Validate this
+            // Incremental models materialize as tables on the warehouse, and
+            // `is_incremental()` checks `relation.type == 'table'`. Mapping to
+            // anything else (e.g. External) breaks dev-cloned incrementals —
+            // the Jinja body takes the non-incremental branch even though the
+            // CLONE has already produced a table.
+            DbtMaterialization::Incremental => RelationType::Table,
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::DynamicTable => RelationType::DynamicTable,

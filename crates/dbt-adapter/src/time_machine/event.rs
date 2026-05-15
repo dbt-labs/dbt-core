@@ -262,6 +262,11 @@ pub enum MetadataCallArgs {
         /// List of (catalog, schema, unique_id) to create
         catalog_schemas: Vec<(String, String, String)>,
     },
+    /// Arguments for fetch_view_definitions
+    FetchViewDefinitions {
+        /// List of relation FQNs being queried
+        relations: Vec<String>,
+    },
 }
 
 /// A (catalog, schema) pair for serialization.

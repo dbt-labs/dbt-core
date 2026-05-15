@@ -20,6 +20,10 @@ impl SalesforceMetadataAdapter {
 }
 
 impl MetadataAdapter for SalesforceMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Salesforce
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         _: Arc<RecordBatch>,

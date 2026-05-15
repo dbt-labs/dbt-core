@@ -104,8 +104,9 @@ impl From<TimeMachineReplayOrdering> for ReplayMode {
 }
 pub use metadata::{
     MetadataResultDeserialize, MetadataResultSerialize, args_create_schemas_if_not_exists,
-    args_freshness, args_list_relations_in_parallel, args_list_relations_schemas,
-    args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
+    args_fetch_view_definitions, args_freshness, args_list_relations_in_parallel,
+    args_list_relations_schemas, args_list_relations_schemas_by_patterns, args_list_udfs,
+    with_time_machine_metadata_wrapper,
 };
 pub use semantic::SemanticCategory;
 pub use serde::{
