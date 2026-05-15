@@ -106,6 +106,7 @@ def populated_node_config_dict():
         "contract": {"enforced": False, "alias_types": True},
         "access": "protected",
         "lookback": 1,
+        "priority": 0,
     }
 
 
@@ -236,6 +237,7 @@ def base_parsed_model_dict():
             "packages": [],
             "access": "protected",
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -350,6 +352,7 @@ def complex_parsed_model_dict():
             "packages": [],
             "access": "protected",
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -578,6 +581,7 @@ def basic_parsed_seed_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "columns": {},
@@ -672,6 +676,7 @@ def complex_parsed_seed_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "columns": {
@@ -885,6 +890,7 @@ def base_parsed_hook_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -970,6 +976,7 @@ def complex_parsed_hook_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1342,6 +1349,7 @@ def basic_timestamp_snapshot_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "lookback": 1,
+        "priority": 0,
     }
 
 
@@ -1382,6 +1390,7 @@ def complex_timestamp_snapshot_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "lookback": 1,
+        "priority": 0,
     }
 
 
@@ -1450,6 +1459,7 @@ def basic_check_snapshot_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "lookback": 1,
+        "priority": 0,
     }
 
 
@@ -1490,6 +1500,7 @@ def complex_set_snapshot_config_dict():
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
         "lookback": 1,
+        "priority": 0,
     }
 
 
@@ -1617,6 +1628,7 @@ def basic_timestamp_snapshot_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
@@ -1724,6 +1736,7 @@ def basic_check_snapshot_dict():
             "contract": {"enforced": False, "alias_types": True},
             "packages": [],
             "lookback": 1,
+            "priority": 0,
         },
         "docs": {"show": True},
         "contract": {"enforced": False, "alias_types": True},
