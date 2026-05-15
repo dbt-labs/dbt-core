@@ -661,6 +661,92 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn backend_library_and_protocol_metadata_are_stable() {
+        let generic = Backend::Generic {
+            library_name: "adbc_driver_sqlite",
+            entrypoint: Some(b"SqliteDriverInit"),
+        };
+
+        assert_eq!(
+            Backend::Postgres.adbc_library_name(),
+            Some("adbc_driver_postgresql")
+        );
+        assert_eq!(Backend::DuckDBExtended.adbc_library_name(), Some("duckdb"));
+        assert_eq!(
+            Backend::ClickHouse.adbc_library_name(),
+            Some("adbc_clickhouse")
+        );
+        assert_eq!(Backend::DatabricksODBC.adbc_library_name(), None);
+        assert_eq!(generic.adbc_library_name(), Some("adbc_driver_sqlite"));
+        assert!(matches!(
+            Backend::Snowflake.ffi_protocol(),
+            FFIProtocol::Adbc
+        ));
+        assert!(matches!(
+            Backend::RedshiftODBC.ffi_protocol(),
+            FFIProtocol::Odbc
+        ));
+    }
+
+    #[test]
+    fn only_custom_entrypoint_backends_report_entrypoints() {
+        let generic = Backend::Generic {
+            library_name: "adbc_driver_sqlite",
+            entrypoint: Some(b"SqliteDriverInit"),
+        };
+        let generic_without_entrypoint = Backend::Generic {
+            library_name: "adbc_driver_sqlite",
+            entrypoint: None,
+        };
+
+        assert_eq!(
+            Backend::Snowflake.adbc_driver_entrypoint(),
+            Some(&b"SnowflakeDriverInit"[..])
+        );
+        assert_eq!(
+            Backend::DuckDBExtended.adbc_driver_entrypoint(),
+            Some(&b"duckdb_adbc_init"[..])
+        );
+        assert_eq!(Backend::Postgres.adbc_driver_entrypoint(), None);
+        assert_eq!(
+            generic.adbc_driver_entrypoint(),
+            Some(&b"SqliteDriverInit"[..])
+        );
+        assert_eq!(generic_without_entrypoint.adbc_driver_entrypoint(), None);
+    }
+
+    #[test]
+    fn driver_filename_display_honors_platform_prefix_suffix_and_version() {
+        let windows = DriverTriplet {
+            os: "pc-windows-msvc",
+            arch: "x86_64",
+            version: "1.2.3",
+        };
+        let linux_without_version = DriverTriplet {
+            os: "manylinux_2_17-linux-gnu",
+            arch: "aarch64",
+            version: "",
+        };
+
+        assert_eq!(
+            DriverFilenameDisplay {
+                name: "snowflake",
+                triplet: windows,
+            }
+            .to_string(),
+            "adbc_driver_snowflake-1.2.3.dll"
+        );
+        assert_eq!(
+            DriverFilenameDisplay {
+                name: "duckdb",
+                triplet: linux_without_version,
+            }
+            .to_string(),
+            "libadbc_driver_duckdb.so"
+        );
+    }
+
     // XXX: remove the `test_with` attribute when the CI image downloads the Snowflake driver.
 
     #[test_with::env(ADBC_DRIVER_TESTS)]

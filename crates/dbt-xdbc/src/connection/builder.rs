@@ -78,3 +78,43 @@ impl IntoIterator for Builder {
         BuilderIter::new(fixed, self.other)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn option_string(value: &OptionValue) -> &str {
+        match value {
+            OptionValue::String(value) => value,
+            value => panic!("expected string option value, got {value:?}"),
+        }
+    }
+
+    #[test]
+    fn connection_builder_preserves_option_names_values_and_order() {
+        let mut builder = Builder::default();
+        builder
+            .with_option(OptionConnection::CurrentCatalog, "analytics")
+            .unwrap()
+            .with_named_option("adbc.connection.role", "reporting")
+            .unwrap()
+            .with_typed_option(
+                OptionConnection::ReadOnly,
+                OptionValue::String("true".into()),
+            )
+            .unwrap();
+
+        let options = builder.into_iter().collect::<Vec<_>>();
+
+        assert_eq!(options.len(), 3);
+        assert_eq!(options[0].0, OptionConnection::CurrentCatalog);
+        assert_eq!(option_string(&options[0].1), "analytics");
+        assert_eq!(
+            options[1].0,
+            OptionConnection::Other("adbc.connection.role".to_string())
+        );
+        assert_eq!(option_string(&options[1].1), "reporting");
+        assert_eq!(options[2].0, OptionConnection::ReadOnly);
+        assert_eq!(option_string(&options[2].1), "true");
+    }
+}

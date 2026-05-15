@@ -381,3 +381,173 @@ impl IntoIterator for Builder {
         BuilderIter::new(fixed, self.other)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn option_string(value: &OptionValue) -> &str {
+        match value {
+            OptionValue::String(value) => value,
+            value => panic!("expected string option value, got {value:?}"),
+        }
+    }
+
+    #[test]
+    fn log_level_round_trips_and_rejects_unknown_values() {
+        let cases = [
+            (LogLevel::Trace, "trace"),
+            (LogLevel::Debug, "debug"),
+            (LogLevel::Info, "info"),
+            (LogLevel::Warn, "warn"),
+            (LogLevel::Error, "error"),
+            (LogLevel::Fatal, "fatal"),
+            (LogLevel::Off, "off"),
+        ];
+
+        for (level, text) in cases {
+            assert_eq!(level.to_string(), text);
+            assert_eq!(
+                text.parse::<LogLevel>().unwrap().to_string(),
+                level.to_string()
+            );
+        }
+
+        let error = "verbose".parse::<LogLevel>().unwrap_err();
+        assert_eq!(error.status, Status::InvalidArguments);
+        assert!(error.message.contains("verbose"));
+        assert!(error.message.contains("trace"));
+        assert!(error.message.contains("off"));
+    }
+
+    #[test]
+    fn uri_authority_credentials_are_decoded_and_redacted() {
+        let mut builder = Builder::new(Backend::Snowflake);
+        builder
+            .with_parse_uri(
+                "snowflake://user%40example:p%2Fss@example.snowflakecomputing.com/db?password=query_secret&role=analyst",
+            )
+            .unwrap()
+            .with_named_option("adbc.snowflake.sql.auth_token", "token_secret")
+            .unwrap();
+
+        assert_eq!(builder.username.as_deref(), Some("user@example"));
+        assert_eq!(builder.password.as_deref(), Some("p/ss"));
+
+        let debug = format!("{builder:?}");
+        assert!(debug.contains("example.snowflakecomputing.com"));
+        assert!(debug.contains("role=analyst"));
+        assert!(debug.contains("*****"));
+        assert!(!debug.contains("p/ss"));
+        assert!(!debug.contains("query_secret"));
+        assert!(!debug.contains("token_secret"));
+    }
+
+    #[test]
+    fn postgres_like_backends_fold_credentials_into_uri_options() {
+        let mut builder = Builder::new(Backend::Postgres);
+        builder
+            .with_parse_uri("postgres://db.example/app")
+            .unwrap()
+            .with_username("alice")
+            .with_password("secret");
+
+        let options = builder.into_iter().collect::<Vec<_>>();
+        assert_eq!(options.len(), 1);
+
+        let (name, value) = &options[0];
+        assert_eq!(name, &OptionDatabase::Uri);
+        let uri = option_string(value);
+        assert!(uri.starts_with("postgres://db.example/app?"));
+        assert!(uri.contains("user=alice"));
+        assert!(uri.contains("password=secret"));
+    }
+
+    #[test]
+    fn non_postgres_backends_preserve_database_options_separately() {
+        let mut builder = Builder::new(Backend::Snowflake);
+        builder
+            .with_parse_uri("snowflake://account/db")
+            .unwrap()
+            .with_username("alice")
+            .with_password("secret")
+            .with_named_option("warehouse", "transforming")
+            .unwrap();
+
+        let options = builder.into_iter().collect::<Vec<_>>();
+        assert_eq!(options.len(), 4);
+        assert_eq!(options[0].0, OptionDatabase::Uri);
+        assert_eq!(option_string(&options[0].1), "snowflake://account/db");
+        assert_eq!(options[1].0, OptionDatabase::Username);
+        assert_eq!(option_string(&options[1].1), "alice");
+        assert_eq!(options[2].0, OptionDatabase::Password);
+        assert_eq!(option_string(&options[2].1), "secret");
+        assert_eq!(options[3].0, OptionDatabase::Other("warehouse".to_string()));
+        assert_eq!(option_string(&options[3].1), "transforming");
+    }
+
+    #[test]
+    fn typed_core_options_accept_string_values_for_uri_username_and_password() {
+        let mut builder = Builder::new(Backend::Snowflake);
+        builder
+            .with_typed_option(
+                OptionDatabase::Uri,
+                OptionValue::String("snowflake://account/db".to_string()),
+            )
+            .unwrap()
+            .with_typed_option(
+                OptionDatabase::Username,
+                OptionValue::String("typed_user".to_string()),
+            )
+            .unwrap()
+            .with_typed_option(
+                OptionDatabase::Password,
+                OptionValue::String("typed_password".to_string()),
+            )
+            .unwrap();
+
+        let options = builder.into_iter().collect::<Vec<_>>();
+        assert_eq!(options.len(), 3);
+        assert_eq!(options[0].0, OptionDatabase::Uri);
+        assert_eq!(option_string(&options[0].1), "snowflake://account/db");
+        assert_eq!(options[1].0, OptionDatabase::Username);
+        assert_eq!(option_string(&options[1].1), "typed_user");
+        assert_eq!(options[2].0, OptionDatabase::Password);
+        assert_eq!(option_string(&options[2].1), "typed_password");
+    }
+
+    #[test]
+    fn typed_core_options_require_string_values() {
+        let cases = [
+            (OptionDatabase::Uri, "uri must be a string"),
+            (OptionDatabase::Username, "username must be a string"),
+            (OptionDatabase::Password, "password must be a string"),
+        ];
+
+        for (option, message) in cases {
+            let mut builder = Builder::new(Backend::DuckDBExtended);
+            let error = builder
+                .with_typed_option(option, OptionValue::Int(42))
+                .unwrap_err();
+
+            assert_eq!(error.status, Status::InvalidArguments);
+            assert_eq!(error.message, message);
+        }
+    }
+
+    #[test]
+    fn fingerprint_changes_when_sensitive_database_options_change() {
+        let mut left = Builder::new(Backend::Snowflake);
+        left.with_username("alice").with_password("old");
+        let left_options = left.into_iter().collect::<Vec<_>>();
+
+        let mut right = Builder::new(Backend::Snowflake);
+        right.with_username("alice").with_password("new");
+        let right_options = right.into_iter().collect::<Vec<_>>();
+
+        assert_ne!(
+            Builder::fingerprint(left_options.iter()),
+            Builder::fingerprint(right_options.iter())
+        );
+    }
+}

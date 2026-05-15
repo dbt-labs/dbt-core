@@ -620,6 +620,19 @@ pub fn download_zst_driver_file(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn remove_test_var(name: &str) {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "installability tests serialize env-var mutations with ENV_LOCK"
+        )]
+        unsafe {
+            env::remove_var(name);
+        }
+    }
 
     #[test]
     fn test_format_driver_url() {
@@ -650,6 +663,198 @@ mod tests {
             dbt_cache_dir.display(),
         ));
         assert_eq!(path, expected);
+    }
+
+    #[test]
+    fn driver_triplet_uses_platform_dll_prefixes_and_suffixes() {
+        let cases = [
+            (
+                DriverTriplet {
+                    os: LINUX_TARGET_OS,
+                    arch: "x86_64",
+                    version: "1",
+                },
+                "lib",
+                ".so",
+            ),
+            (
+                DriverTriplet {
+                    os: MACOS_TARGET_OS,
+                    arch: "aarch64",
+                    version: "1",
+                },
+                "lib",
+                ".dylib",
+            ),
+            (
+                DriverTriplet {
+                    os: WINDOWS_TARGET_OS,
+                    arch: "x86_64",
+                    version: "1",
+                },
+                "",
+                ".dll",
+            ),
+            (
+                DriverTriplet {
+                    os: "manylinux_2_28-linux-gnu",
+                    arch: "aarch64",
+                    version: "1",
+                },
+                "lib",
+                ".so",
+            ),
+        ];
+
+        for (triplet, prefix, suffix) in cases {
+            assert_eq!(triplet.dll_prefix(), prefix);
+            assert_eq!(triplet.dll_suffix(), suffix);
+        }
+    }
+
+    #[test]
+    fn installable_driver_set_matches_cdn_backends_by_default() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        remove_test_var("DISABLE_CDN_DRIVER_CACHE");
+
+        for backend in [
+            Backend::Snowflake,
+            Backend::BigQuery,
+            Backend::Postgres,
+            Backend::Databricks,
+            Backend::Redshift,
+            Backend::DuckDBExtended,
+            Backend::Salesforce,
+            Backend::Spark,
+            Backend::SQLServer,
+        ] {
+            assert!(
+                is_installable_driver(backend),
+                "{backend:?} should be CDN-installable"
+            );
+        }
+
+        for backend in [
+            Backend::Athena,
+            Backend::ClickHouse,
+            Backend::Exasol,
+            Backend::DatabricksODBC,
+            Backend::RedshiftODBC,
+            Backend::Generic {
+                library_name: "adbc_driver_sqlite",
+                entrypoint: Some(b"SqliteDriverInit"),
+            },
+        ] {
+            assert!(
+                !is_installable_driver(backend),
+                "{backend:?} should use system/manual loading"
+            );
+        }
+    }
+
+    #[test]
+    fn backend_names_and_current_platform_triplet_are_stable() {
+        assert_eq!(
+            backend_name_and_version(Backend::DuckDBExtended),
+            ("duckdb", DUCKDB_EXTENDED_DRIVER_VERSION)
+        );
+        assert_eq!(
+            backend_name_and_version(Backend::SQLServer),
+            ("mssql", MSSQLSERVER_DRIVER_VERSION)
+        );
+        assert_eq!(
+            backend_name_and_version(Backend::Postgres),
+            ("postgresql", POSTGRES_DRIVER_VERSION)
+        );
+
+        let (backend_name, triplet) = driver_parameters(Backend::Snowflake);
+        assert_eq!(backend_name, "snowflake");
+        assert_eq!(triplet.arch, env::consts::ARCH);
+        assert_eq!(triplet.version, SNOWFLAKE_DRIVER_VERSION);
+
+        #[cfg(target_os = "linux")]
+        assert_eq!(triplet.os, LINUX_TARGET_OS);
+        #[cfg(target_os = "macos")]
+        assert_eq!(triplet.os, MACOS_TARGET_OS);
+        #[cfg(target_os = "windows")]
+        assert_eq!(triplet.os, WINDOWS_TARGET_OS);
+    }
+
+    #[test]
+    fn checksum_lookup_requires_an_exact_backend_triplet() {
+        let (backend_name, version) = backend_name_and_version(Backend::Snowflake);
+        let triplet = DriverTriplet {
+            os: MACOS_TARGET_OS,
+            arch: "aarch64",
+            version,
+        };
+
+        assert!(find_expected_checksum(backend_name, triplet).is_some());
+
+        let unknown_version = DriverTriplet {
+            os: MACOS_TARGET_OS,
+            arch: "aarch64",
+            version: "0.0.0",
+        };
+        assert!(find_expected_checksum(backend_name, unknown_version).is_none());
+        assert!(find_expected_checksum("unknown", triplet).is_none());
+    }
+
+    #[test]
+    fn install_error_maps_io_status_and_preserves_context() {
+        let cases = [
+            (io::ErrorKind::NotFound, Status::NotFound),
+            (io::ErrorKind::PermissionDenied, Status::Unauthorized),
+            (io::ErrorKind::ConnectionRefused, Status::Unauthorized),
+            (io::ErrorKind::ConnectionReset, Status::Cancelled),
+            (io::ErrorKind::HostUnreachable, Status::IO),
+            (io::ErrorKind::NetworkUnreachable, Status::IO),
+            (io::ErrorKind::ConnectionAborted, Status::Cancelled),
+            (io::ErrorKind::NotConnected, Status::InvalidState),
+            (io::ErrorKind::AddrInUse, Status::IO),
+            (io::ErrorKind::AddrNotAvailable, Status::IO),
+            (io::ErrorKind::NetworkDown, Status::IO),
+            (io::ErrorKind::BrokenPipe, Status::IO),
+            (io::ErrorKind::AlreadyExists, Status::AlreadyExists),
+            (io::ErrorKind::WouldBlock, Status::IO),
+            (io::ErrorKind::NotADirectory, Status::InvalidArguments),
+            (io::ErrorKind::IsADirectory, Status::InvalidArguments),
+            (io::ErrorKind::DirectoryNotEmpty, Status::InvalidState),
+            (io::ErrorKind::ReadOnlyFilesystem, Status::InvalidState),
+            (io::ErrorKind::StaleNetworkFileHandle, Status::InvalidState),
+            (io::ErrorKind::InvalidInput, Status::InvalidArguments),
+            (io::ErrorKind::InvalidData, Status::InvalidData),
+            (io::ErrorKind::TimedOut, Status::Timeout),
+            (io::ErrorKind::WriteZero, Status::IO),
+            (io::ErrorKind::StorageFull, Status::IO),
+            (io::ErrorKind::NotSeekable, Status::IO),
+            (io::ErrorKind::FileTooLarge, Status::IO),
+            (io::ErrorKind::ResourceBusy, Status::IO),
+            (io::ErrorKind::ExecutableFileBusy, Status::IO),
+            (io::ErrorKind::Deadlock, Status::InvalidState),
+            (io::ErrorKind::TooManyLinks, Status::IO),
+            (io::ErrorKind::ArgumentListTooLong, Status::InvalidArguments),
+            (io::ErrorKind::Interrupted, Status::Cancelled),
+            (io::ErrorKind::Unsupported, Status::NotImplemented),
+            (io::ErrorKind::UnexpectedEof, Status::InvalidData),
+            (io::ErrorKind::OutOfMemory, Status::Internal),
+        ];
+
+        for (kind, status) in cases {
+            let error = InstallError::Io(io::Error::from(kind)).to_adbc_error();
+            assert_eq!(error.status, status, "{kind:?}");
+            assert!(error.message.contains("Driver installation error"));
+        }
+
+        let checksum = InstallError::ChecksumMismatch(
+            "expected".to_string(),
+            "actual".to_string(),
+            "https://example.invalid/driver.zst".to_string(),
+        )
+        .to_adbc_error();
+        assert_eq!(checksum.status, Status::InvalidData);
+        assert!(checksum.message.contains("expected expected"));
+        assert!(checksum.message.contains("got actual"));
     }
 
     /// Check that the expected SHA-256 checksum is found for each backend, version, target_os and

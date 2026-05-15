@@ -28,3 +28,71 @@ pub fn env_var_bool(var_name: &str) -> Result<bool> {
         None => Ok(false),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use adbc_core::error::Status;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn set_test_var(name: &str, value: &str) {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "env-var parser tests serialize mutations with ENV_LOCK"
+        )]
+        unsafe {
+            env::set_var(name, value);
+        }
+    }
+
+    fn remove_test_var(name: &str) {
+        unsafe {
+            env::remove_var(name);
+        }
+    }
+
+    #[test]
+    fn env_var_bool_accepts_missing_true_and_false_values() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let name = "DBT_XDBC_TEST_BOOL_VALUES";
+
+        remove_test_var(name);
+        assert!(!env_var_bool(name).unwrap());
+
+        for value in ["1", "TRUE", "yes", "On"] {
+            set_test_var(name, value);
+            assert!(
+                env_var_bool(name).unwrap(),
+                "{value:?} should parse as true"
+            );
+        }
+
+        for value in ["0", "FALSE", "no", "Off", ""] {
+            set_test_var(name, value);
+            assert!(
+                !env_var_bool(name).unwrap(),
+                "{value:?} should parse as false"
+            );
+        }
+
+        remove_test_var(name);
+    }
+
+    #[test]
+    fn env_var_bool_rejects_unknown_values() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let name = "DBT_XDBC_TEST_BOOL_INVALID";
+
+        set_test_var(name, "maybe");
+        let error = env_var_bool(name).unwrap_err();
+        remove_test_var(name);
+
+        assert_eq!(error.status, Status::InvalidArguments);
+        assert!(error.message.contains(name));
+        assert!(error.message.contains("maybe"));
+        assert!(error.message.contains("1, true, yes, on"));
+        assert!(error.message.contains("0, false, no, off, "));
+    }
+}
