@@ -200,6 +200,7 @@ def basic_compiled_dict():
             "docs": {"show": True},
             "access": "protected",
             "lookback": 1,
+            "latest_version_view": {},
         },
         "docs": {"show": True},
         "columns": {},

@@ -5,6 +5,7 @@ import threading
 import time
 from copy import deepcopy
 from dataclasses import asdict
+from dataclasses import replace as dataclass_replace
 from datetime import datetime, timezone
 from typing import (
     AbstractSet,
@@ -61,6 +62,7 @@ from dbt.events.types import (
     MicrobatchExecutionDebug,
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
+from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.graph.thread_pool import DbtThreadPool
 from dbt.hooks import get_hook_dict
@@ -230,6 +232,99 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
 
 
 class ModelRunner(CompileRunner[ModelNode]):
+    def _relation_identifier(self, relation: BaseRelation) -> str:
+        identifier = getattr(relation, "identifier", None)
+        if identifier is not None:
+            return identifier
+        return relation.name or ""
+
+    def _latest_version_view_identifier(
+        self,
+        model: ModelNode,
+        manifest: Manifest,
+        context: Dict[str, Any],
+    ) -> str:
+        lvv = getattr(model.config, "latest_version_view", None)
+        custom_alias_name = str(lvv.alias).strip() if (lvv and lvv.alias) else None
+        alias_macro = manifest.find_macro_by_name(
+            "generate_latest_version_view_alias", self.config.project_name, None
+        )
+        if alias_macro is not None:
+            return MacroGenerator(alias_macro, context, stack=context["context_macro_stack"])(
+                custom_alias_name, context["model"]
+            ).strip()
+        return custom_alias_name or model.name
+
+    def _should_create_latest_version_view(self, model: ModelNode) -> bool:
+        lvv = getattr(model.config, "latest_version_view", None)
+        if lvv is not None and lvv.enabled is not None:
+            # User explicitly set enabled — respect it regardless of flag
+            enabled = lvv.enabled
+        else:
+            # Not explicitly set — defer to project flag (default: False)
+            enabled = bool(getattr(get_flags(), "latest_version_view_enabled_by_default", False))
+        return (
+            isinstance(model, ModelNode)
+            and model.version is not None
+            and model.is_latest_version
+            and enabled
+        )
+
+    def _materialize_latest_version_view(
+        self,
+        manifest: Manifest,
+        model: ModelNode,
+        context: Dict[str, Any],
+        relations: List[BaseRelation],
+    ) -> List[BaseRelation]:
+        if not relations or not self._should_create_latest_version_view(model):
+            return []
+
+        source_relation = relations[0]
+        pointer_identifier = self._latest_version_view_identifier(model, manifest, context)
+
+        if self._relation_identifier(source_relation) == pointer_identifier:
+            raise DbtRuntimeError(
+                f"Cannot create latest version view: the latest version of '{model.name}' "
+                f"is already aliased to '{pointer_identifier}'. "
+                f"Set `latest_version_view: enabled: false` or remove the conflicting alias."
+            )
+
+        # Build a runtime-only synthetic node for the pointer view.
+        # Never added to the manifest — only used to generate context for the
+        # view materialization macro so it runs with the right target relation,
+        # SQL, and config (grants inherited, hooks and persist_docs cleared).
+        pointer_node = dataclass_replace(
+            model,
+            alias=pointer_identifier,
+            raw_code=f"select * from {source_relation}",
+            compiled_code=f"select * from {source_relation}",
+            compiled=True,
+            unique_id=f"{model.unique_id}__latest_version_view",
+            config=dataclass_replace(
+                model.config,
+                pre_hook=[],
+                post_hook=[],
+                persist_docs={},
+            ),
+        )
+
+        pointer_context = generate_runtime_model_context(pointer_node, self.config, manifest)
+
+        view_materialization = manifest.find_materialization_macro_by_name(
+            self.config.project_name, "view", self.adapter.type()
+        )
+        if view_materialization is None:
+            raise DbtInternalError("Missing view materialization for latest version view")
+
+        result = MacroGenerator(
+            view_materialization,
+            pointer_context,
+            stack=pointer_context["context_macro_stack"],
+        )()
+
+        return self._materialization_relations(result, pointer_node)
+
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"
@@ -316,49 +411,57 @@ class ModelRunner(CompileRunner[ModelNode]):
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
+        relations: List[BaseRelation] = []
         try:
             result = MacroGenerator(
                 materialization_macro, context, stack=context["context_macro_stack"]
             )()
+            relations = self._materialization_relations(result, model)
+            relations.extend(
+                self._materialize_latest_version_view(manifest, model, context, relations)
+            )
         finally:
             self.adapter.post_model_hook(context_config, hook_ctx)
 
-        for relation in self._materialization_relations(result, model):
+        for relation in relations:
             self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self._build_run_model_result(model, context)
 
-    def execute(self, model, manifest) -> RunResult:
-        context = generate_runtime_model_context(model, self.config, manifest)
-
+    def _get_materialization_macro(self, model: ModelNode, manifest: Manifest) -> MacroProtocol:
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, model.get_materialization(), self.adapter.type()
         )
-
         if materialization_macro is None:
             raise MissingMaterializationError(
                 materialization=model.get_materialization(), adapter_type=self.adapter.type()
             )
+        supported_languages = getattr(materialization_macro, "supported_languages", None)
+        if supported_languages is not None:
+            if model.language not in supported_languages:
+                str_langs = [str(lang) for lang in supported_languages]
+                raise DbtValidationError(
+                    f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
+                    f'got "{model.language}"'
+                )
+        return materialization_macro
+
+    def execute(self, model, manifest) -> RunResult:
+        context = generate_runtime_model_context(model, self.config, manifest)
 
         if "config" not in context:
             raise DbtInternalError(
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
-        context_config = context["config"]
 
-        mat_has_supported_langs = hasattr(materialization_macro, "supported_languages")
-        model_lang_supported = model.language in materialization_macro.supported_languages
-        if mat_has_supported_langs and not model_lang_supported:
-            str_langs = [str(lang) for lang in materialization_macro.supported_languages]
-            raise DbtValidationError(
-                f'Materialization "{materialization_macro.name}" only supports languages {str_langs}; '
-                f'got "{model.language}"'
-            )
+        materialization_macro = self._get_materialization_macro(model, manifest)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
-        hook_ctx = self.adapter.pre_model_hook(context_config)
-
-        return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
+        return self._execute_model(
+            hook_ctx, context["config"], model, context, materialization_macro, manifest
+        )
 
 
 class MicrobatchBatchRunner(ModelRunner):
@@ -584,6 +687,7 @@ class MicrobatchBatchRunner(ModelRunner):
         model: ModelNode,
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
+        manifest: Manifest,
     ) -> RunResult:
         try:
             batch_result = self._execute_microbatch_materialization(
@@ -852,6 +956,16 @@ class MicrobatchModelRunner(ModelRunner):
 
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
+
+        pointer_relations: List[BaseRelation] = []
+        if result.status == RunStatus.Success and self._should_create_latest_version_view(model):
+            context = generate_runtime_model_context(model, self.config, manifest)
+            source_relations = [self.adapter.Relation.create_from(self.config, model)]  # type: ignore[arg-type]
+            pointer_relations = self._materialize_latest_version_view(
+                manifest, model, context, source_relations
+            )
+        for relation in pointer_relations:
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return result
 
