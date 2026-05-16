@@ -293,6 +293,27 @@ pub trait MetadataAdapter: Send + Sync {
         )
     }
 
+    /// Get freshness of relations, honoring per-relation overrides
+    /// (`loaded_at_field`, `loaded_at_query`).
+    ///
+    /// Default implementation falls back to the bulk `freshness` path and
+    /// silently ignores overrides — adapters that haven't ported the
+    /// override path yet retain today's behavior. Adapters that override this
+    /// method are expected to partition: bulk INFORMATION_SCHEMA query for the
+    /// non-override subset, one targeted query per override (mirroring dbt-core's
+    /// run-cache plugin).
+    ///
+    /// `overrides` is keyed by `BaseRelation::semantic_fqn()` and is a subset of
+    /// the relations passed in `relations`.
+    fn freshness_with_overrides<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        _overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        self.freshness(relations, token)
+    }
+
     /// Check whether each relation exists, keyed by semantic FQN.
     ///
     /// The default implementation uses `list_relations_in_parallel`, which is

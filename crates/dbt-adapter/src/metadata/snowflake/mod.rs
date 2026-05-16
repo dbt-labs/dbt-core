@@ -198,6 +198,44 @@ fn build_relations_from_show_objects(
     Ok(relations)
 }
 
+/// Internal result type for the freshness_with_overrides MapReduce pass.
+enum TaskResult {
+    /// Result of the bulk INFORMATION_SCHEMA call covering all non-override
+    /// relations: pre-built per-relation freshness map.
+    Bulk(BTreeMap<String, MetadataFreshness>),
+    /// Result of one per-source override query: `(semantic_fqn, last_modified_epoch_ms)`.
+    /// `None` epoch = no rows / null timestamp.
+    Override(String, Option<i64>),
+}
+
+/// Substitute `{{ this }}` (with optional surrounding whitespace) in the given
+/// SQL template with the rendered relation FQN. Mirrors the dbt-core plugin's
+/// `loaded_at_query` rendering, which in practice only requires `this`.
+fn render_this(template: &str, rendered_relation: &str) -> String {
+    // Simple substring replacement that handles both `{{ this }}` and `{{this}}`
+    // forms, with arbitrary internal whitespace. Avoids a full Jinja env for
+    // what is effectively a single-placeholder substitution in user-supplied SQL.
+    let mut out = String::with_capacity(template.len());
+    let bytes = template.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            // Find matching `}}`.
+            if let Some(end_offset) = template[i + 2..].find("}}") {
+                let inner = &template[i + 2..i + 2 + end_offset];
+                if inner.trim() == "this" {
+                    out.push_str(rendered_relation);
+                    i += 2 + end_offset + 2;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
@@ -806,6 +844,187 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
+    }
+
+    /// Honors per-source `loaded_at_field` / `loaded_at_query` config. Mirrors the
+    /// dbt-core run-cache plugin: relations without overrides go through the bulk
+    /// INFORMATION_SCHEMA path; each override runs as one targeted query in
+    /// parallel. Net call count: 1 bulk (over the non-override subset) + N
+    /// override queries — same shape as the plugin.
+    fn freshness_with_overrides<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        // Partition relations: those with overrides run their own targeted query;
+        // the rest go through the existing bulk INFORMATION_SCHEMA path.
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+
+        // Run the bulk and per-override queries through one MapReduce pass so
+        // they share the same connection-factory threadpool — same parallelism
+        // model as the plugin.
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        // Keys: enum distinguishing the bulk pseudo-task from per-override tasks.
+        #[derive(Clone)]
+        enum Task {
+            Bulk(Vec<Arc<dyn BaseRelation>>),
+            Override(Arc<dyn BaseRelation>, FreshnessOverride),
+        }
+
+        let mut tasks: Vec<Task> = Vec::new();
+        if !bulk_relations.is_empty() {
+            tasks.push(Task::Bulk(bulk_relations));
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(Task::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection, task: &Task| -> AdapterResult<TaskResult> {
+            match task {
+                Task::Bulk(bulk) => {
+                    let (where_clauses_by_database, relations_by_database) =
+                        build_relation_clauses(bulk)?;
+                    let mut acc: Acc = BTreeMap::new();
+                    for (database, where_clauses) in where_clauses_by_database {
+                        let sql = format!(
+                            "SELECT
+                            table_schema,
+                            table_name,
+                            last_altered,
+                            (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
+                         FROM {}.INFORMATION_SCHEMA.TABLES
+                         WHERE {}",
+                            database,
+                            where_clauses.join(" OR ")
+                        );
+                        let ctx = QueryCtx::default()
+                            .with_desc("Extracting freshness from information schema");
+                        let (_resp, agate_table) = adapter_for_map.query(
+                            &ctx,
+                            &mut *conn,
+                            &sql,
+                            None,
+                            token_clone.clone(),
+                        )?;
+                        let batch = agate_table.original_record_batch();
+                        let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+                        let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+                        let timestamps =
+                            batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+                        let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+                        let relations = &relations_by_database[&database];
+                        for i in 0..batch.num_rows() {
+                            let schema = schemas.value(i);
+                            let table = tables.value(i);
+                            let timestamp = timestamps.value(i);
+                            let is_view = is_views.value(i);
+                            for table_name in find_matching_relation(schema, table, relations)? {
+                                acc.insert(
+                                    table_name,
+                                    MetadataFreshness::from_millis(timestamp, is_view)?,
+                                );
+                            }
+                        }
+                    }
+                    Ok(TaskResult::Bulk(acc))
+                }
+                Task::Override(relation, ovr) => {
+                    let semantic_fqn = relation.semantic_fqn();
+                    let rendered_relation = relation.render_self_as_str();
+                    let sql = match ovr {
+                        FreshnessOverride::Query(query) => render_this(query, &rendered_relation),
+                        FreshnessOverride::Field(field) => format!(
+                            "SELECT max({}) AS last_modified FROM {}",
+                            field, rendered_relation
+                        ),
+                    };
+                    let ctx = QueryCtx::default()
+                        .with_desc("Source freshness override (loaded_at_field/query)");
+                    let (_resp, agate_table) =
+                        adapter_for_map.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
+                    let batch = agate_table.original_record_batch();
+                    if batch.num_rows() == 0 || batch.num_columns() == 0 {
+                        return Ok(TaskResult::Override(semantic_fqn, None));
+                    }
+                    // Snowflake returns timestamps as ms precision; fall through
+                    // other precisions if the column type differs.
+                    let col = batch.column(0);
+                    let epoch_ms = if let Some(ts) =
+                        col.as_any().downcast_ref::<TimestampMillisecondArray>()
+                    {
+                        ts.value(0)
+                    } else if let Some(ts) = col
+                        .as_any()
+                        .downcast_ref::<arrow_array::TimestampNanosecondArray>()
+                    {
+                        ts.value(0) / 1_000_000
+                    } else if let Some(ts) = col
+                        .as_any()
+                        .downcast_ref::<arrow_array::TimestampMicrosecondArray>()
+                    {
+                        ts.value(0) / 1_000
+                    } else if let Some(ts) = col
+                        .as_any()
+                        .downcast_ref::<arrow_array::TimestampSecondArray>()
+                    {
+                        ts.value(0) * 1_000
+                    } else {
+                        return Err(AdapterError::new(
+                            AdapterErrorKind::UnexpectedResult,
+                            format!(
+                                "freshness override returned non-timestamp first column for {}",
+                                semantic_fqn
+                            ),
+                        ));
+                    };
+                    Ok(TaskResult::Override(semantic_fqn, Some(epoch_ms)))
+                }
+            }
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: Task,
+                             res: AdapterResult<TaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match res? {
+                TaskResult::Bulk(bulk_acc) => {
+                    acc.extend(bulk_acc);
+                }
+                TaskResult::Override(name, Some(epoch_ms)) => {
+                    // Sources can't be views, so is_view=false. The downstream
+                    // freshness consumer only reads `last_altered`.
+                    acc.insert(name, MetadataFreshness::from_millis(epoch_ms, false)?);
+                }
+                TaskResult::Override(_, None) => {
+                    // No rows / null timestamp → treat as "no freshness info".
+                    // Downstream uses absence-from-map as the signal.
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql

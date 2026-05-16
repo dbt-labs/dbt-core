@@ -119,6 +119,19 @@ pub struct MetadataFreshness {
     pub is_view: bool,
 }
 
+/// Per-source freshness override. Mirrors the dbt-core plugin's `loaded_at_query` /
+/// `loaded_at_field` handling. When set on a source, the metadata adapter must
+/// execute a targeted query for that source instead of including it in the bulk
+/// INFORMATION_SCHEMA freshness scan.
+#[derive(Clone, Debug)]
+pub enum FreshnessOverride {
+    /// Custom SQL returning a single timestamp scalar. `{{ this }}` (or `{{this}}`)
+    /// is substituted with the source's rendered FQN before execution.
+    Query(String),
+    /// Column name. The metadata adapter runs `SELECT max({field}) FROM {relation}`.
+    Field(String),
+}
+
 impl MetadataFreshness {
     /// Create from seconds
     pub fn from_secs(timestamp: i64, is_view: bool) -> AdapterResult<Self> {
