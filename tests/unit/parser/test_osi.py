@@ -4,10 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dbt.contracts.files import FileHash, FilePath, OsiSourceFile, ParseFileType
 from dbt.events.types import MFConverterIssue
 from dbt.exceptions import ParsingError
 from dbt.parser.osi import (
     _build_model_lookup,
+    _clear_osi_attributed_nodes,
     _scan_osi_directory,
     load_osi_into_manifest,
 )
@@ -267,3 +269,108 @@ class TestLoadOsiIntoManifest:
         assert event_data.element_name == "revenue"
         assert event_data.converter_name == "OSIToMSIConverter"
         assert event_data.issue_type == ConverterIssueType.CONVERSION_METRIC_DROPPED.value
+
+
+def _make_osi_source_file(project_root: str, rel_path: str, pkg: str) -> OsiSourceFile:
+    parts = rel_path.split("/", 1)
+    fp = FilePath(
+        searched_path=parts[0],
+        relative_path=parts[1] if len(parts) > 1 else "",
+        modification_time=0.0,
+        project_root=project_root,
+    )
+    return OsiSourceFile(
+        path=fp,
+        checksum=FileHash.from_contents("{}"),
+        parse_file_type=ParseFileType.OSI,
+        project_name=pkg,
+    )
+
+
+class TestOsiAttribution:
+    def test_attribution_populated_after_load(self, tmp_path):
+        (tmp_path / "OSI").mkdir()
+        (tmp_path / "OSI" / "orders.json").write_text(_osi_json())
+        manifest = make_manifest(nodes=[_orders_model()])
+        osi_sf = _make_osi_source_file(str(tmp_path), "OSI/orders.json", PKG)
+        file_id = osi_sf.file_id
+        manifest.files[file_id] = osi_sf
+
+        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+
+        sf = manifest.files[file_id]
+        assert isinstance(sf, OsiSourceFile)
+        assert f"semantic_model.{PKG}.orders" in sf.semantic_models
+
+    def test_clear_osi_attributed_nodes_removes_semantic_models(self, tmp_path):
+        manifest = make_manifest(nodes=[_orders_model()])
+        osi_sf = _make_osi_source_file(str(tmp_path), "OSI/orders.json", PKG)
+        uid = f"semantic_model.{PKG}.orders"
+        osi_sf.semantic_models.append(uid)
+
+        from tests.unit.utils.manifest import make_semantic_model
+
+        sm = make_semantic_model(PKG, "orders", model=_orders_model())
+        # OSI-sourced nodes always have original_file_path under OSI/
+        sm = sm.__class__(**{**sm.__dict__, "original_file_path": "OSI/orders.json"})
+        manifest.semantic_models[uid] = sm
+        manifest.files[osi_sf.file_id] = osi_sf
+
+        _clear_osi_attributed_nodes(manifest)
+
+        assert uid not in manifest.semantic_models
+        assert osi_sf.semantic_models == []
+
+    def test_clear_osi_attributed_nodes_resets_lists(self, tmp_path):
+        manifest = make_manifest()
+        osi_sf = _make_osi_source_file(str(tmp_path), "OSI/orders.json", PKG)
+        osi_sf.semantic_models.append("semantic_model.pkg.x")
+        osi_sf.metrics.append("metric.pkg.y")
+        manifest.files[osi_sf.file_id] = osi_sf
+
+        _clear_osi_attributed_nodes(manifest)
+
+        assert osi_sf.semantic_models == []
+        assert osi_sf.metrics == []
+
+    def test_clear_osi_is_noop_on_non_osi_files(self, tmp_path):
+        from dbt.contracts.files import SchemaSourceFile
+
+        manifest = make_manifest()
+        uid = "semantic_model.pkg.x"
+        from tests.unit.utils.manifest import make_semantic_model
+
+        sm = make_semantic_model(PKG, "x", model=_orders_model())
+        manifest.semantic_models[uid] = sm
+        manifest.files["pkg://models/foo.yml"] = MagicMock(spec=SchemaSourceFile)
+
+        _clear_osi_attributed_nodes(manifest)
+
+        assert uid in manifest.semantic_models
+
+    def test_load_clears_before_reinject(self, tmp_path):
+        (tmp_path / "OSI").mkdir()
+        (tmp_path / "OSI" / "orders.json").write_text(_osi_json())
+        manifest = make_manifest(nodes=[_orders_model()])
+
+        osi_sf = _make_osi_source_file(str(tmp_path), "OSI/orders.json", PKG)
+        uid = f"semantic_model.{PKG}.orders"
+
+        from tests.unit.utils.manifest import make_semantic_model
+
+        stale_sm = make_semantic_model(PKG, "orders", model=_orders_model())
+        stale_sm = stale_sm.__class__(
+            **{
+                **stale_sm.__dict__,
+                "unique_id": uid,
+                "original_file_path": "OSI/orders.json",
+            }
+        )
+        manifest.semantic_models[uid] = stale_sm
+        osi_sf.semantic_models.append(uid)
+        manifest.files[osi_sf.file_id] = osi_sf
+
+        load_osi_into_manifest(str(tmp_path), PKG, manifest)
+
+        assert uid in manifest.semantic_models
+        assert manifest.files[osi_sf.file_id].semantic_models == [uid]

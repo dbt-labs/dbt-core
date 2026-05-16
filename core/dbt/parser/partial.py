@@ -202,7 +202,14 @@ class PartialParsing:
             self.delete_from_saved(file_id)
         for file_id in self.file_diff["changed"]:
             self.processing_file = file_id
-            self.update_in_saved(file_id)
+            if self.new_files[file_id].parse_file_type == ParseFileType.OSI:
+                # OSI has no dbt parser; just update the saved entry so the next
+                # partial parse sees the correct checksum. load_osi_into_manifest
+                # handles node re-injection on every parse.
+                self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                fire_event(PartialParsingFile(operation="updated", file_id=file_id))
+            else:
+                self.update_in_saved(file_id)
         return self.project_parser_files
 
     # Add the file to the project parser dictionaries to schedule parsing
@@ -245,8 +252,9 @@ class PartialParsing:
         if source_file.parse_file_type == ParseFileType.Schema:
             self.handle_added_schema_file(source_file)
         self.saved_files[file_id] = source_file
-        # update pp_files to parse
-        self.add_to_pp_files(source_file)
+        # update pp_files to parse (OSI has no parser; handled by load_osi_into_manifest)
+        if source_file.parse_file_type != ParseFileType.OSI:
+            self.add_to_pp_files(source_file)
         fire_event(PartialParsingFile(operation="added", file_id=file_id))
 
     def handle_added_schema_file(self, source_file):
@@ -284,6 +292,12 @@ class PartialParsing:
         # nodes, and update pp_files to parse unless the
         # file creating those nodes has also been deleted
         saved_source_file = self.saved_files[file_id]
+
+        # OSI files have no parser; nodes are cleared by load_osi_into_manifest.
+        if saved_source_file.parse_file_type == ParseFileType.OSI:
+            self.saved_manifest.files.pop(file_id)
+            fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
+            return
 
         # SQL file: models, seeds, snapshots, analyses, tests: SQL files, except
         # macros/tests
@@ -1340,7 +1354,7 @@ class PartialParsing:
         # Create a list of file_ids for source_files that need to be reparsed, and
         # a dictionary of file_ids to yaml_keys to names.
         for source_file in self.saved_files.values():
-            if source_file.parse_file_type == ParseFileType.Fixture:
+            if source_file.parse_file_type in (ParseFileType.Fixture, ParseFileType.OSI):
                 continue
             file_id = source_file.file_id
             if not source_file.env_vars:

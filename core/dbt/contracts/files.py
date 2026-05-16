@@ -25,6 +25,7 @@ class ParseFileType(StrEnum):
     Hook = "hook"  # not a real filetype, from dbt_project.yml
     Fixture = "fixture"
     Function = "function"
+    OSI = "osi"  # Open Semantic Interchange files; loaded by load_osi_into_manifest
 
 
 parse_file_type_to_parser = {
@@ -138,6 +139,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             sf = SchemaSourceFile.from_dict(dct)
         elif dct["parse_file_type"] == "fixture":
             sf = FixtureSourceFile.from_dict(dct)
+        elif dct["parse_file_type"] == "osi":
+            sf = OsiSourceFile.from_dict(dct)
         else:
             sf = SourceFile.from_dict(dct)
         return sf
@@ -412,4 +415,10 @@ class FixtureSourceFile(BaseSourceFile):
             self.unit_tests.append(value)
 
 
-AnySourceFile = Union[SchemaSourceFile, SourceFile, FixtureSourceFile]
+@dataclass
+class OsiSourceFile(BaseSourceFile):
+    semantic_models: List[str] = field(default_factory=list)
+    metrics: List[str] = field(default_factory=list)
+
+
+AnySourceFile = Union[SchemaSourceFile, SourceFile, FixtureSourceFile, OsiSourceFile]

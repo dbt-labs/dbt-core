@@ -1,4 +1,5 @@
 import dataclasses
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -6,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 from metricflow.converters.osi_to_msi import OSIToMSIConverter
 
 from dbt.constants import OSI_DIRECTORY_NAME, SUPPORTED_OSI_VERSIONS
+from dbt.contracts.files import OsiSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import Metric, ModelNode, SemanticModel
 from dbt.events.types import MFConverterIssue
@@ -18,9 +20,12 @@ from dbt_common.events.functions import fire_event
 class _OsiFileContext:
     path: Path
     rel_path: str
-    original_file_path: str
     now: float
     package_name: str
+
+    @property
+    def file_id(self) -> str:
+        return f"{self.package_name}://{self.rel_path}"
 
 
 def _scan_osi_directory(project_root: str) -> List[Path]:
@@ -47,7 +52,7 @@ def _inject_one_semantic_model(
     ctx: _OsiFileContext,
     model_lookup: Dict[Tuple[str, str, str], ModelNode],
     pydantic_sm: Any,
-) -> None:
+) -> str:
     nr = pydantic_sm.node_relation
     key = (
         (nr.alias or "").lower(),
@@ -78,7 +83,7 @@ def _inject_one_semantic_model(
             "resource_type": NodeType.SemanticModel,
             "package_name": ctx.package_name,
             "path": ctx.rel_path,
-            "original_file_path": ctx.original_file_path,
+            "original_file_path": ctx.rel_path,
             "unique_id": unique_id,
             "fqn": [ctx.package_name, pydantic_sm.name],
             "model": f"ref('{matched.name}')",
@@ -88,13 +93,14 @@ def _inject_one_semantic_model(
         }
     )
     manifest.semantic_models[unique_id] = SemanticModel.from_dict(d)
+    return unique_id
 
 
 def _inject_one_metric(
     manifest: Manifest,
     ctx: _OsiFileContext,
     pydantic_metric: Any,
-) -> None:
+) -> str:
     unique_id = f"metric.{ctx.package_name}.{pydantic_metric.name}"
     if unique_id in manifest.metrics:
         raise ParsingError(
@@ -110,7 +116,7 @@ def _inject_one_metric(
             "resource_type": NodeType.Metric,
             "package_name": ctx.package_name,
             "path": ctx.rel_path,
-            "original_file_path": ctx.original_file_path,
+            "original_file_path": ctx.rel_path,
             "unique_id": unique_id,
             "fqn": [ctx.package_name, pydantic_metric.name],
             "description": pydantic_metric.description or "",
@@ -119,6 +125,7 @@ def _inject_one_metric(
         }
     )
     manifest.metrics[unique_id] = Metric.from_dict(d)
+    return unique_id
 
 
 def _process_osi_file(
@@ -150,10 +157,40 @@ def _process_osi_file(
             )
         )
 
-    for pydantic_sm in result.output.semantic_models:
-        _inject_one_semantic_model(manifest, ctx, model_lookup, pydantic_sm)
-    for pydantic_metric in result.output.metrics:
-        _inject_one_metric(manifest, ctx, pydantic_metric)
+    sm_ids = [
+        _inject_one_semantic_model(manifest, ctx, model_lookup, sm)
+        for sm in result.output.semantic_models
+    ]
+    metric_ids = [_inject_one_metric(manifest, ctx, m) for m in result.output.metrics]
+    _attribute_to_source_file(manifest, ctx.file_id, sm_ids, metric_ids)
+
+
+def _attribute_to_source_file(
+    manifest: Manifest,
+    file_id: str,
+    sm_ids: List[str],
+    metric_ids: List[str],
+) -> None:
+    sf = manifest.files.get(file_id)
+    if isinstance(sf, OsiSourceFile):
+        sf.semantic_models.extend(sm_ids)
+        sf.metrics.extend(metric_ids)
+
+
+def _clear_osi_attributed_nodes(manifest: Manifest) -> None:
+    osi_pfx = OSI_DIRECTORY_NAME + os.sep
+    for uid in [
+        u for u, n in manifest.semantic_models.items() if n.original_file_path.startswith(osi_pfx)
+    ]:
+        del manifest.semantic_models[uid]
+    for uid in [
+        u for u, n in manifest.metrics.items() if n.original_file_path.startswith(osi_pfx)
+    ]:
+        del manifest.metrics[uid]
+    for sf in manifest.files.values():
+        if isinstance(sf, OsiSourceFile):
+            sf.semantic_models.clear()
+            sf.metrics.clear()
 
 
 def load_osi_into_manifest(
@@ -161,6 +198,10 @@ def load_osi_into_manifest(
     package_name: str,
     manifest: Manifest,
 ) -> None:
+    # Clear any OSI-attributed nodes from a prior load (e.g., partial parse replay).
+    # Must run before the early-return so deleted OSI files don't leave stale nodes.
+    _clear_osi_attributed_nodes(manifest)
+
     files = _scan_osi_directory(project_root)
     if not files:
         return
@@ -173,7 +214,6 @@ def load_osi_into_manifest(
         ctx = _OsiFileContext(
             path=path,
             rel_path=str(path.relative_to(project_root_path)),
-            original_file_path=str(path),
             now=now,
             package_name=package_name,
         )
