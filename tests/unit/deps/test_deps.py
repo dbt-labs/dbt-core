@@ -1,3 +1,4 @@
+import os
 import unittest
 from argparse import Namespace
 from copy import deepcopy
@@ -844,18 +845,32 @@ class TestPackageSpec(unittest.TestCase):
         self.assertEqual(resolved[1].name, "dbt-labs-test/b")
         self.assertEqual(resolved[1].version, "0.2.1")
 
-    def test_private_package_raise_error(self):
-        package_config = PackageConfig.from_dict(
-            {
-                "packages": [
-                    {"private": "dbt-labs-test/a", "subdirectory": "foo-bar"},
-                ],
-            }
-        )
-        with self.assertRaisesRegex(
-            dbt.exceptions.DependencyError, "Cannot resolve private package"
-        ):
-            resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
+    def test_private_package_resolves(self):
+        # Regression sentinel: private: package must dispatch to PrivateUnpinnedPackage,
+        # not raise a "git provider integration is missing" stub error.
+        import dbt.deps.private_package as _pp_mod
+        from dbt.deps.private_package import PrivateUnpinnedPackage
+        from dbt.deps.resolver import PackageListing
+
+        old_helper = _pp_mod.PRIVATE_PACKAGE_HELPER
+        _pp_mod.PRIVATE_PACKAGE_HELPER = None
+        os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"] = "[]"
+        try:
+            package_config = PackageConfig.from_dict(
+                {
+                    "packages": [
+                        {"private": "dbt-labs-test/a", "subdirectory": "foo-bar"},
+                    ],
+                }
+            )
+            listing = PackageListing.from_contracts(package_config.packages)
+            self.assertEqual(len(listing.packages), 1)
+            pkg = next(iter(listing.packages.values()))
+            self.assertIsInstance(pkg, PrivateUnpinnedPackage)
+            self.assertEqual(pkg.git, "git@github.com:dbt-labs-test/a.git")
+        finally:
+            del os.environ["DBT_ENV_PRIVATE_GIT_PROVIDER_INFO"]
+            _pp_mod.PRIVATE_PACKAGE_HELPER = old_helper
 
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(
