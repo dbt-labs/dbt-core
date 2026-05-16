@@ -114,6 +114,7 @@ from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
+from dbt.parser.osi import load_osi_into_manifest
 from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.parser.read_files import (
     FileDiff,
@@ -481,6 +482,13 @@ class ManifestLoader:
             external_nodes_modified = self.inject_external_nodes()
             if external_nodes_modified:
                 self.manifest.rebuild_ref_lookup()
+
+            # Must run after model parsing (lookup complete) and before process_refs.
+            load_osi_into_manifest(
+                self.root_project.project_root,
+                self.root_project.project_name,
+                self.manifest,
+            )
 
             # update the refs, sources, docs and metrics depends_on.nodes
             # These check the created_at time on the nodes to
