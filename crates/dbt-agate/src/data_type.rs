@@ -270,10 +270,118 @@ mod tests {
     use super::*;
     use minijinja::Environment;
 
+    #[derive(Debug)]
+    struct AcceptingDataType;
+
+    static NO_NULL_VALUES: NullValues<'static> = NullValues::Borrowed(&[]);
+
+    impl DataTypeRepr for AcceptingDataType {
+        fn null_values(&self) -> &NullValues<'static> {
+            &NO_NULL_VALUES
+        }
+
+        fn type_name(&self) -> &str {
+            "Accepting"
+        }
+
+        fn cast(&self, d: &dyn DataTypeRepr) -> Result<Value, Error> {
+            Ok(Value::from(format!("casted {}", d.type_name())))
+        }
+
+        fn eq_repr(&self, other: &dyn DataTypeRepr) -> bool {
+            self.type_name() == other.type_name()
+        }
+    }
+
+    impl Object for &'static dyn DataTypeRepr {}
+
+    fn accepting_repr() -> &'static dyn DataTypeRepr {
+        Box::leak(Box::new(AcceptingDataType))
+    }
+
     fn jsonify(dt: &Arc<DataType>, value: Value) -> Value {
         let env = Environment::new();
         let state = env.empty_state();
         dt.call_method(&state, "jsonify", &[value], &[]).unwrap()
+    }
+
+    fn csvify(dt: &Arc<DataType>, value: Value) -> Value {
+        let env = Environment::new();
+        let state = env.empty_state();
+        dt.call_method(&state, "csvify", &[value], &[]).unwrap()
+    }
+
+    #[test]
+    fn null_values_match_case_insensitively_for_borrowed_and_owned_values() {
+        let borrowed = NullValues::Borrowed(&DEFAULT_NULL_VALUES);
+        assert!(borrowed.contains(&Value::from("NA")));
+        assert!(borrowed.contains(&Value::from(".")));
+        assert!(!borrowed.contains(&Value::from("available")));
+
+        let owned = NullValues::Owned(vec![Value::from("Missing"), Value::from(0)]);
+        assert!(owned.contains(&Value::from("missing")));
+        assert!(owned.contains(&Value::from("0")));
+        assert!(owned.contains(&Value::from(0)));
+        assert!(!owned.contains(&Value::from(1)));
+    }
+
+    #[test]
+    fn data_type_default_cast_csvify_and_jsonify_are_observable() {
+        let text = Arc::new(DataType::new("Text".to_string()));
+        let number = DataType::new("Number".to_string());
+        let other = DataTypeReprImpl::new("Number".to_string());
+
+        assert!(!text.test(&other));
+        let err = text.cast(&other).unwrap_err();
+        assert!(err.to_string().contains("cast() method not implemented"));
+
+        assert_eq!(text.csvify(&Value::from("abc")), Value::from("abc"));
+        assert_eq!(text.csvify(&Value::from(42)), Value::from("42"));
+        assert_eq!(text.csvify(&Value::from(())), Value::from(()));
+        assert_eq!(text.csvify(&Value::UNDEFINED), Value::from(()));
+
+        assert_eq!(text.jsonify(&Value::from("abc")), Value::from("abc"));
+        assert_eq!(text.jsonify(&Value::from(())), Value::from(()));
+        assert_eq!(text.jsonify(&Value::UNDEFINED), Value::from(()));
+        assert_eq!(number.jsonify(&Value::from(42)), Value::from(42));
+        assert_eq!(
+            DataType::new("Boolean".to_string()).jsonify(&Value::from(true)),
+            Value::from(true)
+        );
+    }
+
+    #[test]
+    fn data_type_default_test_jsonify_and_object_dispatch_are_observable() {
+        let accepting = Arc::new(DataType(Arc::new(AcceptingDataType)));
+        let arg = accepting_repr();
+
+        assert!(!arg.null_values().contains(&Value::from("not-null")));
+        assert!(arg.test(arg));
+        assert!(accepting.test(arg));
+        assert_eq!(
+            accepting.cast(arg).unwrap(),
+            Value::from("casted Accepting")
+        );
+
+        assert_eq!(arg.jsonify(&Value::from(42)), Value::from("42"));
+        assert_eq!(arg.jsonify(&Value::from(())), Value::from(()));
+        assert_eq!(arg.jsonify(&Value::UNDEFINED), Value::from(()));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+        let arg_value = Value::from_object(arg);
+        assert_eq!(
+            accepting
+                .call_method(&state, "test", std::slice::from_ref(&arg_value), &[])
+                .unwrap(),
+            Value::from(true)
+        );
+        assert_eq!(
+            accepting
+                .call_method(&state, "cast", &[arg_value], &[])
+                .unwrap(),
+            Value::from("casted Accepting")
+        );
     }
 
     #[test]
@@ -302,5 +410,13 @@ mod tests {
         let dt = Arc::new(DataType::new("Text".to_string()));
         let result = jsonify(&dt, Value::from(()));
         assert_eq!(result, Value::from(()));
+    }
+
+    #[test]
+    fn test_data_type_csvify() {
+        let dt = Arc::new(DataType::new("Text".to_string()));
+        assert_eq!(csvify(&dt, Value::from("hello")), Value::from("hello"));
+        assert_eq!(csvify(&dt, Value::from(42)), Value::from("42"));
+        assert_eq!(csvify(&dt, Value::from(())), Value::from(()));
     }
 }

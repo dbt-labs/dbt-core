@@ -1184,7 +1184,7 @@ mod tests {
     use arrow::csv::reader::ReaderBuilder;
     use arrow::datatypes::{DataType, Field, Int32Type, Schema};
     use arrow::record_batch::RecordBatch;
-    use arrow_array::{Array, ListArray, RecordBatchOptions};
+    use arrow_array::{Array, ListArray, RecordBatchOptions, UInt64Array};
     use arrow_schema::Fields;
     use minijinja::Environment;
     use minijinja::value::ValueMap;
@@ -1290,6 +1290,142 @@ mod tests {
         let rows = table.rows();
         let values = rows.values();
         assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn test_table_repr_single_column_and_select_rows_bounds() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+
+        let country = table.repr.single_column_table(1).unwrap();
+        assert_eq!(country.num_columns(), 1);
+        assert_eq!(country.num_rows(), 3);
+        assert_eq!(country.column_name(0).unwrap(), "country");
+        assert!(table.repr.single_column_table(99).is_none());
+
+        let selected_indices = UInt64Array::new(vec![0, 2].into(), None);
+        let selected = table.repr.select_rows(&selected_indices, None).unwrap();
+        assert_eq!(selected.num_rows(), 2);
+        assert_eq!(selected.cell(0, 1), Some(Value::from("Brazil")));
+        assert_eq!(selected.cell(1, 1), Some(Value::from("Canada")));
+
+        let out_of_bounds = UInt64Array::new(vec![99].into(), None);
+        assert!(table.repr.select_rows(&out_of_bounds, None).is_err());
+    }
+
+    #[test]
+    fn test_table_columns_and_object_properties() {
+        let table = AgateTable::new_with_single_row_name(simple_record_batch(), "row-name");
+        let table_value = table.into_value();
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        let column_names = table_value.get_attr("column_names").unwrap();
+        assert_eq!(column_names.len(), Some(2));
+        assert_eq!(
+            column_names.get_item_by_index(0).unwrap(),
+            Value::from("id")
+        );
+        assert_eq!(
+            column_names.get_item_by_index(1).unwrap(),
+            Value::from("country")
+        );
+
+        let column_types = table_value.get_attr("column_types").unwrap();
+        assert_eq!(column_types.len(), Some(2));
+        assert_eq!(
+            column_types
+                .get_item_by_index(0)
+                .unwrap()
+                .downcast_object_ref::<crate::DataType>()
+                .unwrap()
+                .type_name(),
+            "Number"
+        );
+        assert_eq!(
+            column_types
+                .get_item_by_index(1)
+                .unwrap()
+                .downcast_object_ref::<crate::DataType>()
+                .unwrap()
+                .type_name(),
+            "Text"
+        );
+
+        let columns = table_value.get_attr("columns").unwrap();
+        assert_eq!(columns.len(), Some(2));
+        let keys = columns.call_method(&state, "keys", &[], &[]).unwrap();
+        assert_eq!(keys.get_item_by_index(1).unwrap(), Value::from("country"));
+        let id_column = columns.get_item_by_index(0).unwrap();
+        assert_eq!(id_column.get_attr("index").unwrap(), Value::from(0usize));
+        assert_eq!(id_column.get_attr("name").unwrap(), Value::from("id"));
+        assert_eq!(id_column.len(), Some(3));
+        assert_eq!(id_column.get_item_by_index(0).unwrap(), Value::from(42));
+        assert_eq!(id_column.get_item_by_index(2).unwrap(), Value::from(44));
+        assert_eq!(
+            id_column
+                .get_attr("data_type")
+                .unwrap()
+                .downcast_object_ref::<crate::DataType>()
+                .unwrap()
+                .type_name(),
+            "Number"
+        );
+        let columns_items = columns.call_method(&state, "items", &[], &[]).unwrap();
+        assert_eq!(columns_items.len(), Some(2));
+        assert_eq!(
+            columns_items
+                .get_item_by_index(0)
+                .unwrap()
+                .get_item_by_index(0)
+                .unwrap(),
+            Value::from("id")
+        );
+        let country_column = columns
+            .call_method(&state, "get", &[Value::from("country")], &[])
+            .unwrap();
+        assert_eq!(
+            country_column.get_attr("name").unwrap(),
+            Value::from("country")
+        );
+    }
+
+    #[test]
+    fn test_table_rows_and_row_name_properties() {
+        let table = AgateTable::new_with_single_row_name(simple_record_batch(), "row-name");
+        let table_value = table.into_value();
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        let rows = table_value.get_attr("rows").unwrap();
+        assert_eq!(rows.len(), Some(3));
+        let row_keys = rows.call_method(&state, "keys", &[], &[]).unwrap();
+        assert_eq!(
+            row_keys.get_item_by_index(0).unwrap(),
+            Value::from("row-name")
+        );
+        let first_row = rows.get_item_by_index(0).unwrap();
+        assert_eq!(first_row.get_attr("id").unwrap(), Value::from(42));
+        assert_eq!(
+            first_row.get_attr("country").unwrap(),
+            Value::from("Brazil")
+        );
+        let rows_items = rows.call_method(&state, "items", &[], &[]).unwrap();
+        assert_eq!(rows_items.len(), Some(3));
+        assert_eq!(
+            rows_items
+                .get_item_by_index(0)
+                .unwrap()
+                .get_item_by_index(0)
+                .unwrap(),
+            Value::from("row-name")
+        );
+
+        let row_names = table_value.get_attr("row_names").unwrap();
+        assert_eq!(row_names.len(), Some(3));
+        assert_eq!(
+            row_names.get_item_by_index(2).unwrap(),
+            Value::from("row-name")
+        );
     }
 
     #[test]
@@ -1947,6 +2083,16 @@ mod tests {
         assert_eq!(renamed_table.column_name(1).unwrap(), "country");
     }
 
+    #[test]
+    fn test_rename_rejects_each_slug_flag_independently() {
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        let err = table.rename(None, None, true, false).unwrap_err();
+        assert!(err.to_string().contains("slugging columns or rows"));
+
+        let err = table.rename(None, None, false, true).unwrap_err();
+        assert!(err.to_string().contains("slugging columns or rows"));
+    }
+
     fn color_table() -> AgateTable {
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, true),
@@ -1968,6 +2114,17 @@ mod tests {
         AgateTable::from_record_batch(Arc::new(batch))
     }
 
+    fn nullable_and_wide_table() -> AgateTable {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("n", DataType::Utf8, true),
+            Field::new("word", DataType::Utf8, true),
+        ]));
+        let nullable_array: ArrayRef = Arc::new(StringArray::from(vec![None, Some("plain")]));
+        let word_array: ArrayRef = Arc::new(StringArray::from(vec![Some("violet"), Some("green")]));
+        let batch = RecordBatch::try_new(schema, vec![nullable_array, word_array]).unwrap();
+        AgateTable::from_record_batch(Arc::new(batch))
+    }
+
     #[test]
     fn test_grouper() {
         let table = color_table();
@@ -1979,6 +2136,73 @@ mod tests {
         assert_eq!(groups.next().unwrap(), 2); // green
         assert_eq!(groups.next().unwrap(), 1); // blue
         assert_eq!(groups.next().unwrap(), 0); // red
+        assert_eq!(groups.next(), None);
+    }
+
+    #[test]
+    fn test_print_table_truncates_rows_columns_and_width() {
+        let table = color_table();
+        let printed = table.print_table_to_string(2, 2, 5).unwrap();
+        assert_eq!(
+            printed,
+            "\
+| id | color | ... |
+| -- | ----- | --- |
+|  1 | red   | ... |
+|  2 | blue  | ... |
+| ... | ...   | ... |
+"
+        );
+
+        assert_eq!(
+            table
+                .display()
+                .with_max_rows(2)
+                .with_max_columns(2)
+                .with_max_column_width(5)
+                .to_string(),
+            printed
+        );
+
+        let mut output = Vec::new();
+        table.print_table(1, 1, 4, Some(&mut output)).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("| id | ... |"));
+        assert!(output.contains("|  1 | ... |"));
+    }
+
+    #[test]
+    fn test_print_table_keeps_boundary_limits_and_formats_nulls() {
+        let table = color_table();
+        let printed = table.print_table_to_string(6, 3, 20).unwrap();
+        assert_eq!(
+            printed,
+            "\
+| id | color | value |
+| -- | ----- | ----- |
+|  1 | red   |    10 |
+|  2 | blue  |    20 |
+|  3 | red   |    30 |
+|  4 | green |    40 |
+|  5 | blue  |    50 |
+|  6 | red   |    60 |
+"
+        );
+        assert!(!printed.contains("..."));
+
+        let printed = nullable_and_wide_table()
+            .print_table_to_string(2, 2, 5)
+            .unwrap();
+        assert_eq!(
+            printed,
+            "\
+|     n |  word |
+| ----- | ----- |
+|       | vi... |
+| plain | green |
+"
+        );
+        assert!(!printed.contains("none"));
     }
 
     #[test]
@@ -1990,6 +2214,11 @@ mod tests {
         let table_set = table
             .call_method(&state, "group_by", &[Value::from("color")], &[])
             .unwrap();
+        let keys = table_set.call_method(&state, "keys", &[], &[]).unwrap();
+        assert_eq!(keys.get_item_by_index(0).unwrap(), Value::from("red"));
+        assert_eq!(keys.get_item_by_index(1).unwrap(), Value::from("blue"));
+        assert_eq!(keys.get_item_by_index(2).unwrap(), Value::from("green"));
+
         let mut groups = table_set.try_iter().unwrap();
         // each group Value is an AgateTable
         let (red, blue, green) = (

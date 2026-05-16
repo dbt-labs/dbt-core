@@ -864,6 +864,23 @@ mod tests {
         }
     }
 
+    impl fmt::Display for TestMappedSequence {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            MappedSequence::fmt(self, f)
+        }
+    }
+
+    fn tuple(values: Vec<Value>) -> Tuple {
+        Tuple(Box::new(TestTupleRepr::new(Arc::new(values))))
+    }
+
+    fn assert_tuple_values(tuple: &Tuple, expected: Vec<Value>) {
+        assert_eq!(tuple.len(), expected.len());
+        for (idx, expected) in expected.into_iter().enumerate() {
+            assert_eq!(tuple.get(idx as isize), Some(expected));
+        }
+    }
+
     #[test]
     fn test_tuple() {
         let values = vec![Value::from(2), Value::from("biscoito")];
@@ -913,6 +930,86 @@ mod tests {
             .call_method(&state, "index", &[Value::from("cookie")], &[])
             .unwrap();
         assert_eq!(index, Value::from(()));
+    }
+
+    #[test]
+    fn tuple_repr_exclusion_and_object_methods() {
+        let sample = tuple(vec![
+            Value::from("a"),
+            Value::from("b"),
+            Value::from("a"),
+            Value::from("c"),
+        ]);
+
+        assert!(!sample.is_empty());
+        assert_eq!(sample.to_string(), "(a, b, a, c, )");
+        assert_eq!(
+            Value::from_dyn_object(Arc::new(sample.clone_repr())).to_string(),
+            "(a, b, a, c, )"
+        );
+        assert_eq!(sample.count(&Value::from("a")), 2);
+        assert_eq!(sample.count(&Value::from("missing")), 0);
+        assert_eq!(sample.index(&Value::from("c")), Some(3));
+        assert_eq!(sample.index(&Value::from("missing")), None);
+        assert_eq!(
+            sample,
+            tuple(vec![
+                Value::from("a"),
+                Value::from("b"),
+                Value::from("a"),
+                Value::from("c"),
+            ])
+        );
+        assert_ne!(sample, tuple(vec![Value::from("a"), Value::from("b")]));
+
+        let excluded = sample.excluding(1);
+        assert_tuple_values(
+            &excluded,
+            vec![Value::from("a"), Value::from("a"), Value::from("c")],
+        );
+        assert_eq!(excluded.count(&Value::from("a")), 2);
+        assert_eq!(excluded.count(&Value::from("b")), 0);
+        assert_eq!(excluded.index(&Value::from("c")), Some(2));
+
+        let excluded_again = excluded.excluding(1);
+        assert_tuple_values(&excluded_again, vec![Value::from("a"), Value::from("c")]);
+        let out_of_bounds = excluded_again.excluding(99);
+        assert_tuple_values(&out_of_bounds, vec![Value::from("a"), Value::from("c")]);
+
+        let object_tuple = Arc::new(tuple(vec![Value::from(10), Value::from(20)]));
+        assert_eq!(object_tuple.enumerator_len(), Some(2));
+        assert_eq!(
+            object_tuple.get_value(&Value::from(1)),
+            Some(Value::from(20))
+        );
+        assert_eq!(object_tuple.get_value(&Value::from("not-an-index")), None);
+
+        let empty = tuple(vec![]);
+        assert!(empty.is_empty());
+        assert_eq!(empty.to_string(), "()");
+    }
+
+    #[test]
+    fn zipped_tuple_counts_indices_and_rejects_non_pairs() {
+        let first = tuple(vec![Value::from("a"), Value::from("b"), Value::from("a")]);
+        let second = tuple(vec![Value::from(1), Value::from(2), Value::from(1)]);
+        let zipped = ZippedTupleRepr::from_tuples(&first, &second).into_tuple();
+
+        let a_one = Value::from_iter([Value::from("a"), Value::from(1)]);
+        let b_two = Value::from_iter([Value::from("b"), Value::from(2)]);
+        let a_two = Value::from_iter([Value::from("a"), Value::from(2)]);
+
+        assert_tuple_values(&zipped, vec![a_one.clone(), b_two.clone(), a_one.clone()]);
+        assert_eq!(zipped.count(&a_one), 2);
+        assert_eq!(zipped.count(&b_two), 1);
+        assert_eq!(zipped.count(&a_two), 0);
+        assert_eq!(zipped.index(&a_one), Some(0));
+        assert_eq!(zipped.index(&b_two), Some(1));
+        assert_eq!(zipped.index(&a_two), None);
+
+        let not_a_pair = Value::from_iter([Value::from("a")]);
+        assert_eq!(zipped.count(&not_a_pair), 0);
+        assert_eq!(zipped.index(&not_a_pair), None);
     }
 
     #[test]
@@ -997,6 +1094,157 @@ mod tests {
         let dict_value = sequence.call_method(&state, "dict", &[], &[]).unwrap();
         let dict = dict_value.downcast_object_ref::<OrderedDict>().unwrap();
         assert_eq!(dict.to_string(), "OrderedDict({count: 2, name: biscoito})");
+    }
+
+    #[test]
+    fn mapped_sequence_without_keys_has_no_items_or_dict() {
+        let sequence = Arc::new(TestMappedSequence::new(
+            Arc::new(vec![]),
+            Arc::new(vec![Value::from(2), Value::from("biscoito")]),
+        ));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        assert_eq!(sequence.type_name(), "MappedSequence");
+        assert_eq!(sequence.get_value(&Value::from(0)), Some(Value::from(2)));
+        assert_eq!(
+            sequence.get_value(&Value::from(1)),
+            Some(Value::from("biscoito"))
+        );
+        assert_eq!(sequence.get_value(&Value::from("count")), None);
+        assert_eq!(
+            sequence.get(&Value::from("missing"), Some(&Value::from(42))),
+            Value::from(42)
+        );
+
+        assert_eq!(
+            sequence.call_method(&state, "keys", &[], &[]).unwrap(),
+            Value::from(())
+        );
+        let items_err = sequence.call_method(&state, "items", &[], &[]).unwrap_err();
+        assert!(items_err.to_string().contains("does not define keys()"));
+        let dict_err = sequence.call_method(&state, "dict", &[], &[]).unwrap_err();
+        assert!(dict_err.to_string().contains("does not define keys()"));
+    }
+
+    #[test]
+    fn adjusted_index_handles_negative_and_out_of_bounds_indices() {
+        assert_eq!(adjusted_index(-1, 3), Some(2));
+        assert_eq!(adjusted_index(-3, 3), Some(0));
+        assert_eq!(adjusted_index(-4, 3), None);
+        assert_eq!(adjusted_index(0, 3), Some(0));
+        assert_eq!(adjusted_index(3, 3), None);
+        assert_eq!(adjusted_index(0, 0), None);
+    }
+
+    #[test]
+    fn ordered_dict_read_methods_copy_and_contains() {
+        let keys = tuple(vec![Value::from("a"), Value::from("b")]);
+        let values = tuple(vec![Value::from(1), Value::from(2)]);
+        let dict = Arc::new(OrderedDict::new(keys, values));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        assert_eq!(dict.len(), 2);
+        assert_eq!(dict.get_value(&Value::from("a")), Some(Value::from(1)));
+        assert_eq!(dict.get_value(&Value::from("missing")), None);
+        assert_eq!(
+            dict.call_method(&state, "get", &[Value::from("a")], &[])
+                .unwrap(),
+            Value::from(1)
+        );
+        assert_eq!(
+            dict.call_method(
+                &state,
+                "get",
+                &[
+                    Value::from("missing"),
+                    Value::from(Kwargs::from_iter(vec![("default", Value::from(99))])),
+                ],
+                &[],
+            )
+            .unwrap(),
+            Value::from(99)
+        );
+
+        let keys = dict
+            .call_method(&state, "keys", &[], &[])
+            .unwrap()
+            .downcast_object::<Tuple>()
+            .unwrap();
+        assert_tuple_values(&keys, vec![Value::from("a"), Value::from("b")]);
+        let values = dict
+            .call_method(&state, "values", &[], &[])
+            .unwrap()
+            .downcast_object::<Tuple>()
+            .unwrap();
+        assert_tuple_values(&values, vec![Value::from(1), Value::from(2)]);
+        let items = dict
+            .call_method(&state, "items", &[], &[])
+            .unwrap()
+            .downcast_object::<Tuple>()
+            .unwrap();
+        assert_tuple_values(
+            &items,
+            vec![
+                Value::from_iter([Value::from("a"), Value::from(1)]),
+                Value::from_iter([Value::from("b"), Value::from(2)]),
+            ],
+        );
+
+        assert_eq!(
+            dict.call_method(&state, "contains", &[Value::from("b")], &[])
+                .unwrap(),
+            Value::from(true)
+        );
+        assert_eq!(
+            dict.call_method(&state, "contains", &[Value::from("missing")], &[])
+                .unwrap(),
+            Value::from(false)
+        );
+
+        let copied = dict.call_method(&state, "copy", &[], &[]).unwrap();
+        assert_eq!(
+            copied
+                .downcast_object_ref::<OrderedDict>()
+                .unwrap()
+                .get(&Value::from("a")),
+            Some(Value::from(1))
+        );
+        assert_eq!(
+            copied
+                .downcast_object_ref::<OrderedDict>()
+                .unwrap()
+                .get(&Value::from("b")),
+            Some(Value::from(2))
+        );
+        assert_eq!(
+            copied
+                .call_method(&state, "pop", &[Value::from("a")], &[])
+                .unwrap(),
+            Value::from(1)
+        );
+        assert_eq!(
+            copied
+                .downcast_object_ref::<OrderedDict>()
+                .unwrap()
+                .get(&Value::from("a")),
+            None
+        );
+        assert_eq!(
+            copied.downcast_object_ref::<OrderedDict>().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            copied
+                .downcast_object_ref::<OrderedDict>()
+                .unwrap()
+                .get(&Value::from("b")),
+            Some(Value::from(2))
+        );
+        assert_eq!(dict.to_string(), "OrderedDict({a: 1, b: 2})");
     }
 
     #[test]

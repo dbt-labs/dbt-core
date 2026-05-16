@@ -160,3 +160,20 @@ impl<T: DecimalType> Object for DecimalValue<T> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::datatypes::Decimal128Type;
+
+    #[test]
+    fn decimal_value_truthiness_tracks_zero_state() {
+        let zero = Arc::new(DecimalValue::<Decimal128Type>::new(0, 10, 2));
+        assert!(zero.is_zero());
+        assert!(!zero.is_true());
+
+        let value = Arc::new(DecimalValue::<Decimal128Type>::new(12345, 10, 2));
+        assert!(!value.is_zero());
+        assert!(value.is_true());
+    }
+}
