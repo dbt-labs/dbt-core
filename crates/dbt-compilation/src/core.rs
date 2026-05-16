@@ -3,18 +3,28 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
-use dbt_adapter::{AdapterType, adapter::AdapterFactory, sql_types::TypeOpsFactory};
+use dbt_adapter::{
+    Adapter, AdapterEngine, AdapterImpl, AdapterType,
+    adapter::AdapterFactory,
+    cache::RelationCache,
+    config::AdapterConfig,
+    engine::{SidecarClient, SidecarEngine, query_comment::QueryCommentConfig},
+    query_cache::{QueryCacheConfig, QueryCacheImpl},
+    sql_types::TypeOpsFactory,
+};
 use dbt_common::{
-    cancellation::CancellationToken, io_args::FsCommand, path::DbtPath,
+    cancellation::CancellationToken,
+    io_args::{FsCommand, ReplayMode},
+    path::DbtPath,
     tracing::TracingConfigProvider,
 };
 use dbt_error::{ErrorCode, FsResult, fs_err};
 use dbt_features::compilation::CompilationConfig;
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
+    flags::Flags, jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
 };
 use dbt_loader::{
     args::{IoArgs, LoadArgs},
@@ -25,16 +35,22 @@ use dbt_metadata::parse_cache::{
     determine_cache_state_from_previous_previous_resolved_nodes, drop_all_unchanged_nodes,
 };
 use dbt_parser::args::ResolveArgs;
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::{
-        ResolvedCloudConfig, common::DbtQuoting, macros::build_macro_units, project::DbtProject,
+        ResolvedCloudConfig,
+        common::{DbtQuoting, ResolvedQuoting},
+        macros::build_macro_units,
+        profiles::Execute,
+        project::{DbtProject, QueryComment},
     },
     state::{
         CacheState, DbtPackage, DbtState, GetColumnsInRelationCalls, GetRelationCalls,
         PatternedDanglingSources, ResolverState, ResourcePathKind,
     },
 };
+use dbt_xdbc::Backend;
 
 pub struct DbtLoadedProject {
     config: CompilationConfig,
@@ -322,6 +338,148 @@ async fn load_cache(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+async fn init_adapter_core(
+    arg: &IoArgs,
+    replay_mode: Option<ReplayMode>,
+    adapter_type: AdapterType,
+    db_config: dbt_yaml::Mapping,
+    type_ops_factory: Arc<dyn TypeOpsFactory>,
+    adapter_factory: &dyn AdapterFactory,
+    env: &JinjaEnv,
+    schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+    root_project_quoting: ResolvedQuoting,
+    query_comment: Option<QueryComment>,
+    cloud_config: Option<&ResolvedCloudConfig>,
+    token: CancellationToken,
+    execute: Execute,
+    sidecar_client: Option<Arc<dyn SidecarClient>>,
+    threads: Option<usize>,
+) -> FsResult<Arc<Adapter>> {
+    let flags = env
+        .get_global("flags")
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "There must be flags in the global variable",
+            )
+        })?
+        .downcast_object::<Flags>()
+        .ok_or_else(|| fs_err!(ErrorCode::InvalidConfig, "Could not downcast flags"))?;
+
+    let introspect_enabled = flags
+        .to_dict()
+        .get("introspect")
+        .is_none_or(|value| value.is_true());
+
+    // If executing locally, avoid creating a real remote engine entirely to guarantee
+    // no network calls are made, even if adapter macros are accidentally invoked.
+    // This applies to Local, Sidecar, and Service execution modes - all use local/runner execution.
+    // This mode also applies to compile with --no-introspect
+    // DuckDB is a local database — use the AdapterFactory for proper adapter creation
+    // instead of a MockAdapter, so we get real query logging and telemetry.
+    let adapter = if adapter_type == AdapterType::DuckDB {
+        adapter_factory
+            .create_adapter(
+                adapter_type,
+                db_config,
+                Arc::clone(&type_ops_factory),
+                replay_mode,
+                flags.project_flags(),
+                schema_store,
+                None,
+                root_project_quoting,
+                query_comment,
+                token,
+                cloud_config,
+                threads,
+            )
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Could not create DuckDB adapter: {}",
+                    e
+                )
+            })?
+    } else if !introspect_enabled
+        || matches!(
+            execute,
+            Execute::Local | Execute::Sidecar | Execute::Service
+        )
+    {
+        // Construct a MockAdapter wrapped in Adapter
+        let type_ops = type_ops_factory.create(adapter_type);
+
+        if let Some(client) = sidecar_client {
+            // For sidecar/service mode with a sidecar client, use AdapterImpl
+            // wrapping a SidecarEngine which routes introspection (get_columns_in_relation,
+            // list_relations, get_relation) to the sidecar client.
+            let sidecar_engine = SidecarEngine::new(
+                adapter_type,
+                Backend::DuckDBExtended,
+                client,
+                root_project_quoting,
+                AdapterConfig::default(),
+                type_ops_factory.create(adapter_type),
+                adapter_factory.stmt_splitter(),
+                QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
+                Arc::new(RelationCache::default()),
+            );
+            let adapter_impl = AdapterImpl::new(
+                Arc::new(sidecar_engine) as Arc<dyn AdapterEngine>,
+                schema_store,
+            );
+            Arc::new(Adapter::new(Arc::new(adapter_impl), None, token))
+        } else {
+            // Execute::Local or fallback: use mock adapter
+            let mock = AdapterImpl::new_mock(
+                adapter_type,
+                flags.project_flags(),
+                root_project_quoting,
+                type_ops,
+                adapter_factory.stmt_splitter(),
+            );
+            Arc::new(Adapter::new(Arc::new(mock), None, token))
+        }
+    } else {
+        adapter_factory
+            .create_adapter(
+                adapter_type,
+                db_config,
+                Arc::clone(&type_ops_factory),
+                replay_mode,
+                flags.project_flags(),
+                schema_store,
+                if arg.beta_use_query_cache {
+                    Some(Arc::new(QueryCacheImpl::new(QueryCacheConfig::new(
+                        arg.out_dir.join("query_cache"),
+                        Some(Duration::from_secs(60 * 60 * 12)),
+                        vec![
+                            dbt_adapter_core::DBT_EXECUTION_PHASE_RENDER,
+                            dbt_adapter_core::DBT_EXECUTION_PHASE_ANALYZE,
+                        ],
+                    ))))
+                } else {
+                    None
+                },
+                root_project_quoting,
+                query_comment,
+                token,
+                cloud_config,
+                threads,
+            )
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Failed to initialize adapter: {}",
+                    e
+                )
+            })?
+    };
+
+    Ok(adapter)
+}
+
 impl DbtLoadedProject {
     pub async fn load(
         config: CompilationConfig,
@@ -464,6 +622,38 @@ impl DbtLoadedProject {
             cache_state,
             token,
             jinja_type_checking_event_listener_factory,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn init_adapter(
+        &self,
+        resolved_state: &ResolverState,
+        io: &IoArgs,
+        replay_mode: Option<ReplayMode>,
+        jinja_env: &JinjaEnv,
+        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+        token: &CancellationToken,
+        sidecar_client: Option<Arc<dyn SidecarClient>>,
+        execute: Execute,
+    ) -> FsResult<Arc<Adapter>> {
+        init_adapter_core(
+            io,
+            replay_mode,
+            resolved_state.adapter_type,
+            resolved_state.dbt_profile.db_config.to_mapping().unwrap(),
+            Arc::clone(self.type_ops_factory()),
+            self.adapter_factory().as_ref(),
+            jinja_env,
+            schema_store,
+            resolved_state.root_project_quoting,
+            resolved_state.runtime_config.inner.query_comment.clone(),
+            self.dbt_cloud_config(),
+            token.clone(),
+            execute,
+            sidecar_client,
+            resolved_state.dbt_profile.threads,
         )
         .await
     }
