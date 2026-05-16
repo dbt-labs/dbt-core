@@ -6,6 +6,7 @@ from typing import Any, Dict
 from unittest import mock
 
 import pytest
+import yaml
 
 import dbt.config
 import dbt.exceptions
@@ -465,6 +466,22 @@ class TestProjectFile(BaseConfigTest):
         self.write_packages({"invalid": ["not a package of any kind"]})
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.Project.from_project_root(self.project_dir, renderer)
+
+    def test_skills_not_allowed_in_packages_yml(self):
+        renderer = empty_project_renderer()
+        self.write_packages({"skills": [{"package": "dbt-labs/dbt-utils", "version": "1.2.3"}]})
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
+            dbt.config.Project.from_project_root(self.project_dir, renderer)
+
+    def test_skills_allowed_in_dependencies_yml(self):
+        renderer = empty_project_renderer()
+        dependencies_data = {"skills": [{"package": "dbt-labs/dbt-utils", "version": "1.2.3"}]}
+        with open(self.project_path("dependencies.yml"), "w") as fp:
+            yaml.dump(dependencies_data, fp)
+        project = dbt.config.Project.from_project_root(self.project_dir, renderer)
+        # skills key is accepted without error; packages list is empty since
+        # the skills key is not yet functional
+        assert project.packages.packages == []
 
 
 class TestVariableProjectFile(BaseConfigTest):

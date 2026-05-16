@@ -1,0 +1,6 @@
+kind: Features
+body: Installing skills using `dbt deps`
+time: 2026-04-23T12:51:06.453813-06:00
+custom:
+    Author: dbeatty10
+    Issue: "12868"
