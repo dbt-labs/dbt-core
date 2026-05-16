@@ -11,11 +11,13 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
     Type,
     Union,
+    cast,
 )
 
 import dbt.exceptions
@@ -138,25 +140,21 @@ class GraphRunnableTask(ConfiguredTask):
     def exclusion_arg(self):
         return self.args.exclude
 
+    def _no_explicit_selection(self) -> bool:
+        return not (self.selection_arg or self.exclusion_arg)
+
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
         spec: Union[SelectionSpec, bool]
         if hasattr(self.args, "inline") and self.args.inline:
-            # We want an empty selection spec.
             spec = parse_difference(None, None)
         elif self.args.selector:
-            # use pre-defined selector (--selector)
             spec = self.config.get_selector(self.args.selector)
-        elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
-            # use pre-defined selector (--selector) with default: true
+        elif self._no_explicit_selection() and default_selector_name:
             fire_event(DefaultSelector(name=default_selector_name))
             spec = self.config.get_selector(default_selector_name)
         else:
-            # This is what's used with no default selector and no selection
-            # use --select and --exclude args
             spec = parse_difference(self.selection_arg, self.exclusion_arg)
-        # mypy complains because the return values of get_selector and parse_difference
-        # are different
         return spec  # type: ignore
 
     @abstractmethod
@@ -175,7 +173,6 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
-        # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
 
         preserve_edges = True
@@ -187,6 +184,26 @@ class GraphRunnableTask(ConfiguredTask):
     def get_run_mode(self) -> GraphRunnableMode:
         return GraphRunnableMode.Topological
 
+    def _resolve_node(self, uid: str) -> ResultNode:
+        """Look up a selected node UID across all manifest collections."""
+        assert self.manifest is not None
+        for collection in cast(
+            List[Mapping[str, ResultNode]],
+            [
+                self.manifest.nodes,
+                self.manifest.sources,
+                self.manifest.saved_queries,
+                self.manifest.unit_tests,
+                self.manifest.exposures,
+                self.manifest.functions,
+            ],
+        ):
+            if uid in collection:
+                return collection[uid]
+        raise DbtInternalError(
+            f"Node selection returned {uid}, expected an exposure, a function, a node, a saved query, a source, or a unit test"
+        )
+
     def _runtime_initialize(self):
         self.compile_manifest()
         if self.manifest is None or self.graph is None:
@@ -194,31 +211,13 @@ class GraphRunnableTask(ConfiguredTask):
 
         self.job_queue = self.get_graph_queue()
 
-        # Set selected node IDs on the compiler so FK constraint compilation
-        # can determine whether to use deferred relations or current relations.
-        # FK targets that ARE selected should use current relations (being built now).
-        # FK targets that are NOT selected should use deferred relations (from state).
+        # FK targets that ARE selected use current relations (being built now).
+        # FK targets that are NOT selected use deferred relations (from state).
         self.compiler.selected_node_ids = set(self.job_queue.get_selected_nodes())
 
-        # we use this a couple of times. order does not matter.
-        self._flattened_nodes = []
-        for uid in self.job_queue.get_selected_nodes():
-            if uid in self.manifest.nodes:
-                self._flattened_nodes.append(self.manifest.nodes[uid])
-            elif uid in self.manifest.sources:
-                self._flattened_nodes.append(self.manifest.sources[uid])
-            elif uid in self.manifest.saved_queries:
-                self._flattened_nodes.append(self.manifest.saved_queries[uid])
-            elif uid in self.manifest.unit_tests:
-                self._flattened_nodes.append(self.manifest.unit_tests[uid])
-            elif uid in self.manifest.exposures:
-                self._flattened_nodes.append(self.manifest.exposures[uid])
-            elif uid in self.manifest.functions:
-                self._flattened_nodes.append(self.manifest.functions[uid])
-            else:
-                raise DbtInternalError(
-                    f"Node selection returned {uid}, expected an exposure, a function, a node, a saved query, a source, or a unit test"
-                )
+        self._flattened_nodes = [
+            self._resolve_node(uid) for uid in self.job_queue.get_selected_nodes()
+        ]
 
         self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
 
@@ -253,6 +252,22 @@ class GraphRunnableTask(ConfiguredTask):
         # Propagate selected node IDs to the runner's compiler for FK constraint resolution
         runner.compiler.selected_node_ids = self.compiler.selected_node_ids
         return runner
+
+    def _check_fail_fast_or_raise(self, result: NodeResult) -> None:
+        """Set _raise_next_tick if the result warrants a fast failure or first-error raise."""
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and get_flags().FAIL_FAST
+        ):
+            self._raise_next_tick = FailFastError(
+                msg="Failing early due to test failure or runtime error",
+                result=result,
+                node=getattr(result, "node", None),
+            )
+        elif result.status == NodeStatus.Error and self.raise_on_first_error():
+            # If we raise inside a thread it'll just get silently swallowed; stash the error
+            # here and it will be checked on the next tick after the thread finishes.
+            self._raise_next_tick = DbtRuntimeError(result.message)
 
     def call_runner(self, runner: BaseRunner) -> NodeResult:
         with log_contextvars(node_info=runner.node.node_info):
@@ -295,23 +310,7 @@ class GraphRunnableTask(ConfiguredTask):
             # it gets deleted when we're done with it
             runner.node.clear_event_status()
 
-        fail_fast = get_flags().FAIL_FAST
-
-        if (
-            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
-            and fail_fast
-        ):
-            self._raise_next_tick = FailFastError(
-                msg="Failing early due to test failure or runtime error",
-                result=result,
-                node=getattr(result, "node", None),
-            )
-        elif result.status == NodeStatus.Error and self.raise_on_first_error():
-            # if we raise inside a thread, it'll just get silently swallowed.
-            # stash the error message we want here, and it will check the
-            # next 'tick' - should be soon since our thread is about to finish!
-            self._raise_next_tick = DbtRuntimeError(result.message)
-
+        self._check_fail_fast_or_raise(result)
         return result
 
     def _submit(self, pool: DbtThreadPool, args: List[Any], callback: Callable) -> None:
@@ -350,17 +349,12 @@ class GraphRunnableTask(ConfiguredTask):
         while not self.job_queue.empty():
             self.handle_job_queue(pool, callback)
 
-        # block on completion
         if get_flags().FAIL_FAST:
-            # checkout for an errors after task completion in case of
-            # fast failure
             while self.job_queue.wait_until_something_was_done():
                 self._raise_set_error()
         else:
-            # wait until every task will be complete
             self.job_queue.join()
 
-        # if an error got set during join(), raise it.
         self._raise_set_error()
 
         return
@@ -426,14 +420,52 @@ class GraphRunnableTask(ConfiguredTask):
         ):
             return
 
-        # If result.status == NodeStatus.Error, plus Fail for build command
         if result.status in self.MARK_DEPENDENT_ERRORS_STATUSES:
-            if is_ephemeral:
-                cause = result
-            else:
-                cause = None
-
+            cause = result if is_ephemeral else None
             self._mark_dependent_errors(node.unique_id, result, cause)
+
+    def _cancel_open_connections(self, adapter) -> None:
+        """Cancel all open adapter connections, logging each one that isn't ephemeral."""
+        for conn_name in adapter.cancel_open_connections():
+            node = self.manifest.nodes.get(conn_name) if self.manifest is not None else None
+            if node is not None and node.is_ephemeral_model:
+                continue
+            fire_event(LogCancelLine(conn_name=conn_name))
+
+    def _handle_fail_fast_skips(self, failure: FailFastError) -> List[BaseResult]:
+        """Mark all not-yet-executed nodes as skipped and return the full result list."""
+        executed_node_ids = {
+            r.node.unique_id for r in self.node_results if isinstance(r, NodeResult)
+        }
+        assert self._flattened_nodes is not None
+        message = "Skipping due to fail_fast"
+        for node in self._flattened_nodes:
+            if node.unique_id not in executed_node_ids:
+                skipped = mark_node_as_skipped(node, executed_node_ids, message)
+                if skipped:
+                    self.node_results.append(skipped)
+        print_run_result_error(failure.result)
+        # ensure information about all nodes is propagated to run results when failing fast
+        return self.node_results
+
+    def _write_interrupt_run_results(self, pool) -> None:
+        """Write partial run results to disk on KeyboardInterrupt/SystemExit."""
+        run_result = self.get_result(
+            results=self.node_results,
+            elapsed_time=time.time() - self.started_at,
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        if self.args.write_json and hasattr(run_result, "write"):
+            run_result.write(self.result_path())
+            add_artifact_produced(self.result_path())
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=run_result.__class__.__name__,
+                    artifact_path=self.result_path(),
+                )
+            )
+        self._cancel_connections(pool)
+        print_run_end_messages(self.node_results, keyboard_interrupt=True)
 
     def _cancel_connections(self, pool):
         """Given a pool, cancel all adapter connections and wait until all
@@ -448,14 +480,7 @@ class GraphRunnableTask(ConfiguredTask):
             fire_event(QueryCancelationUnsupported(type=adapter.type()))
         else:
             with adapter.connection_named("master"):
-                for conn_name in adapter.cancel_open_connections():
-                    if self.manifest is not None:
-                        node = self.manifest.nodes.get(conn_name)
-                        if node is not None and node.is_ephemeral_model:
-                            continue
-                    # if we don't have a manifest/don't have a node, print
-                    # anyway.
-                    fire_event(LogCancelLine(conn_name=conn_name))
+                self._cancel_open_connections(adapter)
 
         pool.join()
 
@@ -469,39 +494,9 @@ class GraphRunnableTask(ConfiguredTask):
             self.run_queue(pool)
         except FailFastError as failure:
             self._cancel_connections(pool)
-
-            executed_node_ids = {r.node.unique_id for r in self.node_results}
-            message = "Skipping due to fail_fast"
-
-            for node in self._flattened_nodes:
-                if node.unique_id not in executed_node_ids:
-                    self.node_results.append(
-                        mark_node_as_skipped(node, executed_node_ids, message)
-                    )
-
-            print_run_result_error(failure.result)
-            # ensure information about all nodes is propagated to run results when failing fast
-            return self.node_results
+            return self._handle_fail_fast_skips(failure)
         except (KeyboardInterrupt, SystemExit):
-            run_result = self.get_result(
-                results=self.node_results,
-                elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            )
-
-            if self.args.write_json and hasattr(run_result, "write"):
-                run_result.write(self.result_path())
-                add_artifact_produced(self.result_path())
-                fire_event(
-                    ArtifactWritten(
-                        artifact_type=run_result.__class__.__name__,
-                        artifact_path=self.result_path(),
-                    )
-                )
-
-            self._cancel_connections(pool)
-            print_run_end_messages(self.node_results, keyboard_interrupt=True)
-
+            self._write_interrupt_run_results(pool)
             raise
 
         pool.close()
@@ -528,32 +523,40 @@ class GraphRunnableTask(ConfiguredTask):
         for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
             self._skipped_children[dep_node_id] = cause
 
+    def _cachable_manifest_nodes(self) -> List:
+        if self.manifest is None:
+            raise DbtInternalError("manifest was None in populate_adapter_cache")
+        return [
+            node
+            for node in self.manifest.nodes.values()
+            if node.is_relational and not node.is_ephemeral_model and not node.is_external_node
+        ]
+
+    def _fill_adapter_cache(
+        self,
+        adapter,
+        cachable_nodes: List,
+        required_schemas: Optional[Set[BaseRelation]],
+        start_time: float,
+    ) -> None:
+        if get_flags().CACHE_SELECTED_ONLY is True:
+            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
+        else:
+            adapter.set_relations_cache(cachable_nodes)
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_runnable_timing(
+                {"adapter_cache_construction_elapsed": time.perf_counter() - start_time}
+            )
+
     def populate_adapter_cache(
         self, adapter, required_schemas: Optional[Set[BaseRelation]] = None
     ):
         if not self.args.populate_cache:
             return
 
-        if self.manifest is None:
-            raise DbtInternalError("manifest was None in populate_adapter_cache")
-
-        start_populate_cache = time.perf_counter()
-        # the cache only cares about executable nodes
-        cachable_nodes = [
-            node
-            for node in self.manifest.nodes.values()
-            if (node.is_relational and not node.is_ephemeral_model and not node.is_external_node)
-        ]
-
-        if get_flags().CACHE_SELECTED_ONLY is True:
-            adapter.set_relations_cache(cachable_nodes, required_schemas=required_schemas)
-        else:
-            adapter.set_relations_cache(cachable_nodes)
-        cache_populate_time = time.perf_counter() - start_populate_cache
-        if dbt.tracking.active_user is not None:
-            dbt.tracking.track_runnable_timing(
-                {"adapter_cache_construction_elapsed": cache_populate_time}
-            )
+        start_time = time.perf_counter()
+        cachable_nodes = self._cachable_manifest_nodes()
+        self._fill_adapter_cache(adapter, cachable_nodes, required_schemas, start_time)
 
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
@@ -566,6 +569,28 @@ class GraphRunnableTask(ConfiguredTask):
 
     def print_results_line(self, node_results, elapsed):
         pass
+
+    def _skip_remaining_nodes(self) -> List:
+        """Skip all not-yet-executed nodes when on-run-start hooks fail."""
+        executed_node_ids = {r.node.unique_id for r in self.node_results if hasattr(r, "node")}
+        for index, node in enumerate(self._flattened_nodes or []):
+            if node.unique_id not in executed_node_ids:
+                group = group_lookup.get(node.unique_id)
+                fire_event(
+                    SkippingDetails(
+                        resource_type=node.resource_type,
+                        schema=node.schema,
+                        node_name=node.name,
+                        index=index + 1,
+                        total=self.num_nodes,
+                        node_info=node.node_info,
+                        group=group,
+                    )
+                )
+                skipped = mark_node_as_skipped(node, executed_node_ids, None)
+                if skipped:
+                    self.node_results.append(skipped)
+        return []
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
@@ -588,30 +613,7 @@ class GraphRunnableTask(ConfiguredTask):
             ):
                 res = self.execute_nodes()
             else:
-                executed_node_ids = {
-                    r.node.unique_id for r in self.node_results if hasattr(r, "node")
-                }
-
-                res = []
-
-                for index, node in enumerate(self._flattened_nodes or []):
-                    group = group_lookup.get(node.unique_id)
-
-                    if node.unique_id not in executed_node_ids:
-                        fire_event(
-                            SkippingDetails(
-                                resource_type=node.resource_type,
-                                schema=node.schema,
-                                node_name=node.name,
-                                index=index + 1,
-                                total=self.num_nodes,
-                                node_info=node.node_info,
-                                group=group,
-                            )
-                        )
-                        skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
-                        if skipped_node_result:
-                            self.node_results.append(skipped_node_result)
+                res = self._skip_remaining_nodes()
 
             self.after_run(adapter, res)
         finally:
@@ -625,6 +627,30 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         return result
+
+    def _maybe_fire_end_run_event(self, result) -> None:
+        if isinstance(result, RunExecutionResult):
+            result_msgs = [r.to_msg_dict() for r in result.results]
+            fire_event(
+                EndRunResult(
+                    results=result_msgs,
+                    generated_at=result.generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    elapsed_time=result.elapsed_time,
+                    success=GraphRunnableTask.interpret_results(result.results),
+                )
+            )
+
+    def _write_run_results(self, result) -> None:
+        assert self.manifest is not None
+        write_manifest(self.manifest, self.config.project_target_path)
+        if hasattr(result, "write"):
+            result.write(self.result_path())
+            add_artifact_produced(self.result_path())
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                )
+            )
 
     def run(self):
         """
@@ -652,27 +678,10 @@ class GraphRunnableTask(ConfiguredTask):
                 result = self.execute_with_hooks(selected_uids)
 
         # We have other result types here too, including FreshnessResult
-        if isinstance(result, RunExecutionResult):
-            result_msgs = [result.to_msg_dict() for result in result.results]
-            fire_event(
-                EndRunResult(
-                    results=result_msgs,
-                    generated_at=result.generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    elapsed_time=result.elapsed_time,
-                    success=GraphRunnableTask.interpret_results(result.results),
-                )
-            )
+        self._maybe_fire_end_run_event(result)
 
         if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
-            if hasattr(result, "write"):
-                result.write(self.result_path())
-                add_artifact_produced(self.result_path())
-                fire_event(
-                    ArtifactWritten(
-                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
-                    )
-                )
+            self._write_run_results(result)
 
         self.task_end_messages(result.results)
         return result
@@ -710,72 +719,74 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
+    @staticmethod
+    def _list_schemas_for_db(adapter, db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
+        db_lowercase = dbt_common.utils.formatting.lowercase(db_only.database)
+        database_quoted = None if db_only.database is None else str(db_only)
+        return [
+            (db_lowercase, s.lower())
+            for s in adapter.list_schemas(database_quoted)
+            if s is not None
+        ]
+
+    @staticmethod
+    def _create_schema_for_relation(adapter, relation: BaseRelation) -> None:
+        db = relation.database or ""
+        with adapter.connection_named(f"create_{db}_{relation.schema}"):
+            adapter.create_schema(relation)
+
+    def _submit_list_schema_futures(
+        self, tpe, adapter, required_databases: Set[BaseRelation]
+    ) -> List:
+        futures = []
+        for req in required_databases:
+            name = "list_schemas" if req.database is None else f"list_{req.database}"
+            fut = tpe.submit_connected(adapter, name, self._list_schemas_for_db, adapter, req)
+            futures.append(fut)
+        return futures
+
+    def _submit_create_schema_futures(
+        self,
+        tpe,
+        adapter,
+        required_schemas: Set[BaseRelation],
+        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]],
+    ) -> List:
+        futures = []
+        for info in required_schemas:
+            if info.schema is None:
+                continue
+            db_lower = dbt_common.utils.formatting.lowercase(info.database)
+            db_schema = (db_lower, info.schema.lower())
+            if db_schema not in existing_schemas_lowered:
+                existing_schemas_lowered.add(db_schema)
+                fut = tpe.submit_connected(
+                    adapter,
+                    f'create_{info.database or ""}_{info.schema}',
+                    self._create_schema_for_relation,
+                    adapter,
+                    info,
+                )
+                futures.append(fut)
+        return futures
+
     def create_schemas(self, adapter, required_schemas: Set[BaseRelation]):
-        # we want the string form of the information schema database
-        required_databases: Set[BaseRelation] = set()
-        for required in required_schemas:
-            db_only = required.include(database=True, schema=False, identifier=False)
-            required_databases.add(db_only)
+        required_databases: Set[BaseRelation] = {
+            req.include(database=True, schema=False, identifier=False) for req in required_schemas
+        }
 
-        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]]
-        existing_schemas_lowered = set()
-
-        def list_schemas(db_only: BaseRelation) -> List[Tuple[Optional[str], str]]:
-            # the database can be None on some warehouses that don't support it
-            database_quoted: Optional[str]
-            db_lowercase = dbt_common.utils.formatting.lowercase(db_only.database)
-            if db_only.database is None:
-                database_quoted = None
-            else:
-                database_quoted = str(db_only)
-
-            # we should never create a null schema, so just filter them out
-            return [
-                (db_lowercase, s.lower())
-                for s in adapter.list_schemas(database_quoted)
-                if s is not None
-            ]
-
-        def create_schema(relation: BaseRelation) -> None:
-            db = relation.database or ""
-            schema = relation.schema
-            with adapter.connection_named(f"create_{db}_{schema}"):
-                adapter.create_schema(relation)
-
-        list_futures = []
-        create_futures = []
+        existing_schemas_lowered: Set[Tuple[Optional[str], Optional[str]]] = set()
 
         # TODO: following has a mypy issue because profile and project config
         # defines threads as int and HasThreadingConfig defines it as Optional[int]
         with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
-            for req in required_databases:
-                if req.database is None:
-                    name = "list_schemas"
-                else:
-                    name = f"list_{req.database}"
-                fut = tpe.submit_connected(adapter, name, list_schemas, req)
-                list_futures.append(fut)
-
+            list_futures = self._submit_list_schema_futures(tpe, adapter, required_databases)
             for ls_future in as_completed(list_futures):
                 existing_schemas_lowered.update(ls_future.result())
 
-            for info in required_schemas:
-                if info.schema is None:
-                    # we are not in the business of creating null schemas, so
-                    # skip this
-                    continue
-                db: Optional[str] = info.database
-                db_lower: Optional[str] = dbt_common.utils.formatting.lowercase(db)
-                schema: str = info.schema
-
-                db_schema = (db_lower, schema.lower())
-                if db_schema not in existing_schemas_lowered:
-                    existing_schemas_lowered.add(db_schema)
-                    fut = tpe.submit_connected(
-                        adapter, f'create_{info.database or ""}_{info.schema}', create_schema, info
-                    )
-                    create_futures.append(fut)
-
+            create_futures = self._submit_create_schema_futures(
+                tpe, adapter, required_schemas, existing_schemas_lowered
+            )
             for create_future in as_completed(create_futures):
                 # trigger/re-raise any exceptions while creating schemas
                 create_future.result()
