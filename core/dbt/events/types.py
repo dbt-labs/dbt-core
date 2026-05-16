@@ -803,6 +803,18 @@ class GenerateSchemaNameNullValueDeprecation(WarnLevel):
         return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
 
 
+class UnknownFlagsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D045"
+
+    def message(self) -> str:
+        description = f"Unknown flags in dbt_project.yml: {', '.join(self.flag_names)}. "
+        if require_event_names_in_deprecations():
+            return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag_less_strict(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
