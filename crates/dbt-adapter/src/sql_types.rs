@@ -96,6 +96,10 @@ pub trait TypeOps: Send + Sync {
     /// for data that's treated differently by pure-Python `dbt seed`. In such case, the mapping is
     /// not well defined and we have a problem.
     fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType>;
+
+    /// A parser for a column description, which is "everything in a column definition, except the
+    /// column's name", where column definition is as in CREATE TABLE.
+    fn parse_column_description(&self, s: &str) -> AdapterResult<Field>;
 }
 
 pub trait TypeOpsFactory: Send + Sync {
@@ -174,6 +178,17 @@ impl TypeOps for SATypeOpsImpl {
                 todo!("not yet")
             }
         }
+    }
+
+    fn parse_column_description(&self, _s: &str) -> AdapterResult<Field> {
+        let err = AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            format!(
+                "parse_column_description is not supported for {}",
+                self.adapter_type()
+            ),
+        );
+        Err(err)
     }
 }
 
