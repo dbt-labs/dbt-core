@@ -69,7 +69,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnitTestNode,
 )
-from dbt.events.types import JinjaLogWarning
+from dbt.events.types import JinjaLogDebug, JinjaLogWarning
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
@@ -1134,6 +1134,10 @@ class ProviderContext(ManifestContext):
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
         self.provider: Provider = provider
+        # Tracks whether we've already warned about run_query being called
+        # during the parse phase. The warning fires at most once per context
+        # so logs don't get spammed when a model loops over run_query.
+        self._run_query_parse_warning_fired: bool = False
         self.adapter = get_adapter(self.config)
         # The macro namespace is used in creating the DatabaseWrapper
         self.db_wrapper = self.provider.DatabaseWrapper(self.adapter, self.namespace)
@@ -1180,7 +1184,29 @@ class ProviderContext(ManifestContext):
                 self.sql_results[name] = None
                 return ret_val
         else:
-            # Handle trying to load a result that was never stored
+            # Handle trying to load a result that was never stored. The most
+            # common cause is calling run_query() during the parse phase: the
+            # `statement` macro is gated on `{% if execute %}`, so nothing is
+            # stored, and run_query then asks load_result for the missing
+            # "run_query_statement" key. Surface a one-shot debug hint that
+            # points users at the {% if execute %} workaround. See issue
+            # https://github.com/dbt-labs/dbt-core/issues/11070.
+            if (
+                name == "run_query_statement"
+                and not self.provider.execute
+                and not self._run_query_parse_warning_fired
+            ):
+                self._run_query_parse_warning_fired = True
+                fire_event(
+                    JinjaLogDebug(
+                        msg=(
+                            "run_query was called during the parse phase and returned "
+                            "no rows. Wrap the call in `{% if execute %}` to defer it "
+                            "to the execute phase. See "
+                            "https://docs.getdbt.com/reference/dbt-jinja-functions/execute"
+                        )
+                    )
+                )
             return None
 
     @contextmember()
