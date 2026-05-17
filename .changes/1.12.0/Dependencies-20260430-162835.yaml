@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Begin depending on MetricFlow instead of dbt-semantic-interfaces
+time: 2026-04-30T16:28:35.97023-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12893"

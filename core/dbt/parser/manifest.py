@@ -9,8 +9,11 @@ from datetime import date, datetime, timezone
 from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
+import jinja2
 import msgpack
-from jinja2.nodes import Call
+from jinja2.nodes import Call, Const
+from metricflow_semantic_interfaces.enum_extension import assert_values_exhausted
+from metricflow_semantic_interfaces.type_enums import MetricType
 
 import dbt.deprecations
 import dbt.exceptions
@@ -28,16 +31,18 @@ from dbt.adapters.factory import (
 from dbt.artifacts.resources import (
     CatalogWriteIntegrationConfig,
     FileHash,
+    MetricInput,
     NodeRelation,
     NodeVersion,
 )
-from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.resources.types import BatchSize, FunctionLanguage, FunctionType
 from dbt.artifacts.schemas.base import Writable
 from dbt.clients.jinja import MacroStack, get_rendered
 from dbt.clients.jinja_static import statically_extract_macro_calls
 from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
     MANIFEST_FILE_NAME,
+    OSI_DOCUMENT_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
@@ -92,6 +97,7 @@ from dbt.exceptions import (
     AmbiguousAliasError,
     DuplicateResourceNameError,
     InvalidAccessTypeError,
+    ParsingError,
     TargetNotFoundError,
     scrub_secrets,
 )
@@ -128,13 +134,16 @@ from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.base_types import EventGroupType, EventLevel
+from dbt_common.events.functions import (
+    fire_event,
+    fire_or_defer_event,
+    get_invocation_id,
+)
 from dbt_common.events.types import Note
 from dbt_common.exceptions.base import DbtValidationError
 from dbt_common.helper_types import PathSet
-from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt_common.ui import error_tag
 
 PERF_INFO_FILE_NAME = "perf_info.json"
 
@@ -150,6 +159,8 @@ def extended_msgpack_encoder(obj):
     elif type(obj) is datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
+    elif isinstance(obj, jinja2.Undefined):
+        return None
 
     return obj
 
@@ -169,13 +180,12 @@ def extended_msgpack_decoder(code, data):
         return msgpack.ExtType(code, data)
 
 
-def version_to_str(version: Optional[Union[str, int]]) -> str:
-    if isinstance(version, int):
-        return str(version)
-    elif isinstance(version, str):
+def version_to_str(version: Optional[NodeVersion]) -> str:
+    if version is None:
+        return ""
+    if isinstance(version, str):
         return version
-
-    return ""
+    return str(version)
 
 
 class ReparseReason(StrEnum):
@@ -601,12 +611,14 @@ class ManifestLoader:
         for node in self.manifest.nodes.values():
             if isinstance(node, ModelNode) and node.deprecation_date:
                 if node.is_past_deprecation_date:
-                    warn_or_error(
+                    fire_or_defer_event(
                         DeprecatedModel(
                             model_name=node.name,
                             model_version=version_to_str(node.version),
                             deprecation_date=node.deprecation_date.isoformat(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                 # At this point _process_refs should already have been called, and
                 # we just rebuilt the parent and child maps.
@@ -621,7 +633,7 @@ class ManifestLoader:
                     else:
                         event_cls = UpcomingReferenceDeprecation
 
-                    warn_or_error(
+                    fire_or_defer_event(
                         event_cls(
                             model_name=child_node.name,
                             ref_model_package=node.package_name,
@@ -629,7 +641,9 @@ class ManifestLoader:
                             ref_model_version=version_to_str(node.version),
                             ref_model_latest_version=str(node.latest_version),
                             ref_model_deprecation_date=node.deprecation_date.isoformat(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_for_spaces_in_resource_names(self):
@@ -676,6 +690,64 @@ class ManifestLoader:
                 )
                 raise DbtValidationError(
                     f"Resource names cannot contain spaces:\n{formatted_resources_with_spaces}\nPlease rename the invalid model(s) so that their name(s) do not contain any spaces."
+                )
+
+        self._check_for_spaces_in_source_and_semantic_model_names(flags)
+
+    def _check_for_spaces_in_source_and_semantic_model_names(self, flags):
+        """Validates that source and semantic model names do not contain spaces.
+
+        Controlled by the `REQUIRE_SOURCE_AND_SEMANTIC_MODEL_NAMES_WITHOUT_SPACES` flag.
+        """
+        error_on_invalid = get_flags().require_source_and_semantic_model_names_without_spaces
+        level = EventLevel.ERROR if error_on_invalid else EventLevel.WARN
+
+        improper_names: dict[str, str] = {}  # unique_id -> original_file_path
+
+        # Check source names (source_name is the source-level name).
+        # Deduplicate by source_name since multiple tables share the same source_name.
+        seen_source_names: set[str] = set()
+        for source in self.manifest.sources.values():
+            if " " in source.source_name and source.source_name not in seen_source_names:
+                seen_source_names.add(source.source_name)
+                source_id = f"source.{source.package_name}.{source.source_name}"
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=source_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[source_id] = source.original_file_path
+
+        # Check semantic model names.
+        for semantic_model in self.manifest.semantic_models.values():
+            if " " in semantic_model.name:
+                if (not improper_names and not error_on_invalid) or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=semantic_model.unique_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_names[semantic_model.unique_id] = semantic_model.original_file_path
+
+        if improper_names:
+            if level == EventLevel.WARN:
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=len(improper_names),
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:
+                formatted = "\n".join(
+                    f"  * '{uid}' ({path})" for uid, path in improper_names.items()
+                )
+                raise DbtValidationError(
+                    f"Resource names cannot contain spaces:\n{formatted}\n"
+                    "Please rename the invalid resource(s) so that their name(s) do not contain any spaces."
                 )
 
     def check_for_microbatch_deprecations(self) -> None:
@@ -1028,22 +1100,24 @@ class ManifestLoader:
             v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
         ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
-        vars_hash = FileHash.from_contents(
-            "\x00".join(
-                [
-                    stringified_cli_vars,
-                    getattr(config.args, "profile", "") or "",
-                    getattr(config.args, "target", "") or "",
-                    __version__,
-                ]
-            )
-        )
+        vars_hash_contents = [
+            stringified_cli_vars,
+            config.profile_name,
+            config.target_name,
+            __version__,
+        ]
+
+        # We only add vars from `vars.yml` if it's present to prevent affecting users not using vars.yml from getting fully parsed.
+        if config.vars_from_file:
+            vars_hash_contents.append(pprint.pformat(config.vars_from_file))
+
+        vars_hash = FileHash.from_contents("\x00".join(vars_hash_contents))
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
                 vars=scrub_secrets(stringified_cli_vars, secret_vars),
-                profile=config.args.profile,
-                target=config.args.target,
+                profile=config.profile_name,
+                target=config.target_name,
                 version=__version__,
             )
         )
@@ -1244,7 +1318,7 @@ class ManifestLoader:
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
         # might have alias/schema/database fields that are updated by yaml config.
-        if semantic_model.depends_on_nodes[0]:
+        if semantic_model.depends_on_nodes:
             refd_node = self.manifest.nodes[semantic_model.depends_on_nodes[0]]
             semantic_model.node_relation = NodeRelation(
                 relation_name=refd_node.relation_name,
@@ -1530,11 +1604,13 @@ class ManifestLoader:
                         models_forcing_concurrent_batches += 1
 
                 if models_forcing_concurrent_batches > 0:
-                    warn_or_error(
+                    fire_or_defer_event(
                         InvalidConcurrentBatchesConfig(
                             num_models=models_forcing_concurrent_batches,
                             adapter_type=adapter.type(),
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
     def check_microbatch_model_has_a_filtered_input(self):
@@ -1651,12 +1727,14 @@ def warn_if_package_node_depends_on_root_project_node(
         and target_model.package_name == current_project
         and ref_package_name != current_project
     ):
-        warn_or_error(
+        fire_or_defer_event(
             PackageNodeDependsOnRootProjectNode(
                 node_name=node.name,
                 package_name=node.package_name,
                 root_project_unique_id=target_model.unique_id,
-            )
+            ),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
         )
 
 
@@ -1741,8 +1819,34 @@ def _warn_for_unused_resource_config_paths(manifest: Manifest, config: RuntimeCo
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
+def _check_function_language_support(manifest: Manifest, config: RuntimeConfig) -> None:
+    """Validate that function languages are supported by the current adapter.
+
+    - JavaScript UDFs are only supported on BigQuery and Snowflake.
+    - JavaScript aggregate UDFs are not supported on Snowflake.
+    """
+    JS_SUPPORTED_ADAPTERS = {"bigquery", "snowflake"}
+    adapter_type = config.credentials.type
+
+    for unique_id, function_node in manifest.functions.items():
+        if function_node.language == FunctionLanguage.javascript:
+            if adapter_type not in JS_SUPPORTED_ADAPTERS:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' uses JavaScript, which is not supported on '{adapter_type}'. "
+                    )
+                )
+            if adapter_type == "snowflake" and function_node.config.type == FunctionType.Aggregate:
+                raise ParsingError(
+                    error_tag(
+                        f"Function '{function_node.name}' is a JavaScript aggregate function and not supported on '{adapter_type}'. "
+                    )
+                )
+
+
 def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
     _check_resource_uniqueness(manifest, config)
+    _check_function_language_support(manifest, config)
     _warn_for_unused_resource_config_paths(manifest, config)
 
 
@@ -1765,7 +1869,15 @@ def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> 
                 and hasattr(node.node, "name")
                 and node.node.name == "doc"
             ):
-                doc_args = [arg.value for arg in node.args]
+                # Only Const is statically resolvable to a block name at parse time.
+                #    * It does have a "value" attribute but mypy is unconvinced so the hasattr is to make it extra happy.
+                # Filter out Const values to avoid raising an unhandled exception attempting
+                # to statically parseother jinja expression nodes (ie Concat, CondExpr)
+                doc_args = [
+                    arg.value
+                    for arg in node.args
+                    if isinstance(arg, Const) and hasattr(arg, "value")
+                ]
 
                 if len(doc_args) == 1:
                     package, name = None, doc_args[0]
@@ -1926,14 +2038,51 @@ def _process_refs(
         node.depends_on.add_node(target_model_id)
 
 
-def _process_metric_depends_on(
+def _add_depends_on_metrics_to_v2_metric(
+    metric: Metric,
+    input_metrics: List[MetricInput],
+    manifest: Manifest,
+    current_project: str,
+) -> None:
+    """Set the depends_on property for a v2 metric that depends on other metrics"""
+    for input_metric in input_metrics:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest,
+            current_project=current_project,
+            metric=target_metric,
+        )
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
+def _process_metric_depends_on_semantic_models_for_measures(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
-    """For a given metric, set the `depends_on` property"""
+    """For a given v1 metric, set the `depends_on` property"""
 
-    assert len(metric.type_params.input_measures) > 0
+    assert (
+        len(metric.type_params.input_measures) > 0
+        or metric.type_params.metric_aggregation_params is not None
+    ), f"{metric} should have a measure or agg type defined, but it does not."
     for input_measure in metric.type_params.input_measures:
         target_semantic_model = manifest.resolve_semantic_model_for_measure(
             target_measure_name=input_measure.name,
@@ -1954,38 +2103,151 @@ def _process_metric_depends_on(
         metric.depends_on.add_node(target_semantic_model.unique_id)
 
 
+def _process_multiple_metric_inputs(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    metric_inputs: List[MetricInput],
+) -> None:
+    for input_metric in metric_inputs:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest, current_project=current_project, metric=target_metric
+        )
+        for input_measure in target_metric.type_params.input_measures:
+            metric.add_input_measure(input_measure)
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
 def _process_metric_node(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
     """Sets a metric's `input_measures` and `depends_on` properties"""
-
     # This ensures that if this metrics input_measures have already been set
     # we skip the work. This could happen either due to recursion or if multiple
     # metrics derive from another given metric.
     # NOTE: This does not protect against infinite loops
     if len(metric.type_params.input_measures) > 0:
         return
+        # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
+        # probably require passing through / maintaining a "processed" set of metric names)
 
     if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
-        assert (
-            metric.type_params.measure is not None
-        ), f"{metric} should have a measure defined, but it does not."
-        metric.add_input_measure(metric.type_params.measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+        if metric.type is MetricType.SIMPLE and (
+            metric.type_params.measure is None
+            and metric.type_params.metric_aggregation_params is None
+        ):
+            # This should be caught earlier, but just in case, we assert here to avoid
+            # any unexpected behaviors.
+            raise dbt.exceptions.ParsingError(
+                f"Simple metric {metric} should have a measure or agg type defined, but it does not.",
+                node=metric,
+            )
+        elif metric.type is MetricType.CUMULATIVE and (
+            metric.type_params.measure is None
+            and (
+                metric.type_params.cumulative_type_params is None
+                or metric.type_params.cumulative_type_params.metric is None
+            )
+        ):
+            raise dbt.exceptions.ParsingError(
+                f"Cumulative metric {metric} should have a measure or input_metric defined, but it does not.",
+                node=metric,
+            )
+        if metric.type_params.measure is not None:
+            # v1 dependencies
+            metric.add_input_measure(metric.type_params.measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest, current_project=current_project, metric=metric
+            )
+        else:
+            # v2 dependencies
+            if metric.type is MetricType.SIMPLE:
+                semantic_model_dependency = metric.type_params.get_semantic_model_name()
+                if semantic_model_dependency is None:
+                    raise dbt.exceptions.ParsingError(
+                        f"Simple metric `{metric.name}` must be attached to a semantic model.",
+                        node=metric,
+                    )
+                unique_id = (
+                    f"{NodeType.SemanticModel}.{current_project}.{semantic_model_dependency}"
+                )
+                metric.depends_on.add_node(unique_id)
+            if metric.type is MetricType.CUMULATIVE:
+                cumulative_type_params = metric.type_params.cumulative_type_params
+                input_metric = (
+                    cumulative_type_params.metric if cumulative_type_params is not None else None
+                )
+                assert (
+                    input_metric is not None
+                ), f"Cumulative metric `{metric.name}` must have a metric as an input."
+                _add_depends_on_metrics_to_v2_metric(
+                    metric,
+                    input_metrics=[input_metric],
+                    manifest=manifest,
+                    current_project=current_project,
+                )
     elif metric.type is MetricType.CONVERSION:
         conversion_type_params = metric.type_params.conversion_type_params
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        metric.add_input_measure(conversion_type_params.base_measure)
-        metric.add_input_measure(conversion_type_params.conversion_measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+        # Handle old-style YAML measure inputs
+        base_measure = conversion_type_params.base_measure
+        conversion_measure = conversion_type_params.conversion_measure
+        base_metric = conversion_type_params.base_metric
+        conversion_metric = conversion_type_params.conversion_metric
+        if base_measure is not None or conversion_measure is not None:
+            # v1 dependencies
+            assert base_measure is not None and conversion_measure is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base measure "
+                + "and conversion measure defined."
+            )
+            metric.add_input_measure(base_measure)
+            metric.add_input_measure(conversion_measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest,
+                current_project=current_project,
+                metric=metric,
+            )
+        elif base_metric is not None or conversion_metric is not None:
+            # v2 dependencies
+            assert base_metric is not None and conversion_metric is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base metric "
+                + "and conversion metric defined."
+            )
+            _add_depends_on_metrics_to_v2_metric(
+                metric,
+                input_metrics=[base_metric, conversion_metric],
+                manifest=manifest,
+                current_project=current_project,
+            )
+        else:
+            raise dbt.exceptions.ParsingError(
+                f"Depending the version of YAML being used, conversion metric `{metric.name}` "
+                + "must have base and conversion measures or base and conversion metrics defined.",
+                node=metric,
+            )
+
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
         if metric.type is MetricType.RATIO:
@@ -2003,7 +2265,6 @@ def _process_metric_node(
                 current_project=current_project,
                 node_package=metric.package_name,
             )
-
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
                     f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
@@ -2014,7 +2275,6 @@ def _process_metric_node(
                     f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
                     node=metric,
                 )
-
             _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )
@@ -2224,9 +2484,9 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
 
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
-    path = os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME)
     semantic_manifest = SemanticManifest(manifest)
-    semantic_manifest.write_json_to_file(path)
+    semantic_manifest.write_json_to_file(os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME))
+    semantic_manifest.write_osi_document_to_file(os.path.join(target_path, OSI_DOCUMENT_FILE_NAME))
 
 
 def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):

@@ -4,7 +4,7 @@ from typing import Iterable, Iterator, NewType, Optional, Set
 
 import networkx as nx  # type: ignore
 
-from dbt_common.exceptions import DbtInternalError
+from dbt_common.exceptions import CompilationError, DbtInternalError
 
 UniqueId = NewType("UniqueId", str)
 
@@ -157,7 +157,7 @@ class Graph:
 
         for node in include_nodes:
             if node not in new_graph:
-                raise ValueError(
+                raise CompilationError(
                     "Couldn't find model '{}' -- does it exist or is it disabled?".format(node)
                 )
 

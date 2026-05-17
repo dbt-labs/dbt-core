@@ -667,3 +667,13 @@ sources:
       - name: test_table
         loaded_at_field: 'id'
 """
+
+null_tables_source_schema_yml = """
+sources:
+  - name: test_source
+    tables:
+"""
+
+null_sources_schema_yml = """
+sources:
+"""

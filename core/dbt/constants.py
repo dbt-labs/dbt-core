@@ -1,4 +1,4 @@
-from dbt_semantic_interfaces.type_enums import TimeGranularity
+from metricflow_semantic_interfaces.type_enums import TimeGranularity
 
 DEFAULT_ENV_PLACEHOLDER = "DBT_DEFAULT_PLACEHOLDER"
 
@@ -12,11 +12,13 @@ PIN_PACKAGE_URL = (
 )
 
 DBT_PROJECT_FILE_NAME = "dbt_project.yml"
+VARS_FILE_NAME = "vars.yml"
 PACKAGES_FILE_NAME = "packages.yml"
 DEPENDENCIES_FILE_NAME = "dependencies.yml"
 PACKAGE_LOCK_FILE_NAME = "package-lock.yml"
 MANIFEST_FILE_NAME = "manifest.json"
 SEMANTIC_MANIFEST_FILE_NAME = "semantic_manifest.json"
+OSI_DOCUMENT_FILE_NAME = "osi_document.json"
 LEGACY_TIME_SPINE_MODEL_NAME = "metricflow_time_spine"
 LEGACY_TIME_SPINE_GRANULARITY = TimeGranularity.DAY
 MINIMUM_REQUIRED_TIME_SPINE_GRANULARITY = TimeGranularity.DAY

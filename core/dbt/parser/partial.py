@@ -23,6 +23,7 @@ from dbt.node_types import NodeType
 from dbt_common.context import get_invocation_context
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 
 mssat_files = (
     ParseFileType.Model,
@@ -135,7 +136,7 @@ class PartialParsing:
                 if self.saved_files[file_id].parse_file_type == ParseFileType.Schema:
                     sf = self.saved_files[file_id]
                     if type(sf).__name__ != "SchemaSourceFile":
-                        raise Exception(f"Serialization failure for {file_id}")
+                        raise DbtInternalError(f"Serialization failure for {file_id}")
                     changed_schema_files.append(file_id)
                 else:
                     if self.saved_files[file_id].parse_file_type in mg_files:
@@ -210,7 +211,7 @@ class PartialParsing:
         parser_name = parse_file_type_to_parser[source_file.parse_file_type]
         project_name = source_file.project_name
         if not parser_name or not project_name:
-            raise Exception(
+            raise DbtInternalError(
                 f"Did not find parse_file_type or project_name "
                 f"in SourceFile for {source_file.file_id}"
             )
@@ -324,7 +325,7 @@ class PartialParsing:
         elif new_source_file.parse_file_type == ParseFileType.Function:
             self.update_function_in_saved(new_source_file, old_source_file)
         else:
-            raise Exception(f"Invalid parse_file_type in source_file {file_id}")
+            raise DbtInternalError(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
 
     # Models, seeds, snapshots: patches and tests
@@ -423,7 +424,40 @@ class PartialParsing:
     ) -> None:
         if self.already_scheduled_for_parsing(old_source_file):
             return
+
+        # Check if this file was absorbed as a function overload.
+        # If so, invalidate and re-parse the root function instead.
+        if (
+            not old_source_file.functions
+            and old_source_file.file_id in self.saved_manifest.function_overload_owners
+        ):
+            self._invalidate_overload_owner(old_source_file, new_source_file)
+            return
+
         self.delete_function_node(old_source_file)
+        self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
+        self.add_to_pp_files(new_source_file)
+
+    def _invalidate_overload_owner(
+        self, old_source_file: SourceFile, new_source_file: SourceFile
+    ) -> None:
+        """When an overload SQL file changes, invalidate its root function
+        so that the root gets re-parsed and re-absorbs the updated overload body."""
+        root_unique_id = self.saved_manifest.function_overload_owners[old_source_file.file_id]
+
+        # Find the root function's source file and schedule it for re-parsing
+        if root_unique_id in self.saved_manifest.functions:
+            root_node = self.saved_manifest.functions[root_unique_id]
+            root_file_id = root_node.file_id
+            if root_file_id in self.saved_files:
+                root_source_file = self.saved_files[root_file_id]
+                if isinstance(root_source_file, SourceFile):
+                    self.delete_function_node(root_source_file)
+                    if root_file_id in self.new_files:
+                        self.saved_files[root_file_id] = deepcopy(self.new_files[root_file_id])
+                    self.add_to_pp_files(root_source_file)
+
+        # Update the overload file in saved files (content changed)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -589,7 +623,7 @@ class PartialParsing:
                 if node.resource_type == NodeType.Test and node.test_node_type == "generic":
                     schema_file_id = node.file_id
                     schema_file = self.saved_manifest.files[schema_file_id]
-                    (key, name) = schema_file.get_key_and_name_for_test(node.unique_id)
+                    key, name = schema_file.get_key_and_name_for_test(node.unique_id)
                     if key and name:
                         patch_list = []
                         if key in schema_file.dict_from_yaml:
@@ -667,6 +701,11 @@ class PartialParsing:
         # duplicate when it's re-added
         source_file.functions.remove(function_unique_id)
 
+        # If this root function had overloads, re-schedule their SQL files for
+        # parsing so the overload nodes get re-created before YAML absorption.
+        if hasattr(function_node, "overloads") and function_node.overloads:
+            self._reschedule_overload_files(function_unique_id)
+
         # If this function had a schema patch, schedule that schema element to be reapplied.
         patch_path = function_node.patch_path
         if (
@@ -687,6 +726,23 @@ class PartialParsing:
         # Finally, remove the deleted function file from saved files
         if source_file.file_id in self.saved_manifest.files:
             self.saved_manifest.files.pop(source_file.file_id)
+
+    def _reschedule_overload_files(self, root_unique_id: str) -> None:
+        """When a root function with overloads is invalidated, re-schedule its
+        overload SQL files for parsing so the nodes exist for re-absorption."""
+        overload_file_ids = [
+            fid
+            for fid, root_uid in self.saved_manifest.function_overload_owners.items()
+            if root_uid == root_unique_id
+        ]
+        for file_id in overload_file_ids:
+            if file_id in self.saved_files:
+                # Use new file content if available, otherwise re-use saved
+                if file_id in self.new_files:
+                    self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                self.add_to_pp_files(self.saved_files[file_id])
+            # Remove the stale mapping — it will be re-created during absorption
+            del self.saved_manifest.function_overload_owners[file_id]
 
     # Schema files -----------------------
     # Changed schema files
@@ -963,6 +1019,14 @@ class PartialParsing:
             # find related tests and remove them
             self.remove_tests(schema_file, dict_key, elem["name"])
 
+        # v2 inline semantic models are created as a side effect of patching a model node.
+        # They live in schema_file.semantic_models / saved_manifest.semantic_models but are NOT
+        # represented under dict_from_yaml["semantic_models"] — so the usual semantic_models key
+        # diff path never cleans them up.  We must clean them up here whenever the model entry
+        # changes or is deleted, otherwise the re-patch creates a duplicate.
+        if dict_key == "models":
+            self._delete_v2_semantic_model_for_model(schema_file, elem)
+
     def remove_tests(self, schema_file, dict_key, name):
         tests = schema_file.get_tests(dict_key, name)
         for test_unique_id in tests:
@@ -1101,6 +1165,50 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
+    def _delete_v2_semantic_model_for_model(self, schema_file, elem):
+        """Clean up a v2 inline semantic model (and its metrics) that was created as a
+        side effect of patching a model node.  v2 semantic models are not represented
+        under dict_from_yaml["semantic_models"], so the normal semantic_models diff path
+        never removes them.  This method looks in the saved manifest directly rather than
+        relying on elem["semantic_model"] (which is the *new* value for changed elements
+        and may no longer reflect what was previously parsed).
+        """
+        model_name = elem["name"]
+        # parse_v2_semantic_model_from_dbt_model_patch always sets sm.model to this string.
+        model_ref = f"ref('{model_name}')"
+
+        # v1 semantic models are declared under the "semantic_models:" top-level YAML key.
+        # They are handled by the normal semantic_models diff path — never touch them here.
+        v1_sm_names = {e["name"] for e in schema_file.dict_from_yaml.get("semantic_models", [])}
+
+        sm_names_to_clean = []
+        for unique_id in schema_file.semantic_models.copy():
+            if unique_id in self.saved_manifest.semantic_models:
+                sm = self.saved_manifest.semantic_models[unique_id]
+                if sm.model == model_ref and sm.name not in v1_sm_names:
+                    sm_names_to_clean.append(sm.name)
+                    if unique_id in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[unique_id])
+                    self.saved_manifest.semantic_models.pop(unique_id)
+                    schema_file.semantic_models.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+
+        if not sm_names_to_clean:
+            return
+
+        # Clean up create_metric-style auto-generated metrics (stored in metrics_from_measures).
+        if schema_file.generated_metrics:
+            schema_file.fix_metrics_from_measures()
+        for sm_name in sm_names_to_clean:
+            if sm_name in schema_file.metrics_from_measures:
+                for unique_id in schema_file.metrics_from_measures[sm_name]:
+                    if unique_id in self.saved_manifest.metrics:
+                        self.saved_manifest.metrics.pop(unique_id)
+                    elif unique_id in self.saved_manifest.disabled:
+                        self.delete_disabled(unique_id, schema_file.file_id)
+                del schema_file.metrics_from_measures[sm_name]
+
     def delete_schema_semantic_model(self, schema_file, semantic_model_dict):
         semantic_model_name = semantic_model_dict["name"]
         semantic_models = schema_file.semantic_models.copy()
@@ -1156,6 +1264,10 @@ class PartialParsing:
                         self.saved_files[file_id] = deepcopy(self.new_files[file_id])
                     if file_id and file_id in self.saved_files:
                         self.add_to_pp_files(self.saved_files[file_id])
+                    # If this root had overloads, re-schedule their SQL files too so
+                    # the overload nodes exist in the manifest before YAML re-absorption.
+                    if hasattr(removed_function, "overloads") and removed_function.overloads:
+                        self._reschedule_overload_files(unique_id)
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
@@ -1182,7 +1294,7 @@ class PartialParsing:
         return (orig_source_schema_file, orig_source)
 
     def remove_source_override_target(self, source_dict):
-        (orig_file, orig_source) = self.get_source_override_file_and_dict(source_dict)
+        orig_file, orig_source = self.get_source_override_file_and_dict(source_dict)
         if orig_source:
             self.delete_schema_source(orig_file, orig_source)
             self.merge_patch(orig_file, "sources", orig_source)

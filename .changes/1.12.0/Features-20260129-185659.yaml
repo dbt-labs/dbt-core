@@ -1,0 +1,6 @@
+kind: Features
+body: Implement primary_entity field for semantic models in semantic YAML v2.
+time: 2026-01-29T18:56:59.184109-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12414"

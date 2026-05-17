@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Move `click` minimum to 8.3.0
+time: 2026-01-21T17:17:12.251254-06:00
+custom:
+  Author: QMalcolm
+  Issue: "12378"

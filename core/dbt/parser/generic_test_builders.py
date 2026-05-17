@@ -14,6 +14,7 @@ from dbt.exceptions import (
     TagsNotListOfStringsError,
     TestArgIncludesModelError,
     TestArgsNotDictError,
+    TestConfigNotDictError,
     TestDefinitionDictLengthError,
     TestNameNotStringError,
     TestTypeError,
@@ -94,6 +95,7 @@ class TestBuilder(Generic[Testable]):
         "fail_calc",
         "store_failures",
         "store_failures_as",
+        "sql_header",
         "meta",
         "database",
         "schema",
@@ -137,6 +139,18 @@ class TestBuilder(Generic[Testable]):
         if "config" in self.args:
             self.config.update(self._render_values(self.args.pop("config", {})))
 
+        # Gate sql_header behind behavior change flag
+        if (
+            self.config.get("sql_header") is not None
+            and not get_flags().require_sql_header_in_test_configs
+        ):
+            deprecations.warn(
+                "custom-key-in-config-deprecation",
+                key="sql_header",
+                file=target.original_file_path,
+                key_path="models.config",
+            )
+
         if self.namespace is not None:
             self.package_name = self.namespace
 
@@ -173,6 +187,8 @@ class TestBuilder(Generic[Testable]):
 
     def _process_legacy_args(self):
         config = {}
+        if "config" in self.args and not isinstance(self.args["config"], dict):
+            raise TestConfigNotDictError(self.args["config"])
         for key in self.CONFIG_ARGS:
             value = self.args.pop(key, None)
             if value and "config" in self.args and key in self.args["config"]:
@@ -237,9 +253,24 @@ class TestBuilder(Generic[Testable]):
         # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
         if get_flags().require_generic_test_arguments_property:
             arguments = test_args.pop("arguments", {})
-            if not arguments and any(
-                k not in ("config", "column_name", "description", "name") for k in test_args.keys()
-            ):
+            for k in test_args.keys():
+                if k in TestBuilder.CONFIG_ARGS:
+                    deprecations.warn(
+                        "property-moved-to-config-deprecation",
+                        key=k,
+                        file=file_path,
+                        key_path=f"data_tests.{test_name}.{k}",
+                    )
+
+            top_level_keys = (
+                "config",
+                "column_name",
+                "description",
+                "name",
+                *TestBuilder.CONFIG_ARGS,
+            )
+
+            if not arguments and any(k not in top_level_keys for k in test_args.keys()):
                 resource = (
                     f"'{resource_name}' in package '{package_name}'"
                     if package_name

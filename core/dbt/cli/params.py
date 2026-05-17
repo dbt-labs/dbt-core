@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 import click
 
@@ -8,11 +9,14 @@ from dbt.cli.option_types import (
     ChoiceTuple,
     Package,
     SampleType,
+    SqlParseOptionsType,
     WarnErrorOptionsType,
 )
 from dbt.cli.options import MultiOption
 from dbt.cli.resolvers import default_profiles_dir, default_project_dir
 from dbt.version import get_version_information
+from dbt_common.constants import ENGINE_ENV_PREFIX
+from dbt_common.exceptions import DbtInternalError
 
 # --- shared option specs --- #
 model_decls = ("-m", "--models", "--model")
@@ -25,18 +29,46 @@ select_attrs = {
     "type": tuple,
 }
 
+
+@dataclass(frozen=True, init=False)
+class EngineEnvVar:
+    name: str
+    old_name: Optional[str] = None
+
+    def __init__(self, envvar: str) -> None:
+        if envvar.startswith(ENGINE_ENV_PREFIX):
+            object.__setattr__(self, "name", envvar)
+            object.__setattr__(self, "old_name", None)
+        elif envvar.startswith("DBT"):
+            object.__setattr__(self, "name", envvar.replace("DBT", f"{ENGINE_ENV_PREFIX}"))
+            object.__setattr__(self, "old_name", envvar)
+        else:
+            raise DbtInternalError(
+                f"Invalid environment variable: {envvar}, this will only happen if we add a new option to dbt that has an envvar that doesn't start with DBT_ or {ENGINE_ENV_PREFIX}"
+            )
+
+
 # Record of env vars associated with options
-KNOWN_ENV_VARS: List[str] = []
+KNOWN_ENV_VARS: List[EngineEnvVar] = []
 
 
 def _create_option_and_track_env_var(
     *args: Any, **kwargs: Any
 ) -> Callable[[click.decorators.FC], click.decorators.FC]:
+    """
+    Abstraction that ensures that all options with env vars are
+    * tracked (used in validation later)
+    * have a `DBT_ENGINE_` prefixed env var
+    """
     global KNOWN_ENV_VARS
 
     envvar = kwargs.get("envvar", None)
     if isinstance(envvar, str):
-        KNOWN_ENV_VARS.append(envvar)
+        engine_env_var = EngineEnvVar(envvar)
+        KNOWN_ENV_VARS.append(engine_env_var)
+        if engine_env_var.old_name is not None:
+            # Order matters, the first envvar in the list is preferred
+            kwargs["envvar"] = [engine_env_var.name, engine_env_var.old_name]
 
     return click.option(*args, **kwargs)
 
@@ -296,6 +328,14 @@ inline = _create_option_and_track_env_var(
     help="Pass SQL inline to dbt compile and show",
 )
 
+sql = _create_option_and_track_env_var(
+    "--sql",
+    envvar=None,
+    help="Execute ad-hoc SQL/Jinja directly via dbt run-operation, without requiring a macro definition.",
+    type=click.STRING,
+    default=None,
+)
+
 inline_direct = _create_option_and_track_env_var(
     "--inline-direct",
     envvar=None,
@@ -376,6 +416,17 @@ macro_debugging = _create_option_and_track_env_var(
     "--macro-debugging/--no-macro-debugging",
     envvar="DBT_MACRO_DEBUGGING",
     hidden=True,
+)
+
+
+sqlparse_options = _create_option_and_track_env_var(
+    "--sqlparse",
+    envvar="DBT_ENGINE_SQLPARSE",
+    hidden=True,
+    help="Set sqlparse options MAX_GROUPING_DEPTH and MAX_GROUPING_TOKENS as YAML.",
+    type=SqlParseOptionsType(),
+    default='{"MAX_GROUPING_DEPTH": null, "MAX_GROUPING_TOKENS": null}',
+    is_eager=True,
 )
 
 models = _create_option_and_track_env_var(*model_decls, **select_attrs)  # type: ignore[arg-type]
@@ -629,6 +680,14 @@ skip_profile_setup = _create_option_and_track_env_var(
     envvar=None,
     help="Skip interactive profile setup.",
     is_flag=True,
+)
+
+skip_debug = _create_option_and_track_env_var(
+    "--skip-debug",
+    envvar=None,
+    help="Skip running dbt debug after project initialization.",
+    is_flag=True,
+    default=False,
 )
 
 source = _create_option_and_track_env_var(

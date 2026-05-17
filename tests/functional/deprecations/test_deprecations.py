@@ -19,9 +19,9 @@ from dbt.events.types import (
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     EnvironmentVariableNamespaceDeprecation,
+    GenerateSchemaNameNullValueDeprecation,
     GenericJSONSchemaValidationDeprecation,
     MissingArgumentsPropertyInGenericTestDeprecation,
-    MissingPlusPrefixDeprecation,
     ModelParamUsageDeprecation,
     ModulesItertoolsUsageDeprecation,
     PackageRedirectDeprecation,
@@ -38,6 +38,8 @@ from tests.functional.deprecations.fixtures import (
     custom_key_in_object_yaml,
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
+    generate_schema_name_null_return_macro_sql,
+    generic_test_config_as_top_level_yaml,
     invalid_deprecation_date_yaml,
     models_custom_key_in_config_non_static_parser_sql,
     models_custom_key_in_config_sql,
@@ -46,6 +48,8 @@ from tests.functional.deprecations.fixtures import (
     multiple_custom_keys_in_config_yaml,
     pre_post_hook_in_config_yaml,
     property_moved_to_config_yaml,
+    python_model_py,
+    python_model_yml,
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
 )
@@ -396,6 +400,21 @@ class TestCustomKeyInConfigSQLDeprecation:
             in event_catcher.caught_events[0].info.msg
         )
 
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    @mock.patch(
+        "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases",
+        return_value=["my_custom_key"],
+    )
+    def test_custom_key_in_config_sql_deprecation_adapter_specific_config_key_aliases(
+        self, mock_get_aliases, project
+    ):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
 
 class TestCustomKeyInConfigComplexSQLDeprecation(TestCustomKeyInConfigSQLDeprecation):
     @pytest.fixture(scope="class")
@@ -686,7 +705,7 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING": "True",
         },
     )
-    def test_environment_variable_namespace_deprecation(self):
+    def test_environment_variable_namespace_deprecation(self, project):
         event_catcher = EventCatcher(event_to_catch=EnvironmentVariableNamespaceDeprecation)
 
         run_dbt(["parse", "--show-all-deprecations"], callbacks=[event_catcher.catch])
@@ -695,45 +714,6 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING"
             == event_catcher.caught_events[0].data.env_var
         )
-
-
-class TestMissingPlusPrefixDeprecation:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"enabled": True}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `enabled`" in event_catcher.caught_events[0].info.msg
-
-
-class TestMissingPlusPrefixDeprecationSubPath:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"+enabled": True, "sub_path": {"enabled": True}}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation_sub_path(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `enabled`" in event_catcher.caught_events[0].info.msg
-
-
-class TestMissingPlusPrefixDeprecationCustomConfig:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"custom_config": True, "sub_path": {"+enabled": True}}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation_sub_path(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `custom_config`" in event_catcher.caught_events[0].info.msg
 
 
 class TestCustomConfigInDbtProjectYmlNoDeprecation:
@@ -746,6 +726,21 @@ class TestCustomConfigInDbtProjectYmlNoDeprecation:
         note_catcher = EventCatcher(Note)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[note_catcher.catch])
         assert len(note_catcher.caught_events) == 0
+
+
+class TestCustomKeyInConfigDbtProjectYmlDeprecation:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"models": {"my_custom_key": True}}
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_custom_key_in_config_dbt_project_yml_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
 
 
 class TestJsonSchemaValidationGating:
@@ -923,4 +918,97 @@ class TestPrePostHookNoFalsePositiveDeprecation:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[event_catcher.catch],
         )
+        assert len(event_catcher.caught_events) == 0
+
+
+class TestGenerateSchemaNameNullValueDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": generate_schema_name_null_return_macro_sql,
+        }
+
+    def test_generate_schema_name_null_value_deprecation(self, project):
+        event_catcher = EventCatcher(GenerateSchemaNameNullValueDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+        assert "Node 'model.test.models_trivial' has a schema set to None as a result of a generate_schema_name call." in event_catcher.caught_events[
+            0
+        ].info.msg.replace(
+            "\n", " "
+        )
+
+
+class TestPythonModelConfigAdditionsDontRaiseDeprecations:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "trivial_model.sql": models_trivial__model_sql,
+            "python_model.py": python_model_py,
+            "python_model.yml": python_model_yml,
+        }
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_python_model_config_additions_dont_raise_deprecations(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
+
+class TestMissingArgsVsPropertyMovedToConfig:
+    """Regression test for #12572 — when a config property like `where` is
+    defined at the top level of a generic test, it should raise
+    PropertyMovedToConfigDeprecation, not MissingArgumentsPropertyInGenericTestDeprecation."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": generic_test_config_as_top_level_yaml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"flags": {"require_generic_test_arguments_property": True}}
+
+    def test_config_key_raises_correct_deprecation(self, project):
+        # Should fire PropertyMovedToConfigDeprecation, not MissingArgumentsPropertyInGenericTestDeprecation
+        moved_catcher = EventCatcher(PropertyMovedToConfigDeprecation)
+        missing_catcher = EventCatcher(MissingArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[moved_catcher.catch, missing_catcher.catch],
+        )
+        assert (
+            len(moved_catcher.caught_events) == 1
+        ), "Expected PropertyMovedToConfigDeprecation for `where` at top level of generic test"
+        assert (
+            len(missing_catcher.caught_events) == 0
+        ), "Got MissingArgumentsPropertyInGenericTestDeprecation — wrong deprecation fired for config key"
+
+
+class TestPropertyAliasesInConfig:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"sources": {"test": {"+aliased_key": "value"}}}
+
+    @mock.patch(
+        "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases", return_value={"aliased_key"}
+    )
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_property_aliases_in_config(self, mock_get_aliases, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0

@@ -631,8 +631,8 @@ class TestVerifyArtifacts(BaseVerifyProject):
             manifest_schema_path,
         )
         verify_run_results(project, expected_run_results(), start_time, run_results_schema_path)
-        # manifest written twice, semantic manifest written twice, run results written once
-        assert len(catcher.caught_events) == 5
+        # manifest written twice, semantic manifest written twice, osi_document written twice, run results written once
+        assert len(catcher.caught_events) == 7
         assert (
             len(
                 [
@@ -649,6 +649,16 @@ class TestVerifyArtifacts(BaseVerifyProject):
                     event
                     for event in catcher.caught_events
                     if event.data.artifact_type == "SemanticManifest"
+                ]
+            )
+            > 0
+        )
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "OsiDocument"
                 ]
             )
             > 0

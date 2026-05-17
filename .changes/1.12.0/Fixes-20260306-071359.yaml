@@ -1,0 +1,6 @@
+kind: Fixes
+body: Update URL and name of behavior change flag for `require_ref_searches_node_package_before_root`
+time: 2026-03-06T07:13:59.659401-07:00
+custom:
+    Author: dbeatty10
+    Issue: "12324"

@@ -44,7 +44,10 @@ class TestModelContractNumericNoPrecision:
         expected_msg = "Detected columns with numeric type and unspecified precision/scale, this can lead to unintended rounding: ['non_integer']"
         _, logs = run_dbt_and_capture(["run"], expect_pass=True)
         assert expected_msg in logs
-        _, logs = run_dbt_and_capture(["--warn-error", "run"], expect_pass=False)
+        _, logs = run_dbt_and_capture(
+            ["--warn-error-options", "{'error': 'all', 'warn': ['DeprecationsSummary']}", "run"],
+            expect_pass=False,
+        )
         assert "Compilation Error in model my_numeric_model" in logs
         assert expected_msg in logs
 

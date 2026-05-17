@@ -45,6 +45,9 @@ def get_rendered_model_config(**updates):
         "begin": None,
         "concurrent_batches": None,
         "freshness": None,
+        "on_error": None,
+        "static_analysis": None,
+        "latest_version_view": {"enabled": None, "alias": None},
     }
     result.update(updates)
     return result
@@ -85,6 +88,7 @@ def get_rendered_seed_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -138,6 +142,7 @@ def get_rendered_snapshot_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -158,6 +163,7 @@ def get_rendered_tst_config(**updates):
         "severity": "ERROR",
         "store_failures": None,
         "store_failures_as": None,
+        "sql_header": None,
         "warn_if": "!= 0",
         "error_if": "!= 0",
         "fail_calc": "count(*)",
@@ -167,6 +173,7 @@ def get_rendered_tst_config(**updates):
         "schema": "dbt_test__audit",
         "alias": None,
         "meta": {},
+        "static_analysis": None,
     }
     result.update(updates)
     return result
@@ -196,10 +203,18 @@ def relation_name_format(quote_database: bool, quote_schema: bool, quote_identif
 def checksum_file(path):
     """windows has silly git behavior that adds newlines, and python does
     silly things if we just open(..., 'r').encode('utf-8').
+
+    seed files should not have their contents normalized to mirror the normalize_file_contents usage during file loading
     """
     with open(path, "rb") as fp:
         # We strip the file contents because we want the checksum to match the stored contents
-        hashed = hashlib.sha256(fp.read().strip()).hexdigest()
+        file_contents = fp.read().strip()
+        # Normalize non-seed contents
+        if not path.endswith(".csv"):
+            file_contents = " ".join(file_contents.decode("utf-8").split()).encode("utf-8")
+
+        hashed = hashlib.sha256(file_contents).hexdigest()
+
     return {
         "name": "sha256",
         "checksum": hashed,
@@ -312,6 +327,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -324,6 +341,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -336,6 +355,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -348,6 +369,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -360,6 +383,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -423,6 +448,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -435,6 +462,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -447,6 +476,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -459,6 +490,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -471,6 +504,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -523,6 +558,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -535,6 +572,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -547,6 +586,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -559,6 +600,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -571,6 +614,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -646,7 +691,14 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
-                "compiled_path": None,
+                "compiled_path": os.path.join(
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
+                ),
                 "build_path": None,
                 "created_at": ANY,
                 "checksum": checksum_file(snapshot_path),
@@ -809,6 +861,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "description": "An ID field",
                         "name": "id",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -830,6 +884,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "loaded_at_query": None,
                     "loaded_at_field": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {
@@ -1081,6 +1136,8 @@ def expected_references_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1093,6 +1150,8 @@ def expected_references_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1159,6 +1218,8 @@ def expected_references_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1171,6 +1232,8 @@ def expected_references_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1232,6 +1295,8 @@ def expected_references_manifest(project):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1244,6 +1309,8 @@ def expected_references_manifest(project):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1256,6 +1323,8 @@ def expected_references_manifest(project):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1268,6 +1337,8 @@ def expected_references_manifest(project):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1280,6 +1351,8 @@ def expected_references_manifest(project):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1316,7 +1389,14 @@ def expected_references_manifest(project):
             },
             "snapshot.test.snapshot_seed": {
                 "alias": "snapshot_seed",
-                "compiled_path": None,
+                "compiled_path": os.path.join(
+                    "target",
+                    "compiled",
+                    "test",
+                    "snapshots",
+                    "snapshot_seed.sql",
+                    "snapshot_seed.sql",
+                ),
                 "build_path": None,
                 "created_at": ANY,
                 "checksum": checksum_file(snapshot_path),
@@ -1363,6 +1443,8 @@ def expected_references_manifest(project):
                 "columns": {
                     "id": {
                         "description": "An ID field",
+                        "dimension": None,
+                        "entity": None,
                         "name": "id",
                         "data_type": None,
                         "meta": {},
@@ -1385,6 +1467,7 @@ def expected_references_manifest(project):
                     "loaded_at_field": None,
                     "loaded_at_query": None,
                     "meta": {},
+                    "static_analysis": None,
                     "tags": [],
                 },
                 "quoting": {
@@ -1607,6 +1690,12 @@ def expected_references_manifest(project):
                 "meta": {
                     "some_key": 100,
                 },
+                "config": {
+                    "meta": {
+                        "some_key": 100,
+                    },
+                    "docs": {"node_color": None, "show": True},
+                },
                 "patch_path": "test://" + os.path.join("macros", "schema.yml"),
                 "resource_type": "macro",
                 "unique_id": "macro.test.test_nothing",
@@ -1659,6 +1748,8 @@ def expected_versions_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1674,6 +1765,8 @@ def expected_versions_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1746,6 +1839,8 @@ def expected_versions_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1761,6 +1856,8 @@ def expected_versions_manifest(project):
                     "extra": {
                         "description": "",
                         "name": "extra",
+                        "dimension": None,
+                        "entity": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,

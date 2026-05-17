@@ -54,9 +54,7 @@ def project_schema() -> Dict[str, Any]:
     global _PROJECT_SCHEMA
 
     if _PROJECT_SCHEMA is None:
-        _PROJECT_SCHEMA = load_json_from_package(
-            jsonschema_type="project", filename="0.0.110.json"
-        )
+        _PROJECT_SCHEMA = load_json_from_package(jsonschema_type="project", filename="latest.json")
     return _PROJECT_SCHEMA
 
 
@@ -118,6 +116,24 @@ def _get_allowed_config_key_aliases() -> List[str]:
             config_aliases.extend(_ADAPTER_TO_CONFIG_ALIASES[adapter])
 
     return config_aliases
+
+
+def _get_allowed_config_fields_for_project_property(schema, property_field_name) -> List[str]:
+    property_defn = schema["properties"].get(property_field_name)
+    property_defn_name = None
+    if property_defn and "anyOf" in property_defn:
+        for any_of_item in property_defn["anyOf"]:
+            if "$ref" in any_of_item:
+                property_defn_name = any_of_item["$ref"].split("/")[-1]
+                break
+
+    if property_defn_name is None:
+        return []
+
+    allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
+    # in dbt_project.yml keys should have a + prefix
+    allowed_config_fields.update([f"+{key}" for key in _get_allowed_config_key_aliases()])
+    return list(allowed_config_fields)
 
 
 def _get_allowed_config_fields_from_error_path(
@@ -183,6 +199,15 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     if key == "type_params":
                         continue
 
+                    # 'dataset' and 'project' are valid top-level source properties for BigQuery
+                    if (
+                        len(error_path) == 2
+                        and error_path[0] == "sources"
+                        and isinstance(error_path[1], int)
+                        and key in _get_allowed_config_key_aliases()
+                    ):
+                        continue
+
                     if key == "overrides" and key_path.startswith("sources"):
                         deprecations.warn(
                             "source-override-deprecation",
@@ -230,20 +255,33 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             )
             # dbt_project.yml configs
             elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
+                allowed_config_fields = _get_allowed_config_fields_for_project_property(
+                    schema, property_field_name=error_path[0]
+                )
                 for sub_error in sub_errors:
-                    if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
-                        # Only raise type-errors if they are indicating leaf config without a plus prefix
-                        if (
-                            len(sub_error.path) > 0
-                            and isinstance(sub_error.path[-1], str)
-                            and not sub_error.path[-1].startswith("+")
-                        ):
-                            deprecations.warn(
-                                "missing-plus-prefix-in-config-deprecation",
-                                key=sub_error.path[-1],
-                                file=file_path,
-                                key_path=error_path_to_string(sub_error),
-                            )
+                    if not isinstance(sub_error, ValidationError) or sub_error.validator != "type":
+                        continue
+                    if not sub_error.path or not isinstance(sub_error.path[-1], str):
+                        continue
+
+                    key = sub_error.path[-1]
+                    had_valid_config_key_in_path = any(
+                        k in allowed_config_fields for k in sub_error.path
+                    )
+                    if f"+{key}" in allowed_config_fields and not had_valid_config_key_in_path:
+                        deprecations.warn(
+                            "missing-plus-prefix-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
+                    elif key not in allowed_config_fields:
+                        deprecations.warn(
+                            "custom-key-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=error_path_to_string(sub_error),
+                        )
         elif error.validator == "type":
             # Not deprecating invalid types yet
             pass
@@ -256,7 +294,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             )
 
 
-def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+def validate_model_config(
+    config: Dict[str, Any], file_path: str, is_python_model: bool = False
+) -> None:
     if not _can_run_validations():
         return
 
@@ -287,6 +327,23 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
                     # Avoids false positives as described in https://github.com/dbt-labs/dbt-core/issues/12087
                     if key in ("post-hook", "pre-hook"):
                         continue
+
+                    # Special case for python model internal key additions
+                    # These keys are added during python model parsing and are not user-provided
+                    python_model_internal_keys = (
+                        "config_keys_used",
+                        "config_keys_defaults",
+                        "meta_keys_used",
+                        "meta_keys_defaults",
+                    )
+                    if key in python_model_internal_keys and is_python_model:
+                        continue
+
+                    # Dont raise deprecation warnings for adapter specific config key aliases
+                    if key in _get_allowed_config_key_aliases():
+                        continue
+
+                    # For everything else, emit deprecation warning
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
                         key=key,

@@ -1,0 +1,6 @@
+kind: Features
+body: Deprecate null return values from generate_schema_name macro, behind require_valid_schema_from_generate_schema_name flag
+time: 2026-01-15T13:11:15.787477-05:00
+custom:
+    Author: michelleark
+    Issue: "12347"

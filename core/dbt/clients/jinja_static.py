@@ -17,6 +17,17 @@ if typing.TYPE_CHECKING:
 _TESTING_MACRO_CACHE: Dict[str, Any] = {}
 
 
+def statically_check_has_jinja(source: Optional[str]) -> bool:
+    """Returns True if the source string contains Jinja delimiters (`{{` or `{%`).
+
+    Used as a fast-path check to skip Jinja parsing/compilation for plain SQL.
+    Safely handles None.
+    """
+    if not source:
+        return False
+    return "{{" in source or "{%" in source
+
+
 def statically_extract_has_name_this(source: str) -> bool:
     """Checks whether the raw jinja has any references to `this`"""
     env = get_environment(None, capture_macros=True)
