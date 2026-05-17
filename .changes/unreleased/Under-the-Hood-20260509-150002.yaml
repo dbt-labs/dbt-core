@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove unreachable duplicate `seed` branch in ParsedNode._deserialize
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "11040"

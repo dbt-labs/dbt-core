@@ -47,6 +47,7 @@ from dbt.contracts.graph.nodes import (
     Macro,
     Metric,
     ModelNode,
+    ParsedNode,
     SeedNode,
     SemanticModel,
     SnapshotNode,
@@ -745,6 +746,15 @@ def test_seed_basic(basic_parsed_seed_dict, basic_parsed_seed_object, minimal_pa
 def test_seed_complex(complex_parsed_seed_dict, complex_parsed_seed_object):
     assert_symmetric(complex_parsed_seed_object, complex_parsed_seed_dict)
     assert complex_parsed_seed_object.get_materialization() == "seed"
+
+
+def test_parsed_node_deserialize_seed_returns_seed_node(basic_parsed_seed_dict):
+    # Regression test for dbt-labs/dbt-core#11040: ParsedNode._deserialize
+    # previously had two `elif resource_type == "seed":` branches; the second
+    # was unreachable. Ensure the single branch still produces a SeedNode.
+    node = ParsedNode._deserialize(basic_parsed_seed_dict)
+    assert isinstance(node, SeedNode)
+    assert node.resource_type == NodeType.Seed
 
 
 unchanged_seeds = [
