@@ -7,7 +7,7 @@ from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, write_file
+from dbt.tests.util import get_manifest, run_dbt, write_file
 
 double_it_sql = """
 SELECT value * 2
@@ -467,6 +467,14 @@ class TestCanUseSourceInUDF:
         assert isinstance(agate_table, agate.Table)
         assert agate_table.column_names == ("summed_numbers",)
         assert agate_table.rows == [(6,)]
+
+    def test_source_udf_depends_on_nodes(self, project):
+        run_dbt(["seed"])
+        run_dbt(["compile"])
+        manifest = get_manifest(project.project_root)
+        function_node = manifest.functions.get("function.test.sum_numbers_function")
+        assert function_node is not None
+        assert "source.test.test_source.numbers_seed" in function_node.depends_on.nodes
 
 
 class TestCanConfigFunctionsFromProjectConfig:
