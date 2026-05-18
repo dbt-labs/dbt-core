@@ -189,6 +189,7 @@ pub fn setup_redshift_profile(
         db_groups: None,
         ra3_node: None,
         datasharing: None,
+        drop_without_cascade: None,
         autocommit: None,
         retries: None,
         method: None,

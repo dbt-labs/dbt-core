@@ -1397,6 +1397,10 @@ impl AdapterImpl {
                 self.engine().as_ref(),
                 "datasharing",
             )?)),
+            (Redshift, "drop_without_cascade") => Ok(Some(get_bool_config(
+                self.engine().as_ref(),
+                "drop_without_cascade",
+            )?)),
             (Databricks, _) => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
@@ -5102,6 +5106,40 @@ mod tests {
         let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
         let result = adapter
             .has_feature(&state, "datasharing", CancellationToken::never_cancels())
+            .unwrap();
+        assert_eq!(result, Some(true));
+    }
+
+    #[test]
+    fn test_has_feature_drop_without_cascade_false_by_default() {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let adapter = AdapterImpl::new(engine(Redshift), None);
+        let result = adapter
+            .has_feature(
+                &state,
+                "drop_without_cascade",
+                CancellationToken::never_cancels(),
+            )
+            .unwrap();
+        assert_eq!(result, Some(false));
+    }
+
+    #[test]
+    fn test_has_feature_drop_without_cascade_true_when_set() {
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let config = Mapping::from_iter([
+            ("database".into(), "mydb".into()),
+            ("drop_without_cascade".into(), true.into()),
+        ]);
+        let adapter = AdapterImpl::new(build_engine(Redshift, config), None);
+        let result = adapter
+            .has_feature(
+                &state,
+                "drop_without_cascade",
+                CancellationToken::never_cancels(),
+            )
             .unwrap();
         assert_eq!(result, Some(true));
     }

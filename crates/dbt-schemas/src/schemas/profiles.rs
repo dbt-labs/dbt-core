@@ -215,6 +215,7 @@ impl DbConfig {
                 "db_groups",
                 "ra3_node",
                 "datasharing",
+                "drop_without_cascade",
                 "connect_timeout",
                 "role",
                 "retries",
@@ -576,6 +577,8 @@ pub struct RedshiftDbConfig {
     pub ra3_node: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub datasharing: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drop_without_cascade: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub autocommit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1563,6 +1566,7 @@ pub struct RedshiftTargetEnv {
     pub db_groups: Option<Vec<String>>,
     pub ra3_node: Option<bool>,
     pub datasharing: Option<bool>,
+    pub drop_without_cascade: Option<bool>,
     pub connect_timeout: Option<i64>,
     pub role: Option<String>,
     pub retries: i64,
@@ -1911,6 +1915,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     db_groups: config.db_groups,
                     ra3_node: config.ra3_node,
                     datasharing: config.datasharing,
+                    drop_without_cascade: config.drop_without_cascade,
                     connect_timeout: config.connect_timeout,
                     role: config.role,
                     retries: config.retries.unwrap_or(1),
@@ -2273,6 +2278,31 @@ extensions:
         assert!(duckdb_config.extensions.is_some());
         let extensions = duckdb_config.extensions.unwrap();
         assert_eq!(extensions.len(), 3);
+    }
+
+    #[test]
+    fn test_redshift_drop_without_cascade_round_trips_through_connection_mapping() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: redshift\n\
+             host: localhost\n\
+             user: u\n\
+             port: 5439\n\
+             database: mydb\n\
+             schema: public\n\
+             drop_without_cascade: true",
+        )
+        .unwrap();
+
+        let DbConfig::Redshift(ref redshift_config) = config else {
+            panic!("Expected DbConfig::Redshift, got {config:?}");
+        };
+        assert_eq!(redshift_config.drop_without_cascade, Some(true));
+
+        let mapping = config.to_connection_mapping().unwrap();
+        let value = mapping
+            .get(dbt_yaml::Value::from("drop_without_cascade"))
+            .expect("drop_without_cascade should be present in connection mapping");
+        assert_eq!(value.as_bool(), Some(true));
     }
 
     #[test]
