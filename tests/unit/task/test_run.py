@@ -17,7 +17,7 @@ from dbt.artifacts.resources.base import FileHash
 from dbt.artifacts.resources.types import NodeType, RunHookType
 from dbt.artifacts.resources.v1.components import DependsOn
 from dbt.artifacts.resources.v1.config import Hook, NodeConfig
-from dbt.artifacts.resources.v1.model import LatestVersionView, ModelConfig
+from dbt.artifacts.resources.v1.model import LatestVersionPointer, ModelConfig
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
@@ -159,7 +159,7 @@ class TestModelRunner:
         model_runner.execute(model=table_model, manifest=manifest)
         # TODO: Assert that the model was executed
 
-    def test_materialize_latest_version_view_for_latest_version(
+    def test_materialize_latest_version_pointer_for_latest_version(
         self, mocker: MockerFixture, model_runner: ModelRunner
     ) -> None:
         @dataclass
@@ -182,7 +182,7 @@ class TestModelRunner:
         model.latest_version = 2
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(enabled=True),
+            latest_version_pointer=LatestVersionPointer(enabled=True),
         )
 
         source_relation = FakeRelation(
@@ -209,7 +209,7 @@ class TestModelRunner:
             model_runner, "_materialization_relations", return_value=[pointer_relation]
         )
 
-        pointer_relations = model_runner._materialize_latest_version_view(
+        pointer_relations = model_runner._materialize_latest_version_pointer(
             manifest=manifest,
             model=model,
             context={"context_macro_stack": []},
@@ -221,7 +221,7 @@ class TestModelRunner:
             model_runner.config.project_name, "view", model_runner.adapter.type()
         )
 
-    def test_materialize_latest_version_view_uses_custom_alias(
+    def test_materialize_latest_version_pointer_uses_custom_alias(
         self, mocker: MockerFixture, model_runner: ModelRunner
     ) -> None:
         @dataclass
@@ -244,7 +244,7 @@ class TestModelRunner:
         model.latest_version = 2
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(enabled=True, alias="latest_alias"),
+            latest_version_pointer=LatestVersionPointer(enabled=True, alias="latest_alias"),
         )
 
         source_relation = FakeRelation(
@@ -274,7 +274,7 @@ class TestModelRunner:
             model_runner, "_materialization_relations", return_value=[pointer_relation]
         )
 
-        pointer_relations = model_runner._materialize_latest_version_view(
+        pointer_relations = model_runner._materialize_latest_version_pointer(
             manifest=manifest,
             model=model,
             context={"context_macro_stack": []},
@@ -288,19 +288,19 @@ class TestModelRunner:
         assert synthetic_node.alias == "latest_alias"
 
     @pytest.mark.parametrize(
-        "version,latest_version,latest_version_view_enabled",
+        "version,latest_version,latest_version_pointer_enabled",
         [
             (1, 2, True),
             (2, 2, False),
         ],
     )
-    def test_materialize_latest_version_view_skips_when_not_needed(
+    def test_materialize_latest_version_pointer_skips_when_not_needed(
         self,
         mocker: MockerFixture,
         model_runner: ModelRunner,
         version: int,
         latest_version: int,
-        latest_version_view_enabled: bool,
+        latest_version_pointer_enabled: bool,
     ) -> None:
         @dataclass
         class FakeRelation:
@@ -319,13 +319,13 @@ class TestModelRunner:
         model.latest_version = latest_version
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(enabled=latest_version_view_enabled),
+            latest_version_pointer=LatestVersionPointer(enabled=latest_version_pointer_enabled),
         )
 
         model_runner.adapter = mocker.Mock()
         manifest = mocker.Mock(spec=Manifest)
 
-        pointer_relations = model_runner._materialize_latest_version_view(
+        pointer_relations = model_runner._materialize_latest_version_pointer(
             manifest=manifest,
             model=model,
             context={"context_macro_stack": []},
@@ -343,7 +343,7 @@ class TestModelRunner:
         model_runner.adapter.Relation.create.assert_not_called()
         manifest.find_macro_by_name.assert_not_called()
 
-    def test_materialize_latest_version_view_synthetic_node_clears_hooks_and_docs(
+    def test_materialize_latest_version_pointer_synthetic_node_clears_hooks_and_docs(
         self, mocker: MockerFixture, model_runner: ModelRunner
     ) -> None:
         """Synthetic node passed to view materialization has hooks cleared and
@@ -369,7 +369,7 @@ class TestModelRunner:
         model.latest_version = 2
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(enabled=True),
+            latest_version_pointer=LatestVersionPointer(enabled=True),
             pre_hook=[Hook(sql="select 1")],
             post_hook=[Hook(sql="select 2")],
         )
@@ -394,7 +394,7 @@ class TestModelRunner:
         )
         mocker.patch.object(model_runner, "_materialization_relations", return_value=[])
 
-        model_runner._materialize_latest_version_view(
+        model_runner._materialize_latest_version_pointer(
             manifest=manifest,
             model=model,
             context={"context_macro_stack": []},
@@ -405,9 +405,9 @@ class TestModelRunner:
         assert synthetic_node.config.pre_hook == []
         assert synthetic_node.config.post_hook == []
         assert synthetic_node.config.persist_docs == {}
-        assert synthetic_node.unique_id == f"{model.unique_id}__latest_version_view"
+        assert synthetic_node.unique_id == f"{model.unique_id}__latest_version_pointer"
 
-    def test_materialize_latest_version_view_errors_on_alias_collision(
+    def test_materialize_latest_version_pointer_errors_on_alias_collision(
         self, mocker: MockerFixture, model_runner: ModelRunner
     ) -> None:
         @dataclass
@@ -427,7 +427,7 @@ class TestModelRunner:
         model.latest_version = 2
         model.config = ModelConfig(
             materialized="table",
-            latest_version_view=LatestVersionView(enabled=True, alias="versioned_model_v2"),
+            latest_version_pointer=LatestVersionPointer(enabled=True, alias="versioned_model_v2"),
         )
 
         source_relation = FakeRelation(
@@ -441,7 +441,7 @@ class TestModelRunner:
         )
 
         with pytest.raises(DbtRuntimeError, match="already aliased"):
-            model_runner._materialize_latest_version_view(
+            model_runner._materialize_latest_version_pointer(
                 manifest=manifest,
                 model=model,
                 context={"context_macro_stack": []},
