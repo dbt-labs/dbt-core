@@ -146,6 +146,7 @@ pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
     AdapterType::Databricks,
     AdapterType::Redshift,
     AdapterType::DuckDB,
+    AdapterType::Salesforce,
 ];
 
 #[cfg(test)]
