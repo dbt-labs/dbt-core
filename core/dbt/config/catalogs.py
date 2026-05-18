@@ -112,6 +112,11 @@ def load_catalogs_v2(
     if not raw_yaml:
         return []
 
+    if not isinstance(raw_yaml, dict):
+        raise DbtValidationError(
+            f"catalogs.yml must be a mapping at the top level, got {type(raw_yaml).__name__}"
+        )
+
     if "iceberg_catalogs" in raw_yaml:
         raise DbtValidationError("v2 catalogs.yml uses 'catalogs', not 'iceberg_catalogs'")
 
