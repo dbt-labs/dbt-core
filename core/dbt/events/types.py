@@ -2374,9 +2374,7 @@ class StatsLine(InfoLevel):
         return "Z023"
 
     def message(self) -> str:
-        stats_line = (
-            "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} NO-OP={noop} TOTAL={total}"
-        )
+        stats_line = "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} NO-OP={noop} REUSED={reused} TOTAL={total}"
         return stats_line.format(**self.stats)
 
 
