@@ -424,7 +424,8 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
                 msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
                 "and its spec is liable to change. "
                 "See https://github.com/dbt-labs/dbt-core/discussions/12723"
-            )
+            ),
+            EventLevel.WARN,
         )
         # Parse + validate structurally before adapter registration — no adapter needed.
         # Keeps validation errors consistent with v1 (fail before adapter is replaced).
