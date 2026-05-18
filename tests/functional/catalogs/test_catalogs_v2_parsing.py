@@ -9,6 +9,14 @@ from dbt.adapters.catalogs import CatalogIntegration, CatalogIntegrationConfig
 from dbt.tests.util import run_dbt, write_config_file
 from dbt_common.exceptions import DbtValidationError
 
+_SENTINEL_CATALOGS_V2 = object()
+
+
+class _MockCapabilityWithV2:
+    """Stub for dbt.cli.requires.Capability that always has CatalogsV2 defined."""
+
+    CatalogsV2 = _SENTINEL_CATALOGS_V2
+
 
 class _AllSupportedCapabilityDict(CapabilityDict):
     """Returns Full support for any capability — used in tests to bypass capability checks."""
@@ -81,6 +89,7 @@ class TestV2HappyPath:
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
         with (
+            mock.patch("dbt.cli.requires.Capability", _MockCapabilityWithV2),
             mock.patch.object(
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),
@@ -130,6 +139,7 @@ class TestV2MultipleCatalogs:
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
         with (
+            mock.patch("dbt.cli.requires.Capability", _MockCapabilityWithV2),
             mock.patch.object(
                 type(project.adapter), "CATALOG_INTEGRATIONS", [StubCatalogIntegration]
             ),

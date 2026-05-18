@@ -459,7 +459,7 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     if use_v2 and catalogs_v2:
         _cat_v2 = getattr(Capability, "CatalogsV2", None)  # type: ignore[attr-defined]
-        if _cat_v2 is not None and not adapter.capabilities()[_cat_v2]:
+        if _cat_v2 is None or not adapter.capabilities()[_cat_v2]:
             raise DbtProjectError(
                 f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
                 f"Use catalogs.yml v1 or upgrade to a supported adapter version."
