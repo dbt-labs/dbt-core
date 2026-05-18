@@ -105,6 +105,50 @@ _VALID_V2_TABLE_FORMATS = {t.value for t in V2TableFormat}
 _VALID_TOP_LEVEL_KEYS = {"name", "type", "table_format", "config"}
 
 
+def _validate_v2_yaml_structure(raw_yaml: Dict[str, Any]) -> List[Any]:
+    if not isinstance(raw_yaml, dict):
+        raise DbtValidationError(
+            f"catalogs.yml must be a mapping at the top level, got {type(raw_yaml).__name__}"
+        )
+    if "iceberg_catalogs" in raw_yaml:
+        raise DbtValidationError("v2 catalogs.yml uses 'catalogs', not 'iceberg_catalogs'")
+    unknown_file_keys = set(raw_yaml.keys()) - {"catalogs"}
+    if unknown_file_keys:
+        raise DbtValidationError(
+            f"Unknown top-level keys in catalogs.yml: {sorted(unknown_file_keys)}. "
+            f"Only 'catalogs' is allowed"
+        )
+    raw_catalogs = raw_yaml.get("catalogs", [])
+    if not isinstance(raw_catalogs, list):
+        raise DbtValidationError(
+            f"'catalogs' in catalogs.yml must be a list, got {type(raw_catalogs).__name__}"
+        )
+    return raw_catalogs
+
+
+def _validate_v2_entry_keys(rendered: Dict[str, Any]) -> None:
+    unknown_keys = set(rendered.keys()) - _VALID_TOP_LEVEL_KEYS
+    if unknown_keys:
+        raise DbtValidationError(
+            f"Unknown keys in catalog entry: {sorted(unknown_keys)}. "
+            f"Allowed keys: {sorted(_VALID_TOP_LEVEL_KEYS)}"
+        )
+    for key in ("name", "type", "table_format", "config"):
+        if key not in rendered:
+            raise DbtValidationError(f"Missing required key '{key}' in catalog entry")
+
+
+def _validate_v2_config(config_raw: Any, name: str) -> Dict[str, Any]:
+    if not isinstance(config_raw, dict):
+        raise DbtValidationError(
+            f"Catalog '{name}' config must be a mapping, got {type(config_raw).__name__}"
+        )
+    for platform, block in config_raw.items():
+        if block is not None and not isinstance(block, dict):
+            raise DbtValidationError(f"Catalog '{name}' config.{platform} must be a mapping")
+    return {k: v for k, v in config_raw.items() if v is not None}
+
+
 def load_catalogs_v2(
     project_dir: str, project_name: str, cli_vars: Dict[str, Any]
 ) -> List[CatalogV2]:
@@ -112,27 +156,7 @@ def load_catalogs_v2(
     if not raw_yaml:
         return []
 
-    if not isinstance(raw_yaml, dict):
-        raise DbtValidationError(
-            f"catalogs.yml must be a mapping at the top level, got {type(raw_yaml).__name__}"
-        )
-
-    if "iceberg_catalogs" in raw_yaml:
-        raise DbtValidationError("v2 catalogs.yml uses 'catalogs', not 'iceberg_catalogs'")
-
-    unknown_file_keys = set(raw_yaml.keys()) - {"catalogs"}
-    if unknown_file_keys:
-        raise DbtValidationError(
-            f"Unknown top-level keys in catalogs.yml: {sorted(unknown_file_keys)}. "
-            f"Only 'catalogs' is allowed"
-        )
-
-    raw_catalogs = raw_yaml.get("catalogs", [])
-    if not isinstance(raw_catalogs, list):
-        raise DbtValidationError(
-            f"'catalogs' in catalogs.yml must be a list, got {type(raw_catalogs).__name__}"
-        )
-
+    raw_catalogs = _validate_v2_yaml_structure(raw_yaml)
     renderer = SecretRenderer(cli_vars)
 
     seen_names: set = set()
@@ -159,16 +183,7 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
     except CompilationError as exc:
         raise DbtValidationError(str(exc)) from exc
 
-    unknown_keys = set(rendered.keys()) - _VALID_TOP_LEVEL_KEYS
-    if unknown_keys:
-        raise DbtValidationError(
-            f"Unknown keys in catalog entry: {sorted(unknown_keys)}. "
-            f"Allowed keys: {sorted(_VALID_TOP_LEVEL_KEYS)}"
-        )
-
-    for key in ("name", "type", "table_format", "config"):
-        if key not in rendered:
-            raise DbtValidationError(f"Missing required key '{key}' in catalog entry")
+    _validate_v2_entry_keys(rendered)
 
     name = rendered["name"]
     if not isinstance(name, str) or not name.strip():
@@ -183,20 +198,11 @@ def load_single_catalog_v2(raw_catalog: Dict[str, Any], renderer: SecretRenderer
             f"Must be one of {sorted(_VALID_V2_TABLE_FORMATS)}"
         )
     table_format = V2TableFormat(raw_format)
-
-    config_raw = rendered["config"]
-    if not isinstance(config_raw, dict):
-        raise DbtValidationError(
-            f"Catalog '{name}' config must be a mapping, got {type(config_raw).__name__}"
-        )
-
-    for platform, block in config_raw.items():
-        if block is not None and not isinstance(block, dict):
-            raise DbtValidationError(f"Catalog '{name}' config.{platform} must be a mapping")
+    config = _validate_v2_config(rendered["config"], name)
 
     return CatalogV2(
         name=name.strip(),
         catalog_type=catalog_type,
         table_format=table_format,
-        config={k: v for k, v in config_raw.items() if v is not None},
+        config=config,
     )

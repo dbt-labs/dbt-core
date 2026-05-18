@@ -404,6 +404,22 @@ def manifest(*args0, write=True, write_perf_info=False):
     return outer_wrapper(args0[0])
 
 
+def _bridge_v2_catalogs(runtime_config: "RuntimeConfig", catalogs_v2: list) -> list:
+    # Bridge requires an adapter instance for type() and override hooks.
+    # parse_manifest will register the adapter again (same config); that
+    # second registration is harmless and ensures integrations are present
+    # when ManifestLoader runs catalog lookups during parsing.
+    register_adapter(runtime_config, get_mp_context())
+    adapter = get_adapter(runtime_config)
+    _cat_v2 = getattr(Capability, "CatalogsV2", None)  # type: ignore[attr-defined]
+    if _cat_v2 is None or not adapter.capabilities()[_cat_v2]:
+        raise DbtProjectError(
+            f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
+            f"Use catalogs.yml v1 or upgrade to a supported adapter version."
+        )
+    return [adapter.bridge_v2_catalog(c) for c in catalogs_v2]
+
+
 def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = False):
     """Load the manifest and add it to the context."""
     req_strs = ["flags", "profile", "project", "runtime_config"]
@@ -427,26 +443,11 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
             ),
             EventLevel.WARN,
         )
-        # Structural validation — no adapter needed.
         catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
         ctx.obj["catalogs"] = catalogs_v2
-
-        if catalogs_v2:
-            # Bridge requires an adapter instance for type() and override hooks.
-            # parse_manifest will register the adapter again (same config); that
-            # second registration is harmless and ensures integrations are present
-            # when ManifestLoader runs catalog lookups during parsing.
-            register_adapter(runtime_config, get_mp_context())
-            _adapter = get_adapter(runtime_config)
-            _cat_v2 = getattr(Capability, "CatalogsV2", None)  # type: ignore[attr-defined]
-            if _cat_v2 is None or not _adapter.capabilities()[_cat_v2]:
-                raise DbtProjectError(
-                    f"Adapter '{_adapter.type()}' does not support catalogs.yml v2 yet. "
-                    f"Use catalogs.yml v1 or upgrade to a supported adapter version."
-                )
-            active_integrations = [_adapter.bridge_v2_catalog(c) for c in catalogs_v2]
-        else:
-            active_integrations = []
+        active_integrations = (
+            _bridge_v2_catalogs(runtime_config, catalogs_v2) if catalogs_v2 else []
+        )
     else:
         catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
         active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]

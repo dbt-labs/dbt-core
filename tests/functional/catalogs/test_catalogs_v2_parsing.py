@@ -37,6 +37,14 @@ class StubCatalogIntegration(CatalogIntegration):
             setattr(self, key, value)
 
 
+def _catalog_entry(name, type_="horizon", table_format="iceberg", config=None):
+    return {"name": name, "type": type_, "table_format": table_format, "config": config or {}}
+
+
+def _catalogs_file(*entries):
+    return {"catalogs": list(entries)}
+
+
 def _mock_bridge(catalog_type: str):
     """Return a bridge side_effect that produces a CatalogWriteIntegrationConfig
     with catalog_type='stub' so StubCatalogIntegration is registered."""
@@ -69,21 +77,12 @@ class TestV2HappyPath:
 
     @pytest.fixture
     def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "my_catalog",
-                    "type": "horizon",
-                    "table_format": "iceberg",
-                    "config": {
-                        "snowflake": {
-                            "external_volume": "s3_vol",
-                            "change_tracking": True,
-                        }
-                    },
-                }
-            ]
-        }
+        return _catalogs_file(
+            _catalog_entry(
+                "my_catalog",
+                config={"snowflake": {"external_volume": "s3_vol", "change_tracking": True}},
+            )
+        )
 
     def test_catalog_registered(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
@@ -118,22 +117,12 @@ class TestV2MultipleCatalogs:
 
     @pytest.fixture
     def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "cat_a",
-                    "type": "horizon",
-                    "table_format": "iceberg",
-                    "config": {"snowflake": {"external_volume": "vol_a"}},
-                },
-                {
-                    "name": "cat_b",
-                    "type": "glue",
-                    "table_format": "iceberg",
-                    "config": {"snowflake": {"external_volume": "vol_b"}},
-                },
-            ]
-        }
+        return _catalogs_file(
+            _catalog_entry("cat_a", config={"snowflake": {"external_volume": "vol_a"}}),
+            _catalog_entry(
+                "cat_b", type_="glue", config={"snowflake": {"external_volume": "vol_b"}}
+            ),
+        )
 
     def test_multiple_catalogs_registered(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
@@ -176,22 +165,10 @@ class TestV2DuplicateCatalogNames:
 
     @pytest.fixture
     def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "dup",
-                    "type": "horizon",
-                    "table_format": "iceberg",
-                    "config": {"snowflake": {"external_volume": "vol"}},
-                },
-                {
-                    "name": "dup",
-                    "type": "glue",
-                    "table_format": "iceberg",
-                    "config": {"snowflake": {"external_volume": "vol"}},
-                },
-            ]
-        }
+        return _catalogs_file(
+            _catalog_entry("dup", config={"snowflake": {"external_volume": "vol"}}),
+            _catalog_entry("dup", type_="glue", config={"snowflake": {"external_volume": "vol"}}),
+        )
 
     def test_duplicate_names_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
@@ -207,16 +184,7 @@ class TestV2InvalidTableFormat:
 
     @pytest.fixture
     def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "cat",
-                    "type": "horizon",
-                    "table_format": "parquet",
-                    "config": {},
-                }
-            ]
-        }
+        return _catalogs_file(_catalog_entry("cat", table_format="parquet"))
 
     def test_invalid_table_format_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
@@ -232,16 +200,7 @@ class TestV2MissingRequiredKey:
 
     @pytest.fixture
     def catalogs(self):
-        return {
-            "catalogs": [
-                {
-                    "name": "cat",
-                    "type": "horizon",
-                    "table_format": "iceberg",
-                    # missing config
-                }
-            ]
-        }
+        return _catalogs_file({"name": "cat", "type": "horizon", "table_format": "iceberg"})
 
     def test_missing_config_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
