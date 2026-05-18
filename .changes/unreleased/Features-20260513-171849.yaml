@@ -1,0 +1,6 @@
+kind: Features
+body: Begin writing OSI SL document at end of parsing
+time: 2026-05-13T17:18:49.359913-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12786"

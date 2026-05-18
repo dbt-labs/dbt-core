@@ -1307,6 +1307,24 @@ class PackageNodeDependsOnRootProjectNode(WarnLevel):
         return warning_tag(msg)
 
 
+class MFConverterIssue(WarnLevel):
+    def code(self) -> str:
+        return "I078"
+
+    def message(self) -> str:
+        if self.issue_type == "CONVERSION_METRIC_DROPPED":
+            msg = f"Metric '{self.element_name}' was excluded from the OSI document: conversion metrics cannot be represented in the OSI format."
+        elif self.issue_type == "PRIVATE_METRIC_DROPPED":
+            msg = f"Metric '{self.element_name}' was excluded from the OSI document: private metrics are not included in OSI output."
+        elif self.issue_type == "NATURAL_ENTITY_DROPPED":
+            msg = f"Entity '{self.element_name}' was excluded from the OSI document: natural entities have no equivalent in the OSI format."
+        elif self.issue_type == "CUMULATIVE_SEMANTICS_LOSS":
+            msg = f"Metric '{self.element_name}' was included in the OSI document, but its cumulative window and grain semantics cannot be represented."
+        else:
+            msg = f"'{self.element_name}' could not be fully represented in the OSI document ({self.issue_type})."
+        return warning_tag(msg)
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -2133,6 +2151,47 @@ class LogFunctionResult(DynamicLevel):
             total=self.total,
             execution_time=self.execution_time,
         )
+
+
+class LogStartOverload(InfoLevel):
+    def code(self) -> str:
+        return "Q048"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status="RUN",
+            index=self.overload_index,
+            total=self.total_overloads,
+        )
+        return f"Overload {formatted}"
+
+
+class LogOverloadResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q049"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status.upper())
+
+        msg = f"{info} {self.description}"
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.overload_index,
+            total=self.total_overloads,
+            execution_time=self.execution_time,
+        )
+        return f"Overload {formatted}"
 
 
 # =======================================================

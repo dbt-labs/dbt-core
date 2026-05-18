@@ -49,7 +49,7 @@ dependencies = [
     "mypy==1.4.1",  # update requires code fixes
     "isort==5.13.2",
     # Testing
-    "pytest>=7.0,<8.0",
+    "pytest>=7.0,<10",
     "pytest-xdist~=3.6",
     "pytest-csv~=3.0",
     "pytest-cov",
@@ -57,15 +57,13 @@ dependencies = [
     "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
-    "pytest-logbook~=1.2",
-    "logbook<1.9",
     "flaky",
     "freezegun>=1.5.1",
     "hypothesis",
     "mocker",
     # Debugging
     "ipdb",
-    "ddtrace==2.21.3",
+    "ddtrace<3.18",
     # Documentation
     "docutils",
     "sphinx",
@@ -82,7 +80,7 @@ dependencies = [
     "types-setuptools",
     # Other
     "pip-tools",
-    "protobuf>=6.0,<7.0",
+    "protobuf>=6.0,<8.0",
 ]
 
 pre-install-commands = [
@@ -178,7 +176,7 @@ dependencies = [
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
     # Testing
     "pre-commit~=3.7.0",
-    "pytest>=7.0,<8.0",
+    "pytest>=7.0,<10",
     "pytest-cov",
     "pytest-xdist~=3.6",
     "pytest-csv~=3.0",
@@ -186,7 +184,7 @@ dependencies = [
     "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
-    "ddtrace==2.21.3",
+    "ddtrace<3.18",
     "flaky",
     "freezegun>=1.5.1",
     "hypothesis",

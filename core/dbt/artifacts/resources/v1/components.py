@@ -18,7 +18,7 @@ from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
-NodeVersion = Union[str, float]
+NodeVersion = Union[int, float, str]
 
 
 def _backcompat_doc_blocks(doc_blocks: Any) -> List[str]:

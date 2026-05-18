@@ -1,4 +1,5 @@
 import threading
+import time
 from dataclasses import replace
 from typing import Any, Dict
 
@@ -10,7 +11,12 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_function_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import FunctionNode
-from dbt.events.types import LogFunctionResult, LogStartLine
+from dbt.events.types import (
+    LogFunctionResult,
+    LogOverloadResult,
+    LogStartLine,
+    LogStartOverload,
+)
 from dbt.task import group_lookup
 from dbt.task.compile import CompileRunner
 from dbt_common.clients.jinja import MacroProtocol
@@ -99,11 +105,35 @@ class FunctionRunner(CompileRunner[FunctionNode]):
         # earlier failures; the order in which overloads are created does not
         # affect database-side dispatch.
         overload_results = OverloadResults()
-        overload_errors: list[str] = []
-        for overload in compiled_node.overloads:
+        total_overloads = len(compiled_node.overloads)
+        group = group_lookup.get(compiled_node.unique_id)
+        for idx, overload in enumerate(compiled_node.overloads, start=1):
+            overload_desc = f"function {compiled_node.name} overload {overload.defined_in}"
+
             if overload.defined_in in already_successful:
                 overload_results.successful.append(overload.defined_in)
+                fire_event(
+                    LogOverloadResult(
+                        description=overload_desc,
+                        status="skipped",
+                        overload_index=idx,
+                        total_overloads=total_overloads,
+                        execution_time=0.0,
+                        node_info=self.node.node_info,
+                        group=group,
+                    ),
+                    level=EventLevel.INFO,
+                )
                 continue
+
+            fire_event(
+                LogStartOverload(
+                    description=overload_desc,
+                    overload_index=idx,
+                    total_overloads=total_overloads,
+                    node_info=self.node.node_info,
+                )
+            )
 
             overload_node = replace(
                 compiled_node,
@@ -112,12 +142,36 @@ class FunctionRunner(CompileRunner[FunctionNode]):
                 compiled_code=overload.compiled_body or "",
             )
             overload_ctx = generate_runtime_function_context(overload_node, self.config, manifest)
+            overload_started_at = time.time()
             try:
                 MacroGenerator(materialization_macro, context=overload_ctx)()
                 overload_results.successful.append(overload.defined_in)
+                fire_event(
+                    LogOverloadResult(
+                        description=overload_desc,
+                        status=str(RunStatus.Success),
+                        overload_index=idx,
+                        total_overloads=total_overloads,
+                        execution_time=time.time() - overload_started_at,
+                        node_info=self.node.node_info,
+                        group=group,
+                    ),
+                    level=EventLevel.INFO,
+                )
             except Exception as e:
                 overload_results.failed.append(overload.defined_in)
-                overload_errors.append(f"{overload.defined_in}: {e}")
+                fire_event(
+                    LogOverloadResult(
+                        description=f"{overload_desc}: {e}",
+                        status=str(RunStatus.Error),
+                        overload_index=idx,
+                        total_overloads=total_overloads,
+                        execution_time=time.time() - overload_started_at,
+                        node_info=self.node.node_info,
+                        group=group,
+                    ),
+                    level=EventLevel.ERROR,
+                )
 
         result = self.build_result(compiled_node, context)
         result.overload_results = overload_results
@@ -125,20 +179,6 @@ class FunctionRunner(CompileRunner[FunctionNode]):
         if overload_results.failed:
             result.status = RunStatus.PartialSuccess
             result.message = f"PARTIAL SUCCESS {compiled_node.name}"
-            # Surface the per-overload errors so users see what failed.
-            for err in overload_errors:
-                fire_event(
-                    LogFunctionResult(
-                        description=f"function {compiled_node.name} overload {err}",
-                        status=str(RunStatus.Error),
-                        index=self.node_index,
-                        total=self.num_nodes,
-                        execution_time=0.0,
-                        node_info=self.node.node_info,
-                        group=group_lookup.get(compiled_node.unique_id),
-                    ),
-                    level=EventLevel.ERROR,
-                )
 
         return result
 

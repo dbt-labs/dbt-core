@@ -1102,3 +1102,20 @@ derived_semantics_with_doc_jinja_yml = """
           type: categorical
           expr: id
 """
+
+semantic_model_schema_yml_v2_entity_without_name = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue.
+    semantic_model: true
+    columns:
+      - name: id
+        entity:
+          type: primary
+      - name: second_col
+        granularity: day
+        dimension:
+          type: time
+      - name: foreign_key
+        entity:
+          type: foreign
+"""

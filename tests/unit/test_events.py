@@ -317,6 +317,7 @@ sample_values = [
     core_types.PackageNodeDependsOnRootProjectNode(
         node_name="", node_package="", root_project_unique_id=""
     ),
+    core_types.MFConverterIssue(issue_type="", element_name="", converter_name=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -470,6 +471,14 @@ sample_values = [
         status="",
         index=0,
         total=0,
+        execution_time=0,
+    ),
+    core_types.LogStartOverload(description="", overload_index=0, total_overloads=0),
+    core_types.LogOverloadResult(
+        description="",
+        status="",
+        overload_index=0,
+        total_overloads=0,
         execution_time=0,
     ),
     # W - Node testing ======================
