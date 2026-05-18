@@ -153,7 +153,7 @@ class SemanticManifest:
         from metricflow.converters.msi_to_osi import MSIToOSIConverter
 
         try:
-            result = MSIToOSIConverter().convert(self._get_pydantic_semantic_manifest())
+            result = MSIToOSIConverter().convert(self.get_pydantic_semantic_manifest())
         except RuntimeError as exc:
             fire_event(
                 SemanticValidationFailure(

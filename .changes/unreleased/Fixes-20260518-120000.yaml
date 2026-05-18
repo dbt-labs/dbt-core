@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix `AttributeError` when writing the OSI document during manifest parsing
+    caused by a call to a non-existent `_get_pydantic_semantic_manifest` method.
+time: 2026-05-18T12:00:00.000000-05:00
+custom:
+    Author: colin-rogers-dbt
+    Issue: "0000"
