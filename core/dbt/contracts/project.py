@@ -97,6 +97,12 @@ class PrivatePackage(Package):
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
 
+    def get_revisions(self) -> List[str]:
+        if self.revision is None:
+            return []
+        else:
+            return [str(self.revision)]
+
 
 @dataclass
 class RegistryPackage(Package):
