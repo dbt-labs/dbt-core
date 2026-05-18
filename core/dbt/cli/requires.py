@@ -436,6 +436,9 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     if use_v2:
         catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
+        # TODO: ctx.obj["catalogs"] is List[CatalogV2] here but downstream tasks
+        # (base.py, build.py, run.py, etc.) annotate it as Optional[List[Catalog]].
+        # Widen signatures to Sequence[Union[Catalog, CatalogV2]] or add a common base.
         ctx.obj["catalogs"] = catalogs_v2
         if catalogs_v2:
             fire_event(
