@@ -599,10 +599,8 @@ pub async fn render_unresolved_sql_files<
         return Ok(Vec::new());
     }
 
-    let mut max_concurrency = crate::parallel::effective_parallelism_with(
-        render_ctx.inner.args.num_threads,
-        render_ctx.inner.args.no_parallel,
-    );
+    let mut max_concurrency =
+        crate::parallel::effective_parallelism(render_ctx.inner.args.no_parallel);
     // TODO: why do we have this override?
     if model_sql_files.len() < 50 {
         max_concurrency = 1;
@@ -694,8 +692,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
         return Ok(Vec::new());
     }
 
-    let max_concurrency =
-        crate::parallel::effective_parallelism_with(arg.num_threads, arg.no_parallel);
+    let max_concurrency = crate::parallel::effective_parallelism(arg.no_parallel);
     let model_vec: Vec<(String, T)> = node_map.into_iter().collect();
     let chunk_size = model_vec.len().div_ceil(max_concurrency);
 

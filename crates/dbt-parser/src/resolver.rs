@@ -1100,8 +1100,7 @@ async fn resolve_package_waves(
     HashMap<String, String>,
     BTreeMap<String, BTreeMap<String, resolve_properties::MinimalPropertiesEntry>>,
 )> {
-    let max_concurrency =
-        crate::parallel::effective_parallelism_with(arg.num_threads, arg.no_parallel);
+    let max_concurrency = crate::parallel::effective_parallelism(arg.no_parallel);
     let arg = Arc::new(arg.clone());
     let macros = Arc::new(macros.clone());
 

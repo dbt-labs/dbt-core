@@ -20,7 +20,10 @@ mod tests {
     use std::sync::Arc;
 
     /// Test that verifies root project config overrides work correctly in both
-    /// sequential and parallel rendering modes by actually calling render_unresolved_sql_files
+    /// sequential and parallel rendering modes by actually calling render_unresolved_sql_files.
+    ///
+    /// Parser parallelism is gated solely by `no_parallel`; `num_threads`
+    /// carries the connection-pool size and must not affect render concurrency.
     #[tokio::test]
     async fn test_render_unresolved_sql_files_config_override() {
         // Set up a temporary directory and create a test SQL file
@@ -75,8 +78,8 @@ mod tests {
                 out_dir: base_path.clone(),
                 ..Default::default()
             },
-            num_threads: Some(1), // Will test both sequential (1) and parallel (>1)
-            no_parallel: false,
+            num_threads: Some(1), // Connection-pool size; parser parallelism is unaffected.
+            no_parallel: true,
             command: FsCommand::Test,
             vars: BTreeMap::new(),
             from_main: false,
@@ -126,7 +129,7 @@ mod tests {
         use dbt_common::cancellation::CancellationToken;
         let token = CancellationToken::never_cancels();
 
-        // Test 1: Sequential rendering (num_threads = 1)
+        // Test 1: Sequential rendering (no_parallel = true)
         let mut node_properties = BTreeMap::new();
         let seq_results = render_unresolved_sql_files::<ModelConfig, ModelProperties>(
             &render_ctx,
@@ -144,9 +147,9 @@ mod tests {
             _ => panic!("Expected schema to be present in sequential result"),
         };
 
-        // Test 2: Parallel rendering (num_threads > 1, and enough files to trigger parallel)
+        // Test 2: Parallel rendering (no_parallel = false, and enough files to trigger parallel)
         let mut parallel_ctx = render_ctx.clone();
-        Arc::make_mut(&mut parallel_ctx.inner).args.num_threads = Some(4);
+        Arc::make_mut(&mut parallel_ctx.inner).args.no_parallel = false;
 
         // Create 60 files to ensure we exceed the 50-file threshold for parallel processing
         let mut many_assets = vec![];

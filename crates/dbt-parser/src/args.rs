@@ -28,9 +28,12 @@ pub struct ResolveArgs {
     pub indirect_selection: Option<IndirectSelection>,
     /// exclude
     pub exclude: Option<SelectExpression>,
-    /// Number of tHreads to use
+    /// Connection-pool size resolved from the profile/CLI `threads` setting.
+    /// Exposed to Jinja as `NUM_THREADS` for dbt parity; do NOT consult this
+    /// to size parser parallelism — use [`no_parallel`] for that.
     pub num_threads: Option<usize>,
-    /// Force sequential rendering/resolution, independent of `num_threads`.
+    /// Force sequential rendering/resolution. This is the only knob that
+    /// controls parser parallelism; otherwise parse saturates CPUs.
     pub no_parallel: bool,
     /// replay mode
     pub replay: Option<dbt_common::io_args::ReplayMode>,

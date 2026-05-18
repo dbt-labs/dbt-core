@@ -2,22 +2,17 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use std::future::Future;
 use tracing::Instrument as _;
 
-/// Returns the effective parallelism level from an optional user-specified thread count.
-/// If `num_threads` is `None` or `0`, returns the number of available CPUs (minimum 1).
-pub fn effective_parallelism(num_threads: Option<usize>) -> usize {
-    num_threads
-        .filter(|&n| n != 0)
-        .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()))
-}
-
-/// Like [`effective_parallelism`] but collapses to 1 when the caller requested
-/// sequential execution via `--no-parallel` (e.g. for deterministic
-/// golden-file output).
-pub fn effective_parallelism_with(num_threads: Option<usize>, no_parallel: bool) -> usize {
+/// Parallelism budget for the parse phase.
+///
+/// Parse is CPU-bound and does not touch the warehouse, so it must NOT be
+/// throttled by the profile's `threads` setting — that knob is exclusively the
+/// adapter connection-pool size. Parse either runs serially (when the caller
+/// passes `--no-parallel`) or saturates the available CPUs.
+pub fn effective_parallelism(no_parallel: bool) -> usize {
     if no_parallel {
         1
     } else {
-        effective_parallelism(num_threads)
+        std::cmp::max(1, num_cpus::get())
     }
 }
 
