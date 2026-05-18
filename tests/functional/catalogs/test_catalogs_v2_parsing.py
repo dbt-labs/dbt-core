@@ -205,5 +205,5 @@ class TestV2MissingRequiredKey:
     def test_missing_config_rejected(self, project, catalogs, adapter):
         write_config_file(catalogs, project.project_root, "catalogs.yml")
 
-        with pytest.raises(DbtValidationError, match="Missing required key 'config'"):
+        with pytest.raises(DbtValidationError, match="Missing required keys.*config"):
             run_dbt(["run"])
