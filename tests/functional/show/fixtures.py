@@ -107,7 +107,3 @@ seeds__sample_seed = """sample_num,sample_bool
 6,false
 7,true
 """
-
-models__model_with_show_in_name = """
-select 1 as id, 'test' as value
-"""
