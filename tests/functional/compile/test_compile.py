@@ -1,11 +1,13 @@
 import json
+import os
 import pathlib
 import re
+import shutil
 
 import pytest
 import sqlparse
 
-from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
+from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.exceptions import DbtRuntimeError
 from tests.functional.assertions.test_runner import dbtTestRunner
@@ -378,3 +380,34 @@ class TestSqlParseOnlyDepthLeavesTokensNone:
     def test_only_depth_set_leaves_tokens_none(self, project):
         run_dbt(["compile", "--sqlparse", '{"MAX_GROUPING_DEPTH": "10000"}'])
         assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None
+
+
+class TestCompileIntersectionStateSelector:
+    """Regression test: ``dbt compile --select 'state:modified+,+state:modified'``
+    must not raise a RuntimeError.  Before the fix, the comma-joined selector
+    was passed unsplit to from_single_spec, producing an invalid value that
+    StateSelectorMethod rejected."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_a.sql": "select 1 as id",
+            "model_b.sql": "select * from {{ ref('model_a') }}",
+        }
+
+    def test_compile_intersection_state_selector(self, project):
+        run_dbt(["run"])
+
+        state_dir = os.path.join(project.project_root, "state")
+        os.makedirs(state_dir, exist_ok=True)
+        shutil.copyfile(
+            os.path.join(project.project_root, "target", "manifest.json"),
+            os.path.join(state_dir, "manifest.json"),
+        )
+
+        write_file("select 1 as id, 'changed' as value", "models", "model_a.sql")
+
+        (results, log_output) = run_dbt_and_capture(
+            ["compile", "--select", "state:modified+,+state:modified", "--state", "./state"]
+        )
+        assert "Compiled node 'model_a' is:" in log_output
