@@ -102,22 +102,22 @@ class TestLoadSingleCatalogV2:
 
     def test_missing_name(self, renderer):
         raw = {"type": "horizon", "table_format": "iceberg", "config": {}}
-        with pytest.raises(DbtValidationError, match="Missing required key 'name'"):
+        with pytest.raises(DbtValidationError, match="Missing required keys.*name"):
             load_single_catalog_v2(raw, renderer)
 
     def test_missing_type(self, renderer):
         raw = {"name": "cat", "table_format": "iceberg", "config": {}}
-        with pytest.raises(DbtValidationError, match="Missing required key 'type'"):
+        with pytest.raises(DbtValidationError, match="Missing required keys.*type"):
             load_single_catalog_v2(raw, renderer)
 
     def test_missing_table_format(self, renderer):
         raw = {"name": "cat", "type": "horizon", "config": {}}
-        with pytest.raises(DbtValidationError, match="Missing required key 'table_format'"):
+        with pytest.raises(DbtValidationError, match="Missing required keys.*table_format"):
             load_single_catalog_v2(raw, renderer)
 
     def test_missing_config(self, renderer):
         raw = {"name": "cat", "type": "horizon", "table_format": "iceberg"}
-        with pytest.raises(DbtValidationError, match="Missing required key 'config'"):
+        with pytest.raises(DbtValidationError, match="Missing required keys.*config"):
             load_single_catalog_v2(raw, renderer)
 
     def test_empty_name_rejected(self, renderer):
