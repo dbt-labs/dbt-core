@@ -432,22 +432,23 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     flags = ctx.obj["flags"]
     project_name = ctx.obj["project"].project_name
-    use_v2 = getattr(flags, "USE_CATALOGS_V2", False)
+    use_v2 = flags.USE_CATALOGS_V2
 
     if use_v2:
-        fire_event(
-            Note(
-                msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
-                "and its spec is liable to change. "
-                "See https://github.com/dbt-labs/dbt-core/discussions/12723"
-            ),
-            EventLevel.WARN,
-        )
         catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
         ctx.obj["catalogs"] = catalogs_v2
-        active_integrations = (
-            _bridge_v2_catalogs(runtime_config, catalogs_v2) if catalogs_v2 else []
-        )
+        if catalogs_v2:
+            fire_event(
+                Note(
+                    msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
+                    "and its spec is liable to change. "
+                    "See https://github.com/dbt-labs/dbt-core/discussions/12723"
+                ),
+                EventLevel.WARN,
+            )
+            active_integrations = _bridge_v2_catalogs(runtime_config, catalogs_v2)
+        else:
+            active_integrations = []
     else:
         catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
         active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]

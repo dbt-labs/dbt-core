@@ -133,9 +133,9 @@ def _validate_v2_entry_keys(rendered: Dict[str, Any]) -> None:
             f"Unknown keys in catalog entry: {sorted(unknown_keys)}. "
             f"Allowed keys: {sorted(_VALID_TOP_LEVEL_KEYS)}"
         )
-    for key in ("name", "type", "table_format", "config"):
-        if key not in rendered:
-            raise DbtValidationError(f"Missing required key '{key}' in catalog entry")
+    missing = [key for key in ("name", "type", "table_format", "config") if key not in rendered]
+    if missing:
+        raise DbtValidationError(f"Missing required keys in catalog entry: {missing}")
 
 
 def _validate_v2_config(config_raw: Any, name: str) -> Dict[str, Any]:
@@ -146,7 +146,7 @@ def _validate_v2_config(config_raw: Any, name: str) -> Dict[str, Any]:
     for platform, block in config_raw.items():
         if block is not None and not isinstance(block, dict):
             raise DbtValidationError(f"Catalog '{name}' config.{platform} must be a mapping")
-    return {k: v for k, v in config_raw.items() if v is not None}
+    return {k: (v if v is not None else {}) for k, v in config_raw.items()}
 
 
 def load_catalogs_v2(
