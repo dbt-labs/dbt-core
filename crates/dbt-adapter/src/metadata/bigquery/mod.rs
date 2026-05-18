@@ -1022,7 +1022,16 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                              database_and_where_clauses: (String, Vec<String>),
                              batch_res: AdapterResult<Arc<RecordBatch>>|
               -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
+            let batch = match batch_res {
+                Ok(b) => b,
+                // Missing dataset surfaces as a BigQuery 404. Treat it like an
+                // empty result so downstream callers (e.g. run cache) see the
+                // relations as having unknown freshness instead of bypassing
+                // entirely. Mirrors the handling in
+                // `list_relations_in_parallel_inner`.
+                Err(e) if e.message().contains("Error 404: Not found:") => return Ok(()),
+                Err(e) => return Err(Cancellable::Error(e)),
+            };
             let schemas = batch.column_values::<StringArray>("table_schema")?;
             let tables = batch.column_values::<StringArray>("table_name")?;
             let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
