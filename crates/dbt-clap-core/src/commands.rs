@@ -165,7 +165,6 @@ pub trait AbstractExtensionCommand: Send + Sync + fmt::Debug + Any {
 
     // TODO: this list of required methods should eventually shrink as we improve the design
     fn to_eval_args(&self, common_args: &CommonArgs, system_arg: SystemArgs) -> FsResult<EvalArgs>;
-    fn is_interactive(&self) -> bool;
     fn common_args(&self) -> CommonArgs;
     fn stage(&self) -> Phases;
     fn as_command(&self) -> FsCommand;

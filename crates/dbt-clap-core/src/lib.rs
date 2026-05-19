@@ -334,29 +334,11 @@ got {:?}, expected an instance of {}",
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
         arg.from_main = from_main;
-        arg.interactive = self.is_interactive();
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
 
         Ok(arg)
-    }
-
-    pub fn is_interactive(&self) -> bool {
-        use CoreCommand::*;
-        match &self.command {
-            Command::Core(core_cmd) => match &core_cmd {
-                Run(args) => args.interactive,
-                Test(args) => args.interactive,
-                Seed(args) => args.interactive,
-                Snapshot(args) => args.interactive,
-                Build(args) => args.interactive,
-                Compile(args) => args.interactive,
-                Show(args) => args.interactive,
-                _ => false,
-            },
-            Command::Extension(ext_cmd) => ext_cmd.is_interactive(),
-        }
     }
 
     // TODO: Box the CommonArgs because it's a 1Kb struct
@@ -573,10 +555,6 @@ pub struct CompileArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
-
     /// Provide SQL content directly to compile as a temporary model
     #[arg(long, conflicts_with = "select", allow_hyphen_values = true)]
     pub inline: Option<String>,
@@ -643,10 +621,6 @@ pub struct SeedArgs {
     // Flattened Common args
     #[clap(flatten)]
     pub common_args: CommonArgs,
-
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -758,10 +732,6 @@ pub struct ShowArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
-
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
     #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
     pub limit: RowLimit,
@@ -815,7 +785,6 @@ impl ShowArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
-        eval_args.interactive = self.interactive;
         eval_args
     }
 }
@@ -829,10 +798,6 @@ pub struct SnapshotArgs {
     // Flattened Common args
     #[clap(flatten)]
     pub common_args: CommonArgs,
-
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -881,10 +846,6 @@ pub struct TestArgs {
     // Flattened Common args
     #[clap(flatten)]
     pub common_args: CommonArgs,
-
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
 
     /// Enable optimizations (testaggregation, testreuse)
     #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
@@ -950,10 +911,6 @@ pub struct BuildArgs {
     // Flattened Common args
     #[clap(flatten)]
     pub common_args: CommonArgs,
-
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
 
     /// Select nodes of a specific type;
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
@@ -1104,10 +1061,6 @@ pub struct RunArgs {
     // Flattened IO args
     #[clap(flatten)]
     pub common_args: CommonArgs,
-
-    /// Drop into an interactive REPL after executing the command
-    #[arg(long, short = 'i', hide = true)]
-    pub interactive: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -2102,7 +2055,7 @@ impl CommonArgs {
             exclude: exclude_option,
             indirect_selection: self.indirect_selection,
             replay,
-            interactive: false,
+            long_living: false,
             skip_semantic_manifest_validation: self.skip_semantic_manifest_validation,
             export_saved_queries: self.export_saved_queries,
             max_depth: 0,

@@ -75,8 +75,8 @@ pub struct RunTasksArgs {
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
     /// Backend used for local execution of runnable nodes
     pub local_execution_backend: LocalExecutionBackendKind,
-    /// Drop into an interactive REPL after executing the command
-    pub interactive: bool,
+    /// Sidecar/service should not time out. (Used by REPL to keep the runner alive across multiple commands.)
+    pub long_living: bool,
     /// Whether to perform a full refresh (rebuild incremental models from scratch)
     pub full_refresh: bool,
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
@@ -126,7 +126,7 @@ impl RunTasksArgs {
             sample_renaming: arg.sample_renaming.clone(),
             phase: arg.phase.clone(),
             local_execution_backend: arg.local_execution_backend,
-            interactive: arg.interactive,
+            long_living: arg.long_living,
             full_refresh: arg.full_refresh,
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),

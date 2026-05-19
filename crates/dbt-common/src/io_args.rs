@@ -480,7 +480,9 @@ pub struct EvalArgs {
     pub update_deps: bool,
     pub replay: Option<ReplayMode>,
     pub static_analysis: Option<StaticAnalysisKind>,
-    pub interactive: bool,
+    /// A signal used to keep sidecar runners alive (no idle timeout).
+    /// Set programmatically by `dbt-repl`; not exposed as a CLI flag on `dbt`.
+    pub long_living: bool,
     pub skip_semantic_manifest_validation: bool,
     pub export_saved_queries: bool,
     pub task_cache_url: String,
