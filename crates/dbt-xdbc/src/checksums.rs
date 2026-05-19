@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 129] = [
+); 133] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -91,6 +91,22 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.9"),
         "4aaf192f26f791ab58850ff357235717245963e9e83401246ac72b54771517a3",
+    ),
+    (
+        ("clickhouse", "apple-darwin", "aarch64", "0.1.0-alpha.1"),
+        "d7f4dd2f67c4ba4e1569986d893ef9a877c3ae385da4ff3aa1faa646adb96f2a",
+    ),
+    (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0-alpha.1"),
+        "5ea43a9ab39898fb448d23915cbea56c9284afea89d3324501606c3917d3fc37",
+    ),
+    (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0-alpha.1"),
+        "ef018d0c80498777583c92403781d8cda934aa5709dd27b624154f18d3891425",
+    ),
+    (
+        ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0-alpha.1"),
+        "b29e3234db386be0c6e1cad6e4ea4185944dd063cb34d385b8ba3fca7b5451f2",
     ),
     (
         ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.5"),
