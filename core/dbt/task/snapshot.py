@@ -13,9 +13,26 @@ from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
+_DUPLICATE_ROW_DML_ERROR = "duplicate row detected during dml action"
+SNAPSHOT_UNIQUE_KEY_HINT = (
+    "Hint: This can happen when the snapshot's configured `unique_key` is not unique. "
+    "Ensure the `unique_key` column(s) identify a single row in the snapshot query."
+)
+
+
+def _add_snapshot_unique_key_hint(message: str) -> str:
+    if _DUPLICATE_ROW_DML_ERROR not in message.lower() or SNAPSHOT_UNIQUE_KEY_HINT in message:
+        return message
+    return f"{message}\n\n{SNAPSHOT_UNIQUE_KEY_HINT}"
+
+
 class SnapshotRunner(ModelRunner):
     def describe_node(self) -> str:
         return "snapshot {}".format(self.get_node_representation())
+
+    def handle_exception(self, e: Exception, ctx) -> str:
+        message = super().handle_exception(e, ctx)
+        return _add_snapshot_unique_key_hint(message)
 
     def print_result_line(self, result):
         model = result.node
