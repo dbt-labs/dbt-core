@@ -655,7 +655,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -670,7 +669,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -685,7 +683,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
