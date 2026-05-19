@@ -306,7 +306,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Redshift => ("redshift", REDSHIFT_DRIVER_VERSION),
         Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
-        Backend::DuckDBExtended => ("duckdb", DUCKDB_EXTENDED_DRIVER_VERSION),
+        Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::Athena
         | Backend::ClickHouse
@@ -756,7 +756,7 @@ mod tests {
     fn backend_names_and_current_platform_triplet_are_stable() {
         assert_eq!(
             backend_name_and_version(Backend::DuckDBExtended),
-            ("duckdb", DUCKDB_EXTENDED_DRIVER_VERSION)
+            ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION)
         );
         assert_eq!(
             backend_name_and_version(Backend::SQLServer),
