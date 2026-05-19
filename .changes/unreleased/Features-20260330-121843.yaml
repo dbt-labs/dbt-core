@@ -1,5 +1,5 @@
 kind: Features
-body: automatically create a latest-version view (e.g. `dim_customers`) for versioned models, opt-in via `latest_version_view_enabled_by_default` flag or per-model `latest_version_view` config
+body: automatically create a latest-version pointer (e.g. `dim_customers`) for versioned models, opt-in via `latest_version_pointer_enabled_by_default` flag or per-model `latest_version_pointer` config
 time: 2026-03-30T12:18:43+05:30
 custom:
     Author: aahel

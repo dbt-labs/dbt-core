@@ -21,7 +21,7 @@ models:
   - name: versioned_model
     config:
       materialized: table
-      latest_version_view:
+      latest_version_pointer:
         enabled: true
     latest_version: 2
     versions:
@@ -34,7 +34,7 @@ models:
   - name: disabled_pointer_model
     config:
       materialized: table
-      latest_version_view:
+      latest_version_pointer:
         enabled: false
     latest_version: 2
     versions:
@@ -47,7 +47,7 @@ models:
   - name: view_versioned_model
     config:
       materialized: view
-      latest_version_view:
+      latest_version_pointer:
         enabled: true
     latest_version: 2
     versions:
@@ -60,7 +60,7 @@ models:
   - name: aliased_model
     config:
       materialized: table
-      latest_version_view:
+      latest_version_pointer:
         enabled: true
         alias: my_custom_latest
     latest_version: 2
@@ -69,7 +69,7 @@ models:
       - v: 2
 """
 
-# No explicit latest_version_view config — project-level config controls it
+# No explicit latest_version_pointer config — project-level config controls it
 project_disabled_schema_yml = """
 models:
   - name: versioned_model
@@ -195,7 +195,7 @@ class TestLatestVersionPointerViewMaterialization:
         check_relations_equal(project.adapter, ["view_versioned_model", "view_versioned_model_v2"])
 
 
-class TestLatestVersionViewCustomAlias:
+class TestLatestVersionPointerCustomAlias:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -217,14 +217,14 @@ class TestLatestVersionViewCustomAlias:
         check_relations_equal(project.adapter, ["my_custom_latest", "aliased_model_v2"])
 
 
-class TestLatestVersionViewProjectDisabled:
-    """Project-level latest_version_view config disables the view even when flag is on."""
+class TestLatestVersionPointerProjectDisabled:
+    """Project-level latest_version_pointer config disables the view even when flag is on."""
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "flags": {"latest_version_view_enabled_by_default": True},
-            "models": {"+latest_version_view": {"enabled": False}},
+            "flags": {"latest_version_pointer_enabled_by_default": True},
+            "models": {"+latest_version_pointer": {"enabled": False}},
         }
 
     @pytest.fixture(scope="class")

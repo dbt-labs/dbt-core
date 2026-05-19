@@ -51,6 +51,8 @@ def interpret_run_result(result) -> str:
         return "pass"
     elif result.status == NodeStatus.NoOp:
         return "noop"
+    elif result.status == NodeStatus.Reused:
+        return "reused"
     else:
         raise RuntimeError(f"unhandled result {result}")
 
@@ -62,6 +64,7 @@ def print_run_status_line(results) -> None:
         "pass": 0,
         "warn": 0,
         "noop": 0,
+        "reused": 0,
         "total": 0,
     }
 

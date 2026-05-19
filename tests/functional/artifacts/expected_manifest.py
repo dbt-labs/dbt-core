@@ -47,7 +47,7 @@ def get_rendered_model_config(**updates):
         "freshness": None,
         "on_error": None,
         "static_analysis": None,
-        "latest_version_view": {"enabled": None, "alias": None},
+        "latest_version_pointer": {"enabled": None, "alias": None},
     }
     result.update(updates)
     return result

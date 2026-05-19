@@ -1,0 +1,6 @@
+kind: Features
+body: Add support for private git packages in `packages.yml` and `dependencies.yml`. Resolves URLs from a configured environment variable when present, otherwise falls back to constructing an SSH URL.
+time: 2026-05-04T15:01:14.629767-06:00
+custom:
+    Author: dbeatty
+    Issue: "12874"

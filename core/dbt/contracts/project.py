@@ -97,6 +97,12 @@ class PrivatePackage(Package):
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
 
+    def get_revisions(self) -> List[str]:
+        if self.revision is None:
+            return []
+        else:
+            return [str(self.revision)]
+
 
 @dataclass
 class RegistryPackage(Package):
@@ -375,7 +381,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_corrected_analysis_fqns: bool = False
     require_source_and_semantic_model_names_without_spaces: bool = False
     enable_grouped_warn_error_parser_logs: bool = False
-    latest_version_view_enabled_by_default: bool = False
+    use_catalogs_v2: bool = False
+    latest_version_pointer_enabled_by_default: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -401,7 +408,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
             "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
             "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
-            "latest_version_view_enabled_by_default": self.latest_version_view_enabled_by_default,
+            "use_catalogs_v2": self.use_catalogs_v2,
+            "latest_version_pointer_enabled_by_default": self.latest_version_pointer_enabled_by_default,
         }
 
 
