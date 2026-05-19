@@ -9,6 +9,7 @@ mod run_tasks_args;
 pub mod span_manager;
 mod stats_to_results;
 pub mod task;
+pub mod task_spans;
 pub mod test_aggregation;
 pub mod visitor;
 

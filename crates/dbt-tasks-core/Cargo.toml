@@ -30,8 +30,10 @@ arrow-schema = { workspace = true }
 chrono = { workspace = true }
 minijinja = { workspace = true }
 parking_lot = { workspace = true }
+petgraph = { workspace = true }
 regex = { workspace = true }
 scc = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
