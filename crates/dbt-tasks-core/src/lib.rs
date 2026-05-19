@@ -22,6 +22,12 @@ pub use stats_to_results::stats_to_results;
 use dbt_common::FsResult;
 use dbt_schemas::stats::Stats;
 
+/// Preview/show results produced during task execution.
+pub struct Preview {
+    pub columns: Vec<String>,
+    pub rows: Vec<serde_json::Value>,
+}
+
 /// Per-node data returned by pre-run hooks.
 pub trait PreTaskRunData: Send + Sync {
     /// Returns a value for `node_id`, or `None` if not present.

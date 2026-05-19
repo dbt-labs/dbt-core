@@ -13,9 +13,13 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+arrow-schema = { workspace = true }
+async-trait = { workspace = true }
 dbt-adapter = { workspace = true }
 dbt-adapter-core = { workspace = true }
+dbt-clap-core = { workspace = true }
 dbt-common = { workspace = true }
+dbt-dag = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }

@@ -33,6 +33,7 @@ parking_lot = { workspace = true }
 petgraph = { workspace = true }
 regex = { workspace = true }
 scc = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 

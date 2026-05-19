@@ -1,0 +1,56 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use dbt_common::path::DbtPath;
+use dbt_schemas::state::CacheState;
+
+#[derive(Debug)]
+pub struct DbtCustomScheduleDescription {
+    pub unique_ids: Vec<String>,
+    pub include_parents: bool,
+    pub include_children: bool,
+}
+
+pub enum DbtScheduleDescription<'a> {
+    Default,
+    Custom(&'a DbtCustomScheduleDescription),
+    CacheChanges(&'a DbtProjectCompilationCacheChanges),
+}
+
+/// Contains information about which nodes and files
+/// have been created, deleted, changed, or unchanged
+/// from initialization.
+/// This is used to determine what to invalidate in a compilation cache
+/// when running tasks.
+#[derive(Default)]
+pub struct DbtProjectCompilationCacheChanges {
+    pub(crate) build_cache_changes: CacheState,
+}
+
+impl DbtProjectCompilationCacheChanges {
+    pub fn new(build_cache_changes: CacheState) -> Self {
+        Self {
+            build_cache_changes,
+        }
+    }
+
+    pub fn new_files(&self) -> &HashSet<DbtPath> {
+        &self.build_cache_changes.file_changes.new_files
+    }
+
+    pub fn deleted_files(&self) -> &HashSet<DbtPath> {
+        &self.build_cache_changes.file_changes.deleted_files
+    }
+
+    pub fn changed_files(&self) -> &HashSet<DbtPath> {
+        &self.build_cache_changes.file_changes.changed_files
+    }
+
+    pub fn as_cache_state(&self) -> &CacheState {
+        &self.build_cache_changes
+    }
+
+    pub fn changed_nodes(&self) -> &Arc<HashSet<String>> {
+        &self.build_cache_changes.changed_nodes
+    }
+}
