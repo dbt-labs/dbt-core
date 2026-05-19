@@ -684,6 +684,8 @@ pub struct SnowflakeDbConfig {
     pub port: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver_log_level: Option<String>,
     /// Removed field — kept only so that profiles containing it still parse.
     /// The value is ignored; a deprecation warning is emitted at startup.
     #[serde(default, skip_serializing)]

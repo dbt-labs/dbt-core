@@ -629,8 +629,16 @@ fn apply_connection_args(
         builder.with_named_option(snowflake::CLIENT_TIMEOUT, client_timeout)?;
     }
 
-    // disable any logging from Gosnowflake that's not a fatal/panic
-    builder.with_named_option(snowflake::LOG_TRACING, LogLevel::Fatal.to_string())?;
+    // disable any logging from Gosnowflake that's not a fatal/panic by default;
+    // can be overridden via the `driver_log_level` profile field for debugging.
+    let log_tracing = match config.get_str("driver_log_level") {
+        Some(value) => value
+            .parse::<LogLevel>()
+            .map_err(|e| AuthError::config(e.to_string()))?
+            .to_string(),
+        None => LogLevel::Fatal.to_string(),
+    };
+    builder.with_named_option(snowflake::LOG_TRACING, log_tracing)?;
 
     Ok(builder)
 }
@@ -779,6 +787,41 @@ mod tests {
             (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_simple_pass_with_driver_log_level_override() {
+        let mut config = base_config();
+        config.insert("driver_log_level".into(), "debug".into());
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::LOG_TRACING, "debug"),
+            (snowflake::LOGIN_TIMEOUT, LOGIN_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_simple_pass_with_invalid_driver_log_level() {
+        let mut config = base_config();
+        config.insert("driver_log_level".into(), "bogus".into());
+        let auth = SnowflakeAuth {};
+        let result = auth.configure(&AdapterConfig::new(config));
+        match result {
+            Err(AuthError::Config(msg)) => {
+                assert!(
+                    msg.contains("invalid log level"),
+                    "unexpected error message: {msg}"
+                );
+            }
+            other => panic!("Expected AuthError::Config(...), got {other:?}"),
+        }
     }
 
     #[test]
