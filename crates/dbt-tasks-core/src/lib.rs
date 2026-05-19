@@ -12,6 +12,9 @@ pub mod task;
 pub mod test_aggregation;
 pub mod visitor;
 
+use std::path::PathBuf;
+use std::{fmt, io};
+
 pub use run_tasks_args::RunTasksArgs;
 pub use stats_to_results::stats_to_results;
 
@@ -25,9 +28,11 @@ pub trait PreTaskRunData: Send + Sync {
 }
 
 /// Abstract storage for task results. Implementations write serialized output
-/// on demand. `None` storage on `RunTasksOk` means nothing to write.
-pub trait TaskResultStorage: Send + Sync + std::fmt::Debug {
-    fn write_results(&self, writer: &mut dyn std::io::Write) -> FsResult<()>;
+/// on demand.
+pub trait StoreableResults: Send + Sync + fmt::Debug {
+    /// Path relative to the output directory where results should be written.
+    fn out_dir_relpath(&self) -> PathBuf;
+    fn write_results(&self, writer: &mut dyn io::Write) -> FsResult<()>;
 }
 
 /// Core result type from running dbt tasks (compile + run statistics).
@@ -35,15 +40,5 @@ pub trait TaskResultStorage: Send + Sync + std::fmt::Debug {
 pub struct RunTasksOk {
     pub compile_stats: Stats,
     pub run_stats: Stats,
-    pub storage: Option<Box<dyn TaskResultStorage>>,
-}
-
-impl RunTasksOk {
-    pub fn write_results(&self, writer: &mut dyn std::io::Write) -> FsResult<()> {
-        if let Some(s) = &self.storage {
-            s.write_results(writer)
-        } else {
-            Ok(())
-        }
-    }
+    pub storeables: Vec<Box<dyn StoreableResults>>,
 }
