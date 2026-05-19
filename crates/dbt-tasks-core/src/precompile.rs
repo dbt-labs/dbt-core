@@ -1,9 +1,11 @@
+use std::collections::BTreeSet;
+
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_schemas::schemas::{IntrospectionKind, Nodes};
 
 use crate::RunTasksArgs;
 
-pub trait StaticAnalysisBuckets {
+pub trait StaticAnalysisBuckets: Send {
     fn global_static_analysis(&self) -> Option<StaticAnalysisKind>;
 
     fn in_off_closure(&self, node_id: &str) -> bool;
@@ -15,4 +17,9 @@ pub trait StaticAnalysisBuckets {
     fn has_dynamic_closure(&self) -> bool;
 
     fn will_build_phased_task_graph(&self, arg: &RunTasksArgs, task_nodes: &Nodes);
+    fn did_build_phased_task_graph(
+        &self,
+        arg: &RunTasksArgs,
+        nodes_with_no_tasks: &BTreeSet<String>,
+    );
 }

@@ -1,18 +1,26 @@
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
+use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_dag::schedule::Schedule;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::phases::compile::{
+    DependencyValidationConfig, build_compile_node_context_inner,
+};
+use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::materialization_resolver::MaterializationResolver;
-use dbt_schemas::schemas::Nodes;
 use dbt_schemas::schemas::common::UpdatesOn;
-use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, ResolverState};
+use dbt_schemas::schemas::relations::base::BaseRelation;
+use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes, Nodes};
+use dbt_schemas::state::{DbtProfile, DbtRuntimeConfig, NodeResolverTracker, ResolverState};
 use minijinja::Value;
 
 use crate::RunTasksArgs;
@@ -155,4 +163,119 @@ pub trait ExtendedCtx: Send + Sync + Any {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+}
+
+#[derive(Clone)]
+pub struct TaskRunnerCtx {
+    pub inner: Arc<TaskRunnerCtxInner>,
+    pub env: Arc<JinjaEnv>,
+    pub schema_cache: Arc<dyn SchemaStoreTrait>,
+    pub data_store: Arc<dyn DataStoreTrait>,
+    pub resolver_state: Arc<ResolverState>, // TODO: make private
+    pub rendering_listener_factory:
+        Arc<dyn dbt_jinja_utils::listener::RenderingEventListenerFactory>,
+    /// Logical worker slot assigned by the visitor before task execution.
+    /// Appears in stats as `"Thread-{N}"` and in Jinja as `{{ thread_id }}`.
+    pub thread_id: i32,
+    // **** DO NOT ADD Arc<> FIELDS HERE ****
+    // Tokio spends a lot of time deallocating the TaskRunnerCtx for fast operations.
+    // If you need to add a field, add it to TaskRunnerCtxInner instead.
+    // (Plain scalars like thread_id are fine — only Arc/heap fields are expensive to drop.)
+}
+
+impl TaskRunnerCtx {
+    pub async fn is_data_test_reused(&self, _unique_id: String) -> bool {
+        false
+    }
+
+    pub fn root_project_name(&self) -> &str {
+        &self.inner.root_project_name
+    }
+
+    pub fn adapter_type(&self) -> AdapterType {
+        self.inner.adapter_type
+    }
+
+    pub fn extended_ctx<T: ExtendedCtx + 'static>(&self) -> Option<&T> {
+        self.inner.extended_ctx.as_any().downcast_ref::<T>()
+    }
+
+    pub fn dbt_profile(&self) -> &DbtProfile {
+        &self.inner.dbt_profile
+    }
+
+    pub fn runtime_config(&self) -> &DbtRuntimeConfig {
+        &self.inner.runtime_config
+    }
+
+    pub fn generic_test_relationships(&self) -> &GenericTestRelationships {
+        &self.inner.generic_test_relationships
+    }
+
+    pub fn resolver_state(&self) -> &Arc<ResolverState> {
+        &self.resolver_state
+    }
+
+    pub fn has_seed(&self, base_db: &str, base_schema: &str, base_identifier: &str) -> bool {
+        self.resolver_state.nodes.seeds.values().any(|seed| {
+            seed.base().database == base_db
+                && seed.base().schema == base_schema
+                && seed.base().alias == base_identifier
+                && self
+                    .inner
+                    .runnable_set
+                    .contains(seed.common().unique_id.as_str())
+        })
+    }
+
+    pub fn try_get_model_original_file_path(&self, unique_id: &str) -> Option<&PathBuf> {
+        self.resolver_state
+            .nodes
+            .models
+            .get(unique_id)
+            .map(|model| &model.__common_attr__.original_file_path)
+    }
+
+    pub fn try_get_relation_from_node(&self, unique_id: &str) -> Option<Arc<dyn BaseRelation>> {
+        self.resolver_state.nodes.get_node(unique_id).map(|node| {
+            create_relation_from_node(self.adapter_type(), node, None)
+                .expect("Failed to create relation from node")
+                .into()
+        })
+    }
+
+    pub fn defer_nodes(&self) -> Option<&Nodes> {
+        self.resolver_state.defer_nodes.as_ref()
+    }
+
+    /// Get the nodes from the resolver state.
+    pub fn nodes(&self) -> &Nodes {
+        &self.resolver_state.nodes
+    }
+
+    /// Get the node resolver for ref/source resolution.
+    pub fn node_resolver(&self) -> Arc<dyn NodeResolverTracker> {
+        self.resolver_state.node_resolver.clone()
+    }
+
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
+    pub fn build_compile_node_context<T>(
+        &self,
+        model: &T,
+        base_context: &BTreeMap<String, Value>,
+        ref_validation_config: DependencyValidationConfig,
+    ) -> (BTreeMap<String, Value>, Arc<DashMap<String, Value>>)
+    where
+        T: InternalDbtNodeAttributes + ?Sized,
+    {
+        build_compile_node_context_inner(
+            model,
+            self.adapter_type(),
+            base_context,
+            self.root_project_name(),
+            self.resolver_state.node_resolver.clone(),
+            self.inner.runtime_config.clone(),
+            ref_validation_config,
+        )
+    }
 }
