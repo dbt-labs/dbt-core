@@ -8,5 +8,6 @@ pub mod sa;
 pub mod adapter;
 pub mod antlr_parser;
 pub mod compilation;
+pub mod sidecar;
 pub mod tracing;
 // add more features here...

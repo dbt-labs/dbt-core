@@ -26,6 +26,7 @@ use crate::adapter::AdapterFeature;
 
 use crate::antlr_parser::AntlrParserFeature;
 use crate::compilation::CompilationConfig;
+use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
 
 /// The instrumentation feature. Exposed as a set of instrumentation services.
@@ -172,6 +173,7 @@ pub struct FeatureStack {
     pub tracing: TracingFeature,
     pub adapter: AdapterFeature,
     pub antlr_parser: AntlrParserFeature,
+    pub sidecar: SidecarFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
