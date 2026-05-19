@@ -92,6 +92,7 @@ pub const BIGQUERY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.11";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0+dbt0.21.7";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
+pub const DUCKDB_DRIVER_VERSION: &str = "1.5.2";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.21";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.22.0";
 pub const SPARK_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.2";

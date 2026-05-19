@@ -67,7 +67,12 @@ pub enum Backend {
     Salesforce,
     /// Spark driver implementation (ADBC).
     Spark,
-    /// DuckDB driver implementation (ADBC) + a set of extensions.
+    /// Official DuckDB ADBC driver from `duckdb/duckdb` releases.
+    /// Lives at `fs/adbc/duckdb/` on the CDN. Supports community extensions.
+    /// Used by the DuckDB adapter.
+    DuckDB,
+    /// Bespoke dbt-built DuckDB driver with internal extensions.
+    /// Lives at `fs/adbc/duckdb_extended/` on the CDN.
     DuckDBExtended,
     /// Microsoft SQL Server implementation (ADBC).
     SQLServer,
@@ -105,7 +110,7 @@ impl fmt::Display for Backend {
             Backend::Postgres => write!(f, "PostgreSQL"),
             Backend::Databricks => write!(f, "Databricks"),
             Backend::Redshift => write!(f, "Redshift"),
-            Backend::DuckDBExtended => write!(f, "DuckDB"),
+            Backend::DuckDB | Backend::DuckDBExtended => write!(f, "DuckDB"),
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
             Backend::Salesforce => write!(f, "Salesforce"),
@@ -129,7 +134,7 @@ impl Backend {
             Backend::Salesforce => Some("adbc_driver_salesforce"),
             Backend::Spark => Some("adbc_driver_spark"),
             Backend::Redshift => Some("adbc_driver_redshift"),
-            Backend::DuckDBExtended => Some("duckdb"),
+            Backend::DuckDB | Backend::DuckDBExtended => Some("duckdb"),
             Backend::SQLServer => Some("adbc_driver_mssql"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Athena => Some("adbc_driver_athena"),
@@ -142,7 +147,7 @@ impl Backend {
     pub fn adbc_driver_entrypoint(&self) -> Option<&'static [u8]> {
         match self {
             Backend::Snowflake => Some(b"SnowflakeDriverInit"),
-            Backend::DuckDBExtended => Some(b"duckdb_adbc_init"),
+            Backend::DuckDB | Backend::DuckDBExtended => Some(b"duckdb_adbc_init"),
             Backend::Generic {
                 library_name: _,
                 entrypoint,
@@ -160,6 +165,7 @@ impl Backend {
             | Backend::Redshift
             | Backend::Salesforce
             | Backend::Spark
+            | Backend::DuckDB
             | Backend::DuckDBExtended
             | Backend::SQLServer
             | Backend::Athena
@@ -403,8 +409,8 @@ impl AdbcDriver {
             // CDN strategy for drivers published to the dbt Labs CDN.
             (
                 load_strategy @ (CdnCache | SystemThenCdnCache),
-                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDBExtended
-                | Salesforce | SQLServer,
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                | DuckDBExtended | Salesforce | SQLServer,
             ) => {
                 #[cfg(debug_assertions)]
                 {
@@ -451,8 +457,8 @@ impl AdbcDriver {
             // Remote drivers are used via the "adbc_driver_flock" library
             (
                 load_strategy @ Remote,
-                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDBExtended
-                | Salesforce | SQLServer,
+                Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
+                | DuckDBExtended | Salesforce | SQLServer,
             ) => load_strategy,
         };
 

@@ -177,7 +177,7 @@ mod tests {
 
                 Ok(builder)
             }
-            Backend::DuckDBExtended => {
+            Backend::DuckDB | Backend::DuckDBExtended => {
                 let mut builder = database::Builder::new(backend);
                 let database_path = ":memory:".to_string();
                 builder.with_named_option("path", database_path)?;
@@ -336,6 +336,7 @@ mod tests {
                 Backend::Postgres
                 | Backend::Redshift
                 | Backend::Databricks
+                | Backend::DuckDB
                 | Backend::DuckDBExtended
                 | Backend::DatabricksODBC
                 | Backend::RedshiftODBC => {

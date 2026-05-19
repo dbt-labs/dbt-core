@@ -4,11 +4,20 @@ use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
 
 use dbt_xdbc::{Backend, database};
 
-pub struct DuckDbAuth;
+pub struct DuckDbAuth {
+    backend: Backend,
+}
+
+impl DuckDbAuth {
+    pub fn new(backend: Backend) -> Self {
+        debug_assert!(matches!(backend, Backend::DuckDB | Backend::DuckDBExtended));
+        Self { backend }
+    }
+}
 
 impl Auth for DuckDbAuth {
     fn backend(&self) -> Backend {
-        Backend::DuckDBExtended
+        self.backend
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
@@ -51,8 +60,22 @@ mod tests {
     }
 
     #[test]
+    fn configure_preserves_duckdb_backend_variant() {
+        for backend in [Backend::DuckDB, Backend::DuckDBExtended] {
+            let auth = DuckDbAuth::new(backend);
+            let builder = auth
+                .configure(&AdapterConfig::new(Default::default()))
+                .unwrap()
+                .builder;
+
+            assert_eq!(auth.backend(), backend);
+            assert_eq!(builder.backend, backend);
+        }
+    }
+
+    #[test]
     fn configure_uses_in_memory_path_for_motherduck() {
-        let auth = DuckDbAuth;
+        let auth = DuckDbAuth::new(Backend::DuckDBExtended);
         let config = config_from_yaml(
             r#"
 path: "md:stocks_dev"
@@ -79,7 +102,7 @@ path: "md:stocks_dev"
 
     #[test]
     fn configure_keeps_local_path() {
-        let auth = DuckDbAuth;
+        let auth = DuckDbAuth::new(Backend::DuckDBExtended);
         let config = config_from_yaml(
             r#"
 path: "/tmp/local.duckdb"

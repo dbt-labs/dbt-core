@@ -12,12 +12,13 @@ use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-static INSTALLABLE_DRIVERS: &[Backend; 9] = &[
+static INSTALLABLE_DRIVERS: &[Backend; 10] = &[
     Backend::Snowflake,
     Backend::BigQuery,
     Backend::Postgres,
     Backend::Databricks,
     Backend::Redshift,
+    Backend::DuckDB,
     Backend::DuckDBExtended,
     Backend::Salesforce,
     Backend::Spark,
@@ -306,6 +307,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Redshift => ("redshift", REDSHIFT_DRIVER_VERSION),
         Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
+        Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::Athena
@@ -723,6 +725,7 @@ mod tests {
             Backend::Postgres,
             Backend::Databricks,
             Backend::Redshift,
+            Backend::DuckDB,
             Backend::DuckDBExtended,
             Backend::Salesforce,
             Backend::Spark,
@@ -754,6 +757,10 @@ mod tests {
 
     #[test]
     fn backend_names_and_current_platform_triplet_are_stable() {
+        assert_eq!(
+            backend_name_and_version(Backend::DuckDB),
+            ("duckdb", DUCKDB_DRIVER_VERSION)
+        );
         assert_eq!(
             backend_name_and_version(Backend::DuckDBExtended),
             ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION)
