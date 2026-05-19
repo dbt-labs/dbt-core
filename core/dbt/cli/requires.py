@@ -8,11 +8,16 @@ from typing import Dict, Optional
 from click import Context
 
 import dbt.tracking
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.config.catalogs import get_active_write_integration, load_catalogs
+from dbt.config.catalogs import (
+    get_active_write_integration,
+    load_catalogs,
+    load_catalogs_v2,
+)
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
@@ -46,6 +51,7 @@ from dbt_common.events.base_types import EventGroupType, EventLevel
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_deferred_events, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtBaseException as DbtException
 from dbt_common.invocation import reset_invocation_id
 from dbt_common.record import (
@@ -398,6 +404,22 @@ def manifest(*args0, write=True, write_perf_info=False):
     return outer_wrapper(args0[0])
 
 
+def _bridge_v2_catalogs(runtime_config: "RuntimeConfig", catalogs_v2: list) -> list:
+    # Bridge requires an adapter instance for type() and override hooks.
+    # parse_manifest will register the adapter again (same config); that
+    # second registration is harmless and ensures integrations are present
+    # when ManifestLoader runs catalog lookups during parsing.
+    register_adapter(runtime_config, get_mp_context())
+    adapter = get_adapter(runtime_config)
+    _cat_v2 = getattr(Capability, "CatalogsV2", None)  # type: ignore[attr-defined]
+    if _cat_v2 is None or not adapter.capabilities()[_cat_v2]:
+        raise DbtProjectError(
+            f"Adapter '{adapter.type()}' does not support catalogs.yml v2 yet. "
+            f"Use catalogs.yml v1 or upgrade to a supported adapter version."
+        )
+    return [adapter.bridge_v2_catalog(c) for c in catalogs_v2]
+
+
 def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = False):
     """Load the manifest and add it to the context."""
     req_strs = ["flags", "profile", "project", "runtime_config"]
@@ -409,10 +431,31 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     runtime_config = ctx.obj["runtime_config"]
 
     flags = ctx.obj["flags"]
-    catalogs = load_catalogs(flags.PROJECT_DIR, ctx.obj["project"].project_name, flags.VARS)
-    active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+    project_name = ctx.obj["project"].project_name
+    use_v2 = flags.USE_CATALOGS_V2
 
-    ctx.obj["catalogs"] = catalogs
+    if use_v2:
+        catalogs_v2 = load_catalogs_v2(flags.PROJECT_DIR, project_name, flags.VARS)
+        # TODO: ctx.obj["catalogs"] is List[CatalogV2] here but downstream tasks
+        # (base.py, build.py, run.py, etc.) annotate it as Optional[List[Catalog]].
+        # Widen signatures to Sequence[Union[Catalog, CatalogV2]] or add a common base.
+        ctx.obj["catalogs"] = catalogs_v2
+        if catalogs_v2:
+            fire_event(
+                Note(
+                    msg="catalogs.yml v2 schema validation is experimental, not officially supported yet, "
+                    "and its spec is liable to change. "
+                    "See https://github.com/dbt-labs/dbt-core/discussions/12723"
+                ),
+                EventLevel.WARN,
+            )
+            active_integrations = _bridge_v2_catalogs(runtime_config, catalogs_v2)
+        else:
+            active_integrations = []
+    else:
+        catalogs = load_catalogs(flags.PROJECT_DIR, project_name, flags.VARS)
+        active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+        ctx.obj["catalogs"] = catalogs
 
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:

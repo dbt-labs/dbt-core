@@ -381,6 +381,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_corrected_analysis_fqns: bool = False
     require_source_and_semantic_model_names_without_spaces: bool = False
     enable_grouped_warn_error_parser_logs: bool = False
+    use_catalogs_v2: bool = False
     latest_version_pointer_enabled_by_default: bool = False
 
     @property
@@ -407,6 +408,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_corrected_analysis_fqns": self.require_corrected_analysis_fqns,
             "require_source_and_semantic_model_names_without_spaces": self.require_source_and_semantic_model_names_without_spaces,
             "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
+            "use_catalogs_v2": self.use_catalogs_v2,
             "latest_version_pointer_enabled_by_default": self.latest_version_pointer_enabled_by_default,
         }
 
