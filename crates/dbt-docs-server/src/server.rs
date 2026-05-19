@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::{get, post};
-use dbt_clap_core::DocsServeArgs;
 use tracing::info;
+
+use crate::DocsServeArgs;
 
 use crate::embed::serve_assets;
 use crate::handlers::{

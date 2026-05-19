@@ -21,7 +21,6 @@ path = "src/lib.rs"
 # views-over-parquet backend; proprietary feature surfaces (column lineage,
 # sample data, etc.) are layered on via dyn-compatible Provider traits and
 # wired in by the proprietary `dbt-docs-server-impl` crate.
-dbt-clap-core = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
 

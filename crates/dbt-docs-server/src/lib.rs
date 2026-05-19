@@ -14,7 +14,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use dbt_clap_core::DocsServeArgs;
+#[derive(Debug, Clone)]
+pub struct DocsServeArgs {
+    pub target_path: Option<PathBuf>,
+    pub host: String,
+    pub port: u16,
+    pub no_open: bool,
+}
 
 mod embed;
 mod handlers;
@@ -32,11 +38,10 @@ pub use state::Capabilities;
 /// 1. `args.target_path` (if provided) → expects `<target_path>/index/` to exist.
 /// 2. `./target/index/` in the current working directory.
 pub fn resolve_index_dir(args: &DocsServeArgs) -> PathBuf {
-    let target = args
-        .target_path
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("./target"));
-    target.join("index")
+    match &args.target_path {
+        Some(p) => p.join("index"),
+        None => PathBuf::from("./target/index"),
+    }
 }
 
 /// Convenience entry that just wraps args in an `Arc`. Mostly useful for
