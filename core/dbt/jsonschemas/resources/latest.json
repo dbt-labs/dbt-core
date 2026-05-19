@@ -724,6 +724,7 @@
         },
         "to_columns": {
           "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
+          "default": [],
           "type": [
             "array",
             "null"
@@ -2135,7 +2136,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -2150,7 +2150,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -2165,7 +2164,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -6037,7 +6035,7 @@
         },
         "to_columns": {
           "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
-          "default": null,
+          "default": [],
           "type": [
             "array",
             "null"
