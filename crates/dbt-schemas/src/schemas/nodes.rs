@@ -6226,7 +6226,16 @@ impl InternalDbtNode for DbtAnalysis {
             let other_config = &other_analysis.deprecated_config;
 
             let enabled_eq = self_config.enabled == other_config.enabled;
-            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+            // Treat None as equivalent to Some(default) so that old manifests
+            // that serialized null (before apply_resolve_defaults ran for analyses)
+            // do not produce false-positive state:modified detections.
+            let default_sa = StaticAnalysisKind::default();
+            let static_analysis_eq =
+                match (&self_config.static_analysis, &other_config.static_analysis) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
+                    (Some(a), Some(b)) => a == b,
+                };
 
             let result = enabled_eq && static_analysis_eq;
 
