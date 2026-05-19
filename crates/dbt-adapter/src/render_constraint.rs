@@ -35,21 +35,18 @@ pub fn render_model_constraint(
                 "{constraint_prefix}primary key{expr} ({column_list})"
             ))
         }
-        ConstraintType::ForeignKey => {
-            if let (Some(to), Some(to_columns)) = (constraint.to, constraint.to_columns) {
-                Some(format!(
-                    "{}foreign key ({}) references {} ({})",
-                    constraint_prefix,
-                    column_list,
-                    to,
-                    to_columns.join(", ")
-                ))
-            } else {
-                constraint.expression.map(|expr| {
-                    format!("{constraint_prefix}foreign key ({column_list}) references {expr}")
-                })
-            }
-        }
+        ConstraintType::ForeignKey => match (constraint.to, constraint.to_columns) {
+            (Some(to), Some(to_columns)) if !to_columns.is_empty() => Some(format!(
+                "{}foreign key ({}) references {} ({})",
+                constraint_prefix,
+                column_list,
+                to,
+                to_columns.join(", ")
+            )),
+            _ => constraint.expression.map(|expr| {
+                format!("{constraint_prefix}foreign key ({column_list}) references {expr}")
+            }),
+        },
         ConstraintType::Custom => constraint
             .expression
             .map(|expr| format!("{constraint_prefix}{expr}")),
@@ -86,15 +83,15 @@ pub fn render_column_constraint(
         ConstraintType::NotNull => Some(format!("not null {constraint_expression}")),
         ConstraintType::Unique => Some(format!("unique {constraint_expression}")),
         ConstraintType::PrimaryKey => Some(format!("primary key {constraint_expression}")),
-        ConstraintType::ForeignKey => {
-            if let (Some(to), Some(to_columns)) = (constraint.to, constraint.to_columns) {
+        ConstraintType::ForeignKey => match (constraint.to, constraint.to_columns) {
+            (Some(to), Some(to_columns)) if !to_columns.is_empty() => {
                 Some(format!("references {} ({})", to, to_columns.join(", ")))
-            } else if !constraint_expression.is_empty() {
-                Some(format!("references {constraint_expression}"))
-            } else {
-                None
             }
-        }
+            _ if !constraint_expression.is_empty() => {
+                Some(format!("references {constraint_expression}"))
+            }
+            _ => None,
+        },
         ConstraintType::Custom if !constraint_expression.is_empty() => Some(constraint_expression),
         _ => None,
     };

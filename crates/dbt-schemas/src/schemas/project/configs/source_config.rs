@@ -240,6 +240,7 @@ pub struct SourceConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(default)]
     pub freshness: Omissible<Option<FreshnessDefinition>>,

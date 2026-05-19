@@ -2123,15 +2123,15 @@ impl AdapterImpl {
             ConstraintType::NotNull => Some(format!("not null {constraint_expression}")),
             ConstraintType::Unique => Some(format!("unique {constraint_expression}")),
             ConstraintType::PrimaryKey => Some(format!("primary key {constraint_expression}")),
-            ConstraintType::ForeignKey => {
-                if let (Some(to), Some(to_columns)) = (constraint.to, constraint.to_columns) {
+            ConstraintType::ForeignKey => match (constraint.to, constraint.to_columns) {
+                (Some(to), Some(to_columns)) if !to_columns.is_empty() => {
                     Some(format!("references {} ({})", to, to_columns.join(", ")))
-                } else if !constraint_expression.is_empty() {
-                    Some(format!("references {constraint_expression}"))
-                } else {
-                    None
                 }
-            }
+                _ if !constraint_expression.is_empty() => {
+                    Some(format!("references {constraint_expression}"))
+                }
+                _ => None,
+            },
             ConstraintType::Custom if !constraint_expression.is_empty() => {
                 Some(constraint_expression)
             }

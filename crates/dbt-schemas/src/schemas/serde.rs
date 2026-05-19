@@ -90,6 +90,51 @@ pub fn yaml_to_fs_error(err: dbt_yaml::Error, filename: Option<&Path>) -> Box<Fs
         .into()
 }
 
+/// Serialize an `Option<T>` as an empty map `{}` when `None`.
+pub fn serialize_option_as_empty_map<S, T>(
+    val: &Option<T>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    use serde::ser::SerializeMap;
+    match val {
+        Some(v) => v.serialize(serializer),
+        None => serializer.serialize_map(Some(0))?.end(),
+    }
+}
+
+/// Serialize an `Option<T>` as `T::default()` when `None`. Use for fields where
+/// dbt-core always emits a default value (e.g. `{}`, `[]`, default enum variant)
+/// instead of omitting/null.
+pub fn serialize_option_as_default<S, T>(val: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Default + Serialize,
+{
+    match val {
+        Some(v) => v.serialize(serializer),
+        None => T::default().serialize(serializer),
+    }
+}
+
+/// Serialize an `Option<Vec<T>>` as an empty array `[]` when `None`.
+pub fn serialize_option_as_empty_vec<S, T>(
+    val: &Option<Vec<T>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    match val {
+        Some(v) => v.serialize(serializer),
+        None => <[T]>::serialize(&[], serializer),
+    }
+}
+
 pub fn default_type<'de, D>(deserializer: D) -> Result<Option<IndexMap<String, YmlValue>>, D::Error>
 where
     D: Deserializer<'de>,

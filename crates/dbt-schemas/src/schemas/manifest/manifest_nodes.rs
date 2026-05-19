@@ -21,7 +21,7 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::model_config::LatestVersionPointer;
 use crate::schemas::properties::ModelFreshness;
 
-use crate::schemas::serde::{bool_or_string_bool, default_type};
+use crate::schemas::serde::bool_or_string_bool;
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -432,23 +432,44 @@ pub struct ManifestSnapshotConfig {
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "pre-hook", default)]
     pub pre_hook: Vec<HookConfig>,
     #[serde(rename = "post-hook", default)]
     pub post_hook: Vec<HookConfig>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(default)]
     pub grants: OmissibleGrantConfig,
     pub event_time: Option<String>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub quoting: Option<DbtQuoting>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::default_type",
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_map"
+    )]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub invalidate_hard_deletes: Option<bool>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub docs: Option<DocsConfig>,
     pub sync: Option<SyncConfig>,
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -776,10 +797,22 @@ pub struct ManifestModelConfig {
     pub database: Omissible<Option<String>>,
     #[serde(alias = "dataset")]
     pub schema: Omissible<Option<String>>,
+    // TODO: dbt-core's NodeConfig declares many of these as non-Optional with `default_factory`.
+    // We keep `Option<T>` here for now (with `serialize_with` to emit defaults when None) to
+    // minimize downstream churn. Fields that should eventually be made non-Option to match core:
+    // tags, meta, persist_docs, quoting, column_types, on_configuration_change, packages, docs,
+    // contract, access (mirrored in ManifestSnapshotConfig / ManifestSeedConfig).
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
-    // need default to ensure None if field is not set
-    #[serde(default, deserialize_with = "default_type")]
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::default_type",
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_map"
+    )]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
@@ -788,21 +821,41 @@ pub struct ManifestModelConfig {
     pub batch_size: Option<DbtBatchSize>,
     pub lookback: Option<i32>,
     pub begin: Option<String>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(rename = "post-hook", default)]
     pub post_hook: Vec<HookConfig>,
     #[serde(rename = "pre-hook", default)]
     pub pre_hook: Vec<HookConfig>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub quoting: Option<DbtQuoting>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_map"
+    )]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub on_configuration_change: Option<OnConfigurationChange>,
     pub on_error: Option<OnError>,
     #[serde(rename = "grants", alias = "+grants")]
     pub grants: OmissibleGrantConfig,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,
     pub imports: Option<StringOrArrayOfStrings>,
@@ -810,13 +863,25 @@ pub struct ManifestModelConfig {
     pub external_access_integrations: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_anonymous_sproc: Option<bool>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub docs: Option<DocsConfig>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub contract: Option<DbtContract>,
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub concurrent_batches: Option<bool>,
     pub merge_update_columns: Option<StringOrArrayOfStrings>,
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub access: Option<Access>,
     pub table_format: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
@@ -843,6 +908,10 @@ pub struct ManifestModelConfig {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
 pub struct ManifestSeedConfig {
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_map"
+    )]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
@@ -850,6 +919,10 @@ pub struct ManifestSeedConfig {
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -861,14 +934,31 @@ pub struct ManifestSeedConfig {
     pub event_time: Option<String>,
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::default_type",
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_map"
+    )]
     pub meta: Option<IndexMap<String, YmlValue>>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(rename = "post-hook", default)]
     pub post_hook: Vec<HookConfig>,
     #[serde(rename = "pre-hook", default)]
     pub pre_hook: Vec<HookConfig>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+    )]
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
@@ -1521,7 +1611,7 @@ impl From<DbtMetric> for ManifestMetric {
                 fqn: metric.__common_attr__.fqn,
                 path: metric.__common_attr__.path,
                 original_file_path: metric.__common_attr__.original_file_path,
-                description: metric.__common_attr__.description,
+                description: Some(metric.__common_attr__.description.unwrap_or_default()),
                 tags: metric.__common_attr__.tags,
                 meta: metric.__common_attr__.meta,
             },
@@ -1550,6 +1640,7 @@ impl From<DbtMetric> for ManifestMetric {
 pub struct ManifestMetricConfig {
     pub enabled: bool,
 
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
 
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -1594,6 +1685,7 @@ pub struct ManifestSemanticModelNodeBaseAttributes {
 pub struct ManifestSemanticModelConfig {
     pub enabled: bool,
 
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
 
     pub group: Option<String>,

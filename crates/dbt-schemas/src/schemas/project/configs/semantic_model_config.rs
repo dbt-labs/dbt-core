@@ -47,6 +47,7 @@ pub struct SemanticModelConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     pub enabled: Option<bool>,
     pub group: Option<String>,
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(
         default,

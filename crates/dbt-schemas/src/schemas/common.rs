@@ -526,11 +526,23 @@ impl TryFrom<DbtQuoting> for ResolvedQuoting {
 #[derive(Debug, Clone, Serialize, Default, Deserialize, PartialEq, Eq, Copy, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtQuoting {
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub database: Option<bool>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub identifier: Option<bool>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub schema: Option<bool>,
     #[serde(
         skip_serializing_if = "Option::is_none",
@@ -697,9 +709,10 @@ pub enum OnSchemaChange {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OnConfigurationChange {
+    #[default]
     Apply,
     Continue,
     Fail,
@@ -764,6 +777,11 @@ pub struct Constraint {
     pub to: Option<Spanned<String>>,
     /// Only ForeignKey constraints accept: a list columns in that table
     /// containing the corresponding primary or unique key.
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_array",
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+    )]
     pub to_columns: Option<Vec<String>>,
     pub warn_unsupported: Option<bool>,
     pub warn_unenforced: Option<bool>,
@@ -913,11 +931,20 @@ pub enum Rows {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct DocsConfig {
     #[serde(default = "default_show")]
     pub show: bool,
     pub node_color: Option<String>,
+}
+
+impl Default for DocsConfig {
+    fn default() -> Self {
+        Self {
+            show: default_show(),
+            node_color: None,
+        }
+    }
 }
 
 fn default_show() -> bool {
@@ -925,7 +952,7 @@ fn default_show() -> bool {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default, DbtSchema)]
 pub struct PersistDocsConfig {
     pub columns: Option<bool>,
     pub relation: Option<bool>,

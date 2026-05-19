@@ -1354,12 +1354,7 @@ pub fn manifest_model_to_dbt_model(
             raw_code: model.__base_attr__.raw_code,
             checksum: recalculated_checksum,
             language: model.__base_attr__.language,
-            tags: model
-                .config
-                .tags
-                .clone()
-                .map(|tags| tags.into())
-                .unwrap_or_default(),
+            tags: model.config.tags.clone().map(Vec::from).unwrap_or_default(),
             meta: model.config.meta.clone().unwrap_or_default(),
         },
         __base_attr__: NodeBaseAttributes {
@@ -1377,16 +1372,11 @@ pub fn manifest_model_to_dbt_model(
             compute: model.config.compute,
             enabled: model.config.enabled.unwrap_or(true),
             extended_model: false,
-            quoting: model
-                .config
-                .quoting
-                .map(|mut quoting| {
-                    quoting.default_to(&dbt_quoting);
-                    quoting
-                })
-                .unwrap_or(dbt_quoting)
-                .try_into()
-                .expect("DbtQuoting should be set"),
+            quoting: {
+                let mut quoting = model.config.quoting.unwrap_or_default();
+                quoting.default_to(&dbt_quoting);
+                quoting.try_into().expect("DbtQuoting should be set")
+            },
             quoting_ignore_case: false,
             persist_docs: model.config.persist_docs.clone(),
             columns: model.__base_attr__.columns,

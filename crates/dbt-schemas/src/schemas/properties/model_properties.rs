@@ -36,7 +36,11 @@ pub struct ModelConstraint {
     pub to: Option<Spanned<String>>,
     /// Only ForeignKey constraints accept: a list columns in that table
     /// containing the corresponding primary or unique key.
-    #[serde(default, deserialize_with = "string_or_array")]
+    #[serde(
+        default,
+        deserialize_with = "string_or_array",
+        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+    )]
     pub to_columns: Option<Vec<String>>,
     #[serde(default, deserialize_with = "string_or_array")]
     pub columns: Option<Vec<String>>,

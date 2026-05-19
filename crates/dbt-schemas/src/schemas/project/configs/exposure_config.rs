@@ -45,6 +45,7 @@ pub struct ExposureConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(
         default,

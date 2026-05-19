@@ -93,7 +93,9 @@ impl TypedConstraint {
                         "foreign_key constraint is missing required field: 'columns'".to_string(),
                     );
                 }
-                if expression.is_none() && (to.is_none() || to_columns.is_none()) {
+                if expression.is_none()
+                    && (to.is_none() || to_columns.as_ref().is_none_or(|v| v.is_empty()))
+                {
                     return Err("foreign_key constraint is missing required fields: ('to', 'to_columns') or 'expression'".to_string());
                 }
                 Ok(())
@@ -160,7 +162,9 @@ impl TypedConstraint {
                     } else {
                         format!("FOREIGN KEY ({}) {expr}", columns.join(", "))
                     }
-                } else if let (Some(to_table), Some(to_cols)) = (to, to_columns) {
+                } else if let (Some(to_table), Some(to_cols)) = (to, to_columns)
+                    && !to_cols.is_empty()
+                {
                     format!(
                         "FOREIGN KEY ({}) REFERENCES {} ({})",
                         columns.join(", "),
@@ -224,7 +228,8 @@ impl TryFrom<&ModelConstraint> for TypedConstraint {
                         );
                     }
                     if constraint.expression.is_none()
-                        && (constraint.to.is_none() || constraint.to_columns.is_none())
+                        && (constraint.to.is_none()
+                            || constraint.to_columns.as_ref().is_none_or(|v| v.is_empty()))
                     {
                         return Err("Foreign key constraint missing required fields: ('to', 'to_columns') or 'expression'".to_string());
                     }
@@ -455,7 +460,8 @@ fn parse_constraint_from_column(
         }),
         ConstraintType::ForeignKey => {
             if constraint.expression.is_none()
-                && (constraint.to.is_none() || constraint.to_columns.is_none())
+                && (constraint.to.is_none()
+                    || constraint.to_columns.as_ref().is_none_or(|v| v.is_empty()))
             {
                 return Err("Foreign key constraint missing required fields: ('to', 'to_columns') or 'expression'".to_string());
             }

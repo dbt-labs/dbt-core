@@ -326,6 +326,7 @@ pub struct DataTestConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub limit: Option<i32>,
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]

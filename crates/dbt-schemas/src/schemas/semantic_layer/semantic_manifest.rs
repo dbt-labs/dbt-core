@@ -66,5 +66,6 @@ impl From<&Nodes> for SemanticManifest {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, Eq, PartialEq, DbtSchema)]
 pub struct SemanticLayerElementConfig {
+    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
 }
