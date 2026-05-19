@@ -210,20 +210,20 @@ Fields marked `// 🔧` are not yet returned — they require a backend change.
   "name": "orders",
   "resource_type": "model",
   "package_name": "jaffle_shop",
-  "description": "Final orders model combining payments and order status.",
-  "original_file_path": "models/orders.sql",
-  "tags": ["finance", "core"],
-  "fqn": ["jaffle_shop", "orders"],
   "materialized": "table",
+  "description": "Final orders model combining payments and order status.",
   "database_name": "prod",
   "schema_name": "dbt_prod",
   "relation_name": "prod.dbt_prod.orders",
   "identifier": "orders",
+  "original_file_path": "models/orders.sql",
   "access_level": "public",
   "group_name": "finance",
-  "contract_enforced": true,
   "raw_code": "select order_id, ...\nfrom {{ ref('stg_orders') }}",
   "compiled_code": "select order_id, ...\nfrom prod.dbt_prod.stg_orders",
+  "contract_enforced": true,
+  "tags": ["finance", "core"],
+  "fqn": ["jaffle_shop", "orders"],
   "columns": [
     {
       "name": "order_id",
@@ -246,20 +246,20 @@ Fields marked `// 🔧` are not yet returned — they require a backend change.
   ],
   "execution_info": {
     "status": "success",
-    "completed_at": "2026-05-15T10:32:11Z",
-    "execution_time": 4.2
+    "execution_time": 4.2,
+    "completed_at": "2026-05-15 10:32:11.000000-07"
   },
   "catalog": {
     "type": "table",
     "owner": "dbt_runner",
-    "bytes_stat": 1048576,
-    "row_count_stat": 10500
+    "bytes_stat": null,
+    "row_count_stat": null
   }
 }
 ```
 
-`execution_info` is `null` when `has_run_results` is false (i.e., `dbt build` has not run).
-`catalog` is `null` when `has_catalog_stats` is false (i.e., `dbt docs generate` has not run).
+`execution_info` is `null` when `dbt_rt.run_results` has no rows for this model (i.e., `dbt build` has not run or produced no result for this node).
+`catalog` is `null` when `dbt.catalog_tables` has no rows for this model (i.e., `dbt docs generate` has not run).
 
 ### Field reference
 
@@ -273,8 +273,8 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `package_name` | `string \| null` | Core | ✅ | — | |
 | `description` | `string \| null` | Core | ✅ | — | |
 | `original_file_path` | `string \| null` | Core | ✅ | — | Relative to project root |
-| `tags` | `string[]` | Core | 🔧 | — | In `dbt.nodes` parquet; add to handler SELECT |
-| `fqn` | `string[]` | Core | 🔧 | — | In `dbt.nodes` parquet; add to handler SELECT |
+| `tags` | `string[]` | Core | ✅ | — | `List(Utf8)` column in `dbt.nodes` |
+| `fqn` | `string[]` | Core | ✅ | — | `List(Utf8)` column in `dbt.nodes` |
 | `materialized` | `string \| null` | Core | ✅ | — | `"table"` · `"view"` · `"incremental"` · `"ephemeral"` |
 | `database_name` | `string \| null` | Core | ✅ | — | |
 | `schema_name` | `string \| null` | Core | ✅ | — | |
@@ -282,34 +282,34 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `identifier` | `string \| null` | Core | ✅ | — | |
 | `access_level` | `string \| null` | Core | ✅ | — | `"public"` · `"protected"` · `"private"` — see Risk #6 |
 | `group_name` | `string \| null` | Core | ✅ | — | |
-| `contract_enforced` | `boolean \| null` | Core | 🔧 | — | In `dbt.nodes` parquet; add to handler SELECT |
+| `contract_enforced` | `boolean \| null` | Core | ✅ | — | |
 | `raw_code` | `string \| null` | Core | ✅ | — | |
-| `compiled_code` | `string \| null` | Core | 🔍 | — | Likely in `dbt.nodes` parquet — confirm schema before implementing |
+| `compiled_code` | `string \| null` | Core | ✅ | — | Confirmed present in `dbt.nodes`; matches `raw_code` for SQL models without macros |
 | `columns` | `ModelColumn[]` | Core | ✅ | — | Empty array if no columns declared |
 | `columns[*].name` | `string` | Core | ✅ | — | |
 | `columns[*].index` | `number \| null` | Core | ✅ | — | Column order |
 | `columns[*].data_type` | `string \| null` | Core | ✅ | — | Declared in YAML |
 | `columns[*].declared_type` | `string \| null` | Core | ✅ | — | |
 | `columns[*].inferred_type` | `string \| null` | Proprietary | ✅ | — | `null` in Core; populated by Fusion static analysis |
-| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | `has_catalog_stats` | Warehouse-verified type; `null` unless `dbt docs generate` ran |
+| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | `null` when catalog absent | Warehouse-verified type; `null` unless `dbt docs generate` ran |
 | `columns[*].description` | `string \| null` | Core | ✅ | — | |
 | `columns[*].label` | `string \| null` | Core | ✅ | — | |
 | `columns[*].granularity` | `string \| null` | Core | ✅ | — | Semantic layer use |
-| `depends_on` | `EdgeRef[]` | Core | ✅ | — | 1-hop upstream; see Risk #5 re: pagination |
+| `depends_on` | `EdgeRef[]` | Core | ✅ | — | 1-hop upstream; see Risk #5 re: lineage bounding decision |
 | `depends_on[*].unique_id` | `string` | Core | ✅ | — | |
 | `depends_on[*].edge_type` | `string` | Core | ✅ | — | |
-| `referenced_by` | `EdgeRef[]` | Core | ✅ | — | 1-hop downstream; see Risk #5 re: pagination |
+| `referenced_by` | `EdgeRef[]` | Core | ✅ | — | 1-hop downstream; see Risk #5 re: lineage bounding decision |
 | `referenced_by[*].unique_id` | `string` | Core | ✅ | — | |
 | `referenced_by[*].edge_type` | `string` | Core | ✅ | — | |
-| `execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | `has_run_results` | `null` when `dbt build` hasn't run |
-| `execution_info.status` | `string` | Core-conditional | 🔧 | `has_run_results` | `"success"` · `"error"` · `"skipped"` |
-| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | ISO 8601 timestamp |
-| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | `has_run_results` | Seconds (float) |
-| `catalog` | `CatalogInfo \| null` | Core-conditional | 🔧 | `has_catalog_stats` | `null` when `dbt docs generate` hasn't run |
-| `catalog.type` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | `"table"` · `"view"` · `"materialized view"` |
-| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Warehouse role that owns the relation |
-| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Bytes; warehouse-specific |
-| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Approximate row count |
+| `execution_info` | `ExecutionInfo \| null` | Core-conditional | ✅ | `null` when run results absent | `null` when `dbt_rt.run_results` has no rows for this model |
+| `execution_info.status` | `string \| null` | Core-conditional | ✅ | — | `"success"` · `"error"` · `"skipped"` |
+| `execution_info.completed_at` | `string \| null` | Core-conditional | ✅ | — | Derived from `created_at`; space-separated local-timezone format (see Risk #1) |
+| `execution_info.execution_time` | `number \| null` | Core-conditional | ✅ | — | Seconds (float) |
+| `catalog` | `CatalogInfo \| null` | Core-conditional | ✅ | `null` when catalog absent | `null` when `dbt.catalog_tables` has no rows for this model |
+| `catalog.type` | `string \| null` | Core-conditional | ✅ | — | `"table"` · `"view"` · `"materialized view"`; maps from `table_type` column |
+| `catalog.owner` | `string \| null` | Core-conditional | ✅ | — | Warehouse role; maps from `table_owner` column |
+| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | — | Always `null`; lives in `dbt.catalog_stats` with adapter-specific `stat_id` (see Risk #4) |
+| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | — | Always `null`; same as above (see Risk #4) |
 | `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; Discovery-API-internal — see Risk #7 |
 | `usage_query_count` | *(absent)* | — | ❌ | — | Class B: no parquet path; Discovery-API-internal |
 
@@ -357,7 +357,7 @@ interface ModelColumn {
 }
 
 interface ExecutionInfo {
-  status: string;
+  status: string | null;
   completed_at: string | null;
   execution_time: number | null;
 }
@@ -377,25 +377,46 @@ interface EdgeRef {
 
 ### Risk register
 
-1. **`execution_info` absent from current API.** ModelView's run-status badge won't
-   render. Requires a 5th parallel query against `dbt_rt.run_results_latest`. Gate
-   behind new capability `has_run_results`.
+1. **`execution_info` implemented; `completed_at` format is approximate.** *(2026-05-18)*
+   Implemented as a query against `dbt_rt.run_results` (not `run_results_latest` — no
+   such pre-aggregated view found). Verified column names: `status` (Utf8), `execution_time`
+   (Float64), `created_at` (timestamptz). `completed_at` is derived from `created_at` via
+   `CAST(... AS VARCHAR)`, producing e.g. `"2026-05-14 17:41:56.652026-07"` (space separator,
+   local timezone). The `timing` column holds a JSON array with per-phase UTC timestamps;
+   extracting the execute-phase `completed_at` would give a cleaner ISO 8601 UTC value but
+   adds DuckDB JSON path complexity. Deferred; acceptable for v0.
 
-2. **`tags`, `fqn`, `contract_enforced` in parquet but not queried.** The handler
-   (`src/handlers/nodes.rs`) has a fixed column SELECT. Add these columns and update
-   `ModelDetail`. Low-risk once parquet schema is confirmed.
+2. **`tags`, `fqn`, `contract_enforced` verified and implemented.** *(2026-05-18)*
+   Confirmed against a real index: `tags` and `fqn` are native `List(Utf8)` columns —
+   arrow_json serializes them as JSON arrays correctly. `contract_enforced` is a Boolean
+   column. All three added to the handler SELECT.
 
-3. **`compiled_code` presence in parquet is unverified.** Confirm against actual parquet
-   schema before implementing. Mark as TODO and omit from the contract if absent.
+3. **`compiled_code` confirmed present and implemented.** *(2026-05-18)*
+   `compiled_code` is a `VARCHAR` column in `dbt.nodes` parquet. Enabled in the handler
+   SELECT as `n.compiled_code`. For SQL models without macros, `compiled_code` equals
+   `raw_code` (no template expansion needed). For models with `{{ ref(...) }}` calls,
+   `compiled_code` contains the fully qualified SQL.
 
-4. **Catalog node-level fields require a new join.** `catalog_type` already exists at
-   the column level. Node-level `catalog.*` fields require joining `dbt.catalog_tables`.
-   Gate behind new capability `has_catalog_stats`.
+4. **Catalog column names corrected; `bytes_stat`/`row_count_stat` still open.** *(2026-05-18)*
+   Verified `dbt.catalog_tables` schema: actual column names are `table_type` and
+   `table_owner` (not `type`/`owner` as initially assumed — those would have caused 500s
+   with real catalog data). Corrected in the handler. `bytes_stat` and `row_count_stat`
+   do not exist in `catalog_tables`; they live in `dbt.catalog_stats` keyed by adapter-
+   specific `stat_id` strings (e.g., `"bytes"`, `"num_bytes"` vary by adapter). Both
+   are stubbed as `NULL::BIGINT` until a populated catalog index is available to confirm
+   the stat IDs. The `catalog` object in the response will always have `null` for these
+   two fields until that work is done.
 
-5. **`depends_on`/`referenced_by` have no pagination cap.** A high-fan-out model (100+
-   downstream consumers) returns an unbounded array. For v0: add a `?first=` cap with
-   `truncated: true` in the response. Promote to cursor pagination when a lineage
-   sub-resource is built.
+5. **`depends_on`/`referenced_by` are intentionally unbounded.** *(Decision: 2026-05-18)*
+   A `?first=` cap on a nested field is an API smell: every paginated request re-fetches
+   all base fields as fixed overhead, and cursor state doesn't compose cleanly with a
+   single-resource endpoint. The correct bounded path, if fan-out at scale requires it, is
+   a dedicated lineage sub-resource (additive, backwards compatible). One caveat: silently
+   **truncating** the inline arrays would be backwards incompatible by output even if the
+   field name is preserved — clients that iterate `depends_on`/`referenced_by` would
+   render incomplete graphs with no schema error to surface the problem. Therefore: keep
+   unbounded until a sub-resource exists; never truncate the inline arrays without
+   deprecating them first.
 
 6. **`access_level` enum values need verification.** dbt-ui uses `AccessLevel`
    (`public | protected | private`). The current field is `string | null`. Confirm the
