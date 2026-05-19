@@ -305,24 +305,18 @@ impl Future for ConnectionBackpressure {
             let num_active = BACKPRESSURE_STATE.num_active_connections();
             let high_water_mark = this.high_water_mark as isize;
             match this.deadline {
-                // less than half the connections are active, ignore the deadline
-                None if num_active < (high_water_mark / 2) => {
-                    Ready(NextBackpressureWakerGuard::new())
-                }
                 None => {
                     // still under the high water mark, add a small jittered wait
                     if num_active < high_water_mark {
                         this.deadline = Some(now() + jittered(GRACE_PERIOD));
-                        Pending
-                    } else {
-                        Ready(NextBackpressureWakerGuard::new())
                     }
+                    Pending
                 }
                 Some(deadline) => {
-                    if num_active < high_water_mark && now() >= deadline {
-                        Ready(NextBackpressureWakerGuard::new())
-                    } else {
+                    if num_active >= high_water_mark || now() < deadline {
                         Pending
+                    } else {
+                        Ready(NextBackpressureWakerGuard::new())
                     }
                 }
             }
