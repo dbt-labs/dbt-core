@@ -1,5 +1,8 @@
 use crate::adapter::adapter_impl::*;
 use crate::connection::AdapterConnectionFactory;
+use crate::metadata::freshness_overrides::{
+    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
+};
 use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::snowflake::SnowflakeRelation;
@@ -196,44 +199,6 @@ fn build_relations_from_show_objects(
     }
 
     Ok(relations)
-}
-
-/// Internal result type for the freshness_with_overrides MapReduce pass.
-enum TaskResult {
-    /// Result of the bulk INFORMATION_SCHEMA call covering all non-override
-    /// relations: pre-built per-relation freshness map.
-    Bulk(BTreeMap<String, MetadataFreshness>),
-    /// Result of one per-source override query: `(semantic_fqn, last_modified_epoch_ms)`.
-    /// `None` epoch = no rows / null timestamp.
-    Override(String, Option<i64>),
-}
-
-/// Substitute `{{ this }}` (with optional surrounding whitespace) in the given
-/// SQL template with the rendered relation FQN. Mirrors the dbt-core plugin's
-/// `loaded_at_query` rendering, which in practice only requires `this`.
-fn render_this(template: &str, rendered_relation: &str) -> String {
-    // Simple substring replacement that handles both `{{ this }}` and `{{this}}`
-    // forms, with arbitrary internal whitespace. Avoids a full Jinja env for
-    // what is effectively a single-placeholder substitution in user-supplied SQL.
-    let mut out = String::with_capacity(template.len());
-    let bytes = template.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'{' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            // Find matching `}}`.
-            if let Some(end_offset) = template[i + 2..].find("}}") {
-                let inner = &template[i + 2..i + 2 + end_offset];
-                if inner.trim() == "this" {
-                    out.push_str(rendered_relation);
-                    i += 2 + end_offset + 2;
-                    continue;
-                }
-            }
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
 }
 
 pub fn list_relations(
@@ -882,26 +847,21 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        // Keys: enum distinguishing the bulk pseudo-task from per-override tasks.
-        #[derive(Clone)]
-        enum Task {
-            Bulk(Vec<Arc<dyn BaseRelation>>),
-            Override(Arc<dyn BaseRelation>, FreshnessOverride),
-        }
-
-        let mut tasks: Vec<Task> = Vec::new();
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
         if !bulk_relations.is_empty() {
-            tasks.push(Task::Bulk(bulk_relations));
+            tasks.push(FreshnessTask::Bulk(bulk_relations));
         }
         for (relation, ovr) in override_targets {
-            tasks.push(Task::Override(relation, ovr));
+            tasks.push(FreshnessTask::Override(relation, ovr));
         }
 
         let token_clone = token.clone();
         let adapter_for_map = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection, task: &Task| -> AdapterResult<TaskResult> {
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
             match task {
-                Task::Bulk(bulk) => {
+                FreshnessTask::Bulk(bulk) => {
                     let (where_clauses_by_database, relations_by_database) =
                         build_relation_clauses(bulk)?;
                     let mut acc: Acc = BTreeMap::new();
@@ -946,80 +906,19 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                             }
                         }
                     }
-                    Ok(TaskResult::Bulk(acc))
+                    Ok(FreshnessTaskResult::Bulk(acc))
                 }
-                Task::Override(relation, ovr) => {
-                    let semantic_fqn = relation.semantic_fqn();
-                    let rendered_relation = relation.render_self_as_str();
-                    let sql = match ovr {
-                        FreshnessOverride::Query(query) => render_this(query, &rendered_relation),
-                        FreshnessOverride::Field(field) => format!(
-                            "SELECT max({}) AS last_modified FROM {}",
-                            field, rendered_relation
-                        ),
-                    };
-                    let ctx = QueryCtx::default()
-                        .with_desc("Source freshness override (loaded_at_field/query)");
-                    let (_resp, agate_table) =
-                        adapter_for_map.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
-                    let batch = agate_table.original_record_batch();
-                    if batch.num_rows() == 0 || batch.num_columns() == 0 {
-                        return Ok(TaskResult::Override(semantic_fqn, None));
-                    }
-                    // Snowflake returns timestamps as ms precision; fall through
-                    // other precisions if the column type differs.
-                    let col = batch.column(0);
-                    let epoch_ms = if let Some(ts) =
-                        col.as_any().downcast_ref::<TimestampMillisecondArray>()
-                    {
-                        ts.value(0)
-                    } else if let Some(ts) = col
-                        .as_any()
-                        .downcast_ref::<arrow_array::TimestampNanosecondArray>()
-                    {
-                        ts.value(0) / 1_000_000
-                    } else if let Some(ts) = col
-                        .as_any()
-                        .downcast_ref::<arrow_array::TimestampMicrosecondArray>()
-                    {
-                        ts.value(0) / 1_000
-                    } else if let Some(ts) = col
-                        .as_any()
-                        .downcast_ref::<arrow_array::TimestampSecondArray>()
-                    {
-                        ts.value(0) * 1_000
-                    } else {
-                        return Err(AdapterError::new(
-                            AdapterErrorKind::UnexpectedResult,
-                            format!(
-                                "freshness override returned non-timestamp first column for {}",
-                                semantic_fqn
-                            ),
-                        ));
-                    };
-                    Ok(TaskResult::Override(semantic_fqn, Some(epoch_ms)))
+                FreshnessTask::Override(relation, ovr) => {
+                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
                 }
             }
         };
 
         let reduce_f = move |acc: &mut Acc,
-                             _task: Task,
-                             res: AdapterResult<TaskResult>|
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            match res? {
-                TaskResult::Bulk(bulk_acc) => {
-                    acc.extend(bulk_acc);
-                }
-                TaskResult::Override(name, Some(epoch_ms)) => {
-                    // Sources can't be views, so is_view=false. The downstream
-                    // freshness consumer only reads `last_altered`.
-                    acc.insert(name, MetadataFreshness::from_millis(epoch_ms, false)?);
-                }
-                TaskResult::Override(_, None) => {
-                    // No rows / null timestamp → treat as "no freshness info".
-                    // Downstream uses absence-from-map as the signal.
-                }
-            }
+            apply_freshness_task_result(acc, res?)?;
             Ok(())
         };
 

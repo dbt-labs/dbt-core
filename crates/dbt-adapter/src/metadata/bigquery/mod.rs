@@ -2,6 +2,9 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use crate::connection::AdapterConnectionFactory;
 use crate::errors::*;
 use crate::metadata::CatalogAndSchema;
+use crate::metadata::freshness_overrides::{
+    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
+};
 use crate::metadata::*;
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
@@ -1057,6 +1060,157 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
         map_reduce.run(Arc::new(keys), token)
+    }
+
+    /// Honors per-source `loaded_at_field` / `loaded_at_query` config. Mirrors the
+    /// dbt-core run-cache plugin: relations without overrides go through the bulk
+    /// `__TABLES__` path; each override runs as one targeted query in parallel.
+    /// Net call count: 1 bulk (over the non-override subset) + N override
+    /// queries — same shape as the plugin.
+    fn freshness_with_overrides<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        // Partition relations: those with overrides run their own targeted query;
+        // the rest go through the existing bulk `__TABLES__` path.
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+
+        // Run the bulk and per-override queries through one MapReduce pass so
+        // they share the same connection-factory threadpool — same parallelism
+        // model as the plugin.
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            // Pre-partition by (project, dataset) so each bulk query runs as
+            // its own MapReduce task — preserves the per-dataset parallelism
+            // that `freshness_inner` gets from MapReducing over the db keys.
+            let (_, relations_by_database) = match build_relation_clauses_bigquery(&bulk_relations)
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            };
+            for (_db, rels) in relations_by_database {
+                tasks.push(FreshnessTask::Bulk(rels));
+            }
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
+            match task {
+                FreshnessTask::Bulk(bulk) => {
+                    let (where_clauses_by_database, relations_by_database) =
+                        build_relation_clauses_bigquery(bulk)?;
+                    let mut acc: Acc = BTreeMap::new();
+                    for (database, where_clauses) in where_clauses_by_database {
+                        let table_list = bulk
+                            .iter()
+                            .map(|relation| {
+                                format!("'{}'", relation.identifier().unwrap_or_default())
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        let or_block = where_clauses.join(" OR ");
+                        let table_filter = format!("table_id IN ({})", table_list);
+                        let joined_where_clauses = if or_block.is_empty() {
+                            table_filter
+                        } else {
+                            format!("({}) AND {}", or_block, table_filter)
+                        };
+
+                        let sql = format!(
+                            "SELECT
+                                 dataset_id AS table_schema,
+                                 table_id AS table_name,
+                                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
+                                 (type = 2) AS is_view
+                             FROM {db}.__TABLES__
+                             WHERE {joined_where_clauses}",
+                            db = database,
+                            joined_where_clauses = joined_where_clauses,
+                        );
+
+                        let ctx = QueryCtx::default()
+                            .with_desc("Extracting freshness from information schema");
+                        let result = adapter_for_map.query(
+                            &ctx,
+                            &mut *conn,
+                            &sql,
+                            None,
+                            token_clone.clone(),
+                        );
+                        let batch = match result {
+                            Ok((_, agate_table)) => agate_table.original_record_batch(),
+                            // Missing dataset surfaces as a BigQuery 404. Treat
+                            // it like an empty result, matching `freshness_inner`.
+                            Err(e) if e.message().contains("Error 404: Not found:") => continue,
+                            Err(e) => return Err(e),
+                        };
+                        let schemas = batch.column_values::<StringArray>("table_schema")?;
+                        let tables = batch.column_values::<StringArray>("table_name")?;
+                        let timestamps =
+                            batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+                        let is_views = batch.column_values::<BooleanArray>("is_view")?;
+                        let relations = &relations_by_database[&database];
+                        for i in 0..batch.num_rows() {
+                            let schema = schemas.value(i);
+                            let table = tables.value(i);
+                            let timestamp = timestamps.value(i);
+                            let is_view = is_views.value(i);
+                            for table_name in find_matching_relation(schema, table, relations)? {
+                                acc.insert(
+                                    table_name,
+                                    MetadataFreshness::from_micros(timestamp, is_view)?,
+                                );
+                            }
+                        }
+                    }
+                    Ok(FreshnessTaskResult::Bulk(acc))
+                }
+                FreshnessTask::Override(relation, ovr) => {
+                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
+                }
+            }
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            apply_freshness_task_result(acc, res?)?;
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
     }
 
     fn create_schemas_if_not_exists(
