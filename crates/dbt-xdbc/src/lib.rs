@@ -94,6 +94,7 @@ pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0+dbt0.21.7";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
 pub const DUCKDB_DRIVER_VERSION: &str = "1.5.2";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.21";
+pub const CLICKHOUSE_DRIVER_VERSION: &str = "0.1.0-alpha.1";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.22.0";
 pub const SPARK_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.2";
 pub const MSSQLSERVER_DRIVER_VERSION: &str = "1.3.1";

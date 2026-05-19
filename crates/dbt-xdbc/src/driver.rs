@@ -410,7 +410,7 @@ impl AdbcDriver {
             (
                 load_strategy @ (CdnCache | SystemThenCdnCache),
                 Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
-                | DuckDBExtended | Salesforce | SQLServer,
+                | DuckDBExtended | Salesforce | SQLServer | ClickHouse,
             ) => {
                 #[cfg(debug_assertions)]
                 {
@@ -445,7 +445,7 @@ impl AdbcDriver {
                 ));
             }
             // CDN strategy for non-CDN drivers: just fall back to the system strategy.
-            (CdnCache | SystemThenCdnCache | Remote, Athena | ClickHouse | Exasol) => System(None),
+            (CdnCache | SystemThenCdnCache | Remote, Athena | Exasol) => System(None),
             // Generic drivers can only be loaded from a file, so fallback to the System strategy.
             (CdnCache | SystemThenCdnCache | Remote, Generic { library_name, .. }) => {
                 System(Some(library_name.to_string()))
@@ -458,7 +458,7 @@ impl AdbcDriver {
             (
                 load_strategy @ Remote,
                 Snowflake | BigQuery | Postgres | Databricks | Redshift | Spark | DuckDB
-                | DuckDBExtended | Salesforce | SQLServer,
+                | DuckDBExtended | Salesforce | SQLServer | ClickHouse,
             ) => load_strategy,
         };
 
@@ -766,7 +766,7 @@ mod tests {
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::Spark, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V100)?;
-        // try_load_with_builder(Backend::ClickHouse, AdbcVersion::V100)?;
+        try_load_with_builder(Backend::ClickHouse, AdbcVersion::V100)?;
         // try_load_with_builder(Backend::Exasol, AdbcVersion::V100)?;
         Ok(())
     }
@@ -782,7 +782,7 @@ mod tests {
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::Spark, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::SQLServer, AdbcVersion::V110)?;
-        // try_load_with_builder(Backend::ClickHouse, AdbcVersion::V110)?;
+        try_load_with_builder(Backend::ClickHouse, AdbcVersion::V110)?;
         // try_load_with_builder(Backend::Exasol, AdbcVersion::V110)?;
         Ok(())
     }
@@ -799,7 +799,7 @@ mod tests {
             Backend::Salesforce,
             // Backend::Spark,
             // Backend::SQLServer,
-            // Backend::ClickHouse,
+            Backend::ClickHouse,
             // Backend::Exasol,
         ]
         .iter()
