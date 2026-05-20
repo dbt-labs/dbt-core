@@ -25,9 +25,9 @@ use uuid::Uuid;
 use crate::adapter::AdapterFeature;
 
 use crate::antlr_parser::AntlrParserFeature;
-use crate::compilation::CompilationConfig;
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
+use dbt_compilation::config::CompilationConfig;
 
 /// The instrumentation feature. Exposed as a set of instrumentation services.
 pub struct InstrumentationFeature {

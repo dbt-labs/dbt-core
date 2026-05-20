@@ -6,6 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::config::CompilationConfig;
 use dbt_adapter::{
     Adapter, AdapterEngine, AdapterImpl, AdapterType,
     adapter::AdapterFactory,
@@ -22,7 +23,6 @@ use dbt_common::{
     tracing::TracingConfigProvider,
 };
 use dbt_error::{ErrorCode, FsResult, fs_err};
-use dbt_features::compilation::CompilationConfig;
 use dbt_jinja_utils::{
     flags::Flags, jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
 };

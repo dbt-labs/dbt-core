@@ -7,7 +7,6 @@ use dbt_adapter_core::AdapterType;
 use dbt_clap_core::Cli;
 use dbt_common::{FsResult, cancellation::CancellationToken, io_args::EvalArgs, path::DbtPath};
 use dbt_dag::schedule::Schedule;
-use dbt_features::feature_stack::FeatureStack;
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
 };
@@ -69,7 +68,6 @@ pub trait CompiledProject: Send + Sync {
 pub trait CompilationDriver: Send + Sync {
     async fn compile(
         &self,
-        feature_stack: &Arc<FeatureStack>,
         arg: &EvalArgs,
         cli: &Cli,
         jinja_type_checking_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
