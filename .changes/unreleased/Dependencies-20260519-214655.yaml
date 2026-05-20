@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Restore dbt-adapters upper bound to <2.0 (reverting the temporary <1.24 cap) now that the breaking change in dbt-adapters 1.24.0 has been addressed.
+time: 2026-05-19T21:46:55.030968+05:30
+custom:
+    Author: sriramr98
+    Issue: NA
