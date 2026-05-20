@@ -1012,3 +1012,12 @@ class TestPropertyAliasesInConfig:
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
+
+    @mock.patch(
+        "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases", return_value={"aliased_key"}
+    )
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_property_aliases_in_config_for_deps(self, mock_get_aliases, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(["deps"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
