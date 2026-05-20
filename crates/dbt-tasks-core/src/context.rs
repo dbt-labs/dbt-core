@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use arrow::array::RecordBatch;
@@ -25,6 +26,7 @@ use minijinja::Value;
 
 use crate::RunTasksArgs;
 use crate::span_manager::SpanManager;
+use crate::task::Task;
 use crate::test_aggregation::GenericTestRelationships;
 use crate::visitor::SkipReason;
 
@@ -163,6 +165,14 @@ pub trait ExtendedCtx: Send + Sync + Any {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    fn on_test_failure(
+        &self,
+        ctx: &TaskRunnerCtx,
+        node: &Arc<dyn Task>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    fn is_sidecar(&self) -> bool;
 }
 
 #[derive(Clone)]
@@ -277,5 +287,16 @@ impl TaskRunnerCtx {
             self.inner.runtime_config.clone(),
             ref_validation_config,
         )
+    }
+
+    pub fn on_test_failure(
+        &self,
+        node: &Arc<dyn Task>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        self.inner.extended_ctx.on_test_failure(self, node)
+    }
+
+    pub fn is_sidecar(&self) -> bool {
+        self.inner.extended_ctx.is_sidecar()
     }
 }

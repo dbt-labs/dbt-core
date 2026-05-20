@@ -22,6 +22,8 @@ dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-tasks-core = { workspace = true }
+dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
 
 arrow-schema = { workspace = true }
