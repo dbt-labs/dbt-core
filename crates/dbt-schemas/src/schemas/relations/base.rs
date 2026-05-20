@@ -9,7 +9,6 @@ use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_schema_store::CanonicalFqn;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
-use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
@@ -534,9 +533,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         // get start/end times
         let (start, end) = run_filter.sample_times();
 
-        // convert to ISO format
-        let start = start.map(|t| PyDateTime::new_naive(t.naive_utc()).isoformat());
-        let end = end.map(|t| PyDateTime::new_naive(t.naive_utc()).isoformat());
+        // Render with explicit UTC offset so non-UTC sessions (e.g. Snowflake
+        // with a session TIMEZONE other than UTC) interpret the literal as UTC,
+        // matching the microbatch DELETE predicate which also uses `to_rfc3339`.
+        let start = start.map(|t| t.to_rfc3339());
+        let end = end.map(|t| t.to_rfc3339());
 
         // render the filter conditions
         let (start, end) = match self.adapter_type() {
@@ -1197,7 +1198,7 @@ mod tests {
         let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
         );
     }
 
@@ -1229,7 +1230,7 @@ mod tests {
         let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00+00:00')"
         );
     }
 
@@ -1261,7 +1262,7 @@ mod tests {
         let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_db.my_schema.my_table where created_at < '2024-07-08T18:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at < '2024-07-08T18:00:00+00:00')"
         );
     }
 
@@ -1350,7 +1351,7 @@ mod tests {
         let result = relation.render_with_run_filter(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+            "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
         );
     }
 }
