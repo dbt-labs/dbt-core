@@ -686,6 +686,9 @@ pub enum DbtIncrementalStrategy {
     /// replace_where (Databricks only)
     /// see https://docs.getdbt.com/reference/resource-configs/databricks-configs
     ReplaceWhere,
+    /// legacy (ClickHouse only) — intermediate-table + swap approach
+    /// https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py
+    Legacy,
     #[strum(default)]
     #[serde(untagged)]
     Custom(String),

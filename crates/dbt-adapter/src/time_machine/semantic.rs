@@ -133,6 +133,22 @@ impl SemanticCategory {
             | "external_write_options"
             | "external_read_location"
             | "get_temp_relation_path"
+            | "get_clickhouse_cluster_name"
+            | "get_clickhouse_local_suffix"
+            | "get_clickhouse_local_db_prefix"
+            | "clickhouse_db_engine_clause"
+            | "is_before_version"
+            | "supports_atomic_exchange"
+            | "can_exchange"
+            | "should_on_cluster"
+            | "calculate_incremental_strategy"
+            | "validate_incremental_strategy"
+            | "get_model_settings"
+            | "get_model_query_settings"
+            | "filter_settings_by_engine"
+            | "get_ch_database"
+            | "get_credentials"
+            | "get_csv_data"
             | "table_format" => SemanticCategory::Pure,
 
             _ => {
