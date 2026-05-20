@@ -1,6 +1,6 @@
 use crate::adapter_config::{
-    setup_bigquery_profile, setup_databricks_profile, setup_postgres_profile,
-    setup_redshift_profile, setup_snowflake_profile,
+    setup_bigquery_profile, setup_clickhouse_profile, setup_databricks_profile,
+    setup_postgres_profile, setup_redshift_profile, setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
@@ -158,6 +158,7 @@ impl ProfileSetup {
             AdapterType::Snowflake,
             AdapterType::Databricks,
             AdapterType::Bigquery,
+            AdapterType::ClickHouse,
             AdapterType::Postgres,
             AdapterType::Redshift,
         ]
@@ -254,7 +255,15 @@ impl ProfileSetup {
                     "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
                 ));
             }
-            AdapterType::ClickHouse => todo!("ClickHouse"),
+            AdapterType::ClickHouse => {
+                let clickhouse_config = match existing_config {
+                    Some(DbConfig::ClickHouse(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::ClickHouse(setup_clickhouse_profile(
+                    clickhouse_config.map(Box::as_ref),
+                )?)
+            }
             AdapterType::Exasol => todo!("Exasol"),
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
