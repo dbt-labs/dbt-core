@@ -2723,14 +2723,17 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
         let mut value =
             dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML");
 
-        // Snapshot macros read `snapshot_table_column_names` (legacy key), but users write
-        // `snapshot_meta_column_names`. Normalize here so both compile and run see the legacy key.
         if let YmlValue::Mapping(ref mut map, _) = value {
-            if !map.contains_key("snapshot_table_column_names") {
-                if let Some(v) = map.get("snapshot_meta_column_names").cloned() {
-                    if !v.is_null() {
-                        map.insert("snapshot_table_column_names".into(), v);
-                    }
+            let has_meta_column_names =
+                matches!(map.get("snapshot_meta_column_names"), Some(v) if !v.is_null());
+            if has_meta_column_names {
+                let column_names = self
+                    .__snapshot_attr__
+                    .snapshot_meta_column_names
+                    .to_defaulted_column_names();
+                map.insert("snapshot_meta_column_names".into(), column_names.clone());
+                if !map.contains_key("snapshot_table_column_names") {
+                    map.insert("snapshot_table_column_names".into(), column_names);
                 }
             }
         }
@@ -5631,13 +5634,60 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        ModelConfig, hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
+        DbtSnapshot, InternalDbtNodeAttributes, ModelConfig, hooks_equal, normalize_description,
+        persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
+    use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
     use dbt_yaml::Verbatim;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn snapshot_serialized_config_defaults_partial_meta_column_names() {
+        let meta_column_names = SnapshotMetaColumnNames {
+            dbt_valid_from: Some("snapshot_valid_from_custom".to_string()),
+            dbt_valid_to: Some("snapshot_valid_to_custom".to_string()),
+            ..Default::default()
+        };
+
+        let mut snapshot = DbtSnapshot::default();
+        snapshot.deprecated_config.snapshot_meta_column_names = Some(meta_column_names.clone());
+        snapshot.__snapshot_attr__.snapshot_meta_column_names = meta_column_names;
+
+        let config = snapshot.serialized_config();
+        let YmlValue::Mapping(config, _) = config else {
+            panic!("expected serialized snapshot config to be a map");
+        };
+        let meta = config
+            .get("snapshot_meta_column_names")
+            .expect("snapshot_meta_column_names should be present");
+        let legacy = config
+            .get("snapshot_table_column_names")
+            .expect("snapshot_table_column_names should be present");
+        assert_eq!(meta, legacy);
+
+        let YmlValue::Mapping(meta, _) = meta else {
+            panic!("expected snapshot_meta_column_names to be a map");
+        };
+        assert_eq!(
+            meta.get("dbt_scd_id").and_then(|v| v.as_str()),
+            Some("dbt_scd_id")
+        );
+        assert_eq!(
+            meta.get("dbt_valid_from").and_then(|v| v.as_str()),
+            Some("snapshot_valid_from_custom")
+        );
+        assert_eq!(
+            meta.get("dbt_valid_to").and_then(|v| v.as_str()),
+            Some("snapshot_valid_to_custom")
+        );
+        assert_eq!(
+            meta.get("dbt_is_deleted").and_then(|v| v.as_str()),
+            Some("dbt_is_deleted")
+        );
+    }
 
     #[test]
     fn test_hooks_equal_none_vs_empty_array() {

@@ -501,6 +501,24 @@ impl SnapshotMetaColumnNames {
                 .to_lowercase()
         }
     }
+
+    pub fn to_defaulted_column_names(&self) -> YmlValue {
+        fn insert_name(map: &mut dbt_yaml::Mapping, key: &str, value: &Option<String>) {
+            let column_name = match value {
+                Some(value) => value.as_str(),
+                None => key,
+            };
+            map.insert(key.into(), YmlValue::string(column_name.to_string()));
+        }
+
+        let mut names = dbt_yaml::Mapping::new();
+        insert_name(&mut names, "dbt_scd_id", &self.dbt_scd_id);
+        insert_name(&mut names, "dbt_updated_at", &self.dbt_updated_at);
+        insert_name(&mut names, "dbt_valid_from", &self.dbt_valid_from);
+        insert_name(&mut names, "dbt_valid_to", &self.dbt_valid_to);
+        insert_name(&mut names, "dbt_is_deleted", &self.dbt_is_deleted);
+        YmlValue::mapping(names)
+    }
 }
 
 impl From<ProjectSnapshotConfig> for SnapshotConfig {
