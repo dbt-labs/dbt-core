@@ -270,6 +270,7 @@ impl DbConfig {
                 "certificate_validation",
             ],
             DbConfig::ClickHouse(_) => &[
+                "database",
                 "schema",
                 "driver",
                 "host",
@@ -365,7 +366,7 @@ impl DbConfig {
             DbConfig::Spark(_) => None,
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
-            DbConfig::ClickHouse(_) => None,
+            DbConfig::ClickHouse(config) => config.database.as_ref(),
         }
     }
 
@@ -1225,6 +1226,9 @@ pub struct ExasolDbConfig {
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct ClickHouseDbConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+
     #[serde(
         skip_serializing_if = "Option::is_none",
         default = "default_clickhouse_schema"

@@ -34,6 +34,9 @@ pub fn load_db_config_from_test_profile_with_database(
         DbConfig::Databricks(db) => {
             db.database = Some(database.to_string());
         }
+        DbConfig::ClickHouse(ch) => {
+            ch.database = Some(database.to_string());
+        }
         _ => {}
     }
 
@@ -90,6 +93,9 @@ pub fn load_db_config<P: AsRef<Path>>(
         }
         DbConfig::Spark(s) => {
             s.schema = Some(schema.to_string());
+        }
+        DbConfig::ClickHouse(ch) => {
+            ch.schema = Some(schema.to_string());
         }
         _ => {}
     }

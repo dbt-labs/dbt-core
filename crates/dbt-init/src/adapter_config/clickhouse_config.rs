@@ -32,6 +32,13 @@ impl InteractiveSetup for ClickHouseDbConfig {
                 required: false,
             },
             ConfigField {
+                name: "database".to_string(),
+                field_type: FieldType::Input { default: None },
+                condition: FieldCondition::Always,
+                prompt: "Database name".to_string(),
+                required: false,
+            },
+            ConfigField {
                 name: "schema".to_string(),
                 field_type: FieldType::Input { default: None },
                 condition: FieldCondition::Always,
@@ -100,6 +107,11 @@ impl InteractiveSetup for ClickHouseDbConfig {
                     self.password = Some(val);
                 }
             }
+            "database" => {
+                if let FieldValue::String(val) = value {
+                    self.database = Some(val);
+                }
+            }
             "schema" => {
                 if let FieldValue::String(val) = value {
                     self.schema = Some(val);
@@ -133,6 +145,10 @@ impl InteractiveSetup for ClickHouseDbConfig {
                 .password
                 .as_ref()
                 .map(|v| FieldValue::String(v.clone())),
+            "database" => self
+                .database
+                .as_ref()
+                .map(|v| FieldValue::String(v.clone())),
             "schema" => self.schema.as_ref().map(|v| FieldValue::String(v.clone())),
             "secure" => self.secure.map(FieldValue::Boolean),
             _ => None,
@@ -145,6 +161,7 @@ impl InteractiveSetup for ClickHouseDbConfig {
             "port" => self.port.is_some(),
             "user" => self.user.is_some(),
             "password" => self.password.is_some(),
+            "database" => self.database.is_some(),
             "schema" => self.schema.is_some(),
             "secure" => self.secure.is_some(),
             _ => false,
