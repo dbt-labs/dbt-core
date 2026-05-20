@@ -15,6 +15,7 @@ drivers = [
   "duckdb-0.21.0.dev+dbt0.0.19",
   "duckdb-0.21.0.dev+dbt0.0.20",
   "duckdb-1.5.2",
+  "duckdb-1.5.3",
   "duckdb_extended-0.21.0.dev+dbt0.0.21",
   "postgresql-0.18.0+dbt0.0.3",
   "postgresql-0.21.0+dbt0.21.0",
