@@ -48,6 +48,7 @@ from dbt.contracts.files import (
     AnySourceFile,
     FileHash,
     FixtureSourceFile,
+    OsiSourceFile,
     SchemaSourceFile,
     SourceFile,
 )
@@ -1780,7 +1781,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.groups.append(node.unique_id)
             elif isinstance(node, SnapshotNode):
                 source_file.snapshots.append(node.unique_id)
-        elif isinstance(source_file, FixtureSourceFile):
+        elif isinstance(source_file, (FixtureSourceFile, OsiSourceFile)):
             pass
         else:
             source_file.nodes.append(node.unique_id)
@@ -1840,7 +1841,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.functions.append(node.unique_id)
             if isinstance(node, UnitTestDefinition):
                 source_file.unit_tests.append(node.unique_id)
-        elif isinstance(source_file, FixtureSourceFile):
+        elif isinstance(source_file, (FixtureSourceFile, OsiSourceFile)):
             pass
         else:
             source_file.nodes.append(node.unique_id)

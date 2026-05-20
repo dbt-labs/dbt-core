@@ -6,11 +6,13 @@ from typing import Dict, List, Literal, Mapping, MutableMapping, Optional, Proto
 import pathspec  # type: ignore
 
 from dbt.config import Project
+from dbt.constants import OSI_DIRECTORY_NAME
 from dbt.contracts.files import (
     AnySourceFile,
     FileHash,
     FilePath,
     FixtureSourceFile,
+    OsiSourceFile,
     ParseFileType,
     SchemaSourceFile,
     SourceFile,
@@ -234,6 +236,31 @@ class ReadFilesFromFileSystem:
                 dbt_ignore_spec,
             )
 
+        self._read_osi_files_for_project(project)
+
+    def _read_osi_files_for_project(self, project):
+        osi_dir = pathlib.Path(project.project_root) / OSI_DIRECTORY_NAME
+        if not osi_dir.is_dir():
+            return
+        for osi_path in sorted(osi_dir.rglob("*.json")):
+            rel_to_osi = osi_path.relative_to(osi_dir)
+            fp = FilePath(
+                searched_path=OSI_DIRECTORY_NAME,
+                relative_path=str(rel_to_osi),
+                modification_time=osi_path.stat().st_mtime,
+                project_root=project.project_root,
+            )
+            contents = load_file_contents(str(osi_path), strip=True)
+            checksum = FileHash.from_contents(normalize_file_contents(contents))
+            sf = OsiSourceFile(
+                path=fp,
+                checksum=checksum,
+                parse_file_type=ParseFileType.OSI,
+                project_name=project.project_name,
+                contents=contents,
+            )
+            self.files[sf.file_id] = sf
+
 
 @dataclass
 class ReadFilesFromDiff:
@@ -252,11 +279,12 @@ class ReadFilesFromDiff:
         # Copy the base file information from the existing manifest.
         # We will do deletions, adds, changes from the file_diff to emulate
         # a complete read of the project file system.
+        _cls_by_parse_type = {
+            ParseFileType.Schema: SchemaSourceFile,
+            ParseFileType.OSI: OsiSourceFile,
+        }
         for file_id, source_file in self.saved_files.items():
-            if isinstance(source_file, SchemaSourceFile):
-                file_cls = SchemaSourceFile
-            else:
-                file_cls = SourceFile
+            file_cls = _cls_by_parse_type.get(source_file.parse_file_type, SourceFile)
             new_source_file = file_cls(
                 path=source_file.path,
                 checksum=source_file.checksum,
