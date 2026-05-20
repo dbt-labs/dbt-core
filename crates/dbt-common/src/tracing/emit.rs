@@ -226,6 +226,12 @@ pub fn emit_trace_event(attrs_and_msg: impl FnOnce() -> (TelemetryAttributes, Op
     }
 }
 
+/// Returns true if trace-level telemetry is enabled.
+#[inline(always)]
+pub fn is_trace_enabled() -> bool {
+    tracing::enabled!(tracing::Level::TRACE)
+}
+
 /// Create a root info-level span with no parent.
 ///
 /// This function creates a new tracing span at the info level that explicitly

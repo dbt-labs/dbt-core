@@ -31,7 +31,7 @@ pub use async_tracing::{spawn_blocking_traced, spawn_traced, spawn_traced_block_
 pub use config::FsTraceConfig;
 pub use emit::{
     create_debug_span, create_debug_span_with_parent, create_info_span,
-    create_info_span_with_parent, create_root_info_span,
+    create_info_span_with_parent, create_root_info_span, is_trace_enabled,
 };
 pub use init::{BaseSubscriber, TelemetryHandle, init_tracing, init_tracing_with_consumer_layer};
 pub use tracing_feature_handles::{TracingConfigProvider, noop_tracing_config_provider};

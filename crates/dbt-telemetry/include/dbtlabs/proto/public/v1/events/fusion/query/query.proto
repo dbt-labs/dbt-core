@@ -57,3 +57,12 @@ message QueryExecuted {
   // Legacy dbt core event code: E016 or E017
   string dbt_core_event_code = 11;
 }
+
+// Time spent waiting for connection concurrency limits to allow a node to proceed.
+message ConnectionLimitWait {
+  // Number of active nodes in task runner. Empty unless trace log level is set.
+  optional uint32 active_nodes = 1;
+
+  // Number of active adapter connections. Empty unless trace log level is set.
+  optional uint32 active_connections = 2;
+}

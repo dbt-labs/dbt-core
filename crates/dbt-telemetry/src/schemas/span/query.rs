@@ -1,4 +1,6 @@
-pub use crate::proto::v1::public::events::fusion::query::{QueryExecuted, QueryOutcome};
+pub use crate::proto::v1::public::events::fusion::query::{
+    ConnectionLimitWait, QueryExecuted, QueryOutcome,
+};
 use prost::Name as _;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
@@ -161,6 +163,63 @@ impl ArrowSerializableTelemetryEvent for QueryExecuted {
                         Self::full_name()
                     )
                 })?,
+        })
+    }
+}
+
+impl ProtoTelemetryEvent for ConnectionLimitWait {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
+
+    fn event_display_name(&self) -> String {
+        let active_nodes_suffix = if let Some(active_nodes) = self.active_nodes {
+            format!(" ({active_nodes} active nodes)")
+        } else {
+            "".to_string()
+        };
+
+        let active_connections_suffix = if let Some(active_connections) = self.active_connections {
+            format!(" ({active_connections} active connections)")
+        } else {
+            "".to_string()
+        };
+
+        format!("Connection limit wait{active_nodes_suffix}{active_connections_suffix}")
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+}
+
+impl ArrowSerializableTelemetryEvent for ConnectionLimitWait {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
+        ArrowAttributes {
+            json_payload: serde_json::to_string(self)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+                .into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+            format!(
+                "Missing json payload for event type \"{}\"",
+                Self::full_name()
+            )
+        })?)
+        .map_err(|e| {
+            format!(
+                "Failed to deserialize event type \"{}\" from JSON: {}",
+                Self::full_name(),
+                e
+            )
         })
     }
 }

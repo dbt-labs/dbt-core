@@ -9,16 +9,17 @@ use std::task::{Poll, Waker};
 use std::time::{Duration, Instant};
 
 use dbt_adapter_core::AdapterType;
-use dbt_common::AdapterResult;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::{AdapterResult, create_debug_span, is_trace_enabled};
+use dbt_telemetry::ConnectionLimitWait;
 use dbt_xdbc::{Connection, ConnectionFactory};
 use minijinja::State;
-use tracy_client::span;
 
 use crossbeam_skiplist::SkipMap;
 use crossbeam_utils::CachePadded;
 
 use rand::Rng;
+use tracing::Span;
 
 use crate::AdapterEngine;
 use crate::errors::AdapterError;
@@ -87,6 +88,26 @@ pub fn num_active_connections() -> isize {
     BACKPRESSURE_STATE.num_active_connections()
 }
 
+/// Returns current active guards & connections if trace level logging is enabled
+fn backpressure_counts_for_trace() -> (Option<u32>, Option<u32>) {
+    if !is_trace_enabled() {
+        return (None, None);
+    }
+
+    (
+        Some(
+            BACKPRESSURE_STATE
+                .num_active_guards()
+                .min(u32::MAX as usize) as u32,
+        ),
+        Some(
+            BACKPRESSURE_STATE
+                .num_active_connections()
+                .clamp(0, u32::MAX as isize) as u32,
+        ),
+    )
+}
+
 /// Function that must be called when a node execution tasks finishes executing.
 ///
 /// This allows the connection used by that node to be recycled and made available
@@ -140,12 +161,12 @@ static BACKPRESSURE_STATE: pri::BackpressureState = pri::BackpressureState::new(
 /// the thread-local variable. If another connection became the thread-local
 /// in the mean time, that connection is dropped and the return proceeds as
 /// normal.
+#[tracing::instrument(skip(engine, state), level = "trace")]
 pub(crate) fn borrow_tlocal_connection<'a>(
     engine: &dyn AdapterEngine,
     state: Option<&State>,
     node_id: Option<String>,
 ) -> AdapterResult<ConnectionGuard<'a>> {
-    let _span = span!("borrow_thread_local_connection");
     borrow_tlocal_connection_impl(
         engine.adapter_type(),
         state,
@@ -246,6 +267,7 @@ impl Drop for ConnectionGuard<'_> {
 /// Bursts can still overshoot the configured threshold.
 pub struct ConnectionBackpressure {
     high_water_mark: u32,
+    span: Span,
     /// Key assigned on first registration into [`wakers`](pri::BackpressureState::wakers).
     /// Reused across re-polls so the task keeps its original queue position.
     key: Option<(Instant, u64)>,
@@ -261,8 +283,14 @@ impl ConnectionBackpressure {
     /// `high_water_mark` is the number of active connections that should trigger
     /// backpressure to the node scheduler when reached.
     pub fn new(high_water_mark: u32) -> Self {
+        let (active_nodes, active_connections) = backpressure_counts_for_trace();
+
         Self {
             high_water_mark,
+            span: create_debug_span(ConnectionLimitWait {
+                active_nodes,
+                active_connections,
+            }),
             key: None,
             deadline: None,
         }
@@ -289,6 +317,26 @@ impl ConnectionBackpressure {
             (deadline, seq)
         })
     }
+
+    /// Creates new NextBackpressureWakerGuard and updates current span data if trace is enabled
+    fn ready_guard(&self) -> NextBackpressureWakerGuard {
+        let guard = NextBackpressureWakerGuard::new();
+
+        if !is_trace_enabled() {
+            return guard;
+        }
+
+        let (active_nodes, active_connections) = backpressure_counts_for_trace();
+        dbt_common::tracing::span_info::update_span_attrs(
+            &self.span,
+            |attrs: &mut ConnectionLimitWait| {
+                attrs.active_nodes = active_nodes;
+                attrs.active_connections = active_connections;
+            },
+        );
+
+        guard
+    }
 }
 
 impl Future for ConnectionBackpressure {
@@ -297,6 +345,8 @@ impl Future for ConnectionBackpressure {
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         use Poll::{Pending, Ready};
         let this = self.get_mut();
+        let span = this.span.clone();
+        let _span_guard = span.enter();
 
         let mut lazy_now = None;
         let mut now = || *lazy_now.get_or_insert_with(Instant::now);
@@ -316,7 +366,7 @@ impl Future for ConnectionBackpressure {
                     if num_active >= high_water_mark || now() < deadline {
                         Pending
                     } else {
-                        Ready(NextBackpressureWakerGuard::new())
+                        Ready(this.ready_guard())
                     }
                 }
             }
@@ -340,7 +390,7 @@ impl Future for ConnectionBackpressure {
         // return Pending, return Ready anyway to avoid deadlock. This ensures
         // at least one task can make progress.
         if result.is_pending() && BACKPRESSURE_STATE.num_active_guards() == 0 {
-            return Ready(NextBackpressureWakerGuard::new());
+            return Ready(this.ready_guard());
         }
 
         result

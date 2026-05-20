@@ -63,6 +63,32 @@ impl ::prost::Name for QueryExecuted {
         "/v1.public.events.fusion.query.QueryExecuted".into()
     }
 }
+/// Time spent waiting for connection concurrency limits to allow a node to proceed.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ConnectionLimitWait {
+    /// Number of active nodes in task runner. Empty unless trace log level is set.
+    #[prost(uint32, optional, tag = "1")]
+    pub active_nodes: ::core::option::Option<u32>,
+    /// Number of active adapter connections. Empty unless trace log level is set.
+    #[prost(uint32, optional, tag = "2")]
+    pub active_connections: ::core::option::Option<u32>,
+}
+impl crate::StaticName for ConnectionLimitWait {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.query.ConnectionLimitWait";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.query.ConnectionLimitWait";
+}
+impl ::prost::Name for ConnectionLimitWait {
+    const NAME: &'static str = "ConnectionLimitWait";
+    const PACKAGE: &'static str = "v1.public.events.fusion.query";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.query.ConnectionLimitWait".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.query.ConnectionLimitWait".into()
+    }
+}
 /// Outcome of a query execution
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

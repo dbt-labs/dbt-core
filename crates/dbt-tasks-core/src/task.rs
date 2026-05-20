@@ -94,28 +94,18 @@ impl<T: Send + 'static> TaskOp<T> {
     /// Execute this operation on the appropriate thread pool.
     pub async fn run(self) -> FsResult<T> {
         match self {
-            TaskOp::Blocking(f) => {
-                let span = tracing::Span::current();
-                tokio::task::spawn_blocking(move || {
-                    let _sp = span.enter();
-                    f()
-                })
+            TaskOp::Blocking(f) => dbt_common::tracing::spawn_blocking_traced(f)
                 .await
-                .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e))
-            }
+                .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e)),
             TaskOp::BlockingWithConnection {
                 f,
                 adapter_type,
                 max_threads,
             } => {
                 let _guard = ConnectionBackpressure::from_config(adapter_type, max_threads).await;
-                let span = tracing::Span::current();
-                tokio::task::spawn_blocking(move || {
-                    let _sp = span.enter();
-                    f()
-                })
-                .await
-                .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e))
+                dbt_common::tracing::spawn_blocking_traced(f)
+                    .await
+                    .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e))
             }
         }
     }
