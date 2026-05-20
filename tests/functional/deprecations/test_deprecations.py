@@ -1005,10 +1005,19 @@ class TestPropertyAliasesInConfig:
         return {"sources": {"test": {"+aliased_key": "value"}}}
 
     @mock.patch(
-        "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases", return_value={"aliased_key"}
+        "dbt.jsonschemas.jsonschemas._ADAPTER_TO_CONFIG_ALIASES", {"postgres": ["aliased_key"]}
     )
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_property_aliases_in_config(self, mock_get_aliases, project):
+    def test_property_aliases_in_config(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
+
+    @mock.patch(
+        "dbt.jsonschemas.jsonschemas._ADAPTER_TO_CONFIG_ALIASES", {"postgres": ["aliased_key"]}
+    )
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_deps_command_property_aliases_in_config(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(["deps"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
