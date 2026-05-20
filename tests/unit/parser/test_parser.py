@@ -476,6 +476,14 @@ sources:
       - name: my_table
         loaded_at_query: "select 1 as id"
 """
+SOURCE_CONFIG_LOADED_AT_FIELD = """
+sources:
+  - name: my_source
+    config:
+      loaded_at_field: created_at
+    tables:
+      - name: my_table
+"""
 
 SOURCE_FRESHNESS_AT_TABLE_AND_CONFIG = """
 sources:
@@ -607,6 +615,24 @@ class SchemaParserSourceTest(SchemaParserTest):
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
         src_default = self.source_patcher.parse_source(unpatched_src_default)
         assert src_default.loaded_at_query == "select 1 as id"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_config_loaded_at_field(self, mock_get_adapter):
+     block = self.file_block_for(
+      SOURCE_CONFIG_LOADED_AT_FIELD,
+        "test_one.yml",
+    )
+
+     dct = yaml_from_file(block.file, validate=True)
+     self.parser.parse_file(block, dct)
+
+     unpatched_src_default = self.parser.manifest.sources[
+        "source.snowplow.my_source.my_table"
+    ]
+
+     src_default = self.source_patcher.parse_source(unpatched_src_default)
+
+     assert src_default.loaded_at_field == "created_at"
 
     @mock.patch("dbt.parser.sources.get_adapter")
     def test_parse_source_field_at_custom_freshness_both_at_table_fails(self, _):
