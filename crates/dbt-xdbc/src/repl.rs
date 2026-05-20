@@ -1,20 +1,135 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{env, slice};
+use std::{fs, slice};
 
 use adbc_core::{
-    error::{Error, Result},
-    options::AdbcVersion,
+    error::{Error, Result, Status},
+    options::{AdbcVersion, ObjectDepth},
 };
 use arrow_array::RecordBatch;
 use arrow_schema::{Schema, SchemaRef};
 use dbt_pretty_table::pretty_data_table;
 use dialoguer::{BasicHistory, Input, theme::ColorfulTheme};
 
-use crate::{
-    Backend, Connection, Database, Driver, bigquery, connection,
-    database::{self, LogLevel},
-    driver, snowflake,
-};
+use crate::{Backend, Connection, Database, Driver, connection, database, driver};
+
+struct Profile {
+    backend: Backend,
+    path: PathBuf,
+    options: Vec<(String, String)>,
+}
+
+fn parse_backend(s: &str) -> Result<Backend> {
+    match s.to_lowercase().as_str() {
+        "snowflake" => Ok(Backend::Snowflake),
+        "bigquery" => Ok(Backend::BigQuery),
+        "postgres" | "postgresql" => Ok(Backend::Postgres),
+        "databricks" => Ok(Backend::Databricks),
+        "redshift" => Ok(Backend::Redshift),
+        "spark" => Ok(Backend::Spark),
+        "salesforce" => Ok(Backend::Salesforce),
+        "duckdb" => Ok(Backend::DuckDB),
+        "sqlserver" | "mssql" => Ok(Backend::SQLServer),
+        "athena" => Ok(Backend::Athena),
+        "clickhouse" => Ok(Backend::ClickHouse),
+        "exasol" => Ok(Backend::Exasol),
+        _ => Err(Error::with_message_and_status(
+            format!("Unsupported backend: {s}"),
+            Status::InvalidArguments,
+        )),
+    }
+}
+
+fn load_profile(config_path: &Path, profile_name: &str) -> Result<Profile> {
+    let text = fs::read_to_string(config_path).map_err(|e| {
+        Error::with_message_and_status(
+            format!("failed to read config file {}: {e}", config_path.display()),
+            Status::IO,
+        )
+    })?;
+    let mut table: toml::Table = toml::from_str(&text).map_err(|e| {
+        Error::with_message_and_status(
+            format!("failed to parse TOML config {}: {e}", config_path.display()),
+            Status::InvalidArguments,
+        )
+    })?;
+
+    let profile_value = table.remove(profile_name).ok_or_else(|| {
+        Error::with_message_and_status(
+            format!(
+                "profile '{profile_name}' not found in {}",
+                config_path.display()
+            ),
+            Status::InvalidArguments,
+        )
+    })?;
+
+    let mut profile_table = match profile_value {
+        toml::Value::Table(t) => t,
+        _ => {
+            return Err(Error::with_message_and_status(
+                format!("profile '{profile_name}' must be a TOML table"),
+                Status::InvalidArguments,
+            ));
+        }
+    };
+
+    let backend_value = profile_table.remove("backend").ok_or_else(|| {
+        Error::with_message_and_status(
+            format!("profile '{profile_name}' is missing required key 'backend'"),
+            Status::InvalidArguments,
+        )
+    })?;
+    let backend_str = match backend_value {
+        toml::Value::String(s) => s,
+        _ => {
+            return Err(Error::with_message_and_status(
+                format!("profile '{profile_name}' key 'backend' must be a string"),
+                Status::InvalidArguments,
+            ));
+        }
+    };
+    let backend = parse_backend(&backend_str)?;
+
+    let path_value = profile_table.remove("path").ok_or_else(|| {
+        Error::with_message_and_status(
+            format!("profile '{profile_name}' is missing required key 'path'"),
+            Status::InvalidArguments,
+        )
+    })?;
+    let path = match path_value {
+        toml::Value::String(s) => PathBuf::from(s),
+        _ => {
+            return Err(Error::with_message_and_status(
+                format!("profile '{profile_name}' key 'path' must be a string"),
+                Status::InvalidArguments,
+            ));
+        }
+    };
+
+    let mut options = Vec::with_capacity(profile_table.len());
+    for (key, value) in profile_table {
+        let value_str = match value {
+            toml::Value::String(s) => s,
+            other => {
+                return Err(Error::with_message_and_status(
+                    format!(
+                        "profile '{profile_name}' option '{key}' must be a string, got {}",
+                        other.type_str()
+                    ),
+                    Status::InvalidArguments,
+                ));
+            }
+        };
+        options.push((key, value_str));
+    }
+
+    Ok(Profile {
+        backend,
+        path,
+        options,
+    })
+}
 
 pub struct ReplState {
     _driver: Box<dyn Driver>,
@@ -27,17 +142,44 @@ pub struct ReplState {
 }
 
 impl ReplState {
-    pub fn new(backend: Backend, version: AdbcVersion) -> Result<Self> {
-        let load_strategy = match backend {
-            Backend::DuckDBExtended => driver::LoadStrategy::SystemThenCdnCache,
-            _ => driver::LoadStrategy::CdnCache,
-        };
-        let mut driver = driver::Builder::new(backend, load_strategy)
-            .with_adbc_version(version)
-            .try_load()?;
+    fn from_profile(profile: Profile) -> Result<Self> {
+        let path_str = profile
+            .path
+            .to_str()
+            .ok_or_else(|| {
+                Error::with_message_and_status(
+                    format!("driver path is not valid UTF-8: {}", profile.path.display()),
+                    Status::InvalidArguments,
+                )
+            })?
+            .to_string();
 
-        let mut database = Self::database_builder_for(backend)?.build(&mut driver)?;
+        let mut driver = driver::Builder::new(
+            profile.backend,
+            driver::LoadStrategy::System(Some(path_str)),
+        )
+        .with_adbc_version(AdbcVersion::V110)
+        .try_load()?;
 
+        let mut database_builder = database::Builder::new(profile.backend);
+        for (key, value) in profile.options {
+            match key.as_str() {
+                "uri" => {
+                    database_builder.with_parse_uri(value)?;
+                }
+                "username" => {
+                    database_builder.with_username(value);
+                }
+                "password" => {
+                    database_builder.with_password(value);
+                }
+                _ => {
+                    database_builder.with_named_option(&key, value)?;
+                }
+            }
+        }
+
+        let mut database = database_builder.build(&mut driver)?;
         let connection = connection::Builder::default().build(&mut database)?;
 
         Ok(Self {
@@ -48,79 +190,6 @@ impl ReplState {
             current_batches: Vec::new(),
             current_batch_idx: 0,
         })
-    }
-
-    // TODO(jasonlin45): wet code - extract default initialization to be shared with the tests
-    // TODO(jasonlin45): allow customization of adbc options via command
-    fn database_builder_for(backend: Backend) -> Result<database::Builder> {
-        let mut database_builder = match backend {
-            Backend::Snowflake => database::Builder::from_snowsql_config(),
-            Backend::BigQuery => {
-                let mut builder = database::Builder::new(backend);
-                let project_id = env::var("ADBC_BIGQUERY_PROJECT").unwrap_or_default();
-                let dataset_id = env::var("ADBC_BIGQUERY_DATASET").unwrap_or_default();
-                let auth_credentials =
-                    env::var("ADBC_BIGQUERY_CREDENTIAL_FILE").unwrap_or_default();
-
-                builder
-                    .with_named_option(
-                        bigquery::AUTH_TYPE,
-                        bigquery::auth_type::JSON_CREDENTIAL_FILE,
-                    )?
-                    .with_named_option(bigquery::PROJECT_ID, project_id)?
-                    .with_named_option(bigquery::DATASET_ID, dataset_id)?
-                    .with_named_option(bigquery::AUTH_CREDENTIALS, auth_credentials)?;
-                Ok(builder)
-            }
-            Backend::Postgres => {
-                // Configuration for Postgres:
-                //     CREATE ROLE username WITH LOGIN PASSWORD 'an_secure_password';
-                //     CREATE DATABASE adbc_test;
-                //     GRANT CONNECT ON DATABASE adbc_test TO username;
-                //     GRANT ALL PRIVILEGES ON DATABASE adbc_test TO username;
-                // Shell:
-                //     export ADBC_POSTGRES_URI="postgres://username:an_secure_password@localhost/adbc_test"
-                let uri = env::var("ADBC_POSTGRES_URI").unwrap_or_else(|_| {
-                    "postgres://username:rocks_password@localhost/adbc_test".to_owned()
-                });
-                let mut builder = database::Builder::new(backend);
-                builder.with_parse_uri(uri)?;
-                Ok(builder)
-            }
-            Backend::Databricks => {
-                const HOST: &str = "adbc.databricks.host";
-                const CATALOG: &str = "adbc.databricks.catalog";
-                const SCHEMA: &str = "adbc.databricks.schema";
-                const WAREHOUSE: &str = "adbc.databricks.warehouse";
-                const TOKEN: &str = "adbc.databricks.token";
-
-                let host = env::var("DATABRICKS_HOST").unwrap();
-                let warehouse = env::var("DATABRICKS_WAREHOUSE").unwrap();
-                let token = env::var("DATABRICKS_TOKEN").unwrap();
-
-                let mut builder = database::Builder::new(backend);
-                // optional
-                if let Ok(catalog) = env::var("DATABRICKS_CATALOG") {
-                    builder.with_named_option(CATALOG, catalog)?;
-                }
-                if let Ok(schema) = env::var("DATABRICKS_SCHEMA") {
-                    builder.with_named_option(SCHEMA, schema)?;
-                }
-
-                builder
-                    .with_named_option(HOST, host)?
-                    .with_named_option(WAREHOUSE, warehouse)?
-                    .with_named_option(TOKEN, token)?;
-                Ok(builder)
-            }
-            Backend::Generic { .. } => unimplemented!("generic backend REPL configuration"),
-            _ => unimplemented!("unsupported backend REPL configuration"),
-        }?;
-        if backend == Backend::Snowflake {
-            database_builder
-                .with_named_option(snowflake::LOG_TRACING, LogLevel::Warn.to_string())?;
-        }
-        Ok(database_builder)
     }
 
     pub fn execute_query(&mut self, query: &str) -> Result<(usize, usize)> {
@@ -138,11 +207,7 @@ impl ReplState {
 
         // grab all the batches
         self.current_batches = reader
-            .map(|r| {
-                r.map_err(|e| {
-                    Error::with_message_and_status(e.to_string(), adbc_core::error::Status::IO)
-                })
-            })
+            .map(|r| r.map_err(|e| Error::with_message_and_status(e.to_string(), Status::IO)))
             .collect::<Result<Vec<_>>>()?;
         let num_batches = self.current_batches.len();
         self.current_batch_idx = 0;
@@ -173,7 +238,7 @@ impl ReplState {
             if idx >= self.current_batches.len() {
                 Err(Error::with_message_and_status(
                     format!("Out of range {idx}"),
-                    adbc_core::error::Status::InvalidArguments,
+                    Status::InvalidArguments,
                 ))
             } else {
                 self.current_batch_idx = idx;
@@ -182,7 +247,7 @@ impl ReplState {
         } else {
             Err(Error::with_message_and_status(
                 "Index overflow".to_string(),
-                adbc_core::error::Status::InvalidArguments,
+                Status::InvalidArguments,
             ))
         }
     }
@@ -195,6 +260,8 @@ enum Command {
     ReloadDriver,
     ShowSchema,
     ShowBatch,
+    GetObjects { identifier: Option<String> },
+    GetSchema { identifier: String },
     Help,
     Quit,
     Invalid,
@@ -209,25 +276,53 @@ fn parse_command(line: &str) -> Option<Command> {
         });
     };
 
-    match line {
-        "exit" | "quit" => Some(Command::Quit),
-        "help" => Some(Command::Help),
-        "reload" => Some(Command::ReloadDriver),
-        "show-schema" => Some(Command::ShowSchema),
-        "show-batch" => Some(Command::ShowBatch),
-        "prev" => Some(Command::Move { delta: -1 }),
-        "next" => Some(Command::Move { delta: 1 }),
-        "move" => {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() != 2 {
-                Some(Command::Invalid)
-            } else if let Ok(delta) = parts[1].parse::<isize>() {
+    let (cmd, rest) = match line.split_once(char::is_whitespace) {
+        Some((c, r)) => (c, r.trim()),
+        None => (line, ""),
+    };
+
+    match cmd {
+        "q" | "exit" | "quit" => Some(Command::Quit),
+        "h" | "help" => Some(Command::Help),
+        "r" | "reload" => Some(Command::ReloadDriver),
+        "ss" | "show-schema" => Some(Command::ShowSchema),
+        "sb" | "show-batch" => Some(Command::ShowBatch),
+        "p" | "prev" => Some(Command::Move { delta: -1 }),
+        "n" | "next" => Some(Command::Move { delta: 1 }),
+        "m" | "move" => {
+            if let Ok(delta) = rest.parse::<isize>() {
                 Some(Command::Move { delta })
             } else {
                 Some(Command::Invalid)
             }
         }
+        "go" | "get-objects" => {
+            let identifier = if rest.is_empty() {
+                None
+            } else {
+                Some(rest.to_string())
+            };
+            Some(Command::GetObjects { identifier })
+        }
+        "gs" | "get-schema" => {
+            if rest.is_empty() {
+                Some(Command::Invalid)
+            } else {
+                Some(Command::GetSchema {
+                    identifier: rest.to_string(),
+                })
+            }
+        }
         _ => Some(Command::Invalid),
+    }
+}
+
+fn parse_table_identifier(s: &str) -> (Option<&str>, Option<&str>, &str) {
+    let parts: Vec<&str> = s.split('.').collect();
+    match parts.len() {
+        1 => (None, None, parts[0]),
+        2 => (None, Some(parts[0]), parts[1]),
+        _ => (Some(parts[0]), Some(parts[1]), parts[2]),
     }
 }
 
@@ -264,37 +359,65 @@ fn visualize_schema(schema: Arc<Schema>) {
     }
 }
 
-pub async fn run_repl(backend_str: &str) -> Result<()> {
-    let backend = match backend_str.to_lowercase().as_str() {
-        "snowflake" => Backend::Snowflake,
-        "bigquery" => Backend::BigQuery,
-        "postgres" => Backend::Postgres,
-        "databricks" => Backend::Databricks,
-        "redshift" => Backend::RedshiftODBC,
-        _ => {
-            return Err(Error::with_message_and_status(
-                format!("Unsupported backend: {backend_str}"),
-                adbc_core::error::Status::InvalidArguments,
-            ));
+fn print_batches(title: &str, batches: &[RecordBatch]) {
+    if batches.is_empty() {
+        println!("(no rows)");
+        return;
+    }
+    let column_names: Vec<String> = batches[0]
+        .schema()
+        .fields()
+        .iter()
+        .map(|field| field.name().to_string())
+        .collect();
+    let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    match pretty_data_table(
+        title,
+        "",
+        &column_names,
+        batches,
+        dbt_pretty_table::DisplayFormat::Table,
+        Some(50),
+        true,
+        Some(total_rows),
+    ) {
+        Ok(table) => println!("{table}"),
+        Err(_) => {
+            eprintln!("Failed to pretty print as table.");
+            for batch in batches {
+                println!("{batch:#?}");
+            }
         }
-    };
+    }
+}
+
+pub async fn run_repl(config_path: &Path, profile_name: &str) -> Result<()> {
+    let profile = load_profile(config_path, profile_name)?;
+    let backend = profile.backend;
+    let driver_path = profile.path.clone();
+
+    let mut state = ReplState::from_profile(profile)?;
 
     let mut history = BasicHistory::new().max_entries(8).no_duplicates(true);
-    let mut state = ReplState::new(backend, AdbcVersion::V110)?;
     let theme = ColorfulTheme::default();
 
     println!("Welcome to dbt-xdbc REPL!");
+    println!(
+        "Loaded profile '{profile_name}' from {} ({backend}, driver: {})",
+        config_path.display(),
+        driver_path.display(),
+    );
     println!("Type :help for available commands");
     println!("Type :quit to exit");
 
+    let prompt = format!("dbt-xdbc | {backend}>");
+
     loop {
         let input: String = Input::with_theme(&theme)
-            .with_prompt(format!("dbt-xdbc | {backend_str}>"))
+            .with_prompt(&prompt)
             .history_with(&mut history)
             .interact_text()
-            .map_err(|e| {
-                Error::with_message_and_status(e.to_string(), adbc_core::error::Status::IO)
-            })?;
+            .map_err(|e| Error::with_message_and_status(e.to_string(), Status::IO))?;
 
         match parse_command(&input) {
             Some(Command::Query { query }) => {
@@ -320,17 +443,25 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
             }
             Some(Command::Help) => {
                 println!("Available commands:");
-                println!("  :help           - Show this help message");
-                println!("  <query>         - Execute SQL query");
-                println!("  :show-schema    - Show current schema");
-                println!("  :show-batch     - Show current batch");
+                println!("  :help, :h                      - Show this help message");
+                println!("  <query>                        - Execute SQL query");
+                println!("  :show-schema, :ss              - Show current schema");
+                println!("  :show-batch, :sb               - Show current batch");
                 println!(
-                    "  :move <int>     - Move current batch pointer. Negative values move backwards, positive values move forwards."
+                    "  :move, :m <int>                - Move current batch pointer. Negative values move backwards, positive values move forwards."
                 );
-                println!("  :prev           - Move to previous batch");
-                println!("  :next           - Advance to next batch");
-                println!("  :reload         - Reload the xdbc driver");
-                println!("  :quit           - Exit the REPL");
+                println!("  :prev, :p                      - Move to previous batch");
+                println!("  :next, :n                      - Advance to next batch");
+                println!(
+                    "  :get-objects, :go [<a.b.c>]    - List objects (catalogs/schemas/tables) optionally filtered by an identifier"
+                );
+                println!(
+                    "  :get-schema, :gs <a.b.c>       - Show the Arrow schema of the table identified by <catalog.schema.table>"
+                );
+                println!(
+                    "  :reload, :r                    - Reload the xdbc driver from the config file"
+                );
+                println!("  :quit, :q                      - Exit the REPL");
             }
             Some(Command::ShowSchema) => {
                 if let Some(schema) = state.show_schema()? {
@@ -341,7 +472,6 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
             }
             Some(Command::ShowBatch) => {
                 if let Ok(Some(batch)) = state.show_batch() {
-                    // Get column names from the schema
                     let column_names: Vec<String> = batch
                         .schema()
                         .fields()
@@ -349,7 +479,6 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                         .map(|field| field.name().to_string())
                         .collect();
 
-                    // Format and display the table
                     if let Ok(table) = pretty_data_table(
                         "Query Results",
                         "",
@@ -370,11 +499,61 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                     println!("No batch found!");
                 }
             }
+            Some(Command::GetObjects { identifier }) => {
+                let (catalog, db_schema, table_name) = match identifier {
+                    Some(ref id) => {
+                        let (c, s, t) = parse_table_identifier(id);
+                        (c, s, Some(t))
+                    }
+                    None => (None, None, None),
+                };
+                match state.connection.get_objects(
+                    ObjectDepth::All,
+                    catalog,
+                    db_schema,
+                    table_name,
+                    None,
+                    None,
+                ) {
+                    Ok(reader) => {
+                        let collected: std::result::Result<Vec<_>, _> = reader.collect();
+                        match collected {
+                            Ok(batches) => print_batches("Objects", &batches),
+                            Err(e) => eprintln!("Error reading objects: {e}"),
+                        }
+                    }
+                    Err(e) => eprintln!("Error getting objects: {e}"),
+                }
+            }
+            Some(Command::GetSchema { identifier }) => {
+                let (catalog, db_schema, table_name) = parse_table_identifier(&identifier);
+                match state
+                    .connection
+                    .get_table_schema(catalog, db_schema, table_name)
+                {
+                    Ok(schema) => visualize_schema(Arc::new(schema)),
+                    Err(e) => eprintln!("Error getting table schema: {e}"),
+                }
+            }
             Some(Command::ReloadDriver) => {
                 // TODO(jasonlin45) the actual binary ends up cached in driver.rs
                 println!("Reloading driver...");
-                state = ReplState::new(backend, AdbcVersion::V110)?;
-                println!("Driver reloaded successfully");
+                let profile = match load_profile(config_path, profile_name) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to reload profile: {e}");
+                        continue;
+                    }
+                };
+                match ReplState::from_profile(profile) {
+                    Ok(new_state) => {
+                        state = new_state;
+                        println!("Driver reloaded successfully");
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to rebuild connection: {e}");
+                    }
+                }
             }
             Some(Command::Quit) => break,
             Some(Command::Invalid) => {

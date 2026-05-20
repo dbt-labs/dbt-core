@@ -206,9 +206,9 @@ We expose a basic REPL that is tightly coupled with the drivers in order to exec
 To invoke this REPL (for Databricks):
 
 ```bash
-$ cargo xtask xdbc-repl --backend databricks
+$ cargo xdbc --profile databricks
 ```
 
-The backend argument can take multiple arguments and supports inputs such as `snowflake` or `bigquery`.
+You'll need a `adbc_config.toml` file somewhere with all your profiles. An example is provided in `adbc_conf.toml.example`.
 
 Follow the prompts within the REPL for features such as executing queries, inspect schemas, and check `RecordBatch` objects extracted from the `RecordBatchReader`.
