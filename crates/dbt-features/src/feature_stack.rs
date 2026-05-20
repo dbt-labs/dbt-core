@@ -62,7 +62,12 @@ pub trait CliExtensionHooks: Send + Sync {
     }
 
     /// Called early in execution, before any tasks are scheduled or run.
-    async fn will_execute(&self, _cli: &Cli, _arg: &EvalArgs) -> FsResult<()> {
+    async fn will_execute(
+        &self,
+        _cli: &Cli,
+        _eval_arg: &EvalArgs,
+        _feature_stack: &Arc<FeatureStack>,
+    ) -> FsResult<()> {
         Ok(())
     }
 
