@@ -1283,8 +1283,6 @@ class ProviderContext(ManifestContext):
 
     @contextmember()
     def load_agate_table(self) -> "agate.Table":
-        from dbt_common.clients import agate_helper
-
         if not isinstance(self.model, SeedNode):
             raise LoadAgateTableNotSeedError(self.model.resource_type, node=self.model)
 
@@ -1300,6 +1298,22 @@ class ProviderContext(ManifestContext):
             path = os.path.join(self.model.root_path, self.model.original_file_path)
 
         column_types = self.model.config.column_types or {}
+        ext = os.path.splitext(path)[1].lower()
+
+        if ext == ".csv":
+            table = self._load_csv_agate_table(path, column_types)
+        elif ext in {".jsonl", ".ndjson"}:
+            table = self._load_jsonl_agate_table(path, column_types)
+        else:
+            raise DbtInternalError(f"Unsupported seed extension: {ext}")
+
+        # this is used by some adapters
+        table.original_abspath = os.path.abspath(path)  # type: ignore
+        return table
+
+    def _load_csv_agate_table(self, path: str, column_types: Dict[str, str]) -> "agate.Table":
+        from dbt_common.clients import agate_helper
+
         delimiter = self.model.config.delimiter
 
         # Validate that column_types keys exist in the file header
@@ -1330,8 +1344,29 @@ class ProviderContext(ManifestContext):
                 table = table.limit(0)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
-        # this is used by some adapters
-        table.original_abspath = os.path.abspath(path)  # type: ignore
+        return table
+
+    def _load_jsonl_agate_table(self, path: str, column_types: Dict[str, str]) -> "agate.Table":
+        from dbt.task.seed_readers import JSONLSeedError, load_jsonl_seed_agate_table
+
+        try:
+            table = load_jsonl_seed_agate_table(path, column_types=column_types)
+        except JSONLSeedError as exc:
+            raise CompilationError(msg=str(exc), node=self.model) from exc
+
+        if column_types:
+            table_columns = {col.name for col in table.columns}
+            invalid_column_names = set(column_types) - table_columns
+            if invalid_column_names:
+                invalid_column_names_str = ", ".join(sorted(invalid_column_names))
+                msg = (
+                    f"Column types specified for non-existent columns in seed '{self.model.name}' (file: {path}): "
+                    f"{invalid_column_names_str}. These column type overrides will be ignored."
+                )
+                fire_event(JinjaLogWarning(msg=msg))
+
+        if getattr(get_flags(), "EMPTY", False):
+            table = table.limit(0)
         return table
 
     @contextproperty()
