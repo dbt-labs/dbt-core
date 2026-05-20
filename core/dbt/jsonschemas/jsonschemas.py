@@ -175,7 +175,6 @@ def _can_run_validations() -> bool:
     # for commands like dbt deps, we don't have adapter types set yet
     if not invocation_context.adapter_types:
         return False
-
     return invocation_context.adapter_types.issubset(_JSONSCHEMA_SUPPORTED_ADAPTERS)
 
 

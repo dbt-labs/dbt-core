@@ -622,7 +622,8 @@ class TestGetRequiredVersion:
 
 class TestDeprecations:
 
-    def test_jsonschema_validate(self) -> None:
+    @mock.patch("dbt.jsonschemas.jsonschemas._can_run_validations", return_value=True)
+    def test_jsonschema_validate(self, mock_can_run) -> None:
         from dbt.jsonschemas.jsonschemas import jsonschema_validate
 
         project_dict: Dict[str, Any] = {}
