@@ -22,6 +22,7 @@ use dbt_schemas::schemas::{
 use minijinja::State;
 
 pub(crate) mod bigquery;
+pub(crate) mod clickhouse;
 pub mod databricks;
 pub(crate) mod duckdb;
 pub(crate) mod fabric;

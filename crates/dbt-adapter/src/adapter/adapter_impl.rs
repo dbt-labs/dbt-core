@@ -16,6 +16,7 @@ use crate::macro_exec::{
 };
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
+use crate::metadata::clickhouse::ClickHouseMetadataAdapter;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::EngineVersion;
@@ -238,7 +239,8 @@ impl AdapterImpl {
                         Fabric => {
                             Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
-                        ClickHouse => todo!("ClickHouse"),
+                        ClickHouse => Box::new(ClickHouseMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
                         Exasol => return None,
                         Starburst => todo!("Starburst"),
                         Athena => todo!("Athena"),
