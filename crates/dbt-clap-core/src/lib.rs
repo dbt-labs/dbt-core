@@ -626,7 +626,7 @@ pub struct SeedArgs {
     #[arg(long, default_value = "false")]
     pub force_node_selection: bool,
 
-    /// The mode to use for the run cache. Cannot be used with --force-node-selection
+    /// The mode to use for dbt State. Cannot be used with --force-node-selection
     #[arg(
         long,
         default_value = "read-write",
@@ -634,7 +634,7 @@ pub struct SeedArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable run cache
+    /// Disable dbt State
     #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
     pub no_run_cache: bool,
 
@@ -803,7 +803,7 @@ pub struct SnapshotArgs {
     #[arg(long, default_value = "false")]
     pub force_node_selection: bool,
 
-    /// The mode to use for the run cache. Cannot be used with --force-node-selection
+    /// The mode to use for dbt State. Cannot be used with --force-node-selection
     #[arg(
         long,
         default_value = "read-write",
@@ -811,7 +811,7 @@ pub struct SnapshotArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable run cache
+    /// Disable dbt State
     #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
     pub no_run_cache: bool,
 
@@ -855,7 +855,7 @@ pub struct TestArgs {
     #[arg(long, default_value = "false")]
     pub force_node_selection: bool,
 
-    /// The mode to use for the run cache. Cannot be used with --force-node-selection
+    /// The mode to use for dbt State. Cannot be used with --force-node-selection
     #[arg(
         long,
         default_value = "read-write",
@@ -863,7 +863,7 @@ pub struct TestArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable run cache
+    /// Disable dbt State
     #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
     pub no_run_cache: bool,
 
@@ -928,7 +928,7 @@ pub struct BuildArgs {
     #[arg(long, default_value = "false")]
     pub force_node_selection: bool,
 
-    /// The mode to use for the run cache. Cannot be used with --force-node-selection
+    /// The mode to use for dbt State. Cannot be used with --force-node-selection
     #[arg(
         long,
         default_value = "read-write",
@@ -936,7 +936,7 @@ pub struct BuildArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable run cache
+    /// Disable dbt State
     #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
     pub no_run_cache: bool,
 
@@ -1066,7 +1066,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub force_node_selection: bool,
 
-    /// The mode to use for the run cache. Cannot be used with --force-node-selection
+    /// The mode to use for dbt State. Cannot be used with --force-node-selection
     #[arg(
         long,
         default_value = "read-write",
@@ -1074,7 +1074,7 @@ pub struct RunArgs {
     )]
     pub run_cache_mode: RunCacheMode,
 
-    /// Disable run cache
+    /// Disable dbt State
     #[arg(long, default_value = "false", conflicts_with = "force_node_selection")]
     pub no_run_cache: bool,
 
@@ -1726,7 +1726,7 @@ pub struct CommonArgs {
     #[clap(long, env = "DBT_TASK_CACHE_URL", default_value = "noop", hide = true)]
     pub task_cache_url: String,
 
-    /// Enable service-backed Run Cache without legacy task-cache coordination
+    /// Enable service-backed dbt State without legacy task-cache coordination
     #[arg(global = true, long = "run-cache-service", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
     pub run_cache_service: bool,
 
