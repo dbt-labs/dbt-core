@@ -582,6 +582,13 @@
           ]
         },
         {
+          "description": "legacy (ClickHouse only) — intermediate-table + swap approach https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py",
+          "type": "string",
+          "enum": [
+            "legacy"
+          ]
+        },
+        {
           "type": "object",
           "required": [
             "custom"
@@ -655,7 +662,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -670,7 +676,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -685,7 +690,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"

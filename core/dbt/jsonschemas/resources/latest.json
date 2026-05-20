@@ -724,6 +724,7 @@
         },
         "to_columns": {
           "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
+          "default": [],
           "type": [
             "array",
             "null"
@@ -2040,6 +2041,13 @@
           ]
         },
         {
+          "description": "legacy (ClickHouse only) — intermediate-table + swap approach https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py",
+          "type": "string",
+          "enum": [
+            "legacy"
+          ]
+        },
+        {
           "type": "object",
           "required": [
             "custom"
@@ -2135,7 +2143,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -2150,7 +2157,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -2165,7 +2171,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -6037,7 +6042,7 @@
         },
         "to_columns": {
           "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
-          "default": null,
+          "default": [],
           "type": [
             "array",
             "null"
