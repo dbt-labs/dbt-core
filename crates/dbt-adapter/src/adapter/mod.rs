@@ -3931,11 +3931,45 @@ impl Adapter {
                 iter.finish()?;
                 self.location_exists(state, location)
             }
+            "get_csv_data" => {
+                let table = args
+                    .first()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::MissingArgument,
+                            "get_csv_data requires agate_table argument",
+                        )
+                    })?
+                    .downcast_object::<AgateTable>()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "get_csv_data: argument must be an AgateTable",
+                        )
+                    })?;
+                self.get_csv_data(table)
+            }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on adapter object: '{name}'"),
             )),
         }
+    }
+
+    pub fn get_csv_data(&self, table: Arc<AgateTable>) -> Result<Value, minijinja::Error> {
+        let batch = table.original_record_batch();
+        let mut buf: Vec<u8> = Vec::new();
+        let mut writer = arrow::csv::WriterBuilder::new()
+            .with_header(false)
+            .build(&mut buf);
+        writer.write(&batch).map_err(|e| {
+            minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!("get_csv_data: failed to format CSV: {e}"),
+            )
+        })?;
+        drop(writer);
+        Ok(Value::from(String::from_utf8_lossy(&buf).into_owned()))
     }
 }
 
