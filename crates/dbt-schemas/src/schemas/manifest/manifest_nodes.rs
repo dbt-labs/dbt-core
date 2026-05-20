@@ -339,6 +339,7 @@ pub struct ManifestDataTest {
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
+    pub group: Option<String>,
     pub generated_sql_file: Option<String>,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -397,6 +398,7 @@ impl From<DbtTest> for ManifestDataTest {
             attached_node: test.__test_attr__.attached_node,
             test_metadata: test.__test_attr__.test_metadata,
             file_key_name: test.__test_attr__.file_key_name,
+            group: test.__test_attr__.group,
             generated_sql_file: Some(
                 test.__common_attr__
                     .original_file_path

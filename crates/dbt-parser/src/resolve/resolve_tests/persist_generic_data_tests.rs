@@ -260,6 +260,7 @@ fn persist_inner(
         resource_name: test_config.resource_name.clone(),
         version: test_config.version_num.clone(),
         resource_type: test_config.resource_type.clone(),
+        source_name: test_config.source_name.clone(),
         test_name: full_name,
         defined_at: test.span().clone().into(),
         test_metadata_name: meta_name,

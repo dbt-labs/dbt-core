@@ -1213,13 +1213,14 @@ pub enum StoreFailuresAs {
 }
 
 #[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema)]
+#[serde(rename_all = "UPPERCASE")]
 #[schemars(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Severity {
     #[default]
-    #[serde(alias = "error", alias = "ERROR")]
+    #[serde(alias = "error", alias = "Error")]
     Error,
-    #[serde(alias = "warn", alias = "WARN")]
+    #[serde(alias = "warn", alias = "Warn")]
     Warn,
 }
 

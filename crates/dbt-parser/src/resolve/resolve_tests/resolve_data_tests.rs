@@ -530,6 +530,23 @@ pub async fn resolve_data_tests(
                         ))
                     }
                 });
+                // Match dbt-core schema_generic_tests.py:218-221: `{yaml_key}.{name}`.
+                // For source tests, name is the source-collection name, not the table.
+                let file_key_name = test_asset.map(|ta| {
+                    let yaml_key = match ta.resource_type.as_str() {
+                        "model" => "models",
+                        "seed" => "seeds",
+                        "snapshot" => "snapshots",
+                        "source" => "sources",
+                        "analysis" => "analyses",
+                        other => other,
+                    };
+                    let name = ta
+                        .source_name
+                        .as_deref()
+                        .unwrap_or(ta.resource_name.as_str());
+                    format!("{yaml_key}.{name}")
+                });
                 let group = attached_node
                     .as_deref()
                     .and_then(|id| models.get(id))
@@ -538,7 +555,7 @@ pub async fn resolve_data_tests(
                     column_name: test_asset.and_then(|ta| ta.test_metadata_column_name.clone()),
                     attached_node,
                     test_metadata: inferred_test_metadata.clone(),
-                    file_key_name: None,
+                    file_key_name,
                     introspection: IntrospectionKind::None,
                     original_name: test_asset.and_then(|ta| ta.original_name.clone()),
                     group,
@@ -644,6 +661,7 @@ mod tests {
             },
             resource_name: "customers".to_string(),
             resource_type: "model".to_string(),
+            source_name: None,
             test_name: "not_null_customers_id".to_string(),
             defined_at: Default::default(),
             test_metadata_name: Some("not_null".to_string()),
@@ -692,6 +710,7 @@ mod tests {
             },
             resource_name: "my_model".to_string(),
             resource_type: "model".to_string(),
+            source_name: None,
             test_name: truncated_name.to_string(),
             defined_at: Default::default(),
             test_metadata_name: Some("not_null".to_string()),
@@ -732,6 +751,7 @@ mod tests {
             },
             resource_name: "customers".to_string(),
             resource_type: "model".to_string(),
+            source_name: None,
             test_name: "unique_combination_of_columns_customers_a__b".to_string(),
             defined_at: Default::default(),
             test_metadata_name: Some("unique_combination_of_columns".to_string()),

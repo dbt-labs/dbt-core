@@ -328,6 +328,7 @@ pub struct DataTestConfig {
     pub limit: Option<i32>,
     #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
+    #[resolved(promote, default = Severity::Error)]
     pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
@@ -622,6 +623,21 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
         }
         if store_failures && self.store_failures.is_none() {
             self.store_failures = Some(store_failures);
+        }
+        // Mirror dbt-core's TestConfig.finalize_and_validate: cross-fill store_failures_as
+        // from store_failures so the manifest carries a concrete value matching core.
+        // See core/dbt/artifacts/resources/v1/config.py:195-241.
+        if self.store_failures_as.is_none() {
+            self.store_failures_as = match self.store_failures {
+                Some(true) => Some(StoreFailuresAs::Table),
+                Some(false) => Some(StoreFailuresAs::Ephemeral),
+                None => None,
+            };
+        } else if self.store_failures.is_none() {
+            self.store_failures = Some(matches!(
+                self.store_failures_as,
+                Some(StoreFailuresAs::Table) | Some(StoreFailuresAs::View)
+            ));
         }
     }
 
