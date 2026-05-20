@@ -1,11 +1,12 @@
 use crate::adapter::adapter_impl::*;
 use crate::connection::AdapterConnectionFactory;
+use crate::metadata::FreshnessOverride;
 use crate::metadata::freshness_overrides::{
     FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
 };
 use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch::RecordBatchExt;
-use crate::relation::snowflake::SnowflakeRelation;
+use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::{AdapterEngine, AdapterResult, AdapterType};
 
@@ -187,15 +188,20 @@ fn build_relations_from_show_objects(
             TableFormat::Default
         };
 
-        let relation = Arc::new(SnowflakeRelation::new(
+        let mut relation = Relation::new(
+            AdapterType::Snowflake,
             Some(database_name.to_string()),
             Some(schema_name.to_string()),
             Some(name.to_string()),
             relation_type,
-            table_format,
+            None,
             quoting,
-        )) as Arc<dyn BaseRelation>;
-        relations.push(relation);
+            None,
+            false,
+            false,
+        );
+        relation.table_format = table_format;
+        relations.push(Arc::new(relation) as Arc<dyn BaseRelation>);
     }
 
     Ok(relations)

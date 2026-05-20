@@ -50,14 +50,19 @@ mod tests {
 
     #[test]
     fn test_render_with_run_filter_snowflake_adapter() {
-        let relation = snowflake::SnowflakeRelation::new(
+        let mut relation = Relation::new(
+            AdapterType::Snowflake,
             None,
             None,
             Some("my_table".to_owned()),
             None,
-            TableFormat::Default,
+            None,
             ResolvedQuoting::disabled(),
+            None,
+            false,
+            false,
         );
+        relation.table_format = TableFormat::Default;
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -92,13 +97,17 @@ mod tests {
     // hourly batch window.
     #[test]
     fn test_render_with_run_filter_snowflake_microbatch_includes_utc_offset() {
-        let relation = snowflake::SnowflakeRelation::new(
+        let relation = Relation::new(
+            AdapterType::Snowflake,
             None,
             None,
             Some("stg_events".to_owned()),
             None,
-            TableFormat::Default,
+            None,
             ResolvedQuoting::disabled(),
+            None,
+            false,
+            false,
         );
         let start = NaiveDate::from_ymd_opt(2026, 4, 27)
             .unwrap()

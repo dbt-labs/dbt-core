@@ -28,10 +28,10 @@ use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::{RecordBatchExt, RenamedColumn};
+use crate::relation::Relation;
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
-use crate::relation::snowflake::SnowflakeRelation;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
@@ -1023,14 +1023,20 @@ impl AdapterImpl {
                     "Introspective queries are disabled (--no-introspect).",
                 ));
             }
-            return Ok(Some(Arc::new(SnowflakeRelation::new(
+            let mut relation = Relation::new(
+                Snowflake,
                 Some(database.to_string()),
                 Some(schema.to_string()),
                 Some(identifier.to_string()),
                 None,
-                TableFormat::Default,
+                None,
                 self.quoting(),
-            ))));
+                None,
+                false,
+                false,
+            );
+            relation.table_format = TableFormat::Default;
+            return Ok(Some(Arc::new(relation)));
         }
         match self.inner_adapter() {
             Replay(_, replay) => {

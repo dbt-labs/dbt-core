@@ -16,7 +16,6 @@ use serde::Deserialize;
 use crate::relation::Relation;
 use crate::relation::databricks::typed_constraint::TypedConstraint;
 use crate::relation::duckdb_should_include_database;
-use crate::relation::snowflake::SnowflakeRelation;
 use crate::value::none_value;
 
 use std::collections::BTreeMap;
@@ -454,14 +453,22 @@ pub fn do_create_relation(
                 false,
             )?) as Box<dyn BaseRelation>
         }
-        Snowflake => Box::new(SnowflakeRelation::new(
-            Some(database),
-            Some(schema),
-            identifier,
-            relation_type,
-            TableFormat::Default,
-            custom_quoting,
-        )) as Box<dyn BaseRelation>,
+        Snowflake => {
+            let mut relation = Relation::new(
+                Snowflake,
+                Some(database),
+                Some(schema),
+                identifier,
+                relation_type,
+                None,
+                custom_quoting,
+                None,
+                false,
+                false,
+            );
+            relation.table_format = TableFormat::Default;
+            Box::new(relation) as Box<dyn BaseRelation>
+        }
         Redshift => Box::new(Relation::new_with_policy(
             Redshift,
             RelationPath {

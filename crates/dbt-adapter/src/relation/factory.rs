@@ -4,7 +4,6 @@ use dbt_adapter_core::AdapterType;
 
 use crate::relation::RelationStatic;
 use crate::relation::StaticBaseRelationObject;
-use crate::relation::snowflake::SnowflakeRelationType;
 
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use minijinja::Value;
@@ -17,12 +16,8 @@ pub fn create_static_relation(
 ) -> Option<Value> {
     use AdapterType::*;
     let result = match adapter_type {
-        Snowflake => {
-            let snowflake_relation_type = SnowflakeRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(snowflake_relation_type))
-        }
-        Databricks | Spark | Fabric | DuckDB | Exasol | Postgres | Redshift | Salesforce
-        | Bigquery => {
+        Snowflake | Databricks | Spark | Fabric | DuckDB | Exasol | Postgres | Redshift
+        | Salesforce | Bigquery => {
             let relation_type = RelationStatic {
                 adapter_type,
                 quoting,

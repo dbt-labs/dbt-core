@@ -8,6 +8,9 @@ use crate::relation::redshift::materialized_view_config::{
     DescribeMaterializedViewResults, RedshiftMaterializedViewConfig,
     RedshiftMaterializedViewConfigChangeset,
 };
+use crate::relation::snowflake::dynamic_table::{
+    DescribeDynamicTableResults, SnowflakeDynamicTableConfig, SnowflakeDynamicTableConfigChangeset,
+};
 use crate::relation::{RelationObject, StaticBaseRelation};
 use crate::value::none_value;
 
@@ -17,9 +20,9 @@ use dbt_common::{ErrorCode, FsResult, constants::DBT_CTE_PREFIX, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
-use dbt_schemas::schemas::common::DbtMaterialization;
+use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, BaseRelationProperties, Policy, RelationPath,
+    BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 
@@ -27,6 +30,7 @@ use arrow::array::RecordBatch;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use minijinja::Value;
+use minijinja::arg_utils::ArgsIter;
 use serde::Deserialize;
 
 use std::any::Any;
@@ -83,6 +87,88 @@ impl StaticBaseRelation for RelationStatic {
     fn get_adapter_type(&self) -> String {
         self.adapter_type.as_ref().to_string()
     }
+
+    fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                let iter = ArgsIter::new("Relation.create", &[], args);
+                let database: Option<String> = iter.next_kwarg::<Option<String>>("database")?;
+                let schema: Option<String> = iter.next_kwarg::<Option<String>>("schema")?;
+                let identifier: Option<String> = iter.next_kwarg::<Option<String>>("identifier")?;
+                let relation_type: Option<String> = iter.next_kwarg::<Option<String>>("type")?;
+                let custom_quoting: Option<Value> =
+                    iter.next_kwarg::<Option<Value>>("quote_policy")?;
+                let table_format: Option<String> =
+                    iter.next_kwarg::<Option<String>>("table_format")?;
+                let _ = iter.trailing_kwargs()?;
+
+                let custom_quoting = custom_quoting
+                    .and_then(|v| DbtQuoting::deserialize(v).ok())
+                    .map(|v| ResolvedQuoting {
+                        database: v.database.unwrap_or_default(),
+                        identifier: v.identifier.unwrap_or_default(),
+                        schema: v.schema.unwrap_or_default(),
+                    })
+                    .unwrap_or(self.quoting);
+
+                let table_format =
+                    if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
+                        TableFormat::Iceberg
+                    } else {
+                        TableFormat::Default
+                    };
+
+                let mut relation = Relation::new(
+                    AdapterType::Snowflake,
+                    database,
+                    schema,
+                    identifier,
+                    relation_type.map(|s| RelationType::from(s.as_str())),
+                    None,
+                    custom_quoting,
+                    None,
+                    false,
+                    false,
+                );
+                relation.table_format = table_format;
+                let rel = RelationObject::new(Arc::new(relation));
+                Ok(Value::from_object(rel))
+            }
+            _ => {
+                let iter = ArgsIter::new("Relation.create", &[], args);
+                let database = iter.next_kwarg::<Option<String>>("database")?;
+                let schema = iter.next_kwarg::<Option<String>>("schema")?;
+                let identifier = iter.next_kwarg::<Option<String>>("identifier")?;
+                let relation_type = iter.next_kwarg::<Option<Value>>("type")?;
+                let custom_quoting = iter.next_kwarg::<Option<Value>>("quote_policy")?;
+                let temporary = iter.next_kwarg::<Option<bool>>("temporary")?;
+                iter.finish()?;
+
+                let custom_quoting = custom_quoting
+                    .and_then(|v| DbtQuoting::deserialize(v).ok())
+                    .map(|v| ResolvedQuoting {
+                        database: v.database.unwrap_or_default(),
+                        identifier: v.identifier.unwrap_or_default(),
+                        schema: v.schema.unwrap_or_default(),
+                    });
+
+                self.try_new(
+                    database,
+                    schema,
+                    identifier,
+                    relation_type.and_then(|v: Value| {
+                        if v.is_none() || v.is_undefined() {
+                            None
+                        } else {
+                            Some(RelationType::from(v.as_str().unwrap_or_default()))
+                        }
+                    }),
+                    custom_quoting,
+                    temporary,
+                )
+            }
+        }
+    }
 }
 
 /// Generic relation implementation shared by Databricks, Spark, Fabric, and DuckDB.
@@ -118,6 +204,8 @@ pub struct Relation {
     pub location: Option<String>,
     /// DuckDB external source location, rendered in place of schema/table.
     pub external: Option<String>,
+    /// The table format of the relation
+    pub table_format: TableFormat,
 }
 
 impl BaseRelationProperties for Relation {
@@ -184,7 +272,7 @@ impl BaseRelationProperties for Relation {
         } else {
             match self.adapter_type {
                 Fabric | Bigquery => db_str,
-                Salesforce => db_str.to_ascii_uppercase(),
+                Salesforce | Snowflake => db_str.to_ascii_uppercase(),
                 _ => db_str.to_ascii_lowercase(),
             }
         };
@@ -194,7 +282,7 @@ impl BaseRelationProperties for Relation {
         } else {
             match self.adapter_type {
                 Fabric | Bigquery => schema_str,
-                Salesforce => schema_str.to_ascii_uppercase(),
+                Salesforce | Snowflake => schema_str.to_ascii_uppercase(),
                 _ => schema_str.to_ascii_lowercase(),
             }
         };
@@ -204,7 +292,7 @@ impl BaseRelationProperties for Relation {
         } else {
             match self.adapter_type {
                 Fabric | Bigquery => ident_str,
-                Salesforce => ident_str.to_ascii_uppercase(),
+                Salesforce | Snowflake => ident_str.to_ascii_uppercase(),
                 _ => ident_str.to_ascii_lowercase(),
             }
         };
@@ -258,6 +346,7 @@ impl Relation {
             temporary,
             location: None,
             external: None,
+            table_format: TableFormat::Default,
         }
     }
 
@@ -323,6 +412,7 @@ impl Relation {
             temporary,
             location: None,
             external: None,
+            table_format: TableFormat::Default,
         })
     }
 
@@ -525,12 +615,187 @@ impl BaseRelation for Relation {
         result
     }
 
+    fn is_iceberg_format(&self) -> bool {
+        matches!(self.table_format, TableFormat::Iceberg)
+    }
+
+    /// Returns the appropriate DDL prefix for creating a table
+    ///
+    /// # Arguments
+    /// * `model_config` - The RunConfig containing model configuration
+    /// * `temporary` - Whether the table should be temporary
+    ///
+    /// # Returns
+    /// One of: "temporary", "iceberg", "transient", or "" (empty string)
+    fn get_ddl_prefix_for_create(
+        &self,
+        config: Value,
+        temporary: bool,
+    ) -> Result<String, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                if temporary {
+                    return Ok("temporary".to_string());
+                }
+
+                // Extract legacy Iceberg configuration values found in a model config.
+                // https://docs.getdbt.com/docs/mesh/iceberg/snowflake-iceberg-support#example-configuration
+                let is_iceberg = config
+                    .get_item(&Value::from("table_format"))
+                    .is_ok_and(|v| v.as_str().is_some_and(|s| s == "iceberg"));
+
+                let transient_explicitly_set_true = config
+                    .get_item(&Value::from("transient"))
+                    .map(|v| v.is_true())
+                    .unwrap_or(false);
+
+                if is_iceberg {
+                    if transient_explicitly_set_true {
+                        eprintln!(
+                            "Warning: Iceberg format relations cannot be transient. Please remove either \
+                                    the transient=true or iceberg config options from {}.{}.{}. If left unmodified, \
+                                    dbt will ignore 'transient'.",
+                            self.path.database.as_deref().unwrap_or(""),
+                            self.path.schema.as_deref().unwrap_or(""),
+                            self.path.identifier.as_deref().unwrap_or("")
+                        );
+                    }
+                    return Ok("iceberg".to_string());
+                }
+
+                let is_transient = config
+                    .get_item(&Value::from("transient"))
+                    .map(|v| v.is_true() || v.is_undefined())
+                    .unwrap_or(true);
+
+                Ok(if is_transient {
+                    "transient".to_string()
+                } else {
+                    String::new()
+                })
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Only available for snowflake",
+            )),
+        }
+    }
+
+    /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L206
+    fn get_iceberg_ddl_options(
+        &self,
+        runtime_model_config: Value,
+    ) -> Result<String, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                // If the base_location_root config is supplied, overwrite the default value ("_dbt/")
+                let mut base_location = runtime_model_config
+                    .get_attr("base_location_root")?
+                    .as_str()
+                    .unwrap_or("_dbt")
+                    .to_string();
+
+                base_location.push_str(&format!(
+                    "/{}/{}",
+                    self.schema_as_str().unwrap_or_default(),
+                    self.identifier_as_str().unwrap_or_default()
+                ));
+
+                if let Some(subpath) = runtime_model_config
+                    .get_attr("base_location_subpath")?
+                    .as_str()
+                {
+                    base_location.push_str(&format!("/{subpath}"))
+                }
+
+                let external_volume = runtime_model_config
+                    .get_attr("external_volume")?
+                    .as_str()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::NonKey,
+                            "external_volume is required",
+                        )
+                    })?
+                    .to_string();
+
+                let iceberg_ddl_predicates = format!(
+                    "\nexternal_volume = '{external_volume}'\ncatalog = 'snowflake'\nbase_location = '{base_location}'\n"
+                );
+
+                // Indent each line by 10 spaces
+                let result = iceberg_ddl_predicates
+                    .lines()
+                    // the first argument is an empty string that then get 10 spaces padding
+                    .map(|line| format!("{:indent$}{line}", "", indent = 10))
+                    .collect::<Vec<String>>()
+                    .join("\n");
+
+                Ok(result)
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Only available for snowflake",
+            )),
+        }
+    }
+
+    fn get_ddl_prefix_for_alter(&self) -> Result<String, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                if self.table_format == TableFormat::Iceberg {
+                    Ok("iceberg".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Only available for snowflake",
+            )),
+        }
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L223
+    fn needs_to_drop(
+        &self,
+        old_relation: Option<Arc<dyn BaseRelation>>,
+    ) -> Result<bool, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                if let Some(old_relation) = old_relation {
+                    // core does only checks this for table conversions since dynamic tables
+                    // are expected to be rebuilt cross-catalog using full refresh mode
+                    if old_relation.is_table() {
+                        // invoke drop for table -> Iceberg or Iceberg -> table
+                        let old_relation_table_format = old_relation
+                            .as_any()
+                            .downcast_ref::<Relation>()
+                            .unwrap()
+                            .table_format;
+                        Ok(self.table_format != old_relation_table_format)
+                    } else {
+                        // An existing view must be dropped for model to build into a table.
+                        Ok(true)
+                    }
+                } else {
+                    Ok(false)
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Only available for snowflake",
+            )),
+        }
+    }
+
     fn can_be_renamed(&self) -> bool {
         use AdapterType::*;
         use RelationType::*;
 
         match (self.adapter_type, self.relation_type()) {
             (Bigquery, Some(Table)) => true,
+            (Snowflake, Some(Table) | Some(View)) => !self.is_iceberg_format(),
             (_, Some(Table) | Some(View)) => true,
             (_, _) => false,
         }
@@ -542,8 +807,52 @@ impl BaseRelation for Relation {
 
         match (self.adapter_type, self.relation_type()) {
             (Redshift, Some(View)) => true,
+            (Snowflake, Some(Table) | Some(View) | Some(DynamicTable)) => true,
             (_, Some(Table) | Some(View)) => true,
             (_, _) => false,
+        }
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/292d17301eff3c8a972fcd57f7deb3aac4c8a3cb/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L92
+    fn dynamic_table_config_changeset(
+        &self,
+        relation_results_value: &Value,
+        relation_config_value: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        match self.adapter_type {
+            AdapterType::Snowflake => {
+                let relation_results =
+                    DescribeDynamicTableResults::try_from(relation_results_value).map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!(
+                                "from_config: Failed to serialize DescribeDynamicTableResults: {e}"
+                            ),
+                        )
+                    })?;
+
+                let existing_config = SnowflakeDynamicTableConfig::try_from(relation_results)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError, format!("dynamic_table_config_changeset: Failed to deserialize SnowflakeDynamicTableConfig: {e}")
+                        )
+                    })?;
+
+                let new_config = node_value_to_snowflake_dynamic_table(relation_config_value)?;
+
+                let changeset =
+                    SnowflakeDynamicTableConfigChangeset::new(existing_config, new_config);
+
+                if changeset.has_changes() {
+                    Ok(Value::from_object(changeset))
+                } else {
+                    Ok(Value::from(()))
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Only available for snowflake",
+            )),
         }
     }
 
@@ -551,6 +860,10 @@ impl BaseRelation for Relation {
         match self.adapter_type {
             AdapterType::Redshift => Ok(Value::from_object(
                 node_value_to_redshift_materialized_view(config)?,
+            )),
+            // https://github.com/dbt-labs/dbt-adapters/blob/816d190c9e31391a48cee979bd049aeb34c89ad3/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L81
+            AdapterType::Snowflake => Ok(Value::from_object(
+                node_value_to_snowflake_dynamic_table(config)?,
             )),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
@@ -563,6 +876,7 @@ impl BaseRelation for Relation {
         use AdapterType::*;
         match self.adapter_type {
             Salesforce | Bigquery => component.to_string(),
+            Snowflake => component.to_uppercase(),
             _ => component.to_lowercase(),
         }
     }
@@ -828,6 +1142,46 @@ impl BaseRelation for Relation {
             _ => unimplemented!("Available only for BigQuery and Redshift"),
         }
     }
+}
+
+// FIXME(serramatutu): this should be deleted from here once Snowflake Dynamic Tables
+// are migrated to RelationConfig v2.
+fn node_value_to_snowflake_dynamic_table(
+    node_value: &Value,
+) -> Result<SnowflakeDynamicTableConfig, minijinja::Error> {
+    let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+        )
+    })?;
+
+    let model = match config_wrapper {
+        InternalDbtNodeWrapper::Model(model) => model,
+        _ => {
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "Expected a model node",
+            ));
+        }
+    };
+
+    if model.__base_attr__.materialized != DbtMaterialization::DynamicTable {
+        return Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
+            format!(
+                "Unsupported operation for materialization type {}",
+                &model.__base_attr__.materialized
+            ),
+        ));
+    }
+
+    SnowflakeDynamicTableConfig::try_from(&*model).map_err(|e| {
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize SnowflakeDynamicTableConfig: {e}"),
+        )
+    })
 }
 
 // FIXME(serramatutu): this should be deleted from here once Redshift Materialized
@@ -1345,22 +1699,50 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_duckdb_external_relation_renders_location() {
-        let relation = Relation::new(
-            AdapterType::DuckDB,
-            Some("main".to_string()),
-            Some("raw".to_string()),
-            Some("orders".to_string()),
-            None,
-            None,
-            DEFAULT_RESOLVED_QUOTING,
-            None,
-            false,
-            false,
-        )
-        .with_external("'data/RawOrders.csv'".to_string());
+    mod duckdb {
+        use super::*;
+        #[test]
+        fn test_external_relation_renders_location() {
+            let relation = Relation::new(
+                AdapterType::DuckDB,
+                Some("main".to_string()),
+                Some("raw".to_string()),
+                Some("orders".to_string()),
+                None,
+                None,
+                DEFAULT_RESOLVED_QUOTING,
+                None,
+                false,
+                false,
+            )
+            .with_external("'data/RawOrders.csv'".to_string());
 
-        assert_eq!(relation.render_self_as_str(), "'data/RawOrders.csv'");
+            assert_eq!(relation.render_self_as_str(), "'data/RawOrders.csv'");
+        }
+    }
+    mod snowflake {
+        use super::*;
+
+        #[test]
+        fn test_create_via_static_base_relation() {
+            let values = [
+                Value::from("d"),
+                Value::from("s"),
+                Value::from("i"),
+                Value::from("table"),
+                Value::from("{database: true, identifier: true, schema: true}"),
+            ];
+
+            let relation = RelationStatic {
+                adapter_type: AdapterType::Snowflake,
+                quoting: DEFAULT_RESOLVED_QUOTING,
+            }
+            .create(&values)
+            .unwrap();
+
+            let relation = relation.downcast_object::<RelationObject>().unwrap();
+            assert_eq!(relation.inner().render_self_as_str(), r#""d"."s"."i""#);
+            assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
+        }
     }
 }

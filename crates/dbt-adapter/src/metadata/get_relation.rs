@@ -16,7 +16,6 @@ use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::relation::do_create_relation;
-use crate::relation::snowflake::SnowflakeRelation;
 use dbt_common::cancellation::CancellationToken;
 
 macro_rules! invalid_value {
@@ -195,14 +194,20 @@ fn snowflake_get_relation(
         TableFormat::Default
     };
 
-    Ok(Some(Box::new(SnowflakeRelation::new(
+    let mut relation = Relation::new(
+        AdapterType::Snowflake,
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),
         relation_type,
-        table_format,
+        None,
         adapter.quoting(),
-    ))))
+        None,
+        false,
+        false,
+    );
+    relation.table_format = table_format;
+    Ok(Some(Box::new(relation)))
 }
 
 #[allow(clippy::too_many_arguments)]
