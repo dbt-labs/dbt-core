@@ -495,6 +495,20 @@ pub fn do_create_relation(
             false,
             false,
         )) as Box<dyn BaseRelation>,
+        ClickHouse => Box::new(Relation::new_with_policy(
+            ClickHouse,
+            RelationPath {
+                database: None,
+                schema: Some(schema),
+                identifier,
+            },
+            relation_type,
+            Policy::new(false, true, true),
+            custom_quoting,
+            None,
+            false,
+            false,
+        )?) as Box<dyn BaseRelation>,
         Exasol => Box::new(Relation::new_with_policy(
             Exasol,
             RelationPath {
@@ -523,7 +537,6 @@ pub fn do_create_relation(
             false,
             false,
         )?) as Box<dyn BaseRelation>,
-        ClickHouse => todo!("ClickHouse"),
         Starburst => todo!("Starburst"),
         Athena => todo!("Athena"),
         Trino => todo!("Trino"),
@@ -980,5 +993,25 @@ mod tests {
         .unwrap();
 
         assert_eq!(relation.render_self_as_str(), "read_csv('orders.csv')");
+    }
+
+    #[test]
+    fn do_create_relation_clickhouse_skips_database() {
+        let relation = do_create_relation(
+            AdapterType::ClickHouse,
+            "ignored".to_string(),
+            "analytics".to_string(),
+            Some("events".to_string()),
+            Some(RelationType::Table),
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
+        assert_eq!(relation.database(), None);
     }
 }

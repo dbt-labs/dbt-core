@@ -87,7 +87,8 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         DuckDB => '"',
         Athena | Trino | Starburst => '"',
         Datafusion => '"',
-        ClickHouse => '"',
+        // https://clickhouse.com/docs/sql-reference/syntax#identifiers
+        ClickHouse => '`',
         Exasol => '"',
         Dremio => todo!("Dremio"),
         Oracle => todo!("Oracle"),
@@ -242,11 +243,15 @@ mod tests {
             AdapterType::Trino,
             AdapterType::Starburst,
             AdapterType::Datafusion,
-            AdapterType::ClickHouse,
             AdapterType::Exasol,
         ] {
             assert_eq!(quote_char(adapter_type), '"', "{adapter_type:?}");
         }
+        assert_eq!(
+            quote_char(AdapterType::ClickHouse),
+            '`',
+            "ClickHouse uses backtick quoting"
+        );
     }
 
     #[test]

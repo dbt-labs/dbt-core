@@ -7,6 +7,7 @@
 #![allow(clippy::should_implement_trait)]
 
 pub mod ident;
+pub mod statements;
 pub mod tokenizer;
 pub mod types;
 

@@ -919,7 +919,8 @@ impl AdapterImpl {
                 Postgres => "nspname",
                 DuckDB => "schema_name",
                 Fabric => "schema",
-                ClickHouse => todo!("ClickHouse"),
+                // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/include/clickhouse/macros/adapters.sql
+                ClickHouse => "name",
                 Exasol => "name",
                 Starburst => todo!("Starburst"),
                 Athena => todo!("Athena"),

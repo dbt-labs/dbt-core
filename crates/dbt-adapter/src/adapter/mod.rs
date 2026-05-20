@@ -2716,6 +2716,9 @@ impl Adapter {
                 let database = iter.next_arg::<&str>().or_else(|e| {
                     if self.adapter_type() == AdapterType::Databricks {
                         Ok(DEFAULT_DATABRICKS_DATABASE)
+                    } else if self.adapter_type() == AdapterType::ClickHouse {
+                        // ClickHouse uses 2-part naming: database is always empty
+                        Ok("")
                     } else {
                         Err(e)
                     }
@@ -3930,6 +3933,71 @@ impl Adapter {
                 let location = iter.next_arg::<&str>()?;
                 iter.finish()?;
                 self.location_exists(state, location)
+            }
+            // ---- ClickHouse adapter method stubs (MVP) ----
+            // These methods are called from ClickHouse Jinja macros. They are
+            // registered for all adapters (they only run when the dispatch
+            // hits a ClickHouse macro), but they return conservative defaults
+            // so behavior matches "no cluster, no special engine, current
+            // server version, cannot exchange tables atomically".
+            "clickhouse_db_engine_clause" => {
+                // (no args) -> "" (skip "ENGINE = ..." in CREATE DATABASE)
+                Ok(Value::from(""))
+            }
+            "get_clickhouse_cluster_name" => {
+                // (no args) -> None (no ON CLUSTER usage)
+                Ok(Value::from(()))
+            }
+            "get_model_settings" => {
+                // model: dict, engine: str = "MergeTree"  -> "" (no settings)
+                Ok(Value::from(""))
+            }
+            "get_model_query_settings" => {
+                // model: dict -> SETTINGS clause appended to CREATE TABLE ... AS (SELECT ...)
+                // Default join_use_nulls=1 makes unmatched LEFT JOIN rows produce NULL
+                // instead of ClickHouse's default type-zero values (0 for Int64, etc.),
+                // restoring standard SQL semantics.
+                // Users can override via model config `query_settings`.
+                Ok(Value::from("SETTINGS join_use_nulls = 1"))
+            }
+            "is_before_version" => {
+                // version: str -> false (assume modern server)
+                Ok(Value::from(false))
+            }
+            "can_exchange" => {
+                // schema: str, type: str -> false (don't use EXCHANGE TABLES)
+                Ok(Value::from(false))
+            }
+            "should_on_cluster" => {
+                // materialized: str, engine_clause: str -> false
+                Ok(Value::from(false))
+            }
+            "calculate_incremental_strategy" => {
+                // strategy: Optional[str] -> str (default to "append" if not set)
+                let strategy = args
+                    .first()
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("append");
+                Ok(Value::from(strategy))
+            }
+            "validate_incremental_strategy" => {
+                // strategy: str, predicates: list, unique_key: ?, partition_by: ? -> None
+                // Stub: all strategies accepted for MVP
+                Ok(Value::from(()))
+            }
+            "check_incremental_schema_changes" => {
+                // on_schema_change: str, existing_relation: Relation, sql: str -> None
+                // Stub: return None (no schema changes tracked); only reached when on_schema_change != 'ignore'
+                Ok(Value::from(()))
+            }
+            "filter_settings_by_engine" => {
+                // model: dict, settings: str -> str
+                Ok(args.get(1).cloned().unwrap_or_else(|| Value::from("")))
+            }
+            "get_ch_database" => {
+                // schema: str -> str (CH database = schema in 2-part naming)
+                Ok(args.first().cloned().unwrap_or_else(|| Value::from("")))
             }
             "get_csv_data" => {
                 let table = args

@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 
 use crate::AdapterResult;
 use crate::column::{BigqueryColumnMode, Column};
+use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::metadata;
 use crate::sql_types::{self, TypeOps, original_type_string};
 use arrow_schema::{DataType, FieldRef};
@@ -28,7 +29,7 @@ impl ColumnBuilder {
             Redshift => Ok(Self::build_redshift(field, type_ops)),
             Postgres | Salesforce | DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
-            ClickHouse => todo!("ClickHouse"),
+            ClickHouse => Self::build_clickhouse(field, type_ops),
             Exasol => Ok(Self::build_postgres_like(field, type_ops)),
             Starburst => todo!("Starburst"),
             Athena => todo!("Athena"),
@@ -93,7 +94,14 @@ impl ColumnBuilder {
                 None, // numeric_scale
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
-            ClickHouse => todo!("ClickHouse"),
+            ClickHouse => Column::new(
+                ClickHouse,
+                name,
+                dtype,
+                char_size,
+                numeric_precision,
+                numeric_scale,
+            ),
             Exasol => Column::new(
                 Exasol,
                 name,
@@ -117,6 +125,104 @@ impl ColumnBuilder {
                 numeric_scale,
             ),
         }
+    }
+
+    const CLICKHOUSE_TYPE_WRAPPERS: [&'static str; 2] = ["LowCardinality", "Nullable"];
+
+    fn strip_clickhouse_wrappers(dtype: &str) -> &str {
+        let mut s = dtype.trim();
+        while let Some(inner) = Self::CLICKHOUSE_TYPE_WRAPPERS
+            .iter()
+            .find_map(|wrapper| Self::strip_type_wrapper(s, wrapper))
+        {
+            s = inner;
+        }
+        s
+    }
+
+    fn strip_type_wrapper<'a>(s: &'a str, wrapper: &str) -> Option<&'a str> {
+        let s = s.trim();
+        let rest = Self::strip_prefix_ignore_ascii_case(s, wrapper)?;
+        let inner = rest.strip_prefix('(')?.strip_suffix(')')?;
+        Some(inner.trim())
+    }
+
+    fn strip_prefix_ignore_ascii_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+        let head = s.get(..prefix.len())?;
+        if head.eq_ignore_ascii_case(prefix) {
+            s.get(prefix.len()..)
+        } else {
+            None
+        }
+    }
+
+    fn parse_fixed_string_size(dtype: &str) -> Option<u32> {
+        let inner = Self::strip_prefix_ignore_ascii_case(dtype.trim(), "FixedString(")?
+            .strip_suffix(')')?;
+        inner.trim().parse().ok()
+    }
+
+    fn parse_decimal_precision_scale(dtype: &str) -> Option<(u64, u64)> {
+        let inner =
+            Self::strip_prefix_ignore_ascii_case(dtype.trim(), "Decimal(")?.strip_suffix(')')?;
+        let mut parts = inner.split(',').map(str::trim);
+        let precision = parts.next()?.parse().ok()?;
+        let scale = parts.next()?.parse().ok()?;
+        Some((precision, scale))
+    }
+
+    fn clickhouse_numeric_precision_scale(
+        data_type: &DataType,
+    ) -> AdapterResult<(Option<u64>, Option<u64>)> {
+        match sql_types::numeric_precision_scale(AdapterType::ClickHouse, data_type)? {
+            Some((precision, Some(scale))) => Ok((
+                Some(u64::from(precision)),
+                Some(Self::widen_numeric_scale(scale)?),
+            )),
+            Some((precision, None)) => Ok((Some(u64::from(precision)), None)),
+            None => Ok((None, None)),
+        }
+    }
+
+    fn widen_numeric_scale(scale: i8) -> AdapterResult<u64> {
+        debug_assert!(scale >= 0);
+        u64::try_from(scale).map_err(|_| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                format!("negative numeric scale {scale}"),
+            )
+        })
+    }
+
+    fn build_clickhouse(field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<Column> {
+        use AdapterType::ClickHouse;
+
+        let type_text = match original_type_string(ClickHouse, field) {
+            Some(s) => s.into_owned(),
+            None => {
+                let mut out = String::new();
+                type_ops.format_arrow_type_as_sql(field.data_type(), &mut out)?;
+                out
+            }
+        };
+
+        let inner = Self::strip_clickhouse_wrappers(&type_text);
+        let char_size = Self::parse_fixed_string_size(inner);
+        let (numeric_precision, numeric_scale) =
+            if let Some((precision, scale)) = Self::parse_decimal_precision_scale(inner) {
+                (Some(precision), Some(scale))
+            } else {
+                Self::clickhouse_numeric_precision_scale(field.data_type())?
+            };
+
+        Ok(Column::new(
+            ClickHouse,
+            field.name().to_string(),
+            type_text,
+            char_size,
+            numeric_precision,
+            numeric_scale,
+        ))
     }
 
     fn build_fabric(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
@@ -439,5 +545,141 @@ impl ColumnBuilder {
             numeric_precision.map(|p| p as u64),
             numeric_scale.map(|s| s as u64),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sql_types::SATypeOpsImpl;
+    use arrow_schema::{DataType, Field};
+    use dbt_adapter_sql::types::metadata_sql_type_key;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_build_clickhouse_decimal_with_wrappers() {
+        let type_text = "Nullable(Decimal(18, 4))";
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            metadata_sql_type_key(AdapterType::ClickHouse).to_string(),
+            type_text.to_string(),
+        );
+        let field = Arc::new(
+            Field::new("amount", DataType::Decimal128(18, 4), true).with_metadata(metadata),
+        );
+
+        let builder = ColumnBuilder::new(AdapterType::ClickHouse);
+        let type_ops = SATypeOpsImpl::new(AdapterType::ClickHouse);
+        let column = builder.build(&field, &type_ops).unwrap();
+
+        assert_eq!(column.name(), "amount");
+        // dtype keeps the wrappers so downstream rendering preserves nullability.
+        assert_eq!(column.dtype(), type_text);
+        assert_eq!(column.numeric_precision(), Some(18));
+        assert_eq!(column.numeric_scale(), Some(4));
+        assert_eq!(column.char_size(), None);
+    }
+
+    #[test]
+    fn test_strip_clickhouse_wrappers_unwrapped() {
+        assert_eq!(ColumnBuilder::strip_clickhouse_wrappers("String"), "String");
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("FixedString(10)"),
+            "FixedString(10)"
+        );
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("Decimal(18, 4)"),
+            "Decimal(18, 4)"
+        );
+    }
+
+    #[test]
+    fn test_strip_clickhouse_wrappers_nullable() {
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("Nullable(String)"),
+            "String"
+        );
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("Nullable(FixedString(10))"),
+            "FixedString(10)"
+        );
+    }
+
+    #[test]
+    fn test_strip_clickhouse_wrappers_low_cardinality_nullable() {
+        // Real-world stack: LowCardinality wraps Nullable wraps String.
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("LowCardinality(Nullable(String))"),
+            "String"
+        );
+        // Either ordering should fully unwrap.
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("Nullable(LowCardinality(String))"),
+            "String"
+        );
+    }
+
+    #[test]
+    fn test_strip_clickhouse_wrappers_case_insensitive() {
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("nullable(String)"),
+            "String"
+        );
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("LOWCARDINALITY(Int32)"),
+            "Int32"
+        );
+    }
+
+    #[test]
+    fn test_strip_clickhouse_wrappers_leaves_other_wrappers_alone() {
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("Array(Int32)"),
+            "Array(Int32)"
+        );
+        assert_eq!(
+            ColumnBuilder::strip_clickhouse_wrappers("DateTime64(6)"),
+            "DateTime64(6)"
+        );
+    }
+
+    #[test]
+    fn test_parse_fixed_string_size() {
+        assert_eq!(
+            ColumnBuilder::parse_fixed_string_size("FixedString(10)"),
+            Some(10)
+        );
+        assert_eq!(
+            ColumnBuilder::parse_fixed_string_size("fixedstring(255)"),
+            Some(255)
+        );
+        assert_eq!(ColumnBuilder::parse_fixed_string_size("String"), None);
+        assert_eq!(
+            ColumnBuilder::parse_fixed_string_size("FixedString()"),
+            None
+        );
+        assert_eq!(
+            ColumnBuilder::parse_fixed_string_size("FixedString(abc)"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_parse_decimal_precision_scale() {
+        assert_eq!(
+            ColumnBuilder::parse_decimal_precision_scale("Decimal(18, 4)"),
+            Some((18, 4))
+        );
+        assert_eq!(
+            ColumnBuilder::parse_decimal_precision_scale("Decimal(38,9)"),
+            Some((38, 9))
+        );
+        // ClickHouse-specific shorthands carry only scale — reject them here.
+        assert_eq!(
+            ColumnBuilder::parse_decimal_precision_scale("Decimal128(4)"),
+            None
+        );
+        assert_eq!(ColumnBuilder::parse_decimal_precision_scale("Int32"), None);
     }
 }

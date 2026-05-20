@@ -7,6 +7,7 @@ pub fn format_ident(id: &str, adapter: AdapterType) -> String {
     if need_quotes(id, adapter) {
         match adapter {
             AdapterType::Fabric => format!("[{}]", id),
+            AdapterType::ClickHouse => format!("`{id}`"),
             _ => format!("\"{}\"", id),
         }
     } else {
@@ -63,9 +64,13 @@ fn is_valid_identifier_char(adapter: AdapterType, c: char) -> bool {
     }
 }
 
+static EMPTY_KEYWORDS: Lazy<HashSet<&'static str>> = Lazy::new(HashSet::new);
+
 pub fn reserved_keywords(adapter: AdapterType) -> &'static HashSet<&'static str> {
     match adapter {
         AdapterType::Fabric => &FABRIC_KEYWORDS,
+        // TODO: add clickhouse keywords to `dbt-sql-keywords`
+        AdapterType::ClickHouse => &EMPTY_KEYWORDS,
         _ => unimplemented!("Reserved keyword unimplemented for adapter {}", adapter),
     }
 }
@@ -498,6 +503,13 @@ mod tests {
         let id = "select";
         let formatted = format_ident(id, AdapterType::Fabric);
         assert_eq!(formatted, "[select]");
+    }
+
+    #[test]
+    fn test_format_ident_quoted_clickhouse_does_not_escape_backticks() {
+        let id = "a`b";
+        let formatted = format_ident(id, AdapterType::ClickHouse);
+        assert_eq!(formatted, "`a`b`");
     }
 
     #[test]

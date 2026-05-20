@@ -16,6 +16,7 @@ pub const BIGQUERY_METADATA_SQL_TYPE_KEY: &str = "Type";
 // XXX: Snowflake does DATA_TYPE for GetTableSchema and SNOWFLAKE_TYPE for other queries...
 pub const SNOWFLAKE_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
 pub const FABRIC_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
+pub const CLICKHOUSE_METADATA_SQL_TYPE_KEY: &str = "data_type";
 
 /// An Arrow schema containing SDF types
 #[derive(Clone)]
@@ -173,8 +174,8 @@ impl TypeOps for SATypeOpsImpl {
             }
             // No type transformations have been necessary for the seed operation against
             // these data platforms so far, but this may need to be updated if that changes.
-            Postgres | Salesforce | Spark | DuckDB | Fabric => None,
-            ClickHouse | Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
+            Postgres | Salesforce | Spark | DuckDB | Fabric | ClickHouse => None,
+            Exasol | Starburst | Athena | Trino | Dremio | Oracle | Datafusion => {
                 todo!("not yet")
             }
         }
@@ -301,7 +302,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::Spark => todo!(),
         AdapterType::DuckDB => todo!(),
         AdapterType::Fabric => FABRIC_METADATA_SQL_TYPE_KEY,
-        AdapterType::ClickHouse => todo!(),
+        AdapterType::ClickHouse => CLICKHOUSE_METADATA_SQL_TYPE_KEY,
         AdapterType::Exasol => "DATA_TYPE",
         AdapterType::Starburst => todo!(),
         AdapterType::Athena => todo!(),
@@ -668,6 +669,81 @@ pub mod postgres {
         };
         if !nullable {
             out.push_str(" not null");
+        }
+        Ok(())
+    }
+}
+
+pub mod clickhouse {
+    use super::*;
+
+    /// TODO: long-term, ClickHouse column SQL types should be sourced from the
+    /// driver's schema metadata rather than reconstructed from Arrow types here.
+    pub fn try_format_type(
+        datatype: &DataType,
+        nullable: bool,
+        out: &mut String,
+    ) -> AdapterResult<()> {
+        let mut datatype = datatype;
+        let mut array_layers = Vec::new();
+        while let DataType::List(item) | DataType::LargeList(item) = datatype {
+            let item_type = item.data_type();
+            array_layers.push((
+                item.is_nullable(),
+                matches!(item_type, DataType::List(_) | DataType::LargeList(_)),
+            ));
+            datatype = item_type;
+        }
+
+        let mut rendered = String::new();
+        match datatype {
+            DataType::Null => rendered.push_str("String"),
+            DataType::Boolean => rendered.push_str("Bool"),
+            DataType::Int8 => rendered.push_str("Int8"),
+            DataType::Int16 => rendered.push_str("Int16"),
+            DataType::Int32 => rendered.push_str("Int32"),
+            DataType::Int64 => rendered.push_str("Int64"),
+            DataType::UInt8 => rendered.push_str("UInt8"),
+            DataType::UInt16 => rendered.push_str("UInt16"),
+            DataType::UInt32 => rendered.push_str("UInt32"),
+            DataType::UInt64 => rendered.push_str("UInt64"),
+            DataType::Float16 | DataType::Float32 => rendered.push_str("Float32"),
+            DataType::Float64 => rendered.push_str("Float64"),
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                rendered.push_str("String")
+            }
+            DataType::Binary | DataType::LargeBinary => rendered.push_str("String"),
+            DataType::Date32 | DataType::Date64 => rendered.push_str("Date32"),
+            DataType::Timestamp(TimeUnit::Second, _) => rendered.push_str("DateTime"),
+            DataType::Timestamp(TimeUnit::Millisecond, _) => rendered.push_str("DateTime64(3)"),
+            DataType::Timestamp(TimeUnit::Microsecond, _) => rendered.push_str("DateTime64(6)"),
+            DataType::Timestamp(TimeUnit::Nanosecond, _) => rendered.push_str("DateTime64(9)"),
+            DataType::Time32(_) | DataType::Time64(_) => rendered.push_str("String"),
+            DataType::Decimal128(precision, scale) | DataType::Decimal256(precision, scale) => {
+                rendered = format!("Decimal({precision}, {scale})");
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnsupportedType,
+                    format!("{datatype} is not convertible to clickhouse sql type"),
+                ));
+            }
+        }
+
+        if array_layers.is_empty() {
+            if nullable {
+                out.push_str(&format!("Nullable({rendered})"));
+            } else {
+                out.push_str(&rendered);
+            }
+        } else {
+            for (item_nullable, item_is_array) in array_layers.into_iter().rev() {
+                if item_nullable && !item_is_array {
+                    rendered = format!("Nullable({rendered})");
+                }
+                rendered = format!("Array({rendered})");
+            }
+            out.push_str(&rendered);
         }
         Ok(())
     }
@@ -1054,6 +1130,57 @@ mod tests {
         assert_eq!(convert_integer_type(Postgres), "integer");
         assert_eq!(convert_integer_type(Snowflake), "integer");
         assert_eq!(convert_integer_type(Redshift), "integer");
+    }
+
+    #[test]
+    fn clickhouse_try_format_type_formats_supported_arrow_types() {
+        let mut out = String::new();
+        clickhouse::try_format_type(&DataType::Int32, false, &mut out).unwrap();
+        assert_eq!(out, "Int32");
+
+        // ClickHouse expresses nullability inline: `Nullable(T)`, not as a
+        // separate column attribute.
+        out.clear();
+        clickhouse::try_format_type(&DataType::Int32, true, &mut out).unwrap();
+        assert_eq!(out, "Nullable(Int32)");
+
+        // Arrays themselves are never nullable in ClickHouse — the wrapper
+        // sits around the element type when the inner Field is nullable.
+        out.clear();
+        let nullable_item = Arc::new(Field::new("item", DataType::Utf8, true));
+        clickhouse::try_format_type(&DataType::List(nullable_item), false, &mut out).unwrap();
+        assert_eq!(out, "Array(Nullable(String))");
+
+        // Non-nullable items round-trip as bare `Array(T)`.
+        out.clear();
+        let non_null_item = Arc::new(Field::new("item", DataType::Utf8, false));
+        clickhouse::try_format_type(&DataType::List(non_null_item), false, &mut out).unwrap();
+        assert_eq!(out, "Array(String)");
+
+        out.clear();
+        let nested_item = Arc::new(Field::new("item", DataType::Int32, true));
+        let nested_list = Arc::new(Field::new("item", DataType::List(nested_item), false));
+        clickhouse::try_format_type(&DataType::List(nested_list), false, &mut out).unwrap();
+        assert_eq!(out, "Array(Array(Nullable(Int32)))");
+
+        // Arrow `Date32` must map to ClickHouse `Date32` (4-byte Int32), not
+        // plain `Date` (2-byte UInt16), to avoid silent truncation past ~2149.
+        out.clear();
+        clickhouse::try_format_type(&DataType::Date32, false, &mut out).unwrap();
+        assert_eq!(out, "Date32");
+
+        out.clear();
+        clickhouse::try_format_type(&DataType::Date64, true, &mut out).unwrap();
+        assert_eq!(out, "Nullable(Date32)");
+    }
+
+    #[test]
+    fn clickhouse_try_format_type_rejects_unsupported_arrow_types() {
+        let mut out = String::new();
+        let fields = arrow_schema::Fields::from(Vec::<Field>::new());
+        let err = clickhouse::try_format_type(&DataType::Struct(fields), true, &mut out)
+            .expect_err("structs must not silently format as String");
+        assert_eq!(err.kind(), AdapterErrorKind::UnsupportedType);
     }
 
     #[test]
