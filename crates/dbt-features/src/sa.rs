@@ -4,6 +4,7 @@ use dbt_common::fail_fast::FailFast;
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
 use crate::feature_stack::*;
+use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
 
@@ -51,6 +52,7 @@ impl SourceAvailableFeatureStackBuilder {
             adapter: self.adapter,
             antlr_parser: self.antlr_parser,
             sidecar: SidecarFeature::default(),
+            metricflow: MetricflowFeature::default(),
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

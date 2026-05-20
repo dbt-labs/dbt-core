@@ -3,6 +3,7 @@
 #![allow(clippy::type_complexity)]
 
 pub mod context;
+pub mod metricflow;
 pub mod precompile;
 pub mod pretty_table;
 mod run_tasks_args;

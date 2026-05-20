@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::adapter::AdapterFeature;
 
 use crate::antlr_parser::AntlrParserFeature;
+use crate::metricflow::{MetricflowClient, MetricflowFeature};
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
 use dbt_compilation::config::CompilationConfig;
@@ -160,6 +161,7 @@ pub trait CliExtensionHooks: Send + Sync {
         _jinja_env: Cow<'_, JinjaEnv>,
         _augmented_resolved_state: &ResolverState,
         _schedule: &Schedule<String>,
+        _metricflow_client: Option<Arc<dyn MetricflowClient>>,
         _token: &CancellationToken,
     ) -> FsResult<()> {
         Ok(())
@@ -179,6 +181,7 @@ pub struct FeatureStack {
     pub adapter: AdapterFeature,
     pub antlr_parser: AntlrParserFeature,
     pub sidecar: SidecarFeature,
+    pub metricflow: MetricflowFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
