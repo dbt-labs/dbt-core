@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize, Verbatim};
@@ -187,10 +187,10 @@ pub struct DbtPackagesLock {
 }
 
 impl DbtPackagesLock {
-    pub fn lookup_map(&self) -> BTreeMap<String, String> {
+    pub fn lookup_map(&self, root: &Path) -> BTreeMap<String, String> {
         self.packages
             .iter()
-            .map(|p| (p.entry_name(), p.package_name()))
+            .map(|p| (p.lookup_key(root), p.package_name()))
             .collect()
     }
 
@@ -258,6 +258,24 @@ impl DbtPackageLock {
             DbtPackageLock::Local(_) => "local".to_string(),
             DbtPackageLock::Private(_) => "private".to_string(),
             DbtPackageLock::Tarball(_) => "tarball".to_string(),
+        }
+    }
+
+    /// Key used to look up this lock entry against entries discovered in transitive
+    /// `packages.yml` files. For `Local`, the lock stores a path relative to the root
+    /// project; we resolve and canonicalize so the key matches no matter which working
+    /// directory the comparison is computed from. For other variants, the entry name
+    /// is already path-independent.
+    pub fn lookup_key(&self, root: &Path) -> String {
+        match self {
+            DbtPackageLock::Local(local) => {
+                let joined = root.join(&local.local);
+                dbt_common::stdfs::canonicalize(&joined)
+                    .unwrap_or(joined)
+                    .to_string_lossy()
+                    .to_string()
+            }
+            _ => self.entry_name(),
         }
     }
 }

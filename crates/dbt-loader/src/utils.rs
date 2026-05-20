@@ -138,7 +138,6 @@ fn process_package_file(
     io_args: &IoArgs,
     package_file_path: &Path,
     package_lookup_map: &BTreeMap<String, String>,
-    in_dir: &Path,
     dependency_package_name: Option<&str>,
 ) -> FsResult<BTreeSet<String>> {
     // If the lookup map is empty, it means no packages were defined in the main project.
@@ -161,9 +160,17 @@ fn process_package_file(
                 key
             }
             DbtPackageEntry::Local(local_package) => {
-                let full_path = get_local_package_full_path(in_dir, &local_package);
-                let relative_path = stdfs::diff_paths(&full_path, in_dir)?;
-                relative_path.to_string_lossy().to_string()
+                // Resolve `local:` paths against the root project's in_dir — matching the
+                // convention dbt-deps uses when writing package-lock.yml. Even for a
+                // transitive packages.yml inside dbt_packages/<pkg>/, a relative `local:`
+                // entry refers to a directory relative to the root, not to the package's
+                // own dir. Canonicalize to also handle absolute paths (fusion #1337) and
+                // any `./` segments uniformly with DbtPackageLock::lookup_key.
+                let full_path = get_local_package_full_path(&io_args.in_dir, &local_package);
+                stdfs::canonicalize(&full_path)
+                    .unwrap_or(full_path)
+                    .to_string_lossy()
+                    .to_string()
             }
             DbtPackageEntry::Private(private_package) => {
                 let mut key = (*private_package.private).clone();
@@ -210,7 +217,6 @@ pub fn identify_package_dependencies(
             io_args,
             &dependencies_yml_path,
             package_lookup_map,
-            in_dir,
             dependency_package_name,
         )?);
     }
@@ -222,7 +228,6 @@ pub fn identify_package_dependencies(
             io_args,
             &packages_yml_path,
             package_lookup_map,
-            in_dir,
             dependency_package_name,
         )?);
     }

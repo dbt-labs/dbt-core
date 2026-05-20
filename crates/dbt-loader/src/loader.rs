@@ -369,7 +369,7 @@ pub async fn load(
         return Ok(dbt_state);
     }
 
-    let lookup_map = packages_lock.lookup_map();
+    let lookup_map = packages_lock.lookup_map(&arg.io.in_dir);
     let mut collected_vars = vec![];
     {
         // TODO: use a dedicated event. Currently this is tightly coupled with tui_layer and assumes
