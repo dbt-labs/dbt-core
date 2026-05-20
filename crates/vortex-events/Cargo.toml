@@ -27,3 +27,6 @@ vortex-client = { workspace = true }
 name = "vortex_events"
 path = "src/lib.rs"
 doctest = false
+
+[lints]
+workspace = true

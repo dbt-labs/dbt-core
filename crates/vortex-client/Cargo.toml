@@ -33,3 +33,6 @@ uuid = { workspace = true }
 name = "vortex_client"
 path = "src/lib.rs"
 doctest = false
+
+[lints]
+workspace = true

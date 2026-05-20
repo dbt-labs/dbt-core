@@ -595,9 +595,23 @@ unicode-segmentation = "1.12"
 axum = "0.8.5"
 tower-http = { version = "0.6", features = ["trace"] }
 
-[workspace.lints.rust]
 # When updating these lints mind that some crates may not inherit form workspace
-# Use only "warn" in this section. CI run will turn these into deny,
-# and we don't want to disallow local compilation of "dirty" code.
+# Use only "warn" in this section if you want to deny a lint. CI run will turn these 
+# into deny, and we don't want to disallow local compilation of "dirty" code.
+
+[workspace.lints.clippy]
+# TODO(serramatutu): We should enable "missing_lints_inheritance" when it lands in Rust stable.
+# See: https://github.com/rust-lang/cargo/pull/16588
+# missing_lints_inheritance = "warn"
+dbg_macro = "warn"
+cognitive_complexity = "warn"
+used_underscore_binding = "warn"
+redundant_clone = "warn"
+inefficient_to_string = "warn"
+or_fun_call = "warn"
+unnecessary_lazy_evaluations = "warn"
+collapsible_if = "allow"
+
+[workspace.lints.rust]
 unused_qualifications = "warn"
 #unused_crate_dependencies = "warn"

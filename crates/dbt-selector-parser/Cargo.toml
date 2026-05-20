@@ -16,3 +16,6 @@ dbt-schemas = { workspace = true }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+
+[lints]
+workspace = true

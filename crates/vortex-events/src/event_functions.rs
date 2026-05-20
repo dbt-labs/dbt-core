@@ -77,7 +77,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             //  REQUIRED invocation_id - globally unique identifier
             invocation_id: invocation_id.to_string(),
             // REQUIRED  event_id - unique identifier for this event (uuid)
-            event_id: uuid::Uuid::new_v4().to_string(),
+            event_id: Uuid::new_v4().to_string(),
             //  progress - start/end
             progress: "start".to_string(),
             //  version - dbt version
@@ -105,7 +105,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             // REQUIRED invocation_id - globally unique identifier
             invocation_id: invocation_id.to_string(),
             // REQUIRED  event_id - unique identifier for this event (uuid)
-            event_id: uuid::Uuid::new_v4().to_string(),
+            event_id: Uuid::new_v4().to_string(),
             // This is a string that indicates the environment in which the invocation is
             environment,
             // This field is a toggle to enable enrichment of the message by the Vortex service.
@@ -136,7 +136,7 @@ pub fn invocation_end_event(invocation_id: String, result_string: String, shutdo
         //  REQUIRED invocation_id - globally unique identifier
         invocation_id,
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         //  progress - start/end
         progress: "end".to_string(),
         //  version - dbt version
@@ -244,7 +244,7 @@ pub fn run_model_event(
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         // Numerical index of the model being run in this invocation
         index: 0,
         // Total number of models being run in this invocation
@@ -280,7 +280,7 @@ pub fn run_model_event(
         // A reason for why the model was skipped. cost_avoidance/upstream_failed
         run_skipped_reason: skipped_reason,
         // A globally unique ID that is emitted at each instance of an individual
-        run_model_id: uuid::Uuid::new_v4().to_string(),
+        run_model_id: Uuid::new_v4().to_string(),
         //  enrichment - toggle enrichment of message by vortex
         enrichment: None,
         // The resource type of the node (model, test, etc.)
@@ -349,7 +349,7 @@ pub fn package_install_event(invocation_id: String, name: String, version: Strin
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         // plain string name of a package that was installed. This is often the same
         // or similar to the git repository name of that package.
         name,
@@ -394,7 +394,7 @@ pub fn resource_counts_event(args: InvocationArgs, resolved_state: &ResolverStat
         // REQUIRED invocation_id - globally unique identifier
         invocation_id: args.invocation_id.to_string(),
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         // total count of models in the project.
         models: model_count,
         // total count of data tests (originally just tests) in the project.
@@ -435,7 +435,7 @@ pub fn adapter_info_event(invocation_id: String, adapter_type: String, adapter_u
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         // adapter_type is the plain string name for the dbt adapter that's used by the
         // project. Examples could include: "bigquery", "snowflake", "redshift", "postgres", etc.
         adapter_type,
@@ -454,7 +454,7 @@ pub fn adapter_info_event(invocation_id: String, adapter_type: String, adapter_u
 pub fn adapter_info_v2_event() {
     let message = AdapterInfoV2 {
         // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
+        event_id: Uuid::new_v4().to_string(),
         // A foreign key to the RunModel message that was emitted at each instance
         // of an individual model being run.
         run_model_id: "".to_string(),
@@ -501,7 +501,7 @@ pub fn get_user_id(profile_path: &Path) -> String {
 }
 
 fn set_user_cookie(profiles_dir: &Path, cookie_path: &Path) -> String {
-    let user_id = uuid::Uuid::new_v4().to_string();
+    let user_id = Uuid::new_v4().to_string();
     let profiles_file = profiles_dir.join("profiles.yml");
     // Check if profiles_dir is empty (current directory) or exists
     if (profiles_dir.as_os_str().is_empty() || profiles_dir.exists()) && profiles_file.exists() {

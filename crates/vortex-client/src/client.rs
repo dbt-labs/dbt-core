@@ -410,7 +410,7 @@ struct VortexProducerClient {
     /// Only set in development mode. MUST be `None` in production.
     dev_mode_output_path: Option<PathBuf>,
     /// Dev-mode output writer, used to write messages to a file in development mode.
-    dev_mode_output_writer: Mutex<Result<io::BufWriter<std::fs::File>, io::Error>>,
+    dev_mode_output_writer: Mutex<Result<io::BufWriter<fs::File>, io::Error>>,
 }
 
 impl Default for VortexProducerClient {
