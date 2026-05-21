@@ -1,5 +1,5 @@
 kind: Under the Hood
-body: Allow-list DBT_ENGINE_STATE_EMIT_REUSED_STATUS and DBT_ENGINE_STATE_OAUTH_CLIENT_ID engine env vars
+body: Allow-list additional DBT_ENGINE_STATE_* engine env vars (EMIT_REUSED_STATUS, OAUTH_CLIENT_ID, AUTH_URL, TOKEN_URL, API_URL)
 time: 2026-05-21T12:00:00.000000000Z
 custom:
     Author: colin-rogers-dbt
