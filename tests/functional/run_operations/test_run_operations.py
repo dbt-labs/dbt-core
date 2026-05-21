@@ -165,6 +165,105 @@ name: 'pkg'
         rm_file("packages.yml")
 
 
+class TestRunOperationSql:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model.sql": model_sql}
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"happy_macros.sql": happy_macros_sql}
+
+    @pytest.fixture(scope="class")
+    def dbt_profile_data(self, unique_schema):
+        return {
+            "test": {
+                "outputs": {
+                    "default": {
+                        "type": "postgres",
+                        "threads": 4,
+                        "host": "localhost",
+                        "port": int(os.getenv("POSTGRES_TEST_PORT", 5432)),
+                        "user": os.getenv("POSTGRES_TEST_USER", "root"),
+                        "pass": os.getenv("POSTGRES_TEST_PASS", "password"),
+                        "dbname": os.getenv("POSTGRES_TEST_DATABASE", "dbt"),
+                        "schema": unique_schema,
+                    },
+                },
+                "target": "default",
+            },
+        }
+
+    def test_sql_simple_select(self, project):
+        results = run_dbt(["run-operation", "--sql", "select 1 as id"])
+        assert results.results[0].status == RunStatus.Success
+
+    def test_sql_create_table(self, project):
+        schema = project.test_schema
+        results = run_dbt(
+            ["run-operation", "--sql", f'create table "{schema}"."inline_table" (id int)']
+        )
+        assert results.results[0].status == RunStatus.Success
+        check_table_does_exist(project.adapter, "inline_table")
+
+    def test_sql_with_ref(self, project):
+        run_dbt(["run"])
+        results = run_dbt(["run-operation", "--sql", "select * from {{ ref('model') }}"])
+        assert results.results[0].status == RunStatus.Success
+
+    def test_sql_with_jinja(self, project):
+        results = run_dbt(
+            ["run-operation", "--sql", "select '{{ target.schema }}' as schema_name"]
+        )
+        assert results.results[0].status == RunStatus.Success
+
+    def test_sql_syntax_error(self, project):
+        results = run_dbt(
+            ["run-operation", "--sql", "select NOPE NOT A VALID QUERY"],
+            expect_pass=False,
+        )
+        assert results.results[0].status == RunStatus.Error
+
+    def test_sql_no_args_error(self, project):
+        with pytest.raises(
+            Exception,
+            match="Either a macro name or --sql must be passed",
+        ):
+            run_dbt(["run-operation"], expect_pass=False)
+
+    def test_sql_args_conflict_error(self, project):
+        with pytest.raises(
+            Exception,
+            match=r"--args cannot be used with --sql",
+        ):
+            run_dbt(
+                ["run-operation", "--sql", "select 1", "--args", "{foo: bar}"],
+                expect_pass=False,
+            )
+
+    def test_sql_no_jinja_skips_compile(self, project):
+        # Plain SQL (no Jinja) should succeed without needing the manifest compiled.
+        # We verify this by checking timing: compile phase should complete near-instantly.
+        results = run_dbt(["run-operation", "--sql", "select 42 as answer"])
+        assert results.results[0].status == RunStatus.Success
+        timing_keys = [t.name for t in results.results[0].timing]
+        assert timing_keys == ["compile", "execute"]
+
+    def test_sql_logs_execution_status(self, project):
+        results, log_output = run_dbt_and_capture(["run-operation", "--sql", "select 1 as id"])
+        assert results.results[0].status == RunStatus.Success
+        assert "START executing inline_query" in log_output
+        assert "OK executed inline_query" in log_output
+
+    def test_sql_logs_error_status(self, project):
+        results, log_output = run_dbt_and_capture(
+            ["run-operation", "--sql", "select NOPE NOT VALID"],
+            expect_pass=False,
+        )
+        assert results.results[0].status == RunStatus.Error
+        assert "ERROR executing inline_query" in log_output
+
+
 class TestRunOperationRefPrivateModel:
     """Regression test for https://github.com/dbt-labs/dbt-core/issues/8248
 

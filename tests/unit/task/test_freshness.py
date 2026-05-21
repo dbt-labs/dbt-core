@@ -66,7 +66,7 @@ class TestFreshnessTaskMetadataCache:
             [],
             {"source_relation": freshness_response},
         )
-        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        task = FreshnessTask(args=args, config=config, manifest=manifest, catalogs=[])
 
         task.populate_metadata_freshness_cache(adapter, {source_no_loaded_at_field.unique_id})
 
@@ -91,7 +91,7 @@ class TestFreshnessTaskMetadataCache:
             [],
             {"source_relation1": freshness_response, "source_relation2": freshness_response},
         )
-        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        task = FreshnessTask(args=args, config=config, manifest=manifest, catalogs=[])
 
         task.populate_metadata_freshness_cache(adapter, {source_no_loaded_at_field.unique_id})
 
@@ -111,7 +111,7 @@ class TestFreshnessTaskMetadataCache:
             [],
             {"source_relation": freshness_response},
         )
-        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        task = FreshnessTask(args=args, config=config, manifest=manifest, catalogs=[])
 
         task.populate_metadata_freshness_cache(adapter, {source_with_loaded_at_field.unique_id})
 
@@ -136,7 +136,7 @@ class TestFreshnessTaskMetadataCache:
             [],
             {"source_relation": freshness_response},
         )
-        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        task = FreshnessTask(args=args, config=config, manifest=manifest, catalogs=[])
 
         task.populate_metadata_freshness_cache(adapter, {source_no_loaded_at_field.unique_id})
 
@@ -148,7 +148,7 @@ class TestFreshnessTaskMetadataCache:
         manifest.sources = {source_no_loaded_at_field.unique_id: source_no_loaded_at_field}
         adapter.Relation.create_from.return_value = "source_relation"
         adapter.calculate_freshness_from_metadata_batch.side_effect = Exception()
-        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        task = FreshnessTask(args=args, config=config, manifest=manifest, catalogs=[])
 
         task.populate_metadata_freshness_cache(adapter, {source_no_loaded_at_field.unique_id})
 

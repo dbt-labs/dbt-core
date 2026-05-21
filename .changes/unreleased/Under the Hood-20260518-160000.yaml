@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Annotate PARAM_TYPE_MAP to fix mypy failure with click 8.4.0
+time: 2026-05-18T16:00:00.000000000Z
+custom:
+    Author: colin-rogers-dbt
+    Issue: N/A

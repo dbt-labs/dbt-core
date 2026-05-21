@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'fix: guard against KeyError for custom constraints in same_contract()'
+time: 2026-03-23T17:24:55.346032-04:00
+custom:
+    Author: michelleark
+    Issue: "12699"

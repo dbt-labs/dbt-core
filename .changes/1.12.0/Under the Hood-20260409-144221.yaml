@@ -1,0 +1,9 @@
+kind: Under the Hood
+body: GenericSqlRunner (used for programmatic SQL execution via SqlCompileRunner/SqlExecuteRunner)
+  is now a standalone class instead of inheriting from CompileRunner. This fixes a
+  latent AttributeError in handle_exception and correctly separates the programmatic
+  SQL execution path from the DAG runner hierarchy.
+time: 2026-04-09T14:42:21.321229-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12811"

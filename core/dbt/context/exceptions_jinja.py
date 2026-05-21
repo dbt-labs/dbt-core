@@ -24,7 +24,7 @@ from dbt.exceptions import (
     env_secrets,
     scrub_secrets,
 )
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import (
     DataclassNotDictError,
     DbtDatabaseError,
@@ -34,7 +34,7 @@ from dbt_common.exceptions import (
 
 
 def warn(msg, node=None):
-    warn_or_error(JinjaLogWarning(msg=msg), node=node)
+    fire_event(JinjaLogWarning(msg=msg), node=node, force_warn_or_error_handling=True)
     return ""
 
 
@@ -119,11 +119,12 @@ def raise_fail_fast_error(msg, node=None) -> NoReturn:
 def warn_snapshot_timestamp_data_types(
     snapshot_time_data_type: str, updated_at_data_type: str
 ) -> None:
-    warn_or_error(
+    fire_event(
         SnapshotTimestampWarning(
             snapshot_time_data_type=snapshot_time_data_type,
             updated_at_data_type=updated_at_data_type,
-        )
+        ),
+        force_warn_or_error_handling=True,
     )
 
 

@@ -3,10 +3,12 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
+from mashumaro.exceptions import InvalidFieldValue
+
 from dbt.adapters.factory import get_config_class_by_name
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
-from dbt.exceptions import SchemaConfigError
+from dbt.exceptions import ParsingError, SchemaConfigError
 from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
@@ -57,6 +59,10 @@ class UnrenderedConfig(ConfigSource):
             model_configs = unrendered.get("exposures")
         elif resource_type == NodeType.Unit:
             model_configs = unrendered.get("unit_tests")
+        elif resource_type == NodeType.Analysis and getattr(
+            get_flags(), "require_corrected_analysis_fqns", False
+        ):
+            model_configs = unrendered.get("analyses")
         else:
             model_configs = unrendered.get("models")
         if model_configs is None:
@@ -88,6 +94,10 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.exposures
         elif resource_type == NodeType.Unit:
             model_configs = self.project.unit_tests
+        elif resource_type == NodeType.Analysis and getattr(
+            get_flags(), "require_corrected_analysis_fqns", False
+        ):
+            model_configs = self.project.analyses
         elif resource_type == NodeType.Function:
             model_configs = self.project.functions
         else:
@@ -215,7 +225,11 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
         adapter_type = self._active_project.credentials.type
         adapter_config_cls = get_config_class_by_name(adapter_type)
 
-        updated = result.update_from(translated, adapter_config_cls, validate=validate)
+        try:
+            updated = result.update_from(translated, adapter_config_cls, validate=validate)
+        except InvalidFieldValue as e:
+            raise ParsingError(str(e))
+
         return updated
 
     def translate_hook_names(self, project_dict):

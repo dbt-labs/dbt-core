@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'Fixed a bug where UDF function schema was not available in jinja context of on-run-end hook '
+time: 2026-03-24T19:48:46.21743+05:30
+custom:
+    Author: sriramr98
+    Issue: "12516"

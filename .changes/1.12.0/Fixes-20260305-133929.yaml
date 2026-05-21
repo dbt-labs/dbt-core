@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix duplicate CTE race condition in ephemeral model compilation
+time: 2026-03-05T13:39:29.780057-08:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "12602"

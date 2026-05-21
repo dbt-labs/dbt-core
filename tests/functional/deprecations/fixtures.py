@@ -336,3 +336,14 @@ generate_schema_name_null_return_macro_sql = """
     {{ return(custom_schema_name) }}
 {% endmacro %}
 """
+
+
+generic_test_config_as_top_level_yaml = """
+models:
+  - name: models_trivial
+    columns:
+      - name: id
+        data_tests:
+          - unique:
+              where: "valid_to is null"
+"""

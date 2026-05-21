@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Improve error message for bad semantic_model config object with disallowed fields in V2 SL YAML.
+time: 2026-04-01T15:41:17.904411-07:00
+custom:
+    Author: theyostalservice
+    Issue: "12766"

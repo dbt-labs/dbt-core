@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources import (
     ColumnConfig,
     ColumnDimension,
@@ -29,11 +35,6 @@ from dbt.node_types import NodeType
 from dbt.parser.search import FileBlock
 from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    DimensionType,
-    EntityType,
-    TimeGranularity,
-)
 
 schema_file_keys_to_resource_types = {
     "models": NodeType.Model,
@@ -253,7 +254,7 @@ class ParserRef:
 
             if isinstance(column.entity, UnparsedColumnEntityV2):
                 entity = ColumnEntity(
-                    name=column.entity.name,
+                    name=column.entity.name or column.name,
                     type=EntityType(column.entity.type),
                     description=column.entity.description or column.description,
                     label=column.entity.label,

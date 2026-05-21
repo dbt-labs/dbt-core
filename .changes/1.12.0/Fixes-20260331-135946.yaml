@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'fix: exclude test_name not inherited when using selector method'
+time: 2026-03-31T13:59:46.596023-04:00
+custom:
+    Author: michelleark
+    Issue: "12753"

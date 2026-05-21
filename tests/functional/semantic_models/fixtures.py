@@ -225,6 +225,38 @@ semantic_models:
 """
 
 
+semantic_model_with_disabled_ref_yml = """
+version: 2
+
+models:
+  - name: people
+    config:
+      enabled: false
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        type: categorical
+      - name: created_at
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        type: primary
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+
 base_schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
@@ -1069,4 +1101,21 @@ derived_semantics_with_doc_jinja_yml = """
           description: "{{ doc('dimension_description') }}"
           type: categorical
           expr: id
+"""
+
+semantic_model_schema_yml_v2_entity_without_name = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue.
+    semantic_model: true
+    columns:
+      - name: id
+        entity:
+          type: primary
+      - name: second_col
+        granularity: day
+        dimension:
+          type: time
+      - name: foreign_key
+        entity:
+          type: foreign
 """

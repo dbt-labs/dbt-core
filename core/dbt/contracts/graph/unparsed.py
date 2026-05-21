@@ -5,6 +5,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    ConversionCalculationType,
+    DimensionType,
+    PeriodAggregation,
+)
 from typing_extensions import override
 
 # trigger the PathEncoder
@@ -47,11 +52,6 @@ from dbt_common.dataclass_schema import (
     dbtClassMixin,
 )
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    ConversionCalculationType,
-    DimensionType,
-    PeriodAggregation,
-)
 
 
 @dataclass
@@ -203,17 +203,18 @@ class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
 
 @dataclass
 class UnparsedEntityBase(dbtClassMixin):
-    name: str
     type: str  # EntityType enum
+    name: Optional[str] = None
     description: Optional[str] = None
     label: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnparsedEntity(UnparsedEntityBase):
     """Used for dbt Semantic Layer entities (v1 YAML only)."""
 
+    name: str
     role: Optional[str] = None
     expr: Optional[str] = None
 
@@ -550,6 +551,19 @@ class UnparsedSemanticModelConfig(dbtClassMixin):
     enabled: bool = True
     group: Optional[str] = None
     config: Optional[UnparsedSemanticResourceConfig] = None
+
+    @classmethod
+    @override
+    def validate(cls, data: Any) -> None:
+        if isinstance(data, dict):
+            allowed = set(cls.__dataclass_fields__.keys())
+            extra = set(data.keys()) - allowed
+            if extra:
+                raise ValidationError(
+                    f"Unknown field(s) in semantic_model config: {', '.join(sorted(extra))}. "
+                    f"Valid fields are: {', '.join(sorted(allowed))}."
+                )
+        super().validate(data)
 
 
 @dataclass
@@ -900,9 +914,20 @@ class UnparsedFunctionReturns(dbtClassMixin):
 
 
 @dataclass
+class UnparsedFunctionOverload(dbtClassMixin):
+    """An overload definition within a function's YAML entry."""
+
+    defined_in: str
+    arguments: List[FunctionArgument] = field(default_factory=list)
+    returns: Optional[FunctionReturns] = None
+    description: Optional[str] = None
+
+
+@dataclass
 class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
+    overloads: List[UnparsedFunctionOverload] = field(default_factory=list)
 
 
 #

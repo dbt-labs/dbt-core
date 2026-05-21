@@ -1,0 +1,6 @@
+kind: Fixes
+body: catch InvalidFieldValue and raise ParsingError during context config generation
+time: 2026-03-31T22:49:46.804326-04:00
+custom:
+    Author: michelleark
+    Issue: "12758"

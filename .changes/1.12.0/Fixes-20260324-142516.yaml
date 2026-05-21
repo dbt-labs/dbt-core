@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'fix: handle null tables value in source YAML to prevent TypeError'
+time: 2026-03-24T14:25:16.772685-04:00
+custom:
+    Author: michelleark
+    Issue: "12704"

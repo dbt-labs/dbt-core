@@ -12,6 +12,11 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
+class SnowflakeFunctionConfig(dbtClassMixin):
+    quote_args: bool = True
+
+
+@dataclass
 class FunctionConfig(NodeConfig):
     # The fact that this is a property, that can be changed, seems wrong.
     # A function's materialization should never be changed, so why allow for it?
@@ -20,6 +25,7 @@ class FunctionConfig(NodeConfig):
     volatility: Optional[FunctionVolatility] = None
     runtime_version: Optional[str] = None
     entry_point: Optional[str] = None
+    snowflake: SnowflakeFunctionConfig = field(default_factory=SnowflakeFunctionConfig)
 
 
 # =============
@@ -65,10 +71,30 @@ class DeferFunction(HasRelationMetadata):
 
 
 @dataclass
+class FunctionOverload(dbtClassMixin):
+    """An overload of a function with different argument signatures.
+
+    Each overload references a separate SQL file (via defined_in) that
+    contains the function body for this overload. All overloads share the
+    same database function name but have different argument types.
+    """
+
+    defined_in: str
+    arguments: List[FunctionArgument] = field(default_factory=list)
+    returns: Optional[FunctionReturns] = None
+    description: Optional[str] = None
+    # Populated during patch processing from the overload's SQL file
+    raw_body: Optional[str] = None
+    # Populated during compile by the FunctionRunner
+    compiled_body: Optional[str] = None
+
+
+@dataclass
 class Function(CompiledResource, FunctionMandatory):
     resource_type: Literal[NodeType.Function]
     config: FunctionConfig
     arguments: List[FunctionArgument] = field(default_factory=list)
+    overloads: List[FunctionOverload] = field(default_factory=list)
     defer_function: Optional[DeferFunction] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):

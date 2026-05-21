@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix "Cannot use selector" error in dbt source freshness
+time: 2026-03-26T14:11:03.929096-04:00
+custom:
+    Author: ash2shukla
+    Issue: "12718"

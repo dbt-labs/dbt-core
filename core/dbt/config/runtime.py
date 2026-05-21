@@ -41,7 +41,8 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_or_defer_event
 from dbt_common.helper_types import DictDefaultEmptyStr, FQNPath, PathSet
 
 from .profile import Profile
@@ -199,6 +200,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             metrics=project.metrics,
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
+            analyses=project.analyses,
             exposures=project.exposures,
             functions=project.functions,
             vars=project.vars,
@@ -409,7 +411,11 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         if len(unused_resource_config_paths) == 0:
             return
 
-        warn_or_error(UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths))
+        fire_or_defer_event(
+            UnusedResourceConfigPath(unused_config_paths=unused_resource_config_paths),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
+        )
 
     def load_dependencies(self, base_only=False) -> Mapping[str, "RuntimeConfig"]:
         if self.dependencies is None:

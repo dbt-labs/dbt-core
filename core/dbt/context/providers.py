@@ -46,7 +46,7 @@ from dbt.clients.jinja import (
 from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
-from dbt.context.base import Var, contextmember, contextproperty
+from dbt.context.base import Var, _get_env_var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
 from dbt.context.exceptions_jinja import wrapped_exports
@@ -1326,6 +1326,8 @@ class ProviderContext(ManifestContext):
             table = agate_helper.from_csv(
                 path, text_columns=filtered_column_types, delimiter=delimiter
             )
+            if getattr(get_flags(), "EMPTY", False):
+                table = table.limit(0)
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
@@ -1749,10 +1751,8 @@ class ProviderContext(ManifestContext):
             raise SecretEnvVarLocationError(var)
 
         env = get_invocation_context().env
-
-        if var in env:
-            return_value = env[var]
-        elif default is not None:
+        return_value, found_in_env = _get_env_var(env, var)
+        if return_value is None and default is not None:
             return_value = default
 
         if return_value is not None:
@@ -1770,7 +1770,7 @@ class ProviderContext(ManifestContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+                    return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
                 )
 
                 # hooks come from dbt_project.yml which doesn't have a real file_id
@@ -2246,6 +2246,18 @@ class TestContext(ProviderContext):
             depends_on_macros.append(get_where_subquery.unique_id)
         if self.model.depends_on and self.model.depends_on.macros:
             depends_on_macros.extend(self.model.depends_on.macros)
+
+        # When support_custom_ref_kwargs is enabled, include custom ref/source
+        # macro overrides in the test namespace so that test arguments like
+        # ref('model', custom_kwarg=value) are properly resolved.
+        if getattr(get_flags(), "SUPPORT_CUSTOM_REF_KWARGS", False):
+            for macro_name in ("ref", "source"):
+                macro = self.macro_resolver.macros_by_name.get(macro_name)
+                if macro and macro.unique_id not in depends_on_macros:
+                    # Only include user-defined overrides, not built-in macros
+                    if macro.package_name != "dbt":
+                        depends_on_macros.append(macro.unique_id)
+
         lookup_macros = depends_on_macros.copy()
         for macro_unique_id in lookup_macros:
             lookup_macro = self.macro_resolver.macros.get(macro_unique_id)
@@ -2264,9 +2276,8 @@ class TestContext(ProviderContext):
             raise SecretEnvVarLocationError(var)
 
         env = get_invocation_context().env
-        if var in env:
-            return_value = env[var]
-        elif default is not None:
+        return_value, found_in_env = _get_env_var(env, var)
+        if return_value is None and default is not None:
             return_value = default
 
         if return_value is not None:
@@ -2277,7 +2288,7 @@ class TestContext(ProviderContext):
                 # reparsing. If the default changes, the file will have been updated and therefore
                 # will be scheduled for reparsing anyways.
                 self.manifest.env_vars[var] = (
-                    return_value if var in env else DEFAULT_ENV_PLACEHOLDER
+                    return_value if found_in_env else DEFAULT_ENV_PLACEHOLDER
                 )
                 # the "model" should only be test nodes, but just in case, check
                 # TODO CT-211

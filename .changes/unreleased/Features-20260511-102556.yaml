@@ -1,0 +1,6 @@
+kind: Features
+body: Add catalogs.yml v2 support gated behind use_catalogs_v2 flag, with adapter-owned bridge architecture
+time: 2026-05-11T10:25:56.262647+05:30
+custom:
+    Author: aahel
+    Issue: "12930"

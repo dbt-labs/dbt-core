@@ -1,0 +1,6 @@
+kind: Features
+body: env vars can now be loaded from .env file
+time: 2026-03-25T21:16:08.447395+05:30
+custom:
+    Author: sriramr98
+    Issue: "12106"

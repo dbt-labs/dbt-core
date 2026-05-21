@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix regression where node.path for snapshots in subdirectories omitted the subdirectory path
+time: 2026-04-07T12:00:00.000000-04:00
+custom:
+    Author: aahel
+    Issue: "12783"

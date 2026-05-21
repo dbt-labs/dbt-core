@@ -1,0 +1,6 @@
+kind: Fixes
+body: Suppress stacktrace when snapshot validation fails due to missing strategy or unique_key
+time: 2026-03-23T22:06:00.000000+00:00
+custom:
+    Author: chinar-amrutkar
+    Issue: "12692"

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
 from dbt.artifacts.resources.base import BaseResource, Docs
-from dbt.artifacts.resources.types import ModelLanguage, NodeType
+from dbt.artifacts.resources.types import FunctionLanguage, ModelLanguage, NodeType
 from dbt.artifacts.resources.v1.components import MacroDependsOn
 from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -34,4 +34,4 @@ class Macro(BaseResource):
     patch_path: Optional[str] = None
     arguments: List[MacroArgument] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
-    supported_languages: Optional[List[ModelLanguage]] = None
+    supported_languages: Optional[List[ModelLanguage | FunctionLanguage]] = None

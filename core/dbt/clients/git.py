@@ -39,7 +39,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
         git_version = version.parse(re.search(r"\d+\.\d+\.\d+", out.decode("utf-8")).group(0))
         if not git_version >= version.parse("2.25.0"):
             # 2.25.0 introduces --sparse
-            raise RuntimeError(
+            raise DbtRuntimeError(
                 "Please update your git version to pull a dbt package "
                 "from a subdirectory: your version is {}, >= 2.25.0 needed".format(git_version)
             )

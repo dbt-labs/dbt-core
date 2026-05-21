@@ -1,6 +1,11 @@
 from dbt.artifacts.resources.base import BaseResource, Docs, FileHash, GraphResource
 from dbt.artifacts.resources.v1.analysis import Analysis
-from dbt.artifacts.resources.v1.catalog import Catalog, CatalogWriteIntegrationConfig
+from dbt.artifacts.resources.v1.catalog import (
+    Catalog,
+    CatalogV2,
+    CatalogWriteIntegrationConfig,
+    V2TableFormat,
+)
 
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.components import (
@@ -43,6 +48,7 @@ from dbt.artifacts.resources.v1.function import (
     FunctionArgument,
     FunctionConfig,
     FunctionMandatory,
+    FunctionOverload,
     FunctionReturns,
 )
 from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
@@ -71,6 +77,7 @@ from dbt.artifacts.resources.v1.model import (
     Model,
     ModelConfig,
     ModelFreshness,
+    ModelOnErrorOptions,
     TimeSpine,
 )
 from dbt.artifacts.resources.v1.owner import Owner

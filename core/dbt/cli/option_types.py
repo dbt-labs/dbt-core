@@ -70,7 +70,9 @@ class SqlParseOptionsType(YAML):
 
     name = "SqlParseOptionsType"
 
-    VALID_KEYS = {"MAX_GROUPING_DEPTH", "MAX_GROUPING_TOKENS"}
+    # Permissive defaults by default
+    # https://sqlparse.readthedocs.io/en/latest/api.html#security-and-performance-considerations
+    VALID_KEYS_TO_DEFAULTS = {"MAX_GROUPING_DEPTH": None, "MAX_GROUPING_TOKENS": None}
 
     def convert(self, value, param, ctx):
         if value is None:
@@ -80,8 +82,13 @@ class SqlParseOptionsType(YAML):
 
         options = super().convert(value, param, ctx)
 
+        # First, apply defaults
+        for key, value in self.VALID_KEYS_TO_DEFAULTS.items():
+            setattr(sqlparse.engine.grouping, key, value)
+
+        # Then, apply user-provided settings
         for key, val in options.items():
-            if key not in self.VALID_KEYS:
+            if key not in self.VALID_KEYS_TO_DEFAULTS:
                 self.fail(
                     f"Unknown sqlparse option: {key}. "
                     f"Valid options: {', '.join(sorted(self.VALID_KEYS))}",

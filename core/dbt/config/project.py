@@ -163,6 +163,9 @@ def package_config_from_data(
     if not packages_data:
         packages_data = {"packages": []}
 
+    if packages_data.get("packages") is None:
+        packages_data["packages"] = []
+
     # this depends on the two lists being in the same order
     if unrendered_packages_data:
         unrendered_packages_data = deepcopy(unrendered_packages_data)
@@ -500,6 +503,7 @@ class PartialProject(RenderComponents):
         metrics: Dict[str, Any]
         semantic_models: Dict[str, Any]
         saved_queries: Dict[str, Any]
+        analyses: Dict[str, Any]
         exposures: Dict[str, Any]
         functions: Dict[str, Any]
         vars_value: VarProvider
@@ -517,6 +521,7 @@ class PartialProject(RenderComponents):
         metrics = cfg.metrics
         semantic_models = cfg.semantic_models
         saved_queries = cfg.saved_queries
+        analyses = cfg.analyses
         exposures = cfg.exposures
         functions = cfg.functions
 
@@ -585,6 +590,7 @@ class PartialProject(RenderComponents):
             metrics=metrics,
             semantic_models=semantic_models,
             saved_queries=saved_queries,
+            analyses=analyses,
             exposures=exposures,
             functions=functions,
             vars=vars_value,
@@ -700,6 +706,7 @@ class Project:
     metrics: Dict[str, Any]
     semantic_models: Dict[str, Any]
     saved_queries: Dict[str, Any]
+    analyses: Dict[str, Any]
     exposures: Dict[str, Any]
     functions: Dict[str, Any]
     vars: VarProvider
@@ -791,6 +798,7 @@ class Project:
                 "metrics": self.metrics,
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,
+                "analyses": self.analyses,
                 "exposures": self.exposures,
                 "functions": self.functions,
                 "vars": self.vars.to_dict(),

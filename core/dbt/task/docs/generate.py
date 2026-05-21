@@ -351,6 +351,7 @@ class GenerateTask(CompileTask):
             previous_state=self.previous_state,
             resource_types=EXECUTABLE_NODE_TYPES,
             include_empty_nodes=True,
+            selectors=self.config.selectors,
         )
 
     def get_catalog_results(
@@ -403,6 +404,7 @@ class GenerateTask(CompileTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=[NodeType.Source],
+            selectors=self.config.selectors,
         )
 
         return source_selector.get_graph_queue(self.get_selection_spec()).get_selected_nodes()

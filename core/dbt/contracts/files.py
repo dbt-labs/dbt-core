@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Union
 from mashumaro.types import SerializableType
 
 from dbt.artifacts.resources.base import FileHash
+from dbt.exceptions import ParsingError
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
 
 from .util import SourceKey
@@ -23,6 +24,7 @@ class ParseFileType(StrEnum):
     Hook = "hook"  # not a real filetype, from dbt_project.yml
     Fixture = "fixture"
     Function = "function"
+    OSI = "osi"  # Open Semantic Interchange files; loaded by load_osi_into_manifest
 
 
 parse_file_type_to_parser = {
@@ -79,7 +81,7 @@ class RemoteFile(dbtClassMixin):
         elif language == "python":
             self.path_end = ".py"
         else:
-            raise RuntimeError(f"Invalid language for remote File {language}")
+            raise ParsingError(f"Invalid language for remote File {language}")
         self.path = f"from remote system{self.path_end}"
 
     @property
@@ -136,6 +138,8 @@ class BaseSourceFile(dbtClassMixin, SerializableType):
             sf = SchemaSourceFile.from_dict(dct)
         elif dct["parse_file_type"] == "fixture":
             sf = FixtureSourceFile.from_dict(dct)
+        elif dct["parse_file_type"] == "osi":
+            sf = OsiSourceFile.from_dict(dct)
         else:
             sf = SourceFile.from_dict(dct)
         return sf
@@ -410,4 +414,10 @@ class FixtureSourceFile(BaseSourceFile):
             self.unit_tests.append(value)
 
 
-AnySourceFile = Union[SchemaSourceFile, SourceFile, FixtureSourceFile]
+@dataclass
+class OsiSourceFile(BaseSourceFile):
+    semantic_models: List[str] = field(default_factory=list)
+    metrics: List[str] = field(default_factory=list)
+
+
+AnySourceFile = Union[SchemaSourceFile, SourceFile, FixtureSourceFile, OsiSourceFile]

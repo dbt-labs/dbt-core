@@ -89,7 +89,8 @@ from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events import EventLevel
-from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.base_types import EventGroupType
+from dbt_common.events.functions import fire_event, fire_or_defer_event
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
@@ -164,7 +165,9 @@ def yaml_from_file(
         # When loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
-        for source in contents.get("sources", []):
+        for source in contents.get("sources") or []:
+            if source.get("tables") is None:
+                source["tables"] = []
             for table in source.get("tables", []):
                 if "loaded_at_field" in table or (
                     "config" in table
@@ -841,14 +844,16 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             if unique_id:
                 resource_type = NodeType(unique_id.split(".")[0])
                 if resource_type.pluralize() != patch.yaml_key:
-                    warn_or_error(
+                    fire_or_defer_event(
                         WrongResourceSchemaFile(
                             patch_name=patch.name,
                             resource_type=resource_type,
                             plural_resource_type=resource_type.pluralize(),
                             yaml_key=patch.yaml_key,
                             file_path=patch.original_file_path,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                     return
         elif patch.yaml_key == "functions":
@@ -892,19 +897,21 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
 
                     self.patch_node_properties(node, patch)
             else:
-                warn_or_error(
+                fire_or_defer_event(
                     NoNodeForYamlKey(
                         patch_name=patch.name,
                         yaml_key=patch.yaml_key,
                         file_path=source_file.path.original_file_path,
-                    )
+                    ),
+                    force_warn_or_error_handling=True,
+                    event_group_type=EventGroupType.PARSE,
                 )
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
         if patch.yaml_key == "functions":
-            node = self.manifest.functions.get(unique_id)
+            node = self.manifest.functions.get(unique_id)  # type: ignore[arg-type]
         else:
-            node = self.manifest.nodes.get(unique_id)
+            node = self.manifest.nodes.get(unique_id)  # type: ignore[arg-type]
 
         if node:
             # patches can't be overwritten
@@ -935,12 +942,14 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         if not isinstance(node, ModelNode):
             for attr in ["latest_version", "access", "version", "constraints"]:
                 if getattr(patch, attr):
-                    warn_or_error(
+                    fire_or_defer_event(
                         ValidationWarning(
                             field_name=attr,
                             resource_type=node.resource_type.value,
                             node_name=patch.name,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
 
 
@@ -962,14 +971,16 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
     def parse_patch(self, block: TargetBlock[UnparsedModelUpdate], refs: ParserRef) -> None:
         target = block.target
         if NodeType.Model.pluralize() != target.yaml_key:
-            warn_or_error(
+            fire_or_defer_event(
                 WrongResourceSchemaFile(
                     patch_name=target.name,
                     resource_type=NodeType.Model,
                     plural_resource_type=NodeType.Model.pluralize(),
                     yaml_key=target.yaml_key,
                     file_path=target.original_file_path,
-                )
+                ),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1031,12 +1042,14 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     add_node_nofile_fn = self.manifest.add_node_nofile
 
                 if versioned_model_node is None:
-                    warn_or_error(
+                    fire_or_defer_event(
                         NoNodeForYamlKey(
                             patch_name=versioned_model_name,
                             yaml_key=target.yaml_key,
                             file_path=source_file.path.original_file_path,
-                        )
+                        ),
+                        force_warn_or_error_handling=True,
+                        event_group_type=EventGroupType.PARSE,
                     )
                     continue
 
@@ -1234,9 +1247,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         # if any constraint has `warn_unsupported` as True then send the warning
         if any(warn_unsupported) and not model_node.materialization_enforces_constraints:
-            warn_or_error(
+            fire_or_defer_event(
                 UnsupportedConstraintMaterialization(materialized=model_node.config.materialized),
                 node=model_node,
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
 
         errors = []
@@ -1289,12 +1304,14 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
             block.name, block.target.package_name
         )
         if not unique_id:
-            warn_or_error(
+            fire_or_defer_event(
                 NoNodeForYamlKey(
                     patch_name=patch.name,
                     yaml_key=patch.yaml_key,
                     file_path=source_file.path.original_file_path,
-                )
+                ),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
             )
             return
 
@@ -1326,9 +1343,92 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         node.arguments = patch.arguments
         node.returns = patch.returns
 
+        # Process overloads: absorb overload SQL files into the root node
+        if patch.overloads:
+            self._absorb_overloads(node, patch.overloads)
+
+    def _absorb_overloads(self, root_node: "FunctionNode", overloads: list) -> None:
+        """Look up overload SQL files, store their code on the root node,
+        and remove them from the manifest so they don't appear as separate
+        DAG nodes."""
+        from dbt.artifacts.resources import FunctionOverload
+
+        absorbed: list[FunctionOverload] = []
+        for overload in overloads:
+            overload_name = overload.defined_in
+
+            # Prevent self-reference
+            if overload_name == root_node.name:
+                raise ParsingError(
+                    f"Function '{root_node.name}' cannot list itself in overloads "
+                    f"(defined_in: '{overload_name}')."
+                )
+
+            # Find the overload node in the manifest by name
+            overload_unique_id = f"function.{root_node.package_name}.{overload_name}"
+            overload_node = self.manifest.functions.get(overload_unique_id)
+
+            if overload_node is None:
+                # Check if this overload was already claimed by another root function
+                claimed_by = next(
+                    (
+                        root_uid
+                        for fid, root_uid in self.manifest.function_overload_owners.items()
+                        if fid.endswith(f"/{overload_name}.sql")
+                    ),
+                    None,
+                )
+                if claimed_by:
+                    raise ParsingError(
+                        f"Function overload '{overload_name}' (defined_in) is already "
+                        f"used by '{claimed_by}'. Each overload file can only belong "
+                        f"to one root function."
+                    )
+                raise ParsingError(
+                    f"Function overload '{overload_name}' (defined_in) not found. "
+                    f"Expected a SQL file at functions/{overload_name}.sql"
+                )
+
+            absorbed.append(
+                FunctionOverload(
+                    defined_in=overload.defined_in,
+                    arguments=overload.arguments,
+                    returns=overload.returns,
+                    description=overload.description,
+                    raw_body=overload_node.raw_code,
+                )
+            )
+
+            # Track the overload→root relationship for partial parsing
+            self.manifest.function_overload_owners[overload_node.file_id] = root_node.unique_id
+
+            # Clear the source file's function list so partial parsing knows
+            # this file no longer owns a standalone function node.
+            overload_file = self.manifest.files.get(overload_node.file_id)
+            if overload_file is not None and hasattr(overload_file, "functions"):
+                overload_file.functions = []
+
+            # Remove the overload node from the manifest — it's now part of the root
+            del self.manifest.functions[overload_unique_id]
+
+        root_node.overloads = absorbed
+
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
+
+        # Convert unparsed overloads to FunctionOverload objects (without body yet)
+        from dbt.artifacts.resources import FunctionOverload
+
+        overloads = [
+            FunctionOverload(
+                defined_in=o.defined_in,
+                arguments=o.arguments,
+                returns=o.returns,
+                description=o.description,
+            )
+            for o in target.overloads
+        ]
 
         return ParsedFunctionPatch(
             name=target.name,
@@ -1348,6 +1448,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
+            overloads=overloads,
         )
 
 
@@ -1376,7 +1477,11 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         unique_id = f"macro.{patch.package_name}.{patch.name}"
         macro = self.manifest.macros.get(unique_id)
         if not macro:
-            warn_or_error(MacroNotFoundForPatch(patch_name=patch.name))
+            fire_or_defer_event(
+                MacroNotFoundForPatch(patch_name=patch.name),
+                force_warn_or_error_handling=True,
+                event_group_type=EventGroupType.PARSE,
+            )
             return
         if macro.patch_path:
             package_name, existing_file_path = macro.patch_path.split("://")
@@ -1426,10 +1531,12 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
                 self._fire_macro_arg_warning(msg, macro)
 
     def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
-        warn_or_error(
+        fire_or_defer_event(
             InvalidMacroAnnotation(
                 msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
-            )
+            ),
+            force_warn_or_error_handling=True,
+            event_group_type=EventGroupType.PARSE,
         )
 
 

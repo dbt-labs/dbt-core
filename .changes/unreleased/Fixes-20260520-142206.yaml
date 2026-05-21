@@ -1,0 +1,6 @@
+kind: Fixes
+body: Skip jsonschema_validation if adapter_type is not available
+time: 2026-05-20T14:22:06.144757+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12992"

@@ -5,7 +5,7 @@ import pytest
 import dbt.flags as flags
 from dbt.adapters.events.types import AdapterDeprecationWarning
 from dbt.events.types import NoNodesForSelectionCriteria
-from dbt_common.events.functions import msg_to_dict, warn_or_error
+from dbt_common.events.functions import fire_event, msg_to_dict
 from dbt_common.events.types import InfoLevel, RetryExternalCall
 from dbt_common.exceptions import EventCompilationError
 
@@ -26,9 +26,9 @@ def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation
     flags.set_from_args(args, {})
     if expect_compilation_exception:
         with pytest.raises(EventCompilationError):
-            warn_or_error(NoNodesForSelectionCriteria())
+            fire_event(NoNodesForSelectionCriteria(), force_warn_or_error_handling=True)
     else:
-        warn_or_error(NoNodesForSelectionCriteria())
+        fire_event(NoNodesForSelectionCriteria(), force_warn_or_error_handling=True)
 
 
 @pytest.mark.parametrize(
@@ -43,11 +43,11 @@ def test_warn_error_options_captures_all_events(error_cls):
     args = Namespace(warn_error_options={"error": [error_cls.__name__]})
     flags.set_from_args(args, {})
     with pytest.raises(EventCompilationError):
-        warn_or_error(error_cls())
+        fire_event(error_cls(), force_warn_or_error_handling=True)
 
     args = Namespace(warn_error_options={"error": "*", "warn": [error_cls.__name__]})
     flags.set_from_args(args, {})
-    warn_or_error(error_cls())
+    fire_event(error_cls(), force_warn_or_error_handling=True)
 
 
 @pytest.mark.parametrize(
@@ -62,9 +62,9 @@ def test_warn_or_error_warn_error(warn_error, expect_compilation_exception):
     flags.set_from_args(args, {})
     if expect_compilation_exception:
         with pytest.raises(EventCompilationError):
-            warn_or_error(NoNodesForSelectionCriteria())
+            fire_event(NoNodesForSelectionCriteria(), force_warn_or_error_handling=True)
     else:
-        warn_or_error(NoNodesForSelectionCriteria())
+        fire_event(NoNodesForSelectionCriteria(), force_warn_or_error_handling=True)
 
 
 def test_msg_to_dict_handles_exceptions_gracefully():

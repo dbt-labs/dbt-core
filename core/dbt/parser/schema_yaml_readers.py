@@ -1,6 +1,16 @@
 from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
+from metricflow_semantic_interfaces.type_enums import (
+    AggregationType,
+    ConversionCalculationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+    PeriodAggregation,
+    TimeGranularity,
+)
+
 from dbt.artifacts.resources import (
     ColumnDimension,
     ColumnEntity,
@@ -83,15 +93,6 @@ from dbt.parser.common import YamlBlock
 from dbt.parser.schemas import ParseResult, SchemaParser, YamlReader
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtInternalError
-from dbt_semantic_interfaces.type_enums import (
-    AggregationType,
-    ConversionCalculationType,
-    DimensionType,
-    EntityType,
-    MetricType,
-    PeriodAggregation,
-    TimeGranularity,
-)
 
 
 def parse_where_filter(
@@ -140,7 +141,10 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
-        tags = sorted(set(self.project.exposures.get("tags", []) + unparsed.tags + config.tags))
+        # Null tags caught during deserialization, but guard here defensively.
+        tags = sorted(
+            set((self.project.exposures.get("tags") or []) + unparsed.tags + config.tags)
+        )
         meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
 
         config.tags = tags
@@ -439,6 +443,7 @@ class MetricParser(YamlReader):
         self,
         unparsed_metric: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> MetricTypeParams:
         if isinstance(unparsed_metric, UnparsedMetric):
             type_params = unparsed_metric.type_params
@@ -487,7 +492,8 @@ class MetricParser(YamlReader):
                         use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
                         == PercentileType.CONTINUOUS,
                     ),
-                    agg_time_dimension=unparsed_metric.agg_time_dimension,
+                    agg_time_dimension=unparsed_metric.agg_time_dimension
+                    or default_agg_time_dimension,
                     non_additive_dimension=self._get_v2_non_additive_dimension(
                         unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
                     ),
@@ -520,6 +526,7 @@ class MetricParser(YamlReader):
         self,
         unparsed: UnparsedMetricBase,
         generated_from: Optional[str] = None,
+        default_agg_time_dimension: Optional[str] = None,
     ) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
@@ -578,7 +585,11 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed, generated_from=generated_from),
+            type_params=self._get_metric_type_params(
+                unparsed,
+                generated_from=generated_from,
+                default_agg_time_dimension=default_agg_time_dimension,
+            ),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=meta,
@@ -638,10 +649,13 @@ class MetricParser(YamlReader):
             if model_patch.semantic_model.name is not None:
                 semantic_model_name = model_patch.semantic_model.name
         for metric in model_patch.metrics:
-            semantic_model = (
-                semantic_model_name if MetricType(metric.type) == MetricType.SIMPLE else None
+            is_simple = MetricType(metric.type) == MetricType.SIMPLE
+            semantic_model = semantic_model_name if is_simple else None
+            self.parse_metric(
+                metric,
+                generated_from=semantic_model,
+                default_agg_time_dimension=model_patch.agg_time_dimension if is_simple else None,
             )
-            self.parse_metric(metric, generated_from=semantic_model)
 
     def parse(self) -> None:
         for data in self.get_key_dicts():
@@ -1012,6 +1026,8 @@ class SemanticModelParser(YamlReader):
     ) -> List[Entity]:
         entities: List[Entity] = []
         for unparsed_entity in derived_semantics.entities:
+            if unparsed_entity.name is None:
+                raise ValidationError("Derived entity is missing a required 'name' field.")
             entities.append(
                 Entity(
                     name=unparsed_entity.name,
@@ -1063,7 +1079,7 @@ class SemanticModelParser(YamlReader):
             pass
         else:
             # this should be unreachable, but just in case
-            raise ValueError(f"Invalid semantic model config: {patch.semantic_model}")
+            raise DbtInternalError(f"Invalid semantic model config: {patch.semantic_model}")
 
         self._parse_semantic_model_helper(
             semantic_model_name=name,

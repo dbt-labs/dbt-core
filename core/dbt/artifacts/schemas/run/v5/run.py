@@ -20,6 +20,7 @@ from dbt.artifacts.schemas.base import (
     schema_version,
 )
 from dbt.artifacts.schemas.batch_results import BatchResults
+from dbt.artifacts.schemas.overload_results import OverloadResults
 from dbt.artifacts.schemas.results import (
     BaseResult,
     ExecutionResult,
@@ -38,6 +39,7 @@ class RunResult(NodeResult):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     batch_results: Optional[BatchResults] = None
+    overload_results: Optional[OverloadResults] = None
 
     @property
     def skipped(self):
@@ -56,6 +58,7 @@ class RunResult(NodeResult):
             adapter_response={},
             failures=None,
             batch_results=None,
+            overload_results=None,
         )
 
 
@@ -73,6 +76,7 @@ class RunResultOutput(BaseResult):
     compiled_code: Optional[str]
     relation_name: Optional[str]
     batch_results: Optional[BatchResults] = None
+    overload_results: Optional[OverloadResults] = None
 
 
 def process_run_result(result: RunResult) -> RunResultOutput:
@@ -89,6 +93,7 @@ def process_run_result(result: RunResult) -> RunResultOutput:
         adapter_response=result.adapter_response,
         failures=result.failures,
         batch_results=result.batch_results,
+        overload_results=result.overload_results,
         compiled=result.node.compiled if compiled else None,  # type:ignore
         compiled_code=result.node.compiled_code if compiled else None,  # type:ignore
         relation_name=result.node.relation_name if compiled else None,  # type:ignore

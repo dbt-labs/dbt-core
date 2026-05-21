@@ -12,6 +12,15 @@ class MockRunner(BaseRunner):
     def compile(self):
         pass
 
+    def before_execute(self):
+        pass
+
+    def execute(self, compiled_node, manifest):
+        pass
+
+    def after_execute(self, result):
+        pass
+
 
 class TestBaseRunner:
     def test_handle_generic_exception_handles_nodes_without_build_path(
