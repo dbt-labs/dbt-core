@@ -11,34 +11,15 @@
     {{ macro(model, column_name) }}
 {% endtest %}
 
-
-{# DIVERGENCE #}
--- funcsign: (relation, list[string]) -> string
-{% test aggregated_unique(model, column_names) %}
-    {% set macro = adapter.dispatch('test_aggregated_unique', 'dbt') %}
-    {{ macro(model, column_names) }}
-{% endtest %}
-
-
-{# DIVERGENCE #}
--- funcsign: (relation, list[string]) -> string
-{% test aggregated_not_null(model, column_names) %}
-    {% set macro = adapter.dispatch('test_aggregated_not_null', 'dbt') %}
-    {{ macro(model, column_names) }}
-{% endtest %}
-
-
 {% test not_null(model, column_name) %}
     {% set macro = adapter.dispatch('test_not_null', 'dbt') %}
     {{ macro(model, column_name) }}
 {% endtest %}
 
-
 {% test accepted_values(model, column_name, values, quote=True) %}
     {% set macro = adapter.dispatch('test_accepted_values', 'dbt') %}
     {{ macro(model, column_name, values, quote) }}
 {% endtest %}
-
 
 {% test relationships(model, column_name, to, field) %}
     {% set macro = adapter.dispatch('test_relationships', 'dbt') %}

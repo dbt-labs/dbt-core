@@ -1,4 +1,10 @@
 -- funcsign: (relation, list[string]) -> string
+{% test aggregated_unique(model, column_names) %}
+    {% set macro = adapter.dispatch('test_aggregated_unique', 'dbt') %}
+    {{ macro(model, column_names) }}
+{% endtest %}
+
+-- funcsign: (relation, list[string]) -> string
 {% macro default__test_aggregated_unique(model, column_names) %}
 
 {% set skip_column_names = aggregated_test_skip_column_names | default([]) %}

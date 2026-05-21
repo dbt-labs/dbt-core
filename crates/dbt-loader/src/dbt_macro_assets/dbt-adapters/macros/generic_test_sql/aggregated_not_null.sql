@@ -1,4 +1,10 @@
 -- funcsign: (relation, list[string]) -> string
+{% test aggregated_not_null(model, column_names) %}
+    {% set macro = adapter.dispatch('test_aggregated_not_null', 'dbt') %}
+    {{ macro(model, column_names) }}
+{% endtest %}
+
+-- funcsign: (relation, list[string]) -> string
 {% macro default__test_aggregated_not_null(model, column_names) %}
 {% set skip_column_names = aggregated_test_skip_column_names | default([]) %}
 {% set filtered_columns = [] %}
