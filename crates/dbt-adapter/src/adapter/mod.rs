@@ -2716,9 +2716,6 @@ impl Adapter {
                 let database = iter.next_arg::<&str>().or_else(|e| {
                     if self.adapter_type() == AdapterType::Databricks {
                         Ok(DEFAULT_DATABRICKS_DATABASE)
-                    } else if self.adapter_type() == AdapterType::ClickHouse {
-                        // ClickHouse uses 2-part naming: database is always empty
-                        Ok("")
                     } else {
                         Err(e)
                     }

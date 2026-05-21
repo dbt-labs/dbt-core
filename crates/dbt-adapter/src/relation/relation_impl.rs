@@ -66,11 +66,12 @@ impl StaticBaseRelation for RelationStatic {
             AdapterType::Salesforce => Policy::new(false, false, true),
             _ => Policy::trues(),
         };
-        // Mirror upstream ClickHouseRelation.__post_init__: discard any
-        // caller-supplied database so `{{ relation.database }}` is always falsy.
+        // Upstream `ClickHouseRelation.__post_init__` forces `path.database = ''`
+        // regardless of the caller-supplied value — including `None`, which upstream
+        // macros do pass (see `clickhouse__get_or_create_relation`).
         // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
         let database = match self.adapter_type {
-            AdapterType::ClickHouse => None,
+            AdapterType::ClickHouse => Some(String::new()),
             _ => database.filter(|s| !s.is_empty()),
         };
         Ok(RelationObject::new(Arc::new(Relation::new_with_policy(
@@ -1760,12 +1761,30 @@ mod tests {
     /// `api.Relation.create(...)`, the rendered FQN must skip the database
     /// segment and produce `` `<schema>`.`<identifier>` ``.
     #[test]
-    fn test_try_new_via_static_base_relation_clickhouse_skips_database() {
+    fn test_try_new_via_static_base_relation_clickhouse_normalizes_database_to_empty_string() {
         let relation_type = RelationStatic {
             adapter_type: AdapterType::ClickHouse,
             quoting: DEFAULT_RESOLVED_QUOTING,
         };
-        let relation = relation_type
+
+        let from_none = relation_type
+            .try_new(
+                None,
+                Some("my_schema".to_string()),
+                Some("my_table".to_string()),
+                Some(RelationType::Table),
+                Some(DEFAULT_RESOLVED_QUOTING),
+                None,
+            )
+            .unwrap();
+        let from_none = from_none.downcast_object::<RelationObject>().unwrap();
+        assert_eq!(from_none.inner().database(), Some(""));
+        assert_eq!(
+            from_none.inner().render_self_as_str(),
+            "`my_schema`.`my_table`"
+        );
+
+        let from_supplied = relation_type
             .try_new(
                 Some("ignored_db".to_string()),
                 Some("my_schema".to_string()),
@@ -1775,15 +1794,11 @@ mod tests {
                 None,
             )
             .unwrap();
-
-        let relation = relation.downcast_object::<RelationObject>().unwrap();
+        let from_supplied = from_supplied.downcast_object::<RelationObject>().unwrap();
+        assert_eq!(from_supplied.inner().database(), Some(""));
         assert_eq!(
-            relation.inner().render_self_as_str(),
+            from_supplied.inner().render_self_as_str(),
             "`my_schema`.`my_table`"
         );
-        // Mirror upstream's `__post_init__` clearing `path.database = ''`:
-        // `{{ relation.database }}` must be falsy even when a database was
-        // supplied to `api.Relation.create(...)`.
-        assert_eq!(relation.inner().database(), None);
     }
 }

@@ -498,7 +498,9 @@ pub fn do_create_relation(
         ClickHouse => Box::new(Relation::new_with_policy(
             ClickHouse,
             RelationPath {
-                database: None,
+                // Upstream `ClickHouseRelation.__post_init__` forces `path.database = ''`
+                // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
+                database: Some(String::new()),
                 schema: Some(schema),
                 identifier,
             },
@@ -996,7 +998,7 @@ mod tests {
     }
 
     #[test]
-    fn do_create_relation_clickhouse_skips_database() {
+    fn do_create_relation_clickhouse_normalizes_database_to_empty_string() {
         let relation = do_create_relation(
             AdapterType::ClickHouse,
             "ignored".to_string(),
@@ -1012,6 +1014,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
-        assert_eq!(relation.database(), None);
+        assert_eq!(relation.database(), Some(""));
     }
 }
