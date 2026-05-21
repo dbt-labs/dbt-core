@@ -1,8 +1,6 @@
 use std::fmt::Write as _;
 
-use arrow_array::{
-    Array, BooleanArray, Float64Array, Int64Array, ListArray, RecordBatch, StringArray,
-};
+use arrow_array::{Array, Int64Array, RecordBatch, StringArray};
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
@@ -11,6 +9,10 @@ use serde::{Deserialize, Serialize};
 use axum::extract::Path;
 
 use crate::handlers::json::{bad_request, internal_error, not_found};
+use crate::handlers::node_base::{
+    EdgeRef, ExecutionInfo, bool_col, extract_edge_refs, extract_execution_info, extract_str_list,
+    str_col,
+};
 use crate::handlers::pagination::{Cursor, PageInfo, SortDir, clamp_first, cursor_where_fragment};
 use crate::handlers::sql::escape_str;
 use crate::state::SharedState;
@@ -144,27 +146,6 @@ pub struct ModelFacetsResponse {
     pub accesses: Vec<FacetValue>,
     /// Owner (group) options; project-specific, sourced from `dbt.groups`.
     pub owners: Vec<FacetValue>,
-}
-
-/// Extract a `StringArray` column from a batch by name.
-/// Panics on schema mismatch — indicates a bug in the SQL/struct alignment.
-fn str_col<'a>(batch: &'a RecordBatch, name: &'static str) -> &'a StringArray {
-    batch
-        .column_by_name(name)
-        .unwrap_or_else(|| panic!("column '{name}' missing from batch"))
-        .as_any()
-        .downcast_ref::<StringArray>()
-        .unwrap_or_else(|| panic!("column '{name}' is not a StringArray"))
-}
-
-/// Extract a `BooleanArray` column from a batch by name.
-fn bool_col<'a>(batch: &'a RecordBatch, name: &'static str) -> &'a BooleanArray {
-    batch
-        .column_by_name(name)
-        .unwrap_or_else(|| panic!("column '{name}' missing from batch"))
-        .as_any()
-        .downcast_ref::<BooleanArray>()
-        .unwrap_or_else(|| panic!("column '{name}' is not a BooleanArray"))
 }
 
 /// Extract the `owner` string column from the facets query result.
@@ -653,8 +634,8 @@ pub struct ModelDetail {
     pub tags: Vec<String>,
     pub fqn: Vec<String>,
     pub columns: Vec<ModelColumn>,
-    pub depends_on: Vec<ModelEdgeRef>,
-    pub referenced_by: Vec<ModelEdgeRef>,
+    pub depends_on: Vec<EdgeRef>,
+    pub referenced_by: Vec<EdgeRef>,
     pub execution_info: Option<ExecutionInfo>,
     pub catalog: Option<ModelCatalogInfo>,
 }
@@ -673,19 +654,6 @@ pub struct ModelColumn {
 }
 
 #[derive(Serialize)]
-pub struct ModelEdgeRef {
-    pub unique_id: String,
-    pub edge_type: String,
-}
-
-#[derive(Serialize)]
-pub struct ExecutionInfo {
-    pub status: Option<String>,
-    pub execution_time: Option<f64>,
-    pub completed_at: Option<String>,
-}
-
-#[derive(Serialize)]
 pub struct ModelCatalogInfo {
     // TODO: bytes_stat and row_count_stat live in dbt.catalog_stats keyed by
     // adapter-specific stat_id values. Stub NULL until a populated catalog
@@ -701,27 +669,8 @@ pub struct ModelCatalogInfo {
 // Extraction helpers
 // ---------------------------------------------------------------------------
 
-fn extract_str_list(batch: &RecordBatch, col_name: &'static str) -> Vec<String> {
-    let Some(col) = batch.column_by_name(col_name) else {
-        return vec![];
-    };
-    if batch.num_rows() == 0 || col.is_null(0) {
-        return vec![];
-    }
-    let Some(list) = col.as_any().downcast_ref::<ListArray>() else {
-        return vec![];
-    };
-    let inner = list.value(0);
-    let Some(strings) = inner.as_any().downcast_ref::<StringArray>() else {
-        return vec![];
-    };
-    (0..strings.len())
-        .filter(|&i| !strings.is_null(i))
-        .map(|i| strings.value(i).to_owned())
-        .collect()
-}
-
 fn extract_node_detail(batches: &[RecordBatch]) -> Option<ModelDetail> {
+    use arrow_array::BooleanArray;
     let batch = batches.iter().find(|b| b.num_rows() > 0)?;
 
     let str_opt = |name: &'static str| -> Option<String> {
@@ -816,55 +765,6 @@ fn extract_model_columns(batches: &[RecordBatch]) -> Vec<ModelColumn> {
         }
     }
     rows
-}
-
-fn extract_edge_refs(batches: &[RecordBatch]) -> Vec<ModelEdgeRef> {
-    let mut rows = Vec::new();
-    for batch in batches {
-        if batch.num_rows() == 0 {
-            continue;
-        }
-        let uid = str_col(batch, "unique_id");
-        let etype = str_col(batch, "edge_type");
-        for i in 0..batch.num_rows() {
-            rows.push(ModelEdgeRef {
-                unique_id: uid.value(i).to_owned(),
-                edge_type: etype.value(i).to_owned(),
-            });
-        }
-    }
-    rows
-}
-
-fn extract_execution_info(batches: &[RecordBatch]) -> Option<ExecutionInfo> {
-    let batch = batches.iter().find(|b| b.num_rows() > 0)?;
-    let status_col = batch
-        .column_by_name("status")
-        .and_then(|c| c.as_any().downcast_ref::<StringArray>());
-    let exec_time_col = batch
-        .column_by_name("execution_time")
-        .and_then(|c| c.as_any().downcast_ref::<Float64Array>());
-    let completed_at_col = batch
-        .column_by_name("completed_at")
-        .and_then(|c| c.as_any().downcast_ref::<StringArray>());
-    Some(ExecutionInfo {
-        status: status_col.and_then(|c| {
-            if c.is_null(0) {
-                None
-            } else {
-                Some(c.value(0).to_owned())
-            }
-        }),
-        execution_time: exec_time_col
-            .and_then(|c| if c.is_null(0) { None } else { Some(c.value(0)) }),
-        completed_at: completed_at_col.and_then(|c| {
-            if c.is_null(0) {
-                None
-            } else {
-                Some(c.value(0).to_owned())
-            }
-        }),
-    })
 }
 
 fn extract_catalog_info(batches: &[RecordBatch]) -> Option<ModelCatalogInfo> {

@@ -23,6 +23,7 @@
   - [`GET /api/v1/nodes/:id` (deferred)](#get-apiv1nodesid-deferred)
   - [ADR-4: `execution_info` field naming — single-run semantics](#adr-4-execution_info-field-naming--single-run-semantics)
   - [ADR-5: `execution_info` omission for definition-only and Semantic Layer resources](#adr-5-execution_info-omission-for-definition-only-and-semantic-layer-resources)
+  - [ADR-7: Capabilities are distribution-gated; parquet absence emits JSON `null`](#adr-7-capabilities-are-distribution-gated-parquet-absence-emits-json-null)
   - [`GET /api/v1/sources/:id`](#get-apiv1sourcesid)
   - [`GET /api/v1/seeds/:id`](#get-apiv1seedsid)
   - [`GET /api/v1/snapshots/:id`](#get-apiv1snapshotsid)
@@ -166,7 +167,7 @@ With it, the dispatcher is a string split plus a match expression.
 
 ## ADR-2: `execution_info` placement
 
-**Status:** Decided — inline in each resource detail response, null-gated by capability.
+**Status:** Decided — inline in each resource detail response, null when no row exists in `dbt_rt.run_results` for the resource. (See ADR-7 — the original "null-gated by capability" wording was misleading; parquet absence is not a capability.)
 **Trigger to revisit:** Run history (last N runs) becomes a product requirement.
 
 ### Options considered
@@ -174,7 +175,7 @@ With it, the dispatcher is a string split plus a match expression.
 **Inline in model detail response**
 
 `execution_info` is a nested object in `ModelDetail`. `null` when `dbt build` hasn't
-run (gated by `has_run_results` capability).
+run — that is, when `dbt_rt.run_results` has no row for this resource.
 
 - Pro: One request for everything the page needs.
 - Pro: Consistent with how `columns[]` is already inlined.
@@ -216,17 +217,9 @@ struct NodeBase {
 
 ### Capability flags
 
-New flags introduced by these contracts (existing: `has_column_lineage`):
+`Capabilities` is solely distribution-gated per ADR-7. The only flag is `has_column_lineage` (proprietary `dbt-index` exposes it; the SA distribution wires `UnavailableColumnLineage` and reports `false`).
 
-| Flag | Gated surface | Parquet source | Precondition |
-|---|---|---|---|
-| `has_run_results` | `execution_info` on all resource detail responses | `dbt_rt.run_results` | `dbt build` ran |
-| `has_catalog_stats` | `catalog.*` on model/source detail; `catalog_type` on columns | `dbt.catalog_tables` | `dbt docs generate` ran |
-| `has_source_freshness` | `freshness` on source detail responses | `dbt.source_freshness` | `dbt source freshness` ran — see Risk #2 in source contract |
-
-These flags must be added to: (1) the `Capabilities` Rust struct, (2) the
-`/api/v1/capabilities` handler, (3) the TypeScript `Capabilities` interface in
-`web/src/api.ts`. Implementation is tracked here; it is a separate task.
+Optional sub-objects on detail responses (`execution_info`, `catalog`, `freshness`) are emitted as JSON `null` when the relevant parquet view has no row — handlers do not gate them through `Capabilities`. See ADR-7 for the rationale.
 
 ---
 
@@ -588,15 +581,15 @@ an additive change with no breaking impact on existing contracts.
 
 ### Why a new ADR
 
-ADR-2 settled the *placement* of `execution_info` (inline, null-gated by `has_run_results`). ADR-2 implicitly assumed every resource type runs — true for models, sources (as test parents), seeds, snapshots, tests. False for the six resource types contracted in this PR.
+ADR-2 settled the *placement* of `execution_info` (inline, null when no `dbt_rt.run_results` row exists for the resource — see ADR-7). ADR-2 implicitly assumed every resource type runs — true for models, sources (as test parents), seeds, snapshots, tests. False for the six resource types contracted in this PR.
 
-A strict reading of ADR-2 would force `execution_info: null` onto every exposure / group / macro / metric / saved_query / semantic_model response in perpetuity, with no project state that would ever flip it to non-null. That's a "this field is dead by construction" surface — the FE has to render the null branch, the TypeScript type has to carry the optional, and reviewers have to wonder if `has_run_results: true` is supposed to populate it.
+A strict reading of ADR-2 would force `execution_info: null` onto every exposure / group / macro / metric / saved_query / semantic_model response in perpetuity, with no project state that would ever flip it to non-null. That's a "this field is dead by construction" surface — the FE has to render the null branch, the TypeScript type has to carry the optional, and reviewers wonder why a runnable's empty-state shape appears on a resource that never runs.
 
 The honest contract is to omit the field entirely from the type and the wire response, the way `SourceDetail` omits `depends_on` (sources have no upstream) and `SeedDetail` omits `materialized` (seeds aren't materialized in the dbt sense). This ADR codifies that.
 
 ### Decision
 
-The following resource types **do not carry `execution_info` on their detail response**, do not participate in the `has_run_results` capability gate, and do not have a `Core-conditional` row for run state in their field reference:
+The following resource types **do not carry `execution_info` on their detail response** and do not have a `Core-conditional` row for run state in their field reference:
 
 | Resource type | Why no `execution_info` |
 |---|---|
@@ -630,7 +623,7 @@ struct RunnableNodeBase {
     #[serde(flatten)] base: NodeBase,
     tags: Vec<String>,
     fqn: Vec<String>,
-    execution_info: Option<ExecutionInfo>,   // null-gated by has_run_results
+    execution_info: Option<ExecutionInfo>,   // null when dbt_rt.run_results has no row
 }
 
 // Composed by ExposureDetail, MacroDetail, MetricDetail, SavedQueryDetail,
@@ -775,8 +768,8 @@ data inlined, null-gated by capability) without exception. `freshness` replaces
 
 ### Example response
 
-`freshness` is `null` when `has_source_freshness` is false (i.e., `dbt source freshness` has not run).
-`catalog` is `null` when `has_catalog_stats` is false (i.e., `dbt docs generate` has not run).
+`freshness` is `null` when `dbt.source_freshness` has no row for this source (i.e., `dbt source freshness` has not run for it).
+`catalog` is `null` when `dbt.catalog_tables` has no row for this source (i.e., `dbt docs generate` has not run).
 Fields marked `// 🔧` are not yet returned — they require a backend change.
 
 ```json
@@ -874,32 +867,32 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `columns[*].data_type` | `string \| null` | Core | ✅ | — | Declared in YAML |
 | `columns[*].declared_type` | `string \| null` | Core | ✅ | — | |
 | `columns[*].inferred_type` | `string \| null` | Proprietary | ✅ | — | `null` in Core; populated by Fusion static analysis |
-| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | `has_catalog_stats` | Warehouse-verified type |
+| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | — | Warehouse-verified type |
 | `columns[*].description` | `string \| null` | Core | ✅ | — | |
 | `columns[*].label` | `string \| null` | Core | ✅ | — | |
 | `columns[*].granularity` | `string \| null` | Core | ✅ | — | |
-| `freshness` | `FreshnessInfo \| null` | Core-conditional | 🔧 | `has_source_freshness` | `null` if `dbt source freshness` hasn't run — see Risk #2 |
-| `freshness.status` | `string` | Core-conditional | 🔧 | `has_source_freshness` | `"pass"` · `"warn"` · `"error"` · `"runtime error"` |
-| `freshness.snapshotted_at` | `string \| null` | Core-conditional | 🔧 | `has_source_freshness` | ISO 8601; when freshness was last checked |
-| `freshness.max_loaded_at` | `string \| null` | Core-conditional | 🔧 | `has_source_freshness` | ISO 8601; most recent row timestamp from the source table |
-| `freshness.max_loaded_at_time_ago` | `number \| null` | Core-conditional | 🔧 | `has_source_freshness` | Seconds elapsed since `max_loaded_at` |
-| `freshness.criteria.error_after.count` | `number \| null` | Core-conditional | 🔧 | `has_source_freshness` | |
-| `freshness.criteria.error_after.period` | `string \| null` | Core-conditional | 🔧 | `has_source_freshness` | `"minute"` · `"hour"` · `"day"` |
-| `freshness.criteria.warn_after.count` | `number \| null` | Core-conditional | 🔧 | `has_source_freshness` | |
-| `freshness.criteria.warn_after.period` | `string \| null` | Core-conditional | 🔧 | `has_source_freshness` | `"minute"` · `"hour"` · `"day"` |
-| `catalog` | `SourceCatalogInfo \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Superset of model `CatalogInfo` — adds `comment`, `primary_key`, `stats[]` |
-| `catalog.type` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.comment` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Warehouse table comment — source-only field |
-| `catalog.primary_key` | `string[]` | Core-conditional | 🔧 | `has_catalog_stats` | Column names constituting the PK; empty array if none. Sourced from `dbt.nodes.primary_key` (a `List<String>` column) — not from `dbt.catalog_tables`, which has no `primary_key` column — source-only field |
-| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | `has_catalog_stats` | Arbitrary warehouse statistics — source-only field |
-| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Stat identifier |
-| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Human-readable label |
-| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Always a string; parse as number if needed |
-| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | `has_catalog_stats` | Whether the stat should be displayed in the UI |
+| `freshness` | `FreshnessInfo \| null` | Core-conditional | 🔧 | — | `null` if `dbt source freshness` hasn't run — see Risk #2 |
+| `freshness.status` | `string` | Core-conditional | 🔧 | — | `"pass"` · `"warn"` · `"error"` · `"runtime error"` |
+| `freshness.snapshotted_at` | `string \| null` | Core-conditional | 🔧 | — | ISO 8601; when freshness was last checked |
+| `freshness.max_loaded_at` | `string \| null` | Core-conditional | 🔧 | — | ISO 8601; most recent row timestamp from the source table |
+| `freshness.max_loaded_at_time_ago` | `number \| null` | Core-conditional | 🔧 | — | Seconds elapsed since `max_loaded_at` |
+| `freshness.criteria.error_after.count` | `number \| null` | Core-conditional | 🔧 | — | |
+| `freshness.criteria.error_after.period` | `string \| null` | Core-conditional | 🔧 | — | `"minute"` · `"hour"` · `"day"` |
+| `freshness.criteria.warn_after.count` | `number \| null` | Core-conditional | 🔧 | — | |
+| `freshness.criteria.warn_after.period` | `string \| null` | Core-conditional | 🔧 | — | `"minute"` · `"hour"` · `"day"` |
+| `catalog` | `SourceCatalogInfo \| null` | Core-conditional | 🔧 | — | Superset of model `CatalogInfo` — adds `comment`, `primary_key`, `stats[]` |
+| `catalog.type` | `string \| null` | Core-conditional | 🔧 | — | |
+| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | — | |
+| `catalog.comment` | `string \| null` | Core-conditional | 🔧 | — | Warehouse table comment — source-only field |
+| `catalog.primary_key` | `string[]` | Core-conditional | 🔧 | — | Column names constituting the PK; empty array if none. Sourced from `dbt.nodes.primary_key` (a `List<String>` column) — not from `dbt.catalog_tables`, which has no `primary_key` column — source-only field |
+| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | — | |
+| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | — | |
+| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | — | Arbitrary warehouse statistics — source-only field |
+| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | — | Stat identifier |
+| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | — | Human-readable label |
+| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | — | Always a string; parse as number if needed |
+| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | — | |
+| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | — | Whether the stat should be displayed in the UI |
 | `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api |
 | `patch_path` | *(absent)* | — | ❌ | — | Class B: YAML-only resource — `original_file_path` IS the `.yml` file containing the source definition; the patch concept does not apply (a "patch" is a separate YAML that augments a non-YAML primary definition, e.g. `.sql` + `schema.yml`). Discovery's `patchPath` would be null or duplicate `originalFilePath` for this resource. |
 
@@ -1001,7 +994,7 @@ interface EdgeRef {
    source freshness` use MergePrune semantics that preserve `nodes.parquet`, or does it
    overwrite the index directory? If it overwrites: freshness is not available in
    stateless docs and must be treated as Platform-tier. **Verify with the dbt-index team
-   before implementing `has_source_freshness`.**
+   before relying on `dbt.source_freshness` as the freshness data source.**
 
 3. **`meta` JSONB presence in parquet is unverified.** The `meta` field is a JSONB
    object in codex-api's Prisma schema. Confirm it's serialized into `dbt.nodes.parquet`
@@ -1099,8 +1092,8 @@ Fields marked `// 🔍` are parquet-unverified — confirm schema before impleme
 }
 ```
 
-`execution_info` is `null` when `has_run_results` is false (i.e., `dbt seed` / `dbt build` has not run).
-`catalog` is `null` when `has_catalog_stats` is false (i.e., `dbt docs generate` has not run).
+`execution_info` is `null` when `dbt_rt.run_results` has no row for this seed (i.e., `dbt seed` / `dbt build` has not run).
+`catalog` is `null` when `dbt.catalog_tables` has no row for this seed (i.e., `dbt docs generate` has not run).
 
 ### Field reference
 
@@ -1128,28 +1121,28 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `columns[*].data_type` | `string \| null` | Core | ✅ | — | Declared in YAML patch |
 | `columns[*].declared_type` | `string \| null` | Core | ✅ | — | |
 | `columns[*].inferred_type` | `string \| null` | Proprietary | ✅ | — | `null` in Core; populated by Fusion static analysis |
-| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | `has_catalog_stats` | Warehouse-verified type; `null` unless `dbt docs generate` ran |
+| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | — | Warehouse-verified type; `null` unless `dbt docs generate` ran |
 | `columns[*].description` | `string \| null` | Core | ✅ | — | |
 | `columns[*].label` | `string \| null` | Core | ✅ | — | |
 | `columns[*].granularity` | `string \| null` | Core | ✅ | — | |
 | `referenced_by` | `EdgeRef[]` | Core | ✅ | — | Downstream models; seeds have **no** `depends_on` |
 | `referenced_by[*].unique_id` | `string` | Core | ✅ | — | |
 | `referenced_by[*].edge_type` | `string` | Core | ✅ | — | |
-| `execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | `has_run_results` | `null` when `dbt seed` / `dbt build` hasn't run |
-| `execution_info.status` | `string` | Core-conditional | 🔧 | `has_run_results` | `"success"` · `"error"` · `"skipped"` |
-| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔍 | `has_run_results` | ISO 8601; extracted from `timing` JSON column — requires `json_extract_string` over the `timing` array |
-| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | `has_run_results` | Seconds (float); from `dbt_rt.run_results.execution_time` |
-| `catalog` | `SeedCatalogInfo \| null` | Core-conditional | 🔧 | `has_catalog_stats` | `null` when `dbt docs generate` hasn't run |
-| `catalog.type` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Warehouse object type; seeds are always `"table"` |
-| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Warehouse role that owns the relation |
-| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔍 | `has_catalog_stats` | Approximate row count; from `dbt.catalog_stats` — confirm stat key |
-| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔍 | `has_catalog_stats` | Bytes; from `dbt.catalog_stats` — confirm stat key |
-| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | `has_catalog_stats` | Arbitrary warehouse statistics |
-| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Stat identifier |
-| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Human-readable label |
-| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Always a string; parse as number if needed |
-| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | `has_catalog_stats` | Whether the stat should be displayed in the UI |
+| `execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt seed` / `dbt build` hasn't run |
+| `execution_info.status` | `string` | Core-conditional | 🔧 | — | `"success"` · `"error"` · `"skipped"` |
+| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔍 | — | ISO 8601; extracted from `timing` JSON column — requires `json_extract_string` over the `timing` array |
+| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | — | Seconds (float); from `dbt_rt.run_results.execution_time` |
+| `catalog` | `SeedCatalogInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt docs generate` hasn't run |
+| `catalog.type` | `string \| null` | Core-conditional | 🔧 | — | Warehouse object type; seeds are always `"table"` |
+| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | — | Warehouse role that owns the relation |
+| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔍 | — | Approximate row count; from `dbt.catalog_stats` — confirm stat key |
+| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔍 | — | Bytes; from `dbt.catalog_stats` — confirm stat key |
+| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | — | Arbitrary warehouse statistics |
+| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | — | Stat identifier |
+| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | — | Human-readable label |
+| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | — | Always a string; parse as number if needed |
+| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | — | |
+| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | — | Whether the stat should be displayed in the UI |
 | `project_id` | *(absent)* | — | ❌ | — | Class B: Cloud concept; not in parquet |
 | `last_run_id` | *(absent)* | — | ❌ | — | Class B: Cloud run ID; not in local parquet |
 | `last_job_definition_id` | *(absent)* | — | ❌ | — | Class B: Cloud scheduler concept; not in parquet |
@@ -1336,8 +1329,8 @@ Fields marked `// 🔍` are parquet presence unverified.
 }
 ```
 
-`execution_info` is `null` when `has_run_results` is false (i.e., `dbt build` has not run).
-`catalog` is `null` when `has_catalog_stats` is false (i.e., `dbt docs generate` has not run).
+`execution_info` is `null` when `dbt_rt.run_results` has no row for this snapshot (i.e., `dbt build` has not run).
+`catalog` is `null` when `dbt.catalog_tables` has no row for this snapshot (i.e., `dbt docs generate` has not run).
 
 ### Field reference
 
@@ -1374,26 +1367,26 @@ Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify pa
 | `columns[*].data_type` | `string \| null` | Core | ✅ | — | Declared in YAML |
 | `columns[*].declared_type` | `string \| null` | Core | ✅ | — | |
 | `columns[*].inferred_type` | `string \| null` | Proprietary | ✅ | — | `null` in Core; populated by Fusion static analysis |
-| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | `has_catalog_stats` | Warehouse-verified type; `null` unless `dbt docs generate` ran |
+| `columns[*].catalog_type` | `string \| null` | Core-conditional | ✅ | — | Warehouse-verified type; `null` unless `dbt docs generate` ran |
 | `columns[*].description` | `string \| null` | Core | ✅ | — | |
 | `columns[*].label` | `string \| null` | Core | ✅ | — | |
 | `columns[*].granularity` | `string \| null` | Core | ✅ | — | |
-| `execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | `has_run_results` | `null` when `dbt build` hasn't run |
-| `execution_info.status` | `string` | Core-conditional | 🔧 | `has_run_results` | `"success"` · `"error"` · `"skipped"` |
-| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | ISO 8601 timestamp |
-| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | `has_run_results` | Seconds (float) |
-| `catalog` | `SnapshotCatalogInfo \| null` | Core-conditional | 🔧 | `has_catalog_stats` | `null` when `dbt docs generate` hasn't run; adds `primary_key` and `stats[]` over base `CatalogInfo` |
-| `catalog.type` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | `"table"` · `"view"` · `"materialized view"` |
-| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Warehouse role that owns the relation |
-| `catalog.primary_key` | `string[]` | Core-conditional | 🔧 | `has_catalog_stats` | Column names constituting the PK; empty array if none. Sourced from `dbt.nodes.primary_key` (a `List<String>` column, populated from the snapshot's `unique_key` config) — not from `dbt.catalog_tables`, which has no `primary_key` column |
-| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Approximate row count |
-| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | `has_catalog_stats` | Bytes; warehouse-specific |
-| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | `has_catalog_stats` | Arbitrary warehouse statistics; same shape as `SourceCatalogInfo.stats[]` |
-| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | Always string; parse as number if needed |
-| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | `has_catalog_stats` | |
-| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | `has_catalog_stats` | Whether to display in UI |
+| `execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt build` hasn't run |
+| `execution_info.status` | `string` | Core-conditional | 🔧 | — | `"success"` · `"error"` · `"skipped"` |
+| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | — | ISO 8601 timestamp |
+| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | — | Seconds (float) |
+| `catalog` | `SnapshotCatalogInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt docs generate` hasn't run; adds `primary_key` and `stats[]` over base `CatalogInfo` |
+| `catalog.type` | `string \| null` | Core-conditional | 🔧 | — | `"table"` · `"view"` · `"materialized view"` |
+| `catalog.owner` | `string \| null` | Core-conditional | 🔧 | — | Warehouse role that owns the relation |
+| `catalog.primary_key` | `string[]` | Core-conditional | 🔧 | — | Column names constituting the PK; empty array if none. Sourced from `dbt.nodes.primary_key` (a `List<String>` column, populated from the snapshot's `unique_key` config) — not from `dbt.catalog_tables`, which has no `primary_key` column |
+| `catalog.row_count_stat` | `number \| null` | Core-conditional | 🔧 | — | Approximate row count |
+| `catalog.bytes_stat` | `number \| null` | Core-conditional | 🔧 | — | Bytes; warehouse-specific |
+| `catalog.stats` | `CatalogStat[]` | Core-conditional | 🔧 | — | Arbitrary warehouse statistics; same shape as `SourceCatalogInfo.stats[]` |
+| `catalog.stats[*].id` | `string` | Core-conditional | 🔧 | — | |
+| `catalog.stats[*].label` | `string` | Core-conditional | 🔧 | — | |
+| `catalog.stats[*].value` | `string` | Core-conditional | 🔧 | — | Always string; parse as number if needed |
+| `catalog.stats[*].description` | `string` | Core-conditional | 🔧 | — | |
+| `catalog.stats[*].include` | `boolean` | Core-conditional | 🔧 | — | Whether to display in UI |
 | `tests` | *(absent)* | — | ❌ | — | Deferred for v0; same open question as `ModelDetail` Risk #8 — defer until model contract resolves |
 | `access_level` | *(absent)* | — | ❌ | — | Model-only governance field; not applicable to snapshots |
 | `group_name` | *(absent)* | — | ❌ | — | Model-only governance field; not applicable to snapshots |
@@ -1490,7 +1483,7 @@ interface SnapshotCatalogInfo {
 
 7. **`execution_info` absent from current handler.** The existing generic `get_node` handler
    does not query `dbt_rt.run_results_latest`. The snapshot-specific handler will need this
-   query added behind the `has_run_results` capability flag.
+   query added; the resulting `execution_info` is `null` when no row exists.
 
 ---
 
@@ -1508,7 +1501,7 @@ a discriminated union on `resource_type` as decided in ADR-3.
 
 ### Example response (data test)
 
-`execution_info` is `null` when `has_run_results` is false (i.e., `dbt build` has not run).
+`execution_info` is `null` when `dbt_rt.run_results` has no row for this test (i.e., `dbt build` has not run).
 Fields marked `// 🔧` are not yet returned — they require a backend change.
 Fields marked `// 🔍` are in parquet but the exact column name is unconfirmed.
 
@@ -1548,7 +1541,7 @@ Fields marked `// 🔍` are in parquet but the exact column name is unconfirmed.
 
 ### Example response (unit test)
 
-`execution_info` is `null` when `has_run_results` is false.
+`execution_info` is `null` when `dbt_rt.run_results` has no row for this test.
 
 ```json
 {
@@ -1616,11 +1609,11 @@ Fields that appear in only one variant are noted in the Notes column.
 | `depends_on` | `EdgeRef[]` | Core | 🔧 | — | 1-hop upstream from `dbt.edges` parquet; maps to `parents` in GraphQL |
 | `depends_on[*].unique_id` | `string` | Core | 🔧 | — | |
 | `depends_on[*].edge_type` | `string` | Core | 🔧 | — | |
-| `execution_info` | `TestExecutionInfo \| null` | Core-conditional | 🔧 | `has_run_results` | `null` when `dbt build` hasn't run; present on both variants |
-| `execution_info.status` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | `"pass"` · `"fail"` · `"error"` · `"warn"` · `"skipped"` · `"reused"` |
-| `execution_info.error` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | Error message when status is `"error"`; `null` otherwise |
-| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | ISO 8601 timestamp |
-| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | `has_run_results` | Seconds (float) |
+| `execution_info` | `TestExecutionInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt build` hasn't run; present on both variants |
+| `execution_info.status` | `string \| null` | Core-conditional | 🔧 | — | `"pass"` · `"fail"` · `"error"` · `"warn"` · `"skipped"` · `"reused"` |
+| `execution_info.error` | `string \| null` | Core-conditional | 🔧 | — | Error message when status is `"error"`; `null` otherwise |
+| `execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | — | ISO 8601 timestamp |
+| `execution_info.execution_time` | `number \| null` | Core-conditional | 🔧 | — | Seconds (float) |
 | `column_name` | `string \| null` | Core | 🔧 | — | **data test only** — column under test; from `dbt.test_metadata` parquet |
 | `test_type` | `string \| null` | Core | 🔧 | — | **data test only** — `"generic"` · `"singular"`; from `dbt.nodes` parquet |
 | `severity` | `string \| null` | Core | 🔧 | — | **data test only** — `"ERROR"` · `"WARN"`; from `dbt.test_metadata` parquet |
@@ -1731,7 +1724,7 @@ interface UnitTestExpect {
 
 4. **`execution_info` requires a run_results JOIN.** `dbt_rt.run_results` must be LEFT
    JOINed on `unique_id` to get `status`, `error`, `completed_at`,
-   and `execution_time`. Gate the entire `execution_info` object behind `has_run_results`.
+   and `execution_time`. The handler emits `execution_info: null` when no row is returned (no Capability flag — see ADR-7).
 
 5. **`meta` JSONB presence in parquet is unverified.** Same risk as `SourceDetail` Risk #3.
    Confirm before adding to the SELECT; downgrade to ❌ Class B if absent.
@@ -1962,16 +1955,15 @@ interface EdgeRef {
    gating) is moot here — auto-exposures are Platform-tier and not in scope for
    dbt-docs-server.
 
-7. **No `execution_info` capability gate.** Unlike models/seeds/snapshots/tests, exposures
+7. **No `execution_info` on this response.** Unlike models/seeds/snapshots/tests, exposures
    have no parquet row in `dbt_rt.run_results` — they are not executable. The contract
-   intentionally omits `execution_info` rather than null-gating it on `has_run_results`.
+   omits `execution_info` entirely (consistent with ADR-5 for definition-only resources).
    FE engineers should not look for a status badge here; an exposure's "health" is
    derivable from upstream node statuses only.
 
 8. **No `Capabilities` flag additions for this endpoint.** All exposure fields are
-   unconditional Core. The existing `has_run_results` / `has_catalog_stats` /
-   `has_source_freshness` flags are not consulted by this handler. Document explicitly so
-   the implementation PR is not blocked behind unrelated capability changes.
+   unconditional Core. Per ADR-7, the absent `execution_info` / `catalog` / `freshness`
+   surfaces are simply not part of this response — they aren't routed through `Capabilities`.
 
 9. **New handler file required.** No `src/handlers/exposures.rs` exists today
    (confirmed against the worktree handler directory listing). Implementation should
@@ -2011,12 +2003,10 @@ Two design choices worth flagging for the coordinator before promotion:
    flag, deferring `GET /api/v1/groups/:id/models` to when a real pagination
    need surfaces. No new ADR required — same pattern as edges on `ModelDetail`.
 
-3. **No new capability flag.** Groups have no run/catalog/freshness surface,
-   so the existing `has_run_results` / `has_catalog_stats` / `has_source_freshness`
-   flags don't apply. `meta`, `tags`, `owner.slack`, `owner.github` are all
-   parquet-schema verification questions, not capability questions — gating them
-   behind a flag would be CC-3 misuse (the flag pattern is for runtime-conditional
-   data, not for "field exists in this parquet writer's output").
+3. **No new capability flag.** Groups have no run/catalog/freshness surface. Per ADR-7,
+   `Capabilities` is distribution-gated only — parquet-presence-based fields don't
+   belong there in the first place. `meta`, `tags`, `owner.slack`, `owner.github` are
+   parquet-schema verification questions, not capability questions.
 
 ---
 
@@ -2527,9 +2517,9 @@ load-bearing for v0 implementation.
    field reference (the Cloud-API name has no parquet analogue), but the FE no
    longer needs to fall back to project-level metadata. See Risk #7.
 
-7. **No new capability flag introduced.** None of the metric fields require a new flag.
-   Existing flags (`has_run_results`, `has_catalog_stats`, `has_source_freshness`) are
-   not applicable — metrics have no execution, no catalog, no freshness.
+7. **No new capability flag introduced.** None of the metric fields require a flag.
+   Per ADR-7 `Capabilities` is distribution-gated only; metrics have no execution, no
+   catalog, no freshness — the question doesn't arise.
 
 ---
 
@@ -2763,16 +2753,15 @@ extends precedent set by `catalog.stats[]`, which is also handler-parsed. Risk #
 captures the DuckDB `json_extract` / parse-side cost. Decision: the handler parses on
 the way out; the REST contract MUST NOT expose stringified JSON.
 
-**2. No `execution_info`, no run-status capability gate.**
+**2. No `execution_info` on this response.**
 
 Saved queries are not built. They are queried at runtime through the Semantic Layer
 service against `dbt-mantle`/`dbt_sl`. The on-disk `dbt_rt.run_results.parquet`
 contains rows for `model.*`, `seed.*`, `snapshot.*`, `test.*`, `unit_test.*` —
-**never** `saved_query.*`. Therefore this contract omits `execution_info`, does not
-participate in `has_run_results`, and the Field reference table has no
-`Core-conditional` rows for run state. The closest analogue — "definition last
-generated at" — is exposed as `created_at` (parquet-backed; epoch seconds in
-`dbt.saved_queries.created_at`) without a capability gate.
+**never** `saved_query.*`. Therefore this contract omits `execution_info` entirely,
+and the Field reference table has no `Core-conditional` rows for run state. The
+closest analogue — "definition last generated at" — is exposed as `created_at`
+(parquet-backed; epoch seconds in `dbt.saved_queries.created_at`).
 
 ---
 
@@ -3009,10 +2998,10 @@ interface EdgeRef {
    semantic difference in the FE-facing API docs so engineers don't expect Cloud
    parity.
 
-6. **No execution_info means no `has_run_results` gate on this endpoint.** This is
-   intentional (Design note 2), but worth restating for any future engineer who
-   sees every other detail endpoint participate in `has_run_results` and asks why
-   saved queries don't. Document at the top of the handler: "Saved queries are
+6. **No execution_info on this endpoint.** This is intentional (Design note 2), but
+   worth restating for any future engineer who sees runnable detail endpoints carry
+   `execution_info` and asks why saved queries don't. Document at the top of the
+   handler: "Saved queries are
    declarative SL definitions; they have no run-time execution status. If a saved
    query's exports are materialized, run status lives on the resulting model
    nodes, queryable via `GET /api/v1/models/:id`."
@@ -3031,7 +3020,7 @@ Three non-obvious decisions arise here. The coordinator should decide whether an
 The dbt-ui detail page renders all three on the same view via tabs and section components (`DimensionsView`, `MeasuresView`, `SemanticModelEntities`) — they are conceptually part of the semantic model itself, not independent resources. Inline mirrors the GraphQL shape (Discovery returns them on the `SemanticModelDefinitionNode`) and is consistent with how `columns[]` is inlined on `ModelDetail`. The fan-out is bounded by spec authorship (typically tens of entries, not hundreds) so no pagination cap is proposed. If a future "metric usage" surface needs to look up measures across all semantic models, a `GET /api/v1/measures` collection endpoint can be added additively.
 
 **2. No `execution_info`, no `catalog`, no capability gating.**
-Semantic models are **spec-only** — they declare entities/dimensions/measures on top of an existing model but are not themselves executed against the warehouse. Their parquet source (`dbt.semantic_models` + `dbt.semantic_{entities,measures,dimensions}`) is written by `dbt parse` / `dbt build` during semantic-manifest ingestion (see `crates/dbt-index/src/ingest/semantic_manifest.rs`) and contains no run-result columns. `RESOURCES_WITH_EXECUTION_INFO` in dbt-ui (`hooks/discovery/types.ts:53`) confirms only `Model | Seed | Snapshot` carry execution_info. ADR-2's `has_run_results` flag does not apply. ADR-4 (bare execution_info naming) is moot.
+Semantic models are **spec-only** — they declare entities/dimensions/measures on top of an existing model but are not themselves executed against the warehouse. Their parquet source (`dbt.semantic_models` + `dbt.semantic_{entities,measures,dimensions}`) is written by `dbt parse` / `dbt build` during semantic-manifest ingestion (see `crates/dbt-index/src/ingest/semantic_manifest.rs`) and contains no run-result columns. `RESOURCES_WITH_EXECUTION_INFO` in dbt-ui (`hooks/discovery/types.ts:53`) confirms only `Model | Seed | Snapshot` carry execution_info. ADR-2 doesn't apply (no `dbt_rt.run_results` row). ADR-4 (bare execution_info naming) is moot.
 
 **3. Measure `agg` and dimension `type` are surfaced as raw strings, not discriminated unions.**
 The dbt-ui `SemanticAspectCard` renders `agg` and `type` as uppercase badges (`SUM`, `COUNT_DISTINCT`, `CATEGORICAL`, `TIME`) with no behavior conditional on the value. MetricFlow defines a closed set of enum values for both, but the consumer treats them as opaque strings. Keep as `string | null` rather than introducing a TypeScript union — keeps the contract stable as MetricFlow extends the enums and matches the precedent set by `materialized` and `access_level` on `ModelDetail`. A measure's `agg_params` (e.g., the `percentile` argument for `percentile` agg) is exposed alongside as an opaque JSON-string column (see `dbt.semantic_measures.agg_params`); if a frontend needs typed access it should parse it locally.

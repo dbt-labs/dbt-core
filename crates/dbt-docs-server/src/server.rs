@@ -8,7 +8,7 @@ use tracing::info;
 use crate::DocsServeArgs;
 use crate::assets::serve_assets;
 use crate::handlers::{
-    capabilities, column_lineage, files, health, lineage, models, nodes, project, query,
+    capabilities, column_lineage, files, health, lineage, models, nodes, project, query, sources,
 };
 use crate::providers::Providers;
 use crate::resolve_index_dir;
@@ -33,6 +33,7 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
         .route("/api/v1/models", get(models::list_models))
         .route("/api/v1/models/facets", get(models::list_model_facets))
         .route("/api/v1/models/{unique_id}", get(models::get_model))
+        .route("/api/v1/sources/{unique_id}", get(sources::get_source))
         .route("/api/v1/nodes", get(nodes::list_nodes))
         .route("/api/v1/nodes/{unique_id}", get(nodes::get_node))
         .route("/api/v1/files", get(files::list_files))

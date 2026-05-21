@@ -19,17 +19,16 @@ pub struct AppState {
 
 pub type SharedState = Arc<AppState>;
 
-/// Gated feature surfaces — `true` only when both the running distribution
-/// and the artifact set on disk support the surface. The UI reads this
-/// via `GET /api/v1/capabilities` to decide which features to enable
-/// versus surface as PLG upsells.
+/// Gated feature surfaces — `true` only when the running distribution
+/// supports the feature. The UI reads this via `GET /api/v1/capabilities`
+/// to decide which features to enable versus surface as PLG upsells.
 ///
-/// Only column-level lineage is gated today. As more gated surfaces are
-/// added (sample data, AI features, etc.) they get their own `has_*`
-/// field here and a matching `Provider` in [`Providers`]. Everything else
-/// (nodes, sources, exposures, metrics, run results, etc.) is just a
-/// plain SQL-over-parquet read and always available — no capability flag
-/// is needed.
+/// Only column-level lineage is gated today. Optional sub-objects on
+/// detail responses (`execution_info`, `catalog`, `freshness`) reflect
+/// whether the user has run a given dbt command — that is a per-project
+/// state, not a distribution capability. Those surfaces emit JSON `null`
+/// on the parent response when the relevant parquet view has no row; they
+/// are not represented here.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Capabilities {
     pub has_column_lineage: bool,

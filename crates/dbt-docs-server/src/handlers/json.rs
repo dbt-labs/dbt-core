@@ -163,3 +163,27 @@ pub fn not_found(msg: String) -> Response {
     )
         .into_response()
 }
+
+/// Parse a JSON-string parquet column into a `serde_json::Value`, falling
+/// back to `Value::Null` on parse failure.
+///
+/// JSON-string parquet columns (`meta`, `config`, and other nested-shape
+/// columns) are deserialized handler-side so the response surfaces nested
+/// objects rather than escaped JSON strings. A malformed blob logs a
+/// warning and emits `null` — never bubbles up to the client.
+pub fn json_parse_or_null(s: Option<&str>) -> serde_json::Value {
+    let Some(text) = s else {
+        return serde_json::Value::Null;
+    };
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return serde_json::Value::Null;
+    }
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = %e, raw = %text, "json_parse_or_null: parse failed");
+            serde_json::Value::Null
+        }
+    }
+}
