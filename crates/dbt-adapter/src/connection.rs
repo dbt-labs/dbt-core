@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicIsize, AtomicU64, AtomicUsize, Ordering};
 use std::task::{Poll, Waker};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::Cancellable;
@@ -18,30 +18,10 @@ use minijinja::State;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_utils::CachePadded;
 
-use rand::Rng;
 use tracing::Span;
 
 use crate::AdapterEngine;
 use crate::errors::AdapterError;
-
-/// When more than half connections are active, wait a little bit before
-/// letting a task through to make sure current nodes are not about to
-/// pick up thread-local connections they have just released. This reduces
-/// the chances of going above the high water mark because of unlucky timing.
-const GRACE_PERIOD: Duration = Duration::from_millis(500);
-
-/// Return a random duration in `[d/2, d)` to spread out concurrent deadline expirations.
-///
-/// This avoids the thundering herd problem [1] where a large number of tasks are
-/// waiting for capacity and all hit their deadline at the same time.
-///
-/// [1]: https://en.wikipedia.org/wiki/Thundering_herd_problem
-fn jittered(d: Duration) -> Duration {
-    let half = d / 2;
-    let half_ms = half.as_secs() * 1000 + half.subsec_millis() as u64;
-    let jitter = Duration::from_millis(rand::rng().random_range(0..half_ms));
-    half + jitter
-}
 
 /// Global atomic for generating unique connection IDs.
 static CONN_SEQ_NUM: AtomicU64 = AtomicU64::new(0);
@@ -88,18 +68,14 @@ pub fn num_active_connections() -> isize {
     BACKPRESSURE_STATE.num_active_connections()
 }
 
-/// Returns current active guards & connections if trace level logging is enabled
+/// Returns current active nodes and connections if trace level logging is enabled
 fn backpressure_counts_for_trace() -> (Option<u32>, Option<u32>) {
     if !is_trace_enabled() {
         return (None, None);
     }
 
     (
-        Some(
-            BACKPRESSURE_STATE
-                .num_active_guards()
-                .min(u32::MAX as usize) as u32,
-        ),
+        Some(BACKPRESSURE_STATE.num_active_nodes().min(u32::MAX as usize) as u32),
         Some(
             BACKPRESSURE_STATE
                 .num_active_connections()
@@ -263,18 +239,17 @@ impl Drop for ConnectionGuard<'_> {
 /// - register wakeup
 /// - return pending until notified
 ///
-/// This is intentionally a soft controller: delays scheduling based on current load.
-/// Bursts can still overshoot the configured threshold.
+/// Capacity is metered by the number of admitted nodes (live
+/// [`NextBackpressureWakerGuard`] instances), not by the number of actively
+/// borrowed connections. Counting at gate entry closes the race where tasks
+/// could pass the readiness check before any of them had a chance to borrow a
+/// connection and update the active connection counter.
 pub struct ConnectionBackpressure {
     high_water_mark: u32,
     span: Span,
     /// Key assigned on first registration into [`wakers`](pri::BackpressureState::wakers).
     /// Reused across re-polls so the task keeps its original queue position.
     key: Option<(Instant, u64)>,
-    /// Set on first `Pending` return.
-    ///
-    /// Allows introducing jittered deadlines to reduce the chances of thundering herd wakeups.
-    deadline: Option<Instant>,
 }
 
 impl ConnectionBackpressure {
@@ -292,7 +267,6 @@ impl ConnectionBackpressure {
                 active_connections,
             }),
             key: None,
-            deadline: None,
         }
     }
 
@@ -312,18 +286,17 @@ impl ConnectionBackpressure {
     /// available.
     fn ordered_key(&mut self) -> (Instant, u64) {
         *self.key.get_or_insert_with(|| {
-            let deadline = self.deadline.unwrap_or_else(Instant::now);
             let seq = BACKPRESSURE_STATE.fresh_waker_seq();
-            (deadline, seq)
+            (Instant::now(), seq)
         })
     }
 
     /// Creates new NextBackpressureWakerGuard and updates current span data if trace is enabled
-    fn ready_guard(&self) -> NextBackpressureWakerGuard {
-        let guard = NextBackpressureWakerGuard::new();
+    fn ready_guard(&self) -> Option<NextBackpressureWakerGuard> {
+        let guard = NextBackpressureWakerGuard::try_new(self.high_water_mark)?;
 
         if !is_trace_enabled() {
-            return guard;
+            return Some(guard);
         }
 
         let (active_nodes, active_connections) = backpressure_counts_for_trace();
@@ -335,7 +308,7 @@ impl ConnectionBackpressure {
             },
         );
 
-        guard
+        Some(guard)
     }
 }
 
@@ -348,52 +321,21 @@ impl Future for ConnectionBackpressure {
         let span = this.span.clone();
         let _span_guard = span.enter();
 
-        let mut lazy_now = None;
-        let mut now = || *lazy_now.get_or_insert_with(Instant::now);
-
-        let mut check_readiness_condition = |this: &mut ConnectionBackpressure| {
-            let num_active = BACKPRESSURE_STATE.num_active_connections();
-            let high_water_mark = this.high_water_mark as isize;
-            match this.deadline {
-                None => {
-                    // still under the high water mark, add a small jittered wait
-                    if num_active < high_water_mark {
-                        this.deadline = Some(now() + jittered(GRACE_PERIOD));
-                    }
-                    Pending
-                }
-                Some(deadline) => {
-                    if num_active >= high_water_mark || now() < deadline {
-                        Pending
-                    } else {
-                        Ready(this.ready_guard())
-                    }
-                }
-            }
-        };
+        let check_readiness_condition =
+            |this: &ConnectionBackpressure| this.ready_guard().map_or(Pending, Ready);
 
         if let Ready(guard) = check_readiness_condition(this) {
             return Ready(guard);
         }
 
         // Register the waker BEFORE checking the condition again to avoid a race
-        // where a connection is released between the check and the registration
+        // where a node slot is released between the check and the registration
         // (which would cause us to miss the wake-up and sleep forever). Once a
-        // waker is registered, the task is guaranteed to be woken if we ensure
-        // all wakers are eventually called.
+        // waker is registered, the next node slot release will wake a waiter.
         BACKPRESSURE_STATE.register_waker(this.ordered_key(), cx.waker().clone());
 
         // Check again after registering waker
-        let result = check_readiness_condition(this);
-
-        // Liveness check: if nothing is running (no active guards) and we would
-        // return Pending, return Ready anyway to avoid deadlock. This ensures
-        // at least one task can make progress.
-        if result.is_pending() && BACKPRESSURE_STATE.num_active_guards() == 0 {
-            return Ready(this.ready_guard());
-        }
-
-        result
+        check_readiness_condition(this)
     }
 }
 
@@ -405,23 +347,29 @@ impl Drop for ConnectionBackpressure {
     }
 }
 
-/// Guard returned by [`ConnectionBackpressure`] that ensures the notification chain
-/// is never broken. When dropped, it wakes the next waiter so that tasks which
-/// complete without ever acquiring a connection don't stall the queue.
+/// Guard returned by [`ConnectionBackpressure`] for a node admitted past the
+/// backpressure gate.
+///
+/// Owning this guard represents one active node slot. The slot is acquired
+/// atomically before the guard is created and released when the guard is
+/// dropped, at which point the next queued waiter is woken.
 ///
 /// https://en.wikipedia.org/wiki/Semaphore_(programming)#Passing_the_baton_pattern
 pub struct NextBackpressureWakerGuard;
 
 impl NextBackpressureWakerGuard {
-    fn new() -> Self {
-        BACKPRESSURE_STATE.increment_active_guards();
-        Self
+    fn try_new(high_water_mark: u32) -> Option<Self> {
+        if BACKPRESSURE_STATE.try_acquire_active_node(high_water_mark as usize) {
+            Some(Self)
+        } else {
+            None
+        }
     }
 }
 
 impl Drop for NextBackpressureWakerGuard {
     fn drop(&mut self) {
-        BACKPRESSURE_STATE.decrement_active_guards();
+        BACKPRESSURE_STATE.release_active_node();
         BACKPRESSURE_STATE.wake_next_backpressure_waiter();
     }
 }
@@ -438,9 +386,9 @@ mod pri {
         waker_seq: CachePadded<AtomicU64>,
         /// Count of active [`NextBackpressureWakerGuard`] instances.
         ///
-        /// Used to detect liveness issues: if no guards are active and no capacity
-        /// is available, we must allow progress to avoid deadlock.
-        active_guards: CachePadded<AtomicUsize>,
+        /// This tracks nodes admitted past the [`ConnectionBackpressure`] gate,
+        /// including nodes that have not borrowed a connection yet.
+        active_nodes: CachePadded<AtomicUsize>,
         /// Wakers registered by [`ConnectionBackpressure`] futures waiting for capacity.
         wakers: LazyLock<SkipMap<(Instant, u64), Waker>>,
     }
@@ -449,24 +397,38 @@ mod pri {
         pub const fn new() -> Self {
             Self {
                 active_connections: CachePadded::new(AtomicIsize::new(0)),
-                active_guards: CachePadded::new(AtomicUsize::new(0)),
+                active_nodes: CachePadded::new(AtomicUsize::new(0)),
                 waker_seq: CachePadded::new(AtomicU64::new(0)),
                 wakers: LazyLock::new(SkipMap::new),
             }
         }
 
-        pub fn increment_active_guards(&self) -> usize {
-            self.active_guards.fetch_add(1, Ordering::AcqRel) + 1
+        pub fn try_acquire_active_node(&self, high_water_mark: usize) -> bool {
+            let mut current = self.active_nodes.load(Ordering::Acquire);
+            loop {
+                if current >= high_water_mark {
+                    return false;
+                }
+                match self.active_nodes.compare_exchange_weak(
+                    current,
+                    current + 1,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => return true,
+                    Err(actual) => current = actual,
+                }
+            }
         }
 
-        pub fn decrement_active_guards(&self) -> usize {
-            let prev = self.active_guards.fetch_sub(1, Ordering::AcqRel);
-            debug_assert!(prev > 0, "active_guards counter underflow");
+        pub fn release_active_node(&self) -> usize {
+            let prev = self.active_nodes.fetch_sub(1, Ordering::AcqRel);
+            debug_assert!(prev > 0, "active_nodes counter underflow");
             prev - 1
         }
 
-        pub fn num_active_guards(&self) -> usize {
-            self.active_guards.load(Ordering::Acquire)
+        pub fn num_active_nodes(&self) -> usize {
+            self.active_nodes.load(Ordering::Acquire)
         }
 
         pub fn will_activate_connection(&self) {
@@ -476,14 +438,12 @@ mod pri {
         pub fn did_deactivate_connection(&self) {
             let prev = self.active_connections.fetch_sub(1, Ordering::AcqRel);
             debug_assert!(prev > 0, "ACTIVE_CONNECTIONS counter underflow");
-            self.wake_next_backpressure_waiter();
         }
 
         /// Wake the longest-waiting backpressure waiter, if any.
         ///
         /// The [`SkipMap`] is sorted by insertion key, so `pop_front` removes the
-        /// entry with the smallest key — the oldest registered waker. This is called
-        /// from both [`did_deactivate_connection`] and [`NextBackpressureWakerGuard::drop`].
+        /// entry with the smallest key — the oldest registered waker.
         pub fn wake_next_backpressure_waiter(&self) {
             if let Some(entry) = self.wakers.pop_front() {
                 entry.value().wake_by_ref();
