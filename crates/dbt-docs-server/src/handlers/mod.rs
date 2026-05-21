@@ -5,6 +5,7 @@ pub mod health;
 pub mod lineage;
 pub mod models;
 pub mod nodes;
+pub mod pagination;
 pub mod project;
 pub mod query;
 

@@ -217,7 +217,7 @@ async fn all_fields_hydrated() {
     assert_eq!(response.status(), 200);
 
     let body = response_body(response).await;
-    let m = &body["models"][0];
+    let m = &body["data"][0];
     assert_eq!(m["unique_id"], "model.pkg.fct_orders");
     assert_eq!(m["name"], "fct_orders");
     assert_eq!(m["modeling_layer"], "Marts");
@@ -225,22 +225,82 @@ async fn all_fields_hydrated() {
     assert_eq!(m["contract_enforced"], true);
     assert_eq!(m["owner"], "Team X");
     assert_eq!(m["executed_at"], "2026-05-11T14:10:00");
-    assert_eq!(body["total"], 1);
-    assert_eq!(body["offset"], 0);
+    assert_eq!(body["page_info"]["total_count"], 1);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    // Single-row page: start_cursor is set, end_cursor is null (no more pages).
+    assert!(
+        body["page_info"]["start_cursor"].is_string(),
+        "start_cursor must be a base64 string on a non-empty page"
+    );
+    assert!(
+        body["page_info"]["end_cursor"].is_null(),
+        "end_cursor must be null when has_next_page is false"
+    );
 }
 
 #[tokio::test]
-async fn pagination_metadata_correct() {
-    let state = make_state(MockBackend::with_rows(50, vec![]));
+async fn page_info_envelope_uses_cursor_shape() {
+    // ADR-6: page_info has four fields (total_count, start_cursor, end_cursor,
+    // has_next_page). The pre-doctrine offset/limit fields must NOT appear.
+    let state = make_state(MockBackend::with_rows(1, vec![all_fields_batch()]));
+    let response = list_models(State(state), Query(ModelListParams::default())).await;
+    assert_eq!(response.status(), 200);
+
+    let body = response_body(response).await;
+    assert!(
+        body.get("page_info").is_some(),
+        "expected top-level \"page_info\" per ADR-6; got: {body}"
+    );
+    assert!(
+        body.get("total").is_none(),
+        "expected NO top-level \"total\" (pre-doctrine); got: {body}"
+    );
+    assert!(
+        body.get("offset").is_none(),
+        "expected NO top-level \"offset\" (pre-doctrine); got: {body}"
+    );
+    assert!(
+        body.get("limit").is_none(),
+        "expected NO top-level \"limit\" (pre-doctrine); got: {body}"
+    );
+
+    let pi = &body["page_info"];
+    for field in ["total_count", "start_cursor", "end_cursor", "has_next_page"] {
+        assert!(pi.get(field).is_some(), "page_info.{field} missing");
+    }
+}
+
+#[tokio::test]
+async fn has_next_page_true_when_backend_returns_peek_row() {
+    // The handler queries `LIMIT first + 1` to peek for `has_next_page`. When
+    // the mock returns more rows than `first`, has_next_page must be true and
+    // the response array must be trimmed to `first`.
+    let state = make_state(MockBackend::with_rows(
+        100,
+        vec![all_fields_batch(), all_fields_batch()], // 2 rows, first=1 + peek
+    ));
     let params = ModelListParams {
-        limit: Some(10),
-        offset: Some(20),
+        first: Some(1),
         ..Default::default()
     };
     let body = response_body(list_models(State(state), Query(params)).await).await;
-    assert_eq!(body["total"], 50);
-    assert_eq!(body["offset"], 20);
-    assert_eq!(body["limit"], 10);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert!(
+        body["page_info"]["end_cursor"].is_string(),
+        "end_cursor must be a base64 string when more pages exist"
+    );
+    assert_eq!(body["page_info"]["total_count"], 100);
+}
+
+#[tokio::test]
+async fn invalid_cursor_returns_400() {
+    let state = make_state(MockBackend::with_rows(0, vec![]));
+    let params = ModelListParams {
+        after: Some("not-base64-and-not-json".into()),
+        ..Default::default()
+    };
+    assert_eq!(list_models(State(state), Query(params)).await.status(), 400);
 }
 
 #[tokio::test]
@@ -304,8 +364,11 @@ async fn empty_result_returns_200() {
     let state = make_state(MockBackend::with_rows(0, vec![]));
     let body =
         response_body(list_models(State(state), Query(ModelListParams::default())).await).await;
-    assert_eq!(body["total"], 0);
-    assert_eq!(body["models"].as_array().unwrap().len(), 0);
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert!(body["page_info"]["start_cursor"].is_null());
+    assert!(body["page_info"]["end_cursor"].is_null());
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -315,7 +378,7 @@ async fn null_fields_present_as_null_not_absent() {
     let state = make_state(MockBackend::with_rows(1, vec![null_fields_batch()]));
     let body =
         response_body(list_models(State(state), Query(ModelListParams::default())).await).await;
-    let m = &body["models"][0];
+    let m = &body["data"][0];
 
     // Fields that are null for this row must appear as JSON null, not absent.
     assert_eq!(
@@ -360,42 +423,54 @@ async fn null_fields_present_as_null_not_absent() {
 }
 
 #[tokio::test]
-async fn pagination_exhausts_all_rows() {
-    // Simulate 3 total rows and page through them one at a time.
-    // Each call moves offset forward; once offset >= total, the loop stops.
-    // This exercises the limit/offset contract end-to-end.
+async fn pagination_exhausts_all_rows_via_cursor() {
+    // Cursor pagination end-to-end: page through all rows by passing
+    // page_info.end_cursor back as ?after on each iteration. Stops when
+    // has_next_page is false.
+    //
+    // The MockBackend can only return a fixed batch per state, so we
+    // construct a fresh state per page and use the test's total = 3 with
+    // first = 1 (one row per page) to drive three forward steps.
     let total: u64 = 3;
+    let first = 1u32;
     let mut collected = 0u64;
-    let mut offset = 0u32;
-    let limit = 1u32;
+    let mut after: Option<String> = None;
 
     loop {
-        let state = make_state(MockBackend::with_rows(
-            total,
-            if offset < total as u32 {
-                vec![all_fields_batch()]
-            } else {
-                vec![]
-            },
-        ));
+        // Per-page mock: returns 2 rows when more pages are expected (so the
+        // handler's peek detects has_next_page), 1 row on the final page.
+        let remaining = total - collected;
+        let rows = if remaining > first as u64 {
+            vec![all_fields_batch(), all_fields_batch()]
+        } else if remaining > 0 {
+            vec![all_fields_batch()]
+        } else {
+            vec![]
+        };
+        let state = make_state(MockBackend::with_rows(total, rows));
+
         let params = ModelListParams {
-            limit: Some(limit),
-            offset: Some(offset),
+            first: Some(first),
+            after: after.clone(),
             ..Default::default()
         };
         let body = response_body(list_models(State(state), Query(params)).await).await;
 
-        assert_eq!(body["total"], total);
-        assert_eq!(body["offset"], offset);
-        assert_eq!(body["limit"], limit);
-
-        let page_count = body["models"].as_array().unwrap().len() as u64;
+        assert_eq!(body["page_info"]["total_count"], total);
+        let page_count = body["data"].as_array().unwrap().len() as u64;
+        assert!(page_count <= first as u64);
         collected += page_count;
-        offset += limit;
 
-        if offset as u64 >= total {
+        let has_next = body["page_info"]["has_next_page"].as_bool().unwrap();
+        if !has_next {
             break;
         }
+        after = Some(
+            body["page_info"]["end_cursor"]
+                .as_str()
+                .expect("end_cursor must be set when has_next_page is true")
+                .to_owned(),
+        );
     }
 
     assert_eq!(collected, total, "paginated through all {total} rows");
