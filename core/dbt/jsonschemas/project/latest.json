@@ -582,6 +582,13 @@
           ]
         },
         {
+          "description": "legacy (ClickHouse only) — intermediate-table + swap approach https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py",
+          "type": "string",
+          "enum": [
+            "legacy"
+          ]
+        },
+        {
           "type": "object",
           "required": [
             "custom"
@@ -655,7 +662,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -670,7 +676,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -685,7 +690,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -1442,6 +1446,21 @@
           ]
         },
         "+copy_grants": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+copy_tags": {
           "anyOf": [
             {
               "default": null,
@@ -2723,6 +2742,21 @@
           ]
         },
         "+copy_grants": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+copy_tags": {
           "anyOf": [
             {
               "default": null,
@@ -4054,6 +4088,20 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+database": {
           "type": [
             "string",
@@ -4897,6 +4945,21 @@
           ]
         },
         "+copy_grants": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+copy_tags": {
           "anyOf": [
             {
               "default": null,
@@ -6400,6 +6463,21 @@
           ]
         },
         "+copy_grants": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+copy_tags": {
           "anyOf": [
             {
               "default": null,
