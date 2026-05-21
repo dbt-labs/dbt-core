@@ -13,20 +13,36 @@
 
 use std::path::Path;
 
+const WATCHED_WEB_INPUTS: &[&str] = &[
+    "web/index.html",
+    "web/package.json",
+    "web/package-lock.json",
+    "web/postcss.config.cjs",
+    "web/tailwind.config.cjs",
+    "web/tsconfig.json",
+    "web/tsconfig.node.json",
+    "web/vite.config.ts",
+    "web/src",
+    "web/placeholder",
+];
+
 fn main() {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
 
-    // Re-run when either the real dist or the placeholder changes. Cargo
-    // watches the directories recursively for content changes.
-    println!("cargo:rerun-if-changed=web/dist");
-    println!("cargo:rerun-if-changed=web/placeholder");
+    // Re-run for checked-in frontend inputs. `web/dist` is gitignored, so only
+    // watch it after it exists; otherwise Cargo treats the missing path as dirty
+    // on every invocation.
+    for path in WATCHED_WEB_INPUTS {
+        println!("cargo:rerun-if-changed={path}");
+    }
     println!("cargo:rerun-if-changed=build.rs");
 
     let dist = Path::new(&manifest_dir).join("web").join("dist");
     let placeholder = Path::new(&manifest_dir).join("web").join("placeholder");
 
     let chosen = if dist.join("index.html").exists() {
+        println!("cargo:rerun-if-changed=web/dist");
         dist
     } else {
         println!(
