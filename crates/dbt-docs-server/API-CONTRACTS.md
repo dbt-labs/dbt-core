@@ -39,6 +39,27 @@
   - [`GET /api/v1/saved_queries/:id`](#get-apiv1saved_queriesid)
   - [Design notes — `GET /api/v1/semantic_models/:id`](#design-notes--get-apiv1semantic_modelsid)
   - [`GET /api/v1/semantic_models/:id`](#get-apiv1semantic_modelsid)
+  - [ADR-6: List + facets endpoint envelope](#adr-6-list--facets-endpoint-envelope)
+  - [`GET /api/v1/sources`](#get-apiv1sources)
+  - [`GET /api/v1/sources/facets`](#get-apiv1sourcesfacets)
+  - [`GET /api/v1/seeds`](#get-apiv1seeds)
+  - [`GET /api/v1/seeds/facets`](#get-apiv1seedsfacets)
+  - [`GET /api/v1/snapshots`](#get-apiv1snapshots)
+  - [`GET /api/v1/snapshots/facets`](#get-apiv1snapshotsfacets)
+  - [`GET /api/v1/tests`](#get-apiv1tests)
+  - [`GET /api/v1/tests/facets`](#get-apiv1testsfacets)
+  - [`GET /api/v1/exposures`](#get-apiv1exposures)
+  - [`GET /api/v1/exposures/facets`](#get-apiv1exposuresfacets)
+  - [`GET /api/v1/groups`](#get-apiv1groups)
+  - [`GET /api/v1/groups/facets`](#get-apiv1groupsfacets)
+  - [`GET /api/v1/macros`](#get-apiv1macros)
+  - [`GET /api/v1/macros/facets`](#get-apiv1macrosfacets)
+  - [`GET /api/v1/metrics`](#get-apiv1metrics)
+  - [`GET /api/v1/metrics/facets`](#get-apiv1metricsfacets)
+  - [`GET /api/v1/saved_queries`](#get-apiv1saved_queries)
+  - [`GET /api/v1/saved_queries/facets`](#get-apiv1saved_queriesfacets)
+  - [`GET /api/v1/semantic_models`](#get-apiv1semantic_models)
+  - [`GET /api/v1/semantic_models/facets`](#get-apiv1semantic_modelsfacets)
 
 ---
 
@@ -67,9 +88,9 @@ Field naming, data classification, and pagination follow the methodology in
 | CC-1 | `snake_case` for all JSON field names and REST path segments |
 | CC-2 | Preserve nested objects from Discovery API shape; do not flatten (exception: singleton wrappers may be flattened) |
 | CC-3 | Nullable fields gated by `Capabilities` flags; no query variants |
-| CC-4 | Cursor-based pagination (`?first=&after=`) for list endpoints at scale |
+| CC-4 | Cursor-based pagination (`?first=&after=`) for **all** list endpoints. Response envelope includes `page_info: { end_cursor, has_next_page }`. No `total` field — counts are O(N) and defeat cursor pagination's constant-time-per-page guarantee; if a real consumer needs a count, expose it as an opt-in (`?include_total=true`) additively. ADR-6 captures the full envelope. |
 | CC-5 | Three classes of "internal" data: **A** = Discovery-internal but parquet-backed → promote to public REST; **B** = no parquet path → exclude; **C** = public in Discovery but CodexDB-only → stub 412 with `upgrade_path` |
-| CC-6 | Inline edge arrays (`depends_on`, `referenced_by`, `models[]` member lists) accept an optional `?first=<n>` query parameter and signal truncation with `truncated: true` on the response. Default cap: 500. The flag is for client-side messaging; cursor pagination via a sub-resource is deferred until a real consumer hits the cap. Applies to every typed detail endpoint that exposes inline arrays. |
+| CC-6 | Inline edge arrays (`depends_on`, `referenced_by`, `models[]` member lists) are capped server-side at 500 entries and signal truncation with `truncated: true` on the response. Clients cannot tune the cap — the legacy `?first=<n>` parameter was withdrawn to free the `first` name for LIST cursor pagination (ADR-6, CC-4). If a real consumer ever needs more than 500 inline edges, the path is a dedicated sub-resource (e.g., `GET /api/v1/<r>/:id/edges`) with its own cursor pagination, not retrofitting a client knob. Applies to every typed detail endpoint that exposes inline arrays. |
 | CC-7 | JSON-string parquet columns (`meta`, `config`, `type_params`, `query_params`, `exports`, `arguments`, `agg_params`, `validity_params`, `metric_filter`, `non_additive_dimension`, etc.) are deserialized handler-side via a shared `json_parse_or_null` helper in `src/handlers/json.rs`. Failed parse → emit `null` and `tracing::warn`; never bubble the error to the client and never leak escaped JSON strings to the response. |
 
 ---
@@ -629,6 +650,116 @@ Each ADR-5–scoped endpoint's field reference table:
 - **must** include a `created_at: number | null` row (Core 🔧) sourced from the resource's parquet `created_at` column. **Exception:** `dbt.groups` has no `created_at` column — the groups contract surfaces `ingested_at` instead, with a row note documenting the fallback.
 
 The per-endpoint Design notes for each of the six resource types that flag "no execution_info because definition-only" are now redundant with this ADR; they remain in place as supporting context but reviewers should treat ADR-5 as the source of truth.
+
+---
+
+## ADR-6: List + facets endpoint envelope
+
+**Status:** Decided — Relay-style cursor pagination (`first` / `after` + `page_info`); `/facets` returns distinct filter values.
+**Trigger to revisit:** A consumer requires backward navigation (`before` / `start_cursor`); a consumer needs a total-row count badly enough to justify a separate count query.
+
+### Why cursor and not offset
+
+CC-4 has documented cursor as the standard direction since the inception of this doc. An earlier draft of this ADR proposed offset/limit for parity with the existing `list_models` handler — that was parity-convenience, not a principled choice. Three reasons cursor is correct here:
+
+1. **dbt-ui already speaks cursor.** Discovery API + the `usePaginatedQuery` reducer consume `{first, after}` and `{pageInfo: {endCursor, hasNextPage}}`. Offset pagination forces the FE to use two pagination shapes side-by-side.
+2. **Read-only parquet snapshot makes stable cursors free.** Data is loaded once at server boot into in-memory DuckDB; there are no inserts/deletes during a session. The hardest property of cursor pagination on a live store — stability across writes — does not need to be defended here.
+3. **Every resource has a stable tie-breaker.** All rows carry `unique_id`. The composite `(sort_value, unique_id)` cursor is unambiguous; DuckDB supports tuple comparison natively (`WHERE (a, b) > (?, ?)`).
+
+The existing `list_models` handler is migrated in a separate PR off `main` (`meta-7432/models-list-cursor-pagination`); ADR-6 and the handler land in lockstep.
+
+### Response envelope (LIST)
+
+```json
+{
+  "data": [ /* item summaries */ ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoibW9kZWwuYWxwaGEiLCJpIjoibW9kZWwuanMuYWxwaGEifQ",
+    "end_cursor": "eyJzIjoibW9kZWwub3JkZXJzIiwiaSI6Im1vZGVsLmpzLm9yZGVycyJ9",
+    "has_next_page": true
+  }
+}
+```
+
+The `page_info` shape mirrors GraphQL Relay's `PageInfo` connection spec (snake_case per CC-1) plus the commonly-added `totalCount` extension:
+
+- **`total_count`** (`number`): total row count under the current filter set, ignoring `first` and `after`. Computed via a separate `COUNT(*)` query per request. Adds a constant-time cost (DuckDB over parquet column statistics is fast); accepted as the price of consumer convenience. If profiling ever shows this materially impacts page latency, move it behind a `?include_total=true` opt-in additively.
+- **`start_cursor`** (`string | null`): opaque base64 cursor pointing to the position of the FIRST row of the current page. `null` when `data` is empty. Useful for "anchor here" UX or for clients that cache pages keyed by their start cursor. Symmetric with `end_cursor`.
+- **`end_cursor`** (`string | null`): opaque base64 cursor pointing to the position of the LAST row of the current page. `null` when `data` is empty OR when `has_next_page` is `false`. Clients pass it back via `?after=...` unmodified to fetch the next page; the server reserves the right to change the internal shape at any time.
+- **`has_next_page`** (`boolean`): `true` when there is at least one more row after the returned page. Implementation: query `LIMIT first + 1` and trim the last row if present; emit `has_next_page = (returned_rows == first + 1)`.
+
+Top-level array is keyed `data` for every resource — generic so one FE / MCP client can consume any list endpoint without a per-resource discriminator.
+
+`has_previous_page` is intentionally omitted from v0 — only forward navigation is supported, and the dbt-ui `usePaginatedQuery` reducer only paginates forward. Including `start_cursor` already gives consumers what they need to build "anchor"/back-to-top behavior client-side; full backward pagination (via `?before=<start_cursor>`) would be additive when a real consumer needs it.
+
+### Cursor encoding
+
+Cursors are opaque to the client. Server-side, the cursor is base64-encoded JSON with two fields: the value of the primary sort column for the last row of the previous page, and that row's `unique_id` as the tie-breaker. For a sort spec `<col>:<dir>`:
+
+```sql
+-- First page (no ?after):
+SELECT … ORDER BY <col> <dir> NULLS LAST, unique_id ASC LIMIT first+1
+
+-- Subsequent page (after cursor decodes to (sort_val, uid)):
+SELECT … WHERE (<col>, unique_id) > (?sort_val, ?uid)   -- semantics depend on sort direction & NULLS LAST
+        ORDER BY <col> <dir> NULLS LAST, unique_id ASC LIMIT first+1
+```
+
+For `:desc` sorts and nullable sort columns the predicate uses an OR-of-conjunctions form to handle NULL bucketing correctly; see the shared `src/handlers/pagination.rs` helper (added by the companion PR).
+
+### Query parameters (LIST)
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | u32 | 100 (max 1000) | Server clamps. The earlier offset envelope had `limit=1000/max=5000`; cursor pagination implies clients page progressively, so the per-page default is smaller. Resources are free to override the default and the max per-resource in their contract section. |
+| `after` | string (opaque base64) | — | The `end_cursor` returned by the previous page. Omit for the first page. Tampering yields 400 `invalid cursor`. |
+| `sort` | string | per-resource (default `name:asc` unless the resource section says otherwise) | `<column>:<asc\|desc>`; columns are an allowlist per resource. The sort columns must be deterministic enough that `(sort_val, unique_id)` uniquely orders every row. |
+| `<filter>` | string (CSV) | none | Comma-separated values OR'd within a filter. Filter names per resource. |
+
+`?limit` and `?offset` from the offset envelope are NOT accepted. Passing them returns 400 with a body that points at this ADR to help client migration.
+
+### Response envelope (FACETS)
+
+```json
+{
+  "<filter_name>": [ { "value": "Marts", "count": null } ]
+}
+```
+
+- One key per documented filter for the resource. Order is alphabetical by filter name.
+- `count` is `null` today — reserved for a future enhancement that counts rows per facet.
+- If a resource has no filters in dbt-ui, the facets endpoint still exists and returns `{}`.
+- Facets are unpaginated; the filter universe per resource is bounded (single-digit databases, schemas, owners, etc.).
+
+### Shared TypeScript types
+
+`PageInfo` is the canonical envelope-suffix type used by every LIST endpoint's response. It is declared **once here** rather than repeated in each LIST contract's Type definition block — each LIST contract's TypeScript fragment refers to `PageInfo` by name and trusts this declaration.
+
+```typescript
+// Shared envelope type used by every LIST endpoint (ADR-6).
+interface PageInfo {
+  total_count: number;
+  start_cursor: string | null;
+  end_cursor: string | null;
+  has_next_page: boolean;
+}
+```
+
+When a per-resource LIST contract's TypeScript references `page_info: PageInfo;`, it points at this single definition. Updating the shape (additive fields, new types) happens here; every contract picks it up by reference.
+
+### Why one ADR, not ten
+
+Lifting cursor pagination into doctrine prevents the ten new resource contracts from re-deriving pagination param names, cursor formats, and sort grammar inconsistently. Test-suite parity, FE client generation, and docs all benefit from one canonical envelope.
+
+### Risks specific to cursor pagination
+
+These apply to every LIST handler; resource-specific contracts may add more.
+
+1. **Cursor stability is server-snapshot-scoped.** Cursors are valid for the lifetime of the current `dbt docs serve` process. Restarting the server invalidates outstanding cursors — clients see a 400 `invalid cursor` and must restart pagination. This matches the read-only-snapshot model. If `dbt docs serve` reloads parquet at runtime (out of scope today), this guarantee must be re-evaluated.
+2. **Tampered cursors must fail closed.** The cursor payload is opaque but not signed. A malformed or out-of-domain cursor (decode error, type mismatch, sort_val type drift) must return 400; never silently re-interpret as a fresh first-page request — that masks client bugs.
+3. **`(sort_val, unique_id)` must be a deterministic order.** If the sort allowlist for a resource permits a non-deterministic column (e.g., a freely-typed string that may have ties on duplicate values), the `unique_id` tie-breaker preserves total order. Resources whose primary sort column is itself unique (e.g., `unique_id` directly) can elide the tie-breaker SQL but must still emit it in the cursor.
+4. **Null sort values require ordered NULL semantics.** Use `NULLS LAST` for ASC and `NULLS LAST` for DESC by convention; encode the cursor with an explicit null marker so the cursor predicate puts post-null rows correctly. Implementation lives in `src/handlers/pagination.rs`.
 
 ---
 
@@ -3194,4 +3325,2852 @@ interface EdgeRef {
 8. **`depends_on` is single-entry by spec but the handler should still emit it as an array.** A semantic model declares exactly one underlying `model:`. Despite this, returning `depends_on` as an `EdgeRef[]` (length-1 array) keeps the contract uniform with `ModelDetail` and avoids special-case TypeScript narrowing. The contract is **not** to inline the upstream model into a singleton `depends_on` object — keep it array-shaped. The `model` field on the response is the convenience denormalization that adds `access_level` and `alias` for the header display.
 
 9. **`semantic_relationships` is intentionally omitted from v0.** `dbt.semantic_relationships` (parquet schema at `crates/dbt-index/src/parquet.rs:1237`) captures `from_unique_id → to_unique_id` PK/FK relationships across semantic models. The dbt-ui detail page does not render these (no GraphQL field is fetched), so they are excluded for v0. If a future "Relationships" tab is added in `SemanticModelView`, expose as a new sub-resource `GET /api/v1/semantic_models/:id/relationships` rather than retrofitting an inline array — fan-out is unbounded across the whole semantic graph.
+
+
+---
+
+## Design notes — `GET /api/v1/sources`
+
+LIST returns **one row per source table**. The unit of identity is the dbt source node — `dbt.nodes` row with `resource_type = 'source'`, `unique_id` of the form `source.<package>.<source_name>.<table_name>` — matching the existing DETAIL endpoint `GET /api/v1/sources/:id` exactly. The handler does **not** introduce a synthetic identifier or invent a new `resource_type` value.
+
+dbt-ui's `SourceCollectionFilterView` rolls per-table rows up into per-(package, source_name) collections client-side via `getTableData` (group by `sourceName`, count tables, take `database`/`schema` from the first table, compute `maxFreshnessStatus`). The REST LIST endpoint stays at per-table granularity for three reasons:
+
+1. **Consistency with detail.** Every other resource's LIST is 1:1 with its DETAIL (`/api/v1/seeds` row keys to `/api/v1/seeds/:id`). Pre-aggregating sources server-side would make sources the lone exception and produce a LIST row whose `unique_id` can't be passed to `:id` — a footgun for any consumer that drills down.
+2. **No invented vocabulary.** The actual dbt model only has `resource_type = 'source'`; collections are a dbt-ui display rollup, not a dbt concept. Synthesizing `source_collection.*` ids and `resource_type: "source_collection"` would inject UI shape into the API contract.
+3. **FE keeps the aggregation it already does.** `appliedAllSources.ts` already fetches per-table rows and the FilterView already aggregates them client-side. Mirroring that on the server provides no FE benefit and locks the contract into one specific presentation.
+
+### Parquet sources
+
+Verified against `~/codaz/sl-schema-evolution/sample_project/target/index/` and the existing `src/handlers/sources.rs` (the DETAIL handler is the authoritative reference for source parquet columns):
+
+- `dbt.nodes.parquet` is the **only** parquet for source rows — there is no separate `dbt.sources.parquet`. Filter on `resource_type = 'source'`. Columns consumed by this LIST: `unique_id`, `name`, `resource_type`, `package_name`, `source_name`, `source_description`, `database_name`, `schema_name`, `identifier`, `loader`, `tags`, `meta` (CC-7 JSON-string), `original_file_path`. Sample project has zero source rows; the column set is empirically confirmed via the DETAIL handler's `SOURCE_DETAIL_NODE_SQL`.
+- `dbt.source_freshness.parquet` carries `unique_id` (the per-table source node id), `status`, `snapshotted_at`, `max_loaded_at`, `max_loaded_at_time_ago`, `warn_after_count`, `warn_after_period`, `error_after_count`, `error_after_period`, `created_at`. Joined LEFT to `dbt.nodes` by `unique_id` so tables without a freshness row emit `freshness: null` per current doctrine (no `has_source_freshness` gate).
+
+### Filters (from dbt-ui)
+
+Three filter dropdowns in `SourceCollectionFilterView.tsx`, all client-side today (GraphQL response is unfiltered):
+
+- **Status** (URL param `freshness`) — single value from `FreshnessStatus` enum plus a `no_data` sentinel for tables with no `dbt.source_freshness` row. REST: `freshness_status` query param accepting a comma-separated list (CSV-OR semantics per ADR-6).
+- **Database** (URL param `database`) — single value. REST: `databases` query param accepting comma-separated list, exact match.
+- **Schema** (URL param `schema`) — single value. REST: `schemas` query param accepting comma-separated list, exact match.
+
+dbt-ui dropdowns are single-select today; ADR-6 standardizes CSV-OR across all LIST endpoints so the FE can pass either one or many. The dbt-ui rollup behaviour (collection's worst-of status, "no_data when every table lacks a row") becomes "this table's status, or `no_data` if this table has no row" at per-table granularity — the FE either filters the per-table rows directly with the same semantics, or applies its existing client-side rollup and uses the same dropdown unchanged.
+
+### No sorts exposed
+
+`SourceCollectionFilterView.tsx` exposes no `Sort` UI. Per ADR-6 default (`name:asc`), the LIST sorts by `n.name ASC` and `?sort` against an empty allowlist returns 400. Same pattern as the exposures contract — forward-compatible without quietly changing render order.
+
+### Decisions worth flagging to the coordinator
+
+1. **Per-table granularity is the canonical shape.** If the FE ever asks for a server-side rollup (e.g., for a separate `/api/v1/source_collections` endpoint or a query-param flag like `?group_by=source_name`), surface it as a NEW endpoint or a flag — do not retroactively change this endpoint's row shape.
+
+2. **`freshness` is single-table here, not a worst-of rollup.** `freshness.status` is the status of THIS table's freshness check from `dbt.source_freshness` (or `null` if absent). The dbt-ui rollup (`maxFreshnessStatus`) stays client-side and operates over the per-table rows this endpoint returns.
+
+3. **No `has_*` flag is introduced.** Per the parent doctrine in API-CONTRACTS.md § "Backend conventions", `has_run_results` / `has_catalog_stats` / `has_source_freshness` are vestigial. The `freshness` field is `null` when no per-table row exists in `dbt.source_freshness.parquet` (or the parquet is absent entirely).
+
+---
+
+## `GET /api/v1/sources`
+
+Powers: `SourceCollectionFilterView` table rows in dbt-ui (per-table rows; FE rolls up to collections client-side).
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/SourceCollectionFilterView.tsx`
+
+GraphQL hooks:
+- `packages/metadata/dbt-explorer/src/hooks/discovery/appliedAllSources.ts` (`AllSources` query — per-table source rows; client-aggregated for display)
+- `packages/metadata/dbt-explorer/src/hooks/discovery/appliedSources.ts` (`AppliedSources` query — per-table detail; `sourceName`, `database`, `schema`, `freshness` rendered)
+- `packages/metadata/dbt-explorer/src/hooks/discovery/appliedMaterializationFields.ts` (`AppliedMaterializedFields` query — distinct database/schema values for the filter dropdowns)
+- `packages/metadata/dbt-explorer/src/hooks/discovery/sourceFreshness.ts` (`SourceFreshness` query — per-table freshness; the FE applies `maxFreshnessStatus` client-side)
+
+### Query parameters
+
+Per ADR-6: `first`, `after`, and `sort` are universal. Filters are resource-specific and use CSV-OR semantics.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Hard max `5000`; clamped server-side per ADR-6. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | **Rejected with 400 if provided.** `SourceCollectionFilterView` exposes no sort UI. Default is internal; clients should not pass `?sort=...`. Forward-compatible: if sorts are added later, this becomes additive. |
+| `freshness_status` | `string` (CSV) | — | OR'd list of `pass` · `warn` · `error` · `runtime_error` · `no_data`. `no_data` matches source-table rows with no `dbt.source_freshness` row. Unknown values → 400. |
+| `databases` | `string` (CSV) | — | OR'd list of exact-match values against `dbt.nodes.database_name`. Case-sensitive. |
+| `schemas` | `string` (CSV) | — | OR'd list of exact-match values against `dbt.nodes.schema_name`. Case-sensitive. |
+
+Unknown query params are silently ignored (matches the existing `list_models` handler convention).
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — this endpoint does not exist yet, so every populated field is `🔧` at implementation time. Fields marked `// 🔍` need empirical confirmation against a project with non-empty freshness data before implementation.
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "source.jaffle_shop.raw_jaffle.orders",
+      "name": "orders",
+      "resource_type": "source",
+      "package_name": "jaffle_shop",
+      "source_name": "raw_jaffle",
+      "source_description": "Operational raw tables from the application DB.",
+      "database_name": "raw",
+      "schema_name": "jaffle_shop",
+      "identifier": "orders",
+      "loader": "fivetran",
+      "tags": [],
+      "freshness": {
+        "status": "warn",
+        "snapshotted_at": "2026-05-19T10:00:00Z",
+        "max_loaded_at": "2026-05-19T09:45:00Z"
+      }
+    },
+    {
+      "unique_id": "source.jaffle_shop.stripe.charges",
+      "name": "charges",
+      "resource_type": "source",
+      "package_name": "jaffle_shop",
+      "source_name": "stripe",
+      "source_description": "Charges exported from Stripe via Fivetran.",
+      "database_name": "raw",
+      "schema_name": "stripe",
+      "identifier": "charges",
+      "loader": "fivetran",
+      "tags": [],
+      "freshness": null
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+`freshness` is `null` when no `dbt.source_freshness` row exists for the source table's `unique_id` (i.e., `dbt source freshness` has not run for this table, or the parquet is absent). When present, `freshness.status` is the per-table status verbatim (with `"runtime error"` normalized to `runtime_error` per CC-1).
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `SourceSummary[]` | Core | 🔧 | — | ADR-6 envelope key. Empty array when no source rows. |
+| `data[*].unique_id` | `string` | Core | 🔧 | — | Real source-table unique_id of the form `source.<package>.<source_name>.<table_name>`. Pass directly to `GET /api/v1/sources/:id`. |
+| `data[*].name` | `string` | Core | 🔧 | — | The source-table name (`dbt.nodes.name`, e.g. `"orders"`). NOT the source block name — that's `source_name` below. |
+| `data[*].resource_type` | `"source"` | Core | 🔧 | — | Literal `"source"`. Same value as the DETAIL endpoint. |
+| `data[*].package_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.package_name`. |
+| `data[*].source_name` | `string \| null` | Core | 🔧 | — | The source block name in YAML (`dbt.nodes.source_name`, e.g. `"raw_jaffle"`). FE groups by this to render collections. |
+| `data[*].source_description` | `string \| null` | Core | 🔧 | — | The source block's description (`dbt.nodes.source_description`). Constant across all tables in the same source block but surfaced per-row for FE convenience. |
+| `data[*].database_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.database_name`. Renders the Database column. |
+| `data[*].schema_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.schema_name`. Renders the Schema column. |
+| `data[*].identifier` | `string \| null` | Core | 🔧 | — | Warehouse-side identifier from `dbt.nodes.identifier` (typically equals `name` unless overridden in YAML). |
+| `data[*].loader` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.loader` (e.g., `"fivetran"`). |
+| `data[*].tags` | `string[]` | Core | 🔧 | — | From `dbt.nodes.tags`. Empty array when absent. |
+| `data[*].freshness` | `Freshness \| null` | Core-conditional | 🔧 | — | `null` when no `dbt.source_freshness` row exists for this `unique_id`. JSON null, no capability gate. |
+| `data[*].freshness.status` | `string` | Core-conditional | 🔧 | — | One of `pass` · `warn` · `error` · `runtime_error`. Normalized from `dbt.source_freshness.status` (which stores `"runtime error"` space-separated) to snake_case per CC-1. |
+| `data[*].freshness.snapshotted_at` | `string \| null` | Core-conditional | 🔍 | — | ISO 8601; from `dbt.source_freshness.snapshotted_at` cast to VARCHAR. |
+| `data[*].freshness.max_loaded_at` | `string \| null` | Core-conditional | 🔍 | — | ISO 8601; from `dbt.source_freshness.max_loaded_at`. |
+| `page_info` | `PageInfo` | Core | 🔧 | — | ADR-6 cursor envelope. See `PageInfo` definition in the shared types. Replaces the offset-era `total`/`offset`/`limit` triple. |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total row count under the current filter set; ignores `first`/`after`. Separate `COUNT(*)` query per request. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor pointing to the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor`. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor; pass back as `?after=...` to fetch the next page. `null` when `has_next_page` is `false`. |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` if at least one more row exists past this page. Server implements via `LIMIT first+1` and trim. |
+| `data[*].max_loaded_at_time_ago` | *(absent)* | — | ❌ | — | The FE computes relative time client-side from `max_loaded_at`; the per-table `dbt.source_freshness.max_loaded_at_time_ago` is staleness-prone (snapshot of relative time at run). Defer to detail if ever needed. |
+| `data[*].criteria` | *(absent)* | — | ❌ | — | Freshness thresholds (`warn_after` / `error_after`) are surfaced by the DETAIL endpoint. Not rendered in the FilterView; omit here. |
+| `data[*].meta` | *(absent)* | — | ❌ | — | JSON-string per CC-7; not rendered in the FilterView. Defer to detail. |
+| `data[*].columns` | *(absent)* | — | ❌ | — | Per-table columns; not rendered in the FilterView. Defer to detail. |
+| `data[*].catalog` | *(absent)* | — | ❌ | — | Per-table catalog stats; not rendered in the FilterView. Defer to detail. |
+| `data[*].health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. The FilterView does not render health badges. |
+| `data[*].file_path` | *(absent)* | — | ❌ | — | Path to the `.yml`; not rendered in the FilterView. Defer to detail. |
+| `data[*].patch_path` | *(absent)* | — | ❌ | — | Sources are YAML-only; `patchPath` does not apply (see DETAIL contract for the same exclusion). |
+| `data[*].execution_info` | *(absent)* | — | ❌ | — | Sources are not executed by `dbt build`. `freshness` is the conditional execution-adjacent surface for sources. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface SourceListResponse {
+  data: SourceSummary[];
+  page_info: PageInfo;
+}
+
+interface SourceSummary {
+  // Real source-table unique_id: source.<package>.<source_name>.<table_name>.
+  // Pass directly to GET /api/v1/sources/:id.
+  unique_id: string;
+  // The source-table name (e.g. "orders"). For the source block name, see source_name.
+  name: string;
+  resource_type: "source";
+  package_name: string | null;
+  source_name: string | null;
+  source_description: string | null;
+  database_name: string | null;
+  schema_name: string | null;
+  identifier: string | null;
+  loader: string | null;
+  tags: string[];
+  // null when no dbt.source_freshness row exists for this unique_id.
+  freshness: Freshness | null;
+}
+
+interface Freshness {
+  // "pass" | "warn" | "error" | "runtime_error" (snake_case normalized).
+  status: string;
+  snapshotted_at: string | null;
+  max_loaded_at: string | null;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **Per-table granularity is locked in.** This LIST returns one row per source table — same granularity as the DETAIL endpoint. If a future product requirement asks for server-side collection rollups (one row per `(package, source_name)`), expose it as a NEW endpoint (e.g., `/api/v1/source_collections`) or a documented `?group_by=source_name` flag. Do NOT retroactively change this endpoint's row shape; doing so breaks `unique_id` round-tripping with the DETAIL endpoint.
+
+2. **No handler exists today.** No list handler in `src/handlers/sources.rs` — only `get_source`. The implementation PR must add `list_sources` + `list_source_facets`, register `GET /api/v1/sources` and `GET /api/v1/sources/facets` in `src/server.rs`, and add the response types to `web/src/api.ts`. Share parquet-column constants with the existing detail handler to avoid drift.
+
+3. **Freshness status normalization is product-load-bearing.** `dbt.source_freshness.status` stores `"runtime error"` (space-separated) for the worst tier. The LIST handler must normalize to `runtime_error` (snake_case) per CC-1 BEFORE returning. The FE's filter dropdown and `maxFreshnessStatus` client-side rollup both assume the snake_case form. Reuse the same enum the DETAIL endpoint emits.
+
+4. **`no_data` filter value has no parquet column.** The FE filter dropdown includes a `no_data` sentinel meaning "show source tables with no `dbt.source_freshness` row." Translate `?freshness_status=no_data` into a `WHERE NOT EXISTS (SELECT 1 FROM dbt.source_freshness sf WHERE sf.unique_id = n.unique_id)` predicate. When combined with other values (e.g., `?freshness_status=no_data,warn`), the predicate is `(sf.status = 'warn') OR <not-exists-clause>`.
+
+5. **Empty project handling.** When `dbt.nodes.parquet` has zero rows with `resource_type = 'source'`, return `{ "data": [], "page_info": { "end_cursor": null, "has_next_page": false } }` — not a 404. Consistent with `list_models` behavior. Sample project (`~/codaz/sl-schema-evolution/sample_project/target/index/`) exercises this path.
+
+6. **`?sort` rejection vs. forward compatibility.** Validate `?sort` against an empty allowlist and return 400 with "sort is not supported on this endpoint" (matches the exposures contract precedent). Do NOT silently ignore — a future addition would change rendered order without the client opting in, masking regressions.
+
+7. **`tags` array vs. CC-7 JSON-string.** `dbt.nodes.tags` is a native list column in parquet, not a JSON-string. Read it directly with the Arrow `ListArray` extractor; do NOT route through `json_parse_or_null`. Confirmed against the schema in `dbt.nodes.parquet` (`'tags'` is `list<element: string>`).
+
+8. **`appliedAllSources` over-fetches today.** The dbt-ui hook fetches columns/health_issues per source for lineage rendering that the FilterView doesn't render. The REST LIST endpoint deliberately omits those (see ❌ rows). If the FE later renders columns or health badges on the LIST view itself, those become additive surfaces — not retrofitted into the existing row shape.
+
+---
+
+## `GET /api/v1/sources/facets`
+
+Powers: filter dropdowns in `SourceCollectionFilterView` (Status, Database,
+Schema).
+
+### Query parameters
+
+None. The facets endpoint takes no query parameters per ADR-6.
+
+### Example response
+
+```json
+{
+  "freshness_status": [
+    { "value": "pass", "count": null },
+    { "value": "warn", "count": null },
+    { "value": "error", "count": null },
+    { "value": "runtime_error", "count": null },
+    { "value": "no_data", "count": null }
+  ],
+  "databases": [
+    { "value": "raw", "count": null }
+  ],
+  "schemas": [
+    { "value": "jaffle_shop", "count": null },
+    { "value": "stripe", "count": null }
+  ]
+}
+```
+
+`freshness_status` values are static (the dbt-ui dropdown is built from the
+`FreshnessStatus` enum + a `no_data` sentinel; values do not depend on the
+project's data). `databases` and `schemas` are project-specific — distinct
+values from `dbt.nodes` filtered to `resource_type = 'source'`.
+
+When `dbt.nodes.parquet` has zero source rows, `databases` and `schemas`
+are empty arrays; `freshness_status` is still populated with its static
+list (matches the dbt-ui dropdown rendering — the Status dropdown is
+visible even on empty projects).
+
+The `count` field is reserved for a future enhancement that returns the
+number of matching collections per facet value. Today it is always `null` —
+matching the `list_model_facets` convention.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `freshness_status` | `FacetValue[]` | Core | 🔧 | — | Static enum values: `pass`, `warn`, `error`, `runtime_error`, `no_data`. Order matches dbt-ui dropdown order: `no_data` first as the "missing data" sentinel, then `freshnessStatuses` enum in dbt-ui order. Server-derived from a constant, not from parquet. |
+| `freshness_status[*].value` | `string` | Core | 🔧 | — | snake_case status; matches `data[*].freshness.status` shape on the LIST endpoint. |
+| `freshness_status[*].count` | `number \| null` | Core | 🔧 | — | Always `null` today; reserved for per-facet count enrichment. Matches `list_model_facets.owners[*].count` convention. |
+| `databases` | `FacetValue[]` | Core | 🔧 | — | Distinct non-null `dbt.nodes.database_name` values for `resource_type = 'source'`, sorted ascending. Mirrors `useAppliedMaterializedFields` GraphQL hook with `types: [Source]`. Empty array on projects with no source nodes. |
+| `databases[*].value` | `string` | Core | 🔧 | — | Raw database name; case-preserved. |
+| `databases[*].count` | `number \| null` | Core | 🔧 | — | Always `null` today; reserved. |
+| `schemas` | `FacetValue[]` | Core | 🔧 | — | Distinct non-null `dbt.nodes.schema_name` values for `resource_type = 'source'`, sorted ascending. Mirrors `useAppliedMaterializedFields` GraphQL hook with `types: [Source]`. |
+| `schemas[*].value` | `string` | Core | 🔧 | — | Raw schema name; case-preserved. |
+| `schemas[*].count` | `number \| null` | Core | 🔧 | — | Always `null` today; reserved. |
+| `owners` | *(absent)* | — | ❌ | — | Sources have no owner concept in dbt — owners live on models (via `dbt.groups`) and exposures (via `owner_name`). The FilterView has no Owner dropdown for sources. |
+| `tags` | *(absent)* | — | ❌ | — | Not exposed as a filter in `SourceCollectionFilterView` today; per-table tag rollup is undefined for collections. |
+| `loaders` | *(absent)* | — | ❌ | — | `dbt.nodes.loader` exists but no dropdown in dbt-ui. Add additively if a Loader filter is ever requested. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface SourceFacetsResponse {
+  freshness_status: FacetValue[];
+  databases: FacetValue[];
+  schemas: FacetValue[];
+}
+
+// FacetValue is shared with ModelFacetsResponse / ExposureFacetsResponse
+interface FacetValue {
+  value: string;
+  count: number | null;
+}
+```
+
+### Risk register
+
+1. **`freshness_status` values are server constants, not parquet-derived.**
+   The dropdown is built from `freshnessStatuses` (the dbt-ui exported
+   constant) plus a `no_data` sentinel. The list of values must stay in
+   sync with the dbt-dag `freshnessStatuses` export — if dbt-dag ever adds
+   a new freshness state (`stale`, etc.), this facet endpoint must be
+   updated. There is no parquet-level enforcement.
+
+2. **`databases` / `schemas` source is `dbt.nodes` filtered to sources, not
+   a separate parquet.** Matches the dbt-ui's
+   `useAppliedMaterializedFields` GraphQL hook with `types: [Source]`. The
+   handler SQL is `SELECT DISTINCT database_name AS value FROM dbt.nodes
+   WHERE resource_type = 'source' AND database_name IS NOT NULL ORDER BY
+   database_name` (and same for schema). Reuse the models facets pattern;
+   do not invent a different filter mechanism.
+
+3. **Database / schema collisions across resource types.** A database name
+   like `"raw"` may appear in both the models facets endpoint (sourced
+   from `dbt.nodes` filtered to `resource_type IN ('model', 'seed', ...)`
+   if/when that handler is added) and the sources facets endpoint. The
+   two endpoints return scoped lists from the same parquet table filtered
+   differently — this is correct and intentional. FE engineers should not
+   assume a global database catalog.
+
+4. **Empty project handling.** When `dbt.nodes.parquet` has zero source
+   rows, the response is `{ "freshness_status": [...static...],
+   "databases": [], "schemas": [] }` — not a 404 and not an error. The
+   static `freshness_status` list is still populated so the dropdown
+   renders consistently.
+
+5. **`count` enrichment deferred consistently.** Today the only producer
+   of facet `count` data is "none." If `list_model_facets` ever starts
+   populating `count`, this endpoint must follow the same pattern at the
+   same time. Coordinate before shipping a partial implementation.
+
+6. **No `has_*` capability gate is introduced.** Per the parent doctrine
+   in API-CONTRACTS.md § "Backend conventions", `has_run_results` /
+   `has_catalog_stats` / `has_source_freshness` are vestigial. The
+   facets endpoint has no execution-, catalog-, or freshness-conditional
+   surface. The `freshness_status` values are static; the `databases` and
+   `schemas` values are derived from `dbt.nodes` which is always present
+   for any indexed project. Do not invent a new `has_*` flag.
+
+7. **Parquet schema empirically anchored to the detail handler.** The
+   column names this contract relies on (`package_name`, `source_name`,
+   `database_name`, `schema_name`, `resource_type`) are exactly the
+   columns selected by `SOURCE_DETAIL_NODE_SQL` in
+   `src/handlers/sources.rs` — the authoritative reference per the plan.
+   No new column dependencies are introduced. If a future index format
+   renames any of these columns, both the detail handler and this list
+   handler must update together.
+
+---
+
+## Design notes
+
+`SeedFilterView` is the simplest of the resource list views: three columns
+(`Name`, `Row count`, `Last executed`), no filter dropdowns, no client-side
+sort controls. The GraphQL hook (`appliedSeeds.ts`) over-fetches considerably
+— `tags`, `description`, `database`, `schema`, `meta`, `alias`, full
+`executionInfo`, full `catalog` (including `columns[]`, `bytesStat`,
+`stats[]`) — but the rendered `TableData` projection in `SeedFilterView.tsx`
+keeps only `name`, `uniqueId`, `lastExecuted` (from
+`executionInfo.executeCompletedAt`), and `rowCount` (from
+`catalog.rowCountStat`).
+
+The LIST contract returns just what the rendered view needs plus the
+ADR-1 `NodeBase` fields (`unique_id`, `name`, `resource_type`,
+`package_name`, `description`, `original_file_path`) so the response is
+useful to other consumers without forcing a second fetch. Per ADR-6, the
+top-level envelope key is `data` — *not* `seeds`. The existing models
+handler still uses a resource-named key (`models`); that's pre-doctrine
+and is being renamed in a companion PR. Author this contract with `data`.
+
+The FACETS endpoint is intentionally minimal. Seeds expose no filter
+dropdowns in dbt-ui, so the response body is `{}`. The endpoint exists for
+API uniformity across resource types (so clients can hit
+`GET /api/v1/<resource>/facets` for every resource without special-casing
+seeds).
+
+Parquet verification against the sample project
+(`~/codaz/sl-schema-evolution/sample_project/target/index/`):
+
+- `dbt.nodes.parquet`: all `NodeBase` columns present; `resource_type='seed'`
+  yields 6 rows in the sample.
+- `dbt_rt.run_results.parquet`: 6 rows for `seed.%` `unique_id` values
+  (`dbt seed` writes one row per seed per invocation, like models). The
+  `created_at` column is the run completion timestamp; the models list
+  handler already extracts this same field via the `last_run` CTE.
+- `dbt.catalog_stats.parquet`: zero rows for `seed.%` in the sample
+  project. `dbt docs generate` against DuckDB does not emit per-stat rows
+  for seeds in this index. The contract still exposes `row_count` as a
+  `🔍` field — the column exists in the schema and other adapters
+  (Snowflake, BigQuery) are known to populate it; the implementation must
+  tolerate the empty result set and return `null`.
+
+## `GET /api/v1/seeds`
+
+Powers: `SeedFilterView` / `ResourceFilterPage` in dbt-ui.
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/SeedFilterView.tsx`
+GraphQL hook: `packages/metadata/dbt-explorer/src/hooks/discovery/appliedSeeds.ts`
+
+### Query parameters
+
+Per ADR-6: `first`, `after`, and `sort` are universal. Seeds expose no
+filter parameters because the dbt-ui view has no filter dropdowns. The
+default sort is `name:asc` — seeds have no naturally-meaningful sort
+order beyond the dbt-ui column set (Name, Row count, Last executed), so
+the ADR-6 default is fine and matches the user-visible order on first
+load.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Hard max `5000`; values above are clamped per ADR-6. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | Format `<column>:<asc\|desc>`. Allowlisted columns: `name`, `row_count`, `executed_at`. Unknown column → 400. |
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — this endpoint does not exist yet,
+so every populated field is `🔧` at implementation time. Fields marked `// 🔍`
+are parquet-unverified for the specific stat-key mapping and require
+confirmation against a real index (see Risk #2).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "seed.jaffle_shop.raw_customers",
+      "name": "raw_customers",
+      "resource_type": "seed",
+      "package_name": "jaffle_shop",
+      "description": "Raw customer seed file loaded from CSV.",
+      "original_file_path": "seeds/raw_customers.csv",
+      "row_count": 935,                              // 🔍 from dbt.catalog_stats; null when has_catalog_stats false or stat absent
+      "executed_at": "2026-05-15T10:28:03Z"          // 🔧 from dbt_rt.run_results.created_at; null when has_run_results false
+    },
+    {
+      "unique_id": "seed.jaffle_shop.raw_orders",
+      "name": "raw_orders",
+      "resource_type": "seed",
+      "package_name": "jaffle_shop",
+      "description": null,
+      "original_file_path": "seeds/raw_orders.csv",
+      "row_count": null,
+      "executed_at": null
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+`row_count` is `null` when `has_catalog_stats` is false (i.e., `dbt docs
+generate` has not run) or when the adapter did not emit a row-count stat
+for this seed. `executed_at` is `null` when `has_run_results` is false
+(i.e., `dbt seed` / `dbt build` has not run for this seed).
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `SeedSummary[]` | Core | 🔧 | — | ADR-6 envelope key. Empty array when no seeds. |
+| `data[*].unique_id` | `string` | Core | 🔧 | — | e.g., `"seed.pkg.name"`. From `dbt.nodes.unique_id`. |
+| `data[*].name` | `string` | Core | 🔧 | — | From `dbt.nodes.name`. |
+| `data[*].resource_type` | `"seed"` | Core | 🔧 | — | Always `"seed"` for this endpoint. |
+| `data[*].package_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.package_name`. |
+| `data[*].description` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.description`. |
+| `data[*].original_file_path` | `string \| null` | Core | 🔧 | — | Path to the CSV file relative to project root; from `dbt.nodes.original_file_path`. |
+| `data[*].row_count` | `number \| null` | Core-conditional | 🔍 | `has_catalog_stats` | Approximate row count from `dbt.catalog_stats` keyed by `stat_id`; canonical stat key unverified — see Risk #2. `null` when stat absent or `dbt docs generate` has not run. |
+| `data[*].executed_at` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | ISO 8601 completion timestamp; from `dbt_rt.run_results.created_at` via a `last_run` CTE (same pattern as the models list handler). `null` when `dbt seed` / `dbt build` has not run for this seed. |
+| `page_info` | `PageInfo` | Core | 🔧 | — | ADR-6 cursor envelope. See `PageInfo` definition in the shared types. Replaces the offset-era `total`/`offset`/`limit` triple. |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total row count under the current filter set; ignores `first`/`after`. Separate `COUNT(*)` query per request. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor pointing to the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor`. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor; pass back as `?after=...` to fetch the next page. `null` when `has_next_page` is `false`. |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` if at least one more row exists past this page. Server implements via `LIMIT first+1` and trim. |
+| `data[*].tags` | *(absent)* | — | ❌ | — | Over-fetched by GraphQL hook but not rendered in `SeedFilterView`; defer to `GET /api/v1/seeds/:id`. |
+| `data[*].database_name` | *(absent)* | — | ❌ | — | Over-fetched; not rendered. Defer to detail. |
+| `data[*].schema_name` | *(absent)* | — | ❌ | — | Over-fetched; not rendered. Defer to detail. |
+| `data[*].identifier` | *(absent)* | — | ❌ | — | Maps to `dbt.nodes.alias`; over-fetched by hook, not rendered. Defer to detail. |
+| `data[*].meta` | *(absent)* | — | ❌ | — | Over-fetched; not rendered. Defer to detail. |
+| `data[*].columns` | *(absent)* | — | ❌ | — | Over-fetched (full `catalog.columns[]`); not rendered. Defer to detail. |
+| `data[*].catalog.bytes_stat` | *(absent)* | — | ❌ | — | Over-fetched; not rendered in list view. Defer to detail. |
+| `data[*].catalog.stats[]` | *(absent)* | — | ❌ | — | Over-fetched; not rendered in list view. Defer to detail. |
+| `data[*].execution_info` | *(absent)* | — | ❌ | — | Full execution object over-fetched; list view only renders `executeCompletedAt`. The summary projects that one field as a top-level `executed_at` (same shape as `ModelSummary.executed_at`). |
+| `data[*].project_id` | *(absent)* | — | ❌ | — | Class B: Cloud concept; not in parquet. |
+| `data[*].last_run_id` | *(absent)* | — | ❌ | — | Class B: Cloud run ID; not in local parquet. |
+| `data[*].health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. |
+
+### Type definition
+
+Type definition (for codegen reference). The field reference table above is the authoritative contract.
+
+```typescript
+interface SeedListResponse {
+  data: SeedSummary[];
+  page_info: PageInfo;
+}
+
+interface SeedSummary {
+  unique_id: string;
+  name: string;
+  resource_type: "seed";
+  package_name: string | null;
+  description: string | null;
+  original_file_path: string | null;
+  // Core-conditional: null when has_catalog_stats false or stat absent.
+  row_count: number | null;
+  // Core-conditional: null when has_run_results false. ISO 8601.
+  executed_at: string | null;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **`executed_at` resilience to missing `dbt_rt.run_results` view.** The
+   models list handler builds two SQL strings — one with the `last_run` CTE
+   and one without — and falls back when `query_scalar` returns `None`
+   (signal that the parquet view is absent). The seeds list handler must
+   follow the same pattern, casting the missing column to
+   `NULL::VARCHAR AS executed_at` so the Arrow column type is stable. Reuse
+   the models pattern; do not invent a second mechanism.
+
+2. **`row_count` stat key is unverified.** `dbt.catalog_stats` stores stats
+   keyed by `stat_id`, and the canonical key for row count is
+   adapter-specific. The sample project (DuckDB) emits zero
+   `catalog_stats` rows for seeds, which is not enough to validate the key
+   name. Before implementing, confirm against a Snowflake or BigQuery
+   index. If the stat is absent, return `null` — never bubble an error.
+
+3. **No filter dropdowns means no `WHERE` accelerators today.** The handler
+   needs only `WHERE n.resource_type = 'seed'` plus optional sort/limit.
+   If a future iteration adds filter dropdowns (e.g., by package), follow
+   the models handler's `parse_*` + comma-OR pattern.
+
+4. **`sort` allowlist is short by design.** Three columns: `name`,
+   `row_count`, `executed_at`. `row_count` and `executed_at` sort use
+   `NULLS LAST` to match the models handler's convention so projects
+   without catalog/run-results don't push `null` rows to the top.
+
+5. **`data` envelope key vs. the existing models handler's `models` key.**
+   The models handler still returns `{ "models": [...] }`. That predates
+   ADR-6 and is being renamed in a companion PR. The seeds handler must
+   land with `data` from day one; do not copy the `models` precedent.
+
+6. **`tags`, `meta`, `database_name`, `schema_name`, `identifier` are over-
+   fetched by the GraphQL hook.** `SeedFilterView.tsx` projects only four
+   fields out of the much larger `SeedAppliedListNode` shape. The REST
+   contract intentionally drops the unused fields rather than mirroring
+   GraphQL one-for-one — preserves CC-2 (preserve shape *of what we
+   actually return*) without paying for fields no client renders. They
+   remain available on `GET /api/v1/seeds/:id`.
+
+## `GET /api/v1/seeds/facets`
+
+Powers: filter dropdowns for the list view above.
+
+### Query parameters
+
+No query parameters.
+
+### Example response
+
+The seeds list has no filter dropdowns, so the response body is an empty
+object. The endpoint exists for API uniformity across resources.
+
+```json
+{}
+```
+
+### Field reference
+
+No facet keys; the endpoint exists for API uniformity.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| *(none)* | — | — | — | — | Seeds expose no filter dropdowns in dbt-ui (`SeedFilterView.tsx`). Response body is `{}`. |
+
+### Type definition
+
+Type definition (for codegen reference). The field reference table above is the authoritative contract.
+
+```typescript
+// Intentionally empty — present for API uniformity with other resources.
+// If filters are ever added to SeedFilterView, append optional keys here
+// following the FacetValue shape used by ModelFacetsResponse.
+type SeedFacetsResponse = Record<string, never>;
+```
+
+### Risk register
+
+No facet-specific risks; see LIST endpoint Risk register above.
+
+---
+
+## Design notes
+
+`SnapshotFilterView.tsx` is one of the simplest resource list views in
+dbt-explorer. It renders four columns — `Name`, `Row count`, `Size`, and
+(Snowflake-only) `Last modified` — backed by a single GraphQL hook,
+`appliedSnapshots.ts`. There are **no filter dropdowns** and **no
+user-facing sort controls**. The view paginates through
+`environment.applied.snapshots` (cursor-based GraphQL); the REST endpoint
+mirrors that read-mostly shape but uses cursor pagination (`first`/`after` + `page_info`) per ADR-6.
+
+Snapshots are dbt-build-runnable resources: `dbt build` and `dbt snapshot`
+both produce `dbt_rt.run_results` rows for `snapshot.*` unique_ids. The
+existing snapshot **detail** contract therefore inlines `execution_info`
+(status/completed_at/execution_time) and `catalog`
+(type/owner/primary_key/row_count_stat/bytes_stat/stats[]). The LIST
+contract is intentionally narrower: only the fields rendered by
+`SnapshotFilterView.tsx` plus the ADR-1 `NodeBase` fields and the snapshot
+config columns that the detail row already exposes cheaply
+(`materialized`, `strategy`, `updated_at`).
+
+Why `execution_info` and `catalog` are kept nested (not flattened) on the
+LIST row:
+
+- The detail contract already establishes the nested shape. Flattening on
+  LIST would create two parallel shapes for the same underlying data
+  (cf. the seeds list contract that projected `executed_at` and
+  `row_count` as top-level fields — that pre-doctrine pattern is fine
+  for seeds because seeds expose no `catalog.stats[]` or `primary_key`,
+  but snapshots do, and nesting preserves room for adding `bytes_stat`
+  to the LIST projection without renaming the existing top-level field).
+- CC-2 (preserve nested objects from Discovery API shape; do not flatten)
+  applies. The dbt-ui hook over-fetches the full `catalog { rowCountStat,
+  bytesStat, stats { ... } }` block; the REST projection trims the
+  `stats[]` array down to the one stat actually rendered
+  (`last_modified`, Snowflake-only) but keeps the parent nesting.
+- Per ADR-6 the nested objects emit JSON `null` when their backing
+  parquet row is absent — no `has_*` capability flag is invented for the
+  LIST endpoint.
+
+Top-level envelope key is `data` per ADR-6 — *not* `snapshots`. The
+existing models handler still uses `models`; that's pre-doctrine and is
+being renamed in a companion PR. Author this contract with `data` from
+day one.
+
+The FACETS endpoint is intentionally minimal. Snapshots expose no filter
+dropdowns in dbt-ui, so the response body is `{}`. The endpoint exists
+for API uniformity across resource types (so clients can hit
+`GET /api/v1/<resource>/facets` for every resource without
+special-casing snapshots).
+
+Parquet verification against the sample project
+(`~/codaz/sl-schema-evolution/sample_project/target/index/`):
+
+- `dbt.nodes.parquet`: all `NodeBase` columns present for snapshots; the
+  sample project (jaffle-shop-style SL) **may contain zero rows with
+  `resource_type='snapshot'`**. The handler must tolerate an empty
+  result and return `{ "data": [], "page_info": { "end_cursor": null, "has_next_page": false } }`. Snapshot config
+  columns (`materialized` is always `"snapshot"`; `strategy` and
+  `updated_at` come from the snapshot `config` JSON or top-level
+  columns) are 🔍 — confirm column names against a real snapshot index
+  before implementing.
+- `dbt_rt.run_results.parquet`: confirmed schema (`unique_id`, `status`,
+  `execution_time`, `created_at`). The models list handler's `last_run`
+  CTE pattern transfers directly — same `MAX(created_at) GROUP BY
+  unique_id` shape, then `LEFT JOIN` onto `dbt.nodes` filtered by
+  `resource_type='snapshot'`.
+- `dbt.catalog_tables.parquet`: schema confirmed via the sources detail
+  handler (`table_type` → `type`, `table_owner` → `owner`,
+  `table_comment` → `comment`). For snapshots in the DuckDB sample
+  project, this view typically has zero matching rows because
+  `dbt docs generate` on DuckDB does not emit per-snapshot rows. The
+  handler must tolerate the empty result and emit `catalog: null`.
+- `dbt.catalog_stats.parquet`: schema confirmed via the sources detail
+  handler (`stat_id`, `stat_label`, `stat_value`, `description`,
+  `include_in_stats`). The `last_modified` stat is **Snowflake-only**;
+  other adapters either omit it or use a different `stat_id`. On the
+  DuckDB sample project this view has zero rows for any `snapshot.*`
+  unique_id, which means every per-stat field
+  (`row_count_stat`, `bytes_stat`, `last_modified_stat`) is `null` in a
+  sample-project round-trip. That is the expected behavior, not a bug.
+
+No `has_*` capability flag is introduced. Per ADR-6, `Capabilities`
+carries only distribution-gated flags; the absence of `catalog`,
+`execution_info`, or per-stat values is purely a project-state concern,
+communicated by emitting JSON `null` on the field itself.
+
+## `GET /api/v1/snapshots`
+
+Powers: `SnapshotFilterView` / `ResourceFilterPage` in dbt-ui.
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/SnapshotFilterView.tsx`
+GraphQL hook: `packages/metadata/dbt-explorer/src/hooks/discovery/appliedSnapshots.ts`
+
+### Query parameters
+
+Per ADR-6: `first`, `after`, and `sort` are universal. Snapshots expose
+no filter parameters because the dbt-ui view has no filter dropdowns.
+Default sort is `name:asc` — snapshots have no naturally-meaningful sort
+order beyond the rendered columns (Name, Row count, Size, Last
+modified), so the ADR-6 default matches the user-visible order on first
+load.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Hard max `5000`; values above are clamped per ADR-6. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | Format `<column>:<asc\|desc>`. Allowlisted columns: `name`, `package_name`, `updated_at`. Sorting by nested `execution_info.*` or `catalog.*` is **not** allowed in v0 to avoid `LEFT JOIN` ordering complexity; if a sort by `completed_at` or `row_count` is ever required, add it explicitly to the allowlist with the same `NULLS LAST` semantics as the models handler. Unknown column → 400. |
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — this endpoint does not exist
+yet, so every populated field is `🔧` at implementation time. Fields
+marked `// 🔍` are parquet-unverified for the specific column name or
+stat-key mapping and require confirmation against a real index (see
+Risk register).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "snapshot.jaffle_shop.orders_snapshot",
+      "name": "orders_snapshot",
+      "resource_type": "snapshot",
+      "package_name": "jaffle_shop",
+      "materialized": "snapshot",
+      "strategy": "timestamp",
+      "updated_at": "updated_at",
+      "execution_info": {
+        "status": "success",
+        "completed_at": "2026-05-15T10:32:11Z",
+        "error": null
+      },
+      "catalog": {
+        "row_count_stat": 42000,
+        "bytes_stat": 3145728,
+        "last_modified_stat": "2026-05-15 10:30:00"
+      }
+    },
+    {
+      "unique_id": "snapshot.jaffle_shop.customers_snapshot",
+      "name": "customers_snapshot",
+      "resource_type": "snapshot",
+      "package_name": "jaffle_shop",
+      "materialized": "snapshot",
+      "strategy": "check",
+      "updated_at": null,
+      "execution_info": null,
+      "catalog": null
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+`execution_info` is `null` when `dbt_rt.run_results` has no row for this
+snapshot (i.e., `dbt build` / `dbt snapshot` has not run for it).
+`catalog` is `null` when `dbt.catalog_tables` has no row for this
+snapshot (i.e., `dbt docs generate` has not run for it).
+
+Within `catalog`, each per-stat field (`row_count_stat`, `bytes_stat`,
+`last_modified_stat`) is independently `null` when the corresponding
+adapter-specific `stat_id` row is absent from `dbt.catalog_stats` —
+`last_modified_stat` in particular is **Snowflake-only** today.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `SnapshotSummary[]` | Core | 🔧 | — | ADR-6 envelope key. Empty array when no snapshots. |
+| `data[*].unique_id` | `string` | Core | 🔧 | — | e.g., `"snapshot.pkg.name"`. From `dbt.nodes.unique_id`. |
+| `data[*].name` | `string` | Core | 🔧 | — | From `dbt.nodes.name`. |
+| `data[*].resource_type` | `"snapshot"` | Core | 🔧 | — | Always `"snapshot"` for this endpoint. |
+| `data[*].package_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.package_name`. |
+| `data[*].materialized` | `"snapshot"` | Core | 🔧 | — | Always `"snapshot"` for this resource type. Included for symmetry with the detail contract and to avoid forcing clients to special-case the resource on display. From `dbt.nodes.materialized`. |
+| `data[*].strategy` | `string \| null` | Core | 🔍 | — | Snapshot strategy: `"timestamp"` or `"check"`. Sourced from the snapshot's `config` JSON (`config->>'strategy'`) in `dbt.nodes.config`, parsed handler-side via `json_parse_or_null` per CC-7. Confirm `config` is present as a JSON-string column for snapshots before implementing — see Risk #1. |
+| `data[*].updated_at` | `string \| null` | Core | 🔍 | — | Name of the timestamp column used by the `timestamp` strategy (e.g., `"updated_at"`). `null` for `check`-strategy snapshots. Sourced from `config->>'updated_at'` (same JSON-parse path as `strategy`). Despite the name, this is **not** a timestamp value — it's the column name dbt watches. Surfaced because the GraphQL hook over-fetches it via `applied.snapshots.node` for downstream tooling; included here to spare clients a second fetch when populating snapshot config previews. |
+| `data[*].execution_info` | `ExecutionInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt_rt.run_results` has no row for this snapshot. Same shape and population strategy as `ModelDetail.execution_info`; the `last_run` CTE pattern from the models list handler transfers directly. |
+| `data[*].execution_info.status` | `string \| null` | Core-conditional | 🔧 | — | `"success"` · `"error"` · `"skipped"` (raw `dbt_rt.run_results.status` value; no normalization). |
+| `data[*].execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | — | Derived from `dbt_rt.run_results.created_at` via `CAST(... AS VARCHAR)`. Same `"2026-05-14 17:41:56.652026-07"`-style space-separated local-timezone format as `ModelDetail.execution_info.completed_at` (see ADR-2 Risk #1). |
+| `data[*].execution_info.error` | `string \| null` | Core-conditional | 🔧 | — | `null` on success; populated when `status = "error"`. Maps to ADR-4's `error` (bare name, not `last_run_error`). Confirm `dbt_rt.run_results` exposes an error/message column at implementation time — if absent, surface `null` and document. |
+| `data[*].catalog` | `SnapshotListCatalogInfo \| null` | Core-conditional | 🔧 | — | `null` when `dbt.catalog_tables` has no row for this snapshot. Narrower than `SnapshotDetail.catalog`: omits `type`, `owner`, `primary_key`, and the full `stats[]` array (those remain on the detail endpoint). |
+| `data[*].catalog.row_count_stat` | `number \| null` | Core-conditional | 🔍 | — | Approximate row count from `dbt.catalog_stats` keyed by adapter-specific `stat_id`. Always `null` in the DuckDB sample project (catalog_stats has zero snapshot rows there). Canonical stat key per adapter is unverified — see Risk #2. |
+| `data[*].catalog.bytes_stat` | `number \| null` | Core-conditional | 🔍 | — | Size in bytes from `dbt.catalog_stats`. Same caveats as `row_count_stat`. Used by `SnapshotFilterView.tsx` to render the `Size` column via `prettyBytes`. |
+| `data[*].catalog.last_modified_stat` | `string \| null` | Core-conditional | 🔍 | — | Last-modified timestamp from `dbt.catalog_stats` where `stat_id = 'last_modified'`. **Snowflake-only** today (`SnapshotFilterView.tsx` only renders the `Last modified` column when `adapterType === 'snowflake'`); always `null` on other adapters and on the DuckDB sample project. Returned as the raw stat value (a string per `dbt.catalog_stats.stat_value`), not parsed into ISO 8601. |
+| `page_info` | `PageInfo` | Core | 🔧 | — | ADR-6 cursor envelope. See `PageInfo` definition in the shared types. Replaces the offset-era `total`/`offset`/`limit` triple. |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total row count under the current filter set; ignores `first`/`after`. Separate `COUNT(*)` query per request. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor pointing to the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor`. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor; pass back as `?after=...` to fetch the next page. `null` when `has_next_page` is `false`. |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` if at least one more row exists past this page. Server implements via `LIMIT first+1` and trim. |
+| `data[*].tags` | *(absent)* | — | ❌ | — | Over-fetched by the GraphQL hook (`tags` on `applied.snapshots.node`) but not rendered in `SnapshotFilterView`. Defer to `GET /api/v1/snapshots/:id`. |
+| `data[*].description` | *(absent)* | — | ❌ | — | Same as `tags` — over-fetched but not rendered in the list view. |
+| `data[*].database_name` | *(absent)* | — | ❌ | — | Over-fetched (`database`); not rendered in list view. Defer to detail. |
+| `data[*].schema_name` | *(absent)* | — | ❌ | — | Over-fetched (`schema`); not rendered in list view. Defer to detail. |
+| `data[*].identifier` | *(absent)* | — | ❌ | — | Over-fetched (`alias`); not rendered in list view. Defer to detail. |
+| `data[*].raw_code` | *(absent)* | — | ❌ | — | Over-fetched; not rendered in list view. Defer to detail. |
+| `data[*].compiled_code` | *(absent)* | — | ❌ | — | Over-fetched; not rendered in list view. Defer to detail. |
+| `data[*].meta` | *(absent)* | — | ❌ | — | Over-fetched; not rendered in list view. Defer to detail. |
+| `data[*].catalog.type` | *(absent)* | — | ❌ | — | Over-fetched in the hook's `catalog { type }` but not rendered in the list view. Defer to detail. |
+| `data[*].catalog.owner` | *(absent)* | — | ❌ | — | Same as `catalog.type`. Defer to detail. |
+| `data[*].catalog.columns` | *(absent)* | — | ❌ | — | Over-fetched (full per-column type/tag breakdown); not rendered in list view. Defer to detail. |
+| `data[*].catalog.primary_key` | *(absent)* | — | ❌ | — | Detail-only — see `SnapshotDetail.catalog.primary_key`. |
+| `data[*].catalog.stats` | *(absent)* | — | ❌ | — | Detail-only — the list view projects only the `last_modified` stat (and only on Snowflake). The full `stats[]` array remains on `GET /api/v1/snapshots/:id`. |
+| `data[*].check_cols` | *(absent)* | — | ❌ | — | `config->>'check_cols'` is detail-only — the list view does not render the check-strategy column list. Defer to detail. |
+| `data[*].last_run_id` | *(absent)* | — | ❌ | — | Class B: Cloud-specific run ID; no parquet path. The GraphQL hook returns it (`executionInfo.lastRunId`) but it has no source-available equivalent. |
+| `data[*].last_success_run_id` | *(absent)* | — | ❌ | — | Class B: same as `last_run_id`. |
+| `data[*].project_id` | *(absent)* | — | ❌ | — | Class B: Cloud concept; not in parquet. |
+| `data[*].health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. |
+| `data[*].adapter_type` | *(absent)* | — | ❌ | — | The dbt-ui view reads `environment.adapterType` (top-level, not per-row) to decide whether to render the `Last modified` column. Adapter type is a project-level capability and lives on `GET /api/v1/capabilities` (or equivalent), not on per-row summaries. |
+
+### Type definition
+
+Type definition (for codegen reference). The field reference table above is the authoritative contract.
+
+```typescript
+interface SnapshotListResponse {
+  data: SnapshotSummary[];
+  page_info: PageInfo;
+}
+
+interface SnapshotSummary {
+  unique_id: string;
+  name: string;
+  resource_type: "snapshot";
+  package_name: string | null;
+  materialized: "snapshot";
+  // From config JSON; "timestamp" or "check".
+  strategy: string | null;
+  // From config JSON; column name for timestamp-strategy snapshots.
+  updated_at: string | null;
+  // null when dbt_rt.run_results has no row for this snapshot.
+  execution_info: SnapshotListExecutionInfo | null;
+  // null when dbt.catalog_tables has no row for this snapshot.
+  catalog: SnapshotListCatalogInfo | null;
+}
+
+// Shape parallels ModelDetail.ExecutionInfo + ADR-4's `error` bare name.
+interface SnapshotListExecutionInfo {
+  status: string | null;
+  completed_at: string | null;
+  error: string | null;
+}
+
+// Narrower than SnapshotDetail.catalog: only the per-stat fields rendered
+// by SnapshotFilterView. The full catalog (type/owner/primary_key/stats[])
+// remains on GET /api/v1/snapshots/:id.
+interface SnapshotListCatalogInfo {
+  row_count_stat: number | null;
+  bytes_stat: number | null;
+  // Snowflake-only — null on other adapters.
+  last_modified_stat: string | null;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **`strategy` and `updated_at` live inside the `config` JSON column.**
+   `dbt.nodes` stores per-resource configuration as a JSON-string column
+   (`config`), parsed handler-side via the shared `json_parse_or_null`
+   helper per CC-7. Confirm that `config` is present and that
+   `strategy` / `updated_at` are top-level keys inside it for snapshots
+   before implementing. If they live under a nested sub-object
+   (e.g. `config->>'snapshot'->>'strategy'`), update the SELECT
+   expression accordingly. Failed parse must emit `null`, never bubble
+   to the client.
+
+2. **`row_count_stat` / `bytes_stat` / `last_modified_stat` keys are
+   adapter-specific.** `dbt.catalog_stats` is keyed by
+   `stat_id` strings that vary by adapter (e.g. `"bytes"` vs
+   `"num_bytes"`). The sources detail handler already pivots from this
+   table via a per-stat SQL projection; the snapshot list handler must
+   reuse that pattern (one `LEFT JOIN` per stat key, filtered on
+   `stat_id`). The exact key names per adapter must be confirmed
+   against real Snowflake / BigQuery / Postgres indexes before
+   implementing — the DuckDB sample project has zero `catalog_stats`
+   rows for snapshots and cannot validate them. Until verified, the
+   handler should tolerate any missing key and return `null` for that
+   field, never bubble an error.
+
+3. **Sample project may have zero snapshots.** The reference parquet at
+   `~/codaz/sl-schema-evolution/sample_project/target/index/` is a
+   semantic-layer-focused project and may not contain any snapshots.
+   The handler must return `{ "data": [], "page_info": { "end_cursor": null,
+   "has_next_page": false } }` cleanly when `dbt.nodes` yields no rows with
+   `resource_type='snapshot'`. Integration tests must cover this case
+   explicitly — do not rely on a populated sample for green tests.
+
+4. **`execution_info.error` column presence in
+   `dbt_rt.run_results`.** ADR-4 mandates the bare field name `error`
+   (not `last_run_error`). The existing models handler does **not**
+   return `error` — only `status`, `execution_time`, and
+   `completed_at`. The snapshot LIST handler must add it to the run
+   results CTE projection; if `dbt_rt.run_results` exposes an error /
+   message column under a different name, document the mapping at
+   implementation time and keep the wire field as `error`.
+
+5. **No filter dropdowns means no `WHERE` accelerators today.** The
+   handler needs only `WHERE n.resource_type = 'snapshot'` plus
+   optional sort/limit. If a future iteration adds filter dropdowns
+   (e.g. by strategy or by package), follow the models handler's
+   `parse_*` + comma-OR pattern.
+
+6. **`sort` allowlist is intentionally narrow.** Three columns:
+   `name`, `package_name`, `updated_at` (top-level `dbt.nodes`
+   columns or trivially-derivable JSON keys). Sorting by nested
+   `execution_info.*` or `catalog.*` is deferred to avoid the LEFT
+   JOIN ordering / NULLS-LAST complexity for v0; add explicitly to
+   the allowlist when a real consumer surfaces.
+
+7. **`data` envelope key vs. the existing models handler's `models`
+   key.** The models handler still returns `{ "models": [...] }`.
+   That predates ADR-6 and is being renamed in a companion PR. The
+   snapshots handler must land with `data` from day one; do not copy
+   the `models` precedent.
+
+8. **`last_modified_stat` is Snowflake-only by design.** The dbt-ui
+   view only renders the `Last modified` column when
+   `adapterType === 'snowflake'` (per `ADAPTERS_WITH_LAST_MODIFIED_STAT`
+   in `SnapshotFilterView.tsx`). The REST contract still exposes the
+   field unconditionally — it's just `null` on every other adapter.
+   This keeps the response schema stable across environments and
+   pushes the rendering-gate decision to the client (where it
+   already lives).
+
+## `GET /api/v1/snapshots/facets`
+
+Powers: filter dropdowns for the list view above.
+
+### Query parameters
+
+No query parameters.
+
+### Example response
+
+The snapshots list has no filter dropdowns, so the response body is an
+empty object. The endpoint exists for API uniformity across resources.
+
+```json
+{}
+```
+
+### Field reference
+
+No facet keys; the endpoint exists for API uniformity.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| *(none)* | — | — | — | — | Snapshots expose no filter dropdowns in dbt-ui (`SnapshotFilterView.tsx`). Response body is `{}`. |
+
+### Type definition
+
+Type definition (for codegen reference). The field reference table above is the authoritative contract.
+
+```typescript
+// Intentionally empty — present for API uniformity with other resources.
+// If filters are ever added to SnapshotFilterView, append optional keys
+// here following the FacetValue shape used by ModelFacetsResponse.
+type SnapshotFacetsResponse = Record<string, never>;
+```
+
+### Risk register
+
+No facet-specific risks; see LIST endpoint Risk register above.
+
+---
+
+## Design notes
+
+Five decisions are specific to this LIST + FACETS pair and warrant calling out before review.
+
+**1. Discriminated union on `resource_type` per ADR-3 — the LIST returns mixed-shape rows.**
+ADR-3 settled the question for the detail endpoint: one endpoint covers both `test.*` and `unit_test.*` `unique_id`s, response shape narrowed by `resource_type`. The LIST inherits the same choice for the same reason — both folds into the same "Tests" tab in dbt-ui (`TestFilterView.tsx`), and `testTypesDisplay = ['unit', 'data']` collapses both into one filter dropdown. Splitting LIST into `/api/v1/tests` and `/api/v1/unit_tests` would force the FE to issue two paginated queries and merge them client-side. Instead, the LIST returns a single `data[]` envelope where each row carries a shared base (unique_id, name, resource_type, package_name, test_type, severity, tested_node_unique_id, tested_column, execution_info) plus union-arm-specific fields (data test → test_metadata; unit_test → fixture row counts). Clients narrow on `resource_type` exactly as they do for the detail endpoint.
+
+**2. Per ADR-4: bare `execution_info` field names; no `last_known_result`.**
+ADR-4 dropped `lastKnownResult` because it requires run history (the concept "did the test pass before a schema change invalidated it?" has no meaning in a single-snapshot index). The LIST therefore does **not** carry a `last_known_result` field; the current test outcome is `execution_info.status` and that is the only signal. Similarly, no `last_run_status` / `executeCompletedAt` — the inline `execution_info` uses bare `status`, `error`, `completed_at`, `execution_time` per ADR-4.
+
+**3. Filter naming: dbt-ui → REST mapping.**
+The FE filter view exposes three filters (`testStatus`/`status`/`testType`) with mappings as follows. The REST contract uses snake_case (CC-1) and singular-tense names consistent with the resource it filters on:
+
+| dbt-ui search param | GraphQL filter | REST query param | Values |
+|---|---|---|---|
+| `testStatus` (UI label "Test result") | `lastKnownResults` | `result` | `pass` · `fail` · `warn` · `error` · `skipped` · `unknown` |
+| `status` (UI label "Run status") | `status` | `run_status` | `success` · `error` · `skipped` · `reused` |
+| `testType` (UI label "Test Type") | `testTypes` | `test_type` | `unit` · `data` (mirrors `testTypesDisplay`) |
+
+Per ADR-4 the `result` and `run_status` filters both project onto `dbt_rt.run_results.status` at the SQL level — see Risk #4 for why both knobs coexist despite degenerating to one column in snapshot mode.
+
+**4. Shared `tested_node_unique_id` field synthesized from two parquet sources.**
+The FE renders a "Tested resource" column on every row (both variants). The parquet shape is asymmetric: `dbt.test_metadata.attached_node` carries the tested model's `unique_id` for data tests, but `dbt.unit_tests` stores the model as a name string in `model` and as a `unique_id` in `depends_on_nodes[0]`. The handler synthesizes a single `tested_node_unique_id` field on every row by reading `test_metadata.attached_node` for `resource_type = 'test'` and `unit_tests.depends_on_nodes[0]` for `resource_type = 'unit_test'`. This keeps the FE table cell logic uniform across the union — every row has the same field name regardless of variant.
+
+**5. ADR-6 envelope; default sort `name:asc`; FACETS returns real keys (not `{}`).**
+The LIST envelope is the ADR-6 standard `{ data, total, offset, limit }`. Top-level key is `data` — not `tests`. Default sort is `name:asc`; the FE exposes no sort controls so the allowlist holds only `name`. Filters are accepted as CSV via `?result=`, `?run_status=`, `?test_type=`. Unlike the seeds / semantic_models contracts (which return `{}` for facets because their FE views have no filter dropdowns), this contract surfaces three facet keys — `results`, `run_statuses`, `test_types` — because the FE filter view has three dropdowns to populate.
+
+Parquet verification against the sample project (`~/codaz/sl-schema-evolution/sample_project/target/index/`):
+
+- `dbt.nodes.parquet`: 20 rows with `resource_type = 'test'`, 2 rows with `resource_type = 'unit_test'` (the unit_test variant is present despite the `dbt.unit_tests` table being separate). All `NodeBase` columns present (`unique_id`, `name`, `package_name`, `original_file_path`, `tags`, `fqn`).
+- `dbt.test_metadata.parquet`: 20 rows; one-to-one with `nodes.resource_type = 'test'`. Columns: `test_name` (e.g., `"accepted_values"`, `"expression_is_true"`), `test_namespace` (e.g., `"dbt_utils"`), `column_name` (sometimes null), `attached_node` (the tested model's `unique_id`), `severity` (all `null` in this sample — see Risk #2), `kwargs` (JSON string).
+- `dbt.unit_tests.parquet`: 2 rows; one-to-one with `nodes.resource_type = 'unit_test'`. Columns: `model` (raw name string e.g. `"orders"`), `given` (JSON-string array), `expect` (JSON-string object), `depends_on_nodes` (`List(Utf8)`).
+- `dbt_rt.run_results.parquet`: 20 rows for `test.*` + `unit_test.*` `unique_id`s; `status` column values were `"skipped"` (sample project never ran successfully) — the column type is `string` and accepts the full test-status enum (`pass`/`fail`/`warn`/`error`/`skipped`).
+- `dbt_rt.test_failures.parquet`: 0 rows in this sample; column shape is `(unique_id, invocation_id, failure_rows)`. Not used by the LIST (failures are a detail-page concern); documented here so reviewers know it exists.
+
+---
+
+## `GET /api/v1/tests`
+
+Powers: `TestFilterView` / `ResourceFilterPage` in dbt-ui.
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/TestFilterView.tsx`
+GraphQL hook: `packages/metadata/dbt-explorer/src/hooks/discovery/appliedTests.ts` (`GetTestListByUniqueId` query, returns `AppliedTests`)
+
+Paginated list of test nodes covering **both** `test.*` and `unit_test.*` `unique_id` prefixes in a single response (ADR-3 union). Six columns render in the FE table: Name, Test type, Test result, Run status, Tested resource, Column.
+
+### Query parameters
+
+Per ADR-6: `first`, `after`, and `sort` are universal. The FE exposes three filter dropdowns and no sort controls.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Hard max `5000`; matches the `/api/v1/models` handler. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | Format `<column>:<asc\|desc>`. Allowlisted columns: `name` (the only column the FE could sort on if a control existed). Invalid column or direction → `400`. |
+| `result` | `string` (csv) | — | Test outcome filter; values from `{pass, fail, warn, error, skipped, unknown}`. Multiple values OR'd: `?result=fail,error`. Maps to `dbt_rt.run_results.status` (see Risk #4). |
+| `run_status` | `string` (csv) | — | Run-engine status filter; values from `{success, error, skipped, reused}`. Multiple values OR'd. Maps to `dbt_rt.run_results.status` (see Risk #4). |
+| `test_type` | `string` (csv) | — | `unit` · `data`. `data` matches `resource_type = 'test'`; `unit` matches `resource_type = 'unit_test'`. Multiple values OR'd: `?test_type=unit,data` (no-op since it returns everything). |
+
+### Example response
+
+The `data` array carries **both** `test` and `unit_test` rows in their respective union-arm shapes. The shared base (unique_id, name, resource_type, package_name, test_type, severity, tested_node_unique_id, tested_column, execution_info) appears on every row. Variant-specific fields (test_metadata for data tests; given/expect row counts for unit tests) appear only on the matching variant — absent (not `null`) on the other.
+
+Fields marked `// 🔧` are not yet returned — this endpoint does not exist yet, so every populated field is `🔧` at implementation time. Fields marked `// 🔍` are parquet-unverified for the specific value mapping and require confirmation against a real index (see Risk #2 for `severity`).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "test.jaffle_shop.not_null_orders_order_id.d12f0947c8",
+      "name": "not_null_orders_order_id",
+      "resource_type": "test",
+      "package_name": "jaffle_shop",
+      "test_type": "not_null",
+      "tested_node_unique_id": "model.jaffle_shop.orders",
+      "tested_column": "order_id",
+      "severity": "ERROR",
+      "test_metadata": {
+        "namespace": null,
+        "kwargs": { "column_name": "order_id", "model": "ref('orders')" }
+      },
+      "execution_info": {
+        "status": "pass",
+        "error": null,
+        "completed_at": "2026-05-15T10:32:11Z"
+      }
+    },
+    {
+      "unique_id": "test.jaffle_shop.dbt_utils_expression_is_true_orders_subtotal.b1416e07ec",
+      "name": "dbt_utils_expression_is_true_orders_subtotal",
+      "resource_type": "test",
+      "package_name": "jaffle_shop",
+      "test_type": "expression_is_true",
+      "tested_node_unique_id": "model.jaffle_shop.orders",
+      "tested_column": null,
+      "severity": "WARN",
+      "test_metadata": {
+        "namespace": "dbt_utils",
+        "kwargs": { "expression": "subtotal >= 0", "model": "ref('orders')" }
+      },
+      "execution_info": {
+        "status": "fail",
+        "error": "Got 12 results, expected 0.",
+        "completed_at": "2026-05-15T10:32:14Z"
+      }
+    },
+    {
+      "unique_id": "unit_test.jaffle_shop.orders.test_supply_costs_sum_correctly",
+      "name": "test_supply_costs_sum_correctly",
+      "resource_type": "unit_test",
+      "package_name": "jaffle_shop",
+      "test_type": "unit",
+      "tested_node_unique_id": "model.jaffle_shop.orders",
+      "tested_column": null,
+      "severity": null,
+      "num_given": 1,
+      "num_given_rows": 3,
+      "num_expect_rows": 3,
+      "execution_info": {
+        "status": "pass",
+        "error": null,
+        "completed_at": "2026-05-15T10:32:15Z"
+      }
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+`execution_info` is `null` when `has_run_results` is false (i.e., `dbt build` / `dbt test` has not run). When `has_run_results` is true but a specific test has no `run_results` row, `execution_info` is still `null` (no fabrication).
+
+Variant-specific fields (`test_metadata` on data tests; `num_given` / `num_given_rows` / `num_expect_rows` on unit tests) are **absent** (omitted from the JSON, not serialized as `null`) on the opposite variant. Clients narrow on `resource_type` before reading them.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+Fields that appear in only one variant are flagged in the Notes column. Every row below is `🔧` (or `🔍` where parquet semantics are unverified) because no LIST handler exists today.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `TestSummary[]` | Core | 🔧 | — | ADR-6 envelope key. Discriminated union of `DataTestSummary \| UnitTestSummary`. Empty array when no tests. |
+| `data[*].unique_id` | `string` | Core | 🔧 | — | e.g., `"test.pkg.name.hash"` or `"unit_test.pkg.model.name"`. From `dbt.nodes.unique_id`. |
+| `data[*].name` | `string` | Core | 🔧 | — | From `dbt.nodes.name`. |
+| `data[*].resource_type` | `"test" \| "unit_test"` | Core | 🔧 | — | Discriminator — determines which variant fields are present. |
+| `data[*].package_name` | `string \| null` | Core | 🔧 | — | From `dbt.nodes.package_name`. |
+| `data[*].test_type` | `string \| null` | Core | 🔧 | — | For `resource_type = 'test'`: from `dbt.test_metadata.test_name` (e.g., `"not_null"`, `"unique"`, `"accepted_values"`, `"relationships"`, custom test names like `"expression_is_true"`). For `resource_type = 'unit_test'`: always the literal string `"unit"`. The FE collapses these into two display buckets (`unit`, `data`) via `translateFromTestType`; the `?test_type=` query param accepts those bucket values. |
+| `data[*].tested_node_unique_id` | `string \| null` | Core | 🔧 | — | The model under test as a `unique_id`. For `resource_type = 'test'`: `dbt.test_metadata.attached_node`. For `resource_type = 'unit_test'`: `dbt.unit_tests.depends_on_nodes[0]` (the first model dependency). Synthesized server-side so the FE has a uniform field across the union — see Design note #4. |
+| `data[*].tested_column` | `string \| null` | Core | 🔧 | — | Column under test for column-level data tests (`not_null`, `unique`, `accepted_values`, etc.). From `dbt.test_metadata.column_name`. Always `null` for unit tests and for table-level data tests (`relationships`, `expression_is_true`, etc.). |
+| `data[*].severity` | `string \| null` | Core | 🔍 | — | `"ERROR"` · `"WARN"` for data tests; `null` for unit tests. From `dbt.test_metadata.severity`. **All values null in the sample project** — see Risk #2; column type confirmed as `string`. |
+| `data[*].execution_info` | `TestExecutionInfo \| null` | Core-conditional | 🔧 | `has_run_results` | `null` when `dbt build` hasn't run (capability flag false) OR when this specific test has no `run_results` row. Present on both variants. |
+| `data[*].execution_info.status` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | `"pass"` · `"fail"` · `"error"` · `"warn"` · `"skipped"` · `"reused"`. From `dbt_rt.run_results.status` (column type confirmed `string`). ADR-4 bare name (no `last_run_status`). |
+| `data[*].execution_info.error` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | Error message; from `dbt_rt.run_results.message`. `null` when status is `"pass"` / `"skipped"`. ADR-4 bare name (no `last_run_error`). |
+| `data[*].execution_info.completed_at` | `string \| null` | Core-conditional | 🔧 | `has_run_results` | ISO 8601 timestamp; from `dbt_rt.run_results.created_at`. ADR-4 bare name (no `executeCompletedAt`). |
+| `data[*].test_metadata` | `TestMetadataSummary \| null` | Core | 🔧 | — | **data test only** — *absent* on unit_test rows (not `null`). From `dbt.test_metadata`. |
+| `data[*].test_metadata.namespace` | `string \| null` | Core | 🔧 | — | **data test only** — from `dbt.test_metadata.test_namespace` (e.g., `"dbt_utils"` for `dbt_utils.expression_is_true`; `null` for first-party tests like `not_null`). |
+| `data[*].test_metadata.kwargs` | `Record<string, unknown>` | Core | 🔍 | — | **data test only** — unstructured JSON, deserialized handler-side via CC-7 `json_parse_or_null`. From `dbt.test_metadata.kwargs` (a JSON string column). Parse failure → `null` + `tracing::warn`; never escaped JSON in the wire response. |
+| `data[*].num_given` | `number \| null` | Core | 🔍 | — | **unit test only** — *absent* on data test rows. Count of `given` fixtures; derived via `json_array_length(given)` or by parsing `dbt.unit_tests.given` (JSON string) and counting top-level entries. See Risk #5. |
+| `data[*].num_given_rows` | `number \| null` | Core | 🔍 | — | **unit test only** — total input rows across all fixtures. Derived from `dbt.unit_tests.given` JSON. See Risk #5. |
+| `data[*].num_expect_rows` | `number \| null` | Core | 🔍 | — | **unit test only** — expected output row count. Derived from `dbt.unit_tests.expect` JSON. See Risk #5. |
+| `page_info` | `PageInfo` | Core | 🔧 | — | ADR-6 cursor envelope. See `PageInfo` definition in the shared types. Replaces the offset-era `total`/`offset`/`limit` triple. |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total row count under the current filter set; ignores `first`/`after`. Separate `COUNT(*)` query per request. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor pointing to the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor`. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor; pass back as `?after=...` to fetch the next page. `null` when `has_next_page` is `false`. |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` if at least one more row exists past this page. Server implements via `LIMIT first+1` and trim. |
+| `data[*].original_file_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint but not rendered in the FE filter table; defer to `GET /api/v1/tests/:id`. |
+| `data[*].tags` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not rendered in the LIST view. |
+| `data[*].fqn` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not rendered. |
+| `data[*].description` | *(absent)* | — | ❌ | — | Not rendered in the LIST view; defer to detail. |
+| `data[*].depends_on` | *(absent)* | — | ❌ | — | Lineage edges are a detail-page concern (`tested_node_unique_id` synthesized from `depends_on_nodes[0]` is the only LIST-level need). |
+| `data[*].raw_code` | *(absent)* | — | ❌ | — | SQL body is a detail-page concern (Code tab). |
+| `data[*].compiled_code` | *(absent)* | — | ❌ | — | Same as `raw_code`. |
+| `data[*].given` | *(absent)* | — | ❌ | — | **unit test only** — full fixture rows are a detail-page concern; LIST exposes only the row counts (`num_given`, `num_given_rows`). |
+| `data[*].expect` | *(absent)* | — | ❌ | — | **unit test only** — same as `given`. |
+| `data[*].last_known_result` | *(absent)* | — | ❌ | — | Per ADR-4, dropped. The current outcome is `execution_info.status`. |
+| `data[*].project_id` | *(absent)* | — | ❌ | — | Class B: Cloud concept; not in parquet. |
+| `data[*].last_run_id` | *(absent)* | — | ❌ | — | Class B: Cloud run ID; not in local parquet. |
+| `data[*].health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface TestListResponse {
+  data: TestSummary[];   // ADR-3 discriminated union
+  page_info: PageInfo;
+}
+
+// Discriminated union on resource_type — mirrors GET /api/v1/tests/:id (ADR-3).
+type TestSummary = DataTestSummary | UnitTestSummary;
+
+// Shared fields factored here for documentation; Rust composes a NodeBase.
+interface TestSummaryBase {
+  unique_id: string;
+  name: string;
+  package_name: string | null;
+  test_type: string | null;
+  tested_node_unique_id: string | null;
+  tested_column: string | null;
+  severity: string | null;
+  execution_info: TestExecutionInfo | null;
+}
+
+interface DataTestSummary extends TestSummaryBase {
+  resource_type: "test";
+  test_metadata: TestMetadataSummary | null;
+}
+
+interface UnitTestSummary extends TestSummaryBase {
+  resource_type: "unit_test";
+  num_given: number | null;
+  num_given_rows: number | null;
+  num_expect_rows: number | null;
+}
+
+interface TestExecutionInfo {
+  status: string | null;        // ADR-4 bare name
+  error: string | null;         // ADR-4 bare name
+  completed_at: string | null;  // ADR-4 bare name
+}
+
+interface TestMetadataSummary {
+  namespace: string | null;
+  kwargs: Record<string, unknown>;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **Two parquet sources required per variant; one query joins both.** A complete LIST query joins `dbt.nodes` (filter on `resource_type IN ('test', 'unit_test')` for the base columns) with `dbt.test_metadata` LEFT JOIN (only the `test` variant has rows here) and `dbt.unit_tests` LEFT JOIN (only the `unit_test` variant has rows there). The handler can emit a single SQL string with both LEFT JOINs and project NULLs for the other variant's columns, then decode the union arm based on `resource_type` in the Rust mapper — same pattern as the detail endpoint will use.
+
+2. **`severity` is `string` in parquet but empirically `null` in the sample.** The `dbt.test_metadata.severity` column type is confirmed `string`, but all 20 rows in the sample project carry `null`. Production dbt projects do populate this column (`"ERROR"` / `"WARN"`); the contract documents the field as `Core 🔍` to flag that the value-mapping verification waits on a populated index. The handler must SELECT it and emit verbatim; do not invent a default.
+
+3. **`run_results.status` is the only outcome signal — `result` and `run_status` filter the same column.** dbt-docs-server is a snapshot server (ADR-4): there is no separate "last known result" timeline. The FE filter view exposes both "Test result" (mapped to `?result=`) and "Run status" (mapped to `?run_status=`); both target `dbt_rt.run_results.status`. The two filters use different value enums (`pass`/`fail`/`warn`/`error`/`skipped`/`unknown` vs. `success`/`error`/`skipped`/`reused`), so a request like `?run_status=success` is degenerate for tests (test runs never report `success`; they report `pass`). The handler accepts both for FE parity but documents the degeneracy in the OpenAPI description. Future cleanup: deprecate `?run_status=` for tests once the FE drops the dropdown.
+
+4. **`test_type` filter semantics: bucket vs. literal.** The `?test_type=` query param accepts the FE's display buckets (`unit`, `data`) — not the literal `test_name` values (`not_null`, `unique`, etc.). `?test_type=unit` filters `resource_type = 'unit_test'`; `?test_type=data` filters `resource_type = 'test'`. The response `data[*].test_type` field, however, returns the **literal** test name (e.g., `"not_null"`, `"accepted_values"`) for data tests and `"unit"` for unit tests. Asymmetric on purpose: the filter mirrors `testTypesDisplay`; the response value preserves the parquet datum so downstream filtering (e.g., facet counts in a future iteration) can drill down by test name.
+
+5. **`num_given` / `num_given_rows` / `num_expect_rows` are derived, not stored.** `dbt.unit_tests` does not pre-compute these counts; `given` and `expect` are JSON strings (`"[{...}, {...}]"`). DuckDB's `json_array_length()` can count top-level array entries cheaply, but summing rows across `given[*].rows[*]` requires either (a) a `json_extract` + nested aggregation or (b) parsing the JSON in Rust and counting. Pick (b) for now: parse with `json_parse_or_null` (CC-7), fall through to `null` on parse failure. Two rows in the sample project; performance is fine.
+
+6. **`tested_node_unique_id` synthesis is asymmetric across the union.** Data tests pull from `dbt.test_metadata.attached_node` (always a `unique_id`); unit tests pull from `dbt.unit_tests.depends_on_nodes[0]` (a `List(Utf8)` of `unique_id`s). The list ordering of `depends_on_nodes` is the order dbt emitted dependencies — not guaranteed to put the model-under-test first, but in practice it does (the unit test's primary subject is the first dependency). Document this assumption; add a Rust unit test asserting first-element semantics. If a unit test ever has zero or multiple model dependencies, fall back to `null` rather than picking arbitrarily.
+
+7. **`kwargs` is unstructured JSON — fragile for `relationships` tests.** Mirrors detail-contract Risk #6: `relationships` tests pack `to:`, `field:`, `column_name:` into kwargs. The LIST exposes `test_metadata.kwargs` as a `Record<string, unknown>` blob; the FE is responsible for any structural narrowing. Document the shape so the FE team does not expect a typed object.
+
+8. **No sort controls in v0; allowlist is one column.** The FE filter view exposes no sort controls. The `?sort=` allowlist holds `name` only. Adding more (e.g., `executed_at`, `severity`) is additive and does not break the contract; resist pre-adding them — every allowlisted column is a tested code path.
+
+9. **Pagination semantics across the union.** `total` counts the **combined** set of `test.*` + `unit_test.*` rows after filters. A page of `limit=10` may contain any mix of variants depending on the sort and filter. Clients that want a variant-specific count should issue two queries: `?test_type=data` and `?test_type=unit`. Do not expose `total_by_resource_type` in v0 — that's surface area without a consumer.
+
+---
+
+## `GET /api/v1/tests/facets`
+
+Powers: the three filter dropdowns in `TestFilterView` — Test result, Run status, Test Type.
+
+### Query parameters
+
+None. Any query parameters supplied are ignored (per the seeds / semantic_models contracts — keeps the endpoint hospitable to future query-string additions).
+
+### Example response
+
+Each key contains a `FacetValue[]` array. `count` is `null` today — reserved for a future enhancement that returns the number of tests matching each filter value without a full LIST query (matches the existing `ModelFacetsResponse` shape).
+
+```json
+{
+  "results": [
+    { "value": "pass", "count": null },
+    { "value": "fail", "count": null },
+    { "value": "warn", "count": null },
+    { "value": "error", "count": null },
+    { "value": "skipped", "count": null },
+    { "value": "unknown", "count": null }
+  ],
+  "run_statuses": [
+    { "value": "success", "count": null },
+    { "value": "error", "count": null },
+    { "value": "skipped", "count": null },
+    { "value": "reused", "count": null }
+  ],
+  "test_types": [
+    { "value": "unit", "count": null },
+    { "value": "data", "count": null }
+  ]
+}
+```
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `results` | `FacetValue[]` | Core | 🔧 | — | Six values from `testStatusesPlusUnknown` (dbt-dag `resourceConstants.ts`): `pass`, `fail`, `warn`, `error`, `skipped`, `unknown`. Server constant — does **not** query parquet for distinct values, because the enum is fixed by dbt-core (`testStatusesPlusUnknown` is the closed set). Pattern matches `accesses` in `ModelFacetsResponse`. |
+| `run_statuses` | `FacetValue[]` | Core | 🔧 | — | Four values from `runStatuses` (dbt-dag `resourceConstants.ts`): `success`, `error`, `skipped`, `reused`. Server constant. |
+| `test_types` | `FacetValue[]` | Core | 🔧 | — | Two display buckets from `testTypesDisplay`: `unit`, `data`. Server constant. |
+| `results[*].value` | `string` | Core | 🔧 | — | The filter value the FE submits as `?result=<value>`. |
+| `results[*].count` | `number \| null` | Core | 🔧 | — | Always `null` today. Reserved for future per-facet counts. Same shape as `ModelFacetsResponse.accesses[*].count`. |
+| `run_statuses[*].value` | `string` | Core | 🔧 | — | Same shape as `results[*].value`. |
+| `run_statuses[*].count` | `number \| null` | Core | 🔧 | — | Same shape. |
+| `test_types[*].value` | `string` | Core | 🔧 | — | Same shape. |
+| `test_types[*].count` | `number \| null` | Core | 🔧 | — | Same shape. |
+| `severities` | *(absent)* | — | ❌ | — | The FE has no severity filter dropdown. Adding one is additive — append a `severities` key whose values are sourced from `dbt.test_metadata.severity` (server constant `["ERROR", "WARN"]` plus the empirical-null case if needed). |
+| `packages` | *(absent)* | — | ❌ | — | No FE filter; add when a filter ships. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface TestFacetsResponse {
+  results: FacetValue[];
+  run_statuses: FacetValue[];
+  test_types: FacetValue[];
+}
+
+// Identical shape to ModelFacetsResponse.FacetValue — share the type at the
+// generator level so client codegen produces a single FacetValue interface.
+interface FacetValue {
+  value: string;
+  count: number | null;   // always null today
+}
+```
+
+### Risk register
+
+1. **All three facet value-sets are server constants — no parquet query.** `runStatuses`, `testStatusesPlusUnknown`, and `testTypesDisplay` are closed enums defined in dbt-dag's `resourceConstants.ts` and (in the case of run/test statuses) ultimately in dbt-core (`core/dbt/contracts/results.py`). Sourcing them from parquet would surface only the values that happen to exist in the current index — a project with no `warn` outcomes would lose the `warn` filter option until one fired. Server constants keep the filter UI stable across project state. This is consistent with `ModelFacetsResponse.modeling_layers` and `accesses`, which are also server-constant.
+
+2. **`results` enum may drift from dbt-core.** `testStatusesPlusUnknown` adds `unknown` on top of `testStatuses` (the dbt-core enum) and intentionally drops `reused` (per the comment in `resourceConstants.ts`: "filters use lastKnownResult … which has no reused value"). The handler must match dbt-dag's `testStatusesPlusUnknown`, not dbt-core's `testStatuses`. Add a test that asserts the array contents are exactly `["pass", "fail", "warn", "error", "skipped", "unknown"]` to catch drift if dbt-dag evolves.
+
+3. **`count: null` is a deliberate stub.** Mirrors `ModelFacetsResponse.FacetValue.count`. Populating real counts requires either (a) running a `GROUP BY` per facet key on every facets request or (b) caching counts and invalidating on index reload. Neither is in v0 scope; the field is reserved so adding counts later is additive (no schema break).
+
+4. **No `severities` facet despite the field existing.** The FE filter view has no severity dropdown today. The contract documents the absence (see `severities` row in the field reference) so reviewers don't add it speculatively. When the FE adds a severity dropdown, append `severities: FacetValue[]` and the matching `?severity=` query param on the LIST endpoint.
+
+---
+
+## Design notes — `GET /api/v1/exposures` + `GET /api/v1/exposures/facets`
+
+Powers the `ExposureFilterView` page in dbt-ui — the project-level table of all
+exposures with a single Owner filter (plus two feature-gated Cloud-only filters).
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/ExposureFilterView.tsx`
+
+GraphQL hooks:
+- `packages/metadata/dbt-explorer/src/hooks/discovery/appliedExposures.ts` (`AppliedExposures` query — list rows)
+- `packages/metadata/dbt-explorer/src/hooks/discovery/exposreOwners.ts` (`GetExposureOwners` query — owner facet; filename misspelling is intentional, matches the source)
+
+Per ADR-5, exposures are definition-only (no `execution_info`, no `dbt_rt.run_results`
+row); the row surface includes `created_at` (epoch seconds from
+`dbt.exposures.created_at`) as the "Definition updated as of …" timestamp surrogate.
+
+This contract covers only the **list row** and **facets** shapes. The detail
+endpoint already exists in `API-CONTRACTS.md` § `GET /api/v1/exposures/:id`. Row
+fields are a subset of detail fields chosen to power the FilterView table columns
+(Name, Health, Type, Owner, Owner email) plus the inline-edge `depends_on[]`
+truncation envelope from CC-6 to support upstream-count badges.
+
+### Decisions worth flagging to the coordinator
+
+1. **No sorts are exposed.** The dbt-ui `ExposureFilterView` does not call any
+   GraphQL `orderBy` argument and renders rows in server-returned order
+   (`AppliedExposures` returns the codex-api default). Per ADR-6 the LIST endpoint
+   still defaults to `name:asc` for client-stable rendering; `?sort` is **not**
+   accepted (validation rejects any value). If the FE adds sort UI later, add the
+   sort allowlist additively — no schema change.
+
+2. **Owner filter is exact match, single value.** `OwnerFilterDropdown` writes a
+   single `owner=<name>` query param (no comma-separated multi-select). The
+   handler validates exact match against `dbt.exposures.owner_name` (`= '<value>'`,
+   not `IN (...)`). Keep parity with `ExposureFilterView`'s contract until a
+   product requirement justifies a list filter.
+
+3. **`AutoBiProvider` and `ExposureMode` filters are Class C (Platform-only).**
+   Both filters are feature-gated in dbt-ui behind `hasAccountFeature('explorerAutoExposures')`.
+   `dbt.exposures.parquet` has no `auto_bi_provider`, no `definition_type`, no
+   `integration_id` column (verified empirically — schema has only the core
+   exposure spec fields plus `created_at`, `ingested_at`, `meta`, `config`,
+   `depends_on_*`). Both filters are **omitted** from the facets response — not
+   stubbed `412` — because the upstream signal does not exist in any parquet
+   column to gate on. Same rationale used for the row-side `auto_bi_provider`
+   field on `GET /api/v1/exposures/:id`.
+
+4. **`health_issues[]` is not exposed on the list row.** Class B per ADR-5
+   discussion in the detail contract — `subGraphs: ['internal']` in codex-api,
+   aggregated from upstream test/source health and not in parquet. The FE
+   `ExposureTrustSignalCell` renders a graceful empty state on `null`/`[]`. List
+   row omits the field entirely (consistent with detail-contract Class B
+   treatment of internal-only signals).
+
+5. **`depends_on` truncation per CC-6.** The list row includes `depends_on[]`
+   (1-hop upstream models + sources, parsed from `dbt.exposures.depends_on_nodes`)
+   capped at the CC-6 default of 500 with `depends_on_truncated: true` signaling.
+   FilterView itself does not render this today, but the row shape mirrors the
+   detail contract to keep type definitions reusable across the list and detail
+   pages; future "upstream count" badges become an FE-only change.
+
+---
+
+## `GET /api/v1/exposures`
+
+Powers: `ExposureFilterView` table rows in dbt-ui.
+
+### Query parameters
+
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Per ADR-6 cursor envelope. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | **Rejected with 400 if provided.** ExposureFilterView exposes no sorts. The default is internal; clients should not pass `?sort=...`. |
+| `owner` | `string` | — | Exact-match filter against `dbt.exposures.owner_name`. Single value only (no comma-separated list). |
+
+`?auto_bi_provider` and `?definition_type` are **not accepted** — see Design notes #3.
+Passing them is silently ignored (unknown query params are not 400s, per the
+existing `list_models` handler convention).
+
+### Example response
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "exposure.jaffle_shop.revenue_dashboard",
+      "name": "revenue_dashboard",
+      "exposure_type": "dashboard",
+      "maturity": "high",
+      "owner_name": "Jane Doe",
+      "owner_email": "jane.doe@example.com",
+      "tags": ["finance", "exec"],
+      "created_at": 1747432300.5,
+      "depends_on": [
+        { "unique_id": "model.jaffle_shop.orders", "edge_type": "model" },
+        { "unique_id": "source.jaffle_shop.raw_jaffle.orders", "edge_type": "source" }
+      ],
+      "depends_on_truncated": false
+    },
+    {
+      "unique_id": "exposure.jaffle_shop.churn_notebook",
+      "name": "churn_notebook",
+      "exposure_type": "notebook",
+      "maturity": "medium",
+      "owner_name": "Alex Park",
+      "owner_email": "alex.park@example.com",
+      "tags": [],
+      "created_at": 1747104900.0,
+      "depends_on": [
+        { "unique_id": "model.jaffle_shop.customers", "edge_type": "model" }
+      ],
+      "depends_on_truncated": false
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+Per ADR-6, the response envelope is fixed: `data: T[]`, `total: number`, `offset: number`, `limit: number`. No handler exists today; every row field is 🔧.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `ExposureSummary[]` | Core | 🔧 | — | ADR-6 list envelope key — not `exposures` |
+| `page_info` | `PageInfo` | Core | 🔧 | — | ADR-6 cursor envelope. See `PageInfo` definition in the shared types. Replaces the offset-era `total`/`offset`/`limit` triple. |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total row count under the current filter set; ignores `first`/`after`. Separate `COUNT(*)` query per request. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor pointing to the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor`. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor; pass back as `?after=...` to fetch the next page. `null` when `has_next_page` is `false`. |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` if at least one more row exists past this page. Server implements via `LIMIT first+1` and trim. |
+| `data[*].unique_id` | `string` | Core | 🔧 | — | e.g., `"exposure.pkg.name"` — from `dbt.exposures.unique_id` |
+| `data[*].name` | `string` | Core | 🔧 | — | From `dbt.exposures.name`; FilterView "Name" column |
+| `data[*].exposure_type` | `string \| null` | Core | 🔧 | — | `"dashboard"` · `"notebook"` · `"analysis"` · `"ml"` · `"application"` — from `dbt.exposures.exposure_type`; FilterView "Type" column. See `GET /api/v1/exposures/:id` Risk #2 (enum unvalidated at parse time). |
+| `data[*].maturity` | `string \| null` | Core | 🔧 | — | `"high"` · `"medium"` · `"low"` — from `dbt.exposures.maturity`. Not surfaced as a FilterView column today, but available to consumers (the detail contract surfaces it on the header card). |
+| `data[*].owner_name` | `string \| null` | Core | 🔧 | — | From `dbt.exposures.owner_name`; FilterView "Owner" column |
+| `data[*].owner_email` | `string \| null` | Core | 🔧 | — | From `dbt.exposures.owner_email`; FilterView "Owner email" column |
+| `data[*].tags` | `string[]` | Core | 🔧 | — | From `dbt.exposures.tags` (list_utf8 column). Empty array if none. |
+| `data[*].created_at` | `number \| null` | Core | 🔧 | — | Epoch seconds (float); from `dbt.exposures.created_at`. Per ADR-5 the definition-time surrogate for "last updated" on definition-only resources. |
+| `data[*].depends_on` | `EdgeRef[]` | Core | 🔧 | — | 1-hop upstream models + sources; derived from `dbt.exposures.depends_on_nodes`. Truncated at 500 per CC-6 — see Risk #2. `edge_type` resolved from the `unique_id` prefix (`model.` → `"model"`, `source.` → `"source"`, etc.), matching the detail contract Risk #4. |
+| `data[*].depends_on_truncated` | `boolean` | Core | 🔧 | — | CC-6 truncation signal. `true` when the underlying upstream list exceeded 500 entries and was capped. |
+| `data[*].depends_on[*].unique_id` | `string` | Core | 🔧 | — | |
+| `data[*].depends_on[*].edge_type` | `string` | Core | 🔧 | — | `"model"` / `"source"` / `"metric"` / `"seed"` — derived from the prefix |
+| `data[*].health_issues` | *(absent)* | — | ❌ | — | Class B: `subGraphs: ['internal']` in codex-api; aggregated from upstream test/source health. Not in parquet. Matches detail-contract treatment. FilterView "Health" column renders graceful empty state. |
+| `data[*].auto_bi_provider` | *(absent)* | — | ❌ | — | Class C (Platform-only) — feature-gated in dbt-ui behind `explorerAutoExposures`. No column in `dbt.exposures.parquet`. See Design notes #3. |
+| `data[*].integration_id` | *(absent)* | — | ❌ | — | Class C (Platform-only) — auto-exposure-only field. No parquet path. |
+| `data[*].definition_type` | *(absent)* | — | ❌ | — | Class C (Platform-only) — drives the FilterView "Exposure Mode" column. No parquet path. |
+| `data[*].manifest_generated_at` | *(absent)* | — | ❌ | — | Class B: environment-level field on the GraphQL `applied` wrapper, not a per-row column |
+| `data[*].package_name` | *(absent)* | — | ❌ | — | Available on the detail endpoint; intentionally omitted from list rows (FilterView does not consume it) |
+| `data[*].description` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not a FilterView column |
+| `data[*].meta` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not a FilterView column |
+| `data[*].url` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not a FilterView column (the link target is rendered from the detail page) |
+| `data[*].label` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not a FilterView column |
+| `data[*].file_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint header; not a FilterView column |
+| `data[*].original_file_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint header; not a FilterView column |
+| `data[*].fqn` | *(absent)* | — | ❌ | — | Available on the detail endpoint; not a FilterView column |
+| `data[*].execution_info` | *(absent)* | — | ❌ | — | Per ADR-5 exposures never execute; omitted from `DefinitionNodeBase` |
+| `data[*].referenced_by` | *(absent)* | — | ❌ | — | Exposures are terminal leaf nodes; nothing refs an exposure (matches detail contract) |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface ExposureListResponse {
+  data: ExposureSummary[];
+  page_info: PageInfo;
+}
+
+interface ExposureSummary {
+  unique_id: string;
+  name: string;
+  exposure_type: string | null;
+  maturity: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  tags: string[];
+  created_at: number | null;       // epoch seconds; ADR-5 definition surrogate
+  depends_on: EdgeRef[];           // capped at 500 per CC-6
+  depends_on_truncated: boolean;   // CC-6 truncation signal
+}
+
+// EdgeRef shared with ModelDetail, SourceDetail, SeedDetail, SnapshotDetail, ExposureDetail
+interface EdgeRef {
+  unique_id: string;
+  edge_type: string;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **No handler exists today.** No `src/handlers/exposures.rs` in the worktree. The
+   implementation PR must add the handler, register `GET /api/v1/exposures` and
+   `GET /api/v1/exposures/facets` in `src/server.rs`, and add the response types to
+   `web/src/api.ts`. Composing the shared `DefinitionNodeBase` Rust struct (ADR-5
+   backend prerequisite) is recommended but the list row is a flat projection — no
+   `NodeBase` composition is strictly required at the row level.
+
+2. **`depends_on[]` truncation requires per-row LIMIT.** With CC-6's 500-entry cap
+   per row, a project with 1000 exposures × 1000 upstream models per exposure
+   would generate 500 000 rows from a naive `LEFT JOIN dbt.edges`. The handler
+   should either (a) build the `depends_on[]` array via a correlated subquery
+   with `LIMIT 500` per exposure unique_id, or (b) build it from
+   `dbt.exposures.depends_on_nodes` (already a list_utf8 column on the row) with
+   `list_slice(depends_on_nodes, 1, 500)` and a length comparison for the
+   `depends_on_truncated` flag. Option (b) is cheaper and matches the detail
+   contract Risk #4 prefix-parsing approach. Pick before implementation.
+
+3. **`owner` filter exactness vs. `dbt.exposures.owner_name` nullability.**
+   `owner_name` is a nullable utf8 column. A `WHERE owner_name = '<value>'`
+   predicate excludes NULL owners — matching `ExposureFilterView` behavior (the
+   dropdown lists only non-null `name` values from the `GetExposureOwners`
+   GraphQL query). Document this explicitly so the handler does not accidentally
+   `COALESCE` away the filter.
+
+4. **`total` count requires a separate query.** Standard pattern shared with
+   `list_models` — count query + rows query, both filtered. Reuse the
+   `query_scalar(count_sql)` + `query_arrow(rows_sql)` shape from
+   `crates/dbt-docs-server/src/handlers/models.rs::list_models`.
+
+5. **`?sort` rejection vs. forward compatibility.** The handler should validate
+   `?sort` against an empty allowlist (returns 400 with "sort is not supported on
+   this endpoint"). If a sort allowlist is added later, it becomes additive — no
+   client breakage. **Do not** silently ignore `?sort`: a future addition would
+   change the rendered order without the client opting in, masking bugs.
+
+6. **`exposure_type` and `maturity` enum unvalidation.** Both columns are plain
+   `utf8` in `dbt.exposures.parquet` (no enum constraint). The handler must pass
+   the raw string through. FE consumers branching on these values (e.g.,
+   `ExposureStatusTileSection.tsx` checks `exposureType === 'dashboard'`) need
+   case-sensitive matches. Document the expected lowercase enum values in
+   `web/src/api.ts` as a TypeScript string-literal union *for consumer
+   convenience only* — the runtime validation lives in the dbt parser, not in
+   this handler.
+
+7. **Empty project handling.** When `dbt.exposures.parquet` has zero rows (a
+   project with no exposures), the handler must return
+   `{ "data": [], "page_info": { "end_cursor": null, "has_next_page": false } }` — not a 404.
+   Consistent with `list_models` behavior.
+
+---
+
+## `GET /api/v1/exposures/facets`
+
+Powers: filter dropdowns in `ExposureFilterView` (Owner dropdown today; the
+feature-gated AutoBiProvider and Exposure Mode dropdowns are Platform-only and
+not surfaced here).
+
+### Query parameters
+
+None. The facets endpoint takes no query parameters per ADR-6.
+
+### Example response
+
+```json
+{
+  "owners": [
+    { "value": "Alex Park", "count": null },
+    { "value": "Jane Doe", "count": null }
+  ]
+}
+```
+
+When `dbt.exposures.parquet` has zero rows (or every `owner_name` is NULL), the
+response is `{ "owners": [] }`.
+
+The `count` field is reserved for a future enhancement that returns the number
+of matching exposures per owner. Today it is always `null` — matching the
+`list_model_facets` convention.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `owners` | `FacetValue[]` | Core | 🔧 | — | Distinct non-null `dbt.exposures.owner_name` values, sorted ascending. Sourced from `dbt.exposures` (NOT `dbt.groups`) because exposure owners are spec'd in the exposure YAML, not in `dbt.groups`. |
+| `owners[*].value` | `string` | Core | 🔧 | — | Owner name as written in the exposure YAML's `owner.name` field |
+| `owners[*].count` | `number \| null` | Core | 🔧 | — | Always `null` today; reserved for per-facet count enrichment. Matches `list_model_facets.owners[*].count` convention. |
+| `auto_bi_providers` | *(absent)* | — | ❌ | — | Class C (Platform-only): no `auto_bi_provider` column in `dbt.exposures.parquet`. Filter is feature-gated in dbt-ui behind `explorerAutoExposures`. See Design notes #3. |
+| `exposure_modes` | *(absent)* | — | ❌ | — | Class C (Platform-only): no `definition_type` column in `dbt.exposures.parquet`. Filter is feature-gated. |
+| `exposure_types` | *(absent)* | — | ❌ | — | Not exposed as a filter in `ExposureFilterView`; the FE has no Type dropdown today. If a Type filter is added later, this facet becomes additive — the values are known statics (`dashboard`, `notebook`, `analysis`, `ml`, `application`) and don't require a parquet query. |
+| `maturities` | *(absent)* | — | ❌ | — | Not exposed as a filter in `ExposureFilterView`; the FE has no Maturity dropdown today. Same reasoning as `exposure_types`. |
+| `tags` | *(absent)* | — | ❌ | — | Not exposed as a filter in `ExposureFilterView` today. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface ExposureFacetsResponse {
+  owners: FacetValue[];
+}
+
+// FacetValue is shared with ModelFacetsResponse
+interface FacetValue {
+  value: string;
+  count: number | null;
+}
+```
+
+### Risk register
+
+1. **Owner source is `dbt.exposures`, not `dbt.groups`.** The `list_model_facets`
+   handler sources owners from `dbt.groups.name` because models inherit owners
+   via their dbt group. Exposures declare their owner directly in YAML
+   (`owners.name` / `owners.email`) — there is no group indirection. The
+   facets SQL is `SELECT DISTINCT owner_name AS value FROM dbt.exposures WHERE
+   owner_name IS NOT NULL ORDER BY owner_name`. Do not copy the model handler's
+   `dbt.groups` query verbatim.
+
+2. **Owner-name collisions across resource types.** A user named `"Jane Doe"`
+   may appear as both a `dbt.groups.name` (model owner) and a
+   `dbt.exposures.owner_name` (exposure owner). The two facets endpoints
+   (`/api/v1/models/facets` and `/api/v1/exposures/facets`) return owner lists
+   from different tables and may differ — this is correct and intentional. FE
+   engineers should not assume a global owners catalog.
+
+3. **Empty project handling.** When `dbt.exposures.parquet` has zero rows, the
+   handler must return `{ "owners": [] }` — not an error and not a 404.
+
+4. **`count` enrichment deferred consistently.** Today the only producer of
+   facet `count` data is "none." If `list_model_facets` ever starts populating
+   `count`, this endpoint should follow the same pattern at the same time — do
+   not asymmetrically populate one and not the other. Coordinate before
+   shipping.
+
+5. **No feature-gated filter facets.** The Cloud-only `auto_bi_providers` and
+   `exposure_modes` filters in `ExposureFilterView` are *not* stubbed with 412
+   `upgrade_path: "platform"` because the underlying signal (the
+   `auto_bi_provider` and `definition_type` columns) does not exist on any
+   parquet row to gate on. Stubbing 412 on a facets endpoint that has no
+   parquet column would be inventing a capability gate where there is no
+   surface — a Class B treatment, not Class C. See Design notes #3.
+
+6. **`dbt.exposures.parquet` schema empirically verified.** Schema confirmed
+   via `pq.read_table(...).schema` on the reference index at
+   `~/codaz/sl-schema-evolution/sample_project/target/index/dbt.exposures.parquet`:
+   `unique_id, name, exposure_type, label, owner_name, owner_email, url,
+   maturity, description, package_name, file_path, original_file_path, fqn,
+   depends_on_nodes, depends_on_macros, refs, sources, metrics, tags, meta,
+   config, created_at, ingested_at`. No `auto_bi_provider`, no `integration_id`,
+   no `definition_type` column.
+
+7. **No `has_*` capability gate is introduced.** The capability flags listed in
+   `API-CONTRACTS.md` § "Backend conventions" are vestigial for definition-only
+   resources per the parent doctrine — exposures have no execution-, catalog-,
+   or freshness-gated surface, and the facets endpoint has no other conditional
+   surface either. Do not invent a new `has_*` flag for this contract.
+
+---
+
+## Design notes
+
+These notes flag the three deviations from the "uniform LIST" template that
+groups specifically requires. Coordinator review should focus on these; the
+field reference table below assumes each is settled the way it's stated here.
+
+1. **The dbt-ui hook is plural-lookup-by-ID, not a paginated LIST.**
+   `useGroupsByIds` in `definitionGroups.ts` takes a `uniqueIds: string[]`
+   filter and runs a GraphQL `groups(first, after, filter: { uniqueIds })`
+   query. This is how the dbt-ui `GroupView` reaches the surrounding-groups
+   table from a model page — the consumer arrives already knowing which group
+   IDs it wants, not asking "give me all groups paginated."
+
+   **The REST `GET /api/v1/groups` endpoint paginates the FULL set of groups
+   in `dbt.groups.parquet`,** not a caller-supplied ID list. The by-IDs
+   pattern is a dbt-ui artifact of how groups are reached from a model page,
+   not the canonical LIST shape. A caller that already has a set of group IDs
+   should hit `GET /api/v1/groups/:id` once per ID; v0 does not add an
+   `?ids=` query parameter to LIST. If a real use case for batch-by-ID
+   surfaces, a dedicated `POST /api/v1/groups/batch` (request body carries
+   the ID list, no URL-length limit) is the right shape — additive, not a
+   refactor of LIST.
+
+2. **`GroupDetail` composes `NodeBase` directly (not `DefinitionNodeBase`)
+   because `dbt.groups` has no `fqn` column.** Per ADR-5, the LIST row
+   reflects this: no `fqn`, no `execution_info`, no `tags` at the top level
+   (tags live in the `config` JSON blob — see the detail contract for the
+   `json_extract` path and Risk #3 in the detail contract). Groups are the
+   one ADR-5 resource type that lacks `fqn`; every other definition-only
+   resource (`exposure`, `macro`, `metric`, `saved_query`, `semantic_model`)
+   composes `DefinitionNodeBase` which carries `fqn`.
+
+3. **`model_count` is a JOIN-aggregated field, not a parquet column.**
+   `dbt.groups.parquet` has no `model_count` column. The handler must
+   aggregate against `dbt.nodes` per row:
+
+   ```sql
+   SELECT g.unique_id, g.name, g.owner_name, g.owner_email,
+          (SELECT COUNT(*) FROM dbt.nodes n
+           WHERE n.group_name = g.name
+             AND n.package_name = g.package_name
+             AND n.resource_type = 'model') AS model_count
+   FROM dbt.groups g
+   ORDER BY g.name ASC
+   LIMIT :limit OFFSET :offset
+   ```
+
+   The JOIN is scoped by `package_name` as well as `name` to prevent
+   cross-package collisions — same rule documented in the groups detail
+   contract Risk #4. The aggregation is marked 🔧 in the field reference
+   (needs handler-side SQL change).
+
+4. **No filters, no sorts, no facets.** The dbt-ui `GroupFilterView` exposes
+   no filter pills and no sortable columns — it renders a static table sorted
+   client-side. The REST endpoint accepts `?sort=name:<asc|desc>` for API
+   uniformity (every LIST endpoint accepts a `sort` parameter) but does not
+   add custom filter parameters. `GET /api/v1/groups/facets` returns `{}` —
+   the endpoint exists for API uniformity (every LIST endpoint has a
+   matching FACETS endpoint) so client codegen can treat all resource types
+   identically.
+
+---
+
+## `GET /api/v1/groups`
+
+Powers: `GroupFilterView` in dbt-ui.
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/GroupFilterView.tsx`
+
+GraphQL hook: `packages/metadata/dbt-explorer/src/hooks/discovery/definitionGroups.ts` (`useGroupsByIds` / `useGroups` — `GetGroupsByUniqueId` query)
+
+**No new ADR needed.** This endpoint follows ADR-1 (type-specific), ADR-5
+(definition-only — no `execution_info`, no `fqn`), and ADR-6 (envelope
+shape). See Design notes above for the three group-specific deviations from
+the uniform LIST template.
+
+### Query parameters
+
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Clamped to `[1, 5000]`; mirrors `GET /api/v1/models` |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `string` | `name:asc` | `<column>:<asc\|desc>`; only `name` is sortable. `400 Bad Request` for unknown columns or directions |
+
+No filter parameters in v0. The dbt-ui `GroupFilterView` exposes no filter
+pills; if a real filter need surfaces (e.g., "groups in package X"), add
+a `?package_name=<csv>` parameter via the established `csv → IN (…)` pattern
+documented for `GET /api/v1/models`.
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — they require a backend change
+(no group LIST handler exists today).
+Fields marked `// 🔍` are parquet-unverified — confirm schema before implementing.
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "group.jaffle_shop.finance",
+      "name": "finance",
+      "owner_name": "Finance Data Team",
+      "owner_email": "finance-data@jaffle.example",
+      "owner_github": "jaffle/finance-data-team",
+      "owner_slack": "#finance-data",
+      "model_count": 12
+    },
+    {
+      "unique_id": "group.jaffle_shop.marketing",
+      "name": "marketing",
+      "owner_name": "Marketing Analytics",
+      "owner_email": "marketing-data@jaffle.example",
+      "owner_github": null,
+      "owner_slack": null,
+      "model_count": 5
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+`owner_github` and `owner_slack` are likely sourced from a `json_extract`
+against the `dbt.groups.config` JSON column (verified empirically: the
+parquet schema has only `owner_name` and `owner_email` as dedicated owner
+columns; see the detail contract Risk #1 for the resolved verification
+trail). If the JSON omits them, ship `null`. The frontend renders gracefully
+either way.
+
+`model_count` is the count of `dbt.nodes` rows where
+`group_name = g.name AND package_name = g.package_name AND resource_type = 'model'`.
+It is **not** a column in `dbt.groups.parquet`; see Design note #3.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists today — every populated field is at minimum 🔧.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `unique_id` | `string` | Core | 🔧 | — | e.g., `"group.jaffle_shop.finance"` — primary key in `dbt.groups` |
+| `name` | `string` | Core | 🔧 | — | Group name (e.g., `"finance"`) |
+| `owner_name` | `string \| null` | Core | 🔧 | — | From `dbt.groups.owner_name` |
+| `owner_email` | `string \| null` | Core | 🔧 | — | From `dbt.groups.owner_email` |
+| `owner_github` | `string \| null` | Core | 🔍 | — | Empirically confirmed absent at the top level of `dbt.groups.parquet`; handler must `json_extract_string(config, '$.owner.github')` and emit `null` on absence — see detail contract Risk #1 |
+| `owner_slack` | `string \| null` | Core | 🔍 | — | Same provenance as `owner_github` — `json_extract_string(config, '$.owner.slack')` — see detail contract Risk #1 |
+| `model_count` | `number` | Core | 🔧 | — | Aggregated via `SELECT COUNT(*) FROM dbt.nodes WHERE group_name = g.name AND package_name = g.package_name AND resource_type = 'model'`; not a parquet column on `dbt.groups` — see Design note #3 |
+| `resource_type` | *(absent)* | — | ❌ | — | LIST row omits the discriminator — the endpoint name already constrains the type. Detail responses keep `resource_type` for ADR-1's deferred generic dispatcher. |
+| `package_name` | *(absent)* | — | ❌ | — | Out of scope for the summary row; consumers wanting it call `GET /api/v1/groups/:id` |
+| `description` | *(absent)* | — | ❌ | — | Same — kept off the summary row to bound payload size; columns shown in `GroupFilterView` are only Name / Model count / Owner * |
+| `original_file_path` | *(absent)* | — | ❌ | — | Same — detail-only |
+| `tags` | *(absent)* | — | ❌ | — | Same — detail-only; also lives in `config` JSON blob (no top-level column) |
+| `meta` | *(absent)* | — | ❌ | — | Same — detail-only; lives in `config` JSON blob |
+| `models` | *(absent)* | — | ❌ | — | Inline member list belongs on detail responses, not list rows; `model_count` scalar covers the summary use case |
+| `fqn` | *(absent)* | — | ❌ | — | Per ADR-5, groups are the one definition-only resource without an `fqn` column in parquet — `GroupDetail` composes `NodeBase` directly (not `DefinitionNodeBase`) for this reason. See Design note #2. |
+| `execution_info` | *(absent)* | — | ❌ | — | Groups never run — definition-only per ADR-5. Field omitted from both `DefinitionNodeBase` and the LIST row entirely. |
+| `catalog` | *(absent)* | — | ❌ | — | No warehouse relation; nothing to catalog |
+| `freshness` | *(absent)* | — | ❌ | — | No source semantics |
+| `ingested_at` | *(absent)* | — | ❌ | — | Detail-only timestamp; not a column shown in `GroupFilterView` |
+| `created_at` | *(absent)* | — | ❌ | — | `dbt.groups` has no `created_at` column; groups use `ingested_at` as the ADR-5 fallback on the detail response. Not a column shown in `GroupFilterView`. |
+| `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api |
+| `project_id` | *(absent)* | — | ❌ | — | Class B: Cloud concept; not in local parquet |
+| `last_updated_at` | *(absent)* | — | ❌ | — | Class B: Cloud-managed environment timestamp; the parquet has `ingested_at` which is server-local, not semantically equivalent |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface GroupListResponse {
+  data: GroupSummary[];
+  page_info: PageInfo;
+}
+
+interface GroupSummary {
+  unique_id: string;
+  name: string;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_github: string | null;
+  owner_slack: string | null;
+  model_count: number;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **`owner_github` and `owner_slack` provenance is `config` JSON, not a
+   parquet column.** Empirically confirmed against
+   `sl-schema-evolution/sample_project/target/index/dbt.groups.parquet`: the
+   schema has only `owner_name` and `owner_email` as dedicated owner columns.
+   Handler must `json_extract_string(config, '$.owner.github')` /
+   `'$.owner.slack'` and emit `null` on absence. The sample project's two
+   rows both have `null` for these fields, so the integration test cannot
+   round-trip verify against this corpus today — the test materializes when
+   a real project surfaces populated data. Same posture as the detail
+   contract Risk #1: ship Core-stable with these JSON paths as the starting
+   recommendation; fix forward in a follow-up if a real project uses a
+   different JSON shape. No dbt-index schema change required.
+
+2. **`model_count` requires a per-row aggregation.** The naive SQL is the
+   correlated subquery shown above. A `LEFT JOIN ... GROUP BY` formulation
+   is equivalent and may be cheaper at scale; the implementer should pick
+   the form that nextest profiles best against a realistic project. Either
+   way, the JOIN must be scoped by `package_name` AND `name` — `dbt.nodes.group_name`
+   stores the group **name** (not the full `unique_id`), so a single-column
+   join risks cross-package collisions; same rule as the detail contract
+   Risk #4. Verified safe for the two-row sample project; revisit if a
+   multi-package project surfaces a case where this is wrong.
+
+3. **No filter parameters in v0 — but LIST must still accept `?sort`.**
+   `GroupFilterView` is filter-less and effectively sort-less (it sorts
+   client-side after fetching). Server-side sorting on `name` is supported
+   for API uniformity; other columns are unsorted in v0. If `model_count`
+   becomes a sort target (a reasonable product ask), add it to the allowlist
+   alongside the aggregation column alias in the SQL ORDER BY — same pattern
+   as `executed_at` on `GET /api/v1/models`.
+
+4. **LIST row omits `description`, `original_file_path`, and `tags` —
+   intentional trade-off.** Mirrors `ModelSummary` precedent: the summary
+   row carries only what `GroupFilterView` actually displays (Name, Model
+   count, Owner *). Consumers wanting the full surface call
+   `GET /api/v1/groups/:id`. Promoting these to the summary would bloat the
+   payload for a 200-group response with fields the FE table doesn't render.
+
+5. **Default `limit` of 1000 may exceed typical group counts by 10–100×.**
+   `ModelSummary` uses `DEFAULT_LIMIT = 1000`. Groups are an order of
+   magnitude rarer than models (a project with 500 models typically has
+   <30 groups). The default is intentionally generous to avoid pagination
+   for any realistic project; if memory profiling surfaces a concern, lower
+   the default to 100 (matching dbt-ui's `INITIAL_PAGE_SIZE`) — the
+   parameter is client-tunable either way.
+
+---
+
+## `GET /api/v1/groups/facets`
+
+Powers: filter pill metadata for `GroupFilterView` in dbt-ui — but
+`GroupFilterView` has no filter pills today. The endpoint exists for API
+uniformity (every LIST endpoint has a matching FACETS endpoint) so client
+codegen can treat all resource types identically.
+
+### Query parameters
+
+None. The endpoint takes no query parameters and ignores any provided.
+
+### Example response
+
+```json
+{}
+```
+
+The empty-object response is canonical and stable — adding a filter to the
+groups LIST in the future would add a new key to this object (e.g.,
+`{ "package_names": [...] }`) without breaking existing consumers, who
+already iterate `Object.entries(facets)` per the uniform codegen pattern.
+
+### Field reference
+
+No populated fields in v0. The table below documents the empty-object
+contract explicitly so reviewers don't infer "the endpoint is unfinished."
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| *(empty object)* | `{}` | Core | 🔧 | — | No filter parameters exist on `GET /api/v1/groups` in v0, so the facets response is the empty object. Endpoint is implemented for API uniformity — `GroupFilterView` does not call it today. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+// v0: no filterable fields → empty object.
+// Adding a future filter (e.g., `package_name`) would extend this type
+// additively: { package_names: FacetValue[] }.
+type GroupFacetsResponse = Record<string, never>;
+
+// FacetValue is shared with other LIST FACETS responses (ModelFacetsResponse, etc.)
+interface FacetValue {
+  value: string;
+  count: number | null;
+}
+```
+
+### Risk register
+
+1. **Empty-object response surface is intentional, not a stub.** Reviewers
+   should not flag the `{}` response as "the endpoint isn't implemented."
+   It is the canonical response for a resource type that has no filterable
+   fields. If a filter is added later, the response gains a key — that's an
+   additive change, not a breaking one.
+
+2. **Client codegen must tolerate empty `{}` from the FACETS endpoint.**
+   The TypeScript `Record<string, never>` type encodes this; OpenAPI codegen
+   should emit an empty object schema (`type: object`, no `properties`,
+   `additionalProperties: false`). Test that `Object.keys(facets).length`
+   is safe to call against this response shape.
+
+3. **Do not introduce an `owners` facet by inferring it from `owner_name`.**
+   `GET /api/v1/models/facets` exposes an `owners` facet sourced from
+   `dbt.groups.name` (the model-to-group ownership relationship). The
+   groups LIST is not gated by owner — every group *is* an owner — so
+   re-exposing `owners` here would be a category error. The list of owner
+   names is `data[*].owner_name` from the LIST endpoint itself; no facet
+   needed.
+
+---
+
+## `GET /api/v1/macros`
+
+Paginated, filterable list of macro definitions. Powers the table on the dbt-ui
+macros filter page.
+
+### Query parameters
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `package` | `string` | *(none)* | Exact-match package name filter. Mirrors `MacroDefinitionFilter.packageName` in the GraphQL hook and the single-select `PackageFilterDropdown` in `MacroFilterView`. Empty string → no filter (treated as absent). |
+| `sort` | `string` | `name:asc` | `<column>:<asc\|desc>`. Allowlisted column: `name`. The dbt-ui table exposes no sort headers (`MacroFilterView` columns are render-only), so `name` is the only sortable column for v0. Invalid column → 400. |
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Clamped to `[1, 5000]` (same envelope as `GET /api/v1/models`). |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+Per ADR-6 the LIST endpoint uses cursor pagination (`first`/`after` + `page_info`) for
+v0; cursor pagination (`?first=&after=` per CC-4) is deferred until a real
+consumer hits the offset-pagination ceiling. The macros parquet in the sample
+project is 671 rows, well inside the `HARD_MAX_LIMIT=5000` envelope.
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — no list handler exists today; every
+field on the row is 🔧 (or 🔍 where parquet shape is unverified).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "macro.jaffle_shop.cents_to_dollars",
+      "name": "cents_to_dollars",
+      "package_name": "jaffle_shop",
+      "description": "Convert an integer cents column to a dollar-denominated decimal.",
+      "arguments": [
+        { "name": "column_name", "type": "string",  "description": "The integer column holding cent values." },
+        { "name": "scale",       "type": "integer", "description": "Decimal scale to round the output to." }
+      ]
+    },
+    {
+      "unique_id": "macro.dbt_utils.surrogate_key",
+      "name": "surrogate_key",
+      "package_name": "dbt_utils",
+      "description": null,
+      "arguments": []
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+No capability gates apply to any field on this response — every included field
+is Core (parquet-backed, unconditional). No `execution_info` block exists on
+macro rows per ADR-5. `tags` is absent (Class B — see Field reference).
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/macros` today; every included field is 🔧 (or 🔍).
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `unique_id` | `string` | Core | 🔧 | — | e.g., `"macro.jaffle_shop.cents_to_dollars"` — from `dbt.macros.unique_id`. Required, non-null in parquet schema (`[utf8!]`). |
+| `name` | `string` | Core | 🔧 | — | From `dbt.macros.name`. The dbt-ui table renders this as the link cell; `parseUniqueId(macro.uniqueId).remainder` derives an equivalent value in the frontend today. |
+| `package_name` | `string \| null` | Core | 🔧 | — | From `dbt.macros.package_name`. Parquet column is `[utf8]` (nullable); in practice every macro carries a package but the wire type honors the schema. |
+| `description` | `string \| null` | Core | 🔧 | — | From `dbt.macros.description`. Null when the YAML schema patch declares no description; the dbt-ui Description column renders `null` as an empty cell. |
+| `arguments` | `MacroArgument[]` | Core | 🔍 | — | From `dbt.macros.arguments` (`[utf8] Option<String>`, JSON-string). Handler must deserialize via the shared `json_parse_or_null` helper per CC-7. Empty array when no arguments are declared OR when the JSON parse fails (warning emitted; never bubbles to the client). Re-emitted as `[{name, type, description}, …]` to match the detail-endpoint shape. The dbt-ui list view flattens this to a CSV of `name` values, but the wire shape preserves the nested objects so the FE can stop flattening when convenient. |
+| `arguments[*].name` | `string` | Core | 🔍 | — | Required on each entry; argument JSON objects missing `name` are filtered out by the handler (logged, not erroring). |
+| `arguments[*].type` | `string \| null` | Core | 🔍 | — | Declared Jinja type hint (e.g., `"string"`, `"integer"`); free-form, not validated. |
+| `arguments[*].description` | `string \| null` | Core | 🔍 | — | Per-argument description from the YAML schema patch. |
+| `tags` | *(absent)* | — | ❌ | — | Class B for macros: `dbt.macros` parquet has no `tags` column (empirically confirmed against 671-row sample project — see Risk #3 on `GET /api/v1/macros/:id`). GraphQL surfaces `tags` but it is manifest-only metadata that codex-api persists separately. Documented here so FE engineers don't add an optional `tags?` to the list-row TypeScript type. |
+| `group_name` | *(absent)* | — | ❌ | — | Class B for macros: `dbt.macros` parquet has no `group_name` column. Macros are not group-owned in the dbt grouping model; the `MacroFilterView` does not render an Owner column. |
+| `meta` | *(absent)* | — | ❌ | — | Available on the detail endpoint (`GET /api/v1/macros/:id`). Omitted from the list row to keep the row small; no `MacroFilterView` column renders meta. Promote to the list row only if a future filter/column needs it. |
+| `macro_sql` | *(absent)* | — | ❌ | — | Available on the detail endpoint. List rows would render hundreds of KB of Jinja source if this were inlined; FE never displays it in the list view. |
+| `file_path` / `original_file_path` / `patch_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint. The list view renders no path information. |
+| `docs_show` / `supported_languages` | *(absent)* | — | ❌ | — | Available on the detail endpoint. Filtering by `docs_show=false` is not exposed in `MacroFilterView`; if/when an "include internal helpers" toggle is added, promote `docs_show` to the row. |
+| `created_at` | *(absent)* | — | ❌ | — | Available on the detail endpoint per ADR-5 ("Definition updated as of …"). The list view shows no per-row timestamp; the parent `dbt.macros.parquet` ingest time is exposed via the global `lastUpdatedAt` plumbing (handled by `useCacheMonitor`), not per-row. |
+| `depends_on` / `referenced_by` | *(absent)* | — | ❌ | — | Class A but list-inappropriate: macro edges are inlined on the detail endpoint (see `GET /api/v1/macros/:id` contract). Inlining them on every list row would amplify the response size by O(edges) per row with no `MacroFilterView` consumer. |
+| `execution_info` | *(absent)* | — | ❌ | — | Per ADR-5 macros are not runnable; the field is omitted from `DefinitionNodeBase` entirely. This row is documentation only. |
+| `run_id` / `project_id` | *(absent)* | — | ❌ | — | Class B: CodexDB-only identifiers; no parquet path. GraphQL `runId` exposed on the macro node is dropped from the REST surface. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface MacroListResponse {
+  data: MacroSummary[];
+  page_info: PageInfo;
+}
+
+interface MacroSummary {
+  unique_id: string;
+  name: string;
+  package_name: string | null;
+  description: string | null;
+  arguments: MacroArgument[];
+}
+
+// Structurally identical to the MacroArgument on MacroDetail. Kept as a single
+// shared TS type at codegen time; duplicated in the contract here for clarity.
+interface MacroArgument {
+  name: string;
+  type: string | null;
+  description: string | null;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **`arguments` JSON parse is per-row, not free.** `dbt.macros.arguments` is stored as a serialized JSON string per CC-7. For a 1000-row page the handler invokes `json_parse_or_null` 1000 times. Profile against the sample project after the first cut; if parse cost dominates, an alternative is to defer `arguments` to a sub-resource (`GET /api/v1/macros/:id/arguments`) and drop the field from the list row — but the `MacroFilterView` already needs argument names in the Arguments column, so that would cost a round trip per row in the worst case. Decision: ship inlined for v0; revisit only with a profiling-backed regression.
+
+2. **No sort surface despite `sort=name:asc` default.** The dbt-ui `MacroFilterView` does not render sortable column headers. The contract still accepts `?sort=name:asc|desc` so that the handler shares the same `parse_sort` plumbing as `GET /api/v1/models` and so that an MCP/AI consumer (or a future FE toggle) can sort without a contract change. Promoting additional columns to the allowlist (e.g., `package_name`, `created_at`) is additive and does not require a new ADR.
+
+3. **`package` filter is exact-match, single-value.** The dbt-ui `PackageFilterDropdown` is a single-select widget keyed on `PACKAGE_NAME_PARAM`, so the REST contract mirrors that (no CSV; no `IN (…)` semantics). Promoting to CSV (`?package=jaffle_shop,dbt_utils`) is additive and can be done without breaking existing callers — the parser would treat a single value as a one-element list. Deferred until a multi-select UX lands.
+
+4. **`description` from `dbt.macros.parquet` is `[utf8]` non-Option in the Rust schema.** Per `MacroRow` definition (`crates/dbt-index/src/parquet.rs` line 1136) `description: &'a str` is declared without `Option`, but the empirical 671-row sample includes macros with no description. The parquet column itself is nullable at the Arrow level (the Rust binding owns the conversion); the handler must treat the Arrow column as `StringArray` with `is_null` checks (the same pattern as `batches_to_model_rows`). The wire type is `string \| null` — confirm against a fresh ingest before committing the handler.
+
+5. **`MacroDefinitionFilter` GraphQL surface includes `uniqueIds` (multi-ID lookup).** `useDiscoveryDefinitionMacros` accepts `filter.uniqueIds` and pauses the query when `uniqueIds?.length === 0` — used elsewhere in the dbt-ui for "give me these specific macros" lookups (not for the filter page). Omitted from the REST list contract for v0 because `MacroFilterView` does not exercise it. If a future caller needs it, add `?unique_id=` (CSV) as an additive filter; do not retrofit a `POST /api/v1/macros/batch` endpoint.
+
+6. **Empty-string vs absent `package` query param.** The handler must treat `?package=` (empty value) as absent, not as "package_name = ''", consistent with how `MacroFilterView` handles `ALL_PACKAGES_VALUE` — the dropdown's "All packages" sentinel is mapped to `undefined` in the hook (`qsPackageName === ALL_PACKAGES_VALUE ? undefined : qsPackageName`). Confirm the filter handler short-circuits on `Some("")` the same way `build_list_sql` in `models.rs` already does for its filters (`.filter(|s| !s.is_empty())`).
+
+---
+
+## `GET /api/v1/macros/facets`
+
+All filter facet values for the macros list. Single facet key per the
+`MacroFilterView` UX: `packages`.
+
+### Query parameters
+
+None. Facet values are static for the lifetime of an index snapshot; per ADR-6
+the facets endpoint takes no query parameters and returns the full distinct set.
+
+### Example response
+
+```json
+{
+  "packages": [
+    { "value": "dbt",          "count": null },
+    { "value": "dbt_utils",    "count": null },
+    { "value": "jaffle_shop",  "count": null }
+  ]
+}
+```
+
+`count` is `null` in v0 — reserved for a future enhancement that returns the
+number of macros per package without forcing the client to issue a follow-up
+list query for each facet value (same convention as `FacetValue` in
+`/api/v1/models/facets`).
+
+If the parquet contains no macros (e.g., a fresh project), the response is
+`{ "packages": [] }` — never `{}`. The empty-array shape matches the ADR-6
+guidance that absent facets return `{}` only when the facet key itself is
+inapplicable; for the macros list `packages` is always applicable.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/macros/facets` today; every field is 🔧.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `packages` | `FacetValue[]` | Core | 🔧 | — | Distinct package names from `dbt.macros.package_name`, sorted ascending. See Risk #2 for the `dbt.packages` join decision. |
+| `packages[*].value` | `string` | Core | 🔧 | — | The package name; matches the `?package=` query parameter on the list endpoint exactly (no transformation). |
+| `packages[*].count` | `number \| null` | Core | 🔧 | — | Always `null` in v0; reserved for future "macros per package" counts. Shape mirrors `FacetValue` on `/api/v1/models/facets`. |
+| `tags` | *(absent)* | — | ❌ | — | No tags facet — `dbt.macros` has no `tags` column (Class B, see list endpoint Field reference). |
+| `owners` | *(absent)* | — | ❌ | — | No owners facet — macros are not group-owned in the dbt model. |
+
+### Type definition
+
+```typescript
+interface MacroFacetsResponse {
+  packages: FacetValue[];
+}
+
+// Structurally identical to the FacetValue used on /api/v1/models/facets.
+interface FacetValue {
+  value: string;
+  count: number | null;
+}
+```
+
+### Risk register
+
+1. **No handler exists yet.** Net-new endpoint; SQL is a one-line `SELECT DISTINCT package_name FROM dbt.macros WHERE package_name IS NOT NULL ORDER BY package_name`. The handler should follow the `list_model_facets` pattern in `src/handlers/models.rs` (spawn-blocking + `query_arrow` + `batches_to_*_names` extractor). A new `MacroFacetsResponse` struct lives in `src/handlers/macros.rs` (net-new file alongside the macros detail handler — see Risk #1 on the detail contract).
+
+2. **`dbt.packages` join is optional for v0.** The GraphQL `appliedPackageNames` hook returns *all* packages installed in the project (filtered by `PackageResourceType.Macro`), which is conceptually `dbt.packages` filtered to packages that ship macros — equivalent to `SELECT DISTINCT package_name FROM dbt.macros` for any project where every installed package ships at least one macro (which is the common case: `dbt_utils`, `dbt`, etc. all ship macros). Empirically the difference is zero in the sample project. Decision for v0: query `dbt.macros` only — simpler, fewer joins, no risk of stale `dbt.packages` rows surfacing as facet values for packages whose macros were never indexed. If a corner case emerges where a package ships *only* non-macro resources but the FE still wants to expose it as a filter option, switch to `SELECT DISTINCT p.package_name FROM dbt.packages p JOIN dbt.macros m ON m.package_name = p.package_name`.
+
+3. **Sort order is alphabetical, fixed.** No `?sort=` parameter on facets. Mirrors `list_model_facets`, which hardcodes the order of `modeling_layers` (convention) and `owners` (alphabetical from SQL `ORDER BY`). Document explicitly so FE engineers don't expect the facet endpoint to honor the same `?sort=` plumbing as the list endpoint.
+
+4. **`count: null` is a deliberate forward-compatibility hook.** Returning the field with a `null` value (rather than omitting it) preserves the wire shape if/when counts are populated in a future revision. Removing the field later would be a breaking change; keeping it as `null` today costs nothing.
+
+5. **Empty parquet case.** When `dbt.macros.parquet` has zero rows (fresh project, never `dbt parse`'d), the SELECT DISTINCT returns zero rows. Handler must emit `{ "packages": [] }`, not `{}` and not 404 — the endpoint succeeded; the facet just has no values. Confirm against the `query_arrow` empty-batch path; `batches_to_owner_names` already handles this for the models facets endpoint.
+
+6. **No capability flag introduced.** `dbt.macros.parquet` is always present when the index exists (it's emitted by `dbt parse` unconditionally, not by `dbt build` / `dbt docs generate`). The endpoint does not need a `has_*` gate.
+
+---
+
+## `GET /api/v1/metrics`
+
+Paginated, non-filterable, non-sortable list of metric definitions. Powers
+the table on the dbt-ui metrics filter page.
+
+### Query parameters
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `sort` | `string` | `name:asc` | `<column>:<asc\|desc>`. Allowlisted column: `name`. The dbt-ui `MetricFilterView` exposes no sortable column headers; `name` is accepted so the handler can share the same `parse_sort` plumbing as `GET /api/v1/models` and so that an MCP/AI consumer (or a future FE toggle) can sort without a contract change. Invalid column → 400. |
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Clamped to `[1, 5000]` (same envelope as `GET /api/v1/models` and `GET /api/v1/macros`). |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+No filter query parameters. The `MetricFilterView` component renders no
+filter widgets (no package dropdown, no type dropdown, no owner dropdown)
+— mirroring that, the REST contract exposes zero filter params for v0.
+Promoting `package`, `metric_type`, `group_name`, or `tag` to filterable
+parameters is additive and does not require a new ADR; flip the
+corresponding facets row to populated values on the facets endpoint at the
+same time.
+
+Per ADR-6 the LIST endpoint uses cursor pagination (`first`/`after` + `page_info`)
+for v0; cursor pagination (`?first=&after=` per CC-4) is deferred until a
+real consumer hits the offset-pagination ceiling. The metrics parquet in
+the sample project is 43 rows — well inside the `HARD_MAX_LIMIT=5000`
+envelope.
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — no list handler exists today;
+every field on the row is 🔧 (or 🔍 where parquet shape is unverified).
+Nested JSON-string columns (`type_params`, `filter`, `meta`) deserialize
+handler-side per CC-7.
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "metric.jaffle_shop.total_revenue",
+      "name": "total_revenue",
+      "package_name": "jaffle_shop",
+      "group_name": "finance",
+      "metric_type": "simple",
+      "semantic_model_name": "orders",
+      "tags": ["finance"],
+      "description": "Sum of order amounts across all completed orders.",
+      "input_metric_names": [],
+      "input_metric_names_truncated": false,
+      "created_at": 1747432300.5
+    },
+    {
+      "unique_id": "metric.jaffle_shop.gross_margin",
+      "name": "gross_margin",
+      "package_name": "jaffle_shop",
+      "group_name": "finance",
+      "metric_type": "derived",
+      "semantic_model_name": null,
+      "tags": ["finance"],
+      "description": "(revenue - cogs) / revenue.",
+      "input_metric_names": ["total_revenue", "total_cogs"],
+      "input_metric_names_truncated": false,
+      "created_at": 1747432308.1
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+No capability gates apply to any field on this response — every included
+field is Core (parquet-backed, unconditional). No `execution_info` block
+exists on metric rows per ADR-5. `catalog`, `columns`, `materialized`,
+`relation_name`, `database_name`, `schema_name`, `identifier`,
+`access_level`, `contract_enforced`, `raw_code`, `compiled_code` are all
+absent (Class B for metrics — see Field reference and the detail-endpoint
+contract for the per-field rationale).
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/metrics` today; every included field is 🔧 (or 🔍).
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `unique_id` | `string` | Core | 🔧 | — | e.g., `"metric.jaffle_shop.total_revenue"` — from `dbt.metrics.unique_id`. Required, non-null in parquet schema (`[utf8!]`). |
+| `name` | `string` | Core | 🔧 | — | From `dbt.metrics.name`. Renders as the link cell in the dbt-ui table; `parseUniqueId(metric.uniqueId).remainder` derives an equivalent value in the frontend today. |
+| `package_name` | `string \| null` | Core | 🔧 | — | From `dbt.metrics.package_name`. Parquet column is `[utf8]` (nullable). |
+| `group_name` | `string \| null` | Core | 🔧 | — | From `dbt.metrics.group_name` (= manifest `group`). `null` when ungrouped. |
+| `metric_type` | `string \| null` | Core | 🔧 | — | `"simple"` · `"ratio"` · `"derived"` · `"cumulative"` · `"conversion"`; from `dbt.metrics.metric_type` (= manifest `type`). Empirically verified against `dbt.metrics.parquet` in `sl-schema-evolution/sample_project` (all 5 values observed). Renders in the dbt-ui Type column today (`TableData.type` in `MetricFilterView`). |
+| `semantic_model_name` | `string \| null` | Core | 🔧 | — | From `dbt.metrics.semantic_model_name`. Denormalized from `type_params.metric_aggregation_params.semantic_model` at index-build time (`build_metric_row` in `crates/dbt-index/src/parquet.rs`); `null` for `ratio`/`derived` types whose `type_params` references other metrics rather than a semantic model. |
+| `tags` | `string[]` | Core | 🔧 | — | From `dbt.metrics.tags` (`[list_utf8!]` column — always present, possibly empty). Empty array when no tags declared. |
+| `description` | `string \| null` | Core | 🔧 | — | From `dbt.metrics.description`. Renders in the dbt-ui Description column; `null` renders as an empty cell. |
+| `input_metric_names` | `string[]` | Core | 🔧 | — | From `dbt.metrics.input_metric_names` (denormalized in `build_metric_row` from `type_params`). Names of input metrics for `ratio` (numerator/denominator) and `derived` (metrics[]) types; empty array for `simple`/`cumulative`/`conversion`. Truncated per CC-6 — see `input_metric_names_truncated` below and Risk #2. |
+| `input_metric_names_truncated` | `boolean` | Core | 🔧 | — | Per CC-6: `true` when the row's `input_metric_names` array was truncated to fit the optional `?first=<n>` cap (default 500). Always `false` for v0 — metrics with >500 input metrics do not exist in practice (a `derived` metric formula spanning 500 inputs would be a different product problem), but the flag is included now so the wire shape is stable when a real cap is added. See Risk #2. |
+| `created_at` | `number \| null` | Core | 🔧 | — | Epoch seconds (float); from `dbt.metrics.created_at`. Per ADR-5, this is the per-resource "Definition updated as of …" timestamp surfaced to FE consumers in lieu of `execution_info.completed_at` (metrics do not execute — see Design notes 1 and 6 on the detail-endpoint contract). Empirically verified column present in `dbt.metrics.parquet` across 43 rows in the sample project. |
+| `label` | *(absent)* | — | ❌ | — | Available on the detail endpoint (`GET /api/v1/metrics/:id`). Omitted from the list row because the dbt-ui table has no "Label" column; renderers can fall back to `name` when needed. |
+| `type_params` | *(absent)* | — | ❌ | — | JSON-string per CC-7. Available on the detail endpoint. Omitted from the list row because the `MetricFilterView` does not render any `type_params` field and inlining variant-shaped JSON would inflate the row payload by 5–10× for `derived`/`cumulative` metrics. Detail endpoint deserializes per CC-7 (`Record<string, unknown> \| null`). |
+| `filter` | *(absent)* | — | ❌ | — | JSON-string per CC-7 (`dbt.metrics.metric_filter`). Available on the detail endpoint. Omitted from the list row — no `MetricFilterView` column renders the filter. |
+| `agg_params` | *(absent)* | — | ❌ | — | No `agg_params` column on `dbt.metrics.parquet`; this field name appears in CC-7's enumeration of JSON-string columns but does not apply to the metrics row. Documented here so reviewers don't add it. |
+| `validity_params` | *(absent)* | — | ❌ | — | Same as `agg_params` — not a column on `MetricRow`. Lives on `dbt.semantic_measures` (see SemanticMeasureRow) not metrics. |
+| `non_additive_dimension` | *(absent)* | — | ❌ | — | Same as `agg_params` — not a column on `MetricRow`. Lives on the underlying semantic measure, not the metric. |
+| `time_granularity` | *(absent)* | — | ❌ | — | Available on the detail endpoint. Omitted from the list row — no `MetricFilterView` column renders it. |
+| `meta` | *(absent)* | — | ❌ | — | Available on the detail endpoint. JSON-string per CC-7 (`dbt.metrics.meta` is `Option<String>`). Omitted from the list row to keep the row small; no `MetricFilterView` column renders meta. Promote to the list row only if a future filter/column needs it. |
+| `depends_on` / `referenced_by` | *(absent)* | — | ❌ | — | Class A but list-inappropriate: edges are inlined on the detail endpoint. Inlining them on every list row would amplify the response size by O(edges) per row with no `MetricFilterView` consumer. |
+| `fqn` | *(absent)* | — | ❌ | — | Available on the detail endpoint. Omitted from the list row — the dbt-ui table renders `name`, not the FQN tuple. |
+| `file_path` / `original_file_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint. The list view renders no path information. |
+| `formula` | *(absent)* | — | ❌ | — | Class B per detail Design note 5: not a column on `dbt.metrics.parquet`. For `derived` metrics the expression lives at `type_params.expr` — read it there on the detail endpoint, not on the list row. |
+| `run_generated_at` | *(absent)* | — | ❌ | — | Class B per detail Design note 6: Discovery's `runGeneratedAt` has no parquet analogue under that name. `created_at` (above) replaces it for the list row's "Definition updated as of …" header semantics. |
+| `patch_path` | *(absent)* | — | ❌ | — | Class B: `MetricRow` has no `patch_path` column (unlike `NodeRow`/`MacroRow`). Metrics are defined directly in YAML; `original_file_path` is the YAML file (available on the detail endpoint only). |
+| `ai_context` | *(absent)* | — | ❌ | — | `dbt.metrics.ai_context` exists but is Proprietary/Fusion-specific; not a Discovery-public field. Defer until a UI consumer exists. |
+| `config` | *(absent)* | — | ❌ | — | JSON-string per CC-7. `dbt.metrics.config` exists but has no Discovery-public schema; defer until a UI consumer exists. |
+| `refs` / `sources` / `metrics` | *(absent)* | — | ❌ | — | JSON-string per CC-7. Denormalized into `depends_on` via `dbt.edges` on the detail endpoint; do not duplicate on the list row. |
+| `depends_on_macros` | *(absent)* | — | ❌ | — | Denormalized into the generic `depends_on` edge view on the detail endpoint; metrics rarely reference macros directly. Not exposed on the list row. |
+| `materialized` / `relation_name` / `database_name` / `schema_name` / `identifier` | *(absent)* | — | ❌ | — | Not applicable; metrics are not warehouse objects. See detail-endpoint Field reference for the per-field rationale. |
+| `access_level` / `contract_enforced` | *(absent)* | — | ❌ | — | Model-only governance fields; not applicable to metrics. |
+| `raw_code` / `compiled_code` | *(absent)* | — | ❌ | — | Metrics have no SQL body; closest is `type_params.expr` for derived metrics (available on the detail endpoint). |
+| `columns` | *(absent)* | — | ❌ | — | Metrics expose measures/dimensions/granularity via `type_params` and the upstream `semantic_model`, not columns. See detail Design note 3. |
+| `catalog` | *(absent)* | — | ❌ | — | Metrics are not warehouse relations; no `dbt.catalog_tables` row. See detail Design note 2. |
+| `execution_info` | *(absent)* | — | ❌ | — | Per ADR-5 metrics are not runnable; the field is omitted from `DefinitionNodeBase` entirely. No `dbt_rt.run_results` row keyed on `metric.*`. See detail Design note 1. This row is documentation only. |
+| `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. |
+| `usage_query_count` | *(absent)* | — | ❌ | — | Class B: no parquet path; Discovery-API-internal. |
+| `project_id` / `run_id` / `last_run_id` / `last_job_definition_id` | *(absent)* | — | ❌ | — | Class B: Cloud-specific identifiers; no parquet path. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface MetricListResponse {
+  data: MetricSummary[];
+  page_info: PageInfo;
+}
+
+interface MetricSummary {
+  unique_id: string;
+  name: string;
+  package_name: string | null;
+  group_name: string | null;
+  metric_type: string | null;        // "simple" | "ratio" | "derived" | "cumulative" | "conversion"
+  semantic_model_name: string | null;
+  tags: string[];
+  description: string | null;
+  input_metric_names: string[];
+  input_metric_names_truncated: boolean;
+  created_at: number | null;          // ADR-5: per-resource "Definition updated as of …" timestamp; epoch seconds
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **No handler exists yet.** Net-new endpoint; SQL is a straight projection of the columns above from `dbt.metrics` with `ORDER BY name ASC LIMIT … OFFSET …`. The handler should follow the `list_models` pattern in `src/handlers/models.rs` (spawn-blocking + `query_arrow` + Arrow-typed row extractor). A new `MetricListResponse` / `MetricSummary` struct lives in `src/handlers/metrics.rs` (net-new file alongside the metrics detail handler, parallel to the macros file plan in the macros list contract's Risk #1).
+
+2. **`input_metric_names` truncation per CC-6 — flag emitted now, cap deferred.** CC-6 lets the LIST endpoint accept `?first=<n>` (default cap 500) on inline edge arrays and signal truncation per-row. `input_metric_names` is the only inline array on the metric summary that could theoretically be unbounded (a `derived` metric aggregating N input metrics). Empirically in the sample project the maximum observed `input_metric_names.len()` is 2 (for `ratio` metrics with numerator + denominator); no metric in the wild approaches the 500-row cap. Decision: emit `input_metric_names_truncated: false` unconditionally for v0 (no `?first=` query param plumbed yet); add the param when a real consumer needs it. The flag is in the wire shape now so adding the cap later is a wire-stable change.
+
+3. **JSON-string columns are intentionally absent from the list row.** Per CC-7, `type_params`, `filter`, `meta`, `config`, `refs`, `sources`, `metrics`, and `agg_params`/`validity_params`/`non_additive_dimension` (which do not apply to `MetricRow` regardless) deserialize handler-side on the detail endpoint. They are omitted from the list row to keep the per-row payload small and to avoid duplicating the detail-endpoint's per-variant Zod consumer plumbing. If a future filter (e.g., "metrics where `type_params.expr` contains …") needs one of these, plumb it as a server-side predicate, not a wire-shape field on the list row.
+
+4. **`metric_type` filter is not exposed despite a clear use case.** The dbt-ui `MetricFilterView` has no Type dropdown today, but the GraphQL `MetricDefinitionFilter` does expose a `metricType` filter on the underlying API. For parity with `MacroFilterView`'s `package` filter pattern, a future `?metric_type=simple,derived` (CSV → `IN (…)`) is the natural addition. Deferred to v1; flagged here so reviewers know the parameter slot is reserved and the `metric_types` facet row on the facets endpoint is the populated-shape forward hook.
+
+5. **`created_at` precision is epoch-seconds float, not ISO 8601 string.** Same shape as the detail endpoint per ADR-5. FE consumers must format via `new Date(value * 1000).toISOString()` (or equivalent), not parse as a string. Document at the TS interface site; mismatching this on the FE produces an `Invalid Date` rather than a 500.
+
+6. **Empty parquet case.** When `dbt.metrics.parquet` has zero rows (a project with no semantic manifest, OR an OSS Core project before SL parquet emission was wired — see retired Risk #6 on the detail contract: empirically refuted), the handler must emit `{ "data": [], "page_info": { "end_cursor": null, "has_next_page": false } }`, not 404. Mirrors the empty-facets convention on the facets endpoint below.
+
+7. **`semantic_model_name` is denormalized at index-build time, not query time.** The handler must not attempt to re-derive it by parsing `type_params.metric_aggregation_params.semantic_model` — the parquet column is authoritative (`build_metric_row` is the only writer). If a future schema change moves the denormalization elsewhere, update the column source in one place. Documented to head off a subtle correctness regression where a handler-side re-derivation diverges from the parquet truth.
+
+---
+
+## `GET /api/v1/metrics/facets`
+
+All filter facet values for the metrics list. **No facets in v0** — the
+`MetricFilterView` renders no filter widgets and the contract's list-side
+query parameters expose no filters. Per ADR-6, an endpoint with no
+applicable facets returns the empty object.
+
+### Query parameters
+
+None. Facet values are static for the lifetime of an index snapshot; per
+ADR-6 the facets endpoint takes no query parameters.
+
+### Example response
+
+```json
+{}
+```
+
+Per ADR-6: an empty object means "no facets are applicable to this list
+endpoint." This is distinct from `{ "metric_types": [] }`, which would mean
+"the `metric_types` facet exists but the parquet contains no metrics."
+Returning `{}` is a forward-compatible signal: when a future revision adds
+filter parameters to the list endpoint (e.g., `?metric_type=`,
+`?package=`, `?group_name=`, `?tag=`), this endpoint flips to
+`{ "metric_types": […], "packages": […], "owners": […], "tags": […] }`
+without a wire-shape break.
+
+If the parquet contains no metrics (e.g., a project with no semantic
+manifest), the response is still `{}` — the empty-object shape is
+inapplicable-to-this-list, not empty-but-applicable.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/metrics/facets` today; the entire
+response body is the literal `{}`.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `metric_types` | *(absent)* | — | ❌ | — | Reserved for a future revision that adds a `?metric_type=` filter to the list endpoint (see list-endpoint Risk #4). Distinct values would be sourced from `SELECT DISTINCT metric_type FROM dbt.metrics WHERE metric_type IS NOT NULL ORDER BY metric_type` — empirically `{simple, ratio, derived, cumulative, conversion}` across the sample project. |
+| `packages` | *(absent)* | — | ❌ | — | Reserved for a future revision that adds a `?package=` filter (parallel to `GET /api/v1/macros/facets.packages`). Distinct values from `dbt.metrics.package_name`. |
+| `owners` | *(absent)* | — | ❌ | — | Reserved for a future revision that adds a `?owner=` (= `group_name`) filter. Distinct values from `dbt.metrics.group_name` (skip nulls). |
+| `tags` | *(absent)* | — | ❌ | — | Reserved for a future revision that adds a `?tag=` filter. Distinct values from `unnest(dbt.metrics.tags)`; `tags` is a `[list_utf8!]` column. |
+
+### Type definition
+
+```typescript
+// Intentionally empty — no facets applicable in v0.
+interface MetricFacetsResponse {
+  // Forward-compatible: add `metric_types?`, `packages?`, `owners?`, `tags?`
+  // here when the list endpoint adds the corresponding filter parameters.
+  // See list-endpoint Risk #4.
+}
+```
+
+### Risk register
+
+1. **No handler exists yet.** Net-new endpoint; the handler is a one-liner that returns `Json(serde_json::json!({}))` (or a `#[derive(Serialize)] struct MetricFacetsResponse {}`). No SQL, no spawn-blocking, no parquet read. The endpoint should still exist (rather than 404) so that the FE can hit it unconditionally as part of the standard `useResourceFacets` plumbing without a special case for "this resource has no facets" — same convention as the empty-array facet rows on `GET /api/v1/macros/facets`.
+
+2. **`{}` vs. `{ "metric_types": [], … }` is a deliberate v0 choice.** Returning explicit empty arrays for the four forward-reserved facets (`metric_types`, `packages`, `owners`, `tags`) would commit to those keys as part of the wire shape today. Returning `{}` keeps the wire shape open: when a real filter param is added on the list endpoint, the corresponding facet key is added on the facets endpoint at the same time, and clients that read the new key get a populated array on day one. ADR-6 explicitly endorses this: "FACETS: `{}` (no filters)."
+
+3. **No capability flag introduced.** `dbt.metrics.parquet` is always present when the index exists (it is emitted by the standard index path for any project with a `semantic_manifest.json`, regardless of toolchain — see retired Risk #6 on the detail contract). The endpoint does not need a `has_*` gate, and no new capability flag is introduced by this contract (consistent with detail Design note 7).
+
+4. **Empty parquet case.** When `dbt.metrics.parquet` has zero rows, the response is still `{}` — the endpoint is wire-stable regardless of project state. No special handling required.
+
+5. **Sort order is not specified.** Mirrors `list_model_facets` — facet values, when present, are returned in an order determined by SQL `ORDER BY` (alphabetical for project-specific values; convention order for enum-style values like `metric_types`). Document explicitly at promotion time so FE engineers don't expect the facet endpoint to honor a `?sort=` plumbing.
+
+---
+
+## `GET /api/v1/saved_queries`
+
+Paginated list of saved-query definitions. Powers the table on the dbt-ui
+saved-queries filter page.
+
+### Query parameters
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `sort` | `string` | `name:asc` | `<column>:<asc\|desc>`. Allowlisted column: `name`. The dbt-ui table renders no sortable headers (`SavedQueryFilterView` columns are render-only), so `name` is the only sortable column for v0. Invalid column → 400. |
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Clamped to `[1, 5000]` (same envelope as `GET /api/v1/models` and `GET /api/v1/macros`). |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| _(no separate inline-edge param)_ | — | — | Per the updated CC-6, the inline `depends_on_nodes[]` array is capped server-side at 500 entries with `depends_on_nodes_truncated: true` set when exceeded. The client cannot tune the cap (the `first` name is reserved for cursor pagination on this LIST endpoint per ADR-6). |
+
+Per ADR-6 the LIST endpoint uses cursor pagination (`first`/`after` + `page_info`). The saved-queries parquet typically has tens of rows even in mature projects, so single-page responses are the common case; the cursor envelope still applies for shape consistency with every other LIST endpoint.
+
+No filter parameters are accepted. The dbt-ui `SavedQueryFilterView` does not
+render any `Dropdown` filter widgets (unlike `MacroFilterView` which exposes a
+package dropdown); the GraphQL hook accepts a `GenericMaterializedFilter` but
+the view never populates it. Future filters (e.g., `?package=`, `?tags=`,
+`?group=`) are additive per ADR-6 and can be added without a contract break.
+
+### Example response
+
+Fields marked `// 🔧` are not yet returned — no list handler exists today; every
+field on the row is 🔧 (or 🔍 where parquet shape is unverified).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "saved_query.jaffle_shop.weekly_revenue_summary",
+      "name": "weekly_revenue_summary",
+      "package_name": "jaffle_shop",
+      "group_name": "finance",
+      "tags": ["finance", "weekly"],
+      "description": "Weekly revenue by region, materialized to the analytics schema.",
+      "created_at": 1747320731.0,
+      "depends_on_nodes": [
+        "metric.jaffle_shop.revenue",
+        "metric.jaffle_shop.order_count",
+        "semantic_model.jaffle_shop.customers"
+      ],
+      "depends_on_nodes_truncated": false
+    },
+    {
+      "unique_id": "saved_query.jaffle_shop.orders_by_month",
+      "name": "orders_by_month",
+      "package_name": "jaffle_shop",
+      "group_name": null,
+      "tags": [],
+      "description": null,
+      "created_at": 1747320731.0,
+      "depends_on_nodes": [
+        "metric.jaffle_shop.order_count"
+      ],
+      "depends_on_nodes_truncated": false
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+No capability gates apply to any field on this response — every included field
+is Core (parquet-backed, unconditional). No `execution_info` block exists on
+saved-query rows per ADR-5.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/saved_queries` today; every included field is 🔧 (or 🔍).
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `unique_id` | `string` | Core | 🔧 | — | e.g., `"saved_query.jaffle_shop.weekly_revenue_summary"` — from `dbt.saved_queries.unique_id`. Required, non-null in parquet schema (`[utf8!]`). |
+| `name` | `string` | Core | 🔧 | — | From `dbt.saved_queries.name`. The dbt-ui table renders this as the link cell; `parseUniqueId(savedQuery.uniqueId).remainder` derives an equivalent value in the frontend today. |
+| `package_name` | `string \| null` | Core | 🔧 | — | From `dbt.saved_queries.package_name`. Parquet column is `[utf8]` (nullable in the Arrow schema even though `SavedQueryRow.package_name` is `&'a str` on the Rust side); honor the schema and emit `null` when absent. |
+| `group_name` | `string \| null` | Core | 🔧 | — | From `dbt.saved_queries.group_name` (`[utf8]`, nullable). The `SavedQueryFilterView` table does not render Owner today; surfacing this on the list row is forward-compatible with adding an Owner column without a contract bump. |
+| `tags` | `string[]` | Core | 🔧 | — | From `dbt.saved_queries.tags` (`[list_utf8!]`, native Arrow `List(Utf8)` — empty list rather than null when no tags). arrow_json serializes lists as JSON arrays; emit `[]` for the no-tag case. |
+| `description` | `string \| null` | Core | 🔧 | — | From `dbt.saved_queries.description`. Null when the YAML schema patch declares no description; the dbt-ui Description column renders `null` as an empty cell. |
+| `created_at` | `number \| null` | Core | 🔧 | — | Epoch seconds (float) from `dbt.saved_queries.created_at` (`[float]`, nullable per `SavedQueryRow`). Per ADR-5, this is the "Definition updated as of …" timestamp surfaced to `SavedQueryFilterView`'s row; Discovery API analogue is `runGeneratedAt` — see Risk #2. |
+| `depends_on_nodes` | `string[]` | Core | 🔧 | — | Truncatable per CC-6. From `dbt.saved_queries.depends_on_nodes` (`[list_utf8!]`). Typically references `metric.*` / `semantic_model.*` unique_ids; macros are intentionally excluded — see Risk #3. Default cap: 500 (overridable via `?first=<n>`). |
+| `depends_on_nodes_truncated` | `boolean` | Core | 🔧 | — | `true` when the underlying list exceeded `first` and the response is truncated; `false` otherwise. CC-6 compliance signal. |
+| `label` | *(absent)* | — | ❌ | — | Available on the detail endpoint (`GET /api/v1/saved_queries/:id`). Omitted from the list row because the `SavedQueryFilterView` table renders no Label column. Promote if a future column needs it. |
+| `query_params` | *(absent)* | — | ❌ | — | Available on the detail endpoint. JSON-string column per CC-7; deserializing on every list row would amplify response size and parse cost (`metrics[]`, `group_by[]`, `where.where_filters[]` per row). The `SavedQueryFilterView` table never renders query params; users navigate to the detail page to inspect them. |
+| `exports` | *(absent)* | — | ❌ | — | Available on the detail endpoint. JSON-string column per CC-7; same rationale as `query_params` — list row is the wrong place to materialize per-row exports. |
+| `depends_on_macros` | *(absent)* | — | ❌ | — | Available on the detail endpoint indirectly via `depends_on[*]` (where the per-edge `edge_type` carries `"macro"`). For the LIST row, macro edges are excluded from `depends_on_nodes[]` to keep the lineage chip surface focused on metrics / semantic models — see Risk #3. |
+| `refs` | *(absent)* | — | ❌ | — | `dbt.saved_queries.refs` is an internal serialized representation of YAML `ref()` calls; the resolved `depends_on_nodes[]` is the canonical surface. The list row does not duplicate it. |
+| `config` | *(absent)* | — | ❌ | — | JSON-string parquet column per CC-7; available on the detail endpoint only if a real consumer needs it. The `SavedQueryFilterView` does not render config. |
+| `fqn` | *(absent)* | — | ❌ | — | Available on the detail endpoint. The list view renders no FQN information; the row keeps `unique_id` for routing and `name` for display. |
+| `file_path` / `original_file_path` | *(absent)* | — | ❌ | — | Available on the detail endpoint. The list view renders no path information. |
+| `meta` | *(absent)* | — | ❌ | — | `dbt.saved_queries` parquet has no `meta` column (unlike `dbt.nodes`). Detail endpoint also omits this. |
+| `execution_info` | *(absent)* | — | ❌ | — | Per ADR-5 saved queries are not runnable (no `dbt_rt.run_results` rows for `saved_query.*`); the field is omitted from `DefinitionNodeBase` entirely. This row is documentation only. |
+| `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api. |
+| `run_id` / `project_id` / `run_generated_at` | *(absent)* | — | ❌ | — | Class B: CodexDB-only identifiers; no parquet path. The closest local analogue to `runGeneratedAt` is the per-row `created_at` above — see Risk #2. |
+| `referenced_by` | *(absent)* | — | ❌ | — | Class A but list-inappropriate. Available on the detail endpoint via `referenced_by[*]` from `dbt.edges`. Saved queries are rarely referenced by anything (an exposure can theoretically depend on a saved query — see the detail-endpoint Risk #4); the list row would carry an array of size zero for almost every row. Inline only if a `SavedQueryFilterView` consumer needs it. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface SavedQueryListResponse {
+  data: SavedQuerySummary[];
+  page_info: PageInfo;
+}
+
+interface SavedQuerySummary {
+  unique_id: string;
+  name: string;
+  package_name: string | null;
+  group_name: string | null;
+  tags: string[];
+  description: string | null;
+  created_at: number | null;
+  depends_on_nodes: string[];
+  depends_on_nodes_truncated: boolean;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **No handler exists yet.** Net-new endpoint; SQL is a single `SELECT … FROM dbt.saved_queries` with optional `ORDER BY name ASC LIMIT … OFFSET …`. The handler should follow the `list_models` pattern in `src/handlers/models.rs` (spawn-blocking + `query_arrow` + `batches_to_*_rows` extractor) and live in a new `src/handlers/saved_queries.rs` file alongside the existing detail handler (or together with the planned detail handler if neither exists at integration time). Extraction of `tags: Vec<String>` reuses the `extract_str_list` helper that `models.rs::extract_node_detail` already defines for `fqn` / `tags` on `ModelDetail`; promote it to `handlers/node_base.rs` if duplication appears.
+
+2. **`run_generated_at` ≠ `created_at`.** Carries forward the same caveat from the saved-queries detail-endpoint contract (Risk #5 there). The Discovery API field `runGeneratedAt` is the manifest-generation timestamp from CodexDB (project-wide). The parquet `created_at` is a per-row epoch-seconds float that may represent the parse-time of the saved query YAML; empirically it is *constant across all saved-query rows in a given parquet ingest* in the sample project, which means it serves the same UX purpose as `runGeneratedAt` for v0 even though the semantics differ. Document the divergence in the FE-facing API docs so engineers don't expect Cloud parity. If a future SL execution-history backfill (the ADR-5 revisit trigger) lands, a real `last_run_at` analogue would supersede `created_at` for header rendering.
+
+3. **`depends_on_nodes[]` excludes macros.** `SavedQueryRow` carries both `depends_on_nodes: Vec<String>` and `depends_on_macros: Vec<String>` (parquet.rs:1263-1264). The list row surfaces only `depends_on_nodes` — the macro list is noise for a filter-page lineage chip (every Jinja-using saved query depends on a `macro.dbt.*` helper). The detail endpoint exposes the full edge set (including macros) via the `depends_on` array shape from `dbt.edges`. Document so MCP consumers know `depends_on_nodes` is a node-only projection, not the full edge graph.
+
+4. **`tags` is `List(Utf8)` in parquet; empty-list vs null disambiguation.** `dbt.saved_queries.tags` is declared `[list_utf8!]` (non-null list column) in `SavedQueryRow`, so the contract returns `[]` (never `null`) when no tags are declared. Confirm against the live parquet during handler implementation — if the underlying Arrow column is actually nullable (the `!` suffix governs the Rust binding, not the on-disk schema), wrap the extractor with the same `is_null(0)` guard `extract_str_list` already uses.
+
+5. **`depends_on_nodes[]` on the list row is read from `dbt.saved_queries.parquet`, not joined against `dbt.edges`.** The detail endpoint reads from `dbt.edges` (giving the per-edge `edge_type` discriminator); the list row prefers the parquet-native list column because it avoids a per-row join across `dbt.edges` for every page rendered. The two MUST agree on contents (both are populated from the same dbt parse run). If a future ingest divergence is observed (e.g., `dbt.edges` includes only resolved edges and `depends_on_nodes` includes pre-resolution refs), switch the list-row source to `dbt.edges`. For v0, trust the parquet column.
+
+6. **`first` cap applies per row, total list bytes still bounded by `limit`.** A request with `limit=1000` and `first=500` could theoretically inline `1000 × 500 = 500,000` entries across the response. Empirically saved queries depend on ≤10 nodes each, so this is a paper risk. If a misbehaving project pushes the inline size past a reasonable threshold (e.g., 1 MB), the response will stream out fine but FE rendering may stall — surface the existing `truncated:true` flag as the escape hatch and document the per-row `first` default of 500 as conservative.
+
+7. **No sort surface despite `sort=name:asc` default.** The dbt-ui `SavedQueryFilterView` does not render sortable column headers. The contract still accepts `?sort=name:asc|desc` so the handler shares the same `parse_sort` plumbing as `GET /api/v1/models` and so an MCP / AI consumer (or a future FE toggle) can sort without a contract change. Promoting additional columns to the allowlist (e.g., `package_name`, `created_at`) is additive and does not require a new ADR.
+
+8. **GraphQL `filter` is unused by the dbt-ui view.** `useDiscoveryDefinitionSavedQueries` accepts a `filter: GenericMaterializedFilter` argument; `SavedQueryFilterView.tsx` never passes it. The REST contract mirrors the *view's* surface, not the *hook's* surface — no filter query parameters in v0. If a future view adds a package / tag / owner dropdown, add `?package=`, `?tags=`, `?group=` as additive filters per ADR-6 without a new ADR.
+
+---
+
+## `GET /api/v1/saved_queries/facets`
+
+All filter facet values for the saved-queries list. Per ADR-6 the facets
+endpoint takes no query parameters and returns the full distinct set for each
+facet key.
+
+### Query parameters
+
+None.
+
+### Example response
+
+```json
+{}
+```
+
+`SavedQueryFilterView` exposes no filter dropdowns; the facets endpoint
+correctly returns an empty object (`{}`), distinct from
+`{ "packages": [] }` (which would assert that "packages" is an applicable but
+empty facet — it isn't, because no `package` filter is supported in v0).
+
+Per ADR-6 guidance the empty-object shape is **the correct response when no
+facet keys apply** to the resource. The endpoint exists at this URL so the FE
+codegen pipeline can emit a consistent `<Resource>FacetsResponse` type for
+every list endpoint and so a future `?package=` filter can be added by
+populating one key on this response (e.g., `{ "packages": [...] }`) without
+the FE having to discover a new URL.
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+No handler exists for `GET /api/v1/saved_queries/facets` today; every potential field is currently absent by design.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `packages` | *(absent)* | — | ❌ | — | No package facet — `SavedQueryFilterView` does not render a `PackageFilterDropdown`. The parquet column `dbt.saved_queries.package_name` is present and could populate a facet if a future view needs it; ship empty until then. |
+| `tags` | *(absent)* | — | ❌ | — | No tags facet — `SavedQueryFilterView` does not render a tag dropdown. The parquet `dbt.saved_queries.tags` (`[list_utf8!]`) supports a distinct-unnest query when needed. |
+| `groups` / `owners` | *(absent)* | — | ❌ | — | No owners facet — `SavedQueryFilterView` does not render an Owner dropdown. The parquet `dbt.saved_queries.group_name` is available for a future facet but is not surfaced in v0. |
+
+### Type definition
+
+```typescript
+// Empty object literal — no facet keys apply because the dbt-ui filter view
+// exposes no filter dropdowns. The shape is a deliberate ADR-6 contract:
+// future facets (packages, tags, groups) appear as additive keys.
+interface SavedQueryFacetsResponse {}
+```
+
+### Risk register
+
+1. **`{}` is the correct empty shape, not `null` and not `204 No Content`.** The endpoint succeeded; it just has no facet keys to report. Handler must emit `{ }` (HTTP 200, `Content-Type: application/json`) so the FE codegen pipeline can generate `SavedQueryFacetsResponse` as a typed object. Returning `204` or `null` would break consumers that destructure the response without a null guard.
+
+2. **Reserving facet keys for future additive growth.** When a future iteration of `SavedQueryFilterView` introduces a `PackageFilterDropdown` (mirroring `MacroFilterView`), the response shape evolves to `{ "packages": FacetValue[] }`. This is additive per ADR-6 — existing clients that ignore unknown keys continue to work. Document at the top of the handler that adding facets is non-breaking; *removing* a facet key once shipped would be breaking (the FE would lose a filter dropdown).
+
+3. **No capability flag introduced.** `dbt.saved_queries.parquet` is always present when the index exists (emitted by `dbt parse` unconditionally, not by `dbt build` / `dbt docs generate`). The endpoint does not need a `has_*` gate and never returns 412.
+
+4. **Sort order is irrelevant for the empty case but locked-in for forward compatibility.** If facet keys are added later, each `FacetValue[]` must follow the alphabetical sort convention already used by `list_model_facets` (`owners` ORDER BY in SQL) and `list_macro_facets` (`packages` ORDER BY). No `?sort=` parameter on this endpoint, ever.
+
+5. **No empty-parquet handling needed.** Because the response is `{}` regardless of parquet content, an empty `dbt.saved_queries.parquet` produces the same response as a populated one. The handler does not need to query the parquet at all for v0; it can return a `Json(SavedQueryFacetsResponse {})` literal. When facets are added, the query path joins back in.
+
+---
+
+## Design notes
+
+Three decisions are specific to this LIST + FACETS pair and warrant calling out before review.
+
+**1. ADR-5: definition-only, no `execution_info`; `created_at` is the per-row freshness signal.**
+Semantic models are spec-only — they declare entities, dimensions, and measures on top of an existing model but are not themselves executed against the warehouse. Per ADR-5, the LIST row composes `DefinitionNodeBase` and omits `execution_info` entirely (not null-gated). The "Definition updated as of …" timestamp the FE would otherwise pull from a run-result column is sourced from `dbt.semantic_models.created_at` (a `double` column storing epoch seconds — empirically verified across 10 rows in the sample project). The LIST row carries `created_at` directly; clients that want a project-level freshness fallback go to `GET /api/v1/project`.
+
+**2. `entities[]` is JOIN-derived from `dbt.semantic_entities`, not a column on `dbt.semantic_models`.**
+The FE `SemanticModelFilterView` renders an "Entities" column as a comma-separated list of entity names (`flatMap(node => node.name).join(', ')`). The corresponding GraphQL hook (`definitionSemanticModels.ts`) fetches `entities { name, type }` as a nested object array on each `SemanticModelDefinitionNode`. The parquet shape mirrors GraphQL: `dbt.semantic_models` has no `entities` list column — entity rows live in `dbt.semantic_entities` keyed by the parent semantic model's `unique_id`. The handler must `JOIN dbt.semantic_entities e ON e.unique_id = sm.unique_id` (or per-row fan-out) and emit `entities[]` as a JSON array of `{name, type, ...}` objects. The FE flattens to comma-separated names at the cell level; emitting the structured array (not a server-side joined string) keeps the LIST aligned with the detail-endpoint shape and avoids re-parsing on the client.
+
+**3. CC-6: `entities[]` follows the inline-edge truncation convention.**
+`entities[]` is the only inline array on this LIST row. Per CC-6, accept an optional `?first=<n>` query parameter that caps the per-row entity count and emit a sibling `truncated: true` flag on each row whose entities were capped. Default cap: 500. In practice semantic models declare a handful of entities (tens, never hundreds), so the cap is defensive — keep the contract aligned with `depends_on` / `referenced_by` on typed detail endpoints rather than carving an exception.
+
+---
+
+## `GET /api/v1/semantic_models`
+
+Powers: `SemanticModelFilterView` in dbt-ui.
+
+dbt-ui component: `packages/metadata/dbt-explorer/src/pages/account/project/resource/components/FilterPages/SemanticModelFilterView.tsx`
+
+GraphQL hook: `packages/metadata/dbt-explorer/src/hooks/discovery/definitionSemanticModels.ts` (`GetSemanticModelsByUniqueId`)
+
+Paginated list of semantic models. The FE table renders three columns — Name, Entities (comma-separated names), Description — and currently exposes no filters or sorts. ADR-6 default sort (`name:asc`) applies; `?sort` is accepted with `name` as the only allowlisted column (additive: more allowlisted columns can be added without breaking the contract). The response envelope is the ADR-6 standard: `{ data, total, offset, limit }`.
+
+### Query parameters
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `first` | `u32` | `100` (max `1000`) | Per-page row count. Server clamps. Per ADR-6 cursor envelope. |
+| `after` | `string` (opaque base64) | — | Cursor returned as `page_info.end_cursor` on the previous page. Omit for the first page. Tampering yields 400. |
+| `sort` | `<col>:<asc\|desc>` | `name:asc` | Allowlisted columns: `name`. Invalid column or direction → `400`. |
+
+No filter parameters are accepted in v0 — the FE filter view has none. Future filters (e.g., `?group_name=`, `?primary_entity=`) are additive.
+
+### Example response
+
+`execution_info` is **omitted entirely** per ADR-5 — it is not a null field on the row.
+`entities[]` is a JOIN-derived array of `{name, type, ...}` objects (not a pre-joined string).
+Fields marked `// 🔧` require a backend change (no LIST handler exists today).
+
+```json
+{
+  "data": [
+    {
+      "unique_id": "semantic_model.jaffle_shop.orders",
+      "name": "orders",
+      "package_name": "jaffle_shop",
+      "group_name": "finance",
+      "primary_entity": "order",
+      "entities": [
+        { "name": "order", "type": "primary" },
+        { "name": "customer", "type": "foreign" }
+      ],
+      "description": "Semantic model over the orders fact table.",
+      "created_at": 1747432300.5,
+      "truncated": false
+    },
+    {
+      "unique_id": "semantic_model.jaffle_shop.customers",
+      "name": "customers",
+      "package_name": "jaffle_shop",
+      "group_name": null,
+      "primary_entity": "customer",
+      "entities": [
+        { "name": "customer", "type": "primary" }
+      ],
+      "description": null,
+      "created_at": 1747432301.1,
+      "truncated": false
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiPHN0YXJ0X3NvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "end_cursor": "eyJzIjoiPHNvcnRfdmFsdWU+IiwiaSI6Ijx1bmlxdWVfaWQ+In0",
+    "has_next_page": false
+  }
+}
+```
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+There is no `GET /api/v1/semantic_models` handler today — every row below is 🔧 (or 🔍 where parquet presence is unverified). Class A fields are the bulk of the contract.
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `unique_id` | `string` | Core | 🔧 | — | e.g., `"semantic_model.pkg.name"`; from `dbt.semantic_models.unique_id` |
+| `name` | `string` | Core | 🔧 | — | From `dbt.semantic_models.name`; renders the Name column |
+| `package_name` | `string \| null` | Core | 🔧 | — | From `dbt.semantic_models.package_name` |
+| `group_name` | `string \| null` | Core | 🔧 | — | From `dbt.semantic_models.group_name`; not surfaced by the v0 FE filter view but cheap to include for parity with the detail endpoint |
+| `primary_entity` | `string \| null` | Core | 🔧 | — | From `dbt.semantic_models.primary_entity`; entity name designated primary at the semantic-model level. May overlap with one of the `entities[].type == "primary"` rows — see detail-contract Risk #7 |
+| `entities` | `SemanticEntityRef[]` | Core | 🔧 | — | JOIN-derived from `dbt.semantic_entities` on parent `unique_id`. Subset of the detail-endpoint `SemanticEntity` (LIST shows `name`, `type`; the detail endpoint adds `description`, `label`, `expr`, `role`). Honors `?first=<n>` per CC-6. See Design note #2 |
+| `entities[*].name` | `string` | Core | 🔧 | — | From `dbt.semantic_entities.name` |
+| `entities[*].type` | `string \| null` | Core | 🔧 | — | `"primary"` · `"natural"` · `"foreign"` · `"unique"` (MetricFlow enum); from `dbt.semantic_entities.entity_type` |
+| `description` | `string \| null` | Core | 🔧 | — | From `dbt.semantic_models.description`; renders the Description column |
+| `created_at` | `number \| null` | Core | 🔧 | — | Epoch seconds (float); from `dbt.semantic_models.created_at`. ADR-5 freshness signal. Empirically verified column present across 10 rows in the sample project |
+| `truncated` | `boolean` | Core | 🔧 | — | CC-6 flag: `true` when `entities[]` was capped by `?first=<n>` on this row; `false` otherwise. Always present so clients can branch without an undefined check |
+| `execution_info` | *(absent)* | — | ❌ | — | ADR-5: semantic models are not executed (no `dbt_rt.run_results` rows). Field is omitted from `DefinitionNodeBase` entirely — this row is documentation only |
+| `tags` | *(absent)* | — | ❌ | — | Not needed by the LIST view; the detail endpoint surfaces `tags` (extracted from `config` JSON, see detail Risk #2). Add to LIST only when a tag filter ships |
+| `fqn` | *(absent)* | — | ❌ | — | Not needed by the LIST view; available on the detail endpoint |
+| `label` | *(absent)* | — | ❌ | — | Not used by the FE filter table; detail endpoint surfaces it |
+| `model` | *(absent)* | — | ❌ | — | The upstream model reference is a detail-page concern (header denormalization). LIST omits to keep the row lean |
+| `meta` | *(absent)* | — | ❌ | — | Detail-only |
+| `dimensions` | *(absent)* | — | ❌ | — | Detail-only; would multiply parquet reads N× on LIST |
+| `measures` | *(absent)* | — | ❌ | — | Detail-only; same reasoning |
+| `depends_on` | *(absent)* | — | ❌ | — | Detail-only |
+| `referenced_by` | *(absent)* | — | ❌ | — | Detail-only |
+| `health_issues` | *(absent)* | — | ❌ | — | Class B: no parquet path; `subGraphs: ['internal']` in codex-api |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface SemanticModelListResponse {
+  data: SemanticModelSummary[];
+  page_info: PageInfo;
+}
+
+interface SemanticModelSummary {
+  unique_id: string;
+  name: string;
+  package_name: string | null;
+  group_name: string | null;
+  primary_entity: string | null;
+  entities: SemanticEntityRef[];
+  description: string | null;
+  created_at: number | null;   // ADR-5: epoch seconds
+  truncated: boolean;          // CC-6: entities[] capped on this row?
+  // No execution_info per ADR-5 (definition-only).
+}
+
+interface SemanticEntityRef {
+  name: string;
+  type: string | null;
+}
+// PageInfo: see ADR-6 § "Shared TypeScript types" for the canonical declaration.
+
+```
+
+### Risk register
+
+1. **No existing LIST handler — greenfield endpoint.** The `/api/v1/models` handler (`crates/dbt-docs-server/src/handlers/models.rs`) is the structural template: validate query params, build a count + rows SQL pair, run them under `tokio::task::spawn_blocking`, decode `RecordBatch` to typed rows. The new wrinkle is the JOIN against `dbt.semantic_entities` for `entities[]` — either as a single LEFT JOIN with `LIST(struct_pack(name := e.name, type := e.entity_type))` (DuckDB) or as a second query keyed by the page's `unique_id` values. Pick the single-JOIN form unless profiling shows a problem; matches the detail endpoint's parallel-reads pattern.
+
+2. **`entities[]` ordering is unspecified by parquet.** `dbt.semantic_entities` rows have no stable ordering column — the FE renders them comma-separated, so insertion order from the YAML would feel most natural to authors. Decision: `ORDER BY e.name` to make the rendering deterministic across page reloads. The detail endpoint should match (it currently does not specify; a follow-up cleanup).
+
+3. **`?first` semantics — per-row cap, not a global cap.** Unlike `?limit` (page size on the outer list), `?first` caps `entities[]` *within* each row. Two clients querying the same page with different `?first` values must see the same `data[]` length but different `entities[]` shapes. Document this in the handler and add a test (e.g., `?first=1` against a semantic model with 3 entities → 1 entity returned, `truncated: true`).
+
+4. **`primary_entity` may duplicate an `entities[].name`.** Mirrors detail-contract Risk #7: the parquet shape allows both `dbt.semantic_models.primary_entity = "order"` and a row in `dbt.semantic_entities` with `name = "order"` and `entity_type = "primary"`. The LIST emits both fields verbatim — no deduplication. FE consumers that don't want the duplicate filter `entities[].type !== "primary"` client-side.
+
+5. **No filters or sorts in v0.** The FE filter view exposes neither. The contract reserves `?sort=name:asc|desc` and the `?<filter>=<csv>` pattern from ADR-6 for additive future use, but the v0 handler accepts only `?sort=name:*`. Anything else → `400` with a clear message. Resist the temptation to pre-add unused filter params — they'd be untested surface area.
+
+---
+
+## `GET /api/v1/semantic_models/facets`
+
+Returns the set of filter facet values for the semantic models LIST. There are no filters in v0; the FE filter view exposes none. Per ADR-6 the response is the empty object — a stable shape that lets clients call the endpoint unconditionally and surface facets the moment they exist.
+
+### Query parameters
+
+None. Any query parameters supplied are ignored (do not 400 — keeps the endpoint hospitable to future query-string additions).
+
+### Example response
+
+```json
+{}
+```
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| *(none — empty object)* | `{}` | Core | 🔧 | — | No filters exposed by the FE in v0; ADR-6 empty-facets shape. Future filters add keys here (e.g., `groups: FacetValue[]`, `primary_entities: FacetValue[]`) additively — no consumer breaks |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+interface SemanticModelFacetsResponse {
+  // Intentionally empty in v0. Add facets as filters ship.
+}
+```
+
+### Risk register
+
+1. **Empty object today is correct, not a placeholder.** Resist the urge to pre-populate `groups` or `primary_entities` facets "because we'll need them eventually." Per CC-3 and ADR-3 thinking, filter surface area follows the FE — adding a facet without a filter to consume it is dead code on the server and dead UI on the client. Add facets when the corresponding filter ships in `SemanticModelFilterView.tsx`.
+
+2. **Future facet additions are additive.** When a filter ships, append a new key (`<filter>s: FacetValue[]`) and a matching `?<filter>=<csv>` query param on the LIST endpoint. The empty-object today does not lock in any naming; the LIST `?<filter>` query name and the FACETS key name should match (CC-1: `snake_case` plural).
+
+3. **No SQL today; handler is a constant.** The handler returns a static `{}` and does not touch the parquet backend. When facets are added, follow the `list_model_facets` pattern: one SQL query per facet, run inside `spawn_blocking`.
 
