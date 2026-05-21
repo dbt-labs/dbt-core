@@ -4,6 +4,7 @@ pub mod files;
 pub mod groups;
 pub mod health;
 pub mod lineage;
+pub mod macros;
 pub mod models;
 pub mod node_base;
 pub mod nodes;
