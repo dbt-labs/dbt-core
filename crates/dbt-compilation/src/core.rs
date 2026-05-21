@@ -517,6 +517,18 @@ impl DbtLoadedProject {
         // This mode also applies to compile with --no-introspect
         // DuckDB is a local database — use the AdapterFactory for proper adapter creation
         // instead of a MockAdapter, so we get real query logging and telemetry.
+        //
+        // Under `--dbt-replay`, the mock/sidecar adapter below has no metadata
+        // adapter, so unit-test `given` upstream schemas cannot resolve from the
+        // recording. Route those runs through the factory so it builds a replay
+        // adapter instead; sidecar execution still goes through the db_runner.
+        let is_mantle_replay = matches!(&replay_mode, Some(ReplayMode::MantleReplay(_)));
+        let executes_locally = !introspect_enabled
+            || matches!(
+                execute,
+                Execute::Local | Execute::Sidecar | Execute::Service
+            );
+        let use_local_mock_adapter = executes_locally && !is_mantle_replay;
         let adapter = if adapter_type == AdapterType::DuckDB {
             adapter_factory
                 .create_adapter(
@@ -540,12 +552,7 @@ impl DbtLoadedProject {
                         e
                     )
                 })?
-        } else if !introspect_enabled
-            || matches!(
-                execute,
-                Execute::Local | Execute::Sidecar | Execute::Service
-            )
-        {
+        } else if use_local_mock_adapter {
             // Construct a MockAdapter wrapped in Adapter
             let type_ops = type_ops_factory.create(adapter_type);
 
