@@ -1,6 +1,7 @@
 pub mod capabilities;
 pub mod column_lineage;
 pub mod files;
+pub mod groups;
 pub mod health;
 pub mod lineage;
 pub mod models;
