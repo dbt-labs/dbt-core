@@ -6,6 +6,7 @@ use super::{
     span_info::SpanAccess,
 };
 use dbt_telemetry::{AnyTelemetryEvent, TelemetryAttributes};
+use std::any::TypeId;
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 
 /// A data provider allowing safe access to metrics and efficient, thread-safe
@@ -95,7 +96,7 @@ impl<'a> DataProvider<'a> {
     }
 
     /// Initializes an extension value on the current span. Use in conjunction
-    /// with `with_ancestor_data` to store data on intermediate spans in the span tree
+    /// with `with_ancestor_ext` to store data on intermediate spans in the span tree
     /// for later access by descendant spans.
     ///
     /// Note, that it will replace any existing value of the same type.
@@ -123,16 +124,23 @@ impl<'a> DataProvider<'a> {
     ///
     /// The closure is called with a reference to the attributes and the extension value.
     ///
+    /// Use `with_ancestor_attrs` to access the ancestor telemetry attributes themselves.
+    ///
     /// This function will be no-op in the following cases:
     /// - There is no current span (only possible for a log outside of any span)
     /// - No ancestor span has TelemetryAttributes of type A
     /// - The found ancestor span does not have an extension of type T
     ///   (meaning `init_cur` was not called for T on that span)
-    pub fn with_ancestor<A, T>(&self, f: impl FnOnce(&A, &T))
+    pub fn with_ancestor_ext<A, T>(&self, f: impl FnOnce(&A, &T))
     where
         A: AnyTelemetryEvent,
         T: Send + Sync + 'static,
     {
+        debug_assert!(
+            TypeId::of::<T>() != TypeId::of::<TelemetryAttributes>(),
+            "use with_ancestor_attrs for telemetry attributes access"
+        );
+
         let Some(current_span) = self.current_span else {
             return;
         };
@@ -163,6 +171,47 @@ impl<'a> DataProvider<'a> {
         });
     }
 
+    /// Accesses the closest ancestor span's telemetry attributes matching type A,
+    /// starting from the current span and going up to the root.
+    ///
+    /// NOTE:
+    /// - On span start callbacks, the current span doesn't have access to it's own attributes,
+    ///   so the search will effectively from the parent span.
+    /// - On span end and for logs, the current span is included in the search.
+    ///
+    /// This function will be no-op in the following cases:
+    /// - There is no current span (only possible for a log outside of any span)
+    /// - No ancestor span has TelemetryAttributes of type A
+    pub fn with_ancestor_attrs<A>(&self, f: impl FnOnce(&A))
+    where
+        A: AnyTelemetryEvent,
+    {
+        let Some(current_span) = self.current_span else {
+            return;
+        };
+
+        // Wrap closure to make it FnMut for for_each_in_scope, although
+        // logically it can only be called once.
+        let mut f = Some(f);
+
+        current_span.for_each_in_scope(&mut |span| {
+            let extensions = span.extensions();
+
+            if let Some(attrs) = extensions
+                .get::<TelemetryAttributes>()
+                .and_then(|attrs| attrs.downcast_ref::<A>())
+            {
+                if let Some(f) = f.take() {
+                    f(attrs);
+                }
+
+                return false; // Stop iteration
+            }
+
+            true // Continue iteration
+        });
+    }
+
     /// Accesses an extension value for mutation on the closest ancestor span whose
     /// TelemetryAttributes match the given type A, starting from the current span and going up to the root.
     ///
@@ -173,6 +222,8 @@ impl<'a> DataProvider<'a> {
     ///
     /// The closure is called with a mutable reference to the extension value.
     ///
+    /// Use `with_ancestor_attrs_mut` to mutate the ancestor telemetry attributes themselves.
+    ///
     /// This function will be no-op in the following cases:
     /// - There is no current span (only possible for a log outside of any span)
     /// - No ancestor span has TelemetryAttributes of type A
@@ -182,11 +233,16 @@ impl<'a> DataProvider<'a> {
     /// We require `&mut self` to avoid pitfalls of self-locking since this
     /// function will acquire a write lock on span extensions and closure may
     /// try using the same data provider reference again.
-    pub fn with_ancestor_mut<A, T>(&mut self, f: impl FnOnce(&mut T))
+    pub fn with_ancestor_ext_mut<A, T>(&mut self, f: impl FnOnce(&mut T))
     where
         A: AnyTelemetryEvent,
         T: Send + Sync + 'static,
     {
+        debug_assert!(
+            TypeId::of::<T>() != TypeId::of::<TelemetryAttributes>(),
+            "use with_ancestor_attrs_mut for telemetry attributes access"
+        );
+
         let Some(current_span) = self.current_span else {
             return;
         };
@@ -216,6 +272,58 @@ impl<'a> DataProvider<'a> {
             }
 
             true // Continue iteration
+        });
+    }
+
+    /// Mutates the closest ancestor span's telemetry attributes matching type A,
+    /// starting from the current span and going up to the root.
+    ///
+    /// NOTE:
+    /// - On span start callbacks, the current span doesn't have access to it's own attributes,
+    ///   so the search will effectively from the parent span.
+    /// - On span end and for logs, the current span is included in the search.
+    ///
+    /// This function will be no-op in the following cases:
+    /// - There is no current span (only possible for a log outside of any span)
+    /// - No ancestor span has TelemetryAttributes of type A
+    ///
+    /// We require `&mut self` to avoid pitfalls of self-locking since this
+    /// function will acquire a write lock on span extensions and closure may
+    /// try using the same data provider reference again.
+    pub fn with_ancestor_attrs_mut<A>(&mut self, f: impl FnOnce(&mut A))
+    where
+        A: AnyTelemetryEvent,
+    {
+        let Some(current_span) = self.current_span else {
+            return;
+        };
+
+        // Wrap closure to make it FnMut for for_each_in_scope, although
+        // logically it can only be called once.
+        let mut f = Some(f);
+
+        current_span.for_each_in_scope(&mut |span| {
+            let has_matching_attrs = {
+                let extensions = span.extensions();
+                extensions
+                    .get::<TelemetryAttributes>()
+                    .is_some_and(|attrs| attrs.is::<A>())
+            };
+
+            if !has_matching_attrs {
+                return true; // Continue iteration
+            }
+
+            if let Some(attrs) = span
+                .extensions_mut()
+                .get_mut::<TelemetryAttributes>()
+                .and_then(|attrs| attrs.downcast_mut::<A>())
+                && let Some(f) = f.take()
+            {
+                f(attrs);
+            }
+
+            false // Stop iteration
         });
     }
 

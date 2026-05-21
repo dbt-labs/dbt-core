@@ -327,10 +327,12 @@ fn data_provider_init_ancestor_data_on_matching_span() {
     let test_layer = test_layer.with_span_start(move |span, data_provider| {
         if span.span_name.contains("grandchild") {
             // Should find the extension on ancestor (child) span with MockDynSpanEvent
-            data_provider.with_ancestor::<MockDynSpanEvent, _>(|attrs, ext: &AncestorExtension| {
-                assert_eq!(attrs.name, "child");
-                assert_eq!(ext.counter, 42);
-            });
+            data_provider.with_ancestor_ext::<MockDynSpanEvent, _>(
+                |attrs, ext: &AncestorExtension| {
+                    assert_eq!(attrs.name, "child");
+                    assert_eq!(ext.counter, 42);
+                },
+            );
         }
     });
 
@@ -369,7 +371,7 @@ fn data_provider_init_ancestor_data_on_matching_span() {
 }
 
 #[test]
-fn data_provider_with_ancestor_data_finds_closest() {
+fn data_provider_with_ancestor_ext_finds_closest() {
     let trace_id = rand::random::<u128>();
     let (test_layer, ..) = TestLayer::new();
 
@@ -390,14 +392,14 @@ fn data_provider_with_ancestor_data_finds_closest() {
         .with_span_start(move |span, data_provider| {
             if span.span_name.contains("grandchild") {
                 // Should find the child extension (closest MockDynSpanEvent span)
-                data_provider.with_ancestor::<MockDynSpanEvent, _>(
+                data_provider.with_ancestor_ext::<MockDynSpanEvent, _>(
                     |_attrs, ext: &AncestorExtension| {
                         assert_eq!(ext.counter, 20, "Should find closest ancestor");
                     },
                 );
             } else if span.span_name.contains("child") {
                 // Should find the child extension (closest MockDynSpanEvent span)
-                data_provider.with_ancestor::<MockDynSpanEvent, _>(
+                data_provider.with_ancestor_ext::<MockDynSpanEvent, _>(
                     |_attrs, ext: &AncestorExtension| {
                         assert_eq!(ext.counter, 10, "Should find closest ancestor");
                     },
@@ -407,7 +409,7 @@ fn data_provider_with_ancestor_data_finds_closest() {
         .with_span_end(move |span, data_provider| {
             if span.span_name.contains("grandchild") || span.span_name.contains("child") {
                 // Should find the child extension (closest MockDynSpanEvent span)
-                data_provider.with_ancestor::<MockDynSpanEvent, _>(
+                data_provider.with_ancestor_ext::<MockDynSpanEvent, _>(
                     |_attrs, ext: &AncestorExtension| {
                         assert_eq!(ext.counter, 20, "Should find closest ancestor");
                     },
@@ -450,7 +452,7 @@ fn data_provider_with_ancestor_data_finds_closest() {
 }
 
 #[test]
-fn data_provider_with_ancestor_data_mut_modifies_closest() {
+fn data_provider_with_ancestor_ext_mut_modifies_closest() {
     let trace_id = rand::random::<u128>();
     let (test_layer, ..) = TestLayer::new();
 
@@ -466,7 +468,7 @@ fn data_provider_with_ancestor_data_mut_modifies_closest() {
     let test_layer = test_layer.with_span_start(move |span, data_provider| {
         if span.span_name.contains("grandchild1") || span.span_name.contains("grandchild2") {
             // Increment the counter on the ancestor with MockDynSpanEvent
-            data_provider.with_ancestor_mut::<MockDynSpanEvent, _>(
+            data_provider.with_ancestor_ext_mut::<MockDynSpanEvent, _>(
                 |ext: &mut AncestorExtension| {
                     ext.counter += 1;
                 },
@@ -476,7 +478,7 @@ fn data_provider_with_ancestor_data_mut_modifies_closest() {
         if span.span_name.contains("grandchild2") {
             // Verify the counter was incremented by previous grandchildren
             let mut counter = 0;
-            data_provider.with_ancestor::<MockDynSpanEvent, _>(
+            data_provider.with_ancestor_ext::<MockDynSpanEvent, _>(
                 |_attrs, ext: &AncestorExtension| {
                     counter = ext.counter;
                 },
@@ -536,6 +538,65 @@ fn data_provider_with_ancestor_data_mut_modifies_closest() {
 }
 
 #[test]
+fn data_provider_with_ancestor_attrs_accesses_closest_attrs() {
+    let trace_id = rand::random::<u128>();
+    let (test_layer, ..) = TestLayer::new();
+
+    let test_layer = test_layer
+        .with_span_start(move |span, data_provider| {
+            if span.span_name.contains("leaf") {
+                data_provider.with_ancestor_attrs::<MockDynSpanEvent>(|attrs| {
+                    assert_eq!(attrs.name, "child");
+                });
+
+                data_provider.with_ancestor_attrs_mut::<MockDynSpanEvent>(|attrs| {
+                    attrs.name = "child updated".to_string();
+                });
+            }
+        })
+        .with_span_end(move |span, data_provider| {
+            if span.span_name.contains("child") {
+                data_provider.with_ancestor_attrs::<MockDynSpanEvent>(|attrs| {
+                    assert_eq!(attrs.name, "child updated");
+                });
+            }
+        });
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            None,
+            false,
+            std::iter::empty::<MiddlewareLayer>(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        let _root_guard = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        })
+        .entered();
+
+        let _child_guard = create_info_span(MockDynSpanEvent {
+            name: "child".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        })
+        .entered();
+
+        create_info_span(MockDynSpanEvent {
+            name: "leaf".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        });
+    });
+}
+
+#[test]
 fn data_provider_ancestor_apis_return_none_when_not_found() {
     let trace_id = rand::random::<u128>();
     let (test_layer, ..) = TestLayer::new();
@@ -545,16 +606,18 @@ fn data_provider_ancestor_apis_return_none_when_not_found() {
             // Try to access non-existent extension (no init was done)
             // Should be a no-op - closure not called
             let mut called = false;
-            data_provider.with_ancestor::<MockDynSpanEvent, AncestorExtension>(|_attrs, _ext| {
-                called = true;
-            });
+            data_provider.with_ancestor_ext::<MockDynSpanEvent, AncestorExtension>(
+                |_attrs, _ext| {
+                    called = true;
+                },
+            );
             assert!(
                 !called,
                 "Closure should not be called when extension not found"
             );
 
             // Try to mutate non-existent extension - should be a no-op
-            data_provider.with_ancestor_mut::<MockDynSpanEvent, _>(
+            data_provider.with_ancestor_ext_mut::<MockDynSpanEvent, _>(
                 |ext: &mut AncestorExtension| {
                     ext.counter += 1;
                 },

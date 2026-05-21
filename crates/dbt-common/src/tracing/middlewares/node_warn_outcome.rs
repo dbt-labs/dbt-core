@@ -1,6 +1,5 @@
 use dbt_telemetry::{
-    LogMessage, LogRecordInfo, NodeEvaluated, SeverityNumber, TelemetryAttributes,
-    set_node_warning_outcome_warned,
+    LogMessage, LogRecordInfo, NodeEvaluated, SeverityNumber, set_node_warning_outcome_warned,
 };
 
 use super::super::{data_provider::DataProvider, layer::TelemetryMiddleware};
@@ -23,10 +22,8 @@ impl TelemetryMiddleware for TelemetryNodeWarnOutcome {
         if log_record.attributes.is::<LogMessage>()
             && log_record.severity_number == SeverityNumber::Warn
         {
-            data_provider.with_ancestor_mut::<NodeEvaluated, TelemetryAttributes>(|attrs| {
-                if let Some(ev) = attrs.downcast_mut::<NodeEvaluated>() {
-                    set_node_warning_outcome_warned(ev);
-                }
+            data_provider.with_ancestor_attrs_mut::<NodeEvaluated>(|attrs| {
+                set_node_warning_outcome_warned(attrs);
             });
         }
         Some(log_record)

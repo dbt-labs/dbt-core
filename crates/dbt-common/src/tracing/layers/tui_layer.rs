@@ -155,22 +155,24 @@ struct SkippedTestNodes {
 fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
     // This is a non-skipping node, check if there are pending skipped tests to emit
     let mut output_to_emit = None;
-    data_provider.with_ancestor_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(|skipped| {
-        if !skipped.pending_names.is_empty() {
-            // Format the summary and capture it for emission after lock is released
-            output_to_emit = Some(format_skipped_test_group(
-                &skipped.pending_names,
-                skipped.seen_test,
-                skipped.seen_unit_test,
-                true,
-            ));
+    data_provider.with_ancestor_ext_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(
+        |skipped| {
+            if !skipped.pending_names.is_empty() {
+                // Format the summary and capture it for emission after lock is released
+                output_to_emit = Some(format_skipped_test_group(
+                    &skipped.pending_names,
+                    skipped.seen_test,
+                    skipped.seen_unit_test,
+                    true,
+                ));
 
-            // Clear the pending names and flags
-            skipped.pending_names.clear();
-            skipped.seen_test = false;
-            skipped.seen_unit_test = false;
-        }
-    });
+                // Clear the pending names and flags
+                skipped.pending_names.clear();
+                skipped.seen_test = false;
+                skipped.seen_unit_test = false;
+            }
+        },
+    );
 
     // Emit the output after the span lock has been released to avoid possible deadlocks
     if let Some(output) = output_to_emit {
@@ -1000,7 +1002,7 @@ impl TuiLayer {
         // In interactive non-debug mode, accumulate skipped test nodes instead of printing them individually
         if is_current_node_skipped_test && self.group_skipped_tests {
             // Find an ancestor TuiAllProcessingNodesGroup span and add this node to it
-            data_provider.with_ancestor_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(
+            data_provider.with_ancestor_ext_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(
                 |skipped| {
                     skipped.pending_names.push(node.name.clone());
                     if node.node_type() == NodeType::Test {
