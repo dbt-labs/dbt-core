@@ -6,8 +6,7 @@ use axum::routing::{get, post};
 use tracing::info;
 
 use crate::DocsServeArgs;
-
-use crate::embed::serve_assets;
+use crate::assets::serve_assets;
 use crate::handlers::{
     capabilities, column_lineage, files, health, lineage, models, nodes, project, query,
 };

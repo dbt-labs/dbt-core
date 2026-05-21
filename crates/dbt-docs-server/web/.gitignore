@@ -1,11 +1,10 @@
-# Dependencies — pulled by `npm install`.
+# The SPA source lives in the dbt-ui repo. A built `dist/` is committed
+# here so every build of `dbt-docs-server` embeds a working bundle.
 node_modules/
-
-# Vite build cache.
 .vite/
 
-# Build output. The Rust crate's `build.rs` picks `web/dist/` when it
-# exists (real SPA, after `npm run build`) and falls back to
-# `web/placeholder/` otherwise (tiny page telling devs to build the SPA).
-# `dist/` is fully gitignored so build output never lands in commits.
-dist/
+# Parent fs/sa/.gitignore excludes `dist/` everywhere; re-include this
+# committed bundle but keep sourcemaps out (upstream vite has
+# sourcemap: false; belt-and-suspenders).
+!dist/
+dist/**/*.map

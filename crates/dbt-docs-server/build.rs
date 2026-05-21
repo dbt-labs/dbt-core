@@ -1,15 +1,7 @@
-//! Choose where `rust-embed` should read the SPA bundle from.
+//! Build-time wiring for the SPA bundle.
 //!
-//! - If `web/dist/index.html` exists (i.e. someone ran `npm run build`),
-//!   point `rust-embed` at the real bundle.
-//! - Otherwise, point at the checked-in `web/placeholder/` directory which
-//!   contains a tiny page telling the user how to build the SPA. This lets
-//!   `cargo build` produce a working binary (working API + placeholder UI)
-//!   even without Node.js or `GITHUB_TOKEN`.
-//!
-//! `rust-embed` reads the `DOCS_SERVER_WEB_DIST` env var via its
-//! `interpolate-folder-path` feature, so the path lives in `cargo:rustc-env`
-//! and never in source.
+//! Points `rust-embed` at `web/dist/` (a committed build of the dbt-ui
+//! `dbt-docs-v2` SPA) via the `DOCS_SERVER_WEB_DIST` env var.
 
 use std::path::Path;
 
@@ -37,19 +29,16 @@ fn main() {
         println!("cargo:rerun-if-changed={path}");
     }
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=web/dist");
+
+    if std::env::var_os("CARGO_FEATURE_EMBED_UI").is_none() {
+        println!(
+            "cargo:warning=dbt-docs-server: building with no UI backend; `serve_assets` will return 501. \
+             Enable `embed-ui` (default) for a working server."
+        );
+        return;
+    }
 
     let dist = Path::new(&manifest_dir).join("web").join("dist");
-    let placeholder = Path::new(&manifest_dir).join("web").join("placeholder");
-
-    let chosen = if dist.join("index.html").exists() {
-        println!("cargo:rerun-if-changed=web/dist");
-        dist
-    } else {
-        println!(
-            "cargo:warning=web/dist/index.html not found — embedding placeholder UI. Run `cd fs/sa/crates/dbt-docs-server/web && npm install && npm run build` to ship the real SPA."
-        );
-        placeholder
-    };
-
-    println!("cargo:rustc-env=DOCS_SERVER_WEB_DIST={}", chosen.display());
+    println!("cargo:rustc-env=DOCS_SERVER_WEB_DIST={}", dist.display());
 }

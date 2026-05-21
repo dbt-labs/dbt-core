@@ -22,6 +22,8 @@ pub struct DocsServeArgs {
     pub no_open: bool,
 }
 
+mod assets;
+#[cfg(feature = "embed-ui")]
 mod embed;
 mod handlers;
 pub mod providers;
