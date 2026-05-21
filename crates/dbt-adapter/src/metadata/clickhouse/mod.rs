@@ -34,6 +34,17 @@ pub(crate) fn escape_clickhouse_string_literal(value: &str) -> String {
     value.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
+pub(crate) fn build_get_relation_sql(schema: &str, identifier: &str) -> String {
+    let escaped_database = escape_clickhouse_string_literal(schema);
+    let escaped_identifier = escape_clickhouse_string_literal(identifier);
+    format!(
+        "SELECT engine, name \
+         FROM system.tables \
+         WHERE database = '{escaped_database}' \
+           AND name = '{escaped_identifier}'",
+    )
+}
+
 pub struct ClickHouseMetadataAdapter {
     adapter: AdapterImpl,
 }
@@ -329,13 +340,7 @@ pub fn list_relations(
     token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     // ClickHouse only has databases, no schemas — we map dbt `schema` to CH `database`.
-    let query_database = if engine.quoting().schema {
-        db_schema.resolved_schema.clone()
-    } else {
-        db_schema.resolved_schema.to_lowercase()
-    };
-
-    let escaped_database = escape_clickhouse_string_literal(&query_database);
+    let escaped_database = escape_clickhouse_string_literal(&db_schema.resolved_schema);
     let sql = format!(
         "SELECT database AS table_database, \
                 name AS table_name, \
@@ -417,4 +422,30 @@ fn build_schema_from_clickhouse_describe(
 
     let schema = Schema::new(fields);
     Ok(Arc::new(schema))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ClickHouse's `system.tables` is case-sensitive on `database` and `name`
+    #[test]
+    fn build_get_relation_sql_passes_names_through_verbatim() {
+        assert_eq!(
+            build_get_relation_sql("Mixed_Case", "Stg_Customers"),
+            "SELECT engine, name FROM system.tables \
+             WHERE database = 'Mixed_Case' AND name = 'Stg_Customers'",
+        );
+    }
+
+    /// Embedded `'` and `\` must be backslash-escaped per
+    /// <https://clickhouse.com/docs/en/sql-reference/syntax#string>, otherwise
+    /// the literal terminates early or trails an unbalanced backslash.
+    #[test]
+    fn build_get_relation_sql_escapes_quotes_and_backslashes() {
+        assert_eq!(
+            build_get_relation_sql("a'b", r"c\d"),
+            r"SELECT engine, name FROM system.tables WHERE database = 'a\'b' AND name = 'c\\d'",
+        );
+    }
 }

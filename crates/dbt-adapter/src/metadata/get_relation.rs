@@ -918,33 +918,12 @@ fn clickhouse_get_relation(
     identifier: &str,
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
-    use crate::metadata::clickhouse::{
-        escape_clickhouse_string_literal as clickhouse_string_literal, relation_type_from_engine,
-    };
+    use crate::metadata::clickhouse::{build_get_relation_sql, relation_type_from_engine};
     use crate::record_batch::RecordBatchExt;
 
     // ClickHouse only has databases, not schemas — dbt `schema` maps to CH `database`.
     // dbt `database` is unused here.
-    let query_database = if adapter.quoting().schema {
-        schema.to_string()
-    } else {
-        schema.to_lowercase()
-    };
-
-    let query_identifier = if adapter.quoting().identifier {
-        identifier.to_string()
-    } else {
-        identifier.to_lowercase()
-    };
-
-    let query_database_literal = clickhouse_string_literal(&query_database);
-    let query_identifier_literal = clickhouse_string_literal(&query_identifier);
-    let sql = format!(
-        "SELECT engine, name \
-         FROM system.tables \
-         WHERE database = {query_database_literal} \
-           AND name = {query_identifier_literal}",
-    );
+    let sql = build_get_relation_sql(schema, identifier);
 
     let batch = adapter
         .engine()

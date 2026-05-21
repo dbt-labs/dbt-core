@@ -884,7 +884,7 @@ impl BaseRelation for Relation {
     fn normalize_component(&self, component: &str) -> String {
         use AdapterType::*;
         match self.adapter_type {
-            Salesforce | Bigquery => component.to_string(),
+            Salesforce | Bigquery | ClickHouse => component.to_string(),
             Snowflake => component.to_uppercase(),
             _ => component.to_lowercase(),
         }
