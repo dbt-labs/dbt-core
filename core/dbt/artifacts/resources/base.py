@@ -83,7 +83,7 @@ class FileHash(dbtClassMixin):
         path = convert_path(path)
         chunk_size = 1 * 1024 * 1024
         file_hash = hashlib.new(name)
-        with open(path, "r") as handle:
+        with open(path, "r", encoding="utf-8") as handle:
             # Left and rightstrip start and end of contents to give identical
             # results as the seed hashing implementation with from_contents
             chunk = handle.read(chunk_size).lstrip()
