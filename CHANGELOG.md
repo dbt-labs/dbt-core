@@ -139,6 +139,119 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.177
+
+Released May 19, 2026
+
+### Features
+
+- [dbt-fusion] [dbt-fusion] compute rows_affected from Snowflake DML result metadata (#1437) ([#1437](https://github.com/dbt-labs/dbt-fusion/issues/1437))
+- [dbt-fusion] Add `latest_version_pointer` to ModelConfig JSON schema for latest version pointer support
+- [dbt-fusion] Add incremental parse behind `--partial-parse` / `DBT_PARTIAL_PARSE=1`: caches resolved project state to disk and reuses it on subsequent runs, re-parsing only changed files
+- [dbt-fusion] Add DuckLake catalog type for DuckDB catalogs.yml v2 support ([#9732](https://github.com/dbt-labs/dbt-fusion/issues/9732))
+- [dbt-fusion] Add local filesystem catalog type for DuckDB with JIT source rendering and external model materialization ([#9733](https://github.com/dbt-labs/dbt-fusion/issues/9733))
+- [dbt-fusion] SQLite partial-parse cache: warm parse 4x faster (440ms vs 1840ms), warm compile with --select 11x faster (328ms vs 3700ms) on a 5800-node project; per-row SQLite schema with node_index/node_payload split enables lazy payload loading — seed/snapshot skip model payloads entirely, and single-model selectors query only matched nodes and their direct dependencies
+- [dbt-fusion] Added support to declare variables in vars.yml
+- [dbt-fusion] Redshift: support drop_without_cascade profile option — when set to true, DROP TABLE/VIEW/MATERIALIZED VIEW statements omit CASCADE ([#9901](https://github.com/dbt-labs/dbt-fusion/issues/9901))
+- [dbt-fusion] Populate compiled_path, compiled_code, and compiled for snapshots in manifest.json; fix EISDIR when multiple snapshot blocks share a source file ([#9930](https://github.com/dbt-labs/dbt-fusion/issues/9930))
+- [dbt-fusion] [BigQuery] Add support for adapter_properties.connection_id for BigQuery Iceberg catalog integration
+- [dbt-fusion] Index-based selector filter for partial-parse: plain atoms, parent walks (+x), Or/And compounds, and Eager indirect selection now load only matched nodes instead of the full project graph
+- [dbt-fusion] Support Snowflake Programmatic Access Token (PAT) authentication via 'authenticator: programmatic_access_token' or 'method: programmatic_access_token'. Requires 'user' and 'token' in the profile; any 'password' value is ignored. ([#1688](https://github.com/dbt-labs/dbt-fusion/issues/1688))
+- [dbt-fusion] feat(partial-parse): add --lazy-load flag with parquet cache fast-path, unique-id filter, profile_hash validation, and --stress-lazy-load correctness checker
+- [dbt-fusion] Warn error options now allow configuration through both error names and codes. Error strings now also contain both codes and names"
+- [dbt-fusion] Add in-binary dbt docs v2 server (`dbt docs serve`) that exposes parquet artifacts produced by --use-index through an HTTP API and an embedded React SPA. All data access — both untyped SQL and typed column-level lineage / impact — is gated through dyn-compatible Provider traits in dbt-index-core, with proprietary impls injected from dbt-cli.
+- [internal] Append-only invocation parquet: writes one row per dbt command to metadata/invocations/
+- [dbt-fusion] Parse cache: v1_ schema versioning, alive table, promoted fields for DuckDB pushdown
+- [dbt-fusion] Append-only runtime results and freshness parquet tables for execution history
+- [dbt-fusion] Add parse/alive snapshot parquet table for node liveness authority
+- [dbt-fusion] Add compile/columns epoch-append parquet table for inferred column types
+- [dbt-fusion] Wire runtime results and freshness parquet writes into dbt-main command paths
+- [dbt-fusion] Support SQL inputs with arbitrary deep nested expressions
+- [internal] add dbt-platform-auth crate: credential types and resolver chain for dbt platform authentication
+- [dbt-extension] VS Code extension now detects dbt installs older than 2.0.0-preview.165 and surfaces an error-level prompt to update instead of attempting to start the language server.
+- [internal] feat(ci): auto-increment release version from CDN LATEST when not specified
+- [dbt-fusion] (feat redshift) supports access_key_id and secret_access_key in Redshift IAM authentication. When both are provided, they take precedence over iam_profile. ([#1717](https://github.com/dbt-labs/dbt-fusion/issues/1717))
+- [dbt-fusion] Add GET /api/v1/models and /api/v1/models/facets endpoints to dbt-docs-server: paginated, filtered, sorted model list with modeling_layer, access_level, contract_enforced, owner, and executed_at fields; plus facets endpoint for filter dropdown population
+- [dbt-fusion] Honor per-model meta.run_cache_tolerate_nondeterminism override for the Run Cache service
+- [dbt-fusion] Add browser-based PKCE OAuth flow for Run Cache client with on-disk token cache and refresh-token support; client-credentials auth still takes precedence when RUN_CACHE_OAUTH_CLIENT_SECRET is set
+- [dbt-fusion] Add GET /api/v1/models/:id endpoint to dbt-docs-server returning typed ModelDetail with execution_info and catalog
+
+### Fixes
+
+- [dbt-fusion] Resolve per-version `description` for versioned models in the manifest, matching dbt-core behavior ([#595](https://github.com/dbt-labs/dbt-fusion/issues/595), [#1001](https://github.com/dbt-labs/dbt-fusion/issues/1001))
+- [dbt-fusion] Match dbt-core semantics for versioned model field resolution: blank per-version `description` falls back to the top-level description, and top-level `deprecation_date` no longer inherits to versioned children ([#595](https://github.com/dbt-labs/dbt-fusion/issues/595), [#1001](https://github.com/dbt-labs/dbt-fusion/issues/1001))
+- [dbt-fusion] Include the `.v<version>` suffix on `attached_node` for data_tests on versioned models, matching dbt-core. Source tests now correctly have `attached_node = null`.
+- [dbt-fusion] Fix panic and duplicate semantic model/metric generation for versioned models when defining semantic_model or metrics inline in YAML
+- [dbt-fusion] Show rendered SQL for single-model compile output ([#668](https://github.com/dbt-labs/dbt-fusion/issues/668))
+- [dbt-fusion] Improve the MetricFlow Server validation error surfaced during `fs compile` to explain why MFS is contacted during parse (even when Semantic Layer resources are excluded via `--exclude-resource-types`) and point users at `--skip-semantic-manifest-validation` as a bypass when the Semantic Layer is not in use for this invocation.
+- [internal] Make mark-release-bad.yml's versions.json precondition check exact-match against the tag string so suffixed versions (e.g. v2.0.0-preview.176) don't false-positive a check for v2.0.0.
+- [dbt-fusion] Fix selector schema: parse bare-array definition as implicit union; widen childrens_parents/parents/children schema to accept Jinja strings
+- [dbt-fusion] Add description to selector method field in JSON schema listing valid method names and dot-notation usage
+- [dbt-fusion] Fix selector colon-value form (method: config, value: "materialized:table") to match nodes — parity with dbt-core
+- [dbt-fusion] Ensure unit tests render ephemeral upstreams needed by the model under test. ([#1654](https://github.com/dbt-labs/dbt-fusion/issues/1654))
+- [dbt-fusion] fix CompositeExpr JSON schema so selectors.yml with union/intersection definitions validates correctly in IDE
+- [dbt-fusion] (fix bigquery) job_execution_timeout_seconds took secs as ms ([#1722](https://github.com/dbt-labs/dbt-fusion/issues/1722))
+- [dbt-fusion] Have state:modified treat null to be equivalent to Baseline. 
+- [dbt-fusion] fix(run-cache): match deferred/request FQNs via semantic_fqn, confirm Fusion dev clones, fix epoch resolution to milliseconds ([#10206](https://github.com/dbt-labs/dbt-fusion/issues/10206))
+- [dbt-fusion] Decouple parser parallelism from the profile's `threads` setting; parse now saturates available CPUs and is gated only by `--no-parallel`. `threads` remains the adapter connection-pool size.
+- [dbt-fusion] fix(run-cache): treat BigQuery missing dataset (404) in freshness lookup as missing tables instead of bypassing the run cache
+
+### Under the Hood
+
+- [dbt-fusion] chore(telemetry): add some new catalogs.yml info into run model attributes ([#1510](https://github.com/dbt-labs/dbt-fusion/issues/1510))
+- [internal] Extend redist-adbc-driver-gh.yml to support duckdb/duckdb release assets and wire up libduckdb redistribution in release.xdbc.yml
+- [dbt-fusion] LSP add otel
+- [dbt-fusion] Read parquet/JSON seeds without DataFusion
+- [internal] Write column-level lineage to epoch-append parquet files under compiled_state/cll/{N}.parquet alongside the existing index write path; incremental compiles write only recomputed-target edges, compaction fires at >8 epochs
+- [internal] Add epoch-append parquet for compiled node state (compiled_state/nodes/{N}.parquet) — compile-time complement to node_facts, enabling dbt-index to query compiled fields without the ingest pipeline
+- [dbt-fusion] Add file-driven snapshot test framework for DuckDB v2 catalog ATTACH DDL.
+- [dbt-fusion] Persist epoch, extended_model, macro spans and arguments in NodeFactRow parquet cache; move parquet partial-parse code to fs/sa/crates/dbt-metadata; delete orphaned crates/dbt-metadata scratch directory
+- [dbt-fusion] Use async parquet I/O for seed pre-registration; JSON/CSV stay on blocking pool
+- [dbt-fusion] Harden dbt-agate mutant coverage.
+- [dbt-fusion] Harden dbt-xdbc behavior coverage with targeted mutant tests.
+- [dbt-fusion] Harden dbt-adapter-core behavior coverage with targeted mutant tests.
+- [dbt-index] Add dbt-index-core crate with abstract Provider trait surfaces for column lineage and column impact; dbt-index now implements them via DuckDbColumnLineageProvider and DuckDbColumnImpactProvider.
+- [dbt-fusion] Deleted `BigqueryRelation` in favor of `Relation(AdapterType::Bigquery)`
+- [dbt-fusion] (adapter): Followup to PR https://github.com/dbt-labs/fs/pull/10125. Complete cleanup of RecordBatch utils.
+- [dbt-fusion] Sidecar compute warns & skips unsupported hook DDL instead of hard error ([#9932](https://github.com/dbt-labs/dbt-fusion/issues/9932))
+- [dbt-fusion] Eliminate Jinja Environment cloning in typecheck paths: add template_from_named_str_with_profile() to minijinja so typecheck() never clones the env. Reduces peak RSS by ~130 MB and minor page faults by ~14% on an 11k-model project.
+- [dbt-fusion] Ensure docs and all disabled_nodes are serialized with resource_type for parity with dbt-core
+- [dbt-fusion] Serialize manifest config fields with empty defaults to match dbt-core's non-Optional schema (tags, meta, persist_docs, quoting, packages, docs, contract, access, to_columns, etc.)
+- [internal] Drop spurious dependency on postgres
+- [internal] Widen then dateadd and fix the current_timestamp
+- [internal] Remove dead CLI build-cache infrastructure and unused ParquetNode/serde/column code (~7,200 lines) ([#10169](https://github.com/dbt-labs/dbt-fusion/issues/10169))
+- [dbt-fusion] Refactor dbt-metadata-parquet: deduplicate epoch I/O into shared module, standardize naming, extract index_resolution
+- [internal] Rename DuckDB ADBC driver artifact to duckdb_extended at build time in all build scripts and signing steps
+- [dbt-fusion] Hard-exit after flushing output to skip tracing-subscriber destructor overhead, saving ~200ms on every invocation.
+- [internal] Add local compute storyline slide deck (Marp) for Fivetran talk
+- [internal] Add API-CONTRACTS.md to dbt-docs-server with ADRs, GET /api/v1/models/:id and GET /api/v1/sources/:id contracts (JSON examples, flat field reference tables, TypeScript types, risk registers), and update agent context from metadata-ui to dbt-ui ([#7414](https://github.com/dbt-labs/dbt-fusion/issues/7414))
+- [dbt-fusion] cargo mantle: mount ~/.dbt to container home; add --fusion-binary and --venv flags
+- [dbt-fusion] Add scale-6k test fixture as compact TSV + pack/unpack scripts; 5844 dbt models in a single 4MB file instead of 6000 checked-in SQL files
+- [dbt-fusion] bump clickhouse driver version (the first)
+- [dbt-fusion] add extended duckdb driver to CDN
+- [dbt-fusion] Add Backend::DuckDB for the official duckdb/duckdb ADBC driver at fs/adbc/duckdb/ on the CDN ([#9958](https://github.com/dbt-labs/dbt-fusion/issues/9958))
+- [dbt-fusion] REPL is now a stand-alone library, replacing dbt --interactive
+
+### Contributors
+- [@ElDeFaria](https://github.com/ElDeFaria)
+- [@HannanNaeem](https://github.com/HannanNaeem) ([#668](https://github.com/dbt-labs/dbt-fusion/issues/668))
+- [@Wolfram.Schulte](https://github.com/Wolfram.Schulte)
+- [@aahel](https://github.com/aahel) ([#9930](https://github.com/dbt-labs/dbt-fusion/issues/9930))
+- [@aiguofer](https://github.com/aiguofer) ([#595](https://github.com/dbt-labs/dbt-fusion/issues/595), [#1001](https://github.com/dbt-labs/dbt-fusion/issues/1001), [#595](https://github.com/dbt-labs/dbt-fusion/issues/595), [#1001](https://github.com/dbt-labs/dbt-fusion/issues/1001))
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt)
+- [@ajnovice](https://github.com/ajnovice) ([#1688](https://github.com/dbt-labs/dbt-fusion/issues/1688))
+- [@dataders](https://github.com/dataders) ([#9732](https://github.com/dbt-labs/dbt-fusion/issues/9732), [#9733](https://github.com/dbt-labs/dbt-fusion/issues/9733), [#9958](https://github.com/dbt-labs/dbt-fusion/issues/9958))
+- [@dataders,](https://github.com/dataders,)
+- [@izeigerman](https://github.com/izeigerman) ([#10206](https://github.com/dbt-labs/dbt-fusion/issues/10206))
+- [@j-clemons](https://github.com/j-clemons)
+- [@lottaquestions](https://github.com/lottaquestions)
+- [@mach-kernel](https://github.com/mach-kernel) ([#1654](https://github.com/dbt-labs/dbt-fusion/issues/1654), [#9932](https://github.com/dbt-labs/dbt-fusion/issues/9932))
+- [@maxmalkin](https://github.com/maxmalkin)
+- [@rmankad,](https://github.com/rmankad,) ([#1437](https://github.com/dbt-labs/dbt-fusion/issues/1437))
+- [@serramatutu](https://github.com/serramatutu)
+- [@sriramr98](https://github.com/sriramr98)
+
+
 ## 2.0.0-preview.176
 
 Released May 12, 2026
