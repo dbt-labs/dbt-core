@@ -306,6 +306,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 row_access_policy: None,
                 automatic_clustering: None,
                 copy_grants: None,
+                copy_tags: None,
                 secure: None,
                 transient: None,
                 iceberg_version: None,

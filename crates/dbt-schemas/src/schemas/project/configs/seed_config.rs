@@ -46,6 +46,8 @@ pub struct ProjectSeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(rename = "+copy_grants")]
     pub copy_grants: Option<bool>,
+    #[serde(rename = "+copy_tags")]
+    pub copy_tags: Option<bool>,
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
     pub database: Option<String>,
     #[serde(rename = "+alias")]
@@ -384,6 +386,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
                 copy_grants: config.copy_grants,
+                copy_tags: config.copy_tags,
                 secure: config.secure,
                 transient: config.transient,
                 iceberg_version: None,
@@ -488,6 +491,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
             transient: config.__warehouse_specific_config__.transient,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
+            copy_tags: config.__warehouse_specific_config__.copy_tags,
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,

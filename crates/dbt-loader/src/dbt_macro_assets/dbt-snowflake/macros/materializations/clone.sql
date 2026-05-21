@@ -8,4 +8,5 @@
       table {{ this_relation }}
       clone {{ defer_relation }}
       {{ "copy grants" if config.get("copy_grants", false) }}
+      {{ "copy tags" if config.get("copy_tags", false) }}
 {% endmacro %}

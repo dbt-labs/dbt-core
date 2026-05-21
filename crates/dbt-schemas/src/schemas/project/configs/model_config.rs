@@ -143,6 +143,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub copy_grants: Option<bool>,
+    #[serde(
+        default,
+        rename = "+copy_tags",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub copy_tags: Option<bool>,
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
     pub database: Omissible<Option<String>>,
     #[serde(rename = "+databricks_compute")]
@@ -690,6 +696,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
                 copy_grants: config.copy_grants,
+                copy_tags: config.copy_tags,
                 secure: config.secure,
                 transient: config.transient,
                 iceberg_version: config.iceberg_version,
@@ -862,6 +869,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             intermediate_format: config.__warehouse_specific_config__.intermediate_format,
             storage_uri: config.__warehouse_specific_config__.storage_uri,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
+            copy_tags: config.__warehouse_specific_config__.copy_tags,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,

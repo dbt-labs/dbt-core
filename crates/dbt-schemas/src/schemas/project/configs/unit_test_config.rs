@@ -85,6 +85,12 @@ pub struct ProjectUnitTestConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub copy_grants: Option<bool>,
+    #[serde(
+        default,
+        rename = "+copy_tags",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub copy_tags: Option<bool>,
     #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
     #[serde(
@@ -320,6 +326,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
                 copy_grants: config.copy_grants,
+                copy_tags: config.copy_tags,
                 secure: config.secure,
                 transient: config.transient,
                 iceberg_version: None,
@@ -421,6 +428,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
+            copy_tags: config.__warehouse_specific_config__.copy_tags,
             secure: config.__warehouse_specific_config__.secure,
             transient: config.__warehouse_specific_config__.transient,
             // BigQuery fields

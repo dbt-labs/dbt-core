@@ -5275,6 +5275,7 @@ impl AdapterAttr {
                     query_tag: config.query_tag.clone(),
                     automatic_clustering: config.automatic_clustering,
                     copy_grants: config.copy_grants,
+                    copy_tags: config.copy_tags,
                     secure: config.secure,
                     transient: config.transient,
                 })))
@@ -5378,6 +5379,7 @@ impl AdapterAttr {
                         query_tag: config.query_tag.clone(),
                         automatic_clustering: config.automatic_clustering,
                         copy_grants: config.copy_grants,
+                        copy_tags: config.copy_tags,
                         secure: config.secure,
                         transient: config.transient,
                     })))
@@ -5478,6 +5480,7 @@ pub struct SnowflakeAttr {
     pub query_tag: Option<QueryTag>,
     pub automatic_clustering: Option<bool>,
     pub copy_grants: Option<bool>,
+    pub copy_tags: Option<bool>,
     pub secure: Option<bool>,
     pub transient: Option<bool>,
 }

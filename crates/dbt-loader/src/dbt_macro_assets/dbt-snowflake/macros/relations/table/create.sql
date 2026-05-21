@@ -93,6 +93,7 @@ as (
 {# DIVERGENCE END #}
 
 {%- set copy_grants = config.get('copy_grants', default=false) -%}
+{%- set copy_tags = config.get('copy_tags', default=false) -%}
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
@@ -111,6 +112,7 @@ create or replace {{ transient }} table {{ relation }}
     {{ get_table_columns_and_constraints() }}
     {%- endif %}
     {% if copy_grants -%} copy grants {%- endif %}
+    {% if copy_tags -%} copy tags {%- endif %}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     as (
@@ -405,6 +407,7 @@ insert into {{ glue_relation }}
             is proven stable for REST CLD and adopted here, re-enable:
             {% if copy_grants -%} copy grants {%- endif %}
             and add a copy_grants model for the REST CLD path in adapters_snowflake_iceberg_grants_tags.
+            See: https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table#create-iceberg-table-as-select-also-referred-to-as-ctas
         #}
         {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
         {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}

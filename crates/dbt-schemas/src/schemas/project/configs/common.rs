@@ -396,6 +396,8 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub copy_grants: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub copy_tags: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub transient: Option<bool>,
@@ -537,6 +539,7 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             query_tag,
             automatic_clustering,
             copy_grants,
+            copy_tags,
             secure,
             transient,
             iceberg_version,
@@ -640,6 +643,7 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 query_tag,
                 automatic_clustering,
                 copy_grants,
+                copy_tags,
                 secure,
                 transient,
                 iceberg_version,
@@ -816,6 +820,7 @@ pub fn same_warehouse_config(
     let query_tag_eq = self_wh.query_tag == other_wh.query_tag;
     let automatic_clustering_eq = self_wh.automatic_clustering == other_wh.automatic_clustering;
     let copy_grants_eq = self_wh.copy_grants == other_wh.copy_grants;
+    let copy_tags_eq = self_wh.copy_tags == other_wh.copy_tags;
     let secure_eq = self_wh.secure == other_wh.secure;
     let transient_eq = self_wh.transient == other_wh.transient;
     let iceberg_version_eq = self_wh.iceberg_version == other_wh.iceberg_version;
@@ -884,6 +889,7 @@ pub fn same_warehouse_config(
         && query_tag_eq
         && automatic_clustering_eq
         && copy_grants_eq
+        && copy_tags_eq
         && secure_eq
         && transient_eq
         && iceberg_version_eq
@@ -1326,6 +1332,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.copy_grants),
                         format!("{:?}", &other_wh.copy_grants),
+                    )),
+                ),
+                (
+                    "copy_tags",
+                    copy_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.copy_tags),
+                        format!("{:?}", &other_wh.copy_tags),
                     )),
                 ),
                 (
