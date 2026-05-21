@@ -209,9 +209,9 @@ create or replace iceberg table {{ relation }}
     {{ optional('data_retention_time_in_days', catalog_relation.data_retention_time_in_days)}}
     {{ optional('change_tracking', catalog_relation.change_tracking)}}
     {{ optional('iceberg_version', catalog_relation.iceberg_version)}}
+    {% if copy_grants -%} copy grants {%- endif %}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
-    {% if copy_grants -%} copy grants {%- endif %}
 as (
     {%- if cluster_by_string -%} {# DIVERGENCE #}
     select * from (
@@ -253,7 +253,6 @@ alter iceberg table {{ relation }} resume recluster;
 
 {# Step 2: Create the iceberg table in the CLD with explicit column definitions #}
 
-{%- set copy_grants = config.get('copy_grants', default=false) -%}
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
@@ -301,9 +300,14 @@ create iceberg table {{ glue_relation }} (
 {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
 {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
 {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
+{#
+    TODO: COPY GRANTS is in the CLD grammar but this macro uses DROP + CREATE (not CREATE OR REPLACE),
+    so there is no source object to copy from after the drop. Once CREATE OR REPLACE is proven stable
+    for Glue CLD and adopted here, re-enable: {% if copy_grants -%} copy grants {%- endif %}
+    and add a copy_grants model for the Glue CLD path in adapters_snowflake_iceberg_grants_tags.
+#}
 {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
 {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
-{% if copy_grants -%} copy grants {%- endif %}
 ;
 
 {# Step 3: Insert data from the view (in regular DB) into the table (in CLD) #}
@@ -342,8 +346,6 @@ insert into {{ glue_relation }}
 {%- endmacro %}
 
 {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
-
-{%- set copy_grants = config.get('copy_grants', default=false) -%}
 
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
@@ -397,9 +399,15 @@ insert into {{ glue_relation }}
         {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
         {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
         {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
+        {#
+            TODO: COPY GRANTS is in the CLD grammar but this macro uses DROP + CREATE (not CREATE OR
+            REPLACE), so there is no source object to copy from after the drop. Once CREATE OR REPLACE
+            is proven stable for REST CLD and adopted here, re-enable:
+            {% if copy_grants -%} copy grants {%- endif %}
+            and add a copy_grants model for the REST CLD path in adapters_snowflake_iceberg_grants_tags.
+        #}
         {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
         {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
-        {% if copy_grants -%} copy grants {%- endif %}
     as (
         {{ compiled_code }}
     );
