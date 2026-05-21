@@ -31,6 +31,36 @@
 {% endmacro %}
 
 
+{% macro snowflake__create_table_transient_sql(relation, compiled_code) -%}
+{#-
+    Implements CREATE TRANSIENT TABLE ... AS SELECT for use as an incremental
+    tmp relation. Unlike session-scoped temporary tables, transient tables
+    persist in the catalog (enabling Snowflake lineage tracking) but have no
+    fail-safe period, avoiding the storage costs of permanent tables.
+    https://docs.snowflake.com/en/sql-reference/sql/create-table
+-#}
+
+{%- set contract_config = config.get('contract') -%}
+{%- if contract_config.enforced -%}
+    {{- get_assert_columns_equivalent(compiled_code) -}}
+    {%- set compiled_code = get_select_subquery(compiled_code) -%}
+{%- endif -%}
+
+{%- set sql_header = config.get('sql_header', none) -%}
+{{ sql_header if sql_header is not none }}
+
+create or replace transient table {{ relation }}
+    {%- if contract_config.enforced %}
+    {{ get_table_columns_and_constraints() }}
+    {%- endif %}
+as (
+    {{ compiled_code }}
+    )
+;
+
+{%- endmacro %}
+
+
 {% macro snowflake__create_table_temporary_sql(relation, compiled_code) -%}
 {#-
     Implements CREATE TEMPORARY TABLE and CREATE TEMPORARY TABLE ... AS SELECT:
@@ -135,8 +165,8 @@ create or replace {{ transient }} table {{ relation }}
 alter table {{relation}} cluster by ({{cluster_by_string}});
 {%- endif -%}
 
-{# DIVERGENCE #}
-{% if catalog_relation.cluster_by -%}
+{# DIVERGENCE: unreachable — TBD whether this belongs here once cluster_by moves onto CatalogRelation #}
+{%- if false -%}
 alter table {{ relation }} cluster by ({{ catalog_relation.cluster_by }});
 {%- endif -%}
 
@@ -177,7 +207,7 @@ alter table {{ relation }} resume recluster;
 {# -- end TODO #}
 {# DIVERGENCE END #}
 
-{%- set partition_by_keys = get_partition_by_keys(config) -%}
+{%- set partition_by_keys = get_partition_by_keys(config) -%} {# DIVERGENCE: upstream passes catalog_relation; pending partition_by on CatalogRelation #}
 {%- if partition_by_keys -%}
   {%- set partition_by_string = partition_by_keys|join(", ")-%}
 {% else %}
@@ -258,7 +288,7 @@ alter iceberg table {{ relation }} resume recluster;
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
-{%- set partition_by_keys = get_partition_by_keys(config) -%} {# DIVERGENCE #}
+{%- set partition_by_keys = get_partition_by_keys(config) -%} {# DIVERGENCE: upstream passes catalog_relation; pending partition_by on CatalogRelation #}
 {%- if partition_by_keys -%}
   {# HACK: Force columns to be lowercase and quoted in glue #}
   {%- set partition_by_keys_quotes = [] -%}
@@ -336,6 +366,7 @@ insert into {{ glue_relation }}
     - For existing tables, we must DROP the table first before creating the new one
 -#}
 
+{# DIVERGENCE BEGIN: v1/v2 behavior shim; upstream uses catalog_relation.linked_catalog_provider.is_glue directly; remove once use_catalogs_v2 is on by default #}
 {% macro is_glue_catalog_linked_database(catalog_relation) -%}
   {% if adapter.behavior.use_catalogs_v2.no_warn %}
     {{ return(catalog_relation.linked_catalog_provider.is_glue) }}
@@ -346,13 +377,14 @@ insert into {{ glue_relation }}
     {% do exceptions.raise_compiler_error('unreachable: catalog linked database provider must be derivable for this branch') %}
   {% endif %}
 {%- endmacro %}
+{# DIVERGENCE END #}
 
 {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
 
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
-{%- set partition_by_keys = get_partition_by_keys(config) -%}
+{%- set partition_by_keys = get_partition_by_keys(config) -%} {# DIVERGENCE: upstream passes catalog_relation; pending partition_by on CatalogRelation #}
 {%- if partition_by_keys -%}
   {%- set partition_by_string = partition_by_keys|join(", ")-%}
 {% else %}
