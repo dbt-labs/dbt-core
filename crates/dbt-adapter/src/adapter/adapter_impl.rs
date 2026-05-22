@@ -2117,10 +2117,15 @@ impl AdapterImpl {
 
     /// BaseAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-adapters/src/dbt/adapters/base/impl.py#L1816
     pub fn render_column_constraint(&self, constraint: Constraint) -> Option<String> {
-        // TODO: revisit to support warn_supported, warn_unenforced
-        let constraint_support = self.get_constraint_support(constraint.type_);
-        if constraint_support == ConstraintSupport::NotSupported {
-            return None;
+        // Custom constraints bypass the support check — dbt-adapters intentionally
+        // short-circuits enforcement for custom and passes the expression verbatim.
+        // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1908-L1909
+        if constraint.type_ != ConstraintType::Custom {
+            // TODO: revisit to support warn_supported, warn_unenforced
+            let constraint_support = self.get_constraint_support(constraint.type_);
+            if constraint_support == ConstraintSupport::NotSupported {
+                return None;
+            }
         }
 
         let constraint_expression = constraint.expression.unwrap_or_default();
@@ -5281,5 +5286,43 @@ mod tests {
         let state = State::new_for_env(&env);
         let options = adapter.get_adbc_execute_options(&state);
         assert!(find_job_timeout(&options).is_none());
+    }
+
+    // Regression test for https://github.com/dbt-labs/dbt-fusion/issues/1733:
+    // type:custom column constraints were silently dropped because get_constraint_support
+    // returns NotSupported for Custom on all adapters, and the NotSupported guard ran
+    // before the Custom arm in the match — bypassing the expression entirely.
+    #[test]
+    fn test_render_column_constraint_custom_snowflake() {
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
+        let constraint = Constraint {
+            type_: ConstraintType::Custom,
+            expression: Some("with tag (governance.masking.pii_type = 'SSN')".to_string()),
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        let rendered = adapter.render_column_constraint(constraint);
+        assert_eq!(
+            rendered,
+            Some("with tag (governance.masking.pii_type = 'SSN')".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_column_constraint_custom_empty_expression_returns_none() {
+        let adapter = AdapterImpl::new(engine(Snowflake), None);
+        let constraint = Constraint {
+            type_: ConstraintType::Custom,
+            expression: None,
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        assert!(adapter.render_column_constraint(constraint).is_none());
     }
 }
