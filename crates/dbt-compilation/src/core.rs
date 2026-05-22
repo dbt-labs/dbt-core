@@ -185,16 +185,35 @@ fn is_resource_changeable(kind: &ResourcePathKind) -> bool {
 }
 
 // TODO: Chenyu this will be moved to use CAS as previous state on next PR.
+fn is_internal_package(pkg: &DbtPackage) -> bool {
+    pkg.package_root_path
+        .components()
+        .any(|c| c.as_os_str() == "dbt_internal_packages")
+}
+
 async fn compute_file_changeset(
     prev_dbt_state: &DbtState,
     current_dbt_state: &DbtState,
     token: &CancellationToken,
 ) -> FsResult<FileChangeset> {
-    let prev_packages = &prev_dbt_state.packages;
-    let current_packages = &current_dbt_state.packages;
+    let prev_packages: Vec<_> = prev_dbt_state
+        .packages
+        .iter()
+        .filter(|p| !is_internal_package(p))
+        .collect();
+    let current_packages: Vec<_> = current_dbt_state
+        .packages
+        .iter()
+        .filter(|p| !is_internal_package(p))
+        .collect();
 
     if prev_packages.len() != current_packages.len() {
-        return Err(fs_err!(ErrorCode::CacheError, "Number of packages changed"));
+        return Err(fs_err!(
+            ErrorCode::CacheError,
+            "Number of packages changed: prev={} current={}",
+            prev_packages.len(),
+            current_packages.len()
+        ));
     }
 
     let mut changed = Vec::new();
@@ -204,8 +223,15 @@ async fn compute_file_changeset(
         let prev_package = &prev_packages[i];
         let current_package = &current_packages[i];
 
+        // Packages must appear in the same order across runs (insertion order from loader).
+        // Verify both identity and position so a reordering produces a clear message.
         if prev_package.package_root_path != current_package.package_root_path {
-            return Err(fs_err!(ErrorCode::CacheError, "Packages changed"));
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Package at index {i} changed: prev='{}' current='{}'",
+                prev_package.dbt_project.name,
+                current_package.dbt_project.name
+            ));
         }
 
         let prev_fs_timestamps = prev_package.all_paths.clone();
@@ -215,7 +241,13 @@ async fn compute_file_changeset(
             HashSet::from_iter(prev_fs_timestamps.keys());
         let new_fs_keys = HashSet::from_iter(new_fs_timestamps.keys());
         if prev_fs_keys != new_fs_keys {
-            return Err(fs_err!(ErrorCode::CacheError, "Resource kinds changed"));
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Resource kinds changed in package '{}': prev={:?} current={:?}",
+                prev_package.dbt_project.name,
+                prev_fs_keys,
+                new_fs_keys
+            ));
         }
 
         for (key, prev_value) in prev_fs_timestamps {
@@ -234,7 +266,14 @@ async fn compute_file_changeset(
                 current_value.iter().map(|x| (&x.0, x.1)).collect();
 
             if prev_fs.len() != current_fs.len() {
-                return Err(fs_err!(ErrorCode::CacheError, "Input files changed"));
+                return Err(fs_err!(
+                    ErrorCode::CacheError,
+                    "File count changed in package '{}' kind '{:?}': prev={} current={}",
+                    prev_package.dbt_project.name,
+                    key,
+                    prev_fs.len(),
+                    current_fs.len()
+                ));
             }
 
             for current in current_fs.iter() {
@@ -242,7 +281,12 @@ async fn compute_file_changeset(
                 // Using [std::path::Path] for the lookup here means
                 // it will always be case-sensitive.
                 let Some(prev_timestamp) = prev_fs.get(current.0.as_path()) else {
-                    return Err(fs_err!(ErrorCode::CacheError, "Input files changed"));
+                    return Err(fs_err!(
+                        ErrorCode::CacheError,
+                        "File '{}' appeared in package '{}' (not in previous cache)",
+                        current.0.display(),
+                        current_package.dbt_project.name
+                    ));
                 };
                 if current.1 != prev_timestamp {
                     if is_doc && !current.0.has_extension("md") {
@@ -250,12 +294,22 @@ async fn compute_file_changeset(
                         continue;
                     }
                     if !is_resource_changeable(&key) {
-                        return Err(fs_err!(ErrorCode::CacheError, "Input file changed"));
+                        return Err(fs_err!(
+                            ErrorCode::CacheError,
+                            "Non-incremental file changed: '{}' (kind {:?}) — full parse required",
+                            current.0.display(),
+                            key
+                        ));
                     }
+                    // Only root-package (i=0) model/analysis changes are safe for incremental.
+                    // Changes in dependency packages require a full parse because their nodes
+                    // may be referenced by the root and cannot be partially re-resolved.
                     if i > 0 {
                         return Err(fs_err!(
                             ErrorCode::CacheError,
-                            "Dependent package contents changed"
+                            "File '{}' changed in dependency package '{}' — full parse required",
+                            current.0.display(),
+                            current_package.dbt_project.name
                         ));
                     }
                     // The paths in all_paths are already absolute paths

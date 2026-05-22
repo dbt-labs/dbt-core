@@ -30,7 +30,7 @@ use crate::partial_parse::PackageSnapshot;
 const INDEX_COLUMNS: &[&str] = &[
     "unique_id",
     "original_path",
-    "kind",
+    "resource_type",
     "name",
     "package_name",
     "fqn",
@@ -47,14 +47,16 @@ fn read_index_rows_from_file(path: &Path) -> Vec<NodeIndexRow> {
         return vec![];
     };
 
-    let schema_desc = builder.parquet_schema();
+    // Use roots-based projection so list columns (fqn, tags, depends_on) are
+    // selected by their top-level field index rather than by leaf column name,
+    // which would miss nested list item fields.
+    let arrow_schema = builder.schema();
     let col_indices: Vec<usize> = INDEX_COLUMNS
         .iter()
-        .filter_map(|name| {
-            (0..schema_desc.num_columns()).find(|&i| schema_desc.column(i).name() == *name)
-        })
+        .filter_map(|name| arrow_schema.index_of(name).ok())
         .collect();
-    let mask = ProjectionMask::leaves(schema_desc, col_indices);
+    let schema_desc = builder.parquet_schema();
+    let mask = ProjectionMask::roots(schema_desc, col_indices);
 
     let Ok(reader) = builder.with_projection(mask).build() else {
         return vec![];
@@ -95,6 +97,12 @@ pub enum IndexLookupMethod {
     Tag,
     Package,
     ResourceType,
+    /// Component-boundary prefix match on `original_path` (e.g. `"models/staging"`).
+    Path,
+    /// Exact suffix match on `original_path` for `file:` selectors (e.g. `"stg_orders.sql"`).
+    File,
+    /// `source:source_name.table_name` or `source:source_name` selector.
+    Source,
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -127,10 +135,32 @@ pub fn resolve_unique_ids_from_index(
             }
             IndexLookupMethod::Tag => tags_contains(&row.tags, value),
             IndexLookupMethod::Package => row.package_name == value,
-            IndexLookupMethod::ResourceType => row.kind == value,
+            IndexLookupMethod::ResourceType => row.resource_type == value,
+            IndexLookupMethod::Path => path_starts_with(&row.original_path, value),
+            IndexLookupMethod::File => path_ends_with_file(&row.original_path, value),
+            IndexLookupMethod::Source => {
+                if row.resource_type != "source" {
+                    return false;
+                }
+                if let Some(dot) = value.find('.') {
+                    let source_part = &value[..dot];
+                    let table_part = &value[dot + 1..];
+                    row.package_name == source_part && row.name == table_part
+                } else {
+                    row.package_name == value
+                }
+            }
         })
         .map(|row| row.unique_id.clone())
         .collect();
+
+    // Empty seed set means the selector matched nothing in the cached index. This can
+    // happen when the index is stale (e.g. a brand-new model file that hasn't been
+    // parsed yet). Return None to fall back to a full load rather than silently
+    // returning an empty result.
+    if seed_ids.is_empty() {
+        return None;
+    }
 
     let (parents_of, children_of) =
         build_edge_maps(&all_rows, children_depth.is_some() || include_indirect);
@@ -138,11 +168,34 @@ pub fn resolve_unique_ids_from_index(
     let mut result: HashSet<String> = seed_ids.clone();
     walk_parents(&seed_ids, parents_depth, &parents_of, &mut result);
     walk_children(&seed_ids, children_depth, &children_of, &mut result);
-    add_indirect_tests(include_indirect, &children_of, &mut result);
     add_all_ancestors(&parents_of, &mut result);
+    add_indirect_tests(include_indirect, &children_of, &mut result);
     add_all_macros(&parents_of, &mut result);
 
     Some(result)
+}
+
+/// Return only the directly-touched unique_ids (no graph expansion).
+///
+/// Used to synthesize a `SelectExpression` for `--dirty` so the scheduler applies
+/// `seed+` semantics rather than running the pre-expanded ancestor closure.
+/// Returns `None` when the cache directory does not exist.
+pub fn dirty_seed_ids_from_index(out_dir: &Path) -> Option<HashSet<String>> {
+    let dir = cache_dir(out_dir);
+    if !dir.exists() {
+        return None;
+    }
+    let project: Vec<parse_state::KvRow> =
+        dbt_metadata_parquet::epoch_io::read_rows(&project_path(&dir));
+    let packages = load_packages(&dir, &project)?;
+    let touched = detect_dirty_files(&packages);
+    let all_rows = read_node_index_rows(&dir);
+    let seed_ids = all_rows
+        .iter()
+        .filter(|row| touched.contains(&(row.package_name.clone(), row.original_path.clone())))
+        .map(|row| row.unique_id.clone())
+        .collect();
+    Some(seed_ids)
 }
 
 /// Resolve unique_ids for `state:dirty` — nodes whose source file mtime changed.
@@ -195,8 +248,8 @@ pub fn resolve_dirty_unique_ids_from_index(
     let mut result: HashSet<String> = seed_ids.clone();
     walk_parents(&seed_ids, parents_depth, &parents_of, &mut result);
     walk_children(&seed_ids, children_depth, &children_of, &mut result);
-    add_indirect_tests(include_indirect, &children_of, &mut result);
     add_all_ancestors(&parents_of, &mut result);
+    add_indirect_tests(include_indirect, &children_of, &mut result);
     add_all_macros(&parents_of, &mut result);
 
     Some(result)
@@ -210,8 +263,7 @@ fn build_edge_maps(
 ) -> (HashMap<String, Vec<String>>, HashMap<String, Vec<String>>) {
     let mut parents_of: HashMap<String, Vec<String>> = HashMap::new();
     for row in rows {
-        let deps: Vec<String> = serde_json::from_str(&row.depends_on).unwrap_or_default();
-        parents_of.insert(row.unique_id.clone(), deps);
+        parents_of.insert(row.unique_id.clone(), row.depends_on.clone());
     }
 
     let mut children_of: HashMap<String, Vec<String>> = HashMap::new();
@@ -351,18 +403,23 @@ fn detect_dirty_files(packages: &[PackageSnapshot]) -> HashSet<(String, String)>
     touched
 }
 
-fn fqn_contains(fqn_json: &str, value: &str) -> bool {
-    let Ok(parts) = serde_json::from_str::<Vec<String>>(fqn_json) else {
-        return false;
-    };
-    parts.iter().any(|p| p == value)
+fn fqn_contains(fqn: &[String], value: &str) -> bool {
+    fqn.iter().any(|p| p == value)
 }
 
-fn tags_contains(tags_json: &str, value: &str) -> bool {
-    let Ok(parts) = serde_json::from_str::<Vec<String>>(tags_json) else {
-        return false;
-    };
-    parts.iter().any(|p| p == value)
+fn tags_contains(tags: &[String], value: &str) -> bool {
+    tags.iter().any(|p| p == value)
+}
+
+/// Component-boundary prefix match: `"models/staging/orders.sql"` matches `"models/staging"`.
+fn path_starts_with(original_path: &str, prefix: &str) -> bool {
+    Path::new(original_path).starts_with(Path::new(prefix))
+}
+
+/// Suffix/filename match: `"models/staging/stg_orders.sql"` matches `"stg_orders.sql"`.
+/// Uses `Path::ends_with` for component-boundary correctness.
+fn path_ends_with_file(original_path: &str, suffix: &str) -> bool {
+    Path::new(original_path).ends_with(Path::new(suffix))
 }
 
 #[cfg(test)]
@@ -374,12 +431,12 @@ mod tests {
         NodeIndexRow {
             unique_id: uid.to_string(),
             original_path: format!("models/{uid}.sql"),
-            kind: "model".to_string(),
+            resource_type: "model".to_string(),
             name: uid.to_string(),
             package_name: "pkg".to_string(),
-            fqn: format!(r#"["pkg","{}"]"#, uid),
-            tags: "[]".to_string(),
-            depends_on: serde_json::to_string(deps).unwrap(),
+            fqn: vec!["pkg".to_string(), uid.to_string()],
+            tags: vec![],
+            depends_on: deps.iter().map(|s| (*s).to_string()).collect(),
             materialization: "table".to_string(),
         }
     }
@@ -518,15 +575,61 @@ mod tests {
 
     #[test]
     fn fqn_contains_matches() {
-        assert!(fqn_contains(r#"["pkg","models","users"]"#, "users"));
-        assert!(fqn_contains(r#"["pkg","models","users"]"#, "pkg"));
-        assert!(!fqn_contains(r#"["pkg","models","users"]"#, "orders"));
+        let fqn = vec!["pkg".to_string(), "models".to_string(), "users".to_string()];
+        assert!(fqn_contains(&fqn, "users"));
+        assert!(fqn_contains(&fqn, "pkg"));
+        assert!(!fqn_contains(&fqn, "orders"));
     }
 
     #[test]
     fn tags_contains_matches() {
-        assert!(tags_contains(r#"["daily","critical"]"#, "daily"));
-        assert!(!tags_contains(r#"["daily","critical"]"#, "weekly"));
-        assert!(!tags_contains("invalid json", "daily"));
+        let tags = vec!["daily".to_string(), "critical".to_string()];
+        assert!(tags_contains(&tags, "daily"));
+        assert!(!tags_contains(&tags, "weekly"));
+        assert!(!tags_contains(&[], "daily"));
+    }
+
+    // ── path_starts_with / path_ends_with_file ───────────────────────────────
+
+    #[test]
+    fn path_starts_with_prefix_match() {
+        assert!(path_starts_with(
+            "models/staging/orders.sql",
+            "models/staging"
+        ));
+        assert!(path_starts_with(
+            "models/staging/orders.sql",
+            "models/staging/orders.sql"
+        ));
+        // Component boundary: "models/stag" does NOT match "models/staging/..."
+        assert!(!path_starts_with(
+            "models/staging/orders.sql",
+            "models/stag"
+        ));
+        assert!(!path_starts_with(
+            "models/staging/orders.sql",
+            "models/marts"
+        ));
+    }
+
+    #[test]
+    fn path_ends_with_file_match() {
+        assert!(path_ends_with_file(
+            "models/staging/orders.sql",
+            "orders.sql"
+        ));
+        assert!(path_ends_with_file(
+            "models/staging/orders.sql",
+            "staging/orders.sql"
+        ));
+        // Component boundary: "rders.sql" does NOT match
+        assert!(!path_ends_with_file(
+            "models/staging/orders.sql",
+            "rders.sql"
+        ));
+        assert!(!path_ends_with_file(
+            "models/staging/orders.sql",
+            "payments.sql"
+        ));
     }
 }

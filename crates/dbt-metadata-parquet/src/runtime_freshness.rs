@@ -3,12 +3,14 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   metadata/runtime/freshness/v1_{N}.parquet   ← append-only, one row per source per check
+//!   metadata/run/freshness/v1_{N}.parquet   ← append-only, one row per source per check
 //! ```
 
 use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +52,11 @@ fn freshness_fields() -> Vec<Field> {
         Field::new("warn_after_period", DataType::Utf8, true),
         Field::new("error_after_count", DataType::Int32, true),
         Field::new("error_after_period", DataType::Utf8, true),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -132,7 +138,7 @@ mod tests {
             warn_after_period: Some("hour".to_string()),
             error_after_count: Some(24),
             error_after_period: Some("hour".to_string()),
-            ingested_at: 1_700_000_000_000_000_000,
+            ingested_at: 1_700_000_000_000_000,
         }];
 
         write_freshness_results(dir_path, &rows).unwrap();

@@ -46,8 +46,10 @@ pub struct RunTasksArgs {
     pub limit: Option<usize>,
     /// Whether to write json output
     pub write_json: bool,
-    /// Whether to maintain the parquet index during command execution.
-    pub write_index: bool,
+    /// Whether to write metadata parquet epoch files during command execution.
+    pub write_metadata: bool,
+    /// Whether to compute and write column-level lineage into compile/cll parquet.
+    pub write_lineage: bool,
     /// Whether this is the main command or a subcommand
     pub from_main: bool,
     /// Number of threads (connection backpressure + parser rendering). Not
@@ -111,7 +113,8 @@ impl RunTasksArgs {
             format: arg.format,
             limit: arg.limit,
             write_json: arg.write_json,
-            write_index: arg.write_index,
+            write_metadata: arg.write_metadata,
+            write_lineage: arg.write_lineage,
             from_main: arg.from_main,
             num_threads: arg.num_threads.unwrap_or(0),
             no_parallel: arg.no_parallel,

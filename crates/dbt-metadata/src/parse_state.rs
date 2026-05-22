@@ -57,7 +57,7 @@ fn t(label: &str, start: Instant) {
     }
 }
 
-use arrow::datatypes::{DataType, Field, FieldRef};
+use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
 use parquet::arrow::{ProjectionMask, arrow_reader::ParquetRecordBatchReaderBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -76,7 +76,7 @@ use crate::partial_parse::PackageSnapshot;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-pub const CACHE_DIR_NAME: &str = "parse_state";
+pub const CACHE_DIR_NAME: &str = "metadata/parse";
 
 /// Compact epoch files into one when this many delta files exist.
 const COMPACT_THRESHOLD: u32 = 8;
@@ -158,13 +158,13 @@ struct FilestampRow {
 pub(crate) struct NodeRow {
     pub unique_id: String,
     pub is_disabled: i32,
-    pub kind: String,
+    pub resource_type: String,
     pub name: String,
     pub package_name: String,
     pub original_path: String,
-    pub fqn: String,
-    pub tags: String,
-    pub depends_on: String,
+    pub fqn: Vec<String>,
+    pub tags: Vec<String>,
+    pub depends_on: Vec<String>,
     pub uses_graph: i32,
     pub materialization: String,
     pub payload: String,
@@ -195,12 +195,12 @@ pub(crate) struct NodeRow {
 pub(crate) struct NodeIndexRow {
     pub unique_id: String,
     pub original_path: String,
-    pub kind: String,
+    pub resource_type: String,
     pub name: String,
     pub package_name: String,
-    pub fqn: String,
-    pub tags: String,
-    pub depends_on: String,
+    pub fqn: Vec<String>,
+    pub tags: Vec<String>,
+    pub depends_on: Vec<String>,
     /// Kept for future lazy-load logic that distinguishes ephemeral / view materializations.
     #[allow(dead_code)]
     pub materialization: String,
@@ -218,6 +218,14 @@ fn i32_field(name: &str) -> FieldRef {
 
 fn i64_field(name: &str) -> FieldRef {
     Arc::new(Field::new(name, DataType::Int64, false))
+}
+
+fn timestamp_micros_field(name: &str) -> FieldRef {
+    Arc::new(Field::new(
+        name,
+        DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+        false,
+    ))
 }
 
 fn write_rows_with_fields<T: Serialize>(path: &Path, fields: &[FieldRef], rows: &[T]) -> bool {
@@ -240,7 +248,7 @@ fn filestamp_fields() -> Vec<FieldRef> {
         str_field("path_kind"),
         str_field("path"),
         i64_field("mtime_ns"),
-        i64_field("ingested_at"),
+        timestamp_micros_field("ingested_at"),
     ]
 }
 
@@ -248,21 +256,29 @@ fn nullable_str_field(name: &str) -> FieldRef {
     Arc::new(Field::new(name, DataType::Utf8, true))
 }
 
+fn list_str_field(name: &str) -> FieldRef {
+    Arc::new(Field::new(
+        name,
+        DataType::List(Arc::new(Field::new("item", DataType::Utf8, false))),
+        false,
+    ))
+}
+
 fn node_fields() -> Vec<FieldRef> {
     vec![
         str_field("unique_id"),
         i32_field("is_disabled"),
-        str_field("kind"),
+        str_field("resource_type"),
         str_field("name"),
         str_field("package_name"),
         str_field("original_path"),
-        str_field("fqn"),
-        str_field("tags"),
-        str_field("depends_on"),
+        list_str_field("fqn"),
+        list_str_field("tags"),
+        list_str_field("depends_on"),
         i32_field("uses_graph"),
         str_field("materialization"),
         str_field("payload"),
-        i64_field("ingested_at"),
+        timestamp_micros_field("ingested_at"),
         i32_field("extended_model"),
         str_field("macro_arguments_json"),
         str_field("macro_span_json"),
@@ -287,10 +303,9 @@ where
 {
     let c = node.common();
     let b = node.base();
-    let fqn = serde_json::to_string(&c.fqn).unwrap_or_else(|_| "[]".into());
-    let tags = serde_json::to_string(&c.tags).unwrap_or_else(|_| "[]".into());
-    let deps: Vec<&String> = b.depends_on.nodes.iter().collect();
-    let depends_on = serde_json::to_string(&deps).unwrap_or_else(|_| "[]".into());
+    let fqn = c.fqn.clone();
+    let tags = c.tags.clone();
+    let depends_on = b.depends_on.nodes.clone();
     let uses_graph = if c.raw_code.as_deref().unwrap_or("").contains("graph") {
         1
     } else {
@@ -318,7 +333,7 @@ where
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
-        kind: kind.to_string(),
+        resource_type: kind.to_string(),
         name: c.name.clone(),
         package_name: c.package_name.clone(),
         original_path: c.original_file_path.display().to_string(),
@@ -341,10 +356,9 @@ where
 
 fn node_row_from_group(uid: &str, node: &DbtGroup, is_disabled: i32) -> NodeRow {
     let c = &node.__common_attr__;
-    let fqn = serde_json::to_string(&c.fqn).unwrap_or_else(|_| "[]".into());
-    let tags = serde_json::to_string(&c.tags).unwrap_or_else(|_| "[]".into());
-    let deps: Vec<&String> = node.__base_attr__.depends_on.nodes.iter().collect();
-    let depends_on = serde_json::to_string(&deps).unwrap_or_else(|_| "[]".into());
+    let fqn = c.fqn.clone();
+    let tags = c.tags.clone();
+    let depends_on = node.__base_attr__.depends_on.nodes.clone();
     let uses_graph = if c.raw_code.as_deref().unwrap_or("").contains("graph") {
         1
     } else {
@@ -354,7 +368,7 @@ fn node_row_from_group(uid: &str, node: &DbtGroup, is_disabled: i32) -> NodeRow 
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
-        kind: "group".into(),
+        resource_type: "group".into(),
         name: c.name.clone(),
         package_name: c.package_name.clone(),
         original_path: c.original_file_path.display().to_string(),
@@ -368,8 +382,7 @@ fn node_row_from_group(uid: &str, node: &DbtGroup, is_disabled: i32) -> NodeRow 
 }
 
 fn node_row_from_macro(uid: &str, node: &DbtMacro, is_disabled: i32) -> NodeRow {
-    let deps: Vec<&String> = node.depends_on.macros.iter().collect();
-    let depends_on = serde_json::to_string(&deps).unwrap_or_else(|_| "[]".into());
+    let depends_on = node.depends_on.macros.clone();
     let uses_graph = if node.macro_sql.contains("graph") {
         1
     } else {
@@ -391,12 +404,12 @@ fn node_row_from_macro(uid: &str, node: &DbtMacro, is_disabled: i32) -> NodeRow 
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
-        kind: "macro".into(),
+        resource_type: "macro".into(),
         name: node.name.clone(),
         package_name: node.package_name.clone(),
         original_path: node.original_file_path.display().to_string(),
-        fqn: "[]".into(),
-        tags: "[]".into(),
+        fqn: vec![],
+        tags: vec![],
         depends_on,
         uses_graph,
         payload,
@@ -412,13 +425,13 @@ fn node_row_from_docs_macro(uid: &str, node: &DbtDocsMacro, is_disabled: i32) ->
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
-        kind: "docs_macro".into(),
+        resource_type: "docs_macro".into(),
         name: node.name.clone(),
         package_name: node.package_name.clone(),
         original_path: node.original_file_path.display().to_string(),
-        fqn: "[]".into(),
-        tags: "[]".into(),
-        depends_on: "[]".into(),
+        fqn: vec![],
+        tags: vec![],
+        depends_on: vec![],
         payload,
         ..Default::default()
     }
@@ -1215,14 +1228,14 @@ fn load_nodes(
 
     let all_rows = read_node_rows(dir);
     for row in all_rows {
-        if row.kind == "docs_macro" {
+        if row.resource_type == "docs_macro" {
             if let Ok(v) = serde_json::from_str::<DbtDocsMacro>(&row.payload) {
                 docs_macros.insert(row.unique_id, v);
             }
             continue;
         }
         if let Some(kinds) = allowed_kinds {
-            if !kinds.contains(row.kind.as_str()) {
+            if !kinds.contains(row.resource_type.as_str()) {
                 continue;
             }
         }
@@ -1238,7 +1251,7 @@ fn load_nodes(
         };
         deserialize_into(
             &row.unique_id,
-            &row.kind,
+            &row.resource_type,
             &row.payload,
             row.extended_model != 0,
             &row.macro_arguments_json,
@@ -1315,6 +1328,14 @@ fn deserialize_into(
 pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
     packages
         .iter()
+        .filter(|pkg| {
+            // Internal packages are embedded in the binary and reconstructed at load time.
+            // Saving them to the parquet cache is redundant and causes package-count mismatches
+            // when the loader re-adds them fresh on top of a prev_dbt_state that already has them.
+            !pkg.package_root_path
+                .components()
+                .any(|c| c.as_os_str() == "dbt_internal_packages")
+        })
         .map(|pkg| {
             let all_paths: HashMap<ResourcePathKind, Vec<(String, u64)>> = pkg
                 .all_paths
@@ -1349,13 +1370,13 @@ mod tests {
     fn make_row(uid: &str, payload: &str) -> NodeRow {
         NodeRow {
             unique_id: uid.to_string(),
-            kind: "model".to_string(),
+            resource_type: "model".to_string(),
             name: uid.to_string(),
             package_name: "pkg".to_string(),
             original_path: format!("models/{uid}.sql"),
-            fqn: format!(r#"["pkg","{}"]"#, uid),
-            tags: "[]".to_string(),
-            depends_on: "[]".to_string(),
+            fqn: vec!["pkg".to_string(), uid.to_string()],
+            tags: vec![],
+            depends_on: vec![],
             materialization: "table".to_string(),
             payload: payload.to_string(),
             ..Default::default()
@@ -1456,15 +1477,15 @@ mod tests {
 
         let row = NodeRow {
             unique_id: "macro.pkg.my_macro".to_string(),
-            kind: "macro".to_string(),
+            resource_type: "macro".to_string(),
             name: "my_macro".to_string(),
             package_name: "pkg".to_string(),
             original_path: "macros/my_macro.sql".to_string(),
-            fqn: "[]".to_string(),
-            tags: "[]".to_string(),
-            depends_on: "[]".to_string(),
+            fqn: vec![],
+            tags: vec![],
+            depends_on: vec![],
             payload: r#"{"name":"my_macro","package_name":"pkg"}"#.to_string(),
-            ingested_at: 1_700_000_000_000,
+            ingested_at: 1_700_000_000_000_000,
             macro_arguments_json: serde_json::to_string(&args).unwrap(),
             macro_span_json: serde_json::to_string(&span).unwrap(),
             macro_name_span_json: serde_json::to_string(&name_span).unwrap(),
@@ -1480,7 +1501,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         let got = &rows[0];
 
-        assert_eq!(got.ingested_at, 1_700_000_000_000);
+        assert_eq!(got.ingested_at, 1_700_000_000_000_000);
         assert_eq!(got.extended_model, 0);
         assert_eq!(got.macro_arguments_json, row.macro_arguments_json);
         assert_eq!(got.macro_span_json, row.macro_span_json);
@@ -1526,7 +1547,7 @@ mod tests {
 
         let row = NodeRow {
             unique_id: "model.pkg.orders".to_string(),
-            kind: "model".to_string(),
+            resource_type: "model".to_string(),
             extended_model: 1,
             payload,
             ..make_row("model.pkg.orders", "{}")
@@ -1538,7 +1559,7 @@ mod tests {
         let r = &rows[0];
         deserialize_into(
             &r.unique_id,
-            &r.kind,
+            &r.resource_type,
             &r.payload,
             r.extended_model != 0,
             &r.macro_arguments_json,
@@ -1606,7 +1627,7 @@ mod tests {
 
         let row = NodeRow {
             unique_id: "macro.pkg.cents_to_dollars".to_string(),
-            kind: "macro".to_string(),
+            resource_type: "macro".to_string(),
             name: "cents_to_dollars".to_string(),
             package_name: "pkg".to_string(),
             payload,
@@ -1623,7 +1644,7 @@ mod tests {
         let r = &rows[0];
         deserialize_into(
             &r.unique_id,
-            &r.kind,
+            &r.resource_type,
             &r.payload,
             r.extended_model != 0,
             &r.macro_arguments_json,
@@ -1679,24 +1700,18 @@ mod tests {
         // Build NodeRow vec.
         let node_rows: Vec<NodeRow> = nodes
             .iter()
-            .map(|&(uid, rel_path, deps)| {
-                let deps_json = serde_json::to_string(
-                    &deps.iter().copied().map(str::to_string).collect::<Vec<_>>(),
-                )
-                .unwrap();
-                NodeRow {
-                    unique_id: uid.to_string(),
-                    kind: "model".to_string(),
-                    name: uid.to_string(),
-                    package_name: "pkg".to_string(),
-                    original_path: rel_path.to_string(),
-                    fqn: format!(r#"["pkg","{}"]"#, uid),
-                    tags: "[]".to_string(),
-                    depends_on: deps_json,
-                    materialization: "table".to_string(),
-                    payload: "{}".to_string(),
-                    ..Default::default()
-                }
+            .map(|&(uid, rel_path, deps)| NodeRow {
+                unique_id: uid.to_string(),
+                resource_type: "model".to_string(),
+                name: uid.to_string(),
+                package_name: "pkg".to_string(),
+                original_path: rel_path.to_string(),
+                fqn: vec!["pkg".to_string(), uid.to_string()],
+                tags: vec![],
+                depends_on: deps.iter().map(|s| (*s).to_string()).collect(),
+                materialization: "table".to_string(),
+                payload: "{}".to_string(),
+                ..Default::default()
             })
             .collect();
 
@@ -1719,7 +1734,7 @@ mod tests {
                     path_kind: "ModelPaths".to_string(),
                     path: rel_path.to_string(),
                     mtime_ns: mtime as i64,
-                    ingested_at: 1_700_000_000_000,
+                    ingested_at: 1_700_000_000_000_000,
                 }
             })
             .collect();
@@ -1871,5 +1886,105 @@ mod tests {
             result.contains("model.pkg.e"),
             "e pulled in as ancestor of c"
         );
+    }
+
+    // ── Internal package regression tests ─────────────────────────────────────
+
+    fn make_user_package(root: &Path, name: &str) -> DbtPackage {
+        DbtPackage {
+            dbt_project: serde_json::from_value(serde_json::json!({"name": name})).unwrap(),
+            package_root_path: root.join(name),
+            dbt_properties: vec![],
+            analysis_files: vec![],
+            model_sql_files: vec![],
+            function_sql_files: vec![],
+            macro_files: vec![],
+            test_files: vec![],
+            fixture_files: vec![],
+            seed_files: vec![],
+            docs_files: vec![],
+            snapshot_files: vec![],
+            inline_file: None,
+            dependencies: BTreeSet::new(),
+            all_paths: HashMap::new(),
+            embedded_file_contents: None,
+        }
+    }
+
+    fn make_internal_package(root: &Path, name: &str) -> DbtPackage {
+        let internal_root = root.join("dbt_internal_packages").join(name);
+        DbtPackage {
+            dbt_project: serde_json::from_value(serde_json::json!({"name": name})).unwrap(),
+            package_root_path: internal_root,
+            dbt_properties: vec![],
+            analysis_files: vec![],
+            model_sql_files: vec![],
+            function_sql_files: vec![],
+            macro_files: vec![],
+            test_files: vec![],
+            fixture_files: vec![],
+            seed_files: vec![],
+            docs_files: vec![],
+            snapshot_files: vec![],
+            inline_file: None,
+            dependencies: BTreeSet::new(),
+            all_paths: HashMap::new(),
+            embedded_file_contents: Some(HashMap::new()),
+        }
+    }
+
+    /// snapshot_packages must exclude packages whose path contains dbt_internal_packages/.
+    /// This is the regression test for the double-add bug: if internal packages were saved to
+    /// parquet, the loader would add them again on reload, producing m+2n packages where m+n
+    /// are expected.
+    #[test]
+    fn snapshot_packages_excludes_internal_packages() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let user = make_user_package(root, "my_project");
+        let dep = make_user_package(root, "my_dep");
+        let internal = make_internal_package(root, "dbt_utils");
+
+        let all = vec![user, dep, internal];
+        let snaps = snapshot_packages(&all);
+
+        assert_eq!(
+            snaps.len(),
+            2,
+            "only user packages should be serialized; internal packages must be excluded"
+        );
+        assert!(
+            snaps.iter().any(|s| s.package_name == "my_project"),
+            "root package must be present"
+        );
+        assert!(
+            snaps.iter().any(|s| s.package_name == "my_dep"),
+            "dep package must be present"
+        );
+        assert!(
+            snaps.iter().all(|s| s.package_name != "dbt_utils"),
+            "internal package must be excluded"
+        );
+    }
+
+    /// After a round-trip through snapshot_packages + reconstruct_package_metadata,
+    /// the reconstructed package list matches the original user packages.
+    #[test]
+    fn snapshot_packages_round_trip_excludes_internal() {
+        use crate::partial_parse::reconstruct_package_metadata;
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let user = make_user_package(root, "my_project");
+        let internal = make_internal_package(root, "dbt_utils");
+
+        let snaps = snapshot_packages(&[user.clone(), internal]);
+
+        // Only the user package should be in snaps.
+        assert_eq!(snaps.len(), 1);
+        let reconstructed = reconstruct_package_metadata(&snaps[0]).unwrap();
+        assert_eq!(reconstructed.dbt_project.name, "my_project");
+        assert_eq!(reconstructed.package_root_path, user.package_root_path);
     }
 }

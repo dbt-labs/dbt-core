@@ -312,6 +312,7 @@ arrow-data = { version = "=56.0.0" }
 arrow-ipc = { version = "=56.0.0" }
 arrow-json = { version = "=56.0.0" }
 arrow-schema = { version = "=56.0.0", features = ["serde"] }
+arrow-select = { version = "=56.0.0" }
 parquet = { version = "=56.0.0" }
 serde_arrow = { version = "0.13.6", features = ["arrow-56"] }
 

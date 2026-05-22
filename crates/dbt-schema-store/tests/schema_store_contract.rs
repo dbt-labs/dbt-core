@@ -612,7 +612,7 @@ fn clean_entries_produce_no_new_epoch() {
     store2.save(dir.path()).unwrap();
 
     // No dirty entries → no new epoch file written → still 1 file.
-    let remote_dir = dir.path().join("warehouse_state/schemas_remote");
+    let remote_dir = dir.path().join("metadata/warehouse/schemas");
     let file_count = std::fs::read_dir(&remote_dir)
         .unwrap()
         .flatten()

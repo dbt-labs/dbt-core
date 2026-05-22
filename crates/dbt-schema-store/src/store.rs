@@ -41,9 +41,9 @@ const LOCAL_DIR_NAME: &str = "defined_local";
 const DATA_DIR_NAME: &str = "data";
 const SCHEMA_DIR_NAME: &str = "schemas";
 /// Epoch-append parquet dir for compile-time analyzed schemas (no TTL).
-const SCHEMAS_ANALYZED_DIR: &str = "compiled_state/schemas_analyzed";
+const SCHEMAS_ANALYZED_DIR: &str = "metadata/compile/schemas";
 /// Epoch-append parquet dir for warehouse-fetched remote schemas (has TTL).
-const SCHEMAS_REMOTE_DIR: &str = "warehouse_state/schemas_remote";
+const SCHEMAS_REMOTE_DIR: &str = "metadata/warehouse/schemas";
 const DBT_ORIGINAL_SCHEMA_KEY: &str = "DBT:original_schema";
 const DBT_SCHEMA_ORIGIN_KEY: &str = "DBT:schema_origin";
 // Keep in sync with `dbt_frontend_common::error::DBT_CACHED_PARQUET_PATH_KEY`.

@@ -3,13 +3,13 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   compiled_state/cll/v1_{N}.parquet   ← epoch-append, latest-wins by node
+//!   metadata/compile/column_lineage/v1_{N}.parquet   ← epoch-append, latest-wins by node
 //! ```
 //!
 //! ## Invariant
 //! All edges for a given `to_node_unique_id` are written together in a single
-//! `write_cll_epoch` call, stamped with the same `ingested_at` (nanoseconds,
-//! wall-clock time of the invoking run).  Latest-wins is determined by
+//! `write_cll_epoch` call, stamped with the same `ingested_at` (microseconds
+//! since Unix epoch UTC, wall-clock time of the invoking run).  Latest-wins is determined by
 //! `max(ingested_at)` per node across all epoch files; all edges for the
 //! winning node come from exactly one file.  File-number order (the integer in
 //! the filename) breaks ties when `ingested_at` values are equal (e.g. in
@@ -37,7 +37,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +65,7 @@ pub struct CllRow {
     pub from_column_name: String,
     /// Edge kind (e.g. `"direct"`, `"indirect"`, `"scan"`).
     pub lineage_kind: String,
-    /// Wall-clock nanoseconds of the invocation that wrote this row.
+    /// Microseconds since Unix epoch (UTC) of the invocation that wrote this row.
     /// Latest-wins is `max(ingested_at)` per `to_node_unique_id`.
     pub ingested_at: i64,
 }
@@ -75,7 +77,11 @@ fn cll_row_fields() -> Vec<Field> {
         Field::new("from_node_unique_id", DataType::Utf8, false),
         Field::new("from_column_name", DataType::Utf8, false),
         Field::new("lineage_kind", DataType::Utf8, false),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -268,7 +274,7 @@ mod tests {
     #[test]
     fn full_compile_writes_all_rows() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         let rows = vec![
             edge("model.pkg.b", Some("id"), "model.pkg.a", "id"),
@@ -289,7 +295,7 @@ mod tests {
     #[test]
     fn incremental_write_adds_new_epoch() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         let rows0 = vec![
             edge("model.pkg.b", Some("id"), "model.pkg.a", "id"),
@@ -324,7 +330,7 @@ mod tests {
     #[test]
     fn filter_excludes_non_recomputed_targets() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         let mut targets = HashSet::new();
         targets.insert("model.pkg.b".to_string());
@@ -343,7 +349,7 @@ mod tests {
     #[test]
     fn empty_rows_writes_no_file() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         write_cll_epoch(&cll_dir, vec![], T0, None, None).unwrap();
 
@@ -353,7 +359,7 @@ mod tests {
     #[test]
     fn compaction_reduces_to_single_file() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         for i in 0..=COMPACT_THRESHOLD {
             let rows = vec![edge(
@@ -378,7 +384,7 @@ mod tests {
     #[test]
     fn scan_level_edge_no_column_name() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         let rows = vec![CllRow {
             to_node_unique_id: "model.pkg.b".to_string(),
@@ -399,7 +405,7 @@ mod tests {
     #[test]
     fn successful_incremental_after_stale_epoch_replaces_edges() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         let rows0 = vec![edge("model.pkg.b", Some("id"), "model.pkg.a", "id")];
         write_cll_epoch(&cll_dir, rows0, T0, None, None).unwrap();
@@ -421,7 +427,7 @@ mod tests {
     #[test]
     fn old_schema_files_are_ignored() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
         std::fs::create_dir_all(&cll_dir).unwrap();
 
         // Simulate a file from an old schema (no version prefix, or different prefix).
@@ -445,7 +451,7 @@ mod tests {
     #[test]
     fn compaction_evicts_dead_nodes() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         // Write edges for two nodes.
         let rows = vec![
@@ -467,7 +473,7 @@ mod tests {
     #[test]
     fn latest_wins_uses_ingested_at_not_file_order() {
         let dir = TempDir::new().unwrap();
-        let cll_dir = dir.path().join("cll");
+        let cll_dir = dir.path().join("column_lineage");
 
         // Write epoch 0 with T1 (higher timestamp).
         let rows0 = vec![edge("model.pkg.b", Some("id"), "model.pkg.old", "id")];

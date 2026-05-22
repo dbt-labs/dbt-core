@@ -1,14 +1,28 @@
-//! Incremental parse logic: decide whether to incrementally update or fully re-parse
-//! the compilation based on file changes since the last cache save.
+//! Incremental parse / load logic: decides whether to reuse a previous compilation
+//! (fully or partially) or trigger a fresh parse, based on file changes and flags.
 //!
-//! # Cache invalidation decision table
+//! # Conceptual model
+//!
+//! The cache memoizes `resolve(project_files) → ResolverState`.
+//! The cache key is the set of (file_path, mtime) pairs for every tracked file.
+//! **Invariant**: the cache must return the same nodes as a full parse would for
+//! any node it returns. It may return a *subset* of nodes (with `--partial-load`)
+//! but every returned node must be semantically identical to what full parse produces.
+//!
+//! # Three outcomes
+//!
+//! 1. **Fast-path** (`NoFilesChanged` + `--partial-load`): zero WalkDir, return prev as-is.
+//! 2. **Incremental**: only changed `.sql` files re-resolved; unchanged nodes from cache.
+//! 3. **Full parse**: cache discarded, all files re-resolved from scratch.
+//!
+//! # What triggers each outcome
 //!
 //! `needs_full_parse()` runs on every `--partial-parse` invocation and returns either
-//! `None` (Incremental) or `Some(reason)` (FullParse):
+//! `None` (Incremental / Fast-path) or `Some(reason)` (FullParse):
 //!
 //! | Event                           | How detected                   | Outcome     | ~Time (scale_6k) |
 //! |---------------------------------|--------------------------------|-------------|------------------|
-//! | No files changed                | all file mtimes match          | Incremental | ~500ms           |
+//! | No files changed                | all file mtimes match          | Fast-path   | ~10ms            |
 //! | model / analysis `.sql` changed | file mtime changed             | Incremental | ~500ms           |
 //! | any other file changed          | file mtime + kind/ext check    | FullParse   | ~1.8s            |
 //! | any file deleted                | stat fails                     | FullParse   | ~1.8s            |
@@ -20,14 +34,32 @@
 //! | binary version changed          | `CARGO_PKG_VERSION` mismatch   | FullParse   | ~1.8s            |
 //!
 //! (*) New files are not in `all_paths` so `needs_full_parse` cannot see them. They are
-//! discovered by the WalkDir inside `initialize()` on the Incremental path — new model files
-//! will be compiled, new macro/yml files will trigger a FullParse from `compute_file_changeset`.
+//! discovered by WalkDir inside `initialize()` on the Incremental path — new model files
+//! are compiled, new macro/yml files trigger a FullParse from `compute_file_changeset`.
 //!
-//! **Incremental**: passes the previous compilation to `initialize()`, which rescans only
-//! changed model/analysis `.sql` files and re-resolves affected nodes (~500ms).
-//! **FullParse**: discards the cache and runs a complete fresh parse (~1.8s).
+//! # What `--partial-load` adds
 //!
-//! Timings measured on scale_6k (11k models). No-partial-parse baseline: ~1.65s.
+//! Without `--partial-load` the cache always loads *all* nodes from parquet.
+//! With `--partial-load` + a selector, only the nodes reachable from that selector
+//! are deserialized from parquet (`payload_kinds_for_command` + `unique_id_filter_for_selector`).
+//! The loaded set must be closed under dependencies (`all_deps_present` check); if any
+//! dependency is missing the system falls back to loading all nodes.
+//!
+//! `--partial-load` can only be used when:
+//! - `write_json` is false (manifest export needs all nodes)
+//! - `any_uses_graph` is false (Jinja `graph` variable requires all nodes at render time)
+//! - `defer` is false (upstream resolution may expand beyond the selector)
+//! - The selector uses only index-safe methods (fqn, tag, package, path, file, resource_type)
+//!
+//! # Internal packages
+//!
+//! Packages under `dbt_internal_packages/` are embedded in the binary and reconstructed
+//! fresh at every load. They are **never written to the parquet cache** (`snapshot_packages`
+//! filters them out) and **excluded from file-changeset comparisons** (`compute_file_changeset`
+//! filters them). Their macros ARE stored in `resolved_state.macros` (parquet) and reused
+//! on incremental runs — no re-resolution needed.
+//!
+//! Timings measured on scale_6k (~6k nodes). No-partial-parse baseline: ~7.5s cold.
 
 use dbt_adapter::relation::do_create_relation;
 use dbt_common::{
@@ -478,7 +510,7 @@ pub fn save_parse_state(
         disabled_nodes: &resolved_state.disabled_nodes,
         macros: &resolved_state.macros,
         changed_nodes,
-        ingested_at: dbt_state.run_started_at.timestamp_millis(),
+        ingested_at: dbt_state.run_started_at.timestamp_micros(),
         selectors_json: &serde_json::to_string(&resolved_state.manifest_selectors)
             .unwrap_or_default(),
         git_sha: &git_info.sha,
@@ -626,16 +658,64 @@ pub fn unique_id_filter_for_selector(eval: &EvalArgs, io: &IoArgs) -> Option<Has
     resolve_expr(expr, &io.out_dir, default_indirect)
 }
 
+/// Compute the unique_id filter for `--dirty`: nodes whose source files have changed
+/// since the last `--partial-parse` run, plus all their downstream dependents and the
+/// full ancestor closure (so `all_deps_present()` always passes).
+///
+/// This is the same mtime-index logic previously exposed as the `state:dirty` selector
+/// atom, now accessed directly via the `--dirty` flag instead of a selector string.
+///
+/// Returns `None` when the index cannot be read (falls back to full load).
+pub fn unique_id_filter_for_dirty(io: &IoArgs) -> Option<HashSet<String>> {
+    use crate::index_resolution::resolve_dirty_unique_ids_from_index;
+    // Expand downstream (children_depth = Some(u32::MAX)) and include indirect nodes
+    // (tests, unit tests) that depend on dirty nodes. Parents loaded via ancestor closure.
+    resolve_dirty_unique_ids_from_index(&io.out_dir, None, Some(u32::MAX), true)
+}
+
+/// Build a `SelectExpression` for `--dirty`: `seed_id+ seed_id+ ...` (Or of `fqn:id+` atoms).
+///
+/// The scheduler applies this exactly like `--select 'ewe+'` — ancestors are loaded for dep
+/// closure but only the dirty nodes and their descendants are scheduled/run.
+/// Returns `None` when no cache exists or nothing is dirty (caller falls back to running all).
+pub fn dirty_select_expression(io: &IoArgs) -> Option<SelectExpression> {
+    use crate::index_resolution::dirty_seed_ids_from_index;
+    use dbt_common::node_selector::SelectionCriteria;
+    let seeds = dirty_seed_ids_from_index(&io.out_dir)?;
+    if seeds.is_empty() {
+        return None;
+    }
+    let atoms: Vec<SelectExpression> = seeds
+        .into_iter()
+        .map(|uid| {
+            SelectExpression::Atom(SelectionCriteria::new(
+                MethodName::Fqn,
+                vec![],
+                uid,
+                false,
+                None,
+                Some(u32::MAX), // children_depth = ewe+
+                None,
+                None,
+            ))
+        })
+        .collect();
+    if atoms.len() == 1 {
+        Some(atoms.into_iter().next().unwrap())
+    } else {
+        Some(SelectExpression::Or(atoms))
+    }
+}
+
 /// Returns `true` for selector methods that can only be evaluated at schedule time
 /// (after payloads are loaded and external artifacts are available). These arms are
 /// silently skipped during phase-1 load-time resolution — the scheduler applies the
 /// full expression after load.
 fn is_phase2_only(criteria: &dbt_common::node_selector::SelectionCriteria) -> bool {
     match criteria.method {
-        // state:dirty is phase-1 (mtime-based). All other state: values need
-        // deserialized payloads + a --state manifest, so they are phase-2-only.
-        MethodName::State => criteria.value != "dirty",
-        MethodName::Result | MethodName::SourceStatus => true,
+        // All state: values need deserialized payloads + a --state manifest.
+        // Mtime-based change detection is handled by --dirty, not by a selector atom.
+        MethodName::State | MethodName::Result | MethodName::SourceStatus => true,
         _ => false,
     }
 }
@@ -650,9 +730,7 @@ fn resolve_expr(
     out_dir: &Path,
     default_indirect: IndirectSelection,
 ) -> Option<HashSet<String>> {
-    use crate::index_resolution::{
-        IndexLookupMethod, resolve_dirty_unique_ids_from_index, resolve_unique_ids_from_index,
-    };
+    use crate::index_resolution::{IndexLookupMethod, resolve_unique_ids_from_index};
     match expr {
         SelectExpression::Atom(criteria) => {
             // @x — fall back.
@@ -664,28 +742,14 @@ fn resolve_expr(
                 return None;
             }
 
-            // state:dirty — phase-1 resolvable from mtime index. Children walk
-            // allowed: resolve_dirty_unique_ids_from_index loads the full ancestor
-            // closure so all_deps_present() always passes.
-            if matches!(criteria.method, MethodName::State) && criteria.value == "dirty" {
-                let indirect = criteria.indirect.unwrap_or(default_indirect);
-                let include_indirect = !matches!(
-                    indirect,
-                    IndirectSelection::Empty | IndirectSelection::Cautious
-                );
-                return resolve_dirty_unique_ids_from_index(
-                    out_dir,
-                    criteria.parents_depth,
-                    criteria.children_depth,
-                    include_indirect,
-                );
-            }
-
             let method = match criteria.method {
                 MethodName::Fqn => IndexLookupMethod::Fqn,
                 MethodName::Tag => IndexLookupMethod::Tag,
                 MethodName::Package => IndexLookupMethod::Package,
                 MethodName::ResourceType => IndexLookupMethod::ResourceType,
+                MethodName::Path => IndexLookupMethod::Path,
+                MethodName::File => IndexLookupMethod::File,
+                MethodName::Source => IndexLookupMethod::Source,
                 _ => return None,
             };
             let indirect = criteria.indirect.unwrap_or(default_indirect);
@@ -749,46 +813,6 @@ fn resolve_expr(
     }
 }
 
-/// Remove `state:dirty` atoms from a selector expression tree before handing to the
-/// scheduler. The scheduler has no `state:dirty` implementation — it was fully resolved
-/// at load time by `resolve_dirty_unique_ids_from_index`. Leaving it in would cause
-/// `match_state("dirty")` to hit `_ => Ok(false)` and silently select nothing.
-///
-/// - `And([state:dirty+, state:modified])` → `state:modified`
-/// - `Atom(state:dirty+)` alone → `None` (select all loaded nodes)
-/// - `Or([state:dirty+, tag:foo])` → unchanged (Or is not touched — falling back to full
-///   load is correct for Or with phase-2 selectors)
-pub fn strip_dirty_selector(expr: SelectExpression) -> Option<SelectExpression> {
-    match expr {
-        SelectExpression::Atom(ref c)
-            if matches!(c.method, MethodName::State) && c.value == "dirty" =>
-        {
-            None
-        }
-        SelectExpression::And(exprs) => {
-            let filtered: Vec<SelectExpression> =
-                exprs.into_iter().filter_map(strip_dirty_selector).collect();
-            match filtered.len() {
-                0 => None,
-                1 => filtered.into_iter().next(),
-                _ => Some(SelectExpression::And(filtered)),
-            }
-        }
-        other => Some(other),
-    }
-}
-
-/// Returns `true` if the selector expression tree contains a `state:dirty` atom.
-pub fn selector_contains_dirty(expr: &SelectExpression) -> bool {
-    match expr {
-        SelectExpression::Atom(c) => matches!(c.method, MethodName::State) && c.value == "dirty",
-        SelectExpression::And(exprs) | SelectExpression::Or(exprs) => {
-            exprs.iter().any(selector_contains_dirty)
-        }
-        SelectExpression::Exclude(inner) => selector_contains_dirty(inner),
-    }
-}
-
 /// Load incremental state from `target/parse_state/`.
 ///
 /// Returns `None` if:
@@ -849,6 +873,12 @@ pub fn load_parse_state_filtered_with_unique_ids(
     let nodes_with_access_errors: HashSet<String> =
         serde_json::from_str(&loaded.nodes_with_access_errors_json).unwrap_or_default();
     let operations: Operations = serde_json::from_str(&loaded.operations_json).unwrap_or_default();
+    let macros_map = loaded
+        .nodes
+        .macros
+        .iter()
+        .map(|(k, v)| (k.clone(), (**v).clone()))
+        .collect();
 
     Some(IncrementalState {
         version: loaded.version,
@@ -863,8 +893,8 @@ pub fn load_parse_state_filtered_with_unique_ids(
         nodes: loaded.nodes,
         disabled_nodes: loaded.disabled_nodes,
         macros: Macros {
+            macros: macros_map,
             docs_macros: loaded.docs_macros.clone(),
-            ..Macros::default()
         },
         operations,
         nodes_with_resolution_errors,
@@ -1449,6 +1479,101 @@ mod tests {
             Some("--vars changed"),
             "--vars change must invalidate"
         );
+    }
+
+    // ── Behavioral contracts: things that do NOT invalidate the cache ────────────
+
+    /// M-18: cloud.yml changes do not affect the parse cache.
+    /// cloud.yml controls where --defer fetches a state manifest; it is not
+    /// a parse input and is not hashed.
+    #[test]
+    fn validate_ignores_cloud_yml_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("profiles.yml"), b"profile: v1").unwrap();
+        std::fs::write(tmp.path().join("dbt_project.yml"), b"project: v1").unwrap();
+        let state = state_for_validation(tmp.path());
+        assert!(state.validate(&None).is_none(), "baseline: valid");
+
+        // Write or change cloud.yml — validate() must not notice.
+        std::fs::write(tmp.path().join("cloud.yml"), b"account_id: 99999").unwrap();
+        assert!(
+            state.validate(&None).is_none(),
+            "cloud.yml write must not invalidate the parse cache"
+        );
+        std::fs::write(tmp.path().join("cloud.yml"), b"account_id: 11111").unwrap();
+        assert!(
+            state.validate(&None).is_none(),
+            "cloud.yml change must not invalidate the parse cache"
+        );
+    }
+
+    /// M-19: packages.yml change alone does NOT invalidate.
+    /// Only the resulting file changes in dbt_packages/ (tracked by all_paths)
+    /// trigger invalidation. Users must run `dbt deps` after editing packages.yml.
+    #[test]
+    fn validate_ignores_packages_yml_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("profiles.yml"), b"profile: v1").unwrap();
+        std::fs::write(tmp.path().join("dbt_project.yml"), b"project: v1").unwrap();
+        let state = state_for_validation(tmp.path());
+        assert!(state.validate(&None).is_none(), "baseline: valid");
+
+        // Changing packages.yml doesn't invalidate — it's not hashed.
+        std::fs::write(
+            tmp.path().join("packages.yml"),
+            b"packages:\n  - package: dbt-labs/dbt_utils\n    version: 1.2.0",
+        )
+        .unwrap();
+        assert!(
+            state.validate(&None).is_none(),
+            "packages.yml change must not directly invalidate the parse cache"
+        );
+    }
+
+    /// M-20: git state (sha, branch, dirty flag) is stored in the cache as
+    /// metadata but validate() never reads it — git changes do not invalidate.
+    #[test]
+    fn validate_ignores_git_state_fields() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("profiles.yml"), b"profile: v1").unwrap();
+        std::fs::write(tmp.path().join("dbt_project.yml"), b"project: v1").unwrap();
+        let mut state = state_for_validation(tmp.path());
+
+        // Simulate a different commit / branch / dirty flag in the saved state.
+        state.git_sha = "deadbeefdeadbeef".into();
+        state.git_branch = "feature/my-branch".into();
+        state.git_is_dirty = true;
+
+        assert!(
+            state.validate(&None).is_none(),
+            "git state fields must not affect cache validity"
+        );
+    }
+
+    /// M-21: env var first observed after initial parse (not in env_vars map).
+    /// If a new env() call is introduced in a macro that was NOT executed on the
+    /// previous parse run, the new var is absent from env_vars and is invisible
+    /// to validate(). This is a known limitation: validate() can only check vars
+    /// it was told about. Document this by asserting the behavior explicitly.
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn validate_does_not_detect_newly_introduced_env_var() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("profiles.yml"), b"profile: v1").unwrap();
+        std::fs::write(tmp.path().join("dbt_project.yml"), b"project: v1").unwrap();
+        let mut state = state_for_validation(tmp.path());
+        // Cache was saved with no env vars observed.
+        state.env_vars.clear();
+
+        // Now set an env var that a new macro call would observe — the cache
+        // has no record of it so validate() cannot detect the "new" observation.
+        unsafe { std::env::set_var("__DBT_NEW_UNOBSERVED_VAR", "some_value") };
+        assert!(
+            state.validate(&None).is_none(),
+            "validate() cannot detect env vars not present in its saved env_vars map \
+             (known limitation: run without --partial-parse after adding new env() calls)"
+        );
+        unsafe { std::env::remove_var("__DBT_NEW_UNOBSERVED_VAR") };
     }
 
     #[test]
@@ -2151,6 +2276,194 @@ mod tests {
         assert!(payload_kinds_for_command(&eval, &io).is_none());
     }
 
+    // ── any_uses_graph guard tests ────────────────────────────────────────────
+
+    fn write_cache_with_graph_model(out_dir: &Path) {
+        use crate::parse_state::{SaveArgs, save};
+        use dbt_schemas::schemas::DbtModel;
+        use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+        let mut nodes = Nodes::default();
+        // This model's raw_code contains "graph" — simulates {% for n in graph.nodes.values() %}
+        nodes.models.insert(
+            "model.p.uses_graph".into(),
+            DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: "model.p.uses_graph".into(),
+                    name: "uses_graph".into(),
+                    package_name: "p".into(),
+                    raw_code: Some(
+                        "select * from {{ graph.nodes.values() | list | length }}".into(),
+                    ),
+                    ..CommonAttributes::default()
+                },
+                __base_attr__: NodeBaseAttributes::default(),
+                ..DbtModel::default()
+            }
+            .into(),
+        );
+        save(&SaveArgs {
+            out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: "",
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: "",
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[],
+            nodes: &nodes,
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+    }
+
+    fn write_cache_with_graph_macro(out_dir: &Path) {
+        use crate::parse_state::{SaveArgs, save};
+        use dbt_schemas::schemas::macros::DbtMacro;
+        use std::sync::Arc;
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+        let mut nodes = Nodes::default();
+        // Regular macros live in nodes.macros (Arc<DbtMacro>), not the Macros arg.
+        nodes.macros.insert(
+            "macro.p.list_all".into(),
+            Arc::new(DbtMacro {
+                unique_id: "macro.p.list_all".into(),
+                name: "list_all".into(),
+                package_name: "p".into(),
+                // macro_sql contains "graph" — simulates {% set all = graph.nodes.values() %}
+                macro_sql: "{% macro list_all() %}{% for n in graph.nodes.values() %}{{ n.unique_id }}{% endfor %}{% endmacro %}".into(),
+                ..DbtMacro::default()
+            }),
+        );
+        save(&SaveArgs {
+            out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: "",
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: "",
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[],
+            nodes: &nodes,
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+    }
+
+    /// A model whose raw_code contains "graph" → any_uses_graph flag → full load required.
+    /// Uses FsCommand::Seed which would otherwise allow partial load — proving the guard fires.
+    #[test]
+    fn payload_kinds_any_uses_graph_in_model_forces_full_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_cache_with_graph_model(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        assert!(
+            peek_any_uses_graph(&io),
+            "peek_any_uses_graph must be true when a model contains 'graph'"
+        );
+        // Seed command has an explicit kind set — without the graph guard it would return Some.
+        let eval = EvalArgs {
+            command: FsCommand::Seed,
+            select: Some(atom_with_value(MethodName::Fqn, "uses_graph")),
+            ..EvalArgs::default()
+        };
+        assert!(
+            payload_kinds_for_command(&eval, &io).is_none(),
+            "payload_kinds_for_command must return None (full load) when any node uses graph"
+        );
+    }
+
+    /// A macro whose macro_sql contains "graph" → same full-load guard fires for Seed command.
+    #[test]
+    fn payload_kinds_any_uses_graph_in_macro_forces_full_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_cache_with_graph_macro(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        assert!(
+            peek_any_uses_graph(&io),
+            "peek_any_uses_graph must be true when a macro contains 'graph'"
+        );
+        // Seed command has an explicit kind set — without the graph guard it would return Some.
+        let eval = EvalArgs {
+            command: FsCommand::Seed,
+            select: Some(atom_with_value(MethodName::Fqn, "some_seed")),
+            ..EvalArgs::default()
+        };
+        assert!(
+            payload_kinds_for_command(&eval, &io).is_none(),
+            "payload_kinds_for_command must return None (full load) when a macro uses graph"
+        );
+    }
+
+    /// No "graph" in any node → any_uses_graph is false → partial load is allowed.
+    /// Uses FsCommand::Seed which has a concrete kind set (not the catch-all `_ => None`).
+    #[test]
+    fn payload_kinds_no_graph_usage_allows_partial_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        // write_graph_cache writes models without "graph" in raw_code
+        write_graph_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        assert!(
+            !peek_any_uses_graph(&io),
+            "peek_any_uses_graph must be false when no node contains 'graph'"
+        );
+        // Seed command has an explicit kind set — not the catch-all `_ => None` branch.
+        let eval = EvalArgs {
+            command: FsCommand::Seed,
+            select: Some(atom_with_value(MethodName::Fqn, "a")),
+            ..EvalArgs::default()
+        };
+        assert!(
+            payload_kinds_for_command(&eval, &io).is_some(),
+            "payload_kinds_for_command must return Some (partial load allowed) when no node uses graph"
+        );
+    }
+
     /// Safe selector on `dbt seed` → narrow kinds (lazy load).
     #[test]
     fn payload_kinds_seed_safe_selector_is_lazy() {
@@ -2649,6 +2962,162 @@ mod tests {
             Some("non-incremental file changed"),
             "function .yml → FullParse"
         );
+    }
+
+    // --- ModelPaths .py (Python models) ---
+
+    #[test]
+    fn mtime_model_py_updated() {
+        let r = mtime_check_after(ResourcePathKind::ModelPaths, "model.py", |f| {
+            std::fs::write(
+                f,
+                b"def model(dbt, session): return session.sql('select 2')",
+            )
+            .unwrap();
+        });
+        assert_eq!(
+            r,
+            Some("non-incremental file changed"),
+            "model .py → FullParse (not incremental-safe)"
+        );
+    }
+
+    #[test]
+    fn mtime_model_py_deleted() {
+        let r = mtime_check_after(ResourcePathKind::ModelPaths, "model.py", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "model .py delete → FullParse");
+    }
+
+    // --- SeedPaths .parquet ---
+
+    #[test]
+    fn mtime_seed_parquet_updated() {
+        let r = mtime_check_after(ResourcePathKind::SeedPaths, "data.parquet", |f| {
+            std::fs::write(f, b"PAR1fake").unwrap();
+        });
+        assert_eq!(
+            r,
+            Some("non-incremental file changed"),
+            "seed .parquet → FullParse"
+        );
+    }
+
+    #[test]
+    fn mtime_seed_parquet_deleted() {
+        let r = mtime_check_after(ResourcePathKind::SeedPaths, "data.parquet", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "seed .parquet delete → FullParse");
+    }
+
+    // --- FixturePaths ---
+
+    #[test]
+    fn mtime_fixture_csv_updated() {
+        let r = mtime_check_after(ResourcePathKind::FixturePaths, "fixture.csv", |f| {
+            std::fs::write(f, b"id\n2").unwrap();
+        });
+        assert_eq!(
+            r,
+            Some("non-incremental file changed"),
+            "fixture .csv → FullParse"
+        );
+    }
+
+    #[test]
+    fn mtime_fixture_sql_updated() {
+        let r = mtime_check_after(ResourcePathKind::FixturePaths, "fixture.sql", |f| {
+            std::fs::write(f, b"select 2").unwrap();
+        });
+        assert_eq!(
+            r,
+            Some("non-incremental file changed"),
+            "fixture .sql → FullParse"
+        );
+    }
+
+    // --- Delete branches for paths only tested on update so far ---
+
+    #[test]
+    fn mtime_macro_yml_deleted() {
+        let r = mtime_check_after(ResourcePathKind::MacroPaths, "macros.yml", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "macro .yml delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_test_sql_deleted() {
+        let r = mtime_check_after(ResourcePathKind::TestPaths, "test.sql", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "test .sql delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_test_yml_deleted() {
+        let r = mtime_check_after(ResourcePathKind::TestPaths, "schema.yml", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "test .yml delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_snapshot_sql_deleted() {
+        let r = mtime_check_after(ResourcePathKind::SnapshotPaths, "snap.sql", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "snapshot .sql delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_snapshot_yml_deleted() {
+        let r = mtime_check_after(ResourcePathKind::SnapshotPaths, "snap.yml", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "snapshot .yml delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_analysis_sql_deleted() {
+        let r = mtime_check_after(ResourcePathKind::AnalysisPaths, "analysis.sql", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "analysis .sql delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_analysis_yml_deleted() {
+        let r = mtime_check_after(ResourcePathKind::AnalysisPaths, "schema.yml", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "analysis .yml delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_function_sql_deleted() {
+        let r = mtime_check_after(ResourcePathKind::FunctionPaths, "fn.sql", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "function .sql delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_function_yml_deleted() {
+        let r = mtime_check_after(ResourcePathKind::FunctionPaths, "fn.yml", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "function .yml delete → FullParse");
+    }
+
+    #[test]
+    fn mtime_docs_md_deleted() {
+        let r = mtime_check_after(ResourcePathKind::DocsPaths, "docs.md", |f| {
+            std::fs::remove_file(f).unwrap();
+        });
+        assert_eq!(r, Some("file deleted"), "docs .md delete → FullParse");
     }
 
     // ── (A) content hash: profiles.yml, dbt_project.yml ──────────────────────
@@ -3310,155 +3779,627 @@ mod tests {
         }
     }
 
-    // ── state:dirty selector tests ────────────────────────────────────────────
+    // ── --dirty flag tests ────────────────────────────────────────────────────
 
-    fn dirty_atom(parents_depth: Option<u32>, children_depth: Option<u32>) -> SelectExpression {
-        use dbt_common::node_selector::SelectionCriteria;
-        SelectExpression::Atom(SelectionCriteria::new(
-            MethodName::State,
-            vec![],
-            "dirty".into(),
-            false,
-            parents_depth,
-            children_depth,
-            None,
-            None,
-        ))
-    }
-
-    /// state:dirty with no files changed → Some(empty set) not None.
+    /// --dirty with no files changed → Some(empty set) not None.
+    /// unique_id_filter_for_dirty reads the index directly; with no filestamps it
+    /// returns Some({}) meaning "cache exists, nothing dirty".
     #[test]
-    fn state_dirty_nothing_changed_returns_some_empty() {
+    fn dirty_flag_nothing_changed_returns_some_empty() {
         let tmp = tempfile::tempdir().unwrap();
         write_graph_cache(tmp.path());
-        // graph_cache uses no packages/filestamps, so resolve_dirty returns Some({}).
         let io = IoArgs {
             out_dir: tmp.path().to_path_buf(),
             ..IoArgs::default()
         };
-        let eval = EvalArgs {
-            command: FsCommand::Compile,
-            select: Some(dirty_atom(None, None)),
-            ..EvalArgs::default()
-        };
-        // Cache exists but no filestamps → treated as nothing dirty.
-        let result = unique_id_filter_for_selector(&eval, &io);
-        // Should return Some (cache exists) even if empty.
+        let result = unique_id_filter_for_dirty(&io);
         assert!(
             result.is_some(),
-            "state:dirty with existing cache should return Some, not fall back"
+            "--dirty with existing cache should return Some, not fall back"
         );
     }
 
-    /// state:dirty+ AND state:modified — the And arm skips the phase-2 state:modified
-    /// arm and returns Some from the state:dirty+ arm.
+    /// --dirty with selector --select state:modified falls back to full load because
+    /// state:modified is phase-2-only (needs --state manifest).
     #[test]
-    fn state_dirty_and_state_modified_returns_some() {
+    fn dirty_flag_with_state_modified_selector_falls_back() {
         let tmp = tempfile::tempdir().unwrap();
         write_graph_cache(tmp.path());
         let io = IoArgs {
             out_dir: tmp.path().to_path_buf(),
             ..IoArgs::default()
         };
-        // AND expression: state:dirty+ space state:modified
+        // --dirty computes the dirty set separately; the --select is evaluated by the
+        // scheduler after load. unique_id_filter_for_selector falls back to None for
+        // state:modified since it is phase-2-only.
         let eval = EvalArgs {
             command: FsCommand::Compile,
-            select: Some(SelectExpression::And(vec![
-                dirty_atom(None, Some(u32::MAX)),
-                atom_with_value(MethodName::State, "modified"),
-            ])),
-            ..EvalArgs::default()
-        };
-        // state:modified is phase-2-only → skipped; state:dirty+ resolves → Some.
-        let result = unique_id_filter_for_selector(&eval, &io);
-        assert!(
-            result.is_some(),
-            "state:dirty+ AND state:modified should return Some (not fall back)"
-        );
-    }
-
-    /// state:dirty OR state:modified — Or arm: state:modified returns None →
-    /// whole Or falls back to None (OR with phase-2-only is architecturally unsound).
-    #[test]
-    fn state_dirty_or_state_modified_falls_back() {
-        let tmp = tempfile::tempdir().unwrap();
-        write_graph_cache(tmp.path());
-        let io = IoArgs {
-            out_dir: tmp.path().to_path_buf(),
-            ..IoArgs::default()
-        };
-        let eval = EvalArgs {
-            command: FsCommand::Compile,
-            select: Some(SelectExpression::Or(vec![
-                dirty_atom(None, Some(u32::MAX)),
-                atom_with_value(MethodName::State, "modified"),
-            ])),
+            select: Some(atom_with_value(MethodName::State, "modified")),
             ..EvalArgs::default()
         };
         assert!(
             unique_id_filter_for_selector(&eval, &io).is_none(),
-            "state:dirty OR state:modified should fall back (Or with phase-2 arm)"
+            "state:modified is phase-2-only and should fall back"
         );
     }
 
-    // ── strip_dirty_selector tests ────────────────────────────────────────────
+    // ── Differential: warm cache vs incremental vs full parse ─────────────────
+    //
+    // These tests verify the core cache invariant: the cache must produce
+    // identical results to a full parse for every node it returns.
 
+    /// R-warm: after save+reload with no file changes, has_no_file_changes() is true
+    /// and needs_full_parse() returns None.  This is the fast-path precondition.
     #[test]
-    fn test_strip_dirty_atom_alone() {
-        // Atom(state:dirty+) alone → None (select all loaded nodes).
-        let expr = dirty_atom(None, Some(u32::MAX));
+    fn warm_cache_round_trip_no_file_changes() {
+        use crate::parse_state::{SaveArgs, save};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let model_file = tmp.path().join("models").join("orders.sql");
+        std::fs::create_dir_all(model_file.parent().unwrap()).unwrap();
+        std::fs::write(&model_file, b"select 1").unwrap();
+        let mtime =
+            system_time_to_nanos(std::fs::metadata(&model_file).unwrap().modified().unwrap());
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+        let pkg = PackageSnapshot {
+            package_root_path: tmp.path().to_str().unwrap().into(),
+            package_name: "proj".into(),
+            all_paths: HashMap::from([(
+                ResourcePathKind::ModelPaths,
+                vec![("models/orders.sql".into(), mtime)],
+            )]),
+            dependencies: BTreeSet::new(),
+        };
+
+        let out_dir = tmp.path().to_path_buf();
+        save(&SaveArgs {
+            out_dir: &out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: &profile.blake3_hash(),
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: &hash_cli_vars(&None),
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[pkg],
+            nodes: &Nodes::default(),
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+
+        let io = IoArgs {
+            out_dir,
+            ..IoArgs::default()
+        };
+        let state = load_parse_state_filtered(&io, None).expect("should load");
+
+        // Fast-path precondition: no file changes → has_no_file_changes and needs_full_parse both pass.
         assert!(
-            strip_dirty_selector(expr).is_none(),
-            "bare state:dirty should strip to None"
+            state.has_no_file_changes(),
+            "warm cache: has_no_file_changes must be true when no files changed"
+        );
+        assert_eq!(
+            state.needs_full_parse(),
+            None,
+            "warm cache: needs_full_parse must return None when no files changed"
         );
     }
 
+    /// R-incremental: after save+reload, touching a model.sql makes
+    /// has_no_file_changes() false (fast-path skipped) but needs_full_parse()
+    /// returns None (incremental, not full parse).
     #[test]
-    fn test_strip_dirty_and_with_modified() {
-        // And([state:dirty+, state:modified]) → state:modified.
-        let expr = SelectExpression::And(vec![
-            dirty_atom(None, Some(u32::MAX)),
-            atom_with_value(MethodName::State, "modified"),
-        ]);
-        let stripped = strip_dirty_selector(expr).expect("should strip to state:modified");
-        match &stripped {
-            SelectExpression::Atom(c) => {
-                assert_eq!(c.method, MethodName::State);
-                assert_eq!(c.value, "modified");
-            }
-            other => panic!("expected Atom(state:modified), got {other:?}"),
-        }
+    fn incremental_cache_changed_model_sql_not_full_parse() {
+        use crate::parse_state::{SaveArgs, save};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let model_file = tmp.path().join("models").join("orders.sql");
+        std::fs::create_dir_all(model_file.parent().unwrap()).unwrap();
+        std::fs::write(&model_file, b"select 1").unwrap();
+        let mtime =
+            system_time_to_nanos(std::fs::metadata(&model_file).unwrap().modified().unwrap());
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+        let pkg = PackageSnapshot {
+            package_root_path: tmp.path().to_str().unwrap().into(),
+            package_name: "proj".into(),
+            all_paths: HashMap::from([(
+                ResourcePathKind::ModelPaths,
+                vec![("models/orders.sql".into(), mtime)],
+            )]),
+            dependencies: BTreeSet::new(),
+        };
+
+        let out_dir = tmp.path().to_path_buf();
+        save(&SaveArgs {
+            out_dir: &out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: &profile.blake3_hash(),
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: &hash_cli_vars(&None),
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[pkg],
+            nodes: &Nodes::default(),
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+
+        // Touch the model file after saving.
+        sleep_for_mtime_change();
+        std::fs::write(&model_file, b"select 2").unwrap();
+
+        let io = IoArgs {
+            out_dir,
+            ..IoArgs::default()
+        };
+        let state = load_parse_state_filtered(&io, None).expect("should load");
+
+        // Fast-path must NOT trigger (file changed).
+        assert!(
+            !state.has_no_file_changes(),
+            "incremental: has_no_file_changes must be false when model.sql touched"
+        );
+        // But incremental parse IS safe for model .sql changes — not a full parse.
+        assert_eq!(
+            state.needs_full_parse(),
+            None,
+            "incremental: needs_full_parse must return None for model.sql change"
+        );
     }
 
+    /// R-full: touching a macro .sql after save makes needs_full_parse() return Some.
     #[test]
-    fn test_strip_dirty_or_unchanged() {
-        // Or([state:dirty+, tag:foo]) → unchanged (strip only removes from And/Atom).
-        let original = SelectExpression::Or(vec![
-            dirty_atom(None, Some(u32::MAX)),
-            atom_with_value(MethodName::Tag, "foo"),
-        ]);
-        let stripped = strip_dirty_selector(original);
-        // Or is passed through as-is (both arms kept).
-        match stripped {
-            Some(SelectExpression::Or(arms)) => assert_eq!(arms.len(), 2),
-            other => panic!("Or should be preserved, got {other:?}"),
-        }
+    fn incremental_cache_changed_macro_sql_forces_full_parse() {
+        use crate::parse_state::{SaveArgs, save};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let macro_file = tmp.path().join("macros").join("my_macro.sql");
+        std::fs::create_dir_all(macro_file.parent().unwrap()).unwrap();
+        std::fs::write(&macro_file, b"{% macro foo() %}1{% endmacro %}").unwrap();
+        let mtime =
+            system_time_to_nanos(std::fs::metadata(&macro_file).unwrap().modified().unwrap());
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+        let pkg = PackageSnapshot {
+            package_root_path: tmp.path().to_str().unwrap().into(),
+            package_name: "proj".into(),
+            all_paths: HashMap::from([(
+                ResourcePathKind::MacroPaths,
+                vec![("macros/my_macro.sql".into(), mtime)],
+            )]),
+            dependencies: BTreeSet::new(),
+        };
+
+        let out_dir = tmp.path().to_path_buf();
+        save(&SaveArgs {
+            out_dir: &out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: &profile.blake3_hash(),
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: &hash_cli_vars(&None),
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[pkg],
+            nodes: &Nodes::default(),
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+
+        sleep_for_mtime_change();
+        std::fs::write(&macro_file, b"{% macro foo() %}2{% endmacro %}").unwrap();
+
+        let io = IoArgs {
+            out_dir,
+            ..IoArgs::default()
+        };
+        let state = load_parse_state_filtered(&io, None).expect("should load");
+
+        assert!(
+            state.needs_full_parse().is_some(),
+            "changed macro.sql must force full parse (got None)"
+        );
     }
 
+    // ── path: and file: selector index resolution ─────────────────────────────
+
+    fn write_path_graph_cache(out_dir: &Path) {
+        use crate::parse_state::{SaveArgs, save};
+        use dbt_schemas::schemas::DbtModel;
+        use dbt_schemas::schemas::common::NodeDependsOn;
+        use dbt_schemas::schemas::nodes::{CommonAttributes, NodeBaseAttributes};
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+
+        let make_model = |uid: &str, name: &str, path: &str, deps: Vec<String>| DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: uid.into(),
+                name: name.into(),
+                package_name: "p".into(),
+                fqn: vec!["p".into(), name.into()],
+                original_file_path: PathBuf::from(path),
+                ..CommonAttributes::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                depends_on: NodeDependsOn {
+                    nodes: deps,
+                    ..NodeDependsOn::default()
+                },
+                ..NodeBaseAttributes::default()
+            },
+            ..DbtModel::default()
+        };
+
+        let mut nodes = Nodes::default();
+        // staging/stg_orders depends on staging/stg_items
+        nodes.models.insert(
+            "model.p.stg_orders".into(),
+            make_model(
+                "model.p.stg_orders",
+                "stg_orders",
+                "models/staging/stg_orders.sql",
+                vec!["model.p.stg_items".into()],
+            )
+            .into(),
+        );
+        nodes.models.insert(
+            "model.p.stg_items".into(),
+            make_model(
+                "model.p.stg_items",
+                "stg_items",
+                "models/staging/stg_items.sql",
+                vec![],
+            )
+            .into(),
+        );
+        // marts model depends on stg_orders
+        nodes.models.insert(
+            "model.p.orders".into(),
+            make_model(
+                "model.p.orders",
+                "orders",
+                "models/marts/orders.sql",
+                vec!["model.p.stg_orders".into()],
+            )
+            .into(),
+        );
+
+        save(&SaveArgs {
+            out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: "",
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: "",
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[],
+            nodes: &nodes,
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+    }
+
+    /// `path:models/staging` matches both staging models and includes their transitive deps.
     #[test]
-    fn test_selector_contains_dirty() {
-        assert!(selector_contains_dirty(&dirty_atom(None, None)));
-        assert!(selector_contains_dirty(&SelectExpression::And(vec![
-            dirty_atom(None, None),
-            atom_with_value(MethodName::Fqn, "x"),
-        ])));
-        assert!(!selector_contains_dirty(&atom_with_value(
-            MethodName::Fqn,
-            "dirty"
-        )));
-        assert!(!selector_contains_dirty(&atom_with_value(
-            MethodName::State,
-            "modified"
-        )));
+    fn unique_id_filter_path_selector_staging() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_path_graph_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Path, "models/staging")),
+            ..EvalArgs::default()
+        };
+        let ids = unique_id_filter_for_selector(&eval, &io).expect("path: should return Some");
+        assert!(
+            ids.contains("model.p.stg_orders"),
+            "stg_orders must be included"
+        );
+        assert!(
+            ids.contains("model.p.stg_items"),
+            "stg_items must be included (ancestor)"
+        );
+        assert!(
+            !ids.contains("model.p.orders"),
+            "marts/orders must NOT be included by staging path"
+        );
+    }
+
+    /// `path:models/marts` matches only the marts model and expands its ancestor deps.
+    #[test]
+    fn unique_id_filter_path_selector_marts_includes_ancestors() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_path_graph_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Path, "models/marts")),
+            ..EvalArgs::default()
+        };
+        let ids = unique_id_filter_for_selector(&eval, &io).expect("path: should return Some");
+        assert!(ids.contains("model.p.orders"), "orders must be included");
+        // add_all_ancestors must pull in staging deps
+        assert!(
+            ids.contains("model.p.stg_orders"),
+            "stg_orders must be included as ancestor"
+        );
+        assert!(
+            ids.contains("model.p.stg_items"),
+            "stg_items must be included as transitive ancestor"
+        );
+    }
+
+    /// `file:stg_orders.sql` matches the single model by filename.
+    #[test]
+    fn unique_id_filter_file_selector_matches_by_filename() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_path_graph_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::File, "stg_orders.sql")),
+            ..EvalArgs::default()
+        };
+        let ids = unique_id_filter_for_selector(&eval, &io).expect("file: should return Some");
+        assert!(
+            ids.contains("model.p.stg_orders"),
+            "stg_orders must be included"
+        );
+        assert!(
+            ids.contains("model.p.stg_items"),
+            "stg_items must be included as ancestor"
+        );
+        assert!(
+            !ids.contains("model.p.orders"),
+            "orders must NOT be included — it's a downstream, not selected"
+        );
+    }
+
+    /// `path:` with a wildcard falls back to full load.
+    #[test]
+    fn unique_id_filter_path_wildcard_falls_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Path, "models/*")),
+            ..EvalArgs::default()
+        };
+        assert!(
+            unique_id_filter_for_selector(&eval, &io).is_none(),
+            "path: with wildcard must fall back to full load"
+        );
+    }
+
+    // ── source: selector index resolution ────────────────────────────────────
+
+    fn write_source_cache(out_dir: &Path) {
+        use crate::parse_state::{SaveArgs, save};
+        use dbt_schemas::schemas::DbtSource;
+        use dbt_schemas::schemas::nodes::{CommonAttributes, DbtSourceAttr, NodeBaseAttributes};
+
+        let profile = test_profile();
+        let dbt_profile_json = serde_json::to_string(&profile).unwrap();
+
+        let make_source = |uid: &str, name: &str, pkg: &str, source_name: &str| DbtSource {
+            __common_attr__: CommonAttributes {
+                unique_id: uid.into(),
+                name: name.into(),
+                package_name: pkg.into(),
+                fqn: vec![pkg.into(), source_name.into(), name.into()],
+                ..CommonAttributes::default()
+            },
+            __base_attr__: NodeBaseAttributes::default(),
+            __source_attr__: DbtSourceAttr {
+                source_name: source_name.into(),
+                identifier: name.into(),
+                ..DbtSourceAttr::default()
+            },
+            ..DbtSource::default()
+        };
+
+        let mut nodes = Nodes::default();
+        // source.pkg.my_source — table "orders" in source "pkg"
+        nodes.sources.insert(
+            "source.pkg.orders".into(),
+            make_source("source.pkg.orders", "orders", "pkg", "pkg").into(),
+        );
+        // source.pkg.my_source — table "customers" in source "pkg"
+        nodes.sources.insert(
+            "source.pkg.customers".into(),
+            make_source("source.pkg.customers", "customers", "pkg", "pkg").into(),
+        );
+        // source in a different source namespace
+        nodes.sources.insert(
+            "source.other.events".into(),
+            make_source("source.other.events", "events", "other", "other").into(),
+        );
+
+        save(&SaveArgs {
+            out_dir,
+            version: INCREMENTAL_STATE_VERSION,
+            dbt_version: &current_dbt_version(),
+            profile_hash: "",
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: "",
+            dbt_profile_json: &dbt_profile_json,
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            packages: &[],
+            nodes: &nodes,
+            disabled_nodes: &Nodes::default(),
+            changed_nodes: None,
+            ingested_at: 0,
+            macros: &Macros::default(),
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+        })
+        .unwrap();
+    }
+
+    /// `source:pkg.orders` matches exactly one source table.
+    #[test]
+    fn unique_id_filter_source_exact_table_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_source_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Source, "pkg.orders")),
+            ..EvalArgs::default()
+        };
+        let ids = unique_id_filter_for_selector(&eval, &io).expect("source: should return Some");
+        assert!(
+            ids.contains("source.pkg.orders"),
+            "source.pkg.orders must be included"
+        );
+        assert!(
+            !ids.contains("source.pkg.customers"),
+            "source.pkg.customers must NOT be included"
+        );
+        assert!(
+            !ids.contains("source.other.events"),
+            "source.other.events must NOT be included"
+        );
+    }
+
+    /// `source:pkg` matches all tables in that source namespace.
+    #[test]
+    fn unique_id_filter_source_package_matches_all_tables() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_source_cache(tmp.path());
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Source, "pkg")),
+            ..EvalArgs::default()
+        };
+        let ids = unique_id_filter_for_selector(&eval, &io).expect("source: should return Some");
+        assert!(
+            ids.contains("source.pkg.orders"),
+            "source.pkg.orders must be included"
+        );
+        assert!(
+            ids.contains("source.pkg.customers"),
+            "source.pkg.customers must be included"
+        );
+        assert!(
+            !ids.contains("source.other.events"),
+            "source.other.events must NOT be included"
+        );
+    }
+
+    /// `source:` with a wildcard falls back to full load.
+    #[test]
+    fn unique_id_filter_source_wildcard_falls_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let io = IoArgs {
+            out_dir: tmp.path().to_path_buf(),
+            ..IoArgs::default()
+        };
+        let eval = EvalArgs {
+            command: FsCommand::Run,
+            select: Some(atom_with_value(MethodName::Source, "pkg.*")),
+            ..EvalArgs::default()
+        };
+        assert!(
+            unique_id_filter_for_selector(&eval, &io).is_none(),
+            "source: with wildcard must fall back to full load"
+        );
     }
 }

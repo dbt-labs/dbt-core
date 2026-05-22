@@ -28,9 +28,8 @@ use crate::{
 use crate::{
     constants::{
         DBT_DEFAULT_LOG_FILE_BACKUP_COUNT, DBT_DEFAULT_LOG_FILE_MAX_BYTES,
-        DBT_DEFAULT_LOG_FILE_NAME, DBT_DEFAULT_OTEL_PARQUET_FILE_NAME,
-        DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_FUSION, DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME,
-        DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
+        DBT_DEFAULT_LOG_FILE_NAME, DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_FUSION, DBT_LOG_DIR_NAME,
+        DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
     io_args::{FsCommand, IoArgs, LogFormat, ShowOptions},
     io_utils::determine_project_dir,
@@ -298,9 +297,7 @@ impl FsTraceConfig {
     /// Creates a new FsTraceConfig with proper path resolution.
     /// This method never fails - it uses fallback logic for directory resolution.
     ///
-    /// When `write_index` is true and `otel_parquet_file_name` is not explicitly set,
-    /// this method automatically defaults to [`DBT_DEFAULT_OTEL_PARQUET_FILE_NAME`] so the parquet tracing
-    /// layer is created for index consumption.
+    /// OTel parquet tracing is only enabled when explicitly requested via `--otel-parquet-file-name`.
     pub fn new_from_io_args(
         command: FsCommand,
         project_dir: Option<&PathBuf>,
@@ -308,7 +305,6 @@ impl FsTraceConfig {
         io_args: &IoArgs,
         warn_error_options: Option<&WarnErrorOptions>,
         package: &'static str,
-        write_index: bool,
     ) -> Self {
         let max_log_verbosity = io_args
             .log_level
@@ -320,16 +316,9 @@ impl FsTraceConfig {
             .map(|lf| log_level_filter_to_tracing(&lf))
             .unwrap_or(LevelFilter::DEBUG);
 
-        // When --write-index is active, default to OTel parquet tracing for index consumption.
-        // This must happen here (at tracing config construction time) so that all code paths
-        // — including the test infrastructure — create the parquet tracing layer.
-        let otel_parquet_file_name = io_args.otel_parquet_file_name.as_deref().or_else(|| {
-            if write_index && command != FsCommand::Show {
-                Some(DBT_DEFAULT_OTEL_PARQUET_FILE_NAME)
-            } else {
-                None
-            }
-        });
+        // OTel parquet tracing is only enabled when explicitly requested via
+        // --otel-parquet-file-name. The write_metadata flag no longer auto-enables it.
+        let otel_parquet_file_name = io_args.otel_parquet_file_name.as_deref();
 
         Self::new(
             package,

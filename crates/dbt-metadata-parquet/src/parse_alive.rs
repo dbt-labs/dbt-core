@@ -3,7 +3,7 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   parse_state/alive.parquet   ← snapshot, rewritten every parse
+//!   metadata/parse/alive.parquet   ← snapshot, rewritten every parse
 //! ```
 //!
 //! ## Design
@@ -14,7 +14,9 @@
 
 use std::path::Path;
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::FsResult;
 use serde::{Deserialize, Serialize};
 
@@ -33,7 +35,11 @@ fn alive_fields() -> Vec<Field> {
     vec![
         Field::new("unique_id", DataType::Utf8, false),
         Field::new("resource_type", DataType::Utf8, false),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -62,17 +68,17 @@ mod tests {
             AliveRow {
                 unique_id: "model.my_project.model_a".to_string(),
                 resource_type: "model".to_string(),
-                ingested_at: 1_700_000_000_000_000_000,
+                ingested_at: 1_700_000_000_000_000,
             },
             AliveRow {
                 unique_id: "source.my_project.raw.users".to_string(),
                 resource_type: "source".to_string(),
-                ingested_at: 1_700_000_000_000_000_000,
+                ingested_at: 1_700_000_000_000_000,
             },
             AliveRow {
                 unique_id: "test.my_project.not_null_a".to_string(),
                 resource_type: "test".to_string(),
-                ingested_at: 1_700_000_000_000_000_000,
+                ingested_at: 1_700_000_000_000_000,
             },
         ];
 

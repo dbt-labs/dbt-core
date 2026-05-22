@@ -69,7 +69,7 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
     }
 }
 
-use crate::constants::DBT_TARGET_DIR_NAME;
+use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[clap(rename_all = "lowercase")]
@@ -527,12 +527,14 @@ pub struct EvalArgs {
     pub internal_package_mode: InternalPackageMode,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
-    /// Write parquet index alongside JSON artifacts
-    pub write_index: bool,
-    /// Directory for the parquet index output (default: <target>/index/)
-    pub index_dir: Option<PathBuf>,
+    /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
+    pub write_metadata: bool,
+    /// Directory for metadata parquet output (default: <target>/metadata/)
+    pub metadata_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
+    /// Compute and write column-level lineage into compile/cll parquet (requires --metadata and --static-analysis strict)
+    pub write_lineage: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -666,6 +668,13 @@ impl EvalArgsBuilder {
 }
 
 impl EvalArgs {
+    /// Resolves the metadata output directory: `--metadata-dir` if set, else `<out_dir>/metadata`.
+    pub fn metadata_dir(&self) -> PathBuf {
+        self.metadata_dir
+            .clone()
+            .unwrap_or_else(|| self.io.out_dir.join(DBT_METADATA_DIR_NAME))
+    }
+
     // this could accept a SelectExpression in case we want to join more complex selections together.
     pub fn set_refined_node_selectors(mut self, predicate: Option<SelectionCriteria>) -> EvalArgs {
         // Convert SelectionCriteria to SelectExpression::Atom first

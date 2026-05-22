@@ -3,7 +3,7 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   compiled_state/columns/v1_{N}.parquet   ← epoch-append, latest-wins by unique_id
+//!   metadata/compile/columns/v1_{N}.parquet   ← epoch-append, latest-wins by unique_id
 //! ```
 //!
 //! ## Design
@@ -17,7 +17,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +49,11 @@ fn column_fields() -> Vec<Field> {
         Field::new("column_index", DataType::Int32, false),
         Field::new("column_type", DataType::Utf8, true),
         Field::new("description", DataType::Utf8, true),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 

@@ -3,7 +3,7 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   metadata/invocations/v1_{N}.parquet   ← append-only, one row per command
+//!   metadata/run/invocations/v1_{N}.parquet   ← append-only, one row per command
 //! ```
 //!
 //! ## Design
@@ -20,7 +20,9 @@
 
 use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +41,7 @@ pub struct InvocationRow {
     pub command: String,
     pub status: String,
     pub selector: Option<String>,
-    pub cli_args: Option<String>,
+    pub cli_args: Vec<String>,
     pub project_name: Option<String>,
     pub adapter_type: Option<String>,
     pub target_name: Option<String>,
@@ -65,7 +67,11 @@ fn invocation_fields() -> Vec<Field> {
         Field::new("command", DataType::Utf8, false),
         Field::new("status", DataType::Utf8, false),
         Field::new("selector", DataType::Utf8, true),
-        Field::new("cli_args", DataType::Utf8, true),
+        Field::new(
+            "cli_args",
+            DataType::List(Arc::new(Field::new("item", DataType::Utf8, false))),
+            false,
+        ),
         Field::new("project_name", DataType::Utf8, true),
         Field::new("adapter_type", DataType::Utf8, true),
         Field::new("target_name", DataType::Utf8, true),
@@ -82,7 +88,11 @@ fn invocation_fields() -> Vec<Field> {
         Field::new("git_is_dirty", DataType::Int32, true),
         Field::new("elapsed_secs", DataType::Float64, true),
         Field::new("node_count", DataType::Int32, true),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -156,7 +166,11 @@ mod tests {
             command: "compile".to_string(),
             status: "success".to_string(),
             selector: Some("model.my_project.my_model".to_string()),
-            cli_args: Some(r#"["compile","--select","my_model"]"#.to_string()),
+            cli_args: vec![
+                "compile".to_string(),
+                "--select".to_string(),
+                "my_model".to_string(),
+            ],
             project_name: Some("my_project".to_string()),
             adapter_type: Some("snowflake".to_string()),
             target_name: Some("dev".to_string()),
@@ -173,7 +187,7 @@ mod tests {
             git_is_dirty: Some(0),
             elapsed_secs: Some(12.5),
             node_count: Some(42),
-            ingested_at: 1_700_000_000_000_000_000,
+            ingested_at: 1_700_000_000_000_000,
         };
 
         write_invocation(dir_path, row).unwrap();
@@ -198,7 +212,7 @@ mod tests {
                 command: "run".to_string(),
                 status: "success".to_string(),
                 selector: None,
-                cli_args: None,
+                cli_args: vec![],
                 project_name: Some("proj".to_string()),
                 adapter_type: Some("duckdb".to_string()),
                 target_name: Some("dev".to_string()),
@@ -215,7 +229,7 @@ mod tests {
                 git_is_dirty: None,
                 elapsed_secs: Some(i as f64),
                 node_count: None,
-                ingested_at: 1_700_000_000_000_000_000 + i as i64,
+                ingested_at: 1_700_000_000_000_000 + i as i64,
             };
             write_invocation(dir_path, row).unwrap();
         }
@@ -240,7 +254,7 @@ mod tests {
                 command: "compile".to_string(),
                 status: "success".to_string(),
                 selector: None,
-                cli_args: None,
+                cli_args: vec![],
                 project_name: None,
                 adapter_type: None,
                 target_name: None,

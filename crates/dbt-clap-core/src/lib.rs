@@ -217,10 +217,6 @@ impl CliParserTrait for CliParser {
     fn warn_error_options(&self, cli: &Self::CliType) -> Option<WarnErrorOptions> {
         Some(cli.common_args.get_cli_warn_error_options())
     }
-
-    fn write_index(&self, cli: &Self::CliType) -> bool {
-        cli.common_args.write_index
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -337,7 +333,6 @@ got {:?}, expected an instance of {}",
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
-
         Ok(arg)
     }
 
@@ -1483,13 +1478,20 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_WRITE_CATALOG", value_parser = BoolishValueParser::new())]
     pub write_catalog: bool,
 
-    /// Write a parquet index alongside JSON artifacts for fast querying
-    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
-    pub write_index: bool,
+    /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
+    /// artifacts. Implies --partial-parse --no-write-json.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new())]
+    pub write_metadata: bool,
 
-    /// Directory for the index output (default: <target>/index/)
-    #[arg(global = true, long, env = "DBT_INDEX_DIR")]
-    pub index_dir: Option<PathBuf>,
+    /// Directory for metadata parquet output (default: <target>/metadata/)
+    #[arg(global = true, long, env = "DBT_METADATA_DIR")]
+    pub metadata_dir: Option<PathBuf>,
+
+    /// Compute and write column-level lineage into compile/cll parquet.
+    /// Requires --write-metadata and --static-analysis strict. Omitting this flag
+    /// skips the expensive CLL graph build, keeping --write-metadata fast.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new())]
+    pub write_lineage: bool,
 
     // Support for query cache
     #[arg(global = true, long, env = "DBT_BETA_USE_QUERY_CACHE", hide = true)]
@@ -1615,6 +1617,12 @@ pub struct CommonArgs {
     pub partial_load: bool,
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_PARTIAL_LOAD", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_partial_load: bool,
+
+    /// Select only nodes whose source files have changed since the last --partial-parse run,
+    /// plus all their downstream dependents. Implies --partial-parse.
+    /// Use with --partial-load for full speed: --partial-load --dirty
+    #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_DIRTY", value_parser = BoolishValueParser::new())]
+    pub dirty: bool,
 
     #[arg(global = true, long, default_value_t = false, action = ArgAction::SetTrue, env = "DBT_VERIFY_PARTIAL_PARSE", value_parser = BoolishValueParser::new(), hide = true)]
     pub verify_partial_parse: bool,
@@ -1956,18 +1964,22 @@ impl CommonArgs {
     }
 
     /// `--verify-partial-load` implies `--partial-load` implies `--partial-parse`.
+    /// `--dirty` implies `--partial-parse`.
     /// `--verify-partial-load` → `--partial-load` → `--partial-parse`
     /// `--verify-partial-parse` → `--partial-parse`
+    /// `--dirty` → `--partial-parse`
     pub fn effective_partial_parse(&self) -> bool {
-        self.partial_parse
+        self.write_metadata
+            || self.partial_parse
             || self.partial_load
             || self.verify_partial_load
             || self.verify_partial_parse
+            || self.dirty
     }
 
-    /// `--verify-partial-load` implies `--partial-load`.
+    /// `--verify-partial-load` implies `--partial-load`. `--write-metadata` implies both.
     pub fn effective_partial_load(&self) -> bool {
-        self.partial_load || self.verify_partial_load
+        self.write_metadata || self.partial_load || self.verify_partial_load
     }
 
     /// Resolve the effective value of `--quiet` / `--no-quiet`.
@@ -2106,14 +2118,14 @@ impl CommonArgs {
             project_dir: self.project_dir.clone(),
             quiet: self.get_quiet(),
             send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
-            write_json: if self.no_write_json {
+            write_json: if self.write_metadata || self.no_write_json {
                 false
             } else {
                 self.write_json
             },
             write_catalog: self.write_catalog,
-            write_index: self.write_index,
-            index_dir: self.index_dir.clone(),
+            write_metadata: self.write_metadata,
+            metadata_dir: self.metadata_dir.clone(),
             fail_fast: self.fail_fast,
             target_path: self.target_path.clone(),
             empty: self.empty,
@@ -2141,6 +2153,7 @@ impl CommonArgs {
             internal_package_mode: self.internal_package_mode.clone(),
             skip_post_hooks: false,
             skip_creating_generic_tests: false,
+            write_lineage: self.write_lineage,
         }
     }
 

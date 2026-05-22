@@ -3,7 +3,7 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   metadata/runtime/results/v1_{N}.parquet   ← append-only, one row per node per invocation
+//!   metadata/run/results/v1_{N}.parquet   ← append-only, one row per node per invocation
 //! ```
 //!
 //! ## Design
@@ -14,7 +14,9 @@
 
 use std::path::{Path, PathBuf};
 
-use arrow::datatypes::{DataType, Field};
+use std::sync::Arc;
+
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +58,11 @@ fn result_fields() -> Vec<Field> {
         Field::new("relation_name", DataType::Utf8, true),
         Field::new("adapter_response", DataType::Utf8, true),
         Field::new("timing", DataType::Utf8, true),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -141,7 +147,7 @@ mod tests {
                 timing: Some(
                     r#"[{"name":"compile","started_at":"t1","completed_at":"t2"}]"#.to_string(),
                 ),
-                ingested_at: 1_700_000_000_000_000_000,
+                ingested_at: 1_700_000_000_000_000,
             },
             RuntimeResultRow {
                 invocation_id: "inv-001".to_string(),
@@ -155,7 +161,7 @@ mod tests {
                 relation_name: None,
                 adapter_response: None,
                 timing: None,
-                ingested_at: 1_700_000_000_000_000_000,
+                ingested_at: 1_700_000_000_000_000,
             },
         ];
 
@@ -190,7 +196,7 @@ mod tests {
                 relation_name: None,
                 adapter_response: None,
                 timing: None,
-                ingested_at: 1_700_000_000_000_000_000 + i as i64,
+                ingested_at: 1_700_000_000_000_000 + i as i64,
             }];
             write_runtime_results(dir_path, &rows).unwrap();
         }

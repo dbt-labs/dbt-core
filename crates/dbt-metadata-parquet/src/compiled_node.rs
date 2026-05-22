@@ -3,14 +3,14 @@
 //! Files land at:
 //! ```text
 //! target/
-//!   compiled_state/nodes/v1_{N}.parquet   ← epoch-append, latest-wins by unique_id
+//!   metadata/compile/nodes/v1_{N}.parquet   ← epoch-append, latest-wins by unique_id
 //! ```
 //!
 //! Design:
 //! * **Schema versioning** — files are named `v{VERSION}_{N}.parquet`. On read,
 //!   files that don't match the current version prefix are ignored. A schema
 //!   change bumps `SCHEMA_VERSION` and old files become invisible.
-//! * **Split from parse state** — `parse_state/node_facts.{N}.parquet` holds
+//! * **Split from parse state** — `metadata/parse/node_facts.{N}.parquet` holds
 //!   parse-time fields (`name`, `resource_type`, `depends_on`, etc.).  This
 //!   file holds compile-time fields only.  A DuckDB view joins them on
 //!   `unique_id` with a LEFT JOIN so parse-only queries never touch this file.
@@ -25,8 +25,9 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::Arc;
 
-use arrow::datatypes::{DataType, Field};
+use arrow::datatypes::{DataType, Field, TimeUnit};
 use dbt_common::{FsResult, stdfs};
 use serde::{Deserialize, Serialize};
 
@@ -49,21 +50,15 @@ pub struct CompiledNodeRow {
     pub compiled_code_hash: Option<String>,
     /// Project-relative path to the compiled SQL file.
     pub compiled_path: Option<String>,
-    /// RFC3339 timestamp of when this node was compiled.
-    pub compiled_at: Option<String>,
-    /// Full-text search string (node name + column names + description).
-    pub search_text: Option<String>,
-    /// Resolved grain columns (JSON array string).
+    /// Resolved grain columns (JSON array string). LP-inferred (GROUP BY / DISTINCT).
     pub grain: String,
     /// Grain from `primary_key` / `grain:` config (JSON array string).
     pub grain_declared: String,
     /// Grain from uniqueness tests and `unique_key` config (JSON array string).
     pub grain_tested: String,
-    /// Grain inferred by Fusion type analysis (JSON array string).
-    pub grain_inferred: String,
     /// Semantic table role (`fact`, `dimension`, `scd`, …).
     pub table_role: Option<String>,
-    /// Nanoseconds since Unix epoch — the `run_started_at` of the dbt
+    /// Microseconds since Unix epoch (UTC) — the `run_started_at` of the dbt
     /// invocation that wrote this row.  Latest-wins uses `max(ingested_at)`.
     pub ingested_at: i64,
 }
@@ -74,14 +69,15 @@ fn compiled_node_fields() -> Vec<Field> {
         Field::new("compiled_code", DataType::Utf8, true),
         Field::new("compiled_code_hash", DataType::Utf8, true),
         Field::new("compiled_path", DataType::Utf8, true),
-        Field::new("compiled_at", DataType::Utf8, true),
-        Field::new("search_text", DataType::Utf8, true),
         Field::new("grain", DataType::Utf8, false),
         Field::new("grain_declared", DataType::Utf8, false),
         Field::new("grain_tested", DataType::Utf8, false),
-        Field::new("grain_inferred", DataType::Utf8, false),
         Field::new("table_role", DataType::Utf8, true),
-        Field::new("ingested_at", DataType::Int64, false),
+        Field::new(
+            "ingested_at",
+            DataType::Timestamp(TimeUnit::Microsecond, Some(Arc::from("UTC"))),
+            false,
+        ),
     ]
 }
 
@@ -219,12 +215,9 @@ mod tests {
             compiled_code: Some(compiled_code.to_string()),
             compiled_code_hash: None,
             compiled_path: None,
-            compiled_at: None,
-            search_text: None,
             grain: "[]".to_string(),
             grain_declared: "[]".to_string(),
             grain_tested: "[]".to_string(),
-            grain_inferred: "[]".to_string(),
             table_role: None,
             ingested_at,
         }
@@ -400,14 +393,11 @@ mod tests {
             compiled_code: Some("select order_id from raw".to_string()),
             compiled_code_hash: Some("abc123".to_string()),
             compiled_path: Some("target/compiled/orders.sql".to_string()),
-            compiled_at: Some("2026-01-01T00:00:00Z".to_string()),
-            search_text: Some("orders order_id amount".to_string()),
             grain: r#"["order_id"]"#.to_string(),
             grain_declared: r#"["order_id"]"#.to_string(),
             grain_tested: r#"[]"#.to_string(),
-            grain_inferred: r#"["order_id"]"#.to_string(),
             table_role: Some("fact".to_string()),
-            ingested_at: 1_700_000_000_000_000_000,
+            ingested_at: 1_700_000_000_000_000,
         }];
         write_compiled_nodes(&nodes_dir, rows, None, None).unwrap();
 
@@ -417,8 +407,8 @@ mod tests {
         assert_eq!(r.compiled_code_hash.as_deref(), Some("abc123"));
         assert_eq!(r.table_role.as_deref(), Some("fact"));
         assert_eq!(r.grain, r#"["order_id"]"#);
-        assert_eq!(r.search_text.as_deref(), Some("orders order_id amount"));
-        assert_eq!(r.ingested_at, 1_700_000_000_000_000_000);
+        assert_eq!(r.grain_declared, r#"["order_id"]"#);
+        assert_eq!(r.ingested_at, 1_700_000_000_000_000);
     }
 
     #[test]

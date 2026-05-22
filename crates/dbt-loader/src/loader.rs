@@ -291,20 +291,94 @@ pub async fn load(
     if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
         let prev_root_package = prev_dbt_state.root_package();
 
-        let package_map_lookup = BTreeMap::new();
-        let mut dummy_collected_vars = Vec::new();
-        let mut new_root_package = load_inner(
-            arg_ref,
-            &env,
-            &arg.io.in_dir,
-            &dbt_state.dbt_profile,
-            false,
-            &package_map_lookup,
-            true,
-            &mut dummy_collected_vars,
-        )
-        .await?;
-        new_root_package.dependencies = prev_root_package.dependencies.clone();
+        // --inline warm path: skip the full WalkDir (load_inner) and reconstruct the
+        // root package file lists directly from prev_root_package.all_paths.
+        //
+        // INVARIANTS that must hold for this path to be correct:
+        // 1. prev_dbt_state.packages is non-empty (root package exists at index 0).
+        //    Guaranteed by snapshot_packages writing ≥1 user package and the assert below.
+        // 2. prev_root_package.all_paths contains entries for every ResourcePathKind
+        //    the resolver needs (ModelPaths, MacroPaths, TestPaths, SeedPaths, SnapshotPaths).
+        //    Entries may be sparse — find_files_by_kind_and_extension returns [] for missing kinds.
+        // 3. No file deletions or renames happened between the previous run and this one.
+        //    The inline path does NOT re-stat files; stale entries are harmless (resolver
+        //    reads them, fails on missing file, and the error surfaces naturally).
+        // 4. DISPATCH_CONFIG may already be set from a prior run in the same process;
+        //    OnceLock::set silently no-ops if already set, which is correct (same binary,
+        //    same dispatch config).
+        // 5. The inline SQL file is NOT in prev_root_package.all_paths. It is injected
+        //    separately by prepare_inline_sql after this block, into dbt_state.packages[0].
+        let new_root_package = if arg.inline_sql.is_some() {
+            if DISPATCH_CONFIG.get().is_none() {
+                let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
+                if let Ok(proj) =
+                    load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())
+                {
+                    let map = proj.dispatch.as_ref().map_or_else(BTreeMap::new, |d| {
+                        d.iter()
+                            .map(|dc| (dc.macro_namespace.clone(), dc.search_order.clone()))
+                            .collect()
+                    });
+                    let _ = DISPATCH_CONFIG.set(RwLock::new(map));
+                }
+            }
+            let pkg_name = &prev_root_package.dbt_project.name;
+            let in_dir = &arg.io.in_dir;
+            let ap = &prev_root_package.all_paths;
+            let mut root = (*prev_root_package).clone();
+            root.model_sql_files = find_files_by_kind_and_extension(
+                in_dir,
+                pkg_name,
+                &ResourcePathKind::ModelPaths,
+                &["sql", "py"],
+                ap,
+            );
+            root.macro_files = find_files_by_kind_and_extension(
+                in_dir,
+                pkg_name,
+                &ResourcePathKind::MacroPaths,
+                &["sql"],
+                ap,
+            );
+            root.test_files = find_files_by_kind_and_extension(
+                in_dir,
+                pkg_name,
+                &ResourcePathKind::TestPaths,
+                &["sql"],
+                ap,
+            );
+            root.seed_files = find_files_by_kind_and_extension(
+                in_dir,
+                pkg_name,
+                &ResourcePathKind::SeedPaths,
+                &["csv", "parquet", "json"],
+                ap,
+            );
+            root.snapshot_files = find_files_by_kind_and_extension(
+                in_dir,
+                pkg_name,
+                &ResourcePathKind::SnapshotPaths,
+                &["sql"],
+                ap,
+            );
+            root
+        } else {
+            let package_map_lookup = BTreeMap::new();
+            let mut dummy_collected_vars = Vec::new();
+            let mut r = load_inner(
+                arg_ref,
+                &env,
+                &arg.io.in_dir,
+                &dbt_state.dbt_profile,
+                false,
+                &package_map_lookup,
+                true,
+                &mut dummy_collected_vars,
+            )
+            .await?;
+            r.dependencies = prev_root_package.dependencies.clone();
+            r
+        };
         dbt_state.vars = prev_dbt_state.vars.clone();
 
         let packages = prev_dbt_state
@@ -313,7 +387,24 @@ pub async fn load(
             .map(|x| (*x).clone())
             .collect::<Vec<_>>();
         dbt_state.packages.extend(packages);
+        // prev_dbt_state always contains at least the root package; assert so a
+        // corrupted cache produces a clear message rather than an index panic.
+        assert!(
+            !dbt_state.packages.is_empty(),
+            "prev_dbt_state must contain at least one package (the root)"
+        );
         dbt_state.packages[0] = new_root_package;
+
+        // Internal packages (dbt built-ins: get_where_subquery, etc.) are embedded in the
+        // binary and never written to the parquet cache, so they are absent from
+        // prev_dbt_state.packages. Always load them fresh on the incremental path too.
+        let internal_pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+        dbt_state.packages.extend(internal_pkgs);
+
+        // Inject inline SQL even on the incremental path.
+        if let Some(inline_sql) = &arg.inline_sql {
+            let _ = prepare_inline_sql(inline_sql, &arg.io.out_dir, &mut dbt_state).await?;
+        }
 
         return Ok(dbt_state);
     }

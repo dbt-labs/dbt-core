@@ -33,7 +33,7 @@ fn rss_mb() -> u64 {
 }
 
 fn epoch_remote_dir(epoch_dir: &std::path::Path) -> PathBuf {
-    epoch_dir.join("warehouse_state/schemas_remote")
+    epoch_dir.join("metadata/warehouse/schemas")
 }
 
 fn cfqn_from_uid(uid: &str) -> CanonicalFqn {

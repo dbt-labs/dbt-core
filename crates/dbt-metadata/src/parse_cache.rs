@@ -1,3 +1,29 @@
+//! Cache state construction for the incremental compile path.
+//!
+//! This module bridges the parquet-backed parse cache (file mtimes, node snapshots) and
+//! the in-memory `CacheState` consumed by `resolve_phase` in `dbt-compilation`.
+//!
+//! # How CacheState is used
+//!
+//! `resolve_phase` receives an `Option<&CacheState>`. When `Some`:
+//! 1. `drop_all_unchanged_nodes` removes all unimpacted files from `DbtState` so the
+//!    resolver only sees changed files.
+//! 2. Pre-resolved macros and nodes from `unimpacted_resolved_nodes` are passed as
+//!    starting state to the resolver (it skips re-resolving them).
+//! 3. After resolution, `add_all_unchanged_nodes` merges the cached nodes back in.
+//!
+//! When `None`: full resolve — all files processed, no prior nodes reused.
+//!
+//! # Threshold
+//!
+//! If more than `INCREMENTAL_CACHE_FILE_THRESHOLD` files are impacted, the per-file
+//! tracking overhead exceeds the savings and we fall back to a full parse.
+
+/// Maximum number of impacted files (changed + new + deleted) before we abandon the
+/// incremental cache and fall back to a full parse. Beyond this threshold the overhead
+/// of tracking individual file impacts exceeds the cost of a clean full resolve.
+const INCREMENTAL_CACHE_FILE_THRESHOLD: usize = 100;
+
 use dbt_common::path::DbtPath;
 use dbt_common::{
     FsResult,
@@ -538,12 +564,16 @@ fn determine_changeset_from_previous_resolved_nodes<'a>(
         changed_nodes: Arc::new(changed_nodes),
     };
 
-    // If 500+ files have changed/deleted/added, then we have too many changes.
-    if nodes_with_changeset.file_changes.impacted_files.len()
+    // If too many files changed, the incremental cache is more expensive than a full
+    // parse. Fall back and tell the user why so the slowdown is diagnosable.
+    let impacted_total = nodes_with_changeset.file_changes.impacted_files.len()
         + nodes_with_changeset.file_changes.new_files.len()
-        + nodes_with_changeset.file_changes.deleted_files.len()
-        > 500
-    {
+        + nodes_with_changeset.file_changes.deleted_files.len();
+    if impacted_total > INCREMENTAL_CACHE_FILE_THRESHOLD {
+        eprintln!(
+            "[partial-parse] {impacted_total} files changed — exceeds incremental threshold \
+             ({INCREMENTAL_CACHE_FILE_THRESHOLD}), falling back to full parse"
+        );
         return Ok(None);
     }
 
