@@ -101,6 +101,9 @@ pub trait TypeOps: Send + Sync {
     /// A parser for a column description, which is "everything in a column definition, except the
     /// column's name", where column definition is as in CREATE TABLE.
     fn parse_column_description(&self, s: &str) -> AdapterResult<Field>;
+
+    /// Normalize two SQL type strings and compare them for equality.
+    fn normalize_and_compare_sql_types(&self, lhs: &str, rhs: &str) -> AdapterResult<bool>;
 }
 
 pub trait TypeOpsFactory: Send + Sync {
@@ -190,6 +193,20 @@ impl TypeOps for SATypeOpsImpl {
             ),
         );
         Err(err)
+    }
+
+    fn normalize_and_compare_sql_types(&self, lhs: &str, rhs: &str) -> AdapterResult<bool> {
+        let adapter_type = self.adapter_type();
+
+        let lhs = SqlType::parse(adapter_type, lhs)
+            .map(|(ty, _)| ty.display(adapter_type).to_string())
+            .unwrap_or_else(|_| lhs.to_string());
+
+        let rhs = SqlType::parse(self.adapter_type(), rhs)
+            .map(|(ty, _)| ty.display(adapter_type).to_string())
+            .unwrap_or_else(|_| rhs.to_string());
+
+        Ok(lhs == rhs)
     }
 }
 

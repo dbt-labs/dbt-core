@@ -418,6 +418,10 @@ impl DbtLoadedProject {
         &self.config
     }
 
+    pub fn type_ops_factory(&self) -> &Arc<dyn TypeOpsFactory> {
+        &self.type_ops_factory
+    }
+
     pub fn dbt_state(&self) -> Arc<DbtState> {
         self.dbt_state.clone()
     }
