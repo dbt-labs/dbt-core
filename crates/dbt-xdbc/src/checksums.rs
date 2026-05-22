@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 148] = [
+); 152] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -97,16 +97,32 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "d7f4dd2f67c4ba4e1569986d893ef9a877c3ae385da4ff3aa1faa646adb96f2a",
     ),
     (
+        ("clickhouse", "apple-darwin", "aarch64", "0.1.0-alpha.2"),
+        "7ba6156458599b35f6a1c5a2ddbc4cd62036c1d2e46abad702bb950478697472",
+    ),
+    (
         ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0-alpha.1"),
         "5ea43a9ab39898fb448d23915cbea56c9284afea89d3324501606c3917d3fc37",
+    ),
+    (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0-alpha.2"),
+        "81cc15fea37bdf211f97be1eafd09d364d1772396a067f314ffbf01a943afec7",
     ),
     (
         ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0-alpha.1"),
         "ef018d0c80498777583c92403781d8cda934aa5709dd27b624154f18d3891425",
     ),
     (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0-alpha.2"),
+        "d548d9e1e3511553f2e89fe66614e8cb4d69012f194491b869d31cbdbf19343f",
+    ),
+    (
         ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0-alpha.1"),
         "b29e3234db386be0c6e1cad6e4ea4185944dd063cb34d385b8ba3fca7b5451f2",
+    ),
+    (
+        ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0-alpha.2"),
+        "80a8eeabbb1a2913efc423c1bfddcd99bc5acffc19422181a9f7e8ddec54ed9b",
     ),
     (
         ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.5"),
