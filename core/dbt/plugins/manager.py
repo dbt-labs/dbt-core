@@ -1,9 +1,9 @@
-import functools
 import importlib
+import logging
 import os
 import pkgutil
-from types import ModuleType
-from typing import Callable, Dict, List, Mapping
+from types import MappingProxyType
+from typing import Callable, Dict, List, Mapping, Sequence, Set, Tuple
 
 import dbt.tracking
 from dbt.contracts.graph.manifest import Manifest
@@ -12,8 +12,10 @@ from dbt.plugins.manifest import PluginNodes
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.tests import test_caching_enabled
 
-# Values that count as "on" when reading a gate env var. Mirrors the truthy set used by
-# dbt-state itself so behavior is consistent across the boundary.
+logger = logging.getLogger(__name__)
+
+# Values that count as "on" when reading a gate env var. The canonical seven; we deliberately
+# don't accept variants like "enable"/"enabled" -- if users ask, this is the documented list.
 _TRUTHY_ENV_VALUES = frozenset({"true", "1", "t", "y", "yes", "on"})
 
 
@@ -23,6 +25,56 @@ def _env_gate_is_on(env_var: str) -> bool:
     if raw is None:
         return False
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+# Track which (module_name, gate_state) combinations have already emitted a discovery
+# log message in this process, so we don't spam the user when PluginManager is
+# constructed multiple times (e.g. during test runs that reuse the dbtRunner).
+_DISCOVERY_NOTICES_EMITTED: Set[Tuple[str, str]] = set()
+
+
+def _notify_opt_in_module_skipped(module_name: str, env_var: str) -> None:
+    """Emit a one-time per-process notice that an opt-in plugin module was found on the
+    import path but skipped because its gate is off.
+
+    The legacy `dbt_run_cache` name is logged at INFO -- users on pre-bundling versions had
+    that plugin auto-loading, so the silent behavior change deserves visibility. The new
+    `dbt_state` name is logged at DEBUG: there's no pre-existing behavior to break, but
+    operators may still want a breadcrumb when debugging."""
+    key = (module_name, "skipped")
+    if key in _DISCOVERY_NOTICES_EMITTED:
+        return
+    _DISCOVERY_NOTICES_EMITTED.add(key)
+    msg = (
+        "Plugin module %r was found on the import path but %s is not set; "
+        "the plugin will not be loaded. Set %s=true to enable."
+    )
+    if module_name == "dbt_run_cache":
+        # Silent behavior change risk: this name auto-loaded in older dbt-core versions.
+        logger.info(msg, module_name, env_var, env_var)
+    else:
+        logger.debug(msg, module_name, env_var, env_var)
+
+
+def _notify_opt_in_conflict(preferred: str, skipped: str, env_var: str) -> None:
+    """Emit a one-time per-process warning when two modules from the same opt-in
+    conflict group are simultaneously enabled by the gate. We prefer the canonical
+    (first-listed) module and skip the rest to avoid double monkey-patching."""
+    key = (skipped, "conflict")
+    if key in _DISCOVERY_NOTICES_EMITTED:
+        return
+    _DISCOVERY_NOTICES_EMITTED.add(key)
+    logger.warning(
+        "Both %r and %r are installed and %s is set. They are the same plugin under "
+        "different package names. Loading %r and skipping %r to avoid double "
+        "monkey-patching of core classes -- uninstall the unused package to silence "
+        "this warning.",
+        preferred,
+        skipped,
+        env_var,
+        preferred,
+        skipped,
+    )
 
 
 def dbt_hook(func):
@@ -79,18 +131,9 @@ class dbtPlugin:
         raise NotImplementedError(f"get_manifest_artifacts hook not implemented for {self.name}")
 
 
-@functools.lru_cache(maxsize=None)
-def _get_dbt_modules() -> Mapping[str, ModuleType]:
-    # This is an expensive function, especially in the context of testing, when
-    # it is called repeatedly, so we break it out and cache the result globally.
-    return {
-        name: importlib.import_module(name)
-        for _, name, _ in pkgutil.iter_modules()
-        if name.startswith(PluginManager.PLUGIN_MODULE_PREFIX)
-        and name not in PluginManager._disabled_opt_in_modules()
-    }
-
-
+# Module-level cache used by `from_modules` when test caching is enabled. The gate is
+# read at discovery time and the result is cached here; tests that toggle a gate env
+# var mid-process need to clear this cache to see the change.
 _MODULES_CACHE = None
 
 
@@ -98,33 +141,65 @@ class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
 
-    # Plugins that are bundled with dbt-core as install dependencies but must not be
-    # loaded or initialized unless explicitly opted into. The keys are the top-level
-    # module names PluginManager would otherwise auto-discover via pkgutil; the values
-    # are the env vars whose truthy value flips the plugin on.
-    #
-    # Skipping happens at module-discovery time (before importlib.import_module), so a
-    # disabled opt-in plugin pays zero import cost and runs zero side effects -- even
-    # if its __init__.py has eager imports or monkey-patching.
+    # Bundled plugins that are installed as dependencies of dbt-core but must not be
+    # discovered or initialized unless their gate env var is set to a truthy value.
     # Both `dbt_state` and `dbt_run_cache` refer to the same plugin -- the package was
     # renamed from `run-cache` (module `dbt_run_cache`) to `dbt-state` (module
     # `dbt_state`). Either may be present in a user's environment depending on which
     # version they have installed, so both are listed here as first-class entries
-    # gated by the same env var. Setting DBT_STATE_ENABLED=true opts in regardless of
-    # which module name pkgutil discovers.
-    OPT_IN_PLUGIN_MODULES: Dict[str, str] = {
-        "dbt_state": "DBT_STATE_ENABLED",
-        "dbt_run_cache": "DBT_STATE_ENABLED",
-    }
+    # gated by the same env var. Setting DBT_ENGINE_STATE_ENABLED=true opts in regardless
+    # of which module name pkgutil discovers.
+    #
+    # Skipping happens at module-discovery time (before importlib.import_module), so a
+    # disabled opt-in plugin pays zero import cost and runs zero side effects -- even
+    # if its __init__.py has eager imports or monkey-patching.
+    #
+    # Scope: this gate only suppresses auto-discovery via pkgutil. If a user's project
+    # code or another plugin explicitly `import dbt_state`s, the plugin's import-time
+    # side effects will still fire. The plugin itself should also self-gate as
+    # defense-in-depth; the registry here is the dbt-core-side contract.
+    #
+    # MappingProxyType makes the mapping read-only -- tampering raises TypeError rather
+    # than silently flipping activation for the rest of the process.
+    OPT_IN_PLUGIN_MODULES: Mapping[str, str] = MappingProxyType(
+        {
+            "dbt_state": "DBT_ENGINE_STATE_ENABLED",
+            "dbt_run_cache": "DBT_ENGINE_STATE_ENABLED",
+        }
+    )
+
+    # Within a conflict group, if multiple modules pass the gate (e.g. both
+    # `dbt_state` and `dbt_run_cache` happen to be installed during the rename
+    # transition), prefer the first listed and skip the rest with a warning. Avoids
+    # non-deterministic double monkey-patching of CompileRunner/ModelRunner/etc.
+    OPT_IN_PLUGIN_CONFLICT_GROUPS: Sequence[Sequence[str]] = (("dbt_state", "dbt_run_cache"),)
 
     @classmethod
-    def _disabled_opt_in_modules(cls) -> set:
+    def _disabled_opt_in_modules(cls) -> Set[str]:
         """Names of opt-in plugin modules whose gate env var is NOT set to a truthy value."""
         return {
             module_name
             for module_name, env_var in cls.OPT_IN_PLUGIN_MODULES.items()
             if not _env_gate_is_on(env_var)
         }
+
+    @classmethod
+    def _resolve_opt_in_conflicts(cls, candidate_names: Sequence[str]) -> Set[str]:
+        """Return the set of module names that should be skipped due to conflict-group
+        deduplication. Within each group, the first listed name that is present in
+        `candidate_names` wins and the rest are returned as "skip me"."""
+        candidates = set(candidate_names)
+        skip: Set[str] = set()
+        for group in cls.OPT_IN_PLUGIN_CONFLICT_GROUPS:
+            present = [name for name in group if name in candidates]
+            if len(present) <= 1:
+                continue
+            preferred, *rest = present
+            for losing in rest:
+                env_var = cls.OPT_IN_PLUGIN_MODULES.get(losing, "")
+                _notify_opt_in_conflict(preferred, losing, env_var)
+                skip.add(losing)
+        return skip
 
     def __init__(self, plugins: List[dbtPlugin]) -> None:
         self._plugins = plugins
@@ -176,11 +251,27 @@ class PluginManager:
     @classmethod
     def get_prefixed_modules(cls):
         disabled = cls._disabled_opt_in_modules()
-        return {
-            name: importlib.import_module(name)
+
+        # First pass: walk iter_modules without importing, so we can spot opt-in
+        # modules that are physically present on disk and emit the "found but gated
+        # off" notice for the ones we're about to skip. This is what gives existing
+        # `dbt_run_cache` users a breadcrumb when their previously-auto-loaded plugin
+        # stops loading.
+        names_on_path = [
+            name
             for _, name, _ in pkgutil.iter_modules()
-            if name.startswith(cls.PLUGIN_MODULE_PREFIX) and name not in disabled
-        }
+            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
+        ]
+        for name in names_on_path:
+            if name in disabled:
+                _notify_opt_in_module_skipped(name, cls.OPT_IN_PLUGIN_MODULES[name])
+
+        # Second pass: for modules whose gate is ON, dedupe within conflict groups.
+        enabled_candidates = [n for n in names_on_path if n not in disabled]
+        conflict_skips = cls._resolve_opt_in_conflicts(enabled_candidates)
+        to_import = [n for n in enabled_candidates if n not in conflict_skips]
+
+        return {name: importlib.import_module(name) for name in to_import}
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
         all_plugin_artifacts = {}

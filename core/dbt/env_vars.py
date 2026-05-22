@@ -22,6 +22,7 @@ _ADDITIONAL_ENGINE_ENV_VARS: List[str] = [
     "DBT_ENGINE_STATE_AUTH_URL",
     "DBT_ENGINE_STATE_TOKEN_URL",
     "DBT_ENGINE_STATE_API_URL",
+    "DBT_ENGINE_STATE_ENABLED",  # gates discovery of the bundled dbt-state plugin
 ]
 
 
