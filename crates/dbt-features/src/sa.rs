@@ -1,15 +1,23 @@
+use async_trait::async_trait;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
 use crate::feature_stack::*;
+use crate::index::IndexFeature;
+use crate::index::IndexHooks;
 use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
 
 struct NoOpExtensionHooks;
 impl CliExtensionHooks for NoOpExtensionHooks {}
+
+struct NoOpIndexHooks;
+
+#[async_trait]
+impl IndexHooks for NoOpIndexHooks {}
 
 pub struct SourceAvailableFeatureStackBuilder {
     send_anonymous_usage_stats: bool,
@@ -45,9 +53,13 @@ impl SourceAvailableFeatureStackBuilder {
         let cli_extension = CliExtensionFeature {
             hooks: Box::new(NoOpExtensionHooks),
         };
+        let index = IndexFeature {
+            hooks: Box::new(NoOpIndexHooks),
+        };
         let stack = FeatureStack {
             instrumentation,
             cli_extension,
+            index,
             tracing: self.tracing,
             adapter: self.adapter,
             antlr_parser: self.antlr_parser,

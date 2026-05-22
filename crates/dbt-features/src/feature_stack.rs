@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::adapter::AdapterFeature;
 
 use crate::antlr_parser::AntlrParserFeature;
+use crate::index::IndexFeature;
 use crate::metricflow::{MetricflowClient, MetricflowFeature};
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
@@ -177,6 +178,7 @@ pub struct CliExtensionFeature {
 pub struct FeatureStack {
     pub instrumentation: InstrumentationFeature,
     pub cli_extension: CliExtensionFeature,
+    pub index: IndexFeature,
     pub tracing: TracingFeature,
     pub adapter: AdapterFeature,
     pub antlr_parser: AntlrParserFeature,
