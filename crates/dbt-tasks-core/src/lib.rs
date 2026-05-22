@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+pub mod compiled_sql_cache;
 pub mod compiler_env;
 pub mod context;
 pub mod local_schema_builder;
@@ -9,6 +10,7 @@ pub mod metricflow;
 pub mod precompile;
 pub mod pretty_table;
 mod run_tasks_args;
+pub mod schema_hydration;
 pub mod span_manager;
 mod stats_to_results;
 pub mod task;
