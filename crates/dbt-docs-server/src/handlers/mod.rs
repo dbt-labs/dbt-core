@@ -14,6 +14,7 @@ pub mod project;
 pub mod query;
 pub mod seeds;
 pub mod sources;
+pub mod tests;
 
 pub(crate) mod json;
 mod sql;
