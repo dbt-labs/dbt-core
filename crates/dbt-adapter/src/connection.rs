@@ -257,7 +257,7 @@ impl Drop for ConnectionGuard<'_> {
 /// connection and update the active connection counter.
 pub struct ConnectionBackpressure {
     high_water_mark: u32,
-    span: Span,
+    span: Option<Span>,
     /// Key assigned on first registration into [`wakers`](pri::BackpressureState::wakers).
     /// Reused across re-polls so the task keeps its original queue position.
     key: Option<(Instant, u64)>,
@@ -269,14 +269,9 @@ impl ConnectionBackpressure {
     /// `high_water_mark` is the number of active connections that should trigger
     /// backpressure to the node scheduler when reached.
     pub fn new(high_water_mark: u32) -> Self {
-        let (active_nodes, active_connections) = backpressure_counts_for_trace();
-
         Self {
             high_water_mark,
-            span: create_debug_span(ConnectionLimitWait {
-                active_nodes,
-                active_connections,
-            }),
+            span: None,
             key: None,
         }
     }
@@ -302,6 +297,16 @@ impl ConnectionBackpressure {
         })
     }
 
+    fn ensure_wait_span(&mut self) {
+        if self.span.is_none() {
+            let (active_nodes, active_connections) = backpressure_counts_for_trace();
+            self.span = Some(create_debug_span(ConnectionLimitWait {
+                active_nodes,
+                active_connections,
+            }));
+        }
+    }
+
     /// Creates new NextBackpressureWakerGuard and updates current span data if trace is enabled
     fn ready_guard(&self) -> Option<NextBackpressureWakerGuard> {
         let guard = NextBackpressureWakerGuard::try_new(self.high_water_mark)?;
@@ -311,13 +316,15 @@ impl ConnectionBackpressure {
         }
 
         let (active_nodes, active_connections) = backpressure_counts_for_trace();
-        dbt_common::tracing::span_info::update_span_attrs(
-            &self.span,
-            |attrs: &mut ConnectionLimitWait| {
-                attrs.active_nodes = active_nodes;
-                attrs.active_connections = active_connections;
-            },
-        );
+        if let Some(span) = &self.span {
+            dbt_common::tracing::span_info::update_span_attrs(
+                span,
+                |attrs: &mut ConnectionLimitWait| {
+                    attrs.active_nodes = active_nodes;
+                    attrs.active_connections = active_connections;
+                },
+            );
+        }
 
         Some(guard)
     }
@@ -329,8 +336,6 @@ impl Future for ConnectionBackpressure {
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         use Poll::{Pending, Ready};
         let this = self.get_mut();
-        let span = this.span.clone();
-        let _span_guard = span.enter();
 
         let check_readiness_condition =
             |this: &ConnectionBackpressure| this.ready_guard().map_or(Pending, Ready);
@@ -338,6 +343,8 @@ impl Future for ConnectionBackpressure {
         if let Ready(guard) = check_readiness_condition(this) {
             return Ready(guard);
         }
+
+        this.ensure_wait_span();
 
         // Register the waker BEFORE checking the condition again to avoid a race
         // where a node slot is released between the check and the registration
