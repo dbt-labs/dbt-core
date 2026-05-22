@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix bug where schemas of functions weren't guaranteed to exist
-time: 2025-11-24T15:56:29.467004-06:00
-custom:
-  Author: QMalcolm
-  Issue: "12142"
