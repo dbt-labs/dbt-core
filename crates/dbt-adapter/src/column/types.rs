@@ -143,8 +143,8 @@ impl ColumnStatic {
             args,
         );
 
-        let name = iter.next_arg::<&str>()?;
-        let dtype = iter.next_arg::<&str>()?;
+        let name = iter.next_pos_arg_aliased::<&str>(&["column"])?;
+        let dtype = iter.next_pos_arg_aliased::<&str>(&["dtype"])?;
 
         let char_size = iter.next_arg::<Option<u32>>().unwrap_or(None);
         let numeric_precision = iter.next_arg::<Option<u64>>().unwrap_or(None);

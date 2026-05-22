@@ -116,7 +116,44 @@
   {%- endif -%}
 {% endmacro %}
 
+
 {% macro redshift__get_columns_in_relation(relation) -%}
+  {# relation from temp tables does not have a database or schema. #}
+  {# use legacy pattern until SHOW COLUMNS supports temp tables #}
+
+  {#- DIVERGENCE BEGIN: upstream uses redshift__use_show_apis(); Fusion uses adapter.has_feature("datasharing") -#}
+  {% if adapter.has_feature("datasharing") and relation.database and relation.schema %}
+  {#- DIVERGENCE END -#}
+    {{ return(redshift__get_columns_in_relation_show(relation)) }}
+  {% else %}
+    {{ return(redshift__get_columns_in_relation_legacy(relation)) }}
+  {% endif %}
+{% endmacro %}
+
+
+{% macro redshift__get_columns_in_relation_show(relation) -%}
+  {% call statement('get_columns_in_relation', fetch_result=True) %}
+    SHOW COLUMNS FROM TABLE {{ adapter.quote(relation.database) }}.{{ adapter.quote(relation.schema) }}.{{ adapter.quote(relation.identifier) }}
+  {% endcall %}
+  {% set table = load_result('get_columns_in_relation').table %}
+  {% set columns = [] %}
+  {% for row in table %}
+    {# filter out Redshift internal pg.dropped markers that can appear after ALTER TABLE DROP COLUMN #}
+    {% if 'pg.dropped.' not in row['column_name'] %}
+      {% do columns.append(api.Column(
+        column=row['column_name'],
+        dtype=row['data_type'],
+        char_size=row['character_maximum_length'],
+        numeric_precision=row['numeric_precision'],
+        numeric_scale=row['numeric_scale']
+      )) %}
+    {% endif %}
+  {% endfor %}
+  {{ return(columns) }}
+{% endmacro %}
+
+
+{% macro redshift__get_columns_in_relation_legacy(relation) -%}
   {% call statement('get_columns_in_relation', fetch_result=True) %}
       with bound_views as (
         select
