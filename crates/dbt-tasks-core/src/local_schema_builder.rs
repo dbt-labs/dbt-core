@@ -1,3 +1,9 @@
+//! Builds Arrow schemas from YAML column definitions for local sources.
+//!
+//! When a source has `schema_origin: local`, its schema is derived from
+//! the column definitions in the YAML file rather than being fetched from
+//! the warehouse.
+
 use std::{
     collections::{BTreeSet, HashMap},
     path::Path,
