@@ -1227,17 +1227,11 @@ class PartialParsing:
         # These are stored in schema_file.metrics (add_metric is called with generated_from=None).
         # dict_from_yaml still holds the OLD yaml at this point (dfy is updated after cleanup),
         # so we can read the old model entry to find which metric unique_ids to remove.
-        old_model_entry = next(
-            (
-                m
-                for m in schema_file.dict_from_yaml.get("models", [])
-                if m.get("name") == model_name
-            ),
-            None,
-        )
-        if old_model_entry:
+        models = schema_file.dict_from_yaml.get("models", [])
+        old_model = next((m for m in models if m.get("name") == model_name), None)
+        if old_model is not None:
             pkg = schema_file.project_name
-            for old_metric in old_model_entry.get("metrics", []):
+            for old_metric in old_model.get("metrics", []):
                 metric_name = old_metric.get("name")
                 if not metric_name:
                     continue
@@ -1245,6 +1239,8 @@ class PartialParsing:
                 if uid in schema_file.metrics:
                     schema_file.metrics.remove(uid)
                 if uid in self.saved_manifest.metrics:
+                    if uid in self.saved_manifest.child_map:
+                        self.schedule_nodes_for_parsing(self.saved_manifest.child_map[uid])
                     self.saved_manifest.metrics.pop(uid)
                 elif uid in self.saved_manifest.disabled:
                     self.delete_disabled(uid, schema_file.file_id)
