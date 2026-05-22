@@ -123,7 +123,7 @@ jobs:
       - name: "Check Current Version In Code"
         id: determine_version
         run: |
-          current_version=$(grep '^version = ' core/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          current_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' core/dbt/__version__.py)
           echo "current_version=$current_version" >> $GITHUB_OUTPUT
 
       - name: "[Notification] Check Current Version In Code"
