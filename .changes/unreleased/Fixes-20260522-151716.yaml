@@ -1,0 +1,6 @@
+kind: Fixes
+body: corrects FileHash.compare to compare FileHash objects
+time: 2026-05-22T15:17:16.455827+01:00
+custom:
+    Author: andy-cave-nf
+    Issue: "8269"
