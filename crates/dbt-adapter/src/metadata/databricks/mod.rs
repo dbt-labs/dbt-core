@@ -32,6 +32,9 @@ use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::CatalogAndSchema;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::databricks::version::EngineVersion;
+use crate::metadata::freshness_overrides::{
+    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
+};
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch::RecordBatchExt;
@@ -980,15 +983,9 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        // Build the where clause for all relations grouped by databases
-        let (where_clauses_by_database, relations_by_database) =
-            match build_relation_clauses(relations) {
-                Ok(result) => result,
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            };
+        if relations.is_empty() {
+            return Box::pin(async { Ok(BTreeMap::new()) });
+        }
 
         type Acc = BTreeMap<String, MetadataFreshness>;
 
@@ -999,60 +996,90 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          database_and_where_clauses: &(String, Vec<String>)|
-              -> AdapterResult<Arc<RecordBatch>> {
-            let (database, where_clauses) = &database_and_where_clauses;
-            // Query to get last modified times
-            let sql = format!(
-                "SELECT
-                table_schema,
-                table_name,
-                last_altered,
-                (table_type = 'VIEW' OR table_type = 'MATERIALIZED_VIEW') AS is_view
-             FROM {}.INFORMATION_SCHEMA.TABLES
-             WHERE {}",
-                database,
-                where_clauses.join(" OR ")
-            );
 
-            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) =
-                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
-            let batch = agate_table.original_record_batch();
-            Ok(batch)
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          relation: &Arc<dyn BaseRelation>|
+              -> AdapterResult<Option<MetadataFreshness>> {
+            databricks_freshness_for_relation(&adapter, &mut *conn, relation, token_clone.clone())
         };
 
         let reduce_f = move |acc: &mut Acc,
-                             database_and_where_clauses: (String, Vec<String>),
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
+                             relation: Arc<dyn BaseRelation>,
+                             result: AdapterResult<Option<MetadataFreshness>>|
               -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
-            let schemas = batch.column_values::<StringArray>("table_schema")?;
-            let tables = batch.column_values::<StringArray>("table_name")?;
-            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
-            let is_views = batch.column_values::<BooleanArray>("is_view")?;
-
-            let (database, _where_clauses) = &database_and_where_clauses;
-            for i in 0..batch.num_rows() {
-                let schema = schemas.value(i);
-                let table = tables.value(i);
-                let timestamp = timestamps.value(i);
-                let relations = &relations_by_database[database];
-                let is_view = is_views.value(i);
-                for table_name in find_matching_relation(schema, table, relations)? {
-                    acc.insert(
-                        table_name,
-                        MetadataFreshness::from_micros(timestamp, is_view)?,
-                    );
-                }
+            if let Some(freshness) = result? {
+                acc.insert(relation.semantic_fqn(), freshness);
             }
             Ok(())
         };
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        map_reduce.run(Arc::new(keys), token)
+        map_reduce.run(Arc::new(relations.to_vec()), token)
+    }
+
+    fn freshness_with_overrides<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        // Partition: sources with loaded_at_query / loaded_at_field get their own
+        // targeted query; all other relations go through the bulk DESCRIBE HISTORY path.
+        let (bulk_relations, override_targets) = partition_override_relations(relations, overrides);
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            tasks.push(FreshnessTask::Bulk(bulk_relations));
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
+            match task {
+                FreshnessTask::Bulk(bulk) => {
+                    let mut acc: Acc = BTreeMap::new();
+                    for relation in bulk {
+                        if let Some(freshness) = databricks_freshness_for_relation(
+                            &adapter_for_map,
+                            conn,
+                            relation,
+                            token_clone.clone(),
+                        )? {
+                            acc.insert(relation.semantic_fqn(), freshness);
+                        }
+                    }
+                    Ok(FreshnessTaskResult::Bulk(acc))
+                }
+                FreshnessTask::Override(relation, ovr) => {
+                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
+                }
+            }
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            apply_freshness_task_result(acc, res?)?;
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
     }
 
     fn create_schemas_if_not_exists(
@@ -1202,6 +1229,102 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
         map_reduce.run(Arc::new(fqns), token)
     }
+}
+
+/// Resolve the freshness epoch for a single Databricks relation.
+///
+/// Tries `DESCRIBE HISTORY <fqn> LIMIT 1` first: this reads from the Delta
+/// transaction log and reflects all write operations (INSERT, UPDATE, DELETE,
+/// MERGE). On failure — non-Delta tables, views, and older runtimes — falls
+/// back to a per-relation `INFORMATION_SCHEMA.TABLES` query.
+///
+/// Shared by `freshness_inner` (bulk path) and the `Bulk` arm of
+/// `freshness_with_overrides`.
+/// Extract the epoch-millisecond timestamp from the first row of a
+/// `DESCRIBE HISTORY … LIMIT 1` result batch.
+///
+/// Databricks SQL warehouses may return the `timestamp` column in any of the
+/// four Arrow timestamp precisions depending on the runtime and driver version.
+/// Returns `None` when the batch is empty, the column is absent, or the value
+/// is null.
+fn epoch_ms_from_history_batch(batch: &Arc<RecordBatch>) -> Option<i64> {
+    if batch.num_rows() == 0 {
+        return None;
+    }
+    let col = batch.column_by_name("timestamp")?;
+    if col.is_null(0) {
+        return None;
+    }
+    if let Some(ts) = col.as_any().downcast_ref::<TimestampMillisecondArray>() {
+        Some(ts.value(0))
+    } else if let Some(ts) = col.as_any().downcast_ref::<TimestampMicrosecondArray>() {
+        Some(ts.value(0) / 1_000)
+    } else if let Some(ts) = col.as_any().downcast_ref::<TimestampNanosecondArray>() {
+        Some(ts.value(0) / 1_000_000)
+    } else {
+        col.as_any()
+            .downcast_ref::<TimestampSecondArray>()
+            .map(|ts| ts.value(0) * 1_000)
+    }
+}
+
+/// Partition `relations` into bulk (no override) and per-override buckets.
+///
+type OverrideTargets = Vec<(Arc<dyn BaseRelation>, FreshnessOverride)>;
+
+/// Relations whose `semantic_fqn` appears in `overrides` are paired with their
+/// override and collected into the second return value; all others go into the
+/// first (bulk) return value.
+fn partition_override_relations(
+    relations: &[Arc<dyn BaseRelation>],
+    overrides: &BTreeMap<String, FreshnessOverride>,
+) -> (Vec<Arc<dyn BaseRelation>>, OverrideTargets) {
+    let mut bulk = Vec::new();
+    let mut targets = Vec::new();
+    for relation in relations {
+        if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+            targets.push((Arc::clone(relation), ovr.clone()));
+        } else {
+            bulk.push(Arc::clone(relation));
+        }
+    }
+    (bulk, targets)
+}
+
+fn databricks_freshness_for_relation(
+    adapter: &AdapterImpl,
+    conn: &mut dyn Connection,
+    relation: &Arc<dyn BaseRelation>,
+    token: CancellationToken,
+) -> AdapterResult<Option<MetadataFreshness>> {
+    let fqn = relation.render_self_as_str();
+
+    let history_sql = format!("DESCRIBE HISTORY {fqn} LIMIT 1");
+    let ctx = QueryCtx::default().with_desc("Extracting freshness from Delta history");
+    if let Ok((_, agate)) = adapter.query(&ctx, conn, &history_sql, None, token.clone()) {
+        if let Some(ms) = epoch_ms_from_history_batch(&agate.original_record_batch()) {
+            return MetadataFreshness::from_millis(ms, false).map(Some);
+        }
+    }
+
+    // Fallback: INFORMATION_SCHEMA for views and non-Delta objects.
+    let (input_schema, database, input_table) = get_input_schema_database_and_table(relation)?;
+    let sql = format!(
+        "SELECT
+        last_altered,
+        (table_type = 'VIEW' OR table_type = 'MATERIALIZED_VIEW') AS is_view
+     FROM {database}.INFORMATION_SCHEMA.TABLES
+     WHERE table_schema = '{input_schema}' AND table_name = '{input_table}'"
+    );
+    let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+    let (_, agate) = adapter.query(&ctx, conn, &sql, None, token)?;
+    let batch = agate.original_record_batch();
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
+    let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_altered")?;
+    let is_views = batch.column_values::<BooleanArray>("is_view")?;
+    MetadataFreshness::from_micros(timestamps.value(0), is_views.value(0)).map(Some)
 }
 
 /// Extract `View Text` and `View Catalog and Namespace` from the row-based
@@ -1589,5 +1712,190 @@ mod tests {
         let (view_text, catalog_and_ns) = parse_describe_extended_view_info(&batch).unwrap();
         assert!(view_text.is_none());
         assert!(catalog_and_ns.is_none());
+    }
+
+    // ── epoch_ms_from_history_batch ──────────────────────────────────────────
+
+    fn make_history_batch_ms(epoch_ms: i64) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+            true,
+        )]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampMillisecondArray::from(vec![epoch_ms]))],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn make_history_batch_us(epoch_us: i64) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+            true,
+        )]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampMicrosecondArray::from(vec![epoch_us]))],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn make_history_batch_ns(epoch_ns: i64) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Nanosecond, None),
+            true,
+        )]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampNanosecondArray::from(vec![epoch_ns]))],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn make_history_batch_s(epoch_s: i64) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Second, None),
+            true,
+        )]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampSecondArray::from(vec![epoch_s]))],
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_millisecond_precision() {
+        let batch = make_history_batch_ms(1_700_000_000_123);
+        assert_eq!(epoch_ms_from_history_batch(&batch), Some(1_700_000_000_123));
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_microsecond_precision() {
+        let batch = make_history_batch_us(1_700_000_000_123_456);
+        assert_eq!(epoch_ms_from_history_batch(&batch), Some(1_700_000_000_123));
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_nanosecond_precision() {
+        let batch = make_history_batch_ns(1_700_000_000_123_000_000);
+        assert_eq!(epoch_ms_from_history_batch(&batch), Some(1_700_000_000_123));
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_second_precision() {
+        let batch = make_history_batch_s(1_700_000_000);
+        assert_eq!(epoch_ms_from_history_batch(&batch), Some(1_700_000_000_000));
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_empty_returns_none() {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+            true,
+        )]));
+        let batch = Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampMillisecondArray::from(Vec::<i64>::new()))],
+            )
+            .unwrap(),
+        );
+        assert!(epoch_ms_from_history_batch(&batch).is_none());
+    }
+
+    #[test]
+    fn epoch_ms_from_history_batch_null_value_returns_none() {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "timestamp",
+            DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+            true,
+        )]));
+        let batch = Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![Arc::new(TimestampMillisecondArray::from(vec![None::<i64>]))],
+            )
+            .unwrap(),
+        );
+        assert!(epoch_ms_from_history_batch(&batch).is_none());
+    }
+
+    // ── partition_override_relations ─────────────────────────────────────────
+
+    fn make_relation(fqn: &str) -> Arc<dyn BaseRelation> {
+        // Build a relation whose semantic_fqn() matches `fqn` by using the three
+        // parts as database / schema / identifier with no quoting.
+        let parts: Vec<&str> = fqn.splitn(3, '.').collect();
+        let (db, schema, id) = match parts.as_slice() {
+            [db, sc, id] => (*db, *sc, *id),
+            _ => panic!("fqn must be db.schema.identifier, got: {fqn}"),
+        };
+        create_test_relation(db, schema, id, false, false, false)
+    }
+
+    #[test]
+    fn partition_routes_all_to_bulk_when_no_overrides() {
+        let relations: Vec<Arc<dyn BaseRelation>> =
+            vec![make_relation("db.sc.a"), make_relation("db.sc.b")];
+        let overrides = BTreeMap::new();
+        let (bulk, targets) = partition_override_relations(&relations, &overrides);
+        assert_eq!(bulk.len(), 2);
+        assert!(targets.is_empty());
+    }
+
+    #[test]
+    fn partition_routes_override_relation_to_override_bucket() {
+        let r = make_relation("db.sc.src");
+        let fqn = r.semantic_fqn();
+        let relations = vec![r];
+        let mut overrides = BTreeMap::new();
+        overrides.insert(fqn.clone(), FreshnessOverride::Field("updated_at".into()));
+        let (bulk, targets) = partition_override_relations(&relations, &overrides);
+        assert!(bulk.is_empty());
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].0.semantic_fqn(), fqn);
+        assert!(matches!(&targets[0].1, FreshnessOverride::Field(f) if f == "updated_at"));
+    }
+
+    #[test]
+    fn partition_mixed_relations_correctly_sorted() {
+        let r_bulk1 = make_relation("db.sc.bulk1");
+        let r_ovr = make_relation("db.sc.ovr");
+        let r_bulk2 = make_relation("db.sc.bulk2");
+        let fqn_ovr = r_ovr.semantic_fqn();
+
+        let relations = vec![
+            Arc::clone(&r_bulk1),
+            Arc::clone(&r_ovr),
+            Arc::clone(&r_bulk2),
+        ];
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            fqn_ovr.clone(),
+            FreshnessOverride::Query("SELECT max(ts) FROM {{ this }}".into()),
+        );
+
+        let (bulk, targets) = partition_override_relations(&relations, &overrides);
+
+        assert_eq!(bulk.len(), 2);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].0.semantic_fqn(), fqn_ovr);
+        // bulk order is preserved
+        assert_eq!(bulk[0].semantic_fqn(), r_bulk1.semantic_fqn());
+        assert_eq!(bulk[1].semantic_fqn(), r_bulk2.semantic_fqn());
     }
 }

@@ -19,6 +19,24 @@
       {# Constraints are not applied for incremental updates. This point in the code should not have been reached #}
       {{ exceptions.raise_compiler_error("Constraints are not applied for incremental updates. Full refresh is required to update constraints.") }}
     {% else %}
+      {#- DIVERGENCE BEGIN: drop any PK inherited from a SHALLOW CLONE before applying
+          model constraints. SHALLOW CLONE preserves and renames the source's primary key,
+          so a subsequent ALTER TABLE ADD CONSTRAINT fails with "table already has a PRIMARY
+          KEY constraint". Upstream dbt-databricks is not affected because it does not use
+          SHALLOW CLONE. Only applicable to Unity Catalog (not Hive Metastore). -#}
+      {% if not relation.is_hive_metastore() %}
+        {% set existing_pks = fetch_primary_key_constraints(relation) %}
+        {% if existing_pks.rows | length > 0 %}
+          {% for row in existing_pks %}
+            {% if loop.first %}
+              {% call statement('drop_inherited_pk') %}
+                ALTER TABLE {{ relation.render() }} DROP CONSTRAINT {{ row['constraint_name'] }} CASCADE;
+              {% endcall %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endif %}
+      {#- DIVERGENCE END -#}
       {% do alter_column_set_constraints(relation, model) %}
       {% do alter_table_add_constraints(relation, model) %}
     {% endif %}
@@ -39,6 +57,16 @@
 
 {% macro databricks__alter_table_add_constraints(relation, model) %}
     {% set constraints = get_model_constraints(model) %}
+    {#- DIVERGENCE BEGIN: skip model-level PK constraints that already exist, for the
+        same SHALLOW CLONE reason as in databricks__persist_constraints above. -#}
+    {% set wants_pk = constraints | selectattr('type', 'eq', 'primary_key') | list | length > 0 %}
+    {% if wants_pk and not relation.is_hive_metastore() %}
+      {% set existing_pks = fetch_primary_key_constraints(relation) %}
+      {% if existing_pks.rows | length > 0 %}
+        {% set constraints = constraints | rejectattr('type', 'eq', 'primary_key') | list %}
+      {% endif %}
+    {% endif %}
+    {#- DIVERGENCE END -#}
     {% set statements = get_constraints_sql(relation, constraints, model) %}
     {% for stmt in statements %}
       {% call statement() %}
