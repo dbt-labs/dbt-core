@@ -245,6 +245,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             group: None,
             incremental_strategy: None,
             freshness: None,
+            state: None,
             contract: None,
             event_time: None,
             catalog_name: None,

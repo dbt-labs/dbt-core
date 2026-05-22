@@ -1277,6 +1277,7 @@ mod tests {
                 contract: None,
                 incremental_strategy: None,
                 freshness: None,
+                state: None,
                 version: None,
                 latest_version: None,
                 deprecation_date: None,

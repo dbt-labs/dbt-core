@@ -19,7 +19,7 @@ use crate::schemas::common::{HookConfig, Hooks, OnSchemaChange};
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::model_config::LatestVersionPointer;
-use crate::schemas::properties::ModelFreshness;
+use crate::schemas::properties::{ModelFreshness, ModelState};
 
 use crate::schemas::serde::bool_or_string_bool;
 
@@ -888,6 +888,7 @@ pub struct ManifestModelConfig {
     pub table_format: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
+    pub state: Option<ModelState>,
     pub latest_version_pointer: Option<LatestVersionPointer>,
     pub sql_header: Option<String>,
     pub location: Option<String>,
@@ -1090,6 +1091,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             table_format: config.table_format,
             static_analysis: config.static_analysis,
             freshness: config.freshness,
+            state: config.state,
             latest_version_pointer: config.latest_version_pointer,
             sql_header: config.sql_header,
             location: config.location,
@@ -1162,6 +1164,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             table_format: config.table_format,
             static_analysis: config.static_analysis,
             freshness: config.freshness,
+            state: config.state,
             latest_version_pointer: config.latest_version_pointer,
             sql_header: config.sql_header,
             location: config.location,

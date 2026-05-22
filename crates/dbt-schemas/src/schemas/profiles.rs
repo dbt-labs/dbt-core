@@ -656,6 +656,8 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warehouse: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_warehouse: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
@@ -1483,6 +1485,7 @@ pub struct SnowflakeTargetEnv {
     pub account: String,
     pub user: Option<String>,
     pub warehouse: Option<String>,
+    pub metadata_warehouse: Option<String>,
     pub role: Option<String>,
     pub authenticator: Option<String>,
     pub oauth_client_id: Option<String>,
@@ -1760,6 +1763,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     account: config.account.ok_or_else(|| missing("account"))?,
                     user: config.user,
                     warehouse: config.warehouse,
+                    metadata_warehouse: config.metadata_warehouse,
                     role: config.role.clone(),
                     authenticator: config.authenticator,
                     oauth_client_id: config.oauth_client_id,
@@ -2170,6 +2174,34 @@ mod tests {
             panic!("expected snowflake target context");
         };
         assert_eq!(target.user.as_deref(), Some("user"));
+    }
+
+    #[test]
+    fn test_snowflake_metadata_warehouse_parses_and_reaches_target_context() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: snowflake\n\
+             account: acct\n\
+             database: db\n\
+             schema: schema\n\
+             warehouse: build_wh\n\
+             metadata_warehouse: metadata_wh",
+        )
+        .unwrap();
+
+        let DbConfig::Snowflake(snowflake_config) = config.clone() else {
+            panic!("expected snowflake config");
+        };
+        assert_eq!(
+            snowflake_config.metadata_warehouse.as_deref(),
+            Some("metadata_wh")
+        );
+
+        let target = TargetContext::try_from(config).expect("snowflake target context");
+        let TargetContext::Snowflake(target) = target else {
+            panic!("expected snowflake target context");
+        };
+        assert_eq!(target.warehouse.as_deref(), Some("build_wh"));
+        assert_eq!(target.metadata_warehouse.as_deref(), Some("metadata_wh"));
     }
 
     #[test]

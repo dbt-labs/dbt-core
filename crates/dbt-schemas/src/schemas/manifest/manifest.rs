@@ -1393,6 +1393,7 @@ pub fn manifest_model_to_dbt_model(
             contract: model.config.contract.clone(),
             incremental_strategy: model.config.incremental_strategy.clone(),
             freshness: model.config.freshness.clone(),
+            state: model.config.state.clone(),
             introspection: IntrospectionKind::None,
             version: model.version,
             latest_version: model.latest_version,

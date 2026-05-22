@@ -2,6 +2,7 @@ use crate::default_to;
 use crate::schemas::common::ConstraintType;
 use crate::schemas::common::DimensionValidityParams;
 use crate::schemas::common::ModelFreshnessRules;
+use crate::schemas::common::UpdatesOn;
 use crate::schemas::common::Versions;
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::dbt_column::ColumnProperties;
@@ -167,6 +168,48 @@ pub struct ModelFreshness {
     pub build_after: Option<ModelFreshnessRules>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StatePreClone {
+    Never,
+    IfMissing,
+    Always,
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+pub struct ModelState {
+    pub lag_tolerance: Option<ModelFreshnessRules>,
+    pub require_fresh_data_from: Option<UpdatesOn>,
+    pub evaluate_volatile_sql: Option<bool>,
+    pub pre_clone: Option<StatePreClone>,
+    pub execute_hooks_on_reuse: Option<bool>,
+}
+
+impl PartialEq for ModelState {
+    fn eq(&self, other: &Self) -> bool {
+        self.lag_tolerance == other.lag_tolerance
+            && updates_on_eq(
+                &self.require_fresh_data_from,
+                &other.require_fresh_data_from,
+            )
+            && self.evaluate_volatile_sql == other.evaluate_volatile_sql
+            && self.pre_clone == other.pre_clone
+            && self.execute_hooks_on_reuse == other.execute_hooks_on_reuse
+    }
+}
+
+impl Eq for ModelState {}
+
+fn updates_on_eq(a: &Option<UpdatesOn>, b: &Option<UpdatesOn>) -> bool {
+    match (a.as_ref(), b.as_ref()) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(b_val)) => b_val == &UpdatesOn::default(),
+        (Some(a_val), None) => a_val == &UpdatesOn::default(),
+    }
+}
+
 // derived_semantics properties nested in models
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct DerivedSemantics {
@@ -212,6 +255,46 @@ pub struct DerivedEntity {
 mod tests {
     use super::*;
     use dbt_yaml;
+
+    #[test]
+    fn model_state_eq_defaults_require_fresh_data_from_to_any() {
+        let base = ModelState {
+            require_fresh_data_from: None,
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        };
+        let other = ModelState {
+            require_fresh_data_from: Some(UpdatesOn::Any),
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        };
+
+        assert_eq!(base, other);
+    }
+
+    #[test]
+    fn model_state_eq_keeps_require_fresh_data_from_all_distinct() {
+        let base = ModelState {
+            require_fresh_data_from: None,
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        };
+        let other = ModelState {
+            require_fresh_data_from: Some(UpdatesOn::All),
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_reuse: None,
+        };
+
+        assert_ne!(base, other);
+    }
 
     #[test]
     fn test_model_constraint_columns_as_string() {

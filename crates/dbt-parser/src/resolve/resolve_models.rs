@@ -716,6 +716,16 @@ pub async fn resolve_models(
                 )
             })?;
         }
+        if let Some(state) = &model_config.state {
+            ModelFreshnessRules::validate(state.lag_tolerance.as_ref()).map_err(|e| {
+                fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => dbt_asset.path.clone(),
+                    "{}",
+                    e
+                )
+            })?;
+        }
 
         // Keep track of duplicates (often happens with versioned models)
         if (models.contains_key(&unique_id) || models_with_execute.contains_key(&unique_id))
@@ -1048,6 +1058,7 @@ pub async fn resolve_models(
                 contract: model_config.contract.clone(),
                 incremental_strategy: model_config.incremental_strategy.clone(),
                 freshness: model_config.freshness.clone(),
+                state: model_config.state.clone(),
                 event_time: model_config.event_time.clone(),
                 catalog_name: model_config.catalog_name.clone(),
                 table_format: model_config.table_format.clone(),

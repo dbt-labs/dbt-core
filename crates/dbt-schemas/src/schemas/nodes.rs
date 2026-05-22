@@ -5571,6 +5571,7 @@ pub struct DbtModelAttr {
     pub contract: Option<DbtContract>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     pub freshness: Option<ModelFreshness>,
+    pub state: Option<crate::schemas::properties::ModelState>,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
     pub constraints: Vec<ModelConstraint>,

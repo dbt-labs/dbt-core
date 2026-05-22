@@ -241,6 +241,10 @@ pub struct FreshnessDefinition {
     pub warn_after: Option<FreshnessRules>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loaded_at_field: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loaded_at_query: Option<String>,
 }
 
 /// Custom serializer to ensure FreshnessRules are always objects, never null

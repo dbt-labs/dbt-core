@@ -191,6 +191,7 @@ pub fn resolve_sources(
                 })?;
                 c.loaded_at_field = Some(merged.field);
                 c.loaded_at_query = Some(merged.query).into();
+                apply_freshness_loaded_at_override(c, &source_name, &table_name)?;
                 Ok(())
             },
         )?;
@@ -516,6 +517,8 @@ fn merge_freshness_unwrapped(
             // Mantle uses field-level merging: each field uses the update value if set,
             // otherwise inherits from base.
             // https://github.com/dbt-labs/dbt-mantle/blob/6bcac392d653a5c8a35da01bc94d93a45b882629/core/dbt/parser/sources.py#L545-L555
+            let update_has_loaded_at_field = update.loaded_at_field.is_some();
+            let update_has_loaded_at_query = update.loaded_at_query.is_some();
             Some(FreshnessDefinition {
                 error_after: update
                     .error_after
@@ -529,11 +532,59 @@ fn merge_freshness_unwrapped(
                     .filter
                     .clone()
                     .or_else(|| base.and_then(|b| b.filter.clone())),
+                loaded_at_field: if update_has_loaded_at_query {
+                    update.loaded_at_field.clone()
+                } else {
+                    update
+                        .loaded_at_field
+                        .clone()
+                        .or_else(|| base.and_then(|b| b.loaded_at_field.clone()))
+                },
+                loaded_at_query: if update_has_loaded_at_field {
+                    update.loaded_at_query.clone()
+                } else {
+                    update
+                        .loaded_at_query
+                        .clone()
+                        .or_else(|| base.and_then(|b| b.loaded_at_query.clone()))
+                },
             })
         }
         (Some(base), None) => Some(base.clone()),
         (None, None) => Some(FreshnessDefinition::default()), // Provide default value if user never defined freshness https://dbtlabs.atlassian.net/browse/META-5461
     }
+}
+
+fn apply_freshness_loaded_at_override(
+    config: &mut SourceConfig,
+    source_name: &str,
+    table_name: &str,
+) -> FsResult<()> {
+    if let Omissible::Present(Some(freshness)) = &config.freshness {
+        match (
+            freshness.loaded_at_field.clone(),
+            freshness.loaded_at_query.clone(),
+        ) {
+            (Some(_), Some(_)) => {
+                return Err(dbt_common::fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "loaded_at_field and loaded_at_query cannot be set at the same time on source `{}.{}`",
+                    source_name,
+                    table_name
+                ));
+            }
+            (Some(field), None) => {
+                config.loaded_at_field = Some(field);
+                config.loaded_at_query = Some(String::new()).into();
+            }
+            (None, Some(query)) => {
+                config.loaded_at_field = Some(String::new());
+                config.loaded_at_query = Some(query).into();
+            }
+            (None, None) => {}
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -591,6 +642,7 @@ mod tests {
                 period: Some(FreshnessPeriod::hour),
             }),
             filter: Some("base_filter".to_string()),
+            ..Default::default()
         };
         let update = FreshnessDefinition {
             error_after: Some(FreshnessRules {
@@ -599,6 +651,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         };
 
         let result = merge_freshness_unwrapped(Some(&base), Some(&update)).unwrap();
@@ -622,6 +675,7 @@ mod tests {
                 period: Some(FreshnessPeriod::hour),
             }),
             filter: None,
+            ..Default::default()
         };
 
         let result = merge_freshness_unwrapped(Some(&base), None);
@@ -638,6 +692,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         };
 
         let result = merge_freshness_unwrapped(None, Some(&update));
@@ -661,6 +716,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         }));
 
         let update = Omissible::Present(None);
@@ -678,6 +734,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         }));
 
         let update_value = FreshnessDefinition {
@@ -690,6 +747,7 @@ mod tests {
                 period: Some(FreshnessPeriod::day),
             }),
             filter: None,
+            ..Default::default()
         };
 
         let update = Omissible::Present(Some(update_value.clone()));
@@ -707,6 +765,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         };
         let base = Omissible::Present(Some(base_value.clone()));
 
@@ -746,6 +805,7 @@ mod tests {
                 period: Some(FreshnessPeriod::hour),
             }),
             filter: Some("base_filter".to_string()),
+            ..Default::default()
         }));
 
         // Update only has error_after; warn_after and filter should be inherited from base.
@@ -756,6 +816,7 @@ mod tests {
             }),
             warn_after: None,
             filter: None,
+            ..Default::default()
         };
 
         let update = Omissible::Present(Some(update_value));
@@ -767,6 +828,125 @@ mod tests {
         // warn_after and filter are inherited from base
         assert_eq!(merged.warn_after.as_ref().unwrap().count, Some(3));
         assert_eq!(merged.filter.as_deref(), Some("base_filter"));
+    }
+
+    #[test]
+    fn test_merge_freshness_inherits_nested_loaded_at_metadata() {
+        let base = FreshnessDefinition {
+            loaded_at_field: Some("SRC_LOADED_AT".to_string()),
+            ..Default::default()
+        };
+        let update = FreshnessDefinition {
+            warn_after: Some(FreshnessRules {
+                count: Some(3),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        };
+
+        let result = merge_freshness_unwrapped(Some(&base), Some(&update)).unwrap();
+        assert_eq!(result.loaded_at_field.as_deref(), Some("SRC_LOADED_AT"));
+        assert_eq!(result.loaded_at_query, None);
+        assert_eq!(result.warn_after.as_ref().unwrap().count, Some(3));
+    }
+
+    #[test]
+    fn test_merge_freshness_loaded_at_query_clears_inherited_field() {
+        let base = FreshnessDefinition {
+            loaded_at_field: Some("SRC_LOADED_AT".to_string()),
+            ..Default::default()
+        };
+        let update = FreshnessDefinition {
+            loaded_at_query: Some("select max(loaded_at) from source_table".to_string()),
+            ..Default::default()
+        };
+
+        let result = merge_freshness_unwrapped(Some(&base), Some(&update)).unwrap();
+        assert_eq!(result.loaded_at_field, None);
+        assert_eq!(
+            result.loaded_at_query.as_deref(),
+            Some("select max(loaded_at) from source_table")
+        );
+    }
+
+    #[test]
+    fn test_merge_freshness_loaded_at_field_clears_inherited_query() {
+        let base = FreshnessDefinition {
+            loaded_at_query: Some("select max(loaded_at) from source_table".to_string()),
+            ..Default::default()
+        };
+        let update = FreshnessDefinition {
+            loaded_at_field: Some("TABLE_LOADED_AT".to_string()),
+            ..Default::default()
+        };
+
+        let result = merge_freshness_unwrapped(Some(&base), Some(&update)).unwrap();
+        assert_eq!(result.loaded_at_field.as_deref(), Some("TABLE_LOADED_AT"));
+        assert_eq!(result.loaded_at_query, None);
+    }
+
+    #[test]
+    fn test_freshness_loaded_at_field_overrides_top_level_query() {
+        let mut config = SourceConfig {
+            loaded_at_field: Some(String::new()),
+            loaded_at_query: Some("select max(src_loaded_at) from source_table".to_string()).into(),
+            freshness: Omissible::Present(Some(FreshnessDefinition {
+                loaded_at_field: Some("FRESHNESS_LOADED_AT".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        apply_freshness_loaded_at_override(&mut config, "src", "table").unwrap();
+
+        assert_eq!(
+            config.loaded_at_field.as_deref(),
+            Some("FRESHNESS_LOADED_AT")
+        );
+        assert_eq!(config.loaded_at_query.0.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn test_freshness_loaded_at_query_overrides_top_level_field() {
+        let mut config = SourceConfig {
+            loaded_at_field: Some("SRC_LOADED_AT".to_string()),
+            loaded_at_query: Some(String::new()).into(),
+            freshness: Omissible::Present(Some(FreshnessDefinition {
+                loaded_at_query: Some(
+                    "select max(freshness_loaded_at) from source_table".to_string(),
+                ),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        apply_freshness_loaded_at_override(&mut config, "src", "table").unwrap();
+
+        assert_eq!(config.loaded_at_field.as_deref(), Some(""));
+        assert_eq!(
+            config.loaded_at_query.0.as_deref(),
+            Some("select max(freshness_loaded_at) from source_table")
+        );
+    }
+
+    #[test]
+    fn test_freshness_loaded_at_field_and_query_conflict_errors() {
+        let mut config = SourceConfig {
+            freshness: Omissible::Present(Some(FreshnessDefinition {
+                loaded_at_field: Some("LOADED_AT".to_string()),
+                loaded_at_query: Some("select max(loaded_at) from source_table".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let err = apply_freshness_loaded_at_override(&mut config, "src", "table")
+            .expect_err("nested freshness peers should be mutually exclusive");
+        assert!(
+            err.to_string()
+                .contains("loaded_at_field and loaded_at_query cannot be set at the same time"),
+            "error must name the conflict; got: {err}"
+        );
     }
 
     // ── merge_loaded_at_pair ──────────────────────────────────────────────

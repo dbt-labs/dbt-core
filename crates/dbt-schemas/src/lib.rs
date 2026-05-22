@@ -197,6 +197,8 @@ pub mod schemas {
         pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;
         pub use model_properties::ModelProperties;
+        pub use model_properties::ModelState;
+        pub use model_properties::StatePreClone;
         pub use properties::GroupConfig;
         pub use properties::GroupProperties;
         pub use properties::MacrosProperties;
