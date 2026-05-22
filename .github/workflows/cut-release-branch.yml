@@ -206,7 +206,7 @@ jobs:
           cd core
           hatch version ${{ needs.cleanup_changelog.outputs.next-version }}
           hatch run dev-req
-          dbt --version
+          hatch run dbt --version
 
       - name: "Commit Version Bump to Branch"
         run: |
@@ -283,17 +283,19 @@ jobs:
       - name: "Determine PR Title"
         id: pr_title
         run: |
-          echo "pr_title=${{ env.PR_TITLE }}" >> $GITHUB_OUTPUT
-          if [${{ env.PR_TITLE }} == ""]; then
-            echo "pr_title='Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}'" >> $GITHUB_OUTPUT
+          if [[ -z "$PR_TITLE" ]]; then
+            echo "pr_title=Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
           fi
 
       - name: "Determine PR Body"
         id: pr_body
         run: |
-          echo "pr_body=${{ env.PR_BODY }}" >> $GITHUB_OUTPUT
-          if [${{ env.PR_BODY }} == ""]; then
-            echo "pr_body='Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}'" >> $GITHUB_OUTPUT
+          if [[ -z "$PR_BODY" ]]; then
+            echo "pr_body=Clean up changelogs and bump to version ${{ needs.cleanup_changelog.outputs.next-version }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_body=$PR_BODY" >> $GITHUB_OUTPUT
           fi
 
       - name: "Add Branch Details"
