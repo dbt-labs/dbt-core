@@ -61,6 +61,8 @@
   - [`GET /api/v1/saved_queries/facets`](#get-apiv1saved_queriesfacets)
   - [`GET /api/v1/semantic_models`](#get-apiv1semantic_models)
   - [`GET /api/v1/semantic_models/facets`](#get-apiv1semantic_modelsfacets)
+  - [ADR-8: Unified `GET /api/v1/search` endpoint as the documented exception to ADR-1](#adr-8-unified-get-apiv1search-endpoint-as-the-documented-exception-to-adr-1)
+  - [`GET /api/v1/search`](#get-apiv1search)
 
 ---
 
@@ -753,6 +755,82 @@ These apply to every LIST handler; resource-specific contracts may add more.
 2. **Tampered cursors must fail closed.** The cursor payload is opaque but not signed. A malformed or out-of-domain cursor (decode error, type mismatch, sort_val type drift) must return 400; never silently re-interpret as a fresh first-page request — that masks client bugs.
 3. **`(sort_val, unique_id)` must be a deterministic order.** If the sort allowlist for a resource permits a non-deterministic column (e.g., a freely-typed string that may have ties on duplicate values), the `unique_id` tie-breaker preserves total order. Resources whose primary sort column is itself unique (e.g., `unique_id` directly) can elide the tie-breaker SQL but must still emit it in the cursor.
 4. **Null sort values require ordered NULL semantics.** Use `NULLS LAST` for ASC and `NULLS LAST` for DESC by convention; encode the cursor with an explicit null marker so the cursor predicate puts post-null rows correctly. Implementation lives in `src/handlers/pagination.rs`.
+
+---
+
+## ADR-8: Unified `GET /api/v1/search` endpoint as the documented exception to ADR-1
+
+**Status:** Decided — one cross-resource search endpoint; per-type search variants rejected.
+**Trigger to revisit:** A second cross-resource surface (e.g., global "ask anything" lookup, AI agent ingest) needs a different shape, OR per-type relevance tuning becomes a product requirement that cannot be expressed against a uniform pipeline.
+
+### Context
+
+ADR-1 mandated type-specific endpoints (`/api/v1/models/:id`, `/api/v1/sources/:id`, etc.) for the detail surface, rejecting a generic dispatcher. That decision was anchored on the detail-page use case, where the FE always knows the resource type from routing and per-type TypeScript narrowing imposes a non-trivial UX tax at every call site.
+
+Project search has the opposite shape:
+
+- The user types one query into one search box (`/proj/search/?search=<term>`).
+- The UI renders **one mixed-type result list** — `SearchResultsList.tsx` iterates a single `SearchResultDisplayData[]`, with the hit's `resource_type` driving only a per-row `ResourceChip` and the optional "View lineage" link.
+- `SearchResultsContents.tsx` calls **one** GraphQL hook (`useSearchResults` / `GetAppliedSearchResults`) that returns interleaved `models | sources | tests | seeds | snapshots | exposures | metrics | semantic_models | saved_queries | macros` edges in a single `SearchResult` envelope (`appliedSearch.ts`).
+- Pagination, the result-count badge, and the filter pills are all global, not per-type.
+
+Applying ADR-1 literally would require N per-type search endpoints (`/api/v1/models/search`, `/api/v1/sources/search`, …). The SPA would fan out N requests, reassemble the interleaved list client-side, and re-implement total-count and pagination across N independent cursors. That is the wrong primitive for this UI — the cross-resource result stream is the product.
+
+### Options considered
+
+**Per-type search endpoints: `/api/v1/models/search`, `/api/v1/sources/search`, etc.**
+
+Each existing detail-endpoint family gets a sibling `/search` route returning that type's hits.
+
+- Pro: strict consistency with ADR-1.
+- Pro: each endpoint's response type is a clean, non-union shape.
+- **Con:** the SPA must fan out N requests per keystroke and merge results — direct violation of the "one search box → one result list" UX.
+- **Con:** total-count, cursor pagination, and ranking become client-reassembly problems with no single source of truth.
+- **Con:** filter overlap with the existing `ResourceFilterPanel` (which already targets a global mixed list) is awkward.
+
+→ **Rejected.** The cost is paid at every keystroke; the benefit (ADR-1 purity) accrues only to docs-server maintainers.
+
+**Per-type search endpoints + client-side fan-out helper**
+
+Same as above, with a shared client utility that fans out and merges.
+
+- Pro: keeps server endpoints per-type and uniform.
+- Con: pushes the cross-resource pagination/ranking design into the client, which is exactly the design we need to settle once on the server. The "helper" becomes a load-bearing piece of FE code with no test ownership at the server boundary.
+
+→ **Rejected.** Pushes the hard problem (mixed-type ordering and cursor consistency) out of the typed contract layer.
+
+**Unified endpoint: `GET /api/v1/search`**
+
+One endpoint, one envelope, polymorphic `hit` shape discriminated on `resource_type`.
+
+- Pro: matches the UI's "one box → one list" mental model and Discovery API's `AppliedSearch` shape.
+- Pro: total-count, cursor pagination (CC-4), and ranking are decided once on the server.
+- Pro: the filter taxonomy (`?type=`, `?package=`) is a single contract, not N parallel ones.
+- Con: the response carries a polymorphic `hit` type — but the existing `SearchResultHit` TypeScript shape in `SearchResultsList.tsx` is already polymorphic-by-`resourceType`, so this matches the UI's narrowing pattern rather than adding new tax.
+- Con: cursor pagination across a UNION of parquet tables requires a stable total ordering decision (see Q-E9 in the endpoint section).
+
+→ **Chosen for v0.** Cross-resource is the product; encoding it as a single typed contract is honest. ADR-1 stands for every other endpoint family.
+
+### Decision
+
+`GET /api/v1/search` is the single REST surface for free-text project search. It is the **only documented exception** to ADR-1's type-specific-endpoint rule, and only because the UI consumes a cross-resource result stream as a first-class primitive. No other endpoint added under this exception without a new ADR.
+
+The endpoint:
+
+- Returns a `data[]` array of `{ matched_field, highlight, hit }` envelopes (CC-2: highlight metadata is a sibling of `hit`, not flattened into it).
+- Paginates per CC-4 (`?first=&after=`, `page_info.end_cursor`, `page_info.has_next_page`).
+- Discriminates `hit` on `resource_type`, with a shared base shape and additive type-specific fields (mirrors ADR-3's union pattern for tests).
+- Inherits all cross-cutting conventions (CC-1 snake_case, CC-3 capability gating, CC-5 field classification).
+
+The endpoint contract is at [`GET /api/v1/search`](#get-apiv1search) below.
+
+### Trigger conditions for revisiting
+
+- A second cross-resource surface (e.g., AI agent ingest, global account-wide lookup) needs a materially different envelope shape — at that point the "unified" abstraction has more than one consumer and the precedent should be re-examined.
+- Per-type relevance tuning (`/models/search` ranks `name` higher than `/sources/search` does) becomes a product requirement that cannot be expressed against a uniform ranking pipeline.
+- Body-search expansion (Q-E3 option b) becomes load-bearing and the resulting query cost asymmetry between types makes per-type endpoints cheaper to reason about.
+
+None of these triggers apply to v0. Default for the foreseeable future: this single endpoint, in this shape.
 
 ---
 
@@ -6162,4 +6240,647 @@ interface SemanticModelFacetsResponse {
 2. **Future facet additions are additive.** When a filter ships, append a new key (`<filter>s: FacetValue[]`) and a matching `?<filter>=<csv>` query param on the LIST endpoint. The empty-object today does not lock in any naming; the LIST `?<filter>` query name and the FACETS key name should match (CC-1: `snake_case` plural).
 
 3. **No SQL today; handler is a constant.** The handler returns a static `{}` and does not touch the parquet backend. When facets are added, follow the `list_model_facets` pattern: one SQL query per facet, run inside `spawn_blocking`.
+
+
+---
+
+## `GET /api/v1/search`
+
+Powers: project search page (`/proj/search/?search=<term>`).
+
+dbt-ui page: `packages/metadata/dbt-explorer/src/pages/account/project/search/SearchPage.tsx`
+
+dbt-ui result components: `packages/metadata/dbt-explorer/src/pages/account/project/search/components/SearchResultsContents.tsx`, `SearchResultsList.tsx`, `SearchResultItem.tsx`
+
+GraphQL hook (authoritative shape reference): `packages/metadata/dbt-explorer/src/hooks/discovery/appliedSearch.ts` (`GetAppliedSearchResults`)
+
+Current handler: **none.** This is a greenfield endpoint. Reference `src/handlers/models.rs` for the list/sort/cursor pattern and `src/handlers/nodes.rs` for cross-resource aggregation over `dbt.nodes`. The implementation combines both shapes, plus per-type fan-out to `dbt.exposures`, `dbt.macros`, `dbt.metrics`, `dbt.saved_queries`, `dbt.semantic_models`, `dbt.groups`, `dbt.unit_tests`. Implementation is a separate task.
+
+ADR-8 above documents why this is one endpoint rather than N per-type search endpoints. Read ADR-8 before changing the envelope shape.
+
+### Query parameters
+
+| Parameter | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `q` | `string` | no | — | Search query. Max length 1024 (mirrors `MAXIMUM_QUERY_LENGTH` in dbt-ui `util/input.ts`). Tokenized whitespace-split, multi-token AND, case-insensitive (ILIKE). `%` and `_` are escaped server-side before ILIKE — see Risk #3. **Browse mode:** when `q` is absent or empty, no text predicate is applied — all rows matching the other filters (`?type=`, `?package=`, `?tag=`, `?modeling_layer=`) are returned with `matched_field: null` and `highlight: null` per hit. This mirrors catalog/Discovery search behavior (typing into the box progressively narrows; an empty box browses everything) and makes filter-only requests like `?type=model&modeling_layer=Marts` first-class. No min-length floor — any non-empty `q` (even 1 char) applies the predicate. |
+| `type` | `string` | no | — | Comma-separated `resource_type` filter. Mirrors `/api/v1/nodes?type=`. Allowed values: `model`, `source`, `seed`, `snapshot`, `test`, `unit_test`, `exposure`, `metric`, `semantic_model`, `saved_query`, `macro`, `group`. Multiple values are OR'd: `?type=model,source`. Invalid values → 400. |
+| `package` | `string` | no | — | Comma-separated `package_name` filter. Mirrors `/api/v1/nodes?package=`. Multiple values are OR'd: `?package=jaffle_shop,jaffle_marketing`. |
+| `tag` | `string` | no | — | Comma-separated tag filter; a result matches if its `tags[]` contains any of the listed values (case-insensitive equality, not substring). Multiple values are OR'd. Resource types whose parquet table has no `tags` column (`macro`, `group`, `unit_test`) are silently excluded from the result set when `?tag=` is set. |
+| `modeling_layer` | `string` | no | — | Comma-separated modeling-layer filter. Mirrors `/api/v1/models?modeling_layer=`. Allowed values: `Staging`, `Intermediate`, `Marts`. Multiple values are OR'd: `?modeling_layer=Staging,Marts`. **Implicitly types-to-models:** `modeling_layer` is only defined for models (server-computed from file-path prefix on `dbt.nodes.original_file_path`; see `ModelSummary.modeling_layer` in `src/handlers/models.rs`). When this filter is set, non-model resource types have no value to match against and are silently excluded from the result set — effectively narrowing the response to model hits only. Confirmed with design; this is acceptable behavior. |
+| `first` | `number` | no | 50 | Page size; max 200 (matches the cap pattern in `/api/v1/models`). |
+| `after` | `string` | no | — | Opaque cursor returned by a prior page's `page_info.end_cursor`. Clients MUST treat as opaque and not parse — see Risk #8. |
+
+**Resolved design questions** (see Step 5 of the parity prompt that produced this contract):
+- **Q-E1 endpoint shape:** unified `/api/v1/search` per ADR-8.
+- **Q-E2 result envelope:** Discovery-shaped `{ matched_field, highlight, hit }` siblings; single integer `total_count` placed inside `page_info` per ADR-6 (UI evidence — `SearchResultsList.tsx` renders one badge: `getResultCountString(props.totalCount)` → `"N results"`, no per-type breakdown).
+- **Q-E3 searchable fields:** `name`, `fqn`, `description`, `tags`, `column` only. `compiled_code`/`raw_code` deferred (not exposed today — see Risk #4).
+- **Q-E4 query syntax:** see param table; empty/absent `q` triggers browse mode (catalog parity); quoting and fielded queries deferred (Risk #5).
+- **Q-E5 polymorphism:** see "Per-type hit extras" subsection.
+- **Q-E6 ranking:** alphabetical by `(name ASC, unique_id ASC)`; relevance ranking deferred (Risk #1).
+- **Q-E7 highlight semantics:** per-field rules in the field reference notes; matching field disambiguation `name > column > tag > fqn > description`.
+- **Q-E8 filters:** `?type=`, `?package=`, `?tag=`, `?modeling_layer=`. `?modeling_layer=` implicitly narrows to model hits only (the dimension is model-specific) — design-confirmed acceptable. Health filter and model-access filter were removed per Roxi (FEATURE-TO-ENDPOINT-MAPPING.md rows 37, 38) and are not part of this contract.
+- **Q-F1 facets:** no `/api/v1/search/facets` endpoint. `ResourceFilterPanel` is fed by the existing `/<resource>/facets` family. See "Non-goal" note below.
+- **Q-C1 conflict with `/nodes?q=`:** orthogonal. `/nodes?q=` is "list nodes, filter by substring" with a flat row shape; `/search?q=` is "find anything across resource types, with highlight metadata and an envelope shape". The two are intentionally not merged.
+- **Q-E9 cursor encoding:** global ORDER BY (`name`, `unique_id`) over the UNION; cursor is opaque to clients regardless. Switching to per-type pagination later invalidates in-flight cursors — see Risk #8.
+- **Q-C2 MCP overlap:** the POC's `search_dbt` MCP tool aligns with this endpoint and can share SQL. `search_sql` (LIKE on body) is MCP-only and not exposed here — see Risk #4.
+
+**Non-goal — `/api/v1/search/facets`.** `SearchPage.tsx` mounts `ResourceFilterPanel` from `src/components/ResourceFilterPanel/`, which is fed by the existing per-resource `/facets` endpoints (static project-wide distinct values, not query-dependent counts). The widgets present after Roxi's removals: `TypeFilters`, `TagFilters`, `AdvancedFilters` (search-field selector). None of these need per-query counts. Do not design a `/search/facets` endpoint without first finding new UI evidence of demand.
+
+### Error responses
+
+| HTTP | `code` | When |
+|---|---|---|
+| 400 | `query_too_long` | `len(q) > 1024`. Matches the `MAXIMUM_QUERY_LENGTH` constant in dbt-ui `util/input.ts`. The 1024-char cap protects the SQL planner from pathological multi-token patterns. |
+| 400 | `invalid_type` | `?type=` includes a value not in the documented `resource_type` set. Body lists the offending value(s). |
+| 400 | `invalid_modeling_layer` | `?modeling_layer=` includes a value not in `{Staging, Intermediate, Marts}`. Body lists the offending value(s). |
+| 400 | `invalid_cursor` | `?after=` is not URL-safe base64 of a valid `Cursor` JSON. Matches the existing list endpoints' `Cursor::decode → "invalid cursor"` behavior. Stale cursors after a server upgrade (e.g., Q-E9 strategy change) surface here rather than silently-wrong results. |
+
+Empty / absent `?q=` is **not** an error — it triggers browse mode (see the `q` row in the query parameters table). All other filters (`?type=`, `?package=`, `?tag=`, `?modeling_layer=`) still apply. No `query_too_short` floor — single-char queries are accepted and matched verbatim. This mirrors catalog/Discovery behavior.
+
+All error responses follow the existing error envelope shape (see `src/handlers/json.rs::error`). 412 is intentionally unused — `/api/v1/search` has no gated dependencies; capability flags (`has_source_freshness`) only null-gate response fields, never reject the request.
+
+### Backend prerequisite — SQL skeleton
+
+This subsection codifies the implementation decisions reached during contract review. Risk register items reference back to these by index.
+
+**Empirical validation.** The CTEs in (1) and (2) below were executed end-to-end against the sample project at `/Users/eddowh/codaz/sl-schema-evolution/sample_project/target/index/` with `?q=order`. The pipeline returned 15 hits — 14 priority-1 `name` matches and one priority-2 `column` match (the `customers` model, which has `order_id`/`order_total` columns but no `order` in its name). The priority dedupe correctly resolved multi-field matches. Two SQL syntax issues were caught and corrected during validation: tag-matching must use `list_filter(tags, x -> x ILIKE ...)` (not `UNNEST(tags) AS t WHERE t ILIKE ...` — UNNEST returns a struct, not a scalar), and semantic_models tag extraction must use `(json_extract(config, '$.tags'))::varchar[]` (not `list_transform(json_extract(...), x -> json_extract_string(x, '$'))` — fails to bind).
+
+**(1) UNION strategy — dynamically-pruned (decision for Q-E9).**
+
+The handler builds a `UNION ALL` at request time, including only the branches whose `resource_type` appears in `?type=` (or all branches when `?type=` is absent). Five resource types live in `dbt.nodes` and share a branch shape; the other seven each get their own parquet table.
+
+**Interaction with `?modeling_layer=`.** When `modeling_layer` is present, the requested-type set is intersected with `{model}` before branch construction: the dimension is model-only, so any non-model branch under that filter would return zero rows. Short-circuiting to a single nodes-with-`resource_type='model'` branch is both an optimization and a correctness move (avoids scanning eight parquet files for a request that can only match one).
+
+```rust
+// In the request handler:
+let mut requested_types: BTreeSet<ResourceType> = params
+    .type_filter
+    .as_deref()
+    .map(parse_csv_resource_types)
+    .transpose()?                            // 400 on invalid
+    .unwrap_or_else(ResourceType::all);
+
+// modeling_layer is model-only; intersect to avoid scanning irrelevant branches.
+if params.modeling_layer.is_some() {
+    requested_types.retain(|t| *t == ResourceType::Model);
+}
+
+let mut branches: Vec<String> = Vec::new();
+// dbt.nodes covers model / source / seed / snapshot / test
+let nodes_types: Vec<_> = requested_types
+    .iter()
+    .filter(|t| t.lives_in_dbt_nodes())
+    .map(|t| t.as_str())
+    .collect();
+if !nodes_types.is_empty() {
+    branches.push(nodes_branch_sql(&nodes_types));
+}
+if requested_types.contains(&ResourceType::Exposure)     { branches.push(exposures_branch_sql()); }
+if requested_types.contains(&ResourceType::Macro)        { branches.push(macros_branch_sql()); }
+if requested_types.contains(&ResourceType::Metric)       { branches.push(metrics_branch_sql()); }
+if requested_types.contains(&ResourceType::SavedQuery)   { branches.push(saved_queries_branch_sql()); }
+if requested_types.contains(&ResourceType::SemanticModel){ branches.push(semantic_models_branch_sql()); }
+if requested_types.contains(&ResourceType::Group)        { branches.push(groups_branch_sql()); }
+if requested_types.contains(&ResourceType::UnitTest)     { branches.push(unit_tests_branch_sql()); }
+
+let base_union = branches.join("\nUNION ALL\n");
+```
+
+Each branch projects the same column set (with `NULL` for type-specific columns that don't apply to that resource), so the outer SELECT is uniform:
+
+```sql
+-- branch for dbt.nodes (model/source/seed/snapshot/test)
+SELECT
+  unique_id, name, resource_type, package_name, fqn,
+  tags,
+  materialized, access_level,           -- type-specific (model)
+  source_name,                          -- type-specific (source)
+  NULL::varchar AS exposure_type,       -- not applicable
+  description
+FROM 'dbt.nodes.parquet'
+WHERE resource_type IN (<requested_node_types>)
+
+UNION ALL
+
+-- branch for dbt.exposures
+SELECT
+  unique_id, name, 'exposure', package_name, fqn,
+  tags,
+  NULL::varchar, NULL::varchar,
+  NULL::varchar,
+  exposure_type,
+  description
+FROM 'dbt.exposures.parquet'
+
+-- ...and so on for macros / metrics / saved_queries / semantic_models / groups / unit_tests
+-- Branches whose parquet lacks columns (e.g., dbt.macros has no fqn, no tags) project NULL::varchar
+-- and NULL::varchar[] for those positions.
+```
+
+**(2) `matched_field` selection — per-field UNION with priority dedupe (decision for Q-E7).**
+
+A CTE materializes one row per `(unique_id, matched_field)` pair, tagged with a priority integer; the outer aggregation picks the lowest-priority match per `unique_id` via DuckDB's `arg_min`. Cleanest separation, each branch independently testable, and the planner sees all five predicates at once for shared scans.
+
+**Browse-mode short-circuit.** When `q` is empty or absent, the `field_matches` / `winners` CTEs are skipped entirely — no field "won" because no predicate was applied. The outer SELECT becomes `SELECT b.*, NULL::varchar AS matched_field FROM base b ORDER BY name, unique_id LIMIT $first`, and `highlight` is emitted as `null` for every row in serialization. This avoids five no-op ILIKE scans of the base UNION and a meaningless aggregation. The handler branches on `params.q.is_some_and(|q| !q.is_empty())`.
+
+```sql
+WITH base AS (
+  -- The dynamically-pruned UNION ALL from (1)
+),
+field_matches AS (
+  SELECT unique_id, 'name'        AS matched_field, 1 AS priority
+    FROM base
+    WHERE name ILIKE '%' || $q_escaped || '%' ESCAPE '\\'
+
+  UNION ALL
+  SELECT b.unique_id, 'column', 2
+    FROM base b
+    JOIN 'dbt.node_columns.parquet' c USING (unique_id)
+    WHERE c.column_name ILIKE '%' || $q_escaped || '%' ESCAPE '\\'
+
+  UNION ALL
+  SELECT unique_id, 'tag', 3
+    FROM base
+    WHERE tags IS NOT NULL
+      AND len(list_filter(tags, x -> x ILIKE '%' || $q_escaped || '%' ESCAPE '\\')) > 0
+
+  UNION ALL
+  SELECT unique_id, 'fqn', 4
+    FROM base
+    WHERE fqn IS NOT NULL
+      AND array_to_string(fqn, '.') ILIKE '%' || $q_escaped || '%' ESCAPE '\\'
+
+  UNION ALL
+  SELECT unique_id, 'description', 5
+    FROM base
+    WHERE description ILIKE '%' || $q_escaped || '%' ESCAPE '\\'
+),
+winners AS (
+  SELECT unique_id, arg_min(matched_field, priority) AS matched_field
+  FROM field_matches
+  GROUP BY unique_id
+)
+SELECT b.*, w.matched_field
+FROM base b
+JOIN winners w USING (unique_id)
+ORDER BY b.name, b.unique_id
+LIMIT $first;
+```
+
+`$q_escaped` is the result of replacing `\`, `%`, `_` with their backslash-escaped forms before substitution into the SQL string (Risk #3). The Rust handler holds the escaped pattern; the SQL uses `ESCAPE '\\'` to keep the original wildcards inert.
+
+**(3) `total_count` — separate parallel COUNT query (decision for total_count strategy).**
+
+The page query and the count query share the same `base` UNION and `field_matches` predicates but differ in the outer shape. Issue both concurrently via `tokio::join!`; total latency is `max(page, count)` rather than `page + count`.
+
+```rust
+let (page_rows, total_count) = tokio::join!(
+    backend.query(&page_sql, &[&first_clamped, &cursor_predicate]),
+    backend.query_scalar::<u64>(&count_sql, &[]),
+);
+```
+
+```sql
+-- count_sql (same base + field_matches CTE, but outer is COUNT only):
+WITH base AS (...), field_matches AS (...), winners AS (...)
+SELECT COUNT(*) FROM winners;
+-- The base UNION ALL and field_matches CTE are scanned twice (once per query).
+-- For 10k-node projects this is fine; if it becomes hot, the next step is a
+-- shared materialized view of `winners` cached per (q, filters) tuple.
+```
+
+**(4) Cursor encoding — reuse `pagination::Cursor` from list endpoints.**
+
+The cursor is the URL-safe base64 of a JSON-serialized `{ sort_value, unique_id }` struct (see `src/handlers/pagination.rs::Cursor`). For search, `sort_value` is the `name` of the last row in the page. Decode errors return `400 invalid_cursor` (per the error table above), matching the existing `/api/v1/models` behavior. Clients MUST treat cursors as opaque.
+
+**(5) `freshness_checked` JOIN gating.**
+
+When `Capabilities.has_source_freshness` is `false`, the handler skips the `LEFT JOIN dbt.source_freshness` entirely and projects `NULL` for `freshness_checked`. This avoids a parquet read of a file that may not exist on disk (no `dbt source freshness` ever ran). When the capability is `true`, the JOIN's existence-predicate populates the boolean.
+
+```rust
+// In the dbt.nodes branch for source rows:
+let freshness_join = if state.capabilities().has_source_freshness {
+    "LEFT JOIN 'dbt.source_freshness.parquet' f USING (unique_id)"
+} else {
+    "" // skip the file read entirely
+};
+let freshness_projection = if state.capabilities().has_source_freshness {
+    "f.unique_id IS NOT NULL AS freshness_checked"
+} else {
+    "NULL::boolean AS freshness_checked"
+};
+```
+
+**(6) `semantic_models` tags extraction.**
+
+`dbt.semantic_models.parquet` carries `tags` inside the `config` JSON blob rather than as a top-level column. The extraction syntax matches the established pattern in the `/semantic_models/:id` contract (Risk #2 of that contract):
+
+```sql
+-- in the semantic_models branch:
+SELECT
+  unique_id, name, 'semantic_model', package_name, fqn,
+  COALESCE(
+    (json_extract(config, '$.tags'))::varchar[],
+    []::varchar[]
+  ) AS tags,
+  -- ...other columns
+FROM 'dbt.semantic_models.parquet'
+```
+
+Empirically: in the sample project, 9 of 10 semantic_models have `config` NULL (and thus no extractable tags) — the COALESCE ensures the column is always a non-null `varchar[]`. The `list_filter` predicate in (2) then correctly returns no match for those rows. This is the only branch where `tags` is JSON-derived; all other branches project the parquet `tags` column directly.
+
+### Example response
+
+A representative response for `?q=order&first=50`. Hits illustrate every required example: at least one model, one source-shaped extra, one macro (no `fqn`), and at least one each of `matched_field` ∈ `{name, description, column, tag, fqn}`, including one `highlight: null` (the name-match case) and one comma-joined `column` highlight per UI evidence #3.
+
+```jsonc
+{
+  "data": [
+    {
+      // matched_field is a sibling of hit (CC-2; UI evidence #2 — reads data.matchedField directly).
+      // Singular noun, rendered verbatim in "Includes {matchedField}: {highlight}".
+      "matched_field": "name",
+      // null when the match is on `name` — the row header already displays the name with
+      // BoldedText highlighting, so a second "Includes name: ..." line is suppressed
+      // by SearchResultItem.tsx (`if (!data.highlight) return null;`).
+      "highlight": null,
+      "hit": {
+        "unique_id": "model.jaffle_shop.stg_orders",
+        "resource_type": "model",
+        "name": "stg_orders",
+        "fqn": ["jaffle_shop", "staging", "stg_orders"],
+        "package_name": "jaffle_shop",
+        "materialized": "view",
+        "access_level": "protected"
+      }
+    },
+    {
+      "matched_field": "description",
+      // 80-char window around the first match; "..." prefix/suffix when truncated.
+      // <b> wraps each matched token (UI evidence #1; matches Discovery).
+      "highlight": "...combining payments and <b>order</b> status, one row per <b>order</b>...",
+      "hit": {
+        "unique_id": "model.jaffle_shop.orders",
+        "resource_type": "model",
+        "name": "orders",
+        "fqn": ["jaffle_shop", "orders"],
+        "package_name": "jaffle_shop",
+        "materialized": "table",
+        "access_level": "public"
+      }
+    },
+    {
+      "matched_field": "column",
+      // Comma-and-space-joined list of matching column names within this resource.
+      // Each name wrapped in <b> on the matched substring. SearchResultItem.tsx
+      // splits on `, ` and renders each as an individual <Link> to the columns tab
+      // (UI evidence #3 — `matched_field === "column"` triggers special rendering).
+      "highlight": "<b>order</b>_id, <b>order</b>_status",
+      "hit": {
+        "unique_id": "model.jaffle_shop.fct_orders",
+        "resource_type": "model",
+        "name": "fct_orders",
+        "fqn": ["jaffle_shop", "marts", "fct_orders"],
+        "package_name": "jaffle_shop",
+        "materialized": "table",
+        "access_level": "public"
+      }
+    },
+    {
+      "matched_field": "tag",
+      // Single matched tag, full string, matched substring wrapped in <b>.
+      // If multiple tags match, the first (alphabetically) is selected.
+      "highlight": "<b>order</b>s-core",
+      "hit": {
+        "unique_id": "source.jaffle_shop.raw_jaffle.orders",
+        "resource_type": "source",
+        "name": "orders",
+        "fqn": ["jaffle_shop", "raw_jaffle", "orders"],
+        "package_name": "jaffle_shop",
+        "source_name": "raw_jaffle",
+        "freshness_checked": true  // null when has_source_freshness is false
+      }
+    },
+    {
+      "matched_field": "fqn",
+      // Full dotted path with matched substring wrapped in <b>.
+      "highlight": "jaffle_shop.staging.<b>order</b>_audit",
+      "hit": {
+        "unique_id": "test.jaffle_shop.order_audit",
+        "resource_type": "test",
+        "name": "order_audit",
+        "fqn": ["jaffle_shop", "staging", "order_audit"],
+        "package_name": "jaffle_shop",
+        "test_type": "test"  // "test" | "unit_test" — mirrors ADR-3 discriminator
+      }
+    },
+    {
+      "matched_field": "description",
+      "highlight": "...returns the latest <b>order</b> per customer...",
+      "hit": {
+        "unique_id": "macro.jaffle_shop.latest_order_per_customer",
+        "resource_type": "macro",
+        "name": "latest_order_per_customer",
+        // Macros have no fqn — dbt.macros parquet lacks the column. Omitted, not null.
+        "package_name": "jaffle_shop"
+      }
+    },
+    {
+      "matched_field": "name",
+      "highlight": null,
+      "hit": {
+        "unique_id": "exposure.jaffle_shop.orders_dashboard",
+        "resource_type": "exposure",
+        "name": "orders_dashboard",
+        "fqn": ["jaffle_shop", "orders_dashboard"],
+        "package_name": "jaffle_shop",
+        "exposure_type": "dashboard"
+      }
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoic3RnX29yZGVycyIsImkiOiJtb2RlbC5qYWZmbGVfc2hvcC5zdGdfb3JkZXJzIn0=",
+    "end_cursor": "eyJuYW1lIjoib3JkZXJzX2Rhc2hib2FyZCIsInVuaXF1ZV9pZCI6ImV4cG9zdXJlLmphZmZsZV9zaG9wLm9yZGVyc19kYXNoYm9hcmQifQ==",
+    "has_next_page": true
+  }
+}
+```
+
+Empty-result response (no match for `?q=zzznothing`):
+
+```jsonc
+{
+  "data": [],
+  "page_info": {
+    "total_count": 0,
+    "start_cursor": null,
+    "end_cursor": null,
+    "has_next_page": false
+  }
+}
+```
+
+The UI's `NoSearchResults` component checks `props.data.length === 0` and renders the empty state; an empty `data[]` with `page_info.total_count: 0` is the correct trigger.
+
+Browse-mode response (no `?q=`, just `?type=model&first=3`) — catalog parity, no text predicate, hits sorted alphabetically by `name`:
+
+```jsonc
+{
+  "data": [
+    {
+      "matched_field": null,  // no field "won" — no predicate was applied
+      "highlight": null,      // see SearchEdge type definition; both null in browse mode
+      "hit": {
+        "unique_id": "model.jaffle_shop.customers",
+        "resource_type": "model",
+        "name": "customers",
+        "fqn": ["jaffle_shop", "marts", "customers"],
+        "package_name": "jaffle_shop",
+        "materialized": "table",
+        "access_level": "public"
+      }
+    },
+    {
+      "matched_field": null,
+      "highlight": null,
+      "hit": {
+        "unique_id": "model.jaffle_shop.fct_orders",
+        "resource_type": "model",
+        "name": "fct_orders",
+        "fqn": ["jaffle_shop", "marts", "fct_orders"],
+        "package_name": "jaffle_shop",
+        "materialized": "table",
+        "access_level": "public"
+      }
+    },
+    {
+      "matched_field": null,
+      "highlight": null,
+      "hit": {
+        "unique_id": "model.jaffle_shop.stg_orders",
+        "resource_type": "model",
+        "name": "stg_orders",
+        "fqn": ["jaffle_shop", "staging", "stg_orders"],
+        "package_name": "jaffle_shop",
+        "materialized": "view",
+        "access_level": "protected"
+      }
+    }
+  ],
+  "page_info": {
+    "total_count": 42,
+    "start_cursor": "eyJzIjoiY3VzdG9tZXJzIiwiaSI6Im1vZGVsLmphZmZsZV9zaG9wLmN1c3RvbWVycyJ9",
+    "end_cursor": "eyJzIjoic3RnX29yZGVycyIsImkiOiJtb2RlbC5qYWZmbGVfc2hvcC5zdGdfb3JkZXJzIn0=",
+    "has_next_page": true
+  }
+}
+```
+
+### Field reference
+
+Status legend: ✅ returned today · 🔧 needs backend change · 🔍 verify parquet schema · ❌ excluded (no parquet path or out of scope)
+
+| Field | Type | Tier | Status | Capability gate | Notes |
+|---|---|---|---|---|---|
+| `data` | `SearchEdge[]` | Core | 🔧 | — | One envelope per result; empty array on no match. Sorted by `(hit.name ASC, hit.unique_id ASC)` over the UNION (Q-E9 option a). |
+| `data[*].matched_field` | `string \| null` | Core | 🔧 | — | Singular noun. One of: `name`, `description`, `tag`, `column`, `fqn`. The UI renders verbatim ("Includes {matched_field}: ..."). Multi-field match disambiguation: priority `name > column > tag > fqn > description` — emit only the highest-priority match. Server-side: ILIKE has no offsets; the chosen field is re-scanned by case-insensitive substring search to format `highlight`. **`null` in browse mode** (empty/absent `?q=`): no field "won" because no predicate was applied; `highlight` is also `null`. |
+| `data[*].highlight` | `string \| null` | Core | 🔧 | — | Inline match markup with `<b>...</b>` wrapping (UI evidence #1 — Discovery emits `<b>`, `BoldedText.tsx` parses via `BOLD_TAG_REGEX = /<\/? *[bB]>/gm`). `null` when `matched_field === "name"` (the row header already displays the bolded name, so the "Includes ..." line is suppressed by `SearchResultItem.tsx`). Per-field shape rules: see Q-E7 table below. |
+| `data[*].hit` | `SearchHit` | Core | 🔧 | — | Polymorphic on `hit.resource_type` (discriminated union). |
+| `data[*].hit.unique_id` | `string` | Core | 🔧 | — | Native dbt unique_id, e.g., `model.pkg.name`, `source.pkg.source_name.table`, `macro.pkg.name`, `unit_test.pkg.model_name.test_name`. Used as React key in `SearchResultsList.tsx`. |
+| `data[*].hit.resource_type` | `string` | Core | 🔧 | — | Discriminator. One of: `model`, `source`, `seed`, `snapshot`, `test`, `unit_test`, `exposure`, `metric`, `semantic_model`, `saved_query`, `macro`, `group`. |
+| `data[*].hit.name` | `string \| null` | Core | 🔧 | — | Resource short name. Nullable to match the UI's `SearchResultHit.name: string \| null` (the row component returns `null` if `name == null`, so back-end null is safe but expected to be rare). |
+| `data[*].hit.fqn` | `string[]` | Core | 🔧 | — | Dotted-path components. Present for `model`, `source`, `seed`, `snapshot`, `test`, `unit_test`, `exposure`, `metric`, `semantic_model`, `saved_query`. Absent (field omitted) for `macro` and `group` — `dbt.macros` and `dbt.groups` parquet tables have no `fqn` column. `SearchResultItem.tsx` shows the "View lineage" link only when `hit.fqn !== undefined`, which matches: macros and groups have no lineage page. searchable; exposed by `GET /api/v1/<type>/:id` for every type that carries it. |
+| `data[*].hit.package_name` | `string \| null` | Core | 🔧 | — | dbt package the resource belongs to. Used by `?package=` filter. |
+| `data[*].hit.materialized` | `string \| null` | Type-specific | 🔧 | — | `resource_type === "model"` only. `"table"` · `"view"` · `"incremental"` · `"ephemeral"`. From `dbt.nodes.materialized`. |
+| `data[*].hit.access_level` | `string \| null` | Type-specific | 🔧 | — | `resource_type === "model"` only. `"public"` · `"protected"` · `"private"`. From `dbt.nodes.access_level`. |
+| `data[*].hit.source_name` | `string \| null` | Type-specific | 🔧 | — | `resource_type === "source"` only. The dbt source block name (e.g., `"raw_jaffle"`). From `dbt.nodes.source_name`. |
+| `data[*].hit.freshness_checked` | `boolean \| null` | Type-specific (Core-conditional) | 🔧 | `has_source_freshness` | `resource_type === "source"` only. Boolean indicator from `dbt.source_freshness` (a row exists for this source ⇒ `true`). `null` when capability is false. Full freshness object lives on `/api/v1/sources/:id`, not in search results. |
+| `data[*].hit.test_type` | `string` | Type-specific | 🔧 | — | `resource_type ∈ {"test", "unit_test"}`. Mirrors ADR-3's `resource_type` discriminator: `"test"` for `dbt.nodes` rows with `resource_type = "test"`, `"unit_test"` for rows in the `dbt.unit_tests` parquet. Allows the UI to route the result link to the unified `TestView.tsx` with the right narrowing. |
+| `data[*].hit.exposure_type` | `string \| null` | Type-specific | 🔧 | — | `resource_type === "exposure"` only. `"dashboard"` · `"notebook"` · `"analysis"` · `"ml"` · `"application"`. From `dbt.exposures.exposure_type`. |
+| `page_info` | `PageInfo` | Core | 🔧 | — | Standard CC-4 cursor envelope shared with every LIST endpoint (see ADR-6's shared `PageInfo` type). |
+| `page_info.total_count` | `number` | Core | 🔧 | — | Total matching rows across the UNION (not just the current page). Renders as `getResultCountString(totalCount)` in `SearchResultsList.tsx` → `"N results"`. Single integer per UI evidence; no per-type breakdown is rendered. Placement under `page_info` follows ADR-6. |
+| `page_info.start_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64 cursor of the FIRST row of the current page. `null` when `data` is empty. Symmetric with `end_cursor` per ADR-6. |
+| `page_info.end_cursor` | `string \| null` | Core | 🔧 | — | Opaque base64-encoded `(name, unique_id)` of the last row in the page. `null` on empty result or last page. Clients MUST treat as opaque (Risk #8). |
+| `page_info.has_next_page` | `boolean` | Core | 🔧 | — | `true` when at least one more result exists past `end_cursor`. |
+
+**Per-field `highlight` shape rules (Q-E7):**
+
+| `matched_field` | `highlight` shape |
+|---|---|
+| `name` | Full name with matched substring(s) wrapped in `<b>`. **In practice `null`** — emitting non-null is allowed by the schema but suppressed by `SearchResultItem.tsx`'s `if (!data.highlight) return null;` guard, so it would be invisible. Recommendation: emit `null`. |
+| `fqn` | Full dotted path (e.g., `jaffle_shop.staging.stg_orders`) with matched substring(s) wrapped in `<b>`. Built from the `fqn[]` array by `.`-joining server-side. |
+| `description` | 80-char window centered on the first match in `dbt.nodes.description` (or the corresponding column on `dbt.exposures`, `dbt.macros`, `dbt.metrics`, `dbt.saved_queries`, `dbt.semantic_models`, `dbt.groups`). Prefix `"..."` if truncated on the left; suffix `"..."` if truncated on the right. Matched tokens wrapped in `<b>`. |
+| `tag` | The single matched tag, full string, with matched substring wrapped in `<b>`. If multiple tags match, pick the alphabetically-first and emit only that one. Tags filter for resource types whose parquet lacks a `tags` column (`macro`, `group`) is impossible — those types are never returned with `matched_field = "tag"`. |
+| `column` | Comma-and-space-joined string (`"col_a, col_b"`) of all column names within this resource that match the query, each with the matched substring wrapped in `<b>`. Sourced from `dbt.node_columns.column_name`. The UI splits on `, ` and links each column individually to the model's columns tab — this is the only `matched_field` value with split-and-link rendering (UI evidence #3 — `SearchResultItem.tsx` `isColumnMatch` branch). |
+
+**Excluded fields (`❌`)** — listed for the audit trail; not part of the response:
+
+| Field | Why excluded |
+|---|---|
+| `data[*].hit.health_issues` | ❌ Class B. `subGraphs: ['internal']` in Discovery AND no parquet path. Never exposed by dbt-docs-server (load-bearing invariant). The UI's `getTrustSignalsFromHit` falls back to an empty `healthIssues: []` for any hit, which renders no badge — graceful null. |
+| `data[*].hit.usage_query_count` | ❌ Class B. Platform-only; no parquet path. |
+| `data[*].hit.warehouse_asset` | ❌ Class C. Account-search only (CodexDB); project-search does not surface warehouse assets. Hard exclusion per the load-bearing invariant. |
+| `data[*].hit.compiled_code` / `raw_code` | ❌ Deferred (Q-E3). Class A (`dbt.nodes` has both as VARCHAR columns) but no existing endpoint exposes them today. Per the invariant — searchable fields ⊆ fields already exposed — body search is gated on first exposing the underlying fields on `/api/v1/models/:id`. See Risk #4. |
+| `data[*].hit.meta` | ❌ Deferred (Q-E3). JSON-typed user metadata; substring matching against opaque JSON needs separate design. Risk #6. |
+| `data[*].debug` | ❌ Deferred. Discovery's `searchResults.debug @include(if: $includeDebug)` is an operator tool surfaced via the `includeDebug` GraphQL variable. Out of scope for v0 REST. |
+| `data[*].hit.column_description` (matched_field) | ❌ Deferred. `SearchFieldType` GraphQL enum has `columnDescription` as a distinct value, but the UI's `allSearchTypes` (`FilterProvider.tsx`) does not include it in the default set. Re-evaluate when per-column-description filtering becomes a product requirement. |
+| `data[*].hit.modeling_layer` field | ❌ Not surfaced in the hit shape. The `?modeling_layer=` filter IS supported (see query parameters), but the value is server-computed from `original_file_path` at filter time and is not denormalized onto the hit. Consumers that need to display the layer on a result row should call `/api/v1/models/:id` or join the badge from existing model-list pagination. Mirrors the FE pattern: search results show `ResourceChip` (resource_type) only; layer-coloring lives on the model browse page. |
+
+### Type definition
+
+For codegen reference. The field reference table above is the authoritative contract.
+
+```typescript
+// Query parameters
+interface SearchQueryParams {
+  q?: string;                // absent or empty triggers browse mode (no text predicate)
+  type?: string;             // comma-separated resource_type list
+  package?: string;          // comma-separated package_name list
+  tag?: string;              // comma-separated tag list
+  modeling_layer?: string;   // comma-separated layer list (Staging|Intermediate|Marts);
+                             // implicitly narrows to models since the dimension is model-only
+  first?: number;            // default 50, max 200
+  after?: string;            // opaque cursor
+}
+
+// Singular nouns; rendered verbatim by SearchResultItem.tsx as "Includes {matched_field}: ..."
+type MatchedField = "name" | "description" | "tag" | "column" | "fqn";
+
+// Discriminated union on hit.resource_type.
+type SearchHit =
+  | ModelHit
+  | SourceHit
+  | SeedHit
+  | SnapshotHit
+  | TestHit
+  | UnitTestHit
+  | ExposureHit
+  | MetricHit
+  | SemanticModelHit
+  | SavedQueryHit
+  | MacroHit
+  | GroupHit;
+
+interface SearchHitBase {
+  unique_id: string;
+  name: string | null;
+  package_name: string | null;
+}
+
+interface ModelHit extends SearchHitBase {
+  resource_type: "model";
+  fqn: string[];
+  materialized: string | null;
+  access_level: string | null;
+}
+
+interface SourceHit extends SearchHitBase {
+  resource_type: "source";
+  fqn: string[];
+  source_name: string | null;
+  freshness_checked: boolean | null; // null when has_source_freshness is false
+}
+
+interface SeedHit extends SearchHitBase {
+  resource_type: "seed";
+  fqn: string[];
+}
+
+interface SnapshotHit extends SearchHitBase {
+  resource_type: "snapshot";
+  fqn: string[];
+}
+
+interface TestHit extends SearchHitBase {
+  resource_type: "test";
+  fqn: string[];
+  test_type: "test";
+}
+
+interface UnitTestHit extends SearchHitBase {
+  resource_type: "unit_test";
+  fqn: string[];
+  test_type: "unit_test";
+}
+
+interface ExposureHit extends SearchHitBase {
+  resource_type: "exposure";
+  fqn: string[];
+  exposure_type: string | null;
+}
+
+interface MetricHit extends SearchHitBase {
+  resource_type: "metric";
+  fqn: string[];
+}
+
+interface SemanticModelHit extends SearchHitBase {
+  resource_type: "semantic_model";
+  fqn: string[];
+}
+
+interface SavedQueryHit extends SearchHitBase {
+  resource_type: "saved_query";
+  fqn: string[];
+}
+
+// Macro and group hits omit fqn — dbt.macros and dbt.groups parquet tables
+// have no fqn column, and the UI shows "View lineage" only when fqn is defined.
+interface MacroHit extends SearchHitBase {
+  resource_type: "macro";
+}
+
+interface GroupHit extends SearchHitBase {
+  resource_type: "group";
+}
+
+interface SearchEdge {
+  // Both null in browse mode (empty/absent ?q=); both populated when ?q= is set.
+  matched_field: MatchedField | null;
+  highlight: string | null;
+  hit: SearchHit;
+}
+
+// PageInfo is declared once in ADR-6 ("Shared TypeScript types") and reused by
+// every LIST endpoint. Do not redeclare here; the search response uses the same
+// type. ADR-6's shape:
+//   interface PageInfo {
+//     total_count: number;
+//     start_cursor: string | null;
+//     end_cursor: string | null;
+//     has_next_page: boolean;
+//   }
+
+interface SearchResponse {
+  data: SearchEdge[];
+  page_info: PageInfo;
+}
+```
+
+### Risk register
+
+1. **No relevance ranking under DuckDB ILIKE.** DuckDB's `ILIKE` does not return match scores; the implementation uses a global `ORDER BY (name ASC, unique_id ASC)` over the UNION (Q-E6 option a; Q-E9 option a). This is a known downgrade from Discovery's OpenSearch-backed relevance. Promoting to a heuristic score (name-match > fqn-match > tag-match > description-match, alphabetical tie-break) is a future enhancement; Q-E6 option b. Defer until product feedback says alphabetical is insufficient. The contract states sort order explicitly so the UI and tests can rely on it.
+
+2. **Description searches scan `dbt.nodes.description` directly — no `dbt.docs` join required.** The parquet sample shows `dbt.nodes.description` is populated inline (verified against `/Users/eddowh/codaz/sl-schema-evolution/sample_project/target/index/dbt.nodes.parquet`; descriptions present for `customers`, `enrollments`, `fct_orders`, `locations`). `dbt.docs.parquet` is the doc-block table (for `{{ doc() }}` references), not per-node descriptions. The handler does not join `dbt.docs` for resource description matching. Per-table description columns: `dbt.nodes.description`, `dbt.exposures.description`, `dbt.macros.description`, `dbt.metrics.description`, `dbt.saved_queries.description`, `dbt.semantic_models.description`, `dbt.groups.description`, `dbt.unit_tests.description`.
+
+3. **`?q=` substring escaping is a server-side responsibility on every request.** `%` and `_` in user input are SQL wildcards under ILIKE. The handler MUST escape them (e.g., backslash-escape and pass `ESCAPE '\'`) before building the ILIKE predicate. This applies to every searchable field and every token. Parquet is read-only — there is no path to pre-sanitize input on ingest. Add a unit test for inputs like `100% pure`, `snake_case`, and Unicode lookalikes.
+
+4. **Body search is deferred until `compiled_code`/`raw_code` are exposed on a detail endpoint.** Both are Class A in `dbt.nodes` parquet (VARCHAR columns; verified present) but no existing list or detail endpoint surfaces them today. Per the load-bearing invariant (searchable fields ⊆ exposed fields), they cannot be searchable until first exposed. Future path: (a) add `compiled_code`/`raw_code` to `GET /api/v1/models/:id`'s response in a separate PR, then (b) add a `has_body_search` capability flag and a `?include_body=true` parameter to `/search`. Not v0. The MCP tool `search_sql` is the only consumer currently asking for body search; it remains MCP-only and out of REST scope.
+
+5. **Phrase and fielded queries are deferred.** No `"exact phrase"` (quoted-string) support, no `name:foo` (fielded) syntax. Multi-token query is whitespace-split AND. Document explicitly so future readers don't infer support from Discovery. Re-evaluate when product asks for advanced search; Q-E4.
+
+6. **`meta` matching is deferred.** `meta` is a JSON-string column (CC-7) on `dbt.nodes` and most other resource parquet tables. Substring matching against opaque JSON needs a separate design (whole-blob ILIKE vs. JSON-path extraction). Excluded from v0; revisit when there's a concrete product requirement.
+
+7. **Pagination consistency under writes is free here.** Cursor pagination is naturally stable because the parquet snapshot is immutable per server boot — no row can appear or disappear during a paged scan. This is a property of dbt-docs-server's snapshot model and is NOT guaranteed against a live database. Worth documenting so the assumption is not silently carried into future systems.
+
+8. **Cursor encoding is opaque to clients but implementation-fixed.** Default global ORDER BY over the UNION (Q-E9 option a) means the cursor encodes `(name, unique_id)` of the last row. Switching to per-type pagination (Q-E9 option b — composite cursor with `resource_type` clustering) later would invalidate any in-flight cursors. The contract states cursors are opaque and clients MUST NOT parse them. The handler validates and rejects malformed cursors with 400; old clients holding stale cursors after a server upgrade get a clean error rather than silently-wrong results.
+
+9. **Cross-endpoint `?q=` overlap is intentional.** `/api/v1/nodes?q=` and `/api/v1/models?q=` continue to exist with substring-filter semantics — narrow, flat-row, no highlight metadata. `/api/v1/search?q=` is the cross-resource find-anything surface with the envelope shape. The two are NOT merged (Q-C1 option a). Future readers may be tempted to deduplicate; document in code review that the divergence is the design. If consolidation is ever desired, route `/nodes?q=` through `/search` internally (Q-C1 option c) — but that is a deprecation-path change and out of scope for v0.
+
+10. **`search_text` column on `dbt.nodes` is present but unpopulated in the sample index.** The parquet schema for `dbt.nodes` includes a `search_text varchar` column (verified at `/Users/eddowh/codaz/sl-schema-evolution/sample_project/target/index/dbt.nodes.parquet`). Sample values are `NULL` across all 38 rows. This appears to be reserved by dbt-index for a future denormalized full-text column. The handler MUST NOT depend on it being populated; if a future dbt-index version starts emitting `search_text` (a `[name, description, tags-joined, ...]` concatenation), the handler can opportunistically use it as a single-column ILIKE shortcut over the per-field UNION. Until then, the handler matches against the individual columns explicitly.
+
+11. **Resource types whose parquet table lacks a `tags` column are silently excluded when `?tag=` is set.** Confirmed empirically: `dbt.macros.parquet` has no `tags` column; `dbt.groups.parquet` has no `tags` column; `dbt.unit_tests.parquet` has no `tags` column. Models, sources, seeds, tests, snapshots (all in `dbt.nodes`) have `tags: varchar[]`. Exposures, metrics, saved_queries have top-level `tags: varchar[]`. Semantic models surface `tags` via the `config` JSON blob (see the `/semantic_models/:id` contract's Risk #2 for the `json_extract(config, '$.tags')` pattern); the search handler must apply the same extraction for the `?tag=` filter. Document the silent exclusion explicitly so reviewers don't expect `?tag=foo` to return macros.
+
+12. **Highlight extraction re-scans the matched field — DuckDB ILIKE returns no offsets.** For every row in the page, after the matcher decides which field "won" (priority `name > column > tag > fqn > description`), the handler re-runs a case-insensitive substring search on that field's value to locate the match position(s), then formats `highlight` per the per-field rules. This is two passes over the page's matched rows but only on fields the row already matched — the cost is bounded by `first` (default 50, max 200). Multi-token queries wrap each distinct matched token in its own `<b>...</b>` pair.
 
