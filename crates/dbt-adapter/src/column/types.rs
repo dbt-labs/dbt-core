@@ -259,6 +259,10 @@ impl ColumnStatic {
                 Some(size) => format!("STRING({size})"),
                 _ => "STRING".to_string(),
             },
+            AdapterType::ClickHouse => match size {
+                Some(size) => format!("FixedString({size})"),
+                _ => "String".to_string(),
+            },
             _ => match size {
                 Some(size) => format!("character varying({size})"),
                 _ => "character varying".to_string(),
@@ -933,8 +937,11 @@ impl Column {
 
     fn is_string(&self) -> bool {
         match self._adapter_type {
-            AdapterType::Bigquery => {
-                matches!(self.core_dtype.to_lowercase().as_str(), "string")
+            AdapterType::Bigquery | AdapterType::ClickHouse => {
+                matches!(
+                    self.core_dtype.to_lowercase().as_str(),
+                    "string" | "fixedstring"
+                )
             }
             _ => {
                 matches!(

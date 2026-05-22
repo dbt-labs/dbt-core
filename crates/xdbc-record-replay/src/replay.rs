@@ -207,7 +207,9 @@ impl Statement for ReplayStatement {
     }
 
     fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
-        todo!("ReplayStatement::execute_update")
+        // DDL/DML statements (e.g. ClickHouse CREATE TABLE) are not stored in
+        // the recording, so replay just returns success with no row-count.
+        Ok(None)
     }
 
     fn execute_schema(&mut self) -> AdbcResult<Schema> {

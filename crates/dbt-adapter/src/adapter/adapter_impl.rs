@@ -1634,13 +1634,14 @@ impl AdapterImpl {
                     "dbt_databricks",
                 )
             }
-            Postgres | Snowflake | Redshift | DuckDB | Fabric | Spark => execute_macro(
-                state,
-                &[RelationObject::new(relation.to_owned()).into_value()],
-                "get_columns_in_relation",
-            ),
-            Salesforce | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Redshift | DuckDB | Fabric | Spark | ClickHouse => {
+                execute_macro(
+                    state,
+                    &[RelationObject::new(relation.to_owned()).into_value()],
+                    "get_columns_in_relation",
+                )
+            }
+            Salesforce | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
         };
@@ -1727,8 +1728,11 @@ impl AdapterImpl {
                     .collect::<Vec<_>>();
                 Ok(columns)
             }
-            Salesforce | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            ClickHouse => {
+                let result = macro_execution_result?;
+                Ok(Column::vec_from_jinja_value(ClickHouse, result)?)
+            }
+            Salesforce | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
         }
@@ -2872,7 +2876,7 @@ impl AdapterImpl {
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
-            Impl(adapter_type @ (Postgres | DuckDB), engine) => {
+            Impl(adapter_type @ (Postgres | DuckDB | ClickHouse), engine) => {
                 if let Some(configured_database) = engine.get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -2916,8 +2920,8 @@ impl AdapterImpl {
             }
             Impl(
                 adapter_type @ (Snowflake | Bigquery | Databricks | Salesforce | Spark | Fabric
-                | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
-                | Dremio | Oracle),
+                | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
+                | Oracle),
                 _,
             ) => {
                 unimplemented!(

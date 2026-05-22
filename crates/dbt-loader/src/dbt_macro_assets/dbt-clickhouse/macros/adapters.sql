@@ -45,6 +45,13 @@
   {{ return(get_clickhouse_cluster_name() is not none) }}
 {% endmacro %}
 
+{% macro clickhouse__check_schema_exists(information_schema, schema) -%}
+  {% set sql %}
+    select count(*) from system.databases where name = '{{ schema }}'
+  {% endset %}
+  {{ return(run_query(sql)) }}
+{% endmacro %}
+
 {% macro clickhouse__list_schemas(database) %}
   {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
     select name from system.databases

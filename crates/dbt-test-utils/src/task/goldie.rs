@@ -5,7 +5,8 @@ use super::{
     task_seq::CommandFn,
     utils::{
         maybe_normalize_schema_name, maybe_normalize_slashes, maybe_normalize_time,
-        normalize_inline_sql_files, normalize_version,
+        normalize_inline_sql_files, normalize_replay_paths, normalize_thread_ids,
+        normalize_version,
     },
 };
 use futures::FutureExt as _;
@@ -44,6 +45,8 @@ fn postprocess_actual(content: String, sort_output: bool) -> String {
         normalize_version,
         maybe_normalize_tmp_paths,
         normalize_inline_sql_files,
+        normalize_thread_ids,
+        normalize_replay_paths,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));
@@ -59,6 +62,8 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
         normalize_version,
         maybe_normalize_tmp_paths,
         normalize_inline_sql_files,
+        normalize_thread_ids,
+        normalize_replay_paths,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));

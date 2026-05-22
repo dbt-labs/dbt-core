@@ -76,6 +76,11 @@ static TEMP_ROOT_PATTERN_ESCAPED: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 static MKTEMP_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"/\.tmp[0-9A-Za-z_-]+").unwrap());
+// Matches OS thread IDs in Rust panic messages: "thread 'name' (12345678) panicked"
+static THREAD_ID_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(thread '[^']+') \(\d+\) (panicked)").unwrap());
+// Matches absolute replay recording paths in error messages: "(path: /abs/path)"
+static REPLAY_PATH_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\(path: [^)]+\)").unwrap());
 
 /// Copies a directory and its contents, excluding .gitignored files.
 pub fn copy_dir_non_ignored(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FsResult<()> {
@@ -287,6 +292,25 @@ pub fn normalize_inline_sql_files(output: String) -> String {
     // Replace inline SQL file names like "inline_a1b2c3d4.sql" with "inline_#randhash#.sql"
     INLINE_SQL_PATTERN
         .replace_all(&output, "inline_#randhash#.sql")
+        .to_string()
+}
+
+/// Strips non-deterministic OS thread IDs from Rust panic lines.
+///
+/// Replaces `thread 'tokio-rt-worker' (12345678) panicked` with
+/// `thread 'tokio-rt-worker' panicked` so golden files don't need to
+/// be updated on every run.
+pub fn normalize_thread_ids(output: String) -> String {
+    THREAD_ID_PATTERN.replace_all(&output, "$1 $2").to_string()
+}
+
+/// Strips absolute replay recording paths from error messages.
+///
+/// Replaces `(path: /abs/path/to/recordings)` with `(path: <path>)` so golden
+/// files aren't tied to a specific worktree or username.
+pub fn normalize_replay_paths(output: String) -> String {
+    REPLAY_PATH_PATTERN
+        .replace_all(&output, "(path: <path>)")
         .to_string()
 }
 
