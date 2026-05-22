@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from dbt.artifacts.resources.base import BaseResource
+from dbt.artifacts.resources.base import BaseResource, FileHash
 from dbt.artifacts.resources.types import NodeType
 
 
@@ -56,3 +56,53 @@ class TestMinorSchemaChange:
     ):
         # new code (using class without default field) can create an instance of itself given old data (class with old field)
         BaseResource.from_dict(base_resource_new_default_field.to_dict())
+
+
+class TestFileHashPath:
+    @pytest.fixture(scope="class")
+    def path(self):
+        return "test/path"
+
+    @pytest.fixture(scope="class")
+    def file_hash(self, path):
+        return FileHash.path(path)
+
+    def test_name_is_set(self, file_hash):
+        assert file_hash.name == "path"
+
+    def test_path_is_set(self, file_hash):
+        assert file_hash.checksum == "test/path"
+
+    def test_is_equal_to_equivalent_file_hash(self, file_hash, path):
+        assert file_hash == FileHash.path(path)
+
+
+class TestFileHashFromContents:
+    @pytest.fixture(scope="class")
+    def contents(self):
+        return "test"
+
+    @pytest.fixture(scope="class")
+    def file_hash(self, contents):
+        return FileHash.from_contents(contents)
+
+    def test_default_name_is_set(self, file_hash):
+        assert file_hash.name == "sha256"
+
+    def test_is_equal_to_equivalent_file_hash(self, contents, file_hash):
+        assert file_hash.compare(contents)
+
+    def test_is_unequal_to_different_file_hash(self, file_hash):
+        assert not file_hash.compare("different contents")
+
+
+class TestEmptyFileHash:
+    @pytest.fixture(scope="class")
+    def file_hash(self):
+        return FileHash.empty()
+
+    def test_empty_hash_is_not_equal_to_non_empty_hash(self, file_hash):
+        assert not file_hash.compare("test")
+
+    def test_empty_hash_is_not_equal_to_non_hash(self, file_hash):
+        assert not file_hash == "not a hash"
