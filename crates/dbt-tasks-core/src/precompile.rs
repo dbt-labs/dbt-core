@@ -1,4 +1,7 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeSet, HashMap},
+    time::Duration,
+};
 
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_schemas::schemas::{IntrospectionKind, Nodes};
@@ -22,4 +25,19 @@ pub trait StaticAnalysisBuckets: Send {
         arg: &RunTasksArgs,
         nodes_with_no_tasks: &BTreeSet<String>,
     );
+}
+
+/// Builds per-source refresh intervals from node configurations.
+pub fn build_refresh_intervals(
+    unique_ids: &BTreeSet<String>,
+    nodes: &Nodes,
+) -> HashMap<String, Option<Duration>> {
+    unique_ids
+        .iter()
+        .filter_map(|unique_id| {
+            let node = nodes.get_node(unique_id)?;
+            let interval = node.schema_refresh_interval().and_then(|i| i.as_duration());
+            Some((unique_id.clone(), interval))
+        })
+        .collect()
 }

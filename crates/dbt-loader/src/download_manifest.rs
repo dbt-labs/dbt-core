@@ -47,7 +47,7 @@ fn process_manifest_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
 /// Downloads manifest from dbt Cloud if available and not recently cached
 #[allow(clippy::cognitive_complexity)]
 pub async fn hydrate_or_download_manifest_from_cloud(
-    dbt_cloud_config: &Option<ResolvedCloudConfig>,
+    dbt_cloud_config: Option<&ResolvedCloudConfig>,
     io: &IoArgs,
 ) -> FsResult<Option<PathBuf>> {
     let Some(config) = dbt_cloud_config else {
