@@ -13,6 +13,7 @@ pub mod pagination;
 pub mod project;
 pub mod query;
 pub mod seeds;
+pub mod snapshots;
 pub mod sources;
 pub mod tests;
 
