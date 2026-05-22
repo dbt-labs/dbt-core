@@ -12,6 +12,7 @@ pub mod nodes;
 pub mod pagination;
 pub mod project;
 pub mod query;
+pub mod seeds;
 pub mod sources;
 
 pub(crate) mod json;
