@@ -1,5 +1,6 @@
 import functools
 import importlib
+import os
 import pkgutil
 from types import ModuleType
 from typing import Callable, Dict, List, Mapping
@@ -10,6 +11,18 @@ from dbt.plugins.contracts import PluginArtifacts
 from dbt.plugins.manifest import PluginNodes
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.tests import test_caching_enabled
+
+# Values that count as "on" when reading a gate env var. Mirrors the truthy set used by
+# dbt-state itself so behavior is consistent across the boundary.
+_TRUTHY_ENV_VALUES = frozenset({"true", "1", "t", "y", "yes", "on"})
+
+
+def _env_gate_is_on(env_var: str) -> bool:
+    """Return True iff `env_var` is set to one of the recognized truthy values."""
+    raw = os.environ.get(env_var)
+    if raw is None:
+        return False
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
 
 
 def dbt_hook(func):
@@ -74,6 +87,7 @@ def _get_dbt_modules() -> Mapping[str, ModuleType]:
         name: importlib.import_module(name)
         for _, name, _ in pkgutil.iter_modules()
         if name.startswith(PluginManager.PLUGIN_MODULE_PREFIX)
+        and name not in PluginManager._disabled_opt_in_modules()
     }
 
 
@@ -83,6 +97,34 @@ _MODULES_CACHE = None
 class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
+
+    # Plugins that are bundled with dbt-core as install dependencies but must not be
+    # loaded or initialized unless explicitly opted into. The keys are the top-level
+    # module names PluginManager would otherwise auto-discover via pkgutil; the values
+    # are the env vars whose truthy value flips the plugin on.
+    #
+    # Skipping happens at module-discovery time (before importlib.import_module), so a
+    # disabled opt-in plugin pays zero import cost and runs zero side effects -- even
+    # if its __init__.py has eager imports or monkey-patching.
+    # Both `dbt_state` and `dbt_run_cache` refer to the same plugin -- the package was
+    # renamed from `run-cache` (module `dbt_run_cache`) to `dbt-state` (module
+    # `dbt_state`). Either may be present in a user's environment depending on which
+    # version they have installed, so both are listed here as first-class entries
+    # gated by the same env var. Setting DBT_STATE_ENABLED=true opts in regardless of
+    # which module name pkgutil discovers.
+    OPT_IN_PLUGIN_MODULES: Dict[str, str] = {
+        "dbt_state": "DBT_STATE_ENABLED",
+        "dbt_run_cache": "DBT_STATE_ENABLED",
+    }
+
+    @classmethod
+    def _disabled_opt_in_modules(cls) -> set:
+        """Names of opt-in plugin modules whose gate env var is NOT set to a truthy value."""
+        return {
+            module_name
+            for module_name, env_var in cls.OPT_IN_PLUGIN_MODULES.items()
+            if not _env_gate_is_on(env_var)
+        }
 
     def __init__(self, plugins: List[dbtPlugin]) -> None:
         self._plugins = plugins
@@ -133,10 +175,11 @@ class PluginManager:
 
     @classmethod
     def get_prefixed_modules(cls):
+        disabled = cls._disabled_opt_in_modules()
         return {
             name: importlib.import_module(name)
             for _, name, _ in pkgutil.iter_modules()
-            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
+            if name.startswith(cls.PLUGIN_MODULE_PREFIX) and name not in disabled
         }
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
