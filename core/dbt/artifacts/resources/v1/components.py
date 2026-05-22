@@ -1,5 +1,5 @@
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Union
 
@@ -52,6 +52,15 @@ class DependsOn(MacroDependsOn):
     def add_node(self, value: str):
         if value not in self.nodes:
             self.nodes.append(value)
+
+    @classmethod
+    def __pre_deserialize__(cls, data):
+        data = super().__pre_deserialize__(data)
+        # Fusion (dbt-fusion) adds extra keys such as `nodes_with_ref_location`
+        # to the depends_on block. Strip any keys not declared on this dataclass
+        # so mashumaro does not raise InvalidFieldValue on unknown fields.
+        known = {f.name for f in dataclass_fields(cls)}
+        return {k: v for k, v in data.items() if k in known}
 
 
 @dataclass

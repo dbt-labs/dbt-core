@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix loading Fusion-generated manifests that include extra keys in the `depends_on` block (e.g. `nodes_with_ref_location`)
+custom:
+  Author: afischh
+  Issue: "12900"
+time: 2026-05-17T00:00:00Z
