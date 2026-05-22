@@ -122,6 +122,18 @@ impl PrivateDefinition {
     }
 }
 
+fn path_component_eq(left: &str, right: &str) -> bool {
+    left.eq_ignore_ascii_case(right)
+}
+
+fn groups_eq(left: &[String], right: &[String]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right.iter())
+            .all(|(left_group, right_group)| path_component_eq(left_group, right_group))
+}
+
 fn extract_path_from_url(url: String) -> String {
     // 1) parse
     let parsed =
@@ -159,17 +171,19 @@ impl GitURL {
         let url_def = self.get_definition();
 
         // Compare org names
-        if url_def.org_name != private_def.org_name {
+        if !path_component_eq(&url_def.org_name, &private_def.org_name) {
             return false;
         }
 
         // Compare groups (for multi-level paths)
-        if url_def.groups != private_def.groups {
+        if !groups_eq(&url_def.groups, &private_def.groups) {
             return false;
         }
 
         // Compare repo names (allowing for {repo} wildcard)
-        if url_def.is_repo_wildcard() || url_def.repo_name == private_def.repo_name {
+        if url_def.is_repo_wildcard()
+            || path_component_eq(&url_def.repo_name, &private_def.repo_name)
+        {
             return true;
         }
 
@@ -215,12 +229,14 @@ impl ADOGitURL {
 
         // For azure_active_directory, we only compare org and repo, not groups (project is in URL template)
         // Private definition should be 2-part: org/repo
-        if url_def.org_name != private_def.org_name {
+        if !path_component_eq(&url_def.org_name, &private_def.org_name) {
             return false;
         }
 
         // Compare repo names (allowing for {repo} wildcard)
-        if url_def.is_repo_wildcard() || url_def.repo_name == private_def.repo_name {
+        if url_def.is_repo_wildcard()
+            || path_component_eq(&url_def.repo_name, &private_def.repo_name)
+        {
             return true;
         }
 
@@ -237,12 +253,14 @@ impl ADOGitURL {
 
         // The project in private_def is informational — the URL template contains the actual project.
         // We only match on org and repo.
-        if url_def.org_name != private_def.org_name {
+        if !path_component_eq(&url_def.org_name, &private_def.org_name) {
             return false;
         }
 
         // Compare repo names (allowing for {repo} wildcard)
-        if url_def.is_repo_wildcard() || url_def.repo_name == private_def.repo_name {
+        if url_def.is_repo_wildcard()
+            || path_component_eq(&url_def.repo_name, &private_def.repo_name)
+        {
             return true;
         }
 
