@@ -36,6 +36,8 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
         .route("/api/v1/models", get(models::list_models))
         .route("/api/v1/models/facets", get(models::list_model_facets))
         .route("/api/v1/models/{unique_id}", get(models::get_model))
+        .route("/api/v1/sources", get(sources::list_sources))
+        .route("/api/v1/sources/facets", get(sources::list_source_facets))
         .route("/api/v1/sources/{unique_id}", get(sources::get_source))
         .route("/api/v1/groups/{unique_id}", get(groups::get_group))
         .route("/api/v1/macros/{unique_id}", get(macros::get_macro))

@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/sources/:id`.
+//! Tests for `GET /api/v1/sources/:id`, `GET /api/v1/sources`, and
+//! `GET /api/v1/sources/facets`.
 //!
 //! Schema anchoring (#10255): the `RecordBatch` fixtures below are hand-
 //! rolled and not enforced against the production parquet schemas. A column
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use arrow_array::builder::{ListBuilder, StringBuilder};
 use arrow_array::{BooleanArray, Float64Array, Int64Array, ListArray, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
@@ -728,4 +729,497 @@ async fn freshness_criteria_null_when_no_thresholds() {
     let body = response_body(r).await;
     assert_eq!(body["freshness"]["status"], "pass");
     assert_eq!(body["freshness"]["criteria"], serde_json::Value::Null);
+}
+
+// ===========================================================================
+// Tests: GET /api/v1/sources and GET /api/v1/sources/facets
+// ===========================================================================
+//
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index exposes fixture builders bound to the production
+// parquet schema.
+
+// ---------------------------------------------------------------------------
+// Mock backend for list + facets
+// ---------------------------------------------------------------------------
+
+struct SourceListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+    /// When `true`, the WITH-freshness count query returns `None` to trigger
+    /// the no-join fallback path.
+    freshness_view_absent: bool,
+    db_facet_batches: Vec<RecordBatch>,
+    schema_facet_batches: Vec<RecordBatch>,
+}
+
+impl SourceListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+            freshness_view_absent: false,
+            db_facet_batches: vec![],
+            schema_facet_batches: vec![],
+        }
+    }
+    fn without_freshness(mut self) -> Self {
+        self.freshness_view_absent = true;
+        self
+    }
+    fn with_db_facets(mut self, batches: Vec<RecordBatch>) -> Self {
+        self.db_facet_batches = batches;
+        self
+    }
+    fn with_schema_facets(mut self, batches: Vec<RecordBatch>) -> Self {
+        self.schema_facet_batches = batches;
+        self
+    }
+}
+
+impl Backend for SourceListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if !sql.contains("count(*)") {
+            return None;
+        }
+        if self.freshness_view_absent && sql.contains("source_freshness") {
+            return None;
+        }
+        Some(self.total_count.to_string())
+    }
+    fn query_arrow(&self, sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        if sql.contains("database_name AS value") {
+            return Ok(self.db_facet_batches.clone());
+        }
+        if sql.contains("schema_name AS value") {
+            return Ok(self.schema_facet_batches.clone());
+        }
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: SourceListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::unavailable()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+        capabilities: Capabilities::default(),
+        server_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders
+// ---------------------------------------------------------------------------
+
+fn source_list_schema(tags_field: &Field) -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("resource_type", DataType::Utf8, false),
+        Field::new("package_name", DataType::Utf8, true),
+        Field::new("source_name", DataType::Utf8, true),
+        Field::new("source_description", DataType::Utf8, true),
+        Field::new("database_name", DataType::Utf8, true),
+        Field::new("schema_name", DataType::Utf8, true),
+        Field::new("identifier", DataType::Utf8, true),
+        Field::new("loader", DataType::Utf8, true),
+        tags_field.clone(),
+        Field::new("freshness_status", DataType::Utf8, true),
+        Field::new("freshness_snapshotted_at", DataType::Utf8, true),
+        Field::new("freshness_max_loaded_at", DataType::Utf8, true),
+    ]))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn source_list_row(
+    unique_id: &str,
+    name: &str,
+    database_name: Option<&str>,
+    schema_name: Option<&str>,
+    tags: &[&str],
+    freshness_status: Option<&str>,
+    snapshotted_at: Option<&str>,
+    max_loaded_at: Option<&str>,
+) -> RecordBatch {
+    let tags_arr = make_str_list(tags);
+    let tags_field = Field::new("tags", tags_arr.data_type().clone(), true);
+    RecordBatch::try_new(
+        source_list_schema(&tags_field),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec!["source"])),
+            Arc::new(StringArray::from(vec![Some("jaffle_shop")])),
+            Arc::new(StringArray::from(vec![Some("raw_jaffle")])),
+            Arc::new(StringArray::from(vec![None::<&str>])),
+            Arc::new(StringArray::from(vec![database_name])),
+            Arc::new(StringArray::from(vec![schema_name])),
+            Arc::new(StringArray::from(vec![Some(name)])),
+            Arc::new(StringArray::from(vec![Some("fivetran")])),
+            Arc::new(tags_arr),
+            Arc::new(StringArray::from(vec![freshness_status])),
+            Arc::new(StringArray::from(vec![snapshotted_at])),
+            Arc::new(StringArray::from(vec![max_loaded_at])),
+        ],
+    )
+    .expect("valid source list row batch")
+}
+
+fn facet_value_batch(values: &[&str]) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![Field::new(
+        "value",
+        DataType::Utf8,
+        false,
+    )]));
+    RecordBatch::try_new(schema, vec![Arc::new(StringArray::from(values.to_vec()))])
+        .expect("valid facet batch")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builders
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sort_param_returns_err() {
+    let params = SourceListParams {
+        sort: Some("name:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_source_list_sql(&params, true, 10, None).is_err());
+}
+
+#[test]
+fn invalid_freshness_status_returns_err() {
+    let params = SourceListParams {
+        freshness_status: Some("stale".into()),
+        ..Default::default()
+    };
+    assert!(build_source_list_sql(&params, true, 10, None).is_err());
+}
+
+#[test]
+fn freshness_predicate_runtime_error_maps_to_sql_space() {
+    let pred = build_freshness_predicate("runtime_error", true)
+        .unwrap()
+        .unwrap();
+    assert!(pred.contains("'runtime error'"));
+}
+
+#[test]
+fn freshness_predicate_no_data_with_join_uses_null_check() {
+    let pred = build_freshness_predicate("no_data", true).unwrap().unwrap();
+    assert!(pred.contains("sf.unique_id IS NULL"));
+}
+
+#[test]
+fn freshness_predicate_no_data_without_join_is_vacuous() {
+    assert!(
+        build_freshness_predicate("no_data", false)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn freshness_predicate_specific_status_without_join_is_impossible() {
+    let pred = build_freshness_predicate("warn", false).unwrap().unwrap();
+    assert_eq!(pred, "1=0");
+}
+
+#[test]
+fn count_sql_excludes_cursor_page_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("orders".into()),
+        unique_id: "source.pkg.src.orders".into(),
+    };
+    let params = SourceListParams::default();
+    let (count, rows) = build_source_list_sql(&params, true, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("orders"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("orders"),
+        "rows must include cursor predicate"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_sources
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_sources_empty_catalog() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let r = list_sources(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_sources_all_fields_hydrated() {
+    let row = source_list_row(
+        "source.jaffle_shop.raw_jaffle.orders",
+        "orders",
+        Some("raw"),
+        Some("jaffle_shop"),
+        &["tag_a"],
+        Some("pass"),
+        Some("2026-05-19T10:00:00Z"),
+        Some("2026-05-19T09:45:00Z"),
+    );
+    let state = make_list_state(SourceListMockBackend::new(1, vec![row]));
+    let r = list_sources(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(
+        body["data"][0]["unique_id"],
+        "source.jaffle_shop.raw_jaffle.orders"
+    );
+    assert_eq!(body["data"][0]["name"], "orders");
+    assert_eq!(body["data"][0]["resource_type"], "source");
+    assert_eq!(body["data"][0]["database_name"], "raw");
+    assert_eq!(body["data"][0]["schema_name"], "jaffle_shop");
+    assert_eq!(body["data"][0]["loader"], "fivetran");
+    assert_eq!(body["data"][0]["tags"], serde_json::json!(["tag_a"]));
+    assert_eq!(body["data"][0]["freshness"]["status"], "pass");
+    assert_eq!(
+        body["data"][0]["freshness"]["snapshotted_at"],
+        "2026-05-19T10:00:00Z"
+    );
+    assert!(
+        body["data"][0]["freshness"].get("criteria").is_none(),
+        "list freshness must not expose criteria"
+    );
+    assert_eq!(body["page_info"]["total_count"], 1);
+}
+
+#[tokio::test]
+async fn list_sources_freshness_null_when_view_absent() {
+    let row = source_list_row("source.pkg.src.t", "t", None, None, &[], None, None, None);
+    let state = make_list_state(SourceListMockBackend::new(1, vec![row]).without_freshness());
+    let r = list_sources(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["freshness"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_sources_sort_param_returns_400() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let params = SourceListParams {
+        sort: Some("name:asc".into()),
+        ..Default::default()
+    };
+    let r = list_sources(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_sources_invalid_freshness_status_returns_400() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let params = SourceListParams {
+        freshness_status: Some("stale".into()),
+        ..Default::default()
+    };
+    let r = list_sources(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_sources_invalid_cursor_returns_400() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let params = SourceListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_sources(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_sources_multi_page_has_next_page_true() {
+    let row_a = source_list_row(
+        "source.pkg.src.alpha",
+        "alpha",
+        Some("db"),
+        Some("sc"),
+        &[],
+        None,
+        None,
+        None,
+    );
+    let row_b = source_list_row(
+        "source.pkg.src.beta",
+        "beta",
+        Some("db"),
+        Some("sc"),
+        &[],
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(SourceListMockBackend::new(2, vec![row_a, row_b]));
+    let params = SourceListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_sources(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_sources_last_page_end_cursor_null() {
+    let row = source_list_row("source.pkg.src.z", "z", None, None, &[], None, None, None);
+    let state = make_list_state(SourceListMockBackend::new(1, vec![row]));
+    let r = list_sources(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page per ADR-6"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_sources_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "source.pkg.src.alpha".into(),
+    }
+    .encode();
+    let row = source_list_row(
+        "source.pkg.src.beta",
+        "beta",
+        None,
+        None,
+        &[],
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(SourceListMockBackend::new(1, vec![row]));
+    let params = SourceListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_sources(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+#[tokio::test]
+async fn list_sources_tags_extracted_per_row() {
+    let row_a = source_list_row(
+        "source.pkg.src.a",
+        "a",
+        None,
+        None,
+        &["tag_a1", "tag_a2"],
+        None,
+        None,
+        None,
+    );
+    let row_b = source_list_row(
+        "source.pkg.src.b",
+        "b",
+        None,
+        None,
+        &["tag_b1"],
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(SourceListMockBackend::new(2, vec![row_a, row_b]));
+    let r = list_sources(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(
+        body["data"][0]["tags"],
+        serde_json::json!(["tag_a1", "tag_a2"])
+    );
+    assert_eq!(body["data"][1]["tags"], serde_json::json!(["tag_b1"]));
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_source_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_source_facets_freshness_status_is_static() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let r = list_source_facets(State(state)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let statuses: Vec<&str> = body["freshness_status"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        statuses,
+        vec!["no_data", "pass", "warn", "error", "runtime_error"]
+    );
+}
+
+#[tokio::test]
+async fn list_source_facets_all_counts_null() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let r = list_source_facets(State(state)).await;
+    let body = response_body(r).await;
+    for v in body["freshness_status"].as_array().unwrap() {
+        assert_eq!(v["count"], serde_json::Value::Null);
+    }
+}
+
+#[tokio::test]
+async fn list_source_facets_empty_databases_on_empty_catalog() {
+    let state = make_list_state(SourceListMockBackend::new(0, vec![]));
+    let r = list_source_facets(State(state)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["databases"], serde_json::json!([]));
+    assert_eq!(body["schemas"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn list_source_facets_databases_and_schemas_populated() {
+    let state = make_list_state(
+        SourceListMockBackend::new(0, vec![])
+            .with_db_facets(vec![facet_value_batch(&["raw", "analytics"])])
+            .with_schema_facets(vec![facet_value_batch(&["jaffle_shop", "stripe"])]),
+    );
+    let r = list_source_facets(State(state)).await;
+    let body = response_body(r).await;
+    let dbs: Vec<&str> = body["databases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap())
+        .collect();
+    assert_eq!(dbs, vec!["raw", "analytics"]);
+    let schemas: Vec<&str> = body["schemas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap())
+        .collect();
+    assert_eq!(schemas, vec!["jaffle_shop", "stripe"]);
 }
