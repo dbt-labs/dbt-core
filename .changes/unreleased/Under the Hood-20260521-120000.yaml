@@ -3,4 +3,4 @@ body: Allow-list additional DBT_ENGINE_STATE_* engine env vars (EMIT_REUSED_STAT
 time: 2026-05-21T12:00:00.000000000Z
 custom:
     Author: colin-rogers-dbt
-    Issue: 13002
+    Issue: "13002"
