@@ -66,3 +66,18 @@ message ConnectionLimitWait {
   // Number of active adapter connections. Empty unless trace log level is set.
   optional uint32 active_connections = 2;
 }
+
+// Event emitted when an adapter connection is opened. Only emitted at trace log level.
+message AdapterConnectionOpen {
+  // Adapter type name
+  string adapter_type = 1;
+
+  // Adapter backend (driver) name
+  string adapter_backend = 2;
+}
+
+// Event emitted when an adapter connection is closed. Only emitted at trace log level.
+message AdapterConnectionClose {
+  // Debug representation of the adapter connection being closed.
+  string repr = 1;
+}

@@ -7,12 +7,12 @@ use super::traits::AnyTelemetryEvent;
 use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
-        ArtifactWritten, AssetParsed, CallTrace, CompiledCode, CompiledCodeInline,
-        ConnectionLimitWait, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled,
-        GenericOpExecuted, GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput,
-        LogMessage, NodeEvaluated, NodeProcessed, OnboardingScreenShown, PackageUpdate,
-        PhaseExecuted, Process, ProgressMessage, QueryExecuted, ShowDataOutput, ShowResult,
-        StateModifiedDiff, Unknown, UserLogMessage,
+        AdapterConnectionClose, AdapterConnectionOpen, ArtifactWritten, AssetParsed, CallTrace,
+        CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
+        DepsAllPackagesInstalled, DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed,
+        HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
+        OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
+        QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -332,6 +332,18 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<PackageUpdate>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<PackageUpdate>,
+        );
+        registry.register(
+            AdapterConnectionOpen::FULL_NAME,
+            arrow_deserialize_for_type::<AdapterConnectionOpen>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<AdapterConnectionOpen>,
+        );
+        registry.register(
+            AdapterConnectionClose::FULL_NAME,
+            arrow_deserialize_for_type::<AdapterConnectionClose>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<AdapterConnectionClose>,
         );
 
         registry

@@ -11,9 +11,11 @@ use dbt_auth::{AdapterConfig, Auth};
 use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
+use dbt_telemetry::AdapterConnectionOpen;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::*;
 use minijinja::State;
@@ -636,7 +638,19 @@ impl AdapterEngine for XdbcEngine {
             };
 
         match &self.mode {
-            EngineMode::Mock => Ok(Box::new(NoopConnection)),
+            EngineMode::Mock => {
+                emit_trace_event(|| {
+                    (
+                        AdapterConnectionOpen {
+                            adapter_type: self.adapter_type().as_ref().to_owned(),
+                            adapter_backend: self.backend().to_string(),
+                        }
+                        .into(),
+                        None,
+                    )
+                });
+                Ok(Box::new(NoopConnection))
+            }
             EngineMode::Live => do_create_connection(self.adapter_type),
         }
     }
@@ -646,14 +660,35 @@ impl AdapterEngine for XdbcEngine {
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Connection>> {
         if !self.mode.has_real_connections() {
+            emit_trace_event(|| {
+                (
+                    AdapterConnectionOpen {
+                        adapter_type: self.adapter_type().as_ref().to_owned(),
+                        adapter_backend: self.backend().to_string(),
+                    }
+                    .into(),
+                    None,
+                )
+            });
             return Ok(Box::new(NoopConnection));
         }
         let mut database = self.load_driver_and_configure_database(config)?;
         let connect = || connection::Builder::default().build(&mut database);
         let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
-        retry_policy
+        let conn = retry_policy
             .execute(config, connect)
-            .map_err(|e| enrich_connection_error(self.adapter_type(), e, config))
+            .map_err(|e| enrich_connection_error(self.adapter_type(), e, config))?;
+        emit_trace_event(|| {
+            (
+                AdapterConnectionOpen {
+                    adapter_type: self.adapter_type().as_ref().to_owned(),
+                    adapter_backend: self.backend().to_string(),
+                }
+                .into(),
+                None,
+            )
+        });
+        Ok(conn)
     }
 
     fn execute_with_options(

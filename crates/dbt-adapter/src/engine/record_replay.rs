@@ -9,7 +9,9 @@ use dbt_adapter_core::AdapterType;
 use dbt_auth::AdapterConfig;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_telemetry::AdapterConnectionOpen;
 use dbt_xdbc::{Backend, Connection, QueryCtx};
 use minijinja::State;
 use xdbc_record_replay::{RecordConnection, RecordingContext, ReplayConnection};
@@ -157,6 +159,16 @@ impl AdapterEngine for RecordReplayEngine {
                     node_id,
                     metadata: false,
                 });
+                emit_trace_event(|| {
+                    (
+                        AdapterConnectionOpen {
+                            adapter_type: self.adapter_type().as_ref().to_owned(),
+                            adapter_backend: self.backend().to_string(),
+                        }
+                        .into(),
+                        None,
+                    )
+                });
                 Ok(Box::new(conn))
             }
             Mode::Record => {
@@ -183,6 +195,16 @@ impl AdapterEngine for RecordReplayEngine {
                     self.config.clone(),
                     self.generation,
                 );
+                emit_trace_event(|| {
+                    (
+                        AdapterConnectionOpen {
+                            adapter_type: self.adapter_type().as_ref().to_owned(),
+                            adapter_backend: self.backend().to_string(),
+                        }
+                        .into(),
+                        None,
+                    )
+                });
                 Ok(Box::new(conn))
             }
             Mode::Record => self.inner.new_connection_with_config(config),

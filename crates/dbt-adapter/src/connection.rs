@@ -10,8 +10,9 @@ use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::Cancellable;
+use dbt_common::tracing::emit::emit_trace_event;
 use dbt_common::{AdapterResult, create_debug_span, is_trace_enabled};
-use dbt_telemetry::ConnectionLimitWait;
+use dbt_telemetry::{AdapterConnectionClose, ConnectionLimitWait};
 use dbt_xdbc::{Connection, ConnectionFactory};
 use minijinja::State;
 
@@ -226,6 +227,16 @@ impl Drop for ConnectionGuard<'_> {
         if self.persist {
             let conn = self.conn.take();
             CONNECTION.with(|c| c.replace(conn));
+        } else if let Some(conn) = self.conn.as_ref() {
+            emit_trace_event(|| {
+                (
+                    AdapterConnectionClose {
+                        repr: format!("{conn:?}"),
+                    }
+                    .into(),
+                    None,
+                )
+            });
         }
         BACKPRESSURE_STATE.did_deactivate_connection();
     }
