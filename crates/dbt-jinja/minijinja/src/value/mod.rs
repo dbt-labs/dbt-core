@@ -753,6 +753,30 @@ pub(crate) fn intern_into_value(s: &str) -> Value {
     }
 }
 
+/// If `receiver` is a Map value and `key` is a reserved dict method name
+/// (e.g. `items` / `keys` / `values` / `get`), build a [`BoundMethod`]
+/// wrapping `receiver` so attribute access yields the bound method
+/// instead of the user's value at that key (Python parity).
+///
+/// Only used by the `Instruction::GetAttr` VM dispatch and the public
+/// [`Value::get_attr`] API. The context variable-resolution path uses
+/// `get_attr_fast` directly and skips this so context variables named
+/// `items` / `keys` / etc. still resolve to their user values.
+pub(crate) fn bound_dict_method_for_attr(receiver: &Value, key: &str) -> Option<Value> {
+    let dy = match receiver.0 {
+        ValueRepr::Object(ref dy) => dy,
+        _ => return None,
+    };
+    if !matches!(dy.repr(), ObjectRepr::Map) {
+        return None;
+    }
+    let method = crate::value::object::reserved_dict_method_name(key)?;
+    Some(Value::from_object(crate::value::object::BoundMethod::new(
+        receiver.clone(),
+        method,
+    )))
+}
+
 #[allow(clippy::len_without_is_empty)]
 impl Value {
     /// The undefined value.
@@ -1306,8 +1330,13 @@ impl Value {
     /// # Ok(()) }
     /// ```
     pub fn get_attr(&self, key: &str) -> Result<Value, Error> {
+        if let ValueRepr::Undefined = self.0 {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        if let Some(bound) = bound_dict_method_for_attr(self, key) {
+            return Ok(bound);
+        }
         let value = match self.0 {
-            ValueRepr::Undefined => return Err(Error::from(ErrorKind::UndefinedError)),
             ValueRepr::Object(ref dy) => dy.get_value(&Value::from(key)),
             _ => None,
         };
@@ -1321,6 +1350,13 @@ impl Value {
     /// The main difference is that the return value will be `None` if the value is
     /// unable to look up the key rather than returning `Undefined` and errors will
     /// also not be created.
+    ///
+    /// This path intentionally does *not* synthesize a [`BoundMethod`] for
+    /// reserved dict method names — it is reused by the variable-resolution
+    /// path (`Context::load`), where a context variable literally named `items`
+    /// must still resolve to the user value. The `Instruction::GetAttr`
+    /// dispatch in the VM handles the dict-method override before falling
+    /// through to this helper.
     pub(crate) fn get_attr_fast(&self, key: &str) -> Option<Value> {
         match self.0 {
             ValueRepr::Object(ref dy) => dy.get_value(&Value::from(key)),

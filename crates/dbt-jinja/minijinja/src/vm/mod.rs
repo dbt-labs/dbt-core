@@ -474,8 +474,13 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::GetAttr(name, span) => {
                     let a = stack.pop();
-                    let value = a
-                        .get_attr_fast(name)
+                    // For Map values, reserved dict method names (`items` /
+                    // `keys` / `values` / `get`) must resolve to a bound method
+                    // — not the user's value at that key. Python parity:
+                    // `d.items` is the class attribute, `d['items']` is the
+                    // user value.
+                    let value = crate::value::bound_dict_method_for_attr(&a, name)
+                        .or_else(|| a.get_attr_fast(name))
                         .or_else(|| a.as_object()?.get_property(state, name, listeners).ok());
                     stack.push(match value {
                         Some(value) => value

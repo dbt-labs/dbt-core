@@ -89,6 +89,27 @@ fn test_dict_methods() {
 }
 
 #[test]
+fn test_dict_methods_not_shadowed_by_key() {
+    // A user key literally named after a dict method must not shadow the method.
+    // Python parity: `dict.items` is a bound method on the class, so `d['items']`
+    // and `d.items()` are distinct lookups.
+    assert!(eval_expr("{'items': 99}.items()|list == [('items', 99)]").is_true());
+    assert!(eval_expr("{'keys': 1}.keys()|list == ['keys']").is_true());
+    assert!(eval_expr("{'values': 1}.values()|list == [1]").is_true());
+    assert!(eval_expr("{'get': 1}.get('get') == 1").is_true());
+}
+
+#[test]
+fn test_dict_method_bare_attribute_returns_bound_method() {
+    // `d.items` (no parens) returns the bound method, NOT the user value at
+    // key 'items'. The user value is still reachable via `d['items']`.
+    assert!(eval_expr("{'items': 99}.items != 99").is_true());
+    assert!(eval_expr("{'items': 99}['items'] == 99").is_true());
+    // The bound method is callable: invoking it produces the dict's items.
+    assert!(eval_expr("{'items': 99}.items()|list == [('items', 99)]").is_true());
+}
+
+#[test]
 fn test_list_methods() {
     assert!(eval_expr("[1, 2, 2, 3].count(2) == 2").is_true());
 

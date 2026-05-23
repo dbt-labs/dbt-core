@@ -818,6 +818,82 @@ macro_rules! impl_value_iterable {
     };
 }
 
+/// Method names that must never be resolved via dict key-lookup on Map values.
+///
+/// Python treats dict methods (`.items()`, `.keys()`, `.values()`, `.get()`) as
+/// attributes on the class, so user keys with the same name cannot shadow them.
+/// MiniJinja's default `call_method` does key-lookup-as-method-dispatch, which
+/// is convenient for Plain "namespace" objects (function/macro dispatch) but
+/// breaks dict parity. The bundled Map `Object` impls and `MutableMap` call
+/// `is_reserved_dict_method` to defer reserved names to the environment's
+/// `unknown_method_callback` (typically `pycompat::unknown_method_callback`).
+///
+/// `reserved_dict_method_name` is the same lookup but returns the interned
+/// `'static` name so callers (e.g. `Value::get_attr_fast` constructing a
+/// [`BoundMethod`]) can avoid allocating.
+pub(crate) const fn reserved_dict_method_name(name: &str) -> Option<&'static str> {
+    match name.as_bytes() {
+        b"items" => Some("items"),
+        b"keys" => Some("keys"),
+        b"values" => Some("values"),
+        b"get" => Some("get"),
+        _ => None,
+    }
+}
+
+pub(crate) const fn is_reserved_dict_method(name: &str) -> bool {
+    reserved_dict_method_name(name).is_some()
+}
+
+/// A bound dict method (e.g. `d.items` accessed as a bare attribute).
+///
+/// Python parity: `d.items` is the bound method on the dict class, distinct
+/// from `d['items']` (the user value). MiniJinja's default attribute access
+/// on a Map does `get_value(name)`, which would shadow the method with the
+/// user value. When a reserved name is accessed via `.attr` syntax on a Map,
+/// `Value::get_attr_fast` returns a `BoundMethod` whose `call` dispatches
+/// back through `receiver.call_method(...)` — which, for reserved names,
+/// falls through to the environment's `unknown_method_callback` (pycompat).
+#[derive(Debug)]
+pub(crate) struct BoundMethod {
+    receiver: Value,
+    method: &'static str,
+}
+
+impl BoundMethod {
+    pub(crate) fn new(receiver: Value, method: &'static str) -> Self {
+        Self { receiver, method }
+    }
+}
+
+impl Object for BoundMethod {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
+    fn call(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        args: &[Value],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
+        self.receiver
+            .call_method(state, self.method, args, listeners)
+    }
+
+    fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Mirrors Python's `<built-in method items of dict object at ...>` debug
+        // string at a coarse level. Templates that stringify a method object
+        // are doing something weird; this gives a recognizable hint.
+        write!(
+            f,
+            "<bound method {} of {}>",
+            self.method,
+            self.receiver.kind()
+        )
+    }
+}
+
 macro_rules! impl_str_map_helper {
     ($map_type:ident, $key_type:ty, $enumerator:ident) => {
         impl<V> Object for $map_type<$key_type, V>
@@ -836,6 +912,26 @@ macro_rules! impl_str_map_helper {
 
             fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
                 Some(self.len())
+            }
+
+            fn call_method(
+                self: &Arc<Self>,
+                state: &State<'_, '_>,
+                method: &str,
+                args: &[Value],
+                listeners: &[Rc<dyn RenderingEventListener>],
+            ) -> Result<Value, Error> {
+                // Reserved Python dict methods (items / keys / values / get) take
+                // precedence over user keys. Any other name still falls back to
+                // key lookup so Jinja macro imports and namespace-style dispatch
+                // (where macros are stored by name) keep working.
+                if is_reserved_dict_method(method) {
+                    return Err(Error::from(ErrorKind::UnknownMethod));
+                }
+                if let Some(value) = self.get_value(&Value::from(method)) {
+                    return value.call(state, args, listeners);
+                }
+                Err(Error::from(ErrorKind::UnknownMethod))
             }
         }
     };
@@ -916,6 +1012,26 @@ macro_rules! impl_value_map {
 
             fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
                 Some(self.len())
+            }
+
+            fn call_method(
+                self: &Arc<Self>,
+                state: &State<'_, '_>,
+                method: &str,
+                args: &[Value],
+                listeners: &[Rc<dyn RenderingEventListener>],
+            ) -> Result<Value, Error> {
+                // Reserved Python dict methods (items / keys / values / get) take
+                // precedence over user keys. Any other name still falls back to
+                // key lookup so Jinja macro imports and namespace-style dispatch
+                // (where macros are stored by name) keep working.
+                if is_reserved_dict_method(method) {
+                    return Err(Error::from(ErrorKind::UnknownMethod));
+                }
+                if let Some(value) = self.get_value(&Value::from(method)) {
+                    return value.call(state, args, listeners);
+                }
+                Err(Error::from(ErrorKind::UnknownMethod))
             }
         }
 
@@ -1509,8 +1625,15 @@ pub mod mutable_map {
                 }
                 "setdefault" => setdefault_impl(self, args),
                 _ => {
-                    if let Some(value) = self.get(&Value::from(method)) {
-                        return value.call(state, args, listeners);
+                    // Reserved Python dict methods bypass key lookup so the
+                    // environment's `unknown_method_callback` (pycompat) can
+                    // handle them. Other names still fall back to key lookup so
+                    // Jinja macro imports keep working (macros are stored in the
+                    // namespace by name and invoked via this path).
+                    if !is_reserved_dict_method(method) {
+                        if let Some(value) = self.get(&Value::from(method)) {
+                            return value.call(state, args, listeners);
+                        }
                     }
                     Err(Error::new(
                         ErrorKind::UnknownMethod,
