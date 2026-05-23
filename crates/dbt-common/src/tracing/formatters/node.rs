@@ -489,7 +489,10 @@ pub fn format_node_evaluated_end(
     // Format components
     let qualifier_alias = format_qualifier_alias(&relation_schema, &alias, colorize);
     let node_type_formatted = node_type.pretty();
-    let duration_formatted = format_duration_fixed_width(duration);
+    let active_duration = duration.saturating_sub(std::time::Duration::from_millis(
+        node.idle_time_ms.unwrap_or_default(),
+    ));
+    let duration_formatted = format_duration_fixed_width(active_duration);
     let outcome_formatted = format_node_outcome_as_status(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),

@@ -7,12 +7,11 @@ use std::fmt;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use counter::Counter;
 use indicatif::ProgressBar;
 use indicatif::ProgressState;
-use itertools::Itertools as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::BORDERLINE_CONTEXT_THRESHOLD;
@@ -24,11 +23,15 @@ use crate::styles::RED;
 use crate::styles::YELLOW;
 use crate::styles::format_duration_short;
 
+const IDLE_CONTEXT_DEBOUNCE: Duration = Duration::from_millis(250);
+
 /// A context item representing an in-progress task with timing information.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ContextItem {
     name: String,
     start_time: Instant,
+    idle_start: Option<Instant>,
+    idle_duration: Duration,
 }
 
 impl ContextItem {
@@ -36,13 +39,85 @@ impl ContextItem {
         Self {
             name,
             start_time: Instant::now(),
+            idle_start: None,
+            idle_duration: Duration::ZERO,
         }
     }
-}
 
-impl Display for ContextItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let elapsed = self.start_time.elapsed();
+    fn set_idle(&mut self) {
+        if self.idle_start.is_none() {
+            self.idle_start = Some(Instant::now());
+        }
+    }
+
+    fn set_active(&mut self) {
+        if let Some(idle_start) = self.idle_start.take() {
+            self.idle_duration = self.idle_duration.saturating_add(idle_start.elapsed());
+        }
+    }
+
+    fn active_elapsed(&self) -> Duration {
+        let current_idle = self
+            .idle_start
+            .map(|idle_start| idle_start.elapsed())
+            .unwrap_or_default();
+        self.start_time
+            .elapsed()
+            .saturating_sub(self.idle_duration.saturating_add(current_idle))
+    }
+
+    fn is_idle(&self) -> bool {
+        self.idle_start
+            .is_some_and(|idle_start| idle_start.elapsed() >= IDLE_CONTEXT_DEBOUNCE)
+    }
+
+    fn display_text(&self) -> String {
+        if let Some(idle_start) = self.idle_start {
+            let idle_elapsed = idle_start.elapsed();
+            if idle_elapsed >= IDLE_CONTEXT_DEBOUNCE {
+                return format!(
+                    "{} [idle {}]",
+                    self.name,
+                    format_duration_short(idle_elapsed)
+                );
+            }
+        }
+
+        format!(
+            "{} [{}]",
+            self.name,
+            format_duration_short(self.active_elapsed())
+        )
+    }
+
+    fn display_width(&self) -> usize {
+        self.display_text().graphemes(true).count()
+    }
+
+    fn format_with_limit(&self, max_len: usize) -> String {
+        if max_len == 0 {
+            return String::new();
+        }
+
+        let text = self.display_text();
+        let graphemes = text.graphemes(true).collect::<Vec<&str>>();
+        let text = if graphemes.len() <= max_len {
+            text
+        } else if max_len <= 3 {
+            ".".repeat(max_len)
+        } else {
+            graphemes
+                .into_iter()
+                .take(max_len.saturating_sub(3))
+                .chain(std::iter::once("..."))
+                .collect::<String>()
+        };
+
+        if self.is_idle() {
+            return DIM.apply_to(text).to_string();
+        }
+
+        let elapsed = self.active_elapsed();
         let color = console::Style::new();
         let color = if elapsed > SLOW_CONTEXT_THRESHOLD {
             color.red().bold()
@@ -51,12 +126,13 @@ impl Display for ContextItem {
         } else {
             color
         };
-        write!(
-            f,
-            "{} [{}]",
-            color.apply_to(self.name.as_str()),
-            color.apply_to(format_duration_short(self.start_time.elapsed()))
-        )
+        color.apply_to(text).to_string()
+    }
+}
+
+impl Display for ContextItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.format_with_limit(usize::MAX).as_str())
     }
 }
 
@@ -185,14 +261,24 @@ impl ContextualProgressBar {
             }
         }
 
-        // Add in-progress last
+        // Add in-progress and idle context counts last
         if let Ok(items) = self.items.read()
             && !items.is_empty()
         {
-            let part = DIM
-                .apply_to(format!("{} in-progress", items.len()))
-                .to_string();
-            formatted_parts.push(part);
+            let idle_count = items.iter().filter(|item| item.is_idle()).count();
+            let active_count = items.len().saturating_sub(idle_count);
+
+            if active_count > 0 {
+                let part = DIM
+                    .apply_to(format!("{active_count} in-progress"))
+                    .to_string();
+                formatted_parts.push(part);
+            }
+
+            if idle_count > 0 {
+                let part = DIM.apply_to(format!("{idle_count} idle")).to_string();
+                formatted_parts.push(part);
+            }
         }
 
         // Join all parts with " | "
@@ -204,18 +290,27 @@ impl ContextualProgressBar {
     fn format_context_msg(&self, writer: &'_ mut dyn fmt::Write, max_len: usize) {
         match self.items.read() {
             Ok(items) => {
-                let fullmsg = items.iter().join(", ");
-                let graphemes = fullmsg.graphemes(true).collect::<Vec<&str>>();
-                let shortmsg = if graphemes.len() < max_len {
-                    fullmsg
-                } else {
-                    graphemes
-                        .into_iter()
-                        .take(max_len.saturating_sub(3))
-                        .chain(std::iter::once("..."))
-                        .collect::<String>()
-                };
-                let _ = writer.write_str(shortmsg.as_str());
+                let mut remaining = max_len;
+                let mut formatted_parts = Vec::new();
+
+                for item in items.iter() {
+                    let separator_len = if formatted_parts.is_empty() { 0 } else { 2 };
+                    if remaining <= separator_len {
+                        break;
+                    }
+
+                    let item_limit = remaining - separator_len;
+                    let item_width = item.display_width();
+                    formatted_parts.push(item.format_with_limit(item_limit));
+                    remaining =
+                        remaining.saturating_sub(separator_len + item_width.min(item_limit));
+
+                    if item_width > item_limit {
+                        break;
+                    }
+                }
+
+                let _ = writer.write_str(formatted_parts.join(", ").as_str());
             }
             Err(_) => {
                 let _ = writer.write_str("<N/A>");
@@ -276,6 +371,24 @@ impl ContextualProgressBar {
             if let Some(pos) = slots.iter().position(|x| x.as_ref() == item) {
                 slots.remove(pos);
             }
+        }
+    }
+
+    /// Marks a context item as idle without removing it from the bar.
+    pub fn set_idle(&self, item: &str) {
+        if let Ok(mut slots) = self.items.write()
+            && let Some(slot) = slots.iter_mut().find(|x| x.as_ref() == item)
+        {
+            slot.set_idle();
+        }
+    }
+
+    /// Marks a context item active again and accumulates its idle time.
+    pub fn set_active(&self, item: &str) {
+        if let Ok(mut slots) = self.items.write()
+            && let Some(slot) = slots.iter_mut().find(|x| x.as_ref() == item)
+        {
+            slot.set_active();
         }
     }
 }

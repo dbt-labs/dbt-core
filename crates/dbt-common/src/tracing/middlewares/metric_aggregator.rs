@@ -1,7 +1,7 @@
 use dbt_telemetry::{
-    HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeEvent,
-    NodeOutcome, NodeProcessed, NodeSkipReason, SeverityNumber, SourceFreshnessOutcome,
-    SpanEndInfo, has_node_warning, node_processed::NodeOutcomeDetail,
+    ConnectionLimitWait, HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo,
+    NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, SeverityNumber,
+    SourceFreshnessOutcome, SpanEndInfo, has_node_warning, node_processed::NodeOutcomeDetail,
 };
 
 use super::super::{
@@ -170,6 +170,23 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 )),
                 node_type_counts,
                 status_counts,
+            });
+        }
+
+        if span.attributes.is::<ConnectionLimitWait>() {
+            let wait_ms = span
+                .end_time_unix_nano
+                .duration_since(span.start_time_unix_nano)
+                .unwrap_or_default()
+                .as_millis()
+                .min(u64::MAX as u128) as u64;
+
+            data_provider.with_ancestor_attrs_mut::<NodeEvaluated>(|node| {
+                node.idle_time_ms = Some(
+                    node.idle_time_ms
+                        .unwrap_or_default()
+                        .saturating_add(wait_ms),
+                );
             });
         }
 

@@ -1,10 +1,11 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    AssetParsed, CompiledCode, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-    DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput,
-    LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
-    SpanStartInfo, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
+    AssetParsed, CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
+    DepsAllPackagesInstalled, DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed,
+    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
+    NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
+    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, StateModifiedDiff, StatusCode,
+    TelemetryOutputFlags, UserLogMessage,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -18,6 +19,9 @@ use super::super::{
     event_classifiers::is_exit_with_status_log,
     formatters::{
         asset::format_asset_parsed_end,
+        connection_limit_wait::{
+            format_connection_limit_wait_end, format_connection_limit_wait_start,
+        },
         constants::SELECTED_NODES_TITLE,
         deps::{
             format_package_add_end, format_package_add_start, format_package_install_end,
@@ -146,6 +150,11 @@ impl TelemetryConsumer for FileLogLayer {
             return;
         }
 
+        if let Some(wait) = span.attributes.downcast_ref::<ConnectionLimitWait>() {
+            self.handle_connection_limit_wait_start(span, wait);
+            return;
+        }
+
         // Handle DepsAllPackagesInstalled start
         if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
             self.handle_deps_all_packages_installing_start(span, ev);
@@ -180,6 +189,11 @@ impl TelemetryConsumer for FileLogLayer {
         // Query log (it has a separate layer, a dedicated sql file, but also goes to dbt.log as of today)
         if let Some(query_data) = span.attributes.downcast_ref::<QueryExecuted>() {
             self.handle_query_executed(span, query_data);
+            return;
+        }
+
+        if let Some(wait) = span.attributes.downcast_ref::<ConnectionLimitWait>() {
+            self.handle_connection_limit_wait_end(span, wait);
             return;
         }
 
@@ -316,6 +330,24 @@ impl FileLogLayer {
             span.severity_number,
             &[formatted_query],
         );
+    }
+
+    fn handle_connection_limit_wait_start(&self, span: &SpanStartInfo, wait: &ConnectionLimitWait) {
+        let formatted = format_connection_limit_wait_start(wait);
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted],
+        );
+    }
+
+    fn handle_connection_limit_wait_end(&self, span: &SpanEndInfo, wait: &ConnectionLimitWait) {
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+        let formatted = format_connection_limit_wait_end(wait, duration);
+        self.write_log_lines(span.end_time_unix_nano, span.severity_number, &[formatted]);
     }
 
     fn handle_phase_executed_start(&self, span: &SpanStartInfo, phase: &PhaseExecuted) {

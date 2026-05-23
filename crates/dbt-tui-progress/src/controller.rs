@@ -169,6 +169,20 @@ where
         });
     }
 
+    /// Marks a spinner context item idle without removing it.
+    pub fn set_spinner_context_idle(&self, id: &Id, item: &str) {
+        let _ = self.spinners.read_sync(id, |_, spinner| {
+            spinner.set_idle(item);
+        });
+    }
+
+    /// Marks a spinner context item active again.
+    pub fn set_spinner_context_active(&self, id: &Id, item: &str) {
+        let _ = self.spinners.read_sync(id, |_, spinner| {
+            spinner.set_active(item);
+        });
+    }
+
     /// Removes a spinner by ID.
     pub fn remove_spinner(&self, id: &Id) {
         if let Some((_, spinner)) = self.spinners.remove_sync(id) {
@@ -248,6 +262,20 @@ where
             if let Some(status) = status {
                 bar.inc_counter(status, 1);
             }
+        });
+    }
+
+    /// Marks a progress bar context item idle without removing it.
+    pub fn set_bar_context_idle(&self, id: &Id, item: &str) {
+        self.bars.read_sync(id, |_, bar| {
+            bar.set_idle(item);
+        });
+    }
+
+    /// Marks a progress bar context item active again.
+    pub fn set_bar_context_active(&self, id: &Id, item: &str) {
+        self.bars.read_sync(id, |_, bar| {
+            bar.set_active(item);
         });
     }
 

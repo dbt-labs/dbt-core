@@ -296,6 +296,33 @@ fn update_node_processed_from_node_evaluated(sum_ev: &mut NodeProcessed, phase_e
     sum_ev.rows_affected = phase_ev.rows_affected;
 }
 
+fn accumulate_node_processed_phase_duration(
+    sum_ev: &mut NodeProcessed,
+    wall_duration_ms: Option<u64>,
+    phase_ev: Option<&NodeEvaluated>,
+) {
+    let idle_time_ms = phase_ev.and_then(|ev| ev.idle_time_ms).unwrap_or_default();
+
+    if let Some(duration) = wall_duration_ms {
+        let net_duration = duration.saturating_sub(idle_time_ms);
+        sum_ev.duration_ms = Some(
+            sum_ev
+                .duration_ms
+                .unwrap_or_default()
+                .saturating_add(net_duration),
+        );
+    }
+
+    if idle_time_ms > 0 {
+        sum_ev.idle_time_ms = Some(
+            sum_ev
+                .idle_time_ms
+                .unwrap_or_default()
+                .saturating_add(idle_time_ms),
+        );
+    }
+}
+
 /// Factory for phase parent on_task_close callback.
 fn create_phase_on_task_close(
     phase_finished_counter: Arc<AtomicU64>,
@@ -370,15 +397,16 @@ fn create_node_processed_on_task_close(
         .flatten();
 
         update_span_attrs(this_span, |ev: &mut NodeProcessed| {
-            // Accumulate duration from this phase
-            if let Some(duration) = phase_duration_ms {
-                ev.duration_ms = Some(ev.duration_ms.unwrap_or(0) + duration);
-            }
-
             // Update NodeProcessed from NodeEvaluated attributes
-            read_span_attrs::<NodeEvaluated, _>(task_span, |attrs| {
+            let has_node_attrs = read_span_attrs::<NodeEvaluated, _>(task_span, |attrs| {
+                accumulate_node_processed_phase_duration(ev, phase_duration_ms, Some(attrs));
                 update_node_processed_from_node_evaluated(ev, attrs);
-            });
+            })
+            .is_some();
+
+            if !has_node_attrs {
+                accumulate_node_processed_phase_duration(ev, phase_duration_ms, None);
+            }
         });
 
         // Increment finished counter
@@ -405,15 +433,16 @@ fn create_node_processed_on_task_skip(
         .flatten();
 
         update_span_attrs(this_span, |ev: &mut NodeProcessed| {
-            // Accumulate duration from this phase
-            if let Some(duration) = phase_duration_ms {
-                ev.duration_ms = Some(ev.duration_ms.unwrap_or(0) + duration);
-            }
-
             // Update NodeProcessed from NodeEvaluated attributes
-            read_span_attrs::<NodeEvaluated, _>(task_span, |attrs| {
+            let has_node_attrs = read_span_attrs::<NodeEvaluated, _>(task_span, |attrs| {
+                accumulate_node_processed_phase_duration(ev, phase_duration_ms, Some(attrs));
                 update_node_processed_from_node_evaluated(ev, attrs);
-            });
+            })
+            .is_some();
+
+            if !has_node_attrs {
+                accumulate_node_processed_phase_duration(ev, phase_duration_ms, None);
+            }
         });
 
         // Increment finished counter

@@ -259,6 +259,10 @@ pub struct NodeEvaluated {
     /// Only set for successful outcomes where row count is known (e.g., models, seeds).
     #[prost(uint64, optional, tag = "41")]
     pub rows_affected: ::core::option::Option<u64>,
+    /// Total time in milliseconds this node evaluation spent idle.
+    /// This includes time spent waiting on internal backpressure.
+    #[prost(uint64, optional, tag = "42")]
+    pub idle_time_ms: ::core::option::Option<u64>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_evaluated::NodeOutcomeDetail>,
@@ -427,6 +431,10 @@ pub struct NodeProcessed {
     /// Group identifier for model level notifications
     #[prost(string, optional, tag = "44")]
     pub group: ::core::option::Option<::prost::alloc::string::String>,
+    /// Total time in milliseconds spent idle across all nested node evaluations.
+    /// This includes time spent waiting on internal backpressure.
+    #[prost(uint64, optional, tag = "45")]
+    pub idle_time_ms: ::core::option::Option<u64>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,

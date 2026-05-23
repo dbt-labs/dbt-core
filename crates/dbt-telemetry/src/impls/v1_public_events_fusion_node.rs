@@ -374,6 +374,7 @@ impl NodeEvaluated {
             None,        // node_skip_reason
             dbt_core_event_code_for_node_evaluation(phase).map(str::to_string),
             None, // rows_affected
+            None, // idle_time_ms
             None, // node_outcome_detail
         )
     }
@@ -445,6 +446,7 @@ impl NodeProcessed {
             in_selection,
             None, // rows_affected
             group,
+            None, // idle_time_ms
             None, // node_outcome_detail
         )
     }

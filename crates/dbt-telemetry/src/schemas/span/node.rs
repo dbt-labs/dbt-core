@@ -74,6 +74,17 @@ impl ProtoTelemetryEvent for NodeEvaluated {
     }
 }
 
+/// Internal struct used for serializing/deserializing NodeEvaluated fields
+/// stored in JSON payload.
+#[skip_serializing_none]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
+struct NodeEvaluatedJsonPayload {
+    /// Node type specific outcome details.
+    pub node_outcome_detail: Option<NodeOutcomeDetail>,
+    /// Time the node evaluation spent idle.
+    pub idle_time_ms: Option<u64>,
+}
+
 /// Internal struct used for serializing/deserializing subset of
 /// NodeProcessed fields as JSON payload in ArrowAttributes.
 #[skip_serializing_none]
@@ -83,8 +94,56 @@ struct NodeProcessedJsonPayload {
     pub in_selection: bool,
     /// Node type specific outcome details.
     pub node_outcome_detail: Option<node_processed::NodeOutcomeDetail>,
+    /// Time the node spent idle across nested evaluations.
+    pub idle_time_ms: Option<u64>,
     /// Source name for source nodes.
     pub source_name: Option<String>,
+}
+
+fn deserialize_node_evaluated_json_payload(
+    json_payload: Option<&String>,
+) -> Result<NodeEvaluatedJsonPayload, String> {
+    let Some(json_payload) = json_payload else {
+        return Ok(NodeEvaluatedJsonPayload {
+            node_outcome_detail: None,
+            idle_time_ms: None,
+        });
+    };
+
+    let value = serde_json::from_str::<serde_json::Value>(json_payload).map_err(|e| {
+        format!(
+            "Failed to deserialize json payload for event type \"{}\" from JSON: {}",
+            NodeEvaluated::full_name(),
+            e
+        )
+    })?;
+
+    let is_wrapped_payload = value.as_object().is_some_and(|obj| {
+        obj.contains_key("node_outcome_detail") || obj.contains_key("idle_time_ms")
+    });
+
+    if is_wrapped_payload {
+        serde_json::from_value::<NodeEvaluatedJsonPayload>(value).map_err(|e| {
+            format!(
+                "Failed to deserialize json payload for event type \"{}\" from JSON: {}",
+                NodeEvaluated::full_name(),
+                e
+            )
+        })
+    } else {
+        Ok(NodeEvaluatedJsonPayload {
+            node_outcome_detail: Some(serde_json::from_value::<NodeOutcomeDetail>(value).map_err(
+                |e| {
+                    format!(
+                        "Failed to deserialize legacy `node_outcome_detail` in event type \"{}\" from JSON: {}",
+                        NodeEvaluated::full_name(),
+                        e
+                    )
+                },
+            )?),
+            idle_time_ms: None,
+        })
+    }
 }
 
 impl ArrowSerializableTelemetryEvent for NodeEvaluated {
@@ -110,75 +169,87 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
             code_line: self.defined_at_line,
             code_column: self.defined_at_col,
             content_hash: Some(Cow::Borrowed(self.node_checksum.as_str())),
-            // Serialize node_outcome_detail into JSON as it may grow with arbitrary data and less
-            // likely to be queried directly
-            json_payload: self.node_outcome_detail.as_ref().map(|v| {
-                serde_json::to_string(v).unwrap_or_else(|_| {
-                    panic!(
-                        "Failed to serialize `node_outcome_detail` in event type \"{}\" to JSON",
-                        Self::full_name()
-                    )
-                })
-            }),
+            // Serialize less frequently queried node fields into JSON as they may grow
+            // with arbitrary data.
+            json_payload: (self.node_outcome_detail.is_some() || self.idle_time_ms.is_some()).then(
+                || {
+                    serde_json::to_string(&NodeEvaluatedJsonPayload {
+                        node_outcome_detail: self.node_outcome_detail.clone(),
+                        idle_time_ms: self.idle_time_ms,
+                    })
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Failed to serialize json payload for event type \"{}\" to JSON",
+                            Self::full_name()
+                        )
+                    })
+                },
+            ),
             rows_affected: self.rows_affected,
             ..Default::default()
         }
     }
 
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
-        Ok(
-            Self {
-                phase: record.phase.map(|v| v as i32).ok_or_else(
-                    || format!("Missing `phase` for event type \"{}\"", Self::full_name())
-                )?,
-                name: record
-                    .name
-                    .as_deref()
-                    .map(str::to_string)
-                    .ok_or_else(|| format!("Missing `name` for event type \"{}\"", Self::full_name()))?,
-                database: record.database.as_deref().map(str::to_string),
-                schema: record.schema.as_deref().map(str::to_string),
-                identifier: record.identifier.as_deref().map(str::to_string),
-                unique_id: record.unique_id.as_deref().map(str::to_string).ok_or_else(|| {
-                    format!("Missing `unique_id` for event type \"{}\"", Self::full_name())
-                })?,
-                materialization: record.materialization.map(|v| v as i32),
-                custom_materialization: record.custom_materialization.as_deref().map(str::to_string),
-                node_type: record.node_type.map(|v| v as i32).ok_or_else(|| {
-                    format!("Missing `node_type` for event type \"{}\"", Self::full_name())
-                })?,
-                node_outcome: record.node_outcome.map(|v| v as i32).ok_or_else(|| {
-                    format!("Missing `node_outcome` for event type \"{}\"", Self::full_name())
-                })?,
-                node_error_type: record.node_error_type.map(|v| v as i32),
-                node_cancel_reason: record.node_cancel_reason.map(|v| v as i32),
-                node_skip_reason: record.node_skip_reason.map(|v| v as i32),
-                sao_enabled: record.sao_enabled,
-                dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
-                node_outcome_detail: record.json_payload.as_ref().map(|v| serde_json::from_str(v).map_err(|e| {
+        let json_payload = deserialize_node_evaluated_json_payload(record.json_payload.as_ref())?;
+
+        Ok(Self {
+            phase: record.phase.map(|v| v as i32).ok_or_else(|| {
+                format!("Missing `phase` for event type \"{}\"", Self::full_name())
+            })?,
+            name: record.name.as_deref().map(str::to_string).ok_or_else(|| {
+                format!("Missing `name` for event type \"{}\"", Self::full_name())
+            })?,
+            database: record.database.as_deref().map(str::to_string),
+            schema: record.schema.as_deref().map(str::to_string),
+            identifier: record.identifier.as_deref().map(str::to_string),
+            unique_id: record
+                .unique_id
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
                     format!(
-                        "Failed to deserialize `node_outcome_detail` in event type \"{}\" from JSON: {}",
-                        Self::full_name(),
-                        e
+                        "Missing `unique_id` for event type \"{}\"",
+                        Self::full_name()
                     )
-                })).transpose()?,
-                relative_path: record
-                    .relative_path
-                    .as_deref()
-                    .map(str::to_string)
-                    // pre-preview.70 we haven't stored relative_path in arrow, so default to "unknown"
-                    .unwrap_or_else(|| "unknown".to_string()),
-                defined_at_line: record.code_line,
-                defined_at_col: record.code_column,
-                node_checksum: record
-                    .content_hash
-                    .as_deref()
-                    .map(str::to_string)
-                    // pre-preview.70 we haven't stored node_checksum in arrow, so default to "<missing>"
-                    .unwrap_or_else(|| "<missing>".to_string()),
-                rows_affected: record.rows_affected,
-            }
-        )
+                })?,
+            materialization: record.materialization.map(|v| v as i32),
+            custom_materialization: record.custom_materialization.as_deref().map(str::to_string),
+            node_type: record.node_type.map(|v| v as i32).ok_or_else(|| {
+                format!(
+                    "Missing `node_type` for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?,
+            node_outcome: record.node_outcome.map(|v| v as i32).ok_or_else(|| {
+                format!(
+                    "Missing `node_outcome` for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?,
+            node_error_type: record.node_error_type.map(|v| v as i32),
+            node_cancel_reason: record.node_cancel_reason.map(|v| v as i32),
+            node_skip_reason: record.node_skip_reason.map(|v| v as i32),
+            sao_enabled: record.sao_enabled,
+            dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
+            node_outcome_detail: json_payload.node_outcome_detail,
+            relative_path: record
+                .relative_path
+                .as_deref()
+                .map(str::to_string)
+                // pre-preview.70 we haven't stored relative_path in arrow, so default to "unknown"
+                .unwrap_or_else(|| "unknown".to_string()),
+            defined_at_line: record.code_line,
+            defined_at_col: record.code_column,
+            node_checksum: record
+                .content_hash
+                .as_deref()
+                .map(str::to_string)
+                // pre-preview.70 we haven't stored node_checksum in arrow, so default to "<missing>"
+                .unwrap_or_else(|| "<missing>".to_string()),
+            rows_affected: record.rows_affected,
+            idle_time_ms: json_payload.idle_time_ms,
+        })
     }
 }
 
@@ -261,6 +332,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             json_payload: serde_json::to_string(&NodeProcessedJsonPayload {
                 in_selection: self.in_selection,
                 node_outcome_detail: self.node_outcome_detail.clone(),
+                idle_time_ms: self.idle_time_ms,
                 source_name: self.source_name.clone(),
             })
             .unwrap_or_else(|_| {
@@ -370,6 +442,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             in_selection: json_payload.in_selection,
             rows_affected: record.rows_affected,
             group: record.group.as_deref().map(str::to_string),
+            idle_time_ms: json_payload.idle_time_ms,
         })
     }
 }
