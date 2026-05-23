@@ -14,7 +14,7 @@ pub struct HealthResponse {
 pub async fn get_health(State(state): State<SharedState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         ok: true,
-        version: state.server_version,
+        version: state.server_version(),
         index_dir: state.index_dir.display().to_string(),
     })
 }

@@ -143,7 +143,7 @@ impl Backend for MockBackend {
 fn make_state(backend: MockBackend) -> Arc<AppState> {
     let providers = Providers {
         backend: Arc::new(backend),
-        ..Providers::unavailable()
+        ..Providers::default()
     };
     Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
 }
@@ -611,7 +611,7 @@ impl Backend for DetailMockBackend {
 fn make_detail_state(backend: DetailMockBackend) -> Arc<AppState> {
     let providers = Providers {
         backend: Arc::new(backend),
-        ..Providers::unavailable()
+        ..Providers::default()
     };
     Arc::new(AppState::new(std::path::PathBuf::from("/tmp"), providers))
 }

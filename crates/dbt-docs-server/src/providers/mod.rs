@@ -1,13 +1,4 @@
 //! Provider bundle for the docs server.
-//!
-//! Every capability the docs server consumes is gated through a trait
-//! defined in `dbt-index-core` (untyped SQL access via [`Backend`],
-//! typed feature dispatch via [`Provider<Args, Output>`]). The source-
-//! available distribution wires the no-op stubs ([`UnavailableBackend`],
-//! [`UnavailableColumnLineage`], [`UnavailableColumnImpact`]) — every
-//! request gets a "feature not available" response that the UI turns
-//! into a PLG upsell. The proprietary distribution swaps in the real
-//! impls from `dbt-index` via `dbt-cli` at startup.
 
 use std::sync::Arc;
 
@@ -17,30 +8,43 @@ pub use dbt_index_core::{
     UnavailableBackend, UnavailableColumnImpact, UnavailableColumnLineage,
 };
 
+use crate::DistInfo;
+
+pub trait DistInfoProvider: Send + Sync {
+    fn dist_info(&self) -> DistInfo;
+}
+
+pub struct DefaultDistInfoProvider;
+
+impl DistInfoProvider for DefaultDistInfoProvider {
+    fn dist_info(&self) -> DistInfo {
+        DistInfo {
+            name: "oss".to_string(),
+            version: env!("CARGO_PKG_VERSION"),
+            is_logged_in: false,
+        }
+    }
+}
+
 /// Bundle of pluggable providers passed to the docs server at startup.
 ///
-/// Cloning is cheap — every field is `Arc<...>`.
+/// TODO(felipecrv): unbundle the providers to reduce indirection. AppState is the
+/// bundle of providers and any other shared state.
 #[derive(Clone)]
 pub struct Providers {
     pub backend: Arc<dyn Backend>,
     pub column_lineage: Arc<ColumnLineageProvider>,
     pub column_impact: Arc<ColumnImpactProvider>,
-}
-
-impl Providers {
-    /// SA defaults: every capability reports unavailable. Hosts that ship
-    /// the proprietary distribution swap individual fields after building.
-    pub fn unavailable() -> Self {
-        Self {
-            backend: Arc::new(UnavailableBackend),
-            column_lineage: Arc::new(UnavailableColumnLineage::new()),
-            column_impact: Arc::new(UnavailableColumnImpact::new()),
-        }
-    }
+    pub dist_info: Arc<dyn DistInfoProvider>,
 }
 
 impl Default for Providers {
     fn default() -> Self {
-        Self::unavailable()
+        Providers {
+            backend: Arc::new(UnavailableBackend),
+            column_lineage: Arc::new(UnavailableColumnLineage::new()),
+            column_impact: Arc::new(UnavailableColumnImpact::new()),
+            dist_info: Arc::new(DefaultDistInfoProvider),
+        }
     }
 }

@@ -1,5 +1,6 @@
 pub mod capabilities;
 pub mod column_lineage;
+pub mod distribution;
 pub mod exposures;
 pub mod files;
 pub mod groups;

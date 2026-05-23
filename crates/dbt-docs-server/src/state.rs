@@ -6,50 +6,52 @@ use serde::Serialize;
 use crate::providers::Providers;
 
 /// Shared application state held by the axum router.
-///
-/// Holds the [`Providers`] (which carry all proprietary surfaces behind
-/// dyn-compatible traits) plus precomputed [`Capabilities`] read by
-/// `/api/v1/capabilities`.
 pub struct AppState {
     pub index_dir: PathBuf,
     pub providers: Providers,
-    pub capabilities: Capabilities,
-    pub server_version: &'static str,
 }
 
 pub type SharedState = Arc<AppState>;
 
 /// Gated feature surfaces — `true` only when the running distribution
 /// supports the feature. The UI reads this via `GET /api/v1/capabilities`
-/// to decide which features to enable versus surface as PLG upsells.
-///
-/// Only column-level lineage is gated today. Optional sub-objects on
-/// detail responses (`execution_info`, `catalog`, `freshness`) reflect
-/// whether the user has run a given dbt command — that is a per-project
-/// state, not a distribution capability. Those surfaces emit JSON `null`
-/// on the parent response when the relevant parquet view has no row; they
-/// are not represented here.
-#[derive(Debug, Clone, Serialize, Default)]
+/// to decide which features are enabled.
+#[derive(Debug, Clone, Serialize)]
 pub struct Capabilities {
     pub has_column_lineage: bool,
 }
 
+/// Metadata about the running distribution. Returned by `GET /api/v1/distribution`.
+#[derive(Debug, Clone, Serialize)]
+pub struct DistInfo {
+    pub name: String,
+    pub version: &'static str,
+    pub is_logged_in: bool,
+}
+
 impl AppState {
-    /// Build state from injected providers. Probes capabilities through
-    /// the trait surface — never touches a concrete backend type.
     pub fn new(index_dir: PathBuf, providers: Providers) -> Self {
-        let capabilities = compute_capabilities(&providers);
         Self {
             index_dir,
             providers,
-            capabilities,
-            server_version: env!("CARGO_PKG_VERSION"),
         }
     }
-}
 
-fn compute_capabilities(providers: &Providers) -> Capabilities {
-    Capabilities {
-        has_column_lineage: providers.column_lineage.is_available(),
+    pub fn dist_info(&self) -> DistInfo {
+        self.providers.dist_info.dist_info()
+    }
+
+    pub fn server_version(&self) -> &'static str {
+        self.providers.dist_info.dist_info().version
+    }
+
+    pub fn has_column_lineage(&self) -> bool {
+        self.providers.column_lineage.is_available()
+    }
+
+    pub fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            has_column_lineage: self.has_column_lineage(),
+        }
     }
 }

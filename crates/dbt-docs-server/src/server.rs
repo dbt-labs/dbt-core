@@ -9,9 +9,9 @@ use crate::DocsServeArgs;
 
 use crate::assets::serve_assets;
 use crate::handlers::{
-    capabilities, column_lineage, exposures, files, groups, health, lineage, macros, metrics,
-    models, nodes, project, query, saved_queries, seeds, semantic_models, snapshots, sources,
-    tests,
+    capabilities, column_lineage, distribution, exposures, files, groups, health, lineage, macros,
+    metrics, models, nodes, project, query, saved_queries, seeds, semantic_models, snapshots,
+    sources, tests,
 };
 use crate::providers::Providers;
 use crate::resolve_index_dir;
@@ -32,6 +32,7 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
     let app = Router::new()
         .route("/api/v1/health", get(health::get_health))
         .route("/api/v1/capabilities", get(capabilities::get_capabilities))
+        .route("/api/v1/distribution", get(distribution::get_distribution))
         .route("/api/v1/project", get(project::get_project))
         .route("/api/v1/models", get(models::list_models))
         .route("/api/v1/models/facets", get(models::list_model_facets))

@@ -17,7 +17,7 @@ use axum::response::Response;
 
 use super::*;
 use crate::providers::{Backend, BackendError, Providers};
-use crate::state::{AppState, Capabilities};
+use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
 // Mock backend
@@ -89,13 +89,11 @@ impl Backend for SeedDetailMockBackend {
 fn make_state(backend: SeedDetailMockBackend) -> Arc<AppState> {
     let providers = Providers {
         backend: Arc::new(backend),
-        ..Providers::unavailable()
+        ..Providers::default()
     };
     Arc::new(AppState {
         index_dir: PathBuf::from("/tmp"),
         providers,
-        capabilities: Capabilities::default(),
-        server_version: env!("CARGO_PKG_VERSION"),
     })
 }
 
