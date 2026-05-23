@@ -1,4 +1,5 @@
 use super::{RunResultsArtifact, manifest::DbtManifest, sources::FreshnessResultsArtifact};
+use crate::schemas::DbtSource;
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -717,9 +718,45 @@ impl PreviousState {
         //
         // Match dbt-core semantics by only comparing unrendered relation keys when both manifests
         // include them; otherwise compare the rendered/base representation.
-        if current_node.resource_type() == NodeType::Source
-            && previous_node.resource_type() == NodeType::Source
-        {
+        if let (Some(current_source), Some(previous_source)) = (
+            current_node.as_any().downcast_ref::<DbtSource>(),
+            previous_node.as_any().downcast_ref::<DbtSource>(),
+        ) {
+            // dbt-core might also produce `unrendered_database` and `unrendered_schema` outside of the unrendered config.
+            // If so, we need to compare them and use unrendered keys.
+            if (current_source.__source_attr__.unrendered_database.is_some()
+                && previous_source
+                    .__source_attr__
+                    .unrendered_database
+                    .is_some())
+                && (current_source.__source_attr__.unrendered_schema.is_some()
+                    && previous_source.__source_attr__.unrendered_schema.is_some())
+            {
+                let db_eq = current_source.__source_attr__.unrendered_database
+                    == previous_source.__source_attr__.unrendered_database;
+                let schema_eq = current_source.__source_attr__.unrendered_schema
+                    == previous_source.__source_attr__.unrendered_schema;
+                let alias_eq = get(current_uc, "alias") == get(previous_uc, "alias");
+                let is_same_relation = db_eq && schema_eq && alias_eq;
+
+                if !is_same_relation {
+                    log_relation_modified(
+                        current_node,
+                        db_eq,
+                        schema_eq,
+                        alias_eq,
+                        format!("{:?}", &current_node.base().database),
+                        format!("{:?}", &previous_node.base().database),
+                        format!("{:?}", &current_node.base().schema),
+                        format!("{:?}", &previous_node.base().schema),
+                        format!("{:?}", &current_node.base().alias),
+                        format!("{:?}", &previous_node.base().alias),
+                    );
+                }
+
+                return !is_same_relation;
+            }
+
             let uc_has_both = ["database", "schema", "alias"]
                 .iter()
                 .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k));

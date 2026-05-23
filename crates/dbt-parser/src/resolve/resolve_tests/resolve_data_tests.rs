@@ -9,12 +9,16 @@ use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
-use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_compute};
+use crate::resolve::resolve_utils::{
+    build_unrendered_config, err_resource_name_has_spaces, validate_compute,
+};
 use crate::utils::RelationComponents;
+use crate::utils::extract_resource_config_from_raw_project;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_contents;
 use crate::utils::get_original_file_path;
+use crate::utils::parse_unrendered_config;
 use crate::utils::update_node_relation_components;
 use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
@@ -46,7 +50,6 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
-use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ResolvableConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::properties::DataTestProperties;
@@ -214,7 +217,7 @@ pub async fn resolve_data_tests(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     test_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
@@ -235,6 +238,23 @@ pub async fn resolve_data_tests(
     let package_name = package.dbt_project.name.as_str();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
+    let test_key = if package.dbt_project.data_tests.is_some() {
+        "data_tests"
+    } else {
+        "tests"
+    };
+    let is_dependency = dependency_package_name.is_some();
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, test_key);
+    let raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            test_key,
+        ))
+    } else {
+        None
+    };
+
     // Create a map of dbt_asset.path.stem to GenericTestAsset for efficient lookup
     let test_path_to_test_asset: HashMap<PathBuf, &GenericTestAsset> = collected_generic_tests
         .iter()
@@ -248,10 +268,8 @@ pub async fn resolve_data_tests(
             .map(|test_asset| test_asset.dbt_asset.clone()),
     );
 
-    let config_resolver = ProjectConfigResolver::build(
-        root_project_configs.tests.clone(),
-        dependency_package_name.is_some(),
-        || {
+    let config_resolver =
+        ProjectConfigResolver::build(root_project_configs.tests.clone(), is_dependency, || {
             let tests_config = match (
                 package.dbt_project.tests.clone(),
                 package.dbt_project.data_tests.clone(),
@@ -269,14 +287,13 @@ pub async fn resolve_data_tests(
                 package_quoting,
                 dependency_package_name,
             )
-        },
-    )?
-    .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
+        })?
+        .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
-            root_project_name: root_project.name.clone(),
+            root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
@@ -425,6 +442,39 @@ pub async fn resolve_data_tests(
                 .and_then(|asset| test_metadata_from_asset(asset))
         };
 
+        // For singular tests, parse the user-written SQL for inline {{ config(...) }}.
+        // For generic column tests, the schema.yml config (e.g. where, limit) is not yet
+        // captured here. The raw config lives nested inside the parent resource's
+        // MinimalPropertiesEntry.schema_value (columns -> tests -> config), but
+        // test_properties only contains standalone/singular tests — generic column tests
+        // are absent. Extracting it would require navigating model/seed/snapshot/source
+        // schema_value by (resource_name, column_name, test_name), which is not yet
+        // threaded into resolve_data_tests. For now, generic tests only get project-level
+        // config in unrendered_config; schema.yml config keys like `where` and `limit`
+        // are missing. TODO: implement this.
+        let raw_inline_config = if is_singular_data_test {
+            dbt_common::tokiofs::read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
+                .await
+                .ok()
+                .and_then(|sql| parse_unrendered_config(&sql, false))
+        } else {
+            None
+        };
+
+        // TODO: For generic column tests, schema.yml config keys like `where` and `limit`
+        // are not yet captured here; only project-level config is included. Implementing
+        // this requires navigating the parent resource's MinimalPropertiesEntry.schema_value
+        // by (resource_name, column_name, test_name), which is not yet threaded into
+        // resolve_data_tests.
+        let unrendered_config = build_unrendered_config(
+            &fqn,
+            &raw_local_project_config,
+            raw_root_project_cfg.as_ref(),
+            None,
+            raw_inline_config.as_ref(),
+            false,
+        );
+
         let mut dbt_test = DbtTest {
             defined_at,
             manifest_original_file_path: manifest_original_file_path.clone(),
@@ -510,7 +560,7 @@ pub async fn resolve_data_tests(
                     })
                     .collect(),
                 metrics: vec![],
-                unrendered_config: Default::default(),
+                unrendered_config,
             },
             __test_attr__: {
                 let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
@@ -592,7 +642,7 @@ pub async fn resolve_data_tests(
         update_node_relation_components(
             &mut dbt_test,
             &env,
-            &root_project.name,
+            &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,
@@ -630,7 +680,7 @@ pub async fn resolve_data_tests(
         env.clone(),
         adapter_type,
         package.dbt_project.name.as_str(),
-        &root_project.name,
+        &root_package.dbt_project.name,
         runtime_config,
         token,
     )

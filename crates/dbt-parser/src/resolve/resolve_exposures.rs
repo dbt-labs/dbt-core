@@ -1,6 +1,8 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
-use crate::utils::get_node_fqn;
+use crate::resolve::resolve_utils::build_unrendered_config;
+use crate::resolve::resolve_utils::extract_config_map;
+use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use dbt_adapter_core::AdapterType;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
@@ -15,7 +17,7 @@ use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::nodes::{
     CommonAttributes, DbtExposure, DbtExposureAttr, NodeBaseAttributes,
 };
-use dbt_schemas::schemas::project::{DbtProject, ExposureConfig, ResolvedExposureConfig};
+use dbt_schemas::schemas::project::{ExposureConfig, ResolvedExposureConfig};
 use dbt_schemas::schemas::properties::ExposureProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
@@ -36,7 +38,7 @@ pub async fn resolve_exposures(
     args: &ResolveArgs,
     exposure_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
@@ -51,9 +53,10 @@ pub async fn resolve_exposures(
     let mut exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
     let mut disabled_exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
+    let is_dependency = dependency_package_name.is_some();
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.exposures.clone(),
-        dependency_package_name.is_some(),
+        is_dependency,
         || {
             init_project_config(
                 &args.io,
@@ -63,6 +66,17 @@ pub async fn resolve_exposures(
             )
         },
     )?;
+
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "exposures");
+    let raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "exposures",
+        ))
+    } else {
+        None
+    };
 
     // Retrieve exposures from yaml
     let exposure_name_re = Regex::new(r"[\w-]+$").unwrap();
@@ -89,6 +103,7 @@ pub async fn resolve_exposures(
             );
 
             let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
+            let raw_properties_yml_config = extract_config_map(&schema_value);
             // ExposureProperties is for the yaml schema
             let exposure: ExposureProperties = into_typed_with_jinja(
                 &args.io,
@@ -123,7 +138,7 @@ pub async fn resolve_exposures(
                     schema,
                     adapter_type,
                     package_name,
-                    &root_project.name,
+                    &root_package.dbt_project.name,
                     fqn.clone(),
                     &mpe.relative_path.to_string_lossy(),
                     &args.io,
@@ -132,6 +147,14 @@ pub async fn resolve_exposures(
             } else {
                 (vec![], vec![], vec![])
             };
+            let unrendered_config = build_unrendered_config(
+                &fqn,
+                &raw_local_project_config,
+                raw_root_project_cfg.as_ref(),
+                raw_properties_yml_config.as_ref(),
+                None,
+                false,
+            );
 
             let dbt_exposure = DbtExposure {
                 __common_attr__: CommonAttributes {
@@ -186,7 +209,7 @@ pub async fn resolve_exposures(
                     maturity: exposure.maturity.clone(),
                     type_: exposure.type_.clone(),
                     url: exposure.url,
-                    unrendered_config: BTreeMap::new(),
+                    unrendered_config,
                     created_at: Default::default(),
                 },
                 deprecated_config: exposure_properties_config.into(),

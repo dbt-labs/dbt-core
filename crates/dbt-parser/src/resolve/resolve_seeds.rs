@@ -1,9 +1,11 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
-use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::resolve_utils::{
+    build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
+};
 use crate::utils::{
-    RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
-    update_node_relation_components,
+    RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
+    register_duplicate_resource, trigger_duplicate_errors, update_node_relation_components,
 };
 use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
@@ -18,12 +20,10 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
-use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
 use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
-use dbt_yaml::Value as YmlValue;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -34,12 +34,12 @@ use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub fn resolve_seeds(
+pub async fn resolve_seeds(
     arg: &ResolveArgs,
     mut seed_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
@@ -55,6 +55,27 @@ pub fn resolve_seeds(
     let mut disabled_seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
     let io_args = &arg.io;
     let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
+
+    let is_dependency = dependency_package_name.is_some();
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "seeds");
+    let raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "seeds",
+        ))
+    } else {
+        None
+    };
+
+    let raw_schema_yml_configs: BTreeMap<String, BTreeMap<String, dbt_yaml::Value>> =
+        seed_properties
+            .iter()
+            .filter_map(|(name, mpe)| {
+                let config_map = extract_config_map(&mpe.schema_value)?;
+                Some((name.clone(), config_map))
+            })
+            .collect();
 
     let mut seed_root_dirs: Vec<String> = package
         .dbt_project
@@ -73,19 +94,16 @@ pub fn resolve_seeds(
         seed_root_dirs.push("seeds".to_string());
     }
 
-    let config_resolver = ProjectConfigResolver::build(
-        root_project_configs.seeds.clone(),
-        dependency_package_name.is_some(),
-        || {
+    let config_resolver =
+        ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
             init_project_config(
                 io_args,
                 &package.dbt_project.seeds,
                 package_quoting,
                 dependency_package_name,
             )
-        },
-    )?
-    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
+        })?
+        .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
@@ -162,6 +180,18 @@ pub fn resolve_seeds(
             path.to_owned(),
             vec![seed_name.to_owned()],
             package.dbt_project.seed_paths.as_ref().unwrap_or(&vec![]),
+        );
+
+        // TODO: dbt-core deep_merges the rendered and unrendered schema.yml configs, which
+        // doubles list fields (e.g. tags), likely a bug. If state:modified parity requires it:
+        // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/parser/base.py#L424-L426
+        let unrendered_config = build_unrendered_config(
+            &fqn,
+            &raw_local_project_config,
+            raw_root_project_cfg.as_ref(),
+            raw_schema_yml_configs.get(seed_name),
+            None,
+            true,
         );
 
         // Merge schema_file_info
@@ -301,6 +331,7 @@ pub fn resolve_seeds(
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
+                unrendered_config,
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {
@@ -324,33 +355,12 @@ pub fn resolve_seeds(
         update_node_relation_components(
             &mut dbt_seed,
             jinja_env,
-            &root_project.name,
+            &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,
             adapter_type,
         )?;
-
-        // Populate unrendered_config.database/schema/alias for dbt-core compatible
-        // state:* comparisons (mirrors what resolve_models does for model nodes).
-        if let Some(db) = &properties_config.database {
-            dbt_seed
-                .__base_attr__
-                .unrendered_config
-                .insert("database".to_string(), YmlValue::string(db.clone()));
-        }
-        if let Some(sch) = &properties_config.schema {
-            dbt_seed
-                .__base_attr__
-                .unrendered_config
-                .insert("schema".to_string(), YmlValue::string(sch.clone()));
-        }
-        if let Some(alias) = &properties_config.alias {
-            dbt_seed
-                .__base_attr__
-                .unrendered_config
-                .insert("alias".to_string(), YmlValue::string(alias.clone()));
-        }
 
         let status = if is_enabled {
             ModelStatus::Enabled
@@ -372,7 +382,7 @@ pub fn resolve_seeds(
                 if !arg.skip_creating_generic_tests {
                     seed.as_testable().persist(
                         package_name,
-                        &root_project.name,
+                        &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
                         adapter_type,

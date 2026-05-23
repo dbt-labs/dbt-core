@@ -278,6 +278,9 @@ pub fn resolve_unit_tests(
                 compute: properties_config.compute,
                 columns: vec![],
                 metrics: vec![],
+                // TODO: populate unrendered_config for unit tests. dbt-core never does this
+                // (unit_tests.py has no reference to unrendered_config), so empty matches
+                // Core parity today, but it is an omission there too.
                 unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {

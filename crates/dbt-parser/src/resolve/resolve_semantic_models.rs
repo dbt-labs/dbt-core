@@ -1,6 +1,9 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
-use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
+use crate::resolve::resolve_utils::build_unrendered_config;
+use crate::utils::{
+    extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
+};
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::emit_error_log_message;
@@ -50,6 +53,7 @@ fn semantic_model_properties_config(model_props: &ModelProperties) -> Option<Sem
 pub async fn resolve_semantic_models(
     args: &ResolveArgs,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     minimal_model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     typed_models_properties: &BTreeMap<String, ModelProperties>,
@@ -69,9 +73,21 @@ pub async fn resolve_semantic_models(
     }
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
+    let is_dependency = dependency_package_name.is_some();
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "semantic-models");
+    let raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "semantic-models",
+        ))
+    } else {
+        None
+    };
+
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.semantic_models.clone(),
-        dependency_package_name.is_some(),
+        is_dependency,
         || {
             init_project_config(
                 &args.io,
@@ -201,6 +217,42 @@ pub async fn resolve_semantic_models(
             relation_name: resolved_model.__base_attr__.relation_name.clone(),
         };
 
+        // `enabled` and `group` sit directly on `semantic_model:`, while `meta`
+        // (and other config fields) are nested under `semantic_model.config:`.
+        let raw_properties_yml_config = {
+            let sm = mpe.schema_value.get("semantic_model");
+            let mut config: BTreeMap<String, dbt_yaml::Value> = BTreeMap::new();
+            for field in ["enabled", "group"] {
+                if let Some(v) = sm.and_then(|s| s.get(field)) {
+                    config.insert(field.to_string(), v.clone());
+                }
+            }
+            if let Some(mapping) = sm
+                .and_then(|s| s.get("config"))
+                .and_then(|v| v.as_mapping())
+            {
+                for (k, v) in mapping.iter() {
+                    if let Some(k) = k.as_str() {
+                        config.insert(k.to_string(), v.clone());
+                    }
+                }
+            }
+            if config.is_empty() {
+                None
+            } else {
+                Some(config)
+            }
+        };
+
+        let unrendered_config = build_unrendered_config(
+            &semantic_model_fqn,
+            &raw_local_project_config,
+            raw_root_project_cfg.as_ref(),
+            raw_properties_yml_config.as_ref(),
+            None,
+            false,
+        );
+
         let dbt_semantic_model = DbtSemanticModel {
             __common_attr__: CommonAttributes {
                 name: semantic_model_name.clone(),
@@ -262,7 +314,7 @@ pub async fn resolve_semantic_models(
                 unrendered_config: Default::default(),
             },
             __semantic_model_attr__: DbtSemanticModelAttr {
-                unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
+                unrendered_config,
                 group: semantic_model_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
                 metadata: None, // deprioritized feature. always null for now.

@@ -990,6 +990,7 @@ pub fn reconstruct_package_metadata(snapshot: &PackageSnapshot) -> FsResult<DbtP
         dependencies: snapshot.dependencies.clone(),
         all_paths,
         embedded_file_contents: None,
+        raw_project_yml: dbt_yaml::Value::default(),
     })
 }
 
@@ -1156,6 +1157,7 @@ mod tests {
                 )],
             )]),
             embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
         }];
 
         let dbt_state = DbtState {
@@ -3426,6 +3428,7 @@ mod tests {
             inline_file: None,
             dependencies: Default::default(),
             embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
         };
 
         assert!(
@@ -3463,6 +3466,7 @@ mod tests {
             inline_file: None,
             dependencies: Default::default(),
             embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
         };
 
         sleep_for_mtime_change();

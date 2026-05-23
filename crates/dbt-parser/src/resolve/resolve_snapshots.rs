@@ -9,11 +9,14 @@ use crate::renderer::{
     render_unresolved_sql_files,
 };
 use crate::resolve::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
-use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_compute};
+use crate::resolve::resolve_utils::{
+    build_unrendered_config, err_resource_name_has_spaces, extract_config_map, validate_compute,
+};
 use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{
-    RelationComponents, get_node_fqn, get_original_file_path, update_node_relation_components,
+    RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
+    get_original_file_path, parse_unrendered_config, update_node_relation_components,
 };
 use crate::validation::check_node_static_analysis;
 use dbt_adapter_core::AdapterType;
@@ -35,7 +38,7 @@ use dbt_schemas::schemas::common::{
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::nodes::AdapterAttr;
-use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
+use dbt_schemas::schemas::project::SnapshotConfig;
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::{
@@ -55,7 +58,7 @@ pub async fn resolve_snapshots(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     mut snapshot_properties: BTreeMap<String, MinimalPropertiesEntry>,
     macros: &BTreeMap<String, DbtMacro>,
@@ -79,8 +82,20 @@ pub async fn resolve_snapshots(
         Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
     let mut snapshots_with_execute: HashMap<String, DbtSnapshot> = HashMap::new();
 
-    let dependency_package_name = if package.dbt_project.name != root_project.name {
+    let dependency_package_name = if package.dbt_project.name != root_package.dbt_project.name {
         Some(package.dbt_project.name.as_str())
+    } else {
+        None
+    };
+
+    let is_dependency = dependency_package_name.is_some();
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "snapshots");
+    let raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "snapshots",
+        ))
     } else {
         None
     };
@@ -140,6 +155,16 @@ pub async fn resolve_snapshots(
             sql_defined_snapshots.push(target_path);
         }
     }
+
+    // Snapshot raw schema.yml config blocks before schema_values entries are nulled.
+    let raw_schema_yml_configs: BTreeMap<String, BTreeMap<String, dbt_yaml::Value>> =
+        snapshot_properties
+            .iter()
+            .filter_map(|(name, mpe)| {
+                let config_map = extract_config_map(&mpe.schema_value)?;
+                Some((name.clone(), config_map))
+            })
+            .collect();
 
     // Save snapshot from yml to the `snapshots` directory
     for (snapshot_name, mpe) in snapshot_properties.iter_mut() {
@@ -232,7 +257,7 @@ pub async fn resolve_snapshots(
 
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.snapshots.clone(),
-        dependency_package_name.is_some(),
+        is_dependency,
         || {
             init_project_config(
                 &arg.io,
@@ -244,13 +269,13 @@ pub async fn resolve_snapshots(
     )?
     .with_resolve_defaults((
         arg.static_analysis.unwrap_or_default(),
-        root_project.sync.clone(),
+        root_package.dbt_project.sync.clone(),
     ));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
-            root_project_name: root_project.name.clone(),
+            root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
@@ -364,6 +389,25 @@ pub async fn resolve_snapshots(
                 .into_iter()
                 .collect();
 
+            let raw_inline_config =
+                if let Some(original_path) = snapshot_original_paths.get(&dbt_asset.path) {
+                    tokiofs::read_to_string(original_path)
+                        .await
+                        .ok()
+                        .and_then(|sql| parse_unrendered_config(&sql, true))
+                } else {
+                    None
+                };
+
+            let unrendered_config = build_unrendered_config(
+                &fqn,
+                &raw_local_project_config,
+                raw_root_project_cfg.as_ref(),
+                raw_schema_yml_configs.get(snapshot_name),
+                raw_inline_config.as_ref(),
+                true,
+            );
+
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 __common_attr__: CommonAttributes {
@@ -427,7 +471,7 @@ pub async fn resolve_snapshots(
                             location: Some(location.with_file(&dbt_asset.path)),
                         })
                         .collect(),
-                    unrendered_config: Default::default(),
+                    unrendered_config,
                     functions: sql_file_info
                         .functions
                         .iter()
@@ -490,7 +534,7 @@ pub async fn resolve_snapshots(
             update_node_relation_components(
                 &mut dbt_snapshot,
                 &jinja_env,
-                &root_project.name,
+                &root_package.dbt_project.name,
                 &package_name,
                 base_ctx,
                 &components,
@@ -525,7 +569,7 @@ pub async fn resolve_snapshots(
                     if !arg.skip_creating_generic_tests {
                         properties.as_testable().persist(
                             package_name.as_str(),
-                            &root_project.name,
+                            &root_package.dbt_project.name,
                             collected_generic_tests,
                             test_name_truncations,
                             adapter_type,
@@ -567,7 +611,7 @@ pub async fn resolve_snapshots(
         jinja_env,
         adapter_type,
         package.dbt_project.name.as_str(),
-        &root_project.name,
+        &root_package.dbt_project.name,
         runtime_config,
         token,
     )

@@ -373,6 +373,7 @@ pub fn construct_internal_packages(
                 .collect::<Vec<_>>()
         );
 
+        let raw_project_yml: dbt_yaml::Value = dbt_yaml::from_str(&yml_content).unwrap_or_default();
         packages.push(DbtPackage {
             dbt_project,
             package_root_path: package_root,
@@ -401,6 +402,7 @@ pub fn construct_internal_packages(
                 (ResourcePathKind::FixturePaths, vec![]),
                 (ResourcePathKind::FunctionPaths, vec![]),
             ]),
+            raw_project_yml,
         });
     }
     Ok(packages)

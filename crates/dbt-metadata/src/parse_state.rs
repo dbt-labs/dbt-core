@@ -1908,6 +1908,7 @@ mod tests {
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: None,
+            raw_project_yml: dbt_yaml::Value::default(),
         }
     }
 
@@ -1930,6 +1931,7 @@ mod tests {
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: Some(HashMap::new()),
+            raw_project_yml: dbt_yaml::Value::default(),
         }
     }
 

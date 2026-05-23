@@ -1059,12 +1059,34 @@ fn same_database_representation_seed(self_config: &SeedConfig, other_config: &Se
 }
 
 fn same_database_representation_snapshot(
+    self_base: &NodeBaseAttributes,
+    other_base: &NodeBaseAttributes,
     self_config: &SnapshotConfig,
     other_config: &SnapshotConfig,
 ) -> bool {
-    // Compare database, schema, alias from the deprecated_config
-    /*self_config.database == other_config.database
-    && self_config.schema == other_config.schema*/
+    // dbt-core compares the unrendered config representation (database/schema/alias)
+    // to avoid treating target-derived rendering differences as modifications.
+    //
+    // If unrendered config is not available (older Fusion nodes/artifacts), fall back to the
+    // existing behavior for compatibility.
+    let self_uc = &self_base.unrendered_config;
+    let other_uc = &other_base.unrendered_config;
+
+    // Use dbt-core/Mantle semantics whenever possible: compare database/schema/alias using
+    // `unrendered_config`, treating missing keys as `None`.
+    fn get<'a>(m: &'a BTreeMap<String, YmlValue>, k: &str) -> Option<&'a str> {
+        m.get(k).and_then(|v| v.as_str())
+    }
+    let db_eq = get(self_uc, "database") == get(other_uc, "database");
+    let schema_eq = get(self_uc, "schema") == get(other_uc, "schema");
+    let alias_eq = get(self_uc, "alias") == get(other_uc, "alias");
+    let uc_eq = db_eq && schema_eq && alias_eq;
+
+    if uc_eq {
+        return true;
+    }
+
+    // Fallback: Compare rendered database/schema/alias from the deprecated_config (Fusion legacy behavior).
     let alias_eq = self_config.alias == other_config.alias;
 
     if !alias_eq {
@@ -2624,6 +2646,8 @@ impl InternalDbtNode for DbtSnapshot {
             );
             let same_fqn_result = same_fqn(&self.__common_attr__, &other_snapshot.__common_attr__);
             let same_db_repr_result = same_database_representation_snapshot(
+                &self.__base_attr__,
+                &other_snapshot.__base_attr__,
                 &self.deprecated_config,
                 &other_snapshot.deprecated_config,
             );
@@ -4789,6 +4813,9 @@ pub struct DbtSourceAttr {
     #[serde(default)]
     pub schema_origin: SchemaOrigin,
     pub sync: Option<SyncConfig>,
+    /// Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L85-L86
+    pub unrendered_database: Option<String>,
+    pub unrendered_schema: Option<String>,
 }
 
 impl DbtSource {

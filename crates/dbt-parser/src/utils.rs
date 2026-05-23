@@ -16,16 +16,94 @@ use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::state::DbtPackage;
 use minijinja::ArgSpec;
-use minijinja::compiler::ast::{MacroKind, Stmt};
+use minijinja::compiler::ast::{CallArg, Expr, MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
 use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+/// A raw (unrendered) project config tree built from a `dbt_project.yml` models hierarchy.
+/// Mirrors `DbtProjectConfig<T>` but stores raw `dbt_yaml::Value` so Jinja strings are preserved.
+#[derive(Debug, Default)]
+pub struct RawProjectConfig {
+    /// Merged config values at this level of the hierarchy, keyed by config name (without `+` prefix).
+    pub config: BTreeMap<String, dbt_yaml::Value>,
+    /// Child nodes keyed by package/folder name, each with their own inherited config.
+    pub children: BTreeMap<String, RawProjectConfig>,
+}
+
+impl RawProjectConfig {
+    /// Returns an empty config tree with no config values and no children.
+    pub fn empty() -> Self {
+        Self {
+            config: BTreeMap::new(),
+            children: BTreeMap::new(),
+        }
+    }
+
+    /// Returns the merged config for the deepest FQN component that exists in the tree.
+    pub fn get_config_for_fqn(&self, fqn: &[String]) -> &BTreeMap<String, dbt_yaml::Value> {
+        let mut cur = self;
+        for component in fqn {
+            if let Some(child) = cur.children.get(component.as_str()) {
+                cur = child;
+            } else {
+                break;
+            }
+        }
+        &cur.config
+    }
+}
+
+/// Merges a parent raw config map with config keys from a child raw YAML mapping.
+/// Keys prefixed with `+` are config keys (prefix stripped before inserting).
+/// Non-`+` keys are hierarchy keys (package/folder names) and are ignored.
+/// Child values overwrite parent values.
+pub fn merge_raw_config_mappings(
+    parent: &BTreeMap<String, dbt_yaml::Value>,
+    child_mapping: &dbt_yaml::Mapping,
+) -> BTreeMap<String, dbt_yaml::Value> {
+    let mut merged = parent.clone();
+    for (k, v) in child_mapping.iter() {
+        if let Some(key_str) = k.as_str() {
+            if let Some(stripped) = key_str.strip_prefix('+') {
+                merged.insert(stripped.to_string(), v.clone());
+            }
+        }
+    }
+    merged
+}
+
+/// Recursively builds a `RawProjectConfig` tree from a raw YAML mapping.
+/// At each level, `+`-prefixed keys are merged into the config; non-`+` keys with mapping values are recursed into as children.
+pub fn recur_raw_project_config(
+    mapping: &dbt_yaml::Mapping,
+    parent_config: &BTreeMap<String, dbt_yaml::Value>,
+) -> RawProjectConfig {
+    let current_config = merge_raw_config_mappings(parent_config, mapping);
+    let mut children = BTreeMap::new();
+    for (k, v) in mapping.iter() {
+        if let Some(key_str) = k.as_str() {
+            if !key_str.starts_with('+') {
+                if let Some(child_mapping) = v.as_mapping() {
+                    children.insert(
+                        key_str.to_string(),
+                        recur_raw_project_config(child_mapping, &current_config),
+                    );
+                }
+            }
+        }
+    }
+    RawProjectConfig {
+        config: current_config,
+        children,
+    }
+}
+
 /// Coalesce a list of optional values into a single value
 pub fn coalesce<T: Clone>(values: Vec<Option<T>>) -> Option<T> {
     for value in values {
@@ -516,6 +594,136 @@ pub fn update_node_relation_components(
     Ok(())
 }
 
+/// Extracts a resource type subtree from a raw `dbt_project.yml` into a RawProjectConfig struct for building unrendered configs.
+pub fn extract_resource_config_from_raw_project(
+    raw_yml: &dbt_yaml::Value,
+    resource_type: &str,
+) -> RawProjectConfig {
+    if let Some(raw_subtree) = raw_yml.get(resource_type).cloned().and_then(|v| {
+        if let dbt_yaml::Value::Mapping(m, _) = v {
+            Some(m)
+        } else {
+            None
+        }
+    }) {
+        recur_raw_project_config(&raw_subtree, &BTreeMap::new())
+    } else {
+        RawProjectConfig::empty()
+    }
+}
+
+/// Statically parses the raw (unrendered) kwargs from a `{{ config(...) }}` call in a SQL file.
+/// Uses the minijinja AST and byte-offset spans to extract the raw source text for each kwarg,
+/// preserving Jinja expressions as-is. Returns None if no config call is found.
+/// Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/clients/jinja_static.py#L205
+///
+/// WARNING: This performs a duplicate AST parse. minijinja does not expose the AST after compilation, so we need to figure out a way to reuse the parsed AST instead of performing a full parse again.
+pub fn parse_unrendered_config(
+    sql: &str,
+    snapshot: bool,
+) -> Option<BTreeMap<String, dbt_yaml::Value>> {
+    use minijinja::compiler::tokens::Span;
+    use minijinja::value::ValueKind;
+
+    fn expr_span<'a>(expr: &Expr<'a>) -> Option<Span> {
+        Some(match expr {
+            Expr::Var(s) => s.span,
+            Expr::Call(s) => s.span,
+            Expr::BinOp(s) => s.span,
+            Expr::UnaryOp(s) => s.span,
+            Expr::IfExpr(s) => s.span,
+            Expr::Filter(s) => s.span,
+            Expr::Test(s) => s.span,
+            Expr::GetAttr(s) => s.span,
+            Expr::GetItem(s) => s.span,
+            Expr::List(s) => s.span,
+            Expr::Map(s) => s.span,
+            Expr::Tuple(s) => s.span,
+            Expr::Slice(s) => s.span,
+            Expr::Const(s) => s.span,
+        })
+    }
+
+    let mut parser = Parser::new(
+        sql,
+        "",
+        false,
+        #[allow(clippy::default_constructed_unit_structs)]
+        SyntaxConfig::builder().build().unwrap(),
+        WhitespaceConfig::default(),
+    );
+    let ast = parser.parse().ok()?;
+
+    fn find_config_call<'a>(stmt: &'a Stmt<'a>, snapshot: bool) -> Option<&'a Vec<CallArg<'a>>> {
+        match stmt {
+            Stmt::Template(t) => t
+                .children
+                .iter()
+                .find_map(|s| find_config_call(s, snapshot)),
+            Stmt::EmitExpr(e) => {
+                if let Expr::Call(call) = &e.expr {
+                    if let Expr::Var(var) = &call.expr {
+                        if var.id == "config" {
+                            return Some(&call.args);
+                        }
+                    }
+                }
+                None
+            }
+            Stmt::Macro((macro_node, MacroKind::Snapshot, _)) if snapshot => macro_node
+                .body
+                .iter()
+                .find_map(|s| find_config_call(s, snapshot)),
+            _ => None,
+        }
+    }
+
+    let args = find_config_call(&ast, snapshot)?;
+    let sql_bytes = sql.as_bytes();
+
+    let mut map = BTreeMap::new();
+    for arg in args {
+        if let CallArg::Kwarg(name, expr) = arg {
+            // For Expr::Const, use the parsed literal value so the correct type is
+            // preserved.
+            // For all other expressions, preserve the raw Jinja source text as a string.
+            let yml_val: Option<dbt_yaml::Value> = if let Expr::Const(c) = expr {
+                match c.value.kind() {
+                    ValueKind::String => c
+                        .value
+                        .as_str()
+                        .map(|s| dbt_yaml::Value::string(s.to_string())),
+                    ValueKind::Bool => Some(dbt_yaml::Value::bool(c.value.is_true())),
+                    ValueKind::Number => c
+                        .value
+                        .as_i64()
+                        .map(|n| dbt_yaml::Value::number(n.into()))
+                        .or_else(|| {
+                            f64::try_from(c.value.clone())
+                                .ok()
+                                .map(|f| dbt_yaml::Value::number(f.into()))
+                        }),
+                    ValueKind::None => Some(dbt_yaml::Value::null()),
+                    _ => None,
+                }
+            } else {
+                expr_span(expr).and_then(|span| {
+                    let start = span.start_offset as usize;
+                    let end = span.end_offset as usize;
+                    std::str::from_utf8(&sql_bytes[start..end]).ok().map(|raw| {
+                        dbt_yaml::Value::String(raw.trim().to_string(), Default::default())
+                    })
+                })
+            };
+            if let Some(val) = yml_val {
+                map.insert((*name).to_string(), val);
+            }
+        }
+    }
+
+    if map.is_empty() { None } else { Some(map) }
+}
+
 /// A no-op config for the [parse_macro_statements] function
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NoOpConfig {}
@@ -596,7 +804,7 @@ fn extract_sql_resources_from_ast<T: ResolvableConfig<T>>(
                 .iter()
                 .enumerate()
                 .map(|(i, arg)| match arg {
-                    minijinja::compiler::ast::Expr::Var(spanned) => ArgSpec {
+                    Expr::Var(spanned) => ArgSpec {
                         name: spanned.id.to_string(),
                         is_optional: i >= non_optional_args_len,
                     },

@@ -18,7 +18,6 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtAnalysis, DbtAnalysisAttr, NodeBaseAttributes,
         common::NodeDependsOn,
-        project::DbtProject,
         properties::AnalysesProperties,
         ref_and_source::{DbtRef, DbtSourceWrapper},
     },
@@ -42,7 +41,7 @@ pub async fn resolve_analyses(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     analysis_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
@@ -80,7 +79,7 @@ pub async fn resolve_analyses(
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
-            root_project_name: root_project.name.clone(),
+            root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
@@ -240,6 +239,10 @@ pub async fn resolve_analyses(
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),
+                // TODO: populate unrendered_config for analyses. Core has a bug (gated by
+                // `require_corrected_analysis_fqns`) where analyses read from the `models:`
+                // subtree of dbt_project.yml instead of `analyses:`. We need to decide whether
+                // to match the buggy behavior or the corrected one before implementing.
                 unrendered_config: Default::default(),
                 functions: sql_file_info
                     .functions
@@ -277,7 +280,7 @@ pub async fn resolve_analyses(
         update_node_relation_components(
             &mut dbt_analysis,
             &env,
-            &root_project.name,
+            &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,

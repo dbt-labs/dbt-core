@@ -11,11 +11,15 @@ use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
+use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::RelationComponents;
+use crate::utils::extract_resource_config_from_raw_project;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::get_unique_id;
+use crate::utils::parse_unrendered_config;
 use crate::utils::update_node_relation_components;
 use crate::validation::check_node_static_analysis;
 
@@ -29,7 +33,6 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::path::DbtPath;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
@@ -37,7 +40,6 @@ use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
-use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
@@ -83,11 +85,6 @@ use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_utils::validate_compute;
 use super::validate_models::validate_model;
-
-#[derive(serde::Deserialize)]
-struct DbtProjectModelsOnly {
-    models: Option<dbt_schemas::schemas::project::ProjectModelConfig>,
-}
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
 /// `ref('pkg', 'name', version=N)` from a constraint `to:` string (also accepts `v=` alias).
@@ -141,329 +138,6 @@ fn parse_source_from_constraint(to: &str) -> Option<(String, String)> {
     Some((src.to_string(), tbl.to_string()))
 }
 
-/// Build an *unrendered* project config tree from the raw `dbt_project.yml`.
-/// This lets us populate `unrendered_config` for dbt-core compatible state comparisons.
-async fn build_raw_model_project_config(
-    arg: &ResolveArgs,
-    env: &JinjaEnv,
-    base_ctx: &BTreeMap<String, minijinja::Value>,
-    package: &DbtPackage,
-    package_quoting: DbtQuoting,
-) -> FsResult<crate::dbt_project_config::DbtProjectConfig<ModelConfig>> {
-    let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let dbt_project_yml_path = package.package_root_path.join("dbt_project.yml");
-
-    // Best-effort read: embedded packages have synthetic paths that don't exist on disk.
-    // Check embedded_file_contents first, then fall back to disk.
-    let raw_yml = match package
-        .embedded_file_contents
-        .as_ref()
-        .and_then(|m| m.get(&DbtPath::from("dbt_project.yml")))
-    {
-        Some(content) => content.clone(),
-        None => match read_to_string(&dbt_project_yml_path).await {
-            Ok(content) => content,
-            Err(e) => {
-                return Err(fs_err!(
-                    code => ErrorCode::IoError,
-                    loc => dbt_project_yml_path.clone(),
-                    "Failed to read {}: {}",
-                    dbt_project_yml_path.display(),
-                    e
-                ));
-            }
-        },
-    };
-
-    // TODO: This is unfinished and will lead to strange / incorrect discrepancies that fail silently.
-    // NOTE: This is intentionally best-effort. We use it only to populate `unrendered_config`
-    // for state comparisons, and it must not break compilation when the dbt_project.yml contains
-    // Jinja-templated values that don't conform to our typed schema (e.g. model-paths).
-    //
-    // We therefore only deserialize the `models:` subtree and fall back to an empty config tree
-    // if parsing fails for any reason (including Jinja).
-    let raw_models_only: Option<DbtProjectModelsOnly> = from_yaml_raw::<DbtProjectModelsOnly>(
-        &arg.io,
-        &raw_yml,
-        Some(dbt_project_yml_path.as_path()),
-        false,
-        dependency_package_name,
-    )
-    .ok();
-
-    let default_config = ModelConfig {
-        quoting: Some(package_quoting),
-        ..Default::default()
-    };
-
-    // Use the parsed model config if available; otherwise build an empty config tree.
-    // This must be best-effort and must not emit extra errors.
-    // Use a no-op closure to silently skip invalid children; the fully-rendered
-    // dbt_project.yml loader will report errors.
-    Ok(match raw_models_only.and_then(|p| p.models) {
-        Some(models_cfg) => crate::dbt_project_config::recur_build_dbt_project_config(
-            &default_config,
-            &models_cfg,
-            "",
-            &|_, _| {},
-        ),
-        None => crate::dbt_project_config::DbtProjectConfig {
-            config: default_config,
-            children: indexmap::IndexMap::new(),
-        },
-    })
-}
-
-/// Populate `unrendered_config` on a model node for dbt-core compatible `state:*` comparisons.
-///
-/// This should be called before relation components are rendered/resolved, and it should prefer
-/// values from a raw (unrendered) `dbt_project.yml` config tree.
-fn insert_unrendered_grants(
-    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
-    unrendered_project_cfg: &ModelConfig,
-) {
-    use dbt_yaml::Value as YmlValue;
-
-    // Config-level unrendered values (e.g. grants) matter for Mantle-compatible `state:modified`
-    // semantics. Mantle compares configured/unrendered config, not rendered config.
-    if let Some(grants) = unrendered_project_cfg.grants.as_ref() {
-        let mut grants_map = dbt_yaml::Mapping::new();
-        for (k, v) in &grants.0 {
-            let key = YmlValue::String(k.clone(), Default::default());
-            let val = match v {
-                dbt_schemas::schemas::serde::StringOrArrayOfStrings::String(s) => {
-                    YmlValue::String(s.clone(), Default::default())
-                }
-                dbt_schemas::schemas::serde::StringOrArrayOfStrings::ArrayOfStrings(vec) => {
-                    YmlValue::Sequence(
-                        vec.iter()
-                            .cloned()
-                            .map(|s| YmlValue::String(s, Default::default()))
-                            .collect(),
-                        Default::default(),
-                    )
-                }
-            };
-            grants_map.insert(key, val);
-        }
-        if !grants_map.is_empty() {
-            unrendered.insert(
-                "grants".to_string(),
-                YmlValue::Mapping(grants_map, Default::default()),
-            );
-        }
-    }
-}
-
-fn insert_unrendered_hooks(
-    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
-    unrendered_project_cfg: &ModelConfig,
-) {
-    use dbt_yaml::Value as YmlValue;
-
-    // Hooks (`pre-hook` / `post-hook`) show up in dbt-core manifests as lists of SQL strings.
-    // Extract unrendered hook SQL strings in a stable representation.
-    fn hooks_to_yaml(hooks: &dbt_schemas::schemas::common::Hooks) -> YmlValue {
-        match hooks {
-            dbt_schemas::schemas::common::Hooks::String(s) => {
-                YmlValue::String(s.clone(), Default::default())
-            }
-            dbt_schemas::schemas::common::Hooks::ArrayOfStrings(v) => YmlValue::Sequence(
-                v.iter()
-                    .cloned()
-                    .map(|s| YmlValue::String(s, Default::default()))
-                    .collect(),
-                Default::default(),
-            ),
-            dbt_schemas::schemas::common::Hooks::HookConfig(cfg) => YmlValue::Sequence(
-                cfg.sql
-                    .iter()
-                    .cloned()
-                    .map(|s| YmlValue::String(s, Default::default()))
-                    .collect(),
-                Default::default(),
-            ),
-            dbt_schemas::schemas::common::Hooks::HookConfigArray(cfgs) => YmlValue::Sequence(
-                cfgs.iter()
-                    .filter_map(|c| c.sql.clone())
-                    .map(|s| YmlValue::String(s, Default::default()))
-                    .collect(),
-                Default::default(),
-            ),
-        }
-    }
-
-    if let Some(pre) = (*unrendered_project_cfg.pre_hook).as_ref() {
-        unrendered.insert("pre-hook".to_string(), hooks_to_yaml(pre));
-    }
-    if let Some(post) = (*unrendered_project_cfg.post_hook).as_ref() {
-        unrendered.insert("post-hook".to_string(), hooks_to_yaml(post));
-    }
-}
-
-fn insert_unrendered_tags(
-    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
-    unrendered_project_cfg: &ModelConfig,
-) {
-    use dbt_yaml::Value as YmlValue;
-
-    // Tags: store as list if configured as list, or scalar string if configured as string.
-    if let Some(tags) = unrendered_project_cfg.tags.as_ref() {
-        let yaml = match tags {
-            dbt_schemas::schemas::serde::StringOrArrayOfStrings::String(s) => {
-                YmlValue::String(s.clone(), Default::default())
-            }
-            dbt_schemas::schemas::serde::StringOrArrayOfStrings::ArrayOfStrings(v) => {
-                YmlValue::Sequence(
-                    v.iter()
-                        .cloned()
-                        .map(|s| YmlValue::String(s, Default::default()))
-                        .collect(),
-                    Default::default(),
-                )
-            }
-        };
-        unrendered.insert("tags".to_string(), yaml);
-    }
-}
-
-fn insert_unrendered_persist_docs(
-    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
-    pd: Option<&dbt_schemas::schemas::common::PersistDocsConfig>,
-) {
-    use dbt_yaml::Value as YmlValue;
-
-    // Persist docs: store the configured/unrendered mapping if present.
-    if let Some(pd) = pd {
-        let mut pd_map = dbt_yaml::Mapping::new();
-        if let Some(relation) = pd.relation {
-            pd_map.insert(
-                YmlValue::String("relation".to_string(), Default::default()),
-                YmlValue::Bool(relation, Default::default()),
-            );
-        }
-        if let Some(columns) = pd.columns {
-            pd_map.insert(
-                YmlValue::String("columns".to_string(), Default::default()),
-                YmlValue::Bool(columns, Default::default()),
-            );
-        }
-        if !pd_map.is_empty() {
-            unrendered.insert(
-                "persist_docs".to_string(),
-                YmlValue::Mapping(pd_map, Default::default()),
-            );
-        }
-    }
-}
-
-fn set_model_unrendered_relation_config(
-    dbt_model: &mut DbtModel,
-    raw_local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
-    raw_root_project_models_cfg: Option<&dbt_schemas::schemas::project::ProjectModelConfig>,
-    inline_overrides: &RelationComponents,
-    components: &RelationComponents,
-) {
-    use dbt_common::serde_utils::Omissible;
-    use dbt_yaml::Value as YmlValue;
-
-    let mut unrendered = BTreeMap::new();
-
-    // Root project config can apply overrides to dependency packages under:
-    //   models:
-    //     <package_name>:
-    //       +schema: ...
-    // Those must be reflected in `unrendered_config` for state comparisons.
-    fn get_root_model_cfg_for_fqn<'a>(
-        root: &'a dbt_schemas::schemas::project::ProjectModelConfig,
-        fqn: &[String],
-    ) -> &'a dbt_schemas::schemas::project::ProjectModelConfig {
-        let mut cur = root;
-        for component in fqn {
-            let Some(child) = cur.__additional_properties__.get(component) else {
-                break;
-            };
-            let dbt_yaml::ShouldBe::AndIs(cfg) = child else {
-                break;
-            };
-            cur = cfg;
-        }
-        cur
-    }
-
-    fn omissible_opt_str(v: &Omissible<Option<String>>) -> Option<String> {
-        match v {
-            Omissible::Present(inner) => inner.clone(),
-            Omissible::Omitted => None,
-        }
-    }
-
-    let unrendered_project_cfg =
-        raw_local_project_config.get_config_for_fqn(&dbt_model.__common_attr__.fqn);
-    let unrendered_root_cfg = raw_root_project_models_cfg
-        .map(|root| get_root_model_cfg_for_fqn(root, &dbt_model.__common_attr__.fqn));
-
-    // dbt-core precedence: inline SQL config(...) overrides project-level config.
-    //
-    // For Mantle-compatible `state:*` comparisons, we want the *effective configured*
-    // (unrendered) value, not the rendered target-derived value.
-    let unrendered_db = inline_overrides
-        .database
-        .clone()
-        .or_else(|| unrendered_root_cfg.and_then(|cfg| omissible_opt_str(&cfg.database)))
-        .or_else(|| {
-            unrendered_project_cfg
-                .database
-                .clone()
-                .into_inner()
-                .unwrap_or(None)
-        })
-        .or_else(|| components.database.clone());
-    let unrendered_schema = inline_overrides
-        .schema
-        .clone()
-        .or_else(|| unrendered_root_cfg.and_then(|cfg| omissible_opt_str(&cfg.schema)))
-        .or_else(|| {
-            unrendered_project_cfg
-                .schema
-                .clone()
-                .into_inner()
-                .unwrap_or(None)
-        })
-        .or_else(|| components.schema.clone());
-    let unrendered_alias = inline_overrides
-        .alias
-        .clone()
-        .or_else(|| unrendered_root_cfg.and_then(|cfg| cfg.alias.clone()))
-        .or_else(|| unrendered_project_cfg.alias.clone())
-        .or_else(|| components.alias.clone());
-
-    if let Some(db) = unrendered_db.as_ref() {
-        unrendered.insert("database".to_string(), YmlValue::string(db.clone()));
-    }
-    if let Some(sch) = unrendered_schema.as_ref() {
-        unrendered.insert("schema".to_string(), YmlValue::string(sch.clone()));
-    }
-    if let Some(alias) = unrendered_alias.as_ref() {
-        unrendered.insert("alias".to_string(), YmlValue::string(alias.clone()));
-    }
-
-    insert_unrendered_grants(&mut unrendered, unrendered_project_cfg);
-    insert_unrendered_hooks(&mut unrendered, unrendered_project_cfg);
-    insert_unrendered_tags(&mut unrendered, unrendered_project_cfg);
-    // Follow the same hierarchy as database/schema/alias: root sub-section first,
-    // then local project config, then root global. This ensures dep-package models
-    // inherit the root project's global +persist_docs even when a package sub-section
-    // exists (e.g., `elementary: +database: ...`), matching Mantle's behavior.
-    let effective_persist_docs = unrendered_root_cfg
-        .and_then(|cfg| cfg.persist_docs.as_ref())
-        .or(unrendered_project_cfg.persist_docs.as_ref())
-        .or_else(|| raw_root_project_models_cfg.and_then(|root| root.persist_docs.as_ref()));
-    insert_unrendered_persist_docs(&mut unrendered, effective_persist_docs);
-
-    dbt_model.__base_attr__.unrendered_config = unrendered;
-}
-
 #[allow(
     clippy::cognitive_complexity,
     clippy::expect_fun_call,
@@ -473,7 +147,7 @@ pub async fn resolve_models(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     models_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
@@ -500,56 +174,38 @@ pub async fn resolve_models(
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
-    let raw_local_project_config =
-        build_raw_model_project_config(arg, env.as_ref(), base_ctx, package, package_quoting)
-            .await?;
+    let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
     // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
-    let raw_root_project_models_cfg = if dependency_package_name.is_none() {
-        None
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "models");
+    let raw_root_project_models_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "models",
+        ))
     } else {
-        let dbt_project_yml_path = arg.io.in_dir.join("dbt_project.yml");
-        let raw_yml = read_to_string(&dbt_project_yml_path).await.map_err(|e| {
-            fs_err!(
-                code => ErrorCode::IoError,
-                loc => dbt_project_yml_path.clone(),
-                "Failed to read {}: {}",
-                dbt_project_yml_path.display(),
-                e
-            )
-        })?;
-        from_yaml_raw::<DbtProjectModelsOnly>(
-            &arg.io,
-            &raw_yml,
-            Some(dbt_project_yml_path.as_path()),
-            false,
-            None,
-        )
-        .ok()
-        .and_then(|p| p.models)
+        None
     };
 
-    let config_resolver = ProjectConfigResolver::build(
-        root_project_configs.models.clone(),
-        dependency_package_name.is_some(),
-        || {
+    let config_resolver =
+        ProjectConfigResolver::build(root_project_configs.models.clone(), is_dependency, || {
             init_project_config(
                 &arg.io,
                 &package.dbt_project.models,
                 package_quoting,
                 dependency_package_name,
             )
-        },
-    )?
-    .with_resolve_defaults((
-        arg.static_analysis.unwrap_or_default(),
-        root_project.sync.clone(),
-    ));
+        })?
+        .with_resolve_defaults((
+            arg.static_analysis.unwrap_or_default(),
+            root_package.dbt_project.sync.clone(),
+        ));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
-            root_project_name: root_project.name.clone(),
+            root_project_name: root_package.dbt_project.name.clone(),
             config_resolver: config_resolver.clone(),
             package_quoting,
             base_ctx: base_ctx.clone(),
@@ -588,6 +244,17 @@ pub async fn resolve_models(
 
         models_properties_sans_semantics.insert(model_key.clone(), v);
     });
+
+    // Snapshot raw schema.yml config blocks before render_unresolved_sql_files nulls out
+    // schema_value entries via std::mem::replace. Keyed by model name.
+    let raw_schema_yml_configs: BTreeMap<String, BTreeMap<String, dbt_yaml::Value>> =
+        models_properties_sans_semantics
+            .iter()
+            .filter_map(|(key, mpe)| {
+                let config_map = extract_config_map(&mpe.schema_value)?;
+                Some((key.clone(), config_map))
+            })
+            .collect();
 
     // Split SQL and Python models for different processing paths
     let (sql_files, python_files): (Vec<_>, Vec<_>) =
@@ -660,21 +327,10 @@ pub async fn resolve_models(
 
         // Capture inline SQL config overrides (from `{{ config(...) }}`) separately.
         // This should include only values explicitly set in the SQL file, not inherited defaults.
-        let inline_overrides = if let Some(explicit) = sql_file_info.explicit_config.as_ref() {
-            RelationComponents {
-                database: explicit.database.clone().into_inner().unwrap_or(None),
-                schema: explicit.schema.clone().into_inner().unwrap_or(None),
-                alias: explicit.alias.clone(),
-                store_failures: None,
-            }
-        } else {
-            RelationComponents {
-                database: None,
-                schema: None,
-                alias: None,
-                store_failures: None,
-            }
-        };
+        let raw_config_call_dict = read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
+            .await
+            .ok()
+            .and_then(|sql| parse_unrendered_config(&sql, false));
 
         // Set to Inline if this is the inline file
         let is_inline_file = package
@@ -887,6 +543,16 @@ pub async fn resolve_models(
         jinja_type_checking_event_listener_factory
             .update_unique_id(&format!("{package_name}.{model_name}"), &unique_id);
 
+        // TODO: In Core, each merge completely overwrites existing keys. We are matching this behavior, but this seems like a bug in Core.
+        let unrendered_config = build_unrendered_config(
+            &fqn,
+            &raw_local_project_config,
+            raw_root_project_models_cfg.as_ref(),
+            raw_schema_yml_configs.get(ref_name),
+            raw_config_call_dict.as_ref(),
+            true,
+        );
+
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             __common_attr__: CommonAttributes {
@@ -1039,7 +705,7 @@ pub async fn resolve_models(
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
-                unrendered_config: Default::default(),
+                unrendered_config,
             },
             __model_attr__: DbtModelAttr {
                 introspection: if sql_file_info.this {
@@ -1080,21 +746,11 @@ pub async fn resolve_models(
             store_failures: None,
         };
 
-        // Record unrendered (configured) values for dbt-core compatible state comparisons.
-        // This must happen *before* we render/resolve target-derived components.
-        set_model_unrendered_relation_config(
-            &mut dbt_model,
-            &raw_local_project_config,
-            raw_root_project_models_cfg.as_ref(),
-            &inline_overrides,
-            &components,
-        );
-
         // update model components using the generate_relation_components function
         update_node_relation_components(
             &mut dbt_model,
             &env,
-            &root_project.name,
+            &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,
@@ -1139,7 +795,7 @@ pub async fn resolve_models(
                 if !arg.skip_creating_generic_tests {
                     properties.as_testable().persist(
                         package_name,
-                        &root_project.name,
+                        &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
                         adapter_type,
@@ -1222,7 +878,7 @@ pub async fn resolve_models(
         env,
         adapter_type,
         package_name,
-        &root_project.name,
+        &root_package.dbt_project.name,
         runtime_config,
         token,
     )

@@ -226,6 +226,8 @@ pub struct DbtPackage {
     /// `None` for disk-based packages, `Some(map)` for embedded packages.
     /// Keyed by relative path (same as DbtAsset.path).
     pub embedded_file_contents: Option<HashMap<DbtPath, String>>,
+    /// Raw dbt_project.yml.
+    pub raw_project_yml: dbt_yaml::Value,
 }
 
 pub use dbt_jinja_vars::DbtVars;

@@ -311,7 +311,7 @@ pub async fn load(
         let new_root_package = if arg.inline_sql.is_some() {
             if DISPATCH_CONFIG.get().is_none() {
                 let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-                if let Ok(proj) =
+                if let Ok((proj, _)) =
                     load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())
                 {
                     let map = proj.dispatch.as_ref().map_or_else(BTreeMap::new, |d| {
@@ -820,7 +820,7 @@ pub async fn load_inner(
         None
     };
 
-    let dbt_project = load_project_yml(
+    let (dbt_project, raw_project_yml) = load_project_yml(
         &arg.io,
         env,
         &dbt_project_path,
@@ -1072,6 +1072,7 @@ pub async fn load_inner(
         all_paths: all_files,
         inline_file: None,
         embedded_file_contents: None,
+        raw_project_yml,
     })
 }
 

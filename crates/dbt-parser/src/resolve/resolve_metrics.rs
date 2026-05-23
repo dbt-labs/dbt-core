@@ -1,6 +1,10 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
-use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
+use crate::resolve::resolve_utils::build_unrendered_config;
+use crate::resolve::resolve_utils::extract_config_map;
+use crate::utils::{
+    extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
+};
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_error_log_message};
 use dbt_common::{ErrorCode, FsResult};
@@ -55,6 +59,7 @@ fn render_jinja_description(
 pub async fn resolve_metrics(
     arg: &ResolveArgs,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     minimal_model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     minimal_metric_properties: &BTreeMap<String, MinimalPropertiesEntry>,
@@ -67,6 +72,18 @@ pub async fn resolve_metrics(
     let mut disabled_metrics: HashMap<String, Arc<DbtMetric>> = HashMap::new();
     let mut seen_metric_names = HashSet::new();
 
+    let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
+    let raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "metrics");
+    let raw_root_project_cfg = if dependency_package_name.is_some() {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "metrics",
+        ))
+    } else {
+        None
+    };
+
     let (nested_metrics, nested_disabled_metrics) = resolve_nested_model_metrics(
         arg,
         package,
@@ -77,6 +94,8 @@ pub async fn resolve_metrics(
         env,
         base_ctx,
         &mut seen_metric_names,
+        &raw_local_project_config,
+        raw_root_project_cfg.as_ref(),
     )?;
     metrics.extend(nested_metrics);
     disabled_metrics.extend(nested_disabled_metrics);
@@ -90,6 +109,8 @@ pub async fn resolve_metrics(
         env,
         base_ctx,
         &mut seen_metric_names,
+        &raw_local_project_config,
+        raw_root_project_cfg.as_ref(),
     )?;
     metrics.extend(top_level_metrics);
     disabled_metrics.extend(top_level_disabled_metrics);
@@ -108,6 +129,8 @@ pub fn resolve_nested_model_metrics(
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     seen_metric_names: &mut HashSet<String>,
+    raw_local_project_config: &crate::utils::RawProjectConfig,
+    raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -201,6 +224,30 @@ pub fn resolve_nested_model_metrics(
                         metric_props,
                     );
 
+                // Nested metrics are defined inside model YAML, so we find this
+                // metric's entry by name in the model's raw `metrics:` list.
+                let raw_properties_yml_config = mpe
+                    .schema_value
+                    .get("metrics")
+                    .and_then(|v| v.as_sequence())
+                    .and_then(|seq| {
+                        seq.iter().find(|m| {
+                            m.get("name")
+                                .and_then(|n| n.as_str())
+                                .is_some_and(|n| n == metric_name)
+                        })
+                    })
+                    .and_then(extract_config_map);
+
+                let unrendered_config = build_unrendered_config(
+                    &metric_fqn,
+                    raw_local_project_config,
+                    raw_root_project_cfg,
+                    raw_properties_yml_config.as_ref(),
+                    None,
+                    false,
+                );
+
                 let dbt_metric = DbtMetric {
                     __common_attr__: CommonAttributes {
                         name: metric_name.clone(),
@@ -262,7 +309,7 @@ pub fn resolve_nested_model_metrics(
                         unrendered_config: Default::default(),
                     },
                     __metric_attr__: DbtMetricAttr {
-                        unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
+                        unrendered_config,
                         group: metric_config.group.clone(),
                         created_at: chrono::Utc::now().timestamp() as f64,
                         metadata: None,
@@ -305,6 +352,8 @@ pub fn resolve_top_level_metrics(
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     seen_metric_names: &mut HashSet<String>,
+    raw_local_project_config: &crate::utils::RawProjectConfig,
+    raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -331,6 +380,8 @@ pub fn resolve_top_level_metrics(
         if mpe.schema_value.is_null() {
             continue;
         }
+
+        let raw_properties_yml_config = extract_config_map(&mpe.schema_value);
 
         // Parse the metric properties from YAML
         let metric_props: MetricsProperties = into_typed_with_error(
@@ -471,6 +522,15 @@ pub fn resolve_top_level_metrics(
             nodes_with_ref_location: vec![],
         };
 
+        let unrendered_config = build_unrendered_config(
+            &metric_fqn,
+            raw_local_project_config,
+            raw_root_project_cfg,
+            raw_properties_yml_config.as_ref(),
+            None,
+            false,
+        );
+
         let dbt_metric = DbtMetric {
             __common_attr__: CommonAttributes {
                 name: metric_name.clone(),
@@ -522,7 +582,7 @@ pub fn resolve_top_level_metrics(
                 unrendered_config: Default::default(),
             },
             __metric_attr__: DbtMetricAttr {
-                unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
+                unrendered_config,
                 group: metric_metric_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
                 metadata: None,

@@ -681,7 +681,7 @@ pub async fn resolve_inner(
         arg,
         package,
         root_package_name,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         min_properties.source_tables,
         database,
@@ -691,7 +691,8 @@ pub async fn resolve_inner(
         &mut collected_generic_tests,
         test_name_truncations,
         &mut node_resolver,
-    )?;
+    )
+    .await?;
     nodes.sources.extend(sources);
     disabled_nodes.sources.extend(disabled_sources);
 
@@ -701,7 +702,7 @@ pub async fn resolve_inner(
         min_properties.seeds,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         database,
         schema,
@@ -712,7 +713,8 @@ pub async fn resolve_inner(
         &mut collected_generic_tests,
         test_name_truncations,
         &mut node_resolver,
-    )?;
+    )
+    .await?;
     nodes.seeds.extend(seeds);
     disabled_nodes.seeds.extend(disabled_seeds);
 
@@ -724,7 +726,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         min_properties.snapshots,
         &macros.macros,
@@ -760,7 +762,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         &min_properties.models,
         // TODO: pass in typed_models_properties
@@ -787,7 +789,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         &mut min_properties.analyses,
         database,
@@ -807,7 +809,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         &mut min_properties.functions,
         database,
@@ -827,7 +829,7 @@ pub async fn resolve_inner(
         arg,
         &mut min_properties.exposures,
         package,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         database,
         schema,
@@ -844,6 +846,7 @@ pub async fn resolve_inner(
         let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
             arg,
             package,
+            dbt_state.root_package(),
             root_project_configs,
             &min_properties.models,
             &typed_models_properties,
@@ -861,6 +864,7 @@ pub async fn resolve_inner(
         let (metrics, disabled_metrics) = resolve_metrics(
             arg,
             package,
+            dbt_state.root_package(),
             root_project_configs,
             &min_properties.models,
             &min_properties.metrics,
@@ -876,6 +880,7 @@ pub async fn resolve_inner(
         let (saved_queries, disabled_saved_queries) = resolve_saved_queries(
             arg,
             package,
+            dbt_state.root_package(),
             root_package_name,
             root_project_configs,
             &mut min_properties.saved_queries,
@@ -894,7 +899,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
-        dbt_state.root_project(),
+        dbt_state.root_package(),
         root_project_configs,
         &mut min_properties.tests,
         database,

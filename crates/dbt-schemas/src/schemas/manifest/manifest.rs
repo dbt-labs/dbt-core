@@ -1031,6 +1031,8 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     freshness: source.freshness,
                     schema_origin: source.config.schema_origin.unwrap_or_default(),
                     sync: source.config.sync.clone(),
+                    unrendered_database: source.unrendered_database,
+                    unrendered_schema: source.unrendered_schema,
                 },
                 deprecated_config: source.config,
                 __other__: source.__other__,

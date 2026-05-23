@@ -1,6 +1,10 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
-use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
+use crate::resolve::resolve_utils::build_unrendered_config;
+use crate::resolve::resolve_utils::extract_config_map;
+use crate::utils::{
+    extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
+};
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
@@ -22,10 +26,26 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
+fn extract_raw_export_configs(
+    exports: &dbt_yaml::Value,
+) -> HashMap<String, BTreeMap<String, dbt_yaml::Value>> {
+    let mut export_configs = HashMap::new();
+    if let Some(exports) = exports.as_sequence() {
+        for export in exports.iter() {
+            if let Some(name) = export.get("name").and_then(|n| n.as_str()) {
+                let config = extract_config_map(export).unwrap_or_default();
+                export_configs.insert(name.into(), config);
+            }
+        }
+    }
+    export_configs
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_saved_queries(
     arg: &ResolveArgs,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     _root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
     saved_query_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
@@ -47,9 +67,21 @@ pub async fn resolve_saved_queries(
     }
 
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
+    let is_dependency = dependency_package_name.is_some();
+    let _raw_local_project_config =
+        extract_resource_config_from_raw_project(&package.raw_project_yml, "saved-queries");
+    let _raw_root_project_cfg = if is_dependency {
+        Some(extract_resource_config_from_raw_project(
+            &root_package.raw_project_yml,
+            "saved-queries",
+        ))
+    } else {
+        None
+    };
+
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.saved_queries.clone(),
-        dependency_package_name.is_some(),
+        is_dependency,
         || {
             init_project_config(
                 &arg.io,
@@ -87,6 +119,14 @@ pub async fn resolve_saved_queries(
             );
 
             let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
+
+            let raw_properties_yml_config = extract_config_map(&schema_value);
+
+            // Keyed by export name for lookup when building each export's unrendered_config.
+            let raw_export_configs = schema_value
+                .get("exports")
+                .map(extract_raw_export_configs)
+                .unwrap_or_default();
 
             // Parse the saved query properties from YAML
             let saved_query_props: SavedQueriesProperties = into_typed_with_jinja(
@@ -158,7 +198,10 @@ pub async fn resolve_saved_queries(
                             alias: Some(config.alias.unwrap_or_else(|| export.name.clone())),
                             database: Some(database.to_string()),
                         },
-                        unrendered_config: BTreeMap::new(), // TODO
+                        unrendered_config: raw_export_configs
+                            .get(&export.name)
+                            .cloned()
+                            .unwrap_or_default(),
                     }
                 })
                 .collect::<Vec<saved_query::SavedQueryExport>>();
@@ -178,6 +221,22 @@ pub async fn resolve_saved_queries(
                 .first()
                 .map(|export| export.config.alias.clone())
                 .unwrap_or_default();
+
+            // TODO: Core has a bug where saved query unrendered_config only captures YAML-level
+            // config and excludes dbt_project.yml config entirely. In _generate_saved_query_config(),
+            // `patch_config_dict` is built only from `target.config` (the YAML file), so project-level
+            // config never reaches UnrenderedConfigGenerator:
+            // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/parser/schema_yaml_readers.py#L1236-L1246
+            // Passing `local` and `root` as None to match Core's behavior. Once Core fixes this,
+            // pass `&raw_local_project_config` and `raw_root_project_cfg.as_ref()` instead.
+            let unrendered_config = build_unrendered_config(
+                &fqn,
+                &crate::utils::RawProjectConfig::empty(),
+                None,
+                raw_properties_yml_config.as_ref(),
+                None,
+                false,
+            );
 
             let dbt_saved_query = DbtSavedQuery {
                 __common_attr__: CommonAttributes {
@@ -234,7 +293,7 @@ pub async fn resolve_saved_queries(
                     exports,
                     label: saved_query_props.label,
                     metadata: None,
-                    unrendered_config: BTreeMap::new(),
+                    unrendered_config,
                     group: saved_query_config.group.clone(),
                     created_at: chrono::Utc::now().timestamp() as f64,
                     cache: saved_query_config.cache.clone(),

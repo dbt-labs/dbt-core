@@ -159,7 +159,7 @@ pub fn load_project_yml(
     dbt_project_path: &Path,
     dependency_package_name: Option<&str>,
     cli_vars: BTreeMap<String, dbt_yaml::Value>,
-) -> FsResult<DbtProject> {
+) -> FsResult<(DbtProject, dbt_yaml::Value)> {
     let namespace_keys: Vec<String> = env
         .env
         .get_macro_namespace_registry()
@@ -176,10 +176,12 @@ pub fn load_project_yml(
     context.insert("var".to_string(), Value::from_object(Var::new(cli_vars)));
     context.insert(CURRENT_PATH.to_string(), Value::from(DBT_PROJECT_YML));
 
+    let raw_yml = value_from_file(io_args, dbt_project_path, true, dependency_package_name)?;
+
     // Parse the template without vars using Jinja
     let mut dbt_project: DbtProject = into_typed_with_jinja(
         io_args,
-        value_from_file(io_args, dbt_project_path, true, dependency_package_name)?,
+        raw_yml.clone(),
         false,
         env,
         &context,
@@ -201,7 +203,10 @@ pub fn load_project_yml(
     // Prune unexpected null keys (e.g. empty keys) early and emit warnings
     prune_sections(io_args, &mut dbt_project);
 
-    crate::load_packages::build_internal_dbt_project(dbt_project)
+    Ok((
+        crate::load_packages::build_internal_dbt_project(dbt_project)?,
+        raw_yml,
+    ))
 }
 
 pub fn collect_protected_paths(dbt_project: &DbtProject) -> Vec<String> {

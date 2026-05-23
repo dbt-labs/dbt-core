@@ -19,7 +19,6 @@ use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
         common::NodeDependsOn,
-        project::DbtProject,
         properties::{FunctionKind, FunctionProperties},
         ref_and_source::{DbtRef, DbtSourceWrapper},
     },
@@ -43,7 +42,7 @@ pub async fn resolve_functions(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
+    root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     function_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
@@ -80,7 +79,7 @@ pub async fn resolve_functions(
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
-            root_project_name: root_project.name.clone(),
+            root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
             base_ctx: base_ctx.clone(),
@@ -306,7 +305,7 @@ pub async fn resolve_functions(
         update_node_relation_components(
             &mut function,
             &env,
-            &root_project.name,
+            &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,
