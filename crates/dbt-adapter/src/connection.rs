@@ -85,7 +85,7 @@ fn backpressure_counts_for_trace() -> (Option<u32>, Option<u32>) {
     )
 }
 
-/// Function that must be called when a node execution tasks finishes executing.
+/// Function that must be called when a node/operation finishes executing.
 ///
 /// This allows the connection used by that node to be recycled and made available
 /// for reuse by other nodes in other threads. The task execution system should
@@ -103,11 +103,41 @@ fn backpressure_counts_for_trace() -> (Option<u32>, Option<u32>) {
 ///
 /// Violations of Property II are detected at runtime when
 /// [pri::too_many_tlocal_connections] is called.
-#[allow(clippy::result_unit_err)]
-pub fn on_node_execution_finished(_node_id: &str) {
+///
+/// This must be called from the same thread that borrowed the connection. For
+/// blocking task bodies, prefer [`ThreadLocalConnectionRecycleGuard`] so cleanup
+/// also runs while unwinding from a panic.
+pub fn recycle_thread_local_connection() {
     let conn = CONNECTION.with(|c| c.take());
     if let Some(conn) = conn {
         sort_for_recycling(conn)
+    }
+}
+
+/// Drop guard that recycles this thread's cached adapter connection.
+///
+/// Create this at the start of a blocking task body that may borrow an adapter
+/// connection. Because it runs in [`Drop`], the connection is moved from the
+/// blocking worker's thread-local slot to the shared recycling pool on both
+/// normal return and panic unwinding.
+#[must_use = "connection recycling only happens when the guard is dropped"]
+pub struct ThreadLocalConnectionRecycleGuard;
+
+impl Default for ThreadLocalConnectionRecycleGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ThreadLocalConnectionRecycleGuard {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Drop for ThreadLocalConnectionRecycleGuard {
+    fn drop(&mut self) {
+        recycle_thread_local_connection();
     }
 }
 
@@ -745,7 +775,7 @@ mod tests {
                 assert!(conn.is_some());
                 c.replace(conn); // put it back for the next test
             });
-            on_node_execution_finished("node1");
+            recycle_thread_local_connection();
             CONNECTION.with(|c| {
                 // Connection is not in the thread-local anymore
                 assert!(c.take().is_none());
@@ -756,7 +786,7 @@ mod tests {
             CONNECTION.with(|c| {
                 c.replace(conn); // put it back for the next test
             });
-            on_node_execution_finished("node2");
+            recycle_thread_local_connection();
             assert_eq!(new_connection_calls.load(Ordering::Relaxed), 1); // ensure this is still 1
             let _guard = borrow_tlocal_connection_impl(
                 AdapterType::Snowflake,

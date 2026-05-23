@@ -5,7 +5,7 @@ use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use dbt_adapter::connection::ConnectionBackpressure;
+use dbt_adapter::connection::{ConnectionBackpressure, ThreadLocalConnectionRecycleGuard};
 use dbt_adapter_core::AdapterType;
 use dbt_common::stats::NodeStatus;
 use dbt_common::{ErrorCode, FsResult, fs_err};
@@ -108,9 +108,12 @@ impl<T: Send + 'static> TaskOp<T> {
                 max_threads,
             } => {
                 let _guard = ConnectionBackpressure::from_config(adapter_type, max_threads).await;
-                dbt_common::tracing::spawn_blocking_traced(f)
-                    .await
-                    .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e))
+                dbt_common::tracing::spawn_blocking_traced(Box::new(move || {
+                    let _recycle_guard = ThreadLocalConnectionRecycleGuard::new();
+                    f()
+                }))
+                .await
+                .map_err(|e| fs_err!(ErrorCode::Generic, "spawn_blocking join error: {}", e))
             }
         }
     }

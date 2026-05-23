@@ -338,6 +338,12 @@ pub async fn visit_sequential(
     ctx: &mut TaskRunnerCtx,
     token: &CancellationToken,
 ) -> FsResult<()> {
+    // Drain connection on this thread left by inline metadata or hook work before this phase.
+    // TODO: This is just a stopgap to reduce the number of unrecycled connections.
+    // This call should be removed and instead all upstream connection bearing work should
+    // explictly clean up after itself.
+    dbt_adapter::connection::recycle_thread_local_connection();
+
     let mut slot_pool = WorkerSlotPool::new();
     let mut skip_set = SkipSet::new();
     let mut dependents = vec![HashSet::<NodeIndex>::new(); schedule.node_count()];
@@ -417,6 +423,12 @@ pub async fn visit_parallel(
     ctx: &mut TaskRunnerCtx,
     token: &CancellationToken,
 ) -> FsResult<()> {
+    // Drain connection on this thread left by inline metadata or hook work before this phase.
+    // TODO: This is just a stopgap to reduce the number of unrecycled connections.
+    // This call should be removed and instead all upstream connection bearing work should
+    // explictly clean up after itself.
+    dbt_adapter::connection::recycle_thread_local_connection();
+
     // Invariant check - task graph must be a DAG.
     // We use `toposort` to check for cycles as it uses iterative algorithm,
     // while pergraph::algo::is_cyclic_directed uses recursive which may cause stack overflow on large graphs.
@@ -514,8 +526,7 @@ pub async fn visit_parallel(
                 let thread_id = slot_pool.acquire();
                 ctx_clone.thread_id = thread_id;
 
-                let work_node_id = node_clone.work_node_id().to_string();
-                let work_node_id_for_send = work_node_id.clone();
+                let work_node_id_for_send = node_clone.work_node_id().to_string();
 
                 // Spawn the actual task and instrument it with the span. We then await the
                 // JoinHandle in a second task so that panics inside run_task are caught via
@@ -550,7 +561,6 @@ pub async fn visit_parallel(
                     // by should_cancel_compilation, in which case we simply
                     // ignore the error
                     let _ = sender.send((result, node_index, thread_id));
-                    dbt_adapter::connection::on_node_execution_finished(&work_node_id);
                 });
                 waiting.insert(node_index, task_span);
             } else {
