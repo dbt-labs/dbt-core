@@ -26,6 +26,7 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-parser = { workspace = true }
+dbt-pretty-table = { workspace = true }
 dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
@@ -39,6 +40,7 @@ arrow-schema = { workspace = true }
 chrono = { workspace = true }
 itertools = { workspace = true }
 minijinja = { workspace = true }
+parking_lot = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -13,5 +13,6 @@ pub mod microbatch;
 pub mod register_seeds;
 pub mod renderable;
 pub mod runnable;
+pub mod task;
 pub mod utils;
 pub mod visitor;
