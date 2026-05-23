@@ -14,6 +14,7 @@ mod project;
 mod record_and_replay;
 mod run_results_capture;
 mod task_seq;
+pub(crate) mod telemetry;
 
 pub mod goldie;
 pub mod tasks;
