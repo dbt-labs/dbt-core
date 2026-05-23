@@ -1,16 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
-use dbt_adapter::Adapter;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, phases::build_compile_and_run_base_context};
-use dbt_schema_store::{DataStoreTrait, store::SchemaStore};
 use dbt_schemas::state::ResolverState;
-
-#[derive(Clone)]
-pub struct CompilerEnv {
-    pub schema_store: Arc<SchemaStore>,
-    pub data_store: Arc<dyn DataStoreTrait>,
-    pub adapter: Arc<Adapter>,
-}
 
 pub fn build_base_context(
     resolver_state: &ResolverState,

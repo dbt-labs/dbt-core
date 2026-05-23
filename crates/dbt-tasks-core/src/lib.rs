@@ -20,10 +20,8 @@ pub mod utils;
 pub mod visitor;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::{fmt, io};
 
-use dbt_jinja_utils::jinja_environment::JinjaEnv;
 pub use run_tasks_args::RunTasksArgs;
 pub use stats_to_results::stats_to_results;
 
@@ -33,8 +31,6 @@ use dbt_common::io_args::EvalArgs;
 use dbt_dag::schedule::Schedule;
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
-
-use crate::compiler_env::CompilerEnv;
 
 /// Preview/show results produced during task execution.
 pub struct Preview {
@@ -67,12 +63,6 @@ pub trait ShowableResults: Send + Sync + fmt::Debug {
     ) -> FsResult<()>;
 
     fn as_any(&self) -> &dyn std::any::Any;
-}
-
-pub struct PreRunTasksOk {
-    pub compiler_env: CompilerEnv,
-    pub resolved_state: Arc<ResolverState>,
-    pub jinja_env: Arc<JinjaEnv>,
 }
 
 /// Core result type from running dbt tasks (compile + run statistics).
