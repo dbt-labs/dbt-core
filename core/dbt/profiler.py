@@ -5,16 +5,13 @@ from typing import Any, Generator
 
 
 @contextmanager
-def profiler(enable: bool, outfile: str) -> Generator[Any, None, None]:
+def profiler(outfile: str) -> Generator[Any, None, None]:
+    profiler = Profile()
+    profiler.enable()
     try:
-        if enable:
-            profiler = Profile()
-            profiler.enable()
-
         yield
     finally:
-        if enable:
-            profiler.disable()
-            stats = Stats(profiler)
-            stats.sort_stats("tottime")
-            stats.dump_stats(str(outfile))
+        profiler.disable()
+        stats = Stats(profiler)
+        stats.sort_stats("tottime")
+        stats.dump_stats(str(outfile))

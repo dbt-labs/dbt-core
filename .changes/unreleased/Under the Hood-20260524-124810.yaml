@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Drop unused `enable` parameter from the `profiler` context manager; callers
+  already guard on `flags.RECORD_TIMING_INFO`.
+time: 2026-05-24T12:48:10.000000+00:00
+custom:
+    Author: Pawansingh3889
+    Issue: "5886"
