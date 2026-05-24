@@ -7,6 +7,7 @@ pub mod sa;
 // All features:
 pub mod adapter;
 pub mod antlr_parser;
+pub mod cli_extension;
 pub mod index;
 pub mod metricflow;
 pub mod sidecar;

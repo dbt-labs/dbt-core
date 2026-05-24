@@ -22,14 +22,17 @@ fn main() {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
 
-    // Re-run for checked-in frontend inputs. `web/dist` is gitignored, so only
-    // watch it after it exists; otherwise Cargo treats the missing path as dirty
-    // on every invocation.
+    // Only watch paths that exist — Cargo treats a missing rerun-if-changed
+    // path as perpetually dirty, which forces a rebuild every invocation.
     for path in WATCHED_WEB_INPUTS {
-        println!("cargo:rerun-if-changed={path}");
+        if Path::new(path).exists() {
+            println!("cargo:rerun-if-changed={path}");
+        }
     }
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=web/dist");
+    if Path::new("web/dist").exists() {
+        println!("cargo:rerun-if-changed=web/dist");
+    }
 
     if std::env::var_os("CARGO_FEATURE_EMBED_UI").is_none() {
         println!(

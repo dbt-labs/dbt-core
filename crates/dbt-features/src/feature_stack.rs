@@ -1,176 +1,21 @@
-use async_trait::async_trait;
-use dbt_adapter::Adapter;
-use dbt_clap_core::Cli;
-use dbt_clap_core::InitArgs;
+use std::fmt;
+
 use dbt_common::DiscreteEventEmitter;
-use dbt_common::FsResult;
-use dbt_common::cancellation::CancellationToken;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
-use dbt_common::io_args::EvalArgs;
-use dbt_dag::schedule::Schedule;
-use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schemas::schemas::PreviousState;
-use dbt_schemas::state::DbtState;
-use dbt_schemas::state::ResolverState;
-use dbt_tasks_core::PreTaskRunData;
-use dbt_tasks_core::RunTasksOk;
-use minijinja::Value as MinijinjaValue;
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::adapter::AdapterFeature;
-
 use crate::antlr_parser::AntlrParserFeature;
+use crate::cli_extension::CliExtensionFeature;
 use crate::index::IndexFeature;
-use crate::metricflow::{MetricflowClient, MetricflowFeature};
+use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
-use dbt_compilation::config::CompilationConfig;
 
 /// The instrumentation feature. Exposed as a set of instrumentation services.
 pub struct InstrumentationFeature {
     pub event_emitter: Box<dyn DiscreteEventEmitter>,
     // TODO: add more instrumentation services here
-}
-
-#[async_trait]
-#[allow(clippy::too_many_arguments)]
-pub trait CliExtensionHooks: Send + Sync {
-    /// Called before CLI compilation argument validation.
-    ///
-    /// Allowing extensions to inspect or reject arguments before any execution begins.
-    fn will_validate_compilation_cli_args(
-        &self,
-        _cli: &Cli,
-        _eval_arg: &mut Cow<EvalArgs>,
-        _dbt_state: &Arc<DbtState>,
-        _config: &CompilationConfig,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called when `dbt init` is invoked, before project initialization begins.
-    async fn will_init_project(
-        &self,
-        _invocation_id: Uuid,
-        _cli: &Cli,
-        _init_args: &InitArgs,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called early in execution, before any tasks are scheduled or run.
-    async fn will_execute(
-        &self,
-        _cli: &Cli,
-        _eval_arg: &EvalArgs,
-        _feature_stack: &Arc<FeatureStack>,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called after the project has been resolved, before task scheduling
-    /// and execution.
-    ///
-    /// This is the earliest point where `ResolverState` (including nodes,
-    /// groups, and other resolved project data) is available.
-    async fn did_resolve_project(
-        &self,
-        _arg: &EvalArgs,
-        _resolved_state: &ResolverState,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called just before tasks are scheduled and run.
-    fn will_run_tasks(
-        &self,
-        _cli: &Cli,
-        _arg: &EvalArgs,
-        _resolved_state: &ResolverState,
-        _token: &CancellationToken,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called after tasks have been scheduled and run, but before manifest
-    /// update and further phases.
-    ///
-    /// Return `Ok(())` if execution was not fully handled by this hook and
-    /// should continue normally. To signal that a command was handled and
-    /// execution should terminate, return `Err(FsError::exit_with_status(0))`
-    /// for success or `Err(FsError::exit_with_status(n))` for failure.
-    async fn did_schedule_and_run_tasks(
-        &self,
-        _arg: &EvalArgs,
-        _cli: &Cli,
-        _previous_state: Option<&PreviousState>,
-        _run_tasks_ok: &RunTasksOk,
-        _resolved_state: &ResolverState,
-        _token: &CancellationToken,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called after compilation and manifest update, once the full schedule
-    /// and lineage information are available.
-    ///
-    /// Return `Ok(())` if execution was not fully handled by this hook and
-    /// should continue normally. To signal that a command was handled and
-    /// execution should terminate, return `Err(FsError::exit_with_status(0))`
-    /// for success or `Err(FsError::exit_with_status(n))` for failure.
-    async fn did_compile(
-        &self,
-        _arg: &EvalArgs,
-        _cli: &Cli,
-        // _run_tasks_ok: &RunTasksOk,
-        _resolved_state: &ResolverState,
-        _schedule: &Schedule<String>,
-        _token: &CancellationToken,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-
-    /// Called after all compile-time setup (adapter init, defer, schema hydration)
-    /// and before the task runner starts.
-    ///
-    /// Returns per-node data that the task runner consumes, or `None` if this
-    /// hook has nothing to contribute. An `Err` with an exit status signals that
-    /// the hook handled the command fully and execution should terminate.
-    async fn did_pre_run(
-        &self,
-        _arg: &EvalArgs,
-        _cli: &Cli,
-        _jinja_env: Cow<'_, JinjaEnv>,
-        _augmented_resolved_state: &ResolverState,
-        _schedule: &Schedule<String>,
-        _adapter: Arc<Adapter>,
-        _base_context: &BTreeMap<String, MinijinjaValue>,
-        _token: &CancellationToken,
-    ) -> FsResult<Option<Box<dyn PreTaskRunData>>> {
-        Ok(None)
-    }
-
-    async fn did_handle_defer(
-        &self,
-        _arg: &EvalArgs,
-        _cli: &Cli,
-        _jinja_env: Cow<'_, JinjaEnv>,
-        _augmented_resolved_state: &ResolverState,
-        _schedule: &Schedule<String>,
-        _metricflow_client: Option<Arc<dyn MetricflowClient>>,
-        _token: &CancellationToken,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-}
-
-pub struct CliExtensionFeature {
-    pub hooks: Box<dyn CliExtensionHooks>,
 }
 
 /// A feature stack is an object that can be initialized with type-erased

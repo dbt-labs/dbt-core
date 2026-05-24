@@ -1,10 +1,19 @@
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use dbt_common::cancellation::CancellationTokenSource;
+use dbt_common::FsResult;
+use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
 use dbt_common::fail_fast::FailFast;
+use dbt_common::io_args::EvalArgs;
+use minijinja::Value as MinijinjaValue;
+use uuid::Uuid;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
-use crate::feature_stack::*;
+use crate::cli_extension::{CliExtensionFeature, CliExtensionHooks};
+use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::IndexFeature;
 use crate::index::IndexHooks;
 use crate::metricflow::MetricflowFeature;
@@ -12,7 +21,120 @@ use crate::sidecar::SidecarFeature;
 use crate::tracing::TracingFeature;
 
 struct NoOpExtensionHooks;
-impl CliExtensionHooks for NoOpExtensionHooks {}
+
+#[async_trait]
+impl CliExtensionHooks for NoOpExtensionHooks {
+    fn will_validate_compilation_cli_args(
+        &self,
+        _cli: &dbt_clap_core::Cli,
+        _eval_arg: &mut Cow<EvalArgs>,
+        _dbt_state: &Arc<dbt_schemas::state::DbtState>,
+        _config: &dbt_compilation::config::CompilationConfig,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn will_init_project(
+        &self,
+        _invocation_id: Uuid,
+        _cli: &dbt_clap_core::Cli,
+        _init_args: &dbt_clap_core::InitArgs,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn will_execute(
+        &self,
+        _cli: &dbt_clap_core::Cli,
+        _eval_arg: &EvalArgs,
+        _feature_stack: &Arc<FeatureStack>,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_resolve_project(
+        &self,
+        _arg: &EvalArgs,
+        _resolved_state: &dbt_schemas::state::ResolverState,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn will_run_tasks(
+        &self,
+        _cli: &dbt_clap_core::Cli,
+        _arg: &EvalArgs,
+        _resolved_state: &dbt_schemas::state::ResolverState,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_schedule_and_run_tasks(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &dbt_clap_core::Cli,
+        _previous_state: Option<&dbt_schemas::schemas::PreviousState>,
+        _run_tasks_ok: &dbt_tasks_core::RunTasksOk,
+        _resolved_state: &dbt_schemas::state::ResolverState,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_emit_selected_compile_output(
+        &self,
+        _arg: &EvalArgs,
+        _resolved_state: &dbt_schemas::state::ResolverState,
+        _jinja_env: &Arc<dbt_jinja_utils::jinja_environment::JinjaEnv>,
+        _compute_backend: &Arc<dyn std::any::Any + Send + Sync>,
+        _schema_store: &Arc<dyn dbt_schema_store::SchemaStoreTrait>,
+        _data_store: &Arc<dyn dbt_schema_store::DataStoreTrait>,
+        _map_compiled_sql: &HashMap<String, Option<String>>,
+        _feature_stack: &Arc<FeatureStack>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_compile(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &dbt_clap_core::Cli,
+        _resolved_state: &dbt_schemas::state::ResolverState,
+        _schedule: &dbt_dag::schedule::Schedule<String>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_pre_run(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &dbt_clap_core::Cli,
+        _jinja_env: Cow<'_, dbt_jinja_utils::jinja_environment::JinjaEnv>,
+        _augmented_resolved_state: &dbt_schemas::state::ResolverState,
+        _schedule: &dbt_dag::schedule::Schedule<String>,
+        _adapter: Arc<dbt_adapter::Adapter>,
+        _base_context: &BTreeMap<String, MinijinjaValue>,
+        _token: &CancellationToken,
+    ) -> FsResult<Option<Box<dyn dbt_tasks_core::PreTaskRunData>>> {
+        Ok(None)
+    }
+
+    async fn did_handle_defer(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &dbt_clap_core::Cli,
+        _jinja_env: Cow<'_, dbt_jinja_utils::jinja_environment::JinjaEnv>,
+        _augmented_resolved_state: &dbt_schemas::state::ResolverState,
+        _schedule: &dbt_dag::schedule::Schedule<String>,
+        _metricflow_client: Option<Arc<dyn crate::metricflow::MetricflowClient>>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+}
 
 struct NoOpIndexHooks;
 
