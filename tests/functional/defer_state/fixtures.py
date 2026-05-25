@@ -843,7 +843,7 @@ generate_alias_name_sql = """
     {%- elif node.version -%}
         {{ return("generated_" ~ node.name ~ "_v" ~ node.version) }}
     {%- else -%}
-        {{ "generated_" ~ node.name }}
+        {{ return("generated_" ~ node.name) }}
     {%- endif -%}
 {%- endmacro %}
 """
