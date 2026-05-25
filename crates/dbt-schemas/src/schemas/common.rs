@@ -866,7 +866,7 @@ impl DbtChecksum {
         hasher.update(s);
         let checksum = hasher.finalize();
         Self::Object(DbtChecksumObject {
-            name: "SHA256".to_string(),
+            name: "sha256".to_string(),
             checksum: hex::encode(checksum),
         })
     }
@@ -887,7 +887,7 @@ impl DbtChecksum {
             hasher.update(trimmed_string.as_bytes());
             let checksum = hasher.finalize();
             Self::Object(DbtChecksumObject {
-                name: "SHA256".to_string(),
+                name: "sha256".to_string(),
                 checksum: hex::encode(checksum),
             })
         }
