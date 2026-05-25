@@ -180,7 +180,7 @@ opt-level = 3
 lto = "thin"
 # Parallel compilation within a crate. See:
 # https://doc.rust-lang.org/cargo/reference/profiles.html#codegen-units
-codegen-units = 16
+codegen-units = 1
 
 # Used for Linux builds. Symbols are extracted by the CI build script.
 [profile.relwithdebinfo]
