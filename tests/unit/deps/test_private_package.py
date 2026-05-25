@@ -286,6 +286,44 @@ class TestPrivatePackageDefinition:
         assert "Valid providers:" in str(exc_info.value)
         assert "github" in str(exc_info.value)
 
+    def test_build_3part_azure_devops_uses_full_name(self):
+        """3-part path with provider azure_devops should use PrivatePackageName (not legacy)."""
+        result = PrivatePackageDefinition.build(name="org/project/repo", provider="azure_devops")
+        assert isinstance(result.name, PrivatePackageName)
+        assert not isinstance(result.name, ADOLegacyPrivatePackageName)
+        assert result.name.group == "project"
+
+    def test_build_2part_azure_devops_uses_legacy_name(self):
+        """2-part path with provider azure_devops should use ADOLegacyPrivatePackageName."""
+        result = PrivatePackageDefinition.build(name="org/repo", provider="azure_devops")
+        assert isinstance(result.name, ADOLegacyPrivatePackageName)
+
+    def test_build_3part_azure_active_directory_uses_full_name(self):
+        """3-part path with provider azure_active_directory should use PrivatePackageName."""
+        result = PrivatePackageDefinition.build(
+            name="org/project/repo", provider="azure_active_directory"
+        )
+        assert isinstance(result.name, PrivatePackageName)
+        assert not isinstance(result.name, ADOLegacyPrivatePackageName)
+
+    def test_cross_project_azure_devops_does_not_match_wrong_project(self):
+        """3-part cross-project reference must not silently resolve to wrong project."""
+        git_providers = [
+            {
+                "org": "myorg",
+                "url": "https://{token}@dev.azure.com/myorg/current_project/_git/{repo}",
+                "token": "***",
+                "provider": "azure_devops",
+            }
+        ]
+        helper = PrivatePackageHelper(json.dumps(git_providers))
+        # 2-part: should still match (legacy behavior)
+        resolved = helper.get_resolved_url("myorg/repo", provider="azure_devops")
+        assert "current_project" in resolved
+        # 3-part with different project: should fail, not silently use current_project
+        with pytest.raises(PrivatePackageResolutionError):
+            helper.get_resolved_url("myorg/other_project/repo", provider="azure_devops")
+
 
 class TestADOLegacyPrivatePackageName:
     def test_equality_ignores_groups(self):
