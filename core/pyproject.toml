@@ -58,12 +58,11 @@ dependencies = [
     "dbt-common>=1.37.5,<2.0",
     "dbt-adapters>=1.24.1,<2.0",
     "dbt-protos>=1.0.498,<2.0",
-    # Bundled opt-in plugin: installed by default, but PluginManager skips loading it unless
-    # the gate env var (DBT_STATE_ENABLED) is set. See core/dbt/plugins/manager.py
-    # (OPT_IN_PLUGIN_MODULES) for the gating contract.
-    # NOTE: dbt-state is the new name for the package previously published as `run-cache`.
-    # This dependency line cannot resolve until dbt-state is published to PyPI; the rename
-    # of the upstream package and this line must ship together.
+    # Bundled plugin: installed by default; PluginManager auto-discovers and loads it.
+    # Users can opt out via the DBT_ENGINE_STATE_DISABLED env var or by setting
+    # `flags.state_plugin_disabled: true` in dbt_project.yml (equivalently
+    # `config.state_plugin_disabled: true` in profiles.yml). See
+    # core/dbt/plugins/manager.py (OPT_OUT_PLUGIN_MODULES) for the gating contract.
     "dbt-state>=2.18,<3.0",
     "pydantic<3",
     # ----

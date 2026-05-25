@@ -3,7 +3,7 @@ import logging
 import os
 import pkgutil
 from types import MappingProxyType
-from typing import Callable, Dict, List, Mapping, Sequence, Set, Tuple
+from typing import Callable, Dict, List, Mapping, NamedTuple, Sequence, Set, Tuple
 
 import dbt.tracking
 from dbt.contracts.graph.manifest import Manifest
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _TRUTHY_ENV_VALUES = frozenset({"true", "1", "t", "y", "yes", "on"})
 
 
-def _env_gate_is_on(env_var: str) -> bool:
+def _env_var_is_truthy(env_var: str) -> bool:
     """Return True iff `env_var` is set to one of the recognized truthy values."""
     raw = os.environ.get(env_var)
     if raw is None:
@@ -27,51 +27,81 @@ def _env_gate_is_on(env_var: str) -> bool:
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
 
 
-# Track which (module_name, gate_state) combinations have already emitted a discovery
+class OptOutSignal(NamedTuple):
+    """How a single opt-out bundled plugin can be disabled.
+
+    Both signals are read at PluginManager discovery time; either being on causes the
+    plugin to be skipped before importlib.import_module is called.
+
+    - `env_var`: name of the env var that, when truthy, suppresses the plugin. Useful
+      pre-project-load (e.g. `dbt deps`) and for CI overrides.
+    - `flag_attr`: attribute on `get_flags()` (UPPERCASE) populated from
+      `dbt_project.yml`'s `flags:` block or `profiles.yml`'s `config:` block via
+      `ProjectFlags.project_only_flags`. None for plugins that only support env-var
+      disabling.
+    """
+
+    env_var: str
+    flag_attr: str
+
+
+# Track which (module_name, reason) combinations have already emitted a discovery
 # log message in this process, so we don't spam the user when PluginManager is
 # constructed multiple times (e.g. during test runs that reuse the dbtRunner).
 _DISCOVERY_NOTICES_EMITTED: Set[Tuple[str, str]] = set()
 
 
-def _notify_opt_in_module_skipped(module_name: str, env_var: str) -> None:
-    """Emit a one-time per-process notice that an opt-in plugin module was found on the
-    import path but skipped because its gate is off.
+def _read_project_flag(flag_attr: str) -> bool:
+    """Read a project-level bool flag from `dbt.flags.get_flags()`. Imported lazily to
+    avoid a hard import-time dependency between PluginManager and the flags module."""
+    try:
+        from dbt.flags import get_flags
 
-    The legacy `dbt_run_cache` name is logged at INFO -- users on pre-bundling versions had
-    that plugin auto-loading, so the silent behavior change deserves visibility. The new
-    `dbt_state` name is logged at DEBUG: there's no pre-existing behavior to break, but
-    operators may still want a breadcrumb when debugging."""
+        return bool(getattr(get_flags(), flag_attr, False))
+    except Exception:
+        # If flags haven't been initialized yet (e.g. very early in startup), treat as
+        # not-disabled. The env var still gates pre-project-load.
+        return False
+
+
+def _opt_out_reason(signal: OptOutSignal) -> str:
+    """Return a short identifier for which signal disabled the plugin, or empty string
+    if neither is set. Used in log messages so users know what to flip to re-enable."""
+    if _env_var_is_truthy(signal.env_var):
+        return f"env var {signal.env_var}"
+    if _read_project_flag(signal.flag_attr):
+        return f"project flag {signal.flag_attr.lower()}"
+    return ""
+
+
+def _notify_opt_out_module_skipped(module_name: str, reason: str) -> None:
+    """Emit a one-time per-process notice that a bundled plugin was skipped because the
+    user explicitly opted out via env var or project config."""
     key = (module_name, "skipped")
     if key in _DISCOVERY_NOTICES_EMITTED:
         return
     _DISCOVERY_NOTICES_EMITTED.add(key)
-    msg = (
-        "Plugin module %r was found on the import path but %s is not set; "
-        "the plugin will not be loaded. Set %s=true to enable."
+    logger.info(
+        "Bundled plugin %r was skipped (%s). Unset the signal to re-enable.",
+        module_name,
+        reason,
     )
-    if module_name == "dbt_run_cache":
-        # Silent behavior change risk: this name auto-loaded in older dbt-core versions.
-        logger.info(msg, module_name, env_var, env_var)
-    else:
-        logger.debug(msg, module_name, env_var, env_var)
 
 
-def _notify_opt_in_conflict(preferred: str, skipped: str, env_var: str) -> None:
-    """Emit a one-time per-process warning when two modules from the same opt-in
-    conflict group are simultaneously enabled by the gate. We prefer the canonical
+def _notify_opt_out_conflict(preferred: str, skipped: str) -> None:
+    """Emit a one-time per-process warning when two modules from the same opt-out
+    conflict group are simultaneously installed. We prefer the canonical
     (first-listed) module and skip the rest to avoid double monkey-patching."""
     key = (skipped, "conflict")
     if key in _DISCOVERY_NOTICES_EMITTED:
         return
     _DISCOVERY_NOTICES_EMITTED.add(key)
     logger.warning(
-        "Both %r and %r are installed and %s is set. They are the same plugin under "
-        "different package names. Loading %r and skipping %r to avoid double "
-        "monkey-patching of core classes -- uninstall the unused package to silence "
-        "this warning.",
+        "Both %r and %r are installed -- they are the same plugin under different "
+        "package names. Loading %r and skipping %r to avoid double monkey-patching of "
+        "core classes; uninstall the unused package to silence this warning.",
         preferred,
         skipped,
-        env_var,
         preferred,
         skipped,
     )
@@ -141,17 +171,20 @@ class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
 
-    # Bundled plugins that are installed as dependencies of dbt-core but must not be
-    # discovered or initialized unless their gate env var is set to a truthy value.
+    # Bundled plugins that are installed as dependencies of dbt-core and load by
+    # default. Each entry maps a module name (as discovered by pkgutil) to an
+    # OptOutSignal that describes how the user can suppress loading.
+    #
     # Both `dbt_state` and `dbt_run_cache` refer to the same plugin -- the package was
     # renamed from `run-cache` (module `dbt_run_cache`) to `dbt-state` (module
     # `dbt_state`). Either may be present in a user's environment depending on which
     # version they have installed, so both are listed here as first-class entries
-    # gated by the same env var. Setting DBT_ENGINE_STATE_ENABLED=true opts in regardless
-    # of which module name pkgutil discovers.
+    # sharing the same opt-out signal. Setting DBT_ENGINE_STATE_DISABLED=true (or
+    # `flags.state_plugin_disabled: true` in dbt_project.yml / `config:` in
+    # profiles.yml) suppresses loading of either module name.
     #
     # Skipping happens at module-discovery time (before importlib.import_module), so a
-    # disabled opt-in plugin pays zero import cost and runs zero side effects -- even
+    # disabled bundled plugin pays zero import cost and runs zero side effects -- even
     # if its __init__.py has eager imports or monkey-patching.
     #
     # Scope: this gate only suppresses auto-discovery via pkgutil. If a user's project
@@ -161,43 +194,48 @@ class PluginManager:
     #
     # MappingProxyType makes the mapping read-only -- tampering raises TypeError rather
     # than silently flipping activation for the rest of the process.
-    OPT_IN_PLUGIN_MODULES: Mapping[str, str] = MappingProxyType(
+    OPT_OUT_PLUGIN_MODULES: Mapping[str, OptOutSignal] = MappingProxyType(
         {
-            "dbt_state": "DBT_ENGINE_STATE_ENABLED",
-            "dbt_run_cache": "DBT_ENGINE_STATE_ENABLED",
+            "dbt_state": OptOutSignal(
+                env_var="DBT_ENGINE_STATE_DISABLED",
+                flag_attr="STATE_PLUGIN_DISABLED",
+            ),
+            "dbt_run_cache": OptOutSignal(
+                env_var="DBT_ENGINE_STATE_DISABLED",
+                flag_attr="STATE_PLUGIN_DISABLED",
+            ),
         }
     )
 
-    # Within a conflict group, if multiple modules pass the gate (e.g. both
-    # `dbt_state` and `dbt_run_cache` happen to be installed during the rename
+    # Within a conflict group, if multiple modules are installed (e.g. both
+    # `dbt_state` and `dbt_run_cache` happen to be present during the rename
     # transition), prefer the first listed and skip the rest with a warning. Avoids
     # non-deterministic double monkey-patching of CompileRunner/ModelRunner/etc.
-    OPT_IN_PLUGIN_CONFLICT_GROUPS: Sequence[Sequence[str]] = (("dbt_state", "dbt_run_cache"),)
+    OPT_OUT_PLUGIN_CONFLICT_GROUPS: Sequence[Sequence[str]] = (("dbt_state", "dbt_run_cache"),)
 
     @classmethod
-    def _disabled_opt_in_modules(cls) -> Set[str]:
-        """Names of opt-in plugin modules whose gate env var is NOT set to a truthy value."""
+    def _disabled_opt_out_modules(cls) -> Set[str]:
+        """Names of bundled plugin modules whose opt-out signal is currently set."""
         return {
             module_name
-            for module_name, env_var in cls.OPT_IN_PLUGIN_MODULES.items()
-            if not _env_gate_is_on(env_var)
+            for module_name, signal in cls.OPT_OUT_PLUGIN_MODULES.items()
+            if _opt_out_reason(signal)
         }
 
     @classmethod
-    def _resolve_opt_in_conflicts(cls, candidate_names: Sequence[str]) -> Set[str]:
+    def _resolve_opt_out_conflicts(cls, candidate_names: Sequence[str]) -> Set[str]:
         """Return the set of module names that should be skipped due to conflict-group
         deduplication. Within each group, the first listed name that is present in
         `candidate_names` wins and the rest are returned as "skip me"."""
         candidates = set(candidate_names)
         skip: Set[str] = set()
-        for group in cls.OPT_IN_PLUGIN_CONFLICT_GROUPS:
+        for group in cls.OPT_OUT_PLUGIN_CONFLICT_GROUPS:
             present = [name for name in group if name in candidates]
             if len(present) <= 1:
                 continue
             preferred, *rest = present
             for losing in rest:
-                env_var = cls.OPT_IN_PLUGIN_MODULES.get(losing, "")
-                _notify_opt_in_conflict(preferred, losing, env_var)
+                _notify_opt_out_conflict(preferred, losing)
                 skip.add(losing)
         return skip
 
@@ -250,26 +288,30 @@ class PluginManager:
 
     @classmethod
     def get_prefixed_modules(cls):
-        disabled = cls._disabled_opt_in_modules()
-
-        # First pass: walk iter_modules without importing, so we can spot opt-in
-        # modules that are physically present on disk and emit the "found but gated
-        # off" notice for the ones we're about to skip. This is what gives existing
-        # `dbt_run_cache` users a breadcrumb when their previously-auto-loaded plugin
-        # stops loading.
+        # First pass: walk iter_modules without importing, so we can spot bundled
+        # opt-out modules that are present on disk and check their opt-out signals
+        # before paying the import cost.
         names_on_path = [
             name
             for _, name, _ in pkgutil.iter_modules()
             if name.startswith(cls.PLUGIN_MODULE_PREFIX)
         ]
-        for name in names_on_path:
-            if name in disabled:
-                _notify_opt_in_module_skipped(name, cls.OPT_IN_PLUGIN_MODULES[name])
 
-        # Second pass: for modules whose gate is ON, dedupe within conflict groups.
-        enabled_candidates = [n for n in names_on_path if n not in disabled]
-        conflict_skips = cls._resolve_opt_in_conflicts(enabled_candidates)
-        to_import = [n for n in enabled_candidates if n not in conflict_skips]
+        # For each opt-out plugin on disk, check whether the user has opted out (via
+        # env var or project flag) and emit a one-time notice naming the source.
+        disabled: Set[str] = set()
+        for name in names_on_path:
+            if name in cls.OPT_OUT_PLUGIN_MODULES:
+                reason = _opt_out_reason(cls.OPT_OUT_PLUGIN_MODULES[name])
+                if reason:
+                    _notify_opt_out_module_skipped(name, reason)
+                    disabled.add(name)
+
+        # Second pass: dedupe within conflict groups so we don't load two copies of
+        # the same plugin under different package names.
+        candidates = [n for n in names_on_path if n not in disabled]
+        conflict_skips = cls._resolve_opt_out_conflicts(candidates)
+        to_import = [n for n in candidates if n not in conflict_skips]
 
         return {name: importlib.import_module(name) for name in to_import}
 

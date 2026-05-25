@@ -141,7 +141,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_STATE_AUTH_URL",
             "DBT_ENGINE_STATE_TOKEN_URL",
             "DBT_ENGINE_STATE_API_URL",
-            "DBT_ENGINE_STATE_ENABLED",
+            "DBT_ENGINE_STATE_DISABLED",
         }
         from dbt.env_vars import _ALLOWED_ENV_VARS
 

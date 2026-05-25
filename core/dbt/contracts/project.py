@@ -383,6 +383,11 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     enable_grouped_warn_error_parser_logs: bool = False
     use_catalogs_v2: bool = False
     latest_version_pointer_enabled_by_default: bool = False
+    # Opt-out for the bundled dbt-state plugin (installed as a dependency of
+    # dbt-core). Default False -> plugin loads. Setting this to True suppresses
+    # auto-discovery in PluginManager. Also configurable via the
+    # DBT_ENGINE_STATE_DISABLED env var; see core/dbt/plugins/manager.py.
+    state_plugin_disabled: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -410,6 +415,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "enable_grouped_warn_error_parser_logs": self.enable_grouped_warn_error_parser_logs,
             "use_catalogs_v2": self.use_catalogs_v2,
             "latest_version_pointer_enabled_by_default": self.latest_version_pointer_enabled_by_default,
+            "state_plugin_disabled": self.state_plugin_disabled,
         }
 
 
