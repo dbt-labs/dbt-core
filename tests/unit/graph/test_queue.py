@@ -85,3 +85,51 @@ class TestGraphQueue:
         third = graph_queue.get(block=False)
 
         assert third.unique_id == low_priority.unique_id
+
+    def test_priority_overrides_topology(self):
+        # Graph structure:
+        #
+        #   high_root(p=10)     unrelated(p=0)
+        #       |
+        #   high_leaf(p=1000)
+        #
+        # Expected dequeue order: high_root -> high_leaf -> unrelated
+        # Even though high_leaf is deeper in the DAG, its high priority (1000)
+        # causes it to be scheduled before unrelated once it becomes ready.
+        #
+        # If config.priority is missing or invalid, it falls back to 0.
+        high_root = MockNode(
+            package="test_package",
+            name="aaa_high_root",
+            config=mock.MagicMock(priority=10),
+        )
+        high_leaf = MockNode(
+            package="test_package",
+            name="bbb_high_leaf",
+            config=mock.MagicMock(priority=1000),
+        )
+        unrelated = MockNode(
+            package="test_package",
+            name="ccc_unrelated",
+            config=mock.MagicMock(),
+        )
+
+        manifest = make_manifest(nodes=[high_root, high_leaf, unrelated])
+        graph = nx.DiGraph()
+        graph.add_nodes_from(
+            [high_root.unique_id, high_leaf.unique_id, unrelated.unique_id]
+        )
+        graph.add_edge(high_root.unique_id, high_leaf.unique_id)
+
+        graph_queue = GraphQueue(graph=graph, manifest=manifest, selected=set())
+
+        first = graph_queue.get(block=False)
+        assert first.unique_id == high_root.unique_id
+
+        graph_queue.mark_done(first.unique_id)
+        second = graph_queue.get(block=False)
+        assert second.unique_id == high_leaf.unique_id
+
+        graph_queue.mark_done(second.unique_id)
+        third = graph_queue.get(block=False)
+        assert third.unique_id == unrelated.unique_id

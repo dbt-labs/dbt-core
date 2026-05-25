@@ -181,8 +181,12 @@ class GraphQueue:
             if self.graph.in_degree(node) == 0 and not self._already_known(node):
                 configured_priority = self._get_node_priority(node)
                 # PriorityQueue pops the smallest tuple first.
+                # Negate priority so higher priority values are dequeued first.
                 heap_priority = -configured_priority
-                self.inner.put((self._scores[node], heap_priority, node))
+                # Priority is the primary sort key; topo score is only a fallback
+                # among ready nodes. DAG safety is enforced by the in_degree == 0
+                # check above.
+                self.inner.put((heap_priority, self._scores[node], node))
                 self.queued.add(node)
 
     def _get_node_priority(self, node_id: UniqueId) -> int:
