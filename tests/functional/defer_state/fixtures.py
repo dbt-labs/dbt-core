@@ -835,3 +835,15 @@ functions:
     returns:
       data_type: float
 """
+
+generate_alias_name_sql = """
+{% macro generate_alias_name(custom_alias_name=none, node=none) -%}
+    {%- if custom_alias_name -%}
+        {{ custom_alias_name | trim }}
+    {%- elif node.version -%}
+        {{ return("generated_" ~ node.name ~ "_v" ~ node.version) }}
+    {%- else -%}
+        {{ "generated_" ~ node.name }}
+    {%- endif -%}
+{%- endmacro %}
+"""

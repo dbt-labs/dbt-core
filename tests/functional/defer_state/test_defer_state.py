@@ -17,6 +17,7 @@ from tests.functional.defer_state.fixtures import (
     double_it_yml,
     ephemeral_model_sql,
     exposures_yml,
+    generate_alias_name_sql,
     infinite_macros_sql,
     macros_sql,
     schema_yml,
@@ -37,16 +38,18 @@ class BaseDeferState:
         "exposures.yml": exposures_yml,
     }
 
+    _macros = {
+        "macros.sql": macros_sql,
+        "infinite_macros.sql": infinite_macros_sql,
+    }
+
     @pytest.fixture(scope="class")
     def models(self):
         return self._models
 
     @pytest.fixture(scope="class")
     def macros(self):
-        return {
-            "macros.sql": macros_sql,
-            "infinite_macros.sql": infinite_macros_sql,
-        }
+        return self._macros
 
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -437,3 +440,50 @@ class TestFunctionDeferralWithConfigAlias(BaseDeferState):
         compiled = result.results[0].node.compiled_code
         # The deferred function reference should use the config alias "my_custom_double"
         assert "my_custom_double" in compiled
+
+
+class TestFunctionDeferralWithAlias(BaseDeferState):
+    """Test that deferred function references use the alias from generate_alias_name."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            **self._macros,
+            "generate_alias_name.sql": generate_alias_name_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            **self._models,
+            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
+        }
+
+    def test_defer_uses_function_alias(self, project, other_schema):
+        project.create_test_schema(other_schema)
+        run_dbt(["build"])
+        self.copy_state(project.project_root)
+
+        result = run_dbt(
+            [
+                "compile",
+                "-s",
+                "double_it_model",
+                "--state",
+                "state",
+                "--defer",
+                "--target",
+                "otherschema",
+            ]
+        )
+        compiled = result.results[0].node.compiled_code
+        # The deferred function reference should use the alias "generated_double_it"
+        # (as produced by generate_alias_name), not the bare node name "double_it"
+        assert "generated_double_it" in compiled
