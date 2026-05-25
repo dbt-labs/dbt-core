@@ -13,6 +13,7 @@ from tests.functional.defer_state.fixtures import (
     changed_table_model_sql,
     changed_view_model_sql,
     double_it_sql,
+    double_it_with_alias_yml,
     double_it_yml,
     ephemeral_model_sql,
     exposures_yml,
@@ -397,3 +398,42 @@ class TestFunctionDeferral(BaseDeferState):
         )
         assert len(result.results) == 1
         assert result.results[0].node.name == "double_it_model"
+
+
+class TestFunctionDeferralWithConfigAlias(BaseDeferState):
+    """Test that deferred function references use an alias set in config."""
+
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_with_alias_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            **self._models,
+            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
+        }
+
+    def test_defer_uses_config_alias(self, project, other_schema):
+        project.create_test_schema(other_schema)
+        run_dbt(["build"])
+        self.copy_state(project.project_root)
+
+        result = run_dbt(
+            [
+                "compile",
+                "-s",
+                "double_it_model",
+                "--state",
+                "state",
+                "--defer",
+                "--target",
+                "otherschema",
+            ]
+        )
+        compiled = result.results[0].node.compiled_code
+        # The deferred function reference should use the config alias "my_custom_double"
+        assert "my_custom_double" in compiled

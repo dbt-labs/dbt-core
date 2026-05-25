@@ -821,3 +821,17 @@ functions:
     returns:
       data_type: float
 """
+
+double_it_with_alias_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      alias: my_custom_double
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
