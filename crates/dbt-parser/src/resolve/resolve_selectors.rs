@@ -42,7 +42,7 @@ pub fn resolve_manifest_selectors(
             let selector = DbtSelector {
                 name: name.clone(),
                 description: entry.description.unwrap_or_default(),
-                __definition__: definition_value,
+                definition: Some(definition_value),
                 __other__: BTreeMap::new(),
             };
             (name, selector)
