@@ -159,6 +159,7 @@ mod tests {
                 token_name: "pat".to_string(),
                 token_value: token.to_string(),
             }],
+            state: None,
         }
     }
 

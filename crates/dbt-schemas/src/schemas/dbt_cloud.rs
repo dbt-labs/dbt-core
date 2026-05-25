@@ -22,6 +22,17 @@ pub struct DbtCloudProject {
     pub token_value: String,
 }
 
+/// Represents the OAuth client credentials for dbt State authentication.
+/// Sourced from the optional `state:` section in `~/.dbt/dbt_cloud.yml`.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
+pub struct DbtCloudState {
+    #[serde(rename = "client-id")]
+    pub client_id: String,
+    #[serde(rename = "client-secret")]
+    pub client_secret: String,
+}
+
 /// Represents the context section of the dbt Cloud configuration
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
@@ -41,6 +52,7 @@ pub struct DbtCloudConfig {
     pub version: String,
     pub context: DbtCloudContext,
     pub projects: Vec<DbtCloudProject>,
+    pub state: Option<DbtCloudState>,
 }
 
 impl DbtCloudConfig {
@@ -78,4 +90,56 @@ pub struct ResolvedCloudConfig {
     pub environment_id: Option<String>,
     pub defer_env_id: Option<String>,
     pub job_id: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const YAML_WITH_STATE: &str = r#"
+version: "1"
+context:
+  active-project: "proj-1"
+  active-host: "ab123.us1.dbt.com"
+projects:
+  - project-name: "My Project"
+    project-id: "proj-1"
+    account-name: "acme"
+    account-id: "42"
+    account-host: "ab123.us1.dbt.com"
+    token-name: "my-token"
+    token-value: "dbtc_abc"
+state:
+  client-id: "client-abc"
+  client-secret: "secret-xyz"
+"#;
+
+    const YAML_WITHOUT_STATE: &str = r#"
+version: "1"
+context:
+  active-project: "proj-1"
+  active-host: "ab123.us1.dbt.com"
+projects:
+  - project-name: "My Project"
+    project-id: "proj-1"
+    account-name: "acme"
+    account-id: "42"
+    account-host: "ab123.us1.dbt.com"
+    token-name: "my-token"
+    token-value: "dbtc_abc"
+"#;
+
+    #[test]
+    fn parses_state_section_when_present() {
+        let cfg: DbtCloudConfig = dbt_yaml::from_str(YAML_WITH_STATE).unwrap();
+        let state = cfg.state.expect("state should be Some");
+        assert_eq!(state.client_id, "client-abc");
+        assert_eq!(state.client_secret, "secret-xyz");
+    }
+
+    #[test]
+    fn state_is_none_when_section_absent() {
+        let cfg: DbtCloudConfig = dbt_yaml::from_str(YAML_WITHOUT_STATE).unwrap();
+        assert!(cfg.state.is_none());
+    }
 }

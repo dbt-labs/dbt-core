@@ -102,7 +102,7 @@ pub mod schemas {
     pub mod dbt_cloud;
     pub use dbt_cloud::{
         CloudCredentials, DbtCloudConfig, DbtCloudContext, DbtCloudProject, DbtCloudProjectConfig,
-        ResolvedCloudConfig,
+        DbtCloudState, ResolvedCloudConfig,
     };
 
     pub mod semantic_layer {
