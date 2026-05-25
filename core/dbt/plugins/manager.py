@@ -37,8 +37,8 @@ class OptOutSignal(NamedTuple):
       pre-project-load (e.g. `dbt deps`) and for CI overrides.
     - `flag_attr`: attribute on `get_flags()` (UPPERCASE) populated from
       `dbt_project.yml`'s `flags:` block or `profiles.yml`'s `config:` block via
-      `ProjectFlags.project_only_flags`. None for plugins that only support env-var
-      disabling.
+      `ProjectFlags.project_only_flags`. Pass an empty string for plugins that only
+      support env-var disabling.
     """
 
     env_var: str
