@@ -1186,6 +1186,30 @@
         }
       ]
     },
+    "PartitionsConfig": {
+      "description": "External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`) or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/AnyValue"
+            }
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "PersistDocsConfig": {
       "type": "object",
       "properties": {
@@ -1874,13 +1898,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+query_tag": {
           "anyOf": [
@@ -3456,13 +3481,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -4500,13 +4526,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -5416,13 +5443,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -6191,13 +6219,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+quoting": {
           "anyOf": [
@@ -6847,13 +6876,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+query_tag": {
           "anyOf": [
