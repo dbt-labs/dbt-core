@@ -19,6 +19,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: sync-1-latest-1.latest
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
