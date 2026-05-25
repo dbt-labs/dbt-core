@@ -20,6 +20,7 @@ use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
+use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
@@ -316,7 +317,7 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub partition_expiration_days: Option<u64>,
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enable_refresh: Option<bool>,
     #[serde(default, deserialize_with = "f64_or_string_f64")]

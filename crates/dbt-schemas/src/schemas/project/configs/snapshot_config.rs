@@ -35,6 +35,7 @@ use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
@@ -226,7 +227,7 @@ pub struct ProjectSnapshotConfig {
     )]
     pub partition_expiration_days: Option<u64>,
     #[serde(rename = "+partitions")]
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     #[serde(
         default,
         rename = "+refresh_interval_minutes",

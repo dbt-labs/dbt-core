@@ -494,6 +494,15 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
     }
 }
 
+/// External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`)
+/// or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
+#[serde(untagged)]
+pub enum PartitionsConfig {
+    Strings(Vec<String>),
+    Maps(Vec<HashMap<String, YmlValue>>),
+}
+
 /// DuckDB extension definition — can be a simple string (name) or an object with name and optional repo
 #[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, PartialEq, DbtSchema)]
 #[serde(untagged)]
@@ -1099,5 +1108,57 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
 
         assert_eq!(json, r#"{"grants":{}}"#);
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_string_list() {
+        let yaml = "- ds=2023-01-01\n- ds=2023-01-02\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        match parsed {
+            PartitionsConfig::Strings(v) => {
+                assert_eq!(
+                    v,
+                    vec!["ds=2023-01-01".to_string(), "ds=2023-01-02".to_string()]
+                );
+            }
+            PartitionsConfig::Maps(_) => panic!("expected Strings variant"),
+        }
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_map_list() {
+        // dbt-external-tables form: list of maps with name/data_type/expression
+        let yaml = "- name: extracted_at_ts\n  data_type: timestamptz\n  expression: cast(_etl_ts as timestamptz)\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        match parsed {
+            PartitionsConfig::Maps(v) => {
+                assert_eq!(v.len(), 1);
+                assert_eq!(
+                    v[0].get("name").and_then(|y| y.as_str()),
+                    Some("extracted_at_ts"),
+                );
+                assert_eq!(
+                    v[0].get("data_type").and_then(|y| y.as_str()),
+                    Some("timestamptz"),
+                );
+            }
+            PartitionsConfig::Strings(_) => panic!("expected Maps variant"),
+        }
+    }
+
+    #[test]
+    fn test_partitions_config_roundtrips_map_form() {
+        let yaml = "- name: foo\n  data_type: varchar\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        // Serialization must preserve the map shape (untagged enum).
+        let json = serde_json::to_string(&parsed).unwrap();
+        assert!(
+            json.contains(r#""name":"foo""#),
+            "expected map form in json, got {json}",
+        );
+        assert!(
+            json.contains(r#""data_type":"varchar""#),
+            "expected map form in json, got {json}",
+        );
     }
 }

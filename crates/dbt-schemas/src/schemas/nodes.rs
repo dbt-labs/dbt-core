@@ -22,7 +22,7 @@ use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{grants_eq, meta_eq, tags_eq, tags_eq_vec};
 use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::relations::default_dbt_quoting_for;
-use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
+use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
         Access, ClusterConfig, DbtChecksum, DbtContract, DbtIncrementalStrategy,
@@ -5565,7 +5565,7 @@ pub struct BigQueryAttr {
     pub require_partition_filter: Option<bool>,
     pub partition_expiration_days: Option<u64>,
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     pub enable_refresh: Option<bool>,
     pub refresh_interval_minutes: Option<f64>,
     pub max_staleness: Option<String>,

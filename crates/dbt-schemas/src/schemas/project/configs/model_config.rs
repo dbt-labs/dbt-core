@@ -1,5 +1,6 @@
 use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
+use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -369,7 +370,7 @@ pub struct ProjectModelConfig {
     )]
     pub partition_expiration_days: Option<u64>,
     #[serde(rename = "+partitions")]
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(rename = "+post-hook")]

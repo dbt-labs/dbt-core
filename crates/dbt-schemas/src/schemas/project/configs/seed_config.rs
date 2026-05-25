@@ -33,6 +33,7 @@ use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
@@ -169,7 +170,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+grant_access_to")]
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
     #[serde(rename = "+partitions")]
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     #[serde(
         default,
         rename = "+enable_refresh",

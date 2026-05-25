@@ -22,8 +22,8 @@ use dbt_proc_macros::Resolvable;
 
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings, bool_or_string_bool,
-    f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PartitionsConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings,
+    bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -178,7 +178,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+grant_access_to")]
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
     #[serde(rename = "+partitions")]
-    pub partitions: Option<Vec<String>>,
+    pub partitions: Option<PartitionsConfig>,
     #[serde(
         default,
         rename = "+enable_refresh",
