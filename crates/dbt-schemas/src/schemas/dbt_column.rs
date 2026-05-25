@@ -50,6 +50,9 @@ pub struct DbtColumn {
     pub quote: Option<bool>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
+    pub dimension: Option<ColumnPropertiesDimension>,
+    pub entity: Option<Entity>,
+    pub granularity: Option<Granularity>,
 }
 
 fn serialize_dbt_column_desc<S>(description: &Option<String>, s: S) -> Result<S::Ok, S::Error>
@@ -289,6 +292,9 @@ pub fn process_columns(
                     column_mask: cp.column_mask.clone(),
                     quote: cp.quote,
                     deprecated_config: cp.config.clone().unwrap_or_default(),
+                    dimension: cp.dimension.clone(),
+                    entity: cp.entity.clone(),
+                    granularity: cp.granularity.clone(),
                 });
                 by_name.insert(cp.name.clone(), col);
             }
@@ -372,7 +378,7 @@ pub struct ColumnPropertiesDimensionConfig {
     pub validity_params: Option<DimensionValidityParams>,
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Entity {
     EntityConfig(EntityConfig),
@@ -388,7 +394,7 @@ pub enum ColumnPropertiesEntityType {
     unique,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct EntityConfig {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesEntityType,

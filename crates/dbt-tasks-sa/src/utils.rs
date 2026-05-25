@@ -440,6 +440,9 @@ pub fn update_node_columns(
             deprecated_config: existing
                 .map(|col| col.deprecated_config.clone())
                 .unwrap_or_default(),
+            dimension: existing.and_then(|col| col.dimension.clone()),
+            entity: existing.and_then(|col| col.entity.clone()),
+            granularity: existing.and_then(|col| col.granularity.clone()),
         });
 
         new_columns.push(new_column);

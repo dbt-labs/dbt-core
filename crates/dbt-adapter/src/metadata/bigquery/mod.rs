@@ -229,6 +229,9 @@ pub fn nest_column_data_types(
                     column_mask: column.column_mask.clone(),
                     quote: column.quote,
                     deprecated_config: column.deprecated_config.clone(),
+                    dimension: column.dimension.clone(),
+                    entity: column.entity.clone(),
+                    granularity: column.granularity.clone(),
                 },
             ),
             None => result.insert(
@@ -245,6 +248,9 @@ pub fn nest_column_data_types(
                     column_mask: None,
                     quote: None,
                     deprecated_config: Default::default(),
+                    dimension: None,
+                    entity: None,
+                    granularity: None,
                 },
             ),
         };
