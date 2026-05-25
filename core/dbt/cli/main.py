@@ -501,6 +501,44 @@ def init(ctx, **kwargs):
     return results, success
 
 
+# dbt login
+@cli.command("login")
+@click.pass_context
+@global_flags
+@p.profiles_dir_exists_false
+@p.project_dir
+@p.vars
+@requires.postflight
+@requires.preflight
+def login(ctx, **kwargs):
+    """Authenticate to dbt platform."""
+    from dbt.task.login import LoginTask
+
+    with LoginTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
+    return results, success
+
+
+# dbt logout
+@cli.command("logout")
+@click.pass_context
+@global_flags
+@p.profiles_dir_exists_false
+@p.project_dir
+@p.vars
+@requires.postflight
+@requires.preflight
+def logout(ctx, **kwargs):
+    """Remove dbt platform credentials."""
+    from dbt.task.logout import LogoutTask
+
+    with LogoutTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
+    return results, success
+
+
 # dbt list
 @cli.command("list")
 @click.pass_context
