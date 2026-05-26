@@ -635,7 +635,7 @@ pub async fn resolve_data_tests(
                     None
                 }
             }),
-            store_failures: test_config.store_failures,
+            store_failures: Some(test_config.store_failures.unwrap_or(false) || arg.store_failures),
         };
 
         // Update with relation components
