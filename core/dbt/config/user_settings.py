@@ -4,8 +4,10 @@ from pathlib import Path
 
 import yaml
 
+from dbt.clients.yaml_helper import load_yaml_text
 from dbt.constants import USER_SETTINGS_FILE_NAME
 from dbt.contracts.user_settings import UserSettings
+from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import DbtValidationError
 
@@ -17,18 +19,15 @@ def _default_path() -> Path:
 
 
 def _load_yaml_mapping(path: Path) -> dict | None:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
+    if not path.is_file():
         return None
+
+    try:
+        contents = load_file_contents(str(path), strip=False)
     except OSError as e:
         raise DbtValidationError(f"cannot read {path}: {e}") from e
 
-    try:
-        parsed = yaml.safe_load(content)
-    except yaml.YAMLError as e:
-        raise DbtValidationError(f"invalid YAML in {path}: {e}") from e
-
+    parsed = load_yaml_text(contents)
     if parsed is None:
         return None
     if not isinstance(parsed, dict):
@@ -58,7 +57,8 @@ def write_user_settings(settings: UserSettings, path: Path | None = None) -> Non
 def get_user_setting_flags(path: Path | None = None) -> dict:
     try:
         settings = read_user_settings(path)
-    except DbtValidationError:
+    except (DbtValidationError, RuntimeError):
+        # RuntimeError: Path.home() fails when HOME/USERPROFILE env vars are absent.
         return {}
     return settings.flags
 

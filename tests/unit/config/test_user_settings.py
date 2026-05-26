@@ -38,7 +38,7 @@ class TestReadUserSettings:
     def test_invalid_yaml_raises(self, tmp_path):
         p = tmp_path / "user_settings.yml"
         p.write_text(":\n  :\n bad: [")
-        with pytest.raises(DbtValidationError, match="invalid YAML"):
+        with pytest.raises(DbtValidationError, match="Syntax error"):
             read_user_settings(p)
 
 
