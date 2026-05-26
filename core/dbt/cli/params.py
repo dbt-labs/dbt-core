@@ -423,11 +423,11 @@ manage_state = _create_option_and_track_env_var(
     "--manage-state/--no-manage-state",
     envvar="DBT_MANAGE_STATE",
     help=(
-        "Whether to load the bundled dbt-state plugin (installed as a dependency of "
-        "dbt-core). Default true. Set to false to skip auto-discovery and avoid the "
-        "plugin's import-time side effects."
+        "Opt in to loading the bundled dbt-state plugin (installed as a dependency "
+        "of dbt-core). Default false. Pass --manage-state to enable auto-discovery "
+        "and the plugin's runtime behavior."
     ),
-    default=True,
+    default=False,
 )
 
 

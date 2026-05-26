@@ -58,11 +58,11 @@ dependencies = [
     "dbt-common>=1.37.5,<2.0",
     "dbt-adapters>=1.24.1,<2.0",
     "dbt-protos>=1.0.498,<2.0",
-    # Bundled plugin: installed by default; PluginManager auto-discovers and loads it.
-    # Users can opt out via `--no-manage-state` on the CLI, `DBT_ENGINE_MANAGE_STATE=false`,
-    # or `manage_state: false` in dbt_project.yml's `flags:` block (equivalently in
-    # profiles.yml's `config:` block). See core/dbt/plugins/manager.py
-    # (BUNDLED_PLUGIN_MODULES) for the gating contract.
+    # Bundled plugin: installed by default but opt-in. PluginManager skips loading
+    # unless the user passes `--manage-state` on the CLI, sets
+    # `DBT_ENGINE_MANAGE_STATE=true`, or sets `manage_state: true` in dbt_project.yml's
+    # `flags:` block (equivalently in profiles.yml's `config:` block). See
+    # core/dbt/plugins/manager.py (BUNDLED_PLUGIN_MODULES) for the gating contract.
     "dbt-state>=2.18,<3.0",
     "pydantic<3",
     # ----

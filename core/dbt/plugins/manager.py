@@ -17,19 +17,20 @@ logger = logging.getLogger(__name__)
 class ManageSignal(NamedTuple):
     """How a single bundled plugin's load behavior is controlled.
 
-    Read at PluginManager discovery time. When the flag resolves to False, the plugin
-    is skipped before `importlib.import_module` is called.
+    Read at PluginManager discovery time. The plugin is opt-in: it is only loaded
+    when the flag resolves to True. Default is False -- absent any explicit signal,
+    `importlib.import_module` is never called on the bundled module.
 
-    - `flag_attr`: attribute on `get_flags()` (UPPERCASE). True (the default) means
-      load the plugin; False means skip. Populated by the CLI parser from one of
-      three surfaces, in precedence order:
+    - `flag_attr`: attribute on `get_flags()` (UPPERCASE). True means load the
+      plugin; False (the default) means skip. Populated by the CLI parser from one
+      of three surfaces, in precedence order:
         * explicit `--manage-state` / `--no-manage-state` on the command line
         * `DBT_ENGINE_MANAGE_STATE` env var (or its non-engine-prefixed alias
           `DBT_MANAGE_STATE`)
         * `manage_state` in dbt_project.yml's `flags:` block, or equivalently
           `manage_state` in profiles.yml's `config:` block
     - `cli_flag`: human-readable name of the corresponding CLI flag, used in log
-      messages so a skipped user knows what to flip to re-enable.
+      messages so a curious user knows what to pass to opt in.
     """
 
     flag_attr: str
@@ -43,30 +44,30 @@ _DISCOVERY_NOTICES_EMITTED: Set[Tuple[str, str]] = set()
 
 
 def _plugin_is_managed(flag_attr: str) -> bool:
-    """Return True iff the user wants this bundled plugin loaded.
+    """Return True iff the user has explicitly opted in to loading this bundled plugin.
 
     Reads `get_flags().<flag_attr>` lazily to avoid an import-time dependency between
-    PluginManager and the flags module. Defaults to True (load) when flags haven't
-    been initialized yet -- early-startup callers should always get the default
-    behavior, never silently skip a bundled plugin."""
+    PluginManager and the flags module. Defaults to False (skip) when flags haven't
+    been initialized yet -- absent an explicit opt-in, the bundled plugin stays off."""
     try:
         from dbt.flags import get_flags
 
-        return bool(getattr(get_flags(), flag_attr, True))
+        return bool(getattr(get_flags(), flag_attr, False))
     except Exception:
-        return True
+        return False
 
 
 def _notify_bundled_plugin_skipped(module_name: str, cli_flag: str) -> None:
-    """Emit a one-time per-process notice that a bundled plugin was skipped because
-    the user opted out (via CLI flag, env var, or project/profile config)."""
+    """Emit a one-time per-process DEBUG notice that a bundled plugin is installed
+    on the import path but not loaded because the user hasn't opted in. Emitted at
+    DEBUG (not INFO) because this is the default case -- every default invocation
+    hits this path and shouldn't log INFO-level noise."""
     key = (module_name, "skipped")
     if key in _DISCOVERY_NOTICES_EMITTED:
         return
     _DISCOVERY_NOTICES_EMITTED.add(key)
-    logger.info(
-        "Bundled plugin %r was skipped; pass %s (or unset the corresponding env "
-        "var / project flag) to re-enable.",
+    logger.debug(
+        "Bundled plugin %r is installed but not loaded (opt-in); pass %s to enable.",
         module_name,
         cli_flag,
     )
@@ -155,21 +156,22 @@ class PluginManager:
     PLUGIN_MODULE_PREFIX = "dbt_"
     PLUGIN_ATTR_NAME = "plugins"
 
-    # Bundled plugins that are installed as dependencies of dbt-core and load by
-    # default. Each entry maps a module name (as discovered by pkgutil) to a
-    # ManageSignal describing the flag the user can flip to suppress loading.
+    # Bundled plugins that are installed as dependencies of dbt-core but are OPT-IN:
+    # PluginManager only loads them when the user explicitly enables them. Each entry
+    # maps a module name (as discovered by pkgutil) to a ManageSignal describing the
+    # flag the user can flip to opt in.
     #
     # Both `dbt_state` and `dbt_run_cache` refer to the same plugin -- the package was
     # renamed from `run-cache` (module `dbt_run_cache`) to `dbt-state` (module
     # `dbt_state`). Either may be present in a user's environment depending on which
     # version they have installed, so both are listed here as first-class entries
-    # sharing the same `manage_state` flag. Setting `--no-manage-state` (or
-    # `DBT_ENGINE_MANAGE_STATE=false`, or `manage_state: false` in dbt_project.yml /
-    # profiles.yml `config:`) suppresses loading of either module name.
+    # sharing the same `manage_state` flag. Pass `--manage-state` (or
+    # `DBT_ENGINE_MANAGE_STATE=true`, or `manage_state: true` in dbt_project.yml /
+    # profiles.yml `config:`) to enable either module name.
     #
     # Skipping happens at module-discovery time (before importlib.import_module), so a
-    # disabled bundled plugin pays zero import cost and runs zero side effects -- even
-    # if its __init__.py has eager imports or monkey-patching.
+    # not-opted-in bundled plugin pays zero import cost and runs zero side effects --
+    # even if its __init__.py has eager imports or monkey-patching.
     #
     # Scope: this gate only suppresses auto-discovery via pkgutil. If a user's project
     # code or another plugin explicitly `import dbt_state`s, the plugin's import-time
@@ -274,8 +276,9 @@ class PluginManager:
             if name.startswith(cls.PLUGIN_MODULE_PREFIX)
         ]
 
-        # For each bundled plugin on disk, check whether the user has opted out via
-        # `--no-manage-state` / `DBT_ENGINE_MANAGE_STATE=false` / `manage_state: false`.
+        # For each bundled plugin on disk, check whether the user has opted in via
+        # `--manage-state` / `DBT_ENGINE_MANAGE_STATE=true` / `manage_state: true`.
+        # If not opted in, the module is filtered out before any import.
         disabled: Set[str] = set()
         for name in names_on_path:
             if name in cls.BUNDLED_PLUGIN_MODULES:
@@ -285,7 +288,8 @@ class PluginManager:
                     disabled.add(name)
 
         # Second pass: dedupe within conflict groups so we don't load two copies of
-        # the same plugin under different package names.
+        # the same plugin under different package names. Only matters when both modules
+        # are opted in -- the disabled-by-default path has already filtered them out.
         candidates = [n for n in names_on_path if n not in disabled]
         conflict_skips = cls._resolve_bundled_plugin_conflicts(candidates)
         to_import = [n for n in candidates if n not in conflict_skips]

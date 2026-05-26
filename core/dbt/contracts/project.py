@@ -345,10 +345,10 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     log_format_file: Optional[str] = None
     log_level: Optional[str] = None
     log_level_file: Optional[str] = None
-    # Whether to load the bundled dbt-state plugin. Default None defers to the
-    # CLI/env-var default (True). Set false in dbt_project.yml's `flags:` block (or
-    # profiles.yml's `config:` block) to skip plugin auto-discovery. Also settable
-    # via `--manage-state/--no-manage-state` and `DBT_ENGINE_MANAGE_STATE`.
+    # Opt-in for the bundled dbt-state plugin. Default None defers to the CLI/env-var
+    # default (False). Set true in dbt_project.yml's `flags:` block (or profiles.yml's
+    # `config:` block) to enable plugin auto-discovery. Also settable via
+    # `--manage-state/--no-manage-state` and `DBT_ENGINE_MANAGE_STATE`.
     manage_state: Optional[bool] = None
     partial_parse: Optional[bool] = None
     populate_cache: Optional[bool] = None
