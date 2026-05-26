@@ -139,6 +139,147 @@ Released May 08, 2026
 - [@zhong-dbtlabs](https://github.com/zhong-dbtlabs) ([#1590](https://github.com/dbt-labs/dbt-fusion/issues/1590), [#884](https://github.com/dbt-labs/dbt-fusion/issues/884), [#1086](https://github.com/dbt-labs/dbt-fusion/issues/1086))
 
 
+## 2.0.0-preview.178
+
+Released May 26, 2026
+
+### Features
+
+- [dbt-fusion] Wire ClickHouse into dbt-adapter core: factory, columns, relations, type key, and listing-table column strategy ([#9513](https://github.com/dbt-labs/dbt-fusion/issues/9513))
+- [dbt-fusion] Add ClickHouseMetadataAdapter, clickhouse_get_relation, and adapter auth tests ([#9514](https://github.com/dbt-labs/dbt-fusion/issues/9514))
+- [dbt-fusion] Add interactive ClickHouse profile setup wizard to dbt init ([#9515](https://github.com/dbt-labs/dbt-fusion/issues/9515))
+- [dbt-fusion] Add ClickHouse adapter record/replay test scaffolding ([#9516](https://github.com/dbt-labs/dbt-fusion/issues/9516))
+- [dbt-fusion] Add ClickHouse event-time filtering (parseDateTimeBestEffort) and time-machine semantic annotations for 15 adapter methods ([#9939](https://github.com/dbt-labs/dbt-fusion/issues/9939))
+- [dbt-fusion] Make Snowflake driver log level configurable via the `driver_log_level` field in profiles.yml (defaults to `fatal`)
+- [dbt-fusion] Embed committed dbt-docs-v2 SPA bundle in dbt-docs-server. UI source of truth is the dbt-ui repo; built bundle is committed under web/dist/ and baked into the binary at compile time.
+- [dbt-index] dbt-index: add --fusion flag to serve command for lazy incremental ingestion from dbt-fusion target/metadata/ parquet files
+- [dbt-index] dbt-index: Arrow-direct fusion ingest path reduces cold ingest from 4.5s to ~500ms by reading target/metadata/ parquet with Arrow and writing index parquet via IndexWriter, bypassing DuckDB entirely
+- [dbt-fusion] Wire up the /api/v1/files route in dbt-docs-server with handler-level tests
+- [dbt-fusion] BigQuery: honor source loaded_at_field / loaded_at_query overrides in run-cache freshness checks
+- [dbt-index] dbt-index: unified search MCP/CLI tool with code/metadata modes, DAG context, --downstream-of/--upstream-of/--depth subgraph filtering, format=json for MCP search, restored csv/table/ndjson search output, and corrected code search filtering to return only raw/compiled SQL matches
+- [dbt-fusion] Add GET /api/v1/sources/:id endpoint to dbt-docs-server
+- [dbt-fusion] add transient tmp relation type for incremental models ([#9915](https://github.com/dbt-labs/dbt-fusion/issues/9915))
+- [dbt-fusion] Add copy_tags config option for Snowflake table and clone materializations (mirrors copy_grants) ([#10223](https://github.com/dbt-labs/dbt-fusion/issues/10223))
+- [dbt-fusion] Add GET /api/v1/seeds/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/tests/:id endpoint to dbt-docs-server (also covers unit_test.* unique_ids)
+- [dbt-fusion] Add GET /api/v1/snapshots/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/macros/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/groups/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/exposures/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/metrics/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/semantic_models/:id endpoint to dbt-docs-server
+- [dbt-fusion] Add GET /api/v1/saved_queries/:id endpoint to dbt-docs-server
+- [dbt-index] Add drop_schemas action to warehouse_mutate MCP tool for worktree schema cleanup
+- [dbt-fusion] Add dbt-clickhouse macro package with full materialization support ([#9960](https://github.com/dbt-labs/dbt-fusion/issues/9960))
+- [dbt-fusion] dbt-repl revision: it no longer requires a pre-built target/
+- [dbt-fusion] Migrate `GET /api/v1/models` from offset/limit pagination to cursor pagination (`first`/`after` + `page_info`).
+- [dbt-fusion] [Redshift] Migrate `get_columns_in_relation` to `SHOW COLUMNS FROM TABLE` when `datasharing` is enabled, allowing cross-database column introspection ([#9022](https://github.com/dbt-labs/dbt-fusion/issues/9022))
+- [dbt-fusion] Enable ClickHouse adapter tests: add golden recordings for all 17 adapter record/replay tests (create_schema, drop_schema, get_relation, get_columns_in_relation, and more); enable auth tests with graceful skip when credentials are absent; add secure=true to generated ClickHouse profile for Cloud (HTTPS) endpoints
+- [<no value>] Add GET /api/v1/sources and GET /api/v1/sources/facets endpoints to dbt-docs-server ([#7432](https://github.com/dbt-labs/dbt-fusion/issues/7432))
+- [dbt-fusion] Run Cache: load OAuth client-id/client-secret from `~/.dbt/dbt_cloud.yml` `state:` section, auto-refreshing the file when the section is missing.
+- [dbt-fusion] Publish dbt Fusion CLI to PyPI so users can install via 'pip install dbt'
+- [dbt-fusion] dbt-platform-auth: scope-aware OAuth credential resolution with refresh token support — OAuthPassiveResolver filters by client_id, validates cached session scopes, and now exchanges expired refresh tokens for new access tokens (4xx revocation → AuthenticationExpired; network errors → RefreshFailed); OAuthInteractiveResolver merges previously-cached scopes with the new request so re-auth never drops granted scopes; OAUTH_CLIENT_ID moved from resolver layer to chain layer and is now required at resolver construction; both resolver resolve() methods are now public
+- [dbt-fusion] Add 'dbt run-operation --sql <SQL>' to execute an ad-hoc SQL/Jinja statement directly against the target database without authoring a macro file. The statement goes through the standard Jinja rendering pipeline (ref(), source(), var(), target, …), supports ref() to ephemeral models (CTEs are compiled and injected on the fly), and is recorded in run_results.json under the synthetic unique_id 'sql_operation.<project>.inline_query'.
+
+### Fixes
+
+- [dbt-fusion] Fix name_map collision in source freshness when multiple packages define sources pointing to the same physical table ([#1451](https://github.com/dbt-labs/dbt-fusion/issues/1451))
+- [dbt-fusion] Fix state:modified triggering on snapshots incorrectly
+- [dbt-index] Fix compiled_at and compiled_code_hash always being NULL in compile/nodes parquet output; caused dbt_rt.node_status to always show effective_phase='parsed'
+- [dbt-fusion] Default omitted snapshot_meta_column_names entries when exposing snapshot_table_column_names to snapshot macros. ([#10230](https://github.com/dbt-labs/dbt-fusion/issues/10230))
+- [dbt-fusion] Fix Snowflake query cancellation. `Ctrl-C` should now cancel the SQL queries in the remote warehouse. ([#1475](https://github.com/dbt-labs/dbt-fusion/issues/1475))
+- [dbt-fusion] Stop emitting spurious dbt1005 warnings when a local dbt package depends on another local dbt package via absolute paths (dbt-fusion#1337) ([#1337](https://github.com/dbt-labs/dbt-fusion/issues/1337))
+- [dbt-fusion] Microbatch: source-side event-time predicate now includes the explicit `+00:00` UTC offset, matching dbt-core. Fixes incorrect temp-view window vs. DELETE window in non-UTC Snowflake sessions. ([#1608](https://github.com/dbt-labs/dbt-fusion/issues/1608))
+- [dbt-fusion] Use query-schema inference for unit tests on ephemeral models so the BigQuery probe does not require the model's (non-existent) dataset to exist. ([#10271](https://github.com/dbt-labs/dbt-fusion/issues/10271))
+- [dbt-fusion] manifest parity: populate config.severity, config.store_failures_as, file_key_name, and config.group on generic test nodes to match dbt-core ([#10077](https://github.com/dbt-labs/dbt-fusion/issues/10077))
+- [dbt-fusion] Custom column constraint expressions (type: custom) are no longer silently dropped from CREATE TABLE DDL, matching dbt-adapters base behavior ([#1733](https://github.com/dbt-labs/dbt-fusion/issues/1733))
+- [dbt-fusion] Stop spurious full-parse fallback under --partial-parse / --partial-load when profiles.yml lives outside the project root (e.g. ~/.dbt/profiles.yml)
+- [dbt-fusion] Fix COPY GRANTS clause ordering in Snowflake Iceberg built-in, REST, and Glue CLD CREATE TABLE macros. Fix underlying database configuration bug. ([#10223](https://github.com/dbt-labs/dbt-fusion/issues/10223))
+- [dbt-fusion] Make private package resolver matching case-insensitive so provider URL casing and packages.yml casing resolve consistently.
+- [dbt-fusion] Populate unrendered_config in manifests for most resource types, and ensure that they are completely unrendeered and raw
+- [dbt-fusion] `--compute sidecar` + `--dbt-replay`: resolve unit-test `given` upstream schemas from the recording instead of erroring ([#10328](https://github.com/dbt-labs/dbt-fusion/issues/10328))
+- [dbt-fusion] Stop sending `last_modified_epoch` on dbt State service confirmations for data tests, so the audit relation's timestamp never accompanies a `DBT_DATA_TEST` execution submitted with `target_table=None`.
+- [dbt-fusion] Honor the configured threads limit when applying connection backpressure, so runs saturate but do not overshoot connection concurrency. ([#1338](https://github.com/dbt-labs/dbt-fusion/issues/1338))
+- [dbt-fusion] Emit node status `success` instead of `reused` when a clone cache hit occurs from the dbt State run cache service
+- [dbt-fusion] ClickHouse: fix view materialization failing with unknown keyword argument 'database' in load_cached_relation ([#1749](https://github.com/dbt-labs/dbt-fusion/issues/1749))
+- [dbt-extension] Fix query results panel horizontal scrollbar hidden when table has many columns ([#1732](https://github.com/dbt-labs/dbt-fusion/issues/1732))
+- [dbt-fusion] fix(clickhouse): add missing quotes around database/table name literals in get_relation SQL, remove incorrect case-normalization (system.tables is case-sensitive) ([#1702](https://github.com/dbt-labs/dbt-fusion/issues/1702))
+- [dbt-fusion] Under `--dbt-replay`, unit tests infer expected schema via the temp-relation path, matching recordings captured from warehouse builds
+- [dbt-fusion] Exclude connection-limit wait time from node duration and show waiting nodes as idle in interactive progress. ([#1559](https://github.com/dbt-labs/dbt-fusion/issues/1559))
+- [dbt-fusion] Preserve normal CLI runtime shutdown so Time Machine recordings are finalized before process exit.
+- [dbt-fusion] Implement `array_compact` for the DuckDB sidecar ([#10418](https://github.com/dbt-labs/dbt-fusion/issues/10418))
+- [dbt-fusion] Run cache deferral no longer errors when the defer-to target cannot be resolved; it now logs at trace level and silently skips deferral instead.
+- [dbt-fusion] Accept both string-list and map-list forms for the `partitions` model config, restoring compatibility with the `dbt-external-tables` package convention.
+- [dbt-fusion] Reserved Python dict methods (`items` / `keys` / `values` / `get`) on Map values now defer to the environment's `unknown_method_callback` instead of being shadowed by user keys with the same names, matching Python's dict-method-on-class semantics.
+- [dbt-fusion] Don't invalidate the partial-parse cache when an env_var(NAME, default) call has NAME unset and the var is still unset on the next run
+
+### Under the Hood
+
+- [dbt-fusion] Enable ClickHouse ADBC driver assertions in dbt-xdbc driver-load tests ([#1698](https://github.com/dbt-labs/dbt-fusion/issues/1698))
+- [dbt-fusion] Deleted SnowflakeRelation in favor of Relation(AdapterType::Snowflake)
+- [dbt-fusion] Add `cargo ci` command for release-time version stamping, wheel builds, and PyPI publishing
+- [dbt-fusion] Rename kind→resource_type in parse-cache parquet schema, standardize ingested_at to Timestamp(µs, UTC) across all parquet tables, and add path:/file:/source: selector support to partial-load optimization with --dirty selector synthesis and ancestor ordering fix ([#10218](https://github.com/dbt-labs/dbt-fusion/issues/10218))
+- [internal] Add dbt-core 2-way Copybara sync workflows (forward sync, can-build gate, reverse PR sync)
+- [dbt-fusion] move a set of fs unique macros to a different place, to help with the macros sync process
+- [internal] Increase CDN retry budget for 'dbt system update' (5 attempts with 500ms base + ≤25% jitter, doubling each retry: ~500ms/1s/2s/4s) so transient CloudFront 503s have room to recover. Previously: 3 attempts with 200ms backoff.
+- [dbt-index] fusion ingest: fix µs/ns precision mismatch in persisted state so delta skips already-ingested epochs; always populate base_mtime on cold ingest to prevent spurious full-reload on first delta call
+- [dbt-fusion] Document the REST API response shape for dbt-docs-server detail endpoints covering seeds, snapshots, tests, exposures, groups, macros, metrics, saved_queries, and semantic_models, ahead of implementation
+- [internal] Add --env option, similar to docker's option, to cargo mantle
+- [dbt-fusion] [dbt-fusion] rebrand Run Cache user-facing strings to dbt State
+- [dbt-fusion] Emit telemetry for time spent waiting for adapter connections.
+- [dbt-fusion] Add API contracts for ten dbt-docs-server list+facets endpoints (sources, seeds, snapshots, tests, exposures, groups, macros, metrics, saved_queries, semantic_models) and ADR-6 for the uniform envelope.
+- [internal] Upgrage to 1.5.3 DuckDB for the sidecar
+- [internal] Add GET /api/v1/search contract to dbt-docs-server API-CONTRACTS.md
+- [internal] Move DuckDB to 1.5.3
+- [internal] Wire GITHUB_TOKEN into the nightly test step in daily.fs.yml so private_repo_tests and GitHub fast-path tests run with authentication
+- [internal] Make ClickHouse fields in AuthEnv optional so secrets predating ClickHouse support still deserialize correctly
+- [dbt-fusion] Verticalize `EmptyRelation`. Parse-time `Relation` should behave more like compile-time `Relation` objects now.
+- [dbt-fusion] Split tracing data provider ancestor APIs for telemetry attributes and extensions
+- [dbt-fusion] new dbt State configuration
+- [dbt-fusion] Allow DBT_ENGINE_STATE_* environment variables (STATE_AUTH_URL, STATE_TOKEN_URL, STATE_API_URL, STATE_OAUTH_CLIENT_ID, STATE_EMIT_REUSED_STATUS)
+- [dbt-fusion] Serialize entity, dimension, and granularity on column configs in the manifest.
+- [dbt-fusion] bump clickhouse to 0.1.0-a2
+- [dbt-fusion] Add "definition" key to selector manifest serialization
+- [dbt-fusion] Change SHA256 to sha256 for manifest parity with Core
+- [dbt-fusion] Populate relation_name in manifest correctly when store_failures is globally set
+- [dbt-fusion] Add trace-level adapter connection open and close telemetry events
+- [internal] Modified build scripts to properly build duckdb with extensions
+- [internal] Split copybara originFiles glob so dbt-core sync gets LICENSE and dbt-fusion sync keeps LICENSES.md
+- [internal] Override workspace version to 2.0.0-alpha.1 for dbt-core copybara syncs via COPYBARA-DBTCORE-VERSION marker; dbt-fusion sync keeps the preview version
+- [internal] Switch adbc duckdb build to Ninja
+
+### Dependencies
+
+- [dbt-fusion] bump duckdb version to 1.5.3
+
+### Contributors
+- [@Wolfram.Schulte](https://github.com/Wolfram.Schulte) ([#10218](https://github.com/dbt-labs/dbt-fusion/issues/10218))
+- [@aiguofer](https://github.com/aiguofer) ([#10077](https://github.com/dbt-labs/dbt-fusion/issues/10077))
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt)
+- [@ajnovice](https://github.com/ajnovice)
+- [@andrew.meredith@dbtlabs.com](https://github.com/andrew.meredith@dbtlabs.com)
+- [@ayshukla](https://github.com/ayshukla)
+- [@b-per](https://github.com/b-per) ([#1451](https://github.com/dbt-labs/dbt-fusion/issues/1451))
+- [@dataders](https://github.com/dataders) ([#9939](https://github.com/dbt-labs/dbt-fusion/issues/9939), [#9960](https://github.com/dbt-labs/dbt-fusion/issues/9960), [#1733](https://github.com/dbt-labs/dbt-fusion/issues/1733))
+- [@dave-connors-3](https://github.com/dave-connors-3) ([#9513](https://github.com/dbt-labs/dbt-fusion/issues/9513), [#9514](https://github.com/dbt-labs/dbt-fusion/issues/9514), [#9515](https://github.com/dbt-labs/dbt-fusion/issues/9515), [#9516](https://github.com/dbt-labs/dbt-fusion/issues/9516), [#1698](https://github.com/dbt-labs/dbt-fusion/issues/1698))
+- [@eakmanrq](https://github.com/eakmanrq)
+- [@itsnamangoyal](https://github.com/itsnamangoyal)
+- [@izeigerman](https://github.com/izeigerman)
+- [@j-clemons](https://github.com/j-clemons) ([#1732](https://github.com/dbt-labs/dbt-fusion/issues/1732))
+- [@jeager](https://github.com/jeager)
+- [@jgiu](https://github.com/jgiu)
+- [@joaodaher](https://github.com/joaodaher)
+- [@joellabes](https://github.com/joellabes)
+- [@jservilla](https://github.com/jservilla)
+- [@kczimm](https://github.com/kczimm)
+- [@koletzilla](https://github.com/koletzilla) ([#1749](https://github.com/dbt-labs/dbt-fusion/issues/1749), [#1702](https://github.com/dbt-labs/dbt-fusion/issues/1702))
+- [@mach-kernel](https://github.com/mach-kernel) ([#10230](https://github.com/dbt-labs/dbt-fusion/issues/10230), [#10271](https://github.com/dbt-labs/dbt-fusion/issues/10271), [#10328](https://github.com/dbt-labs/dbt-fusion/issues/10328), [#10418](https://github.com/dbt-labs/dbt-fusion/issues/10418))
+- [@peter-bertuglia](https://github.com/peter-bertuglia)
+- [@ragesh-g](https://github.com/ragesh-g) ([#9022](https://github.com/dbt-labs/dbt-fusion/issues/9022))
+- [@serramatutu](https://github.com/serramatutu) ([#1475](https://github.com/dbt-labs/dbt-fusion/issues/1475))
+- [@tauhid621](https://github.com/tauhid621)
+
+
 ## 2.0.0-preview.177
 
 Released May 19, 2026
