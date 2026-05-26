@@ -418,6 +418,13 @@ macro_debugging = _create_option_and_track_env_var(
     hidden=True,
 )
 
+manage_state = _create_option_and_track_env_var(
+    "--manage-state/--no-manage-state",
+    envvar="DBT_ENGINE_MANAGE_STATE",
+    help="Enable dbt State for managed artifact storage.",
+    hidden=True,
+)
+
 
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",

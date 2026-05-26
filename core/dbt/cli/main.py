@@ -122,6 +122,7 @@ def global_flags(func):
     @p.log_cache_events
     @p.log_file_max_bytes
     @p.log_format
+    @p.manage_state
     @p.log_format_file
     @p.log_level
     @p.log_level_file
@@ -515,25 +516,6 @@ def login(ctx, **kwargs):
     from dbt.task.login import LoginTask
 
     with LoginTask(ctx.obj["flags"]) as task:
-        results = task.run()
-        success = task.interpret_results(results)
-    return results, success
-
-
-# dbt logout
-@cli.command("logout")
-@click.pass_context
-@global_flags
-@p.profiles_dir_exists_false
-@p.project_dir
-@p.vars
-@requires.postflight
-@requires.preflight
-def logout(ctx, **kwargs):
-    """Remove dbt platform credentials."""
-    from dbt.task.logout import LogoutTask
-
-    with LogoutTask(ctx.obj["flags"]) as task:
         results = task.run()
         success = task.interpret_results(results)
     return results, success

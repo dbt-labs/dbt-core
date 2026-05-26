@@ -11,7 +11,6 @@ from dbt.auth.session_cache import (
     DEFAULT_CACHE_PATH,
     OAuthSessionCache,
     read_session_cache,
-    remove_session,
     upsert_session,
 )
 
@@ -182,37 +181,3 @@ class TestUpsertSession:
         assert "version" in data
         assert "sessions" in data
         assert isinstance(data["sessions"], list)
-
-
-class TestRemoveSession:
-    def test_noop_if_file_missing(self, tmp_path):
-        remove_session("cli", 42, tmp_path / "nonexistent.json")
-
-    def test_removes_matching_session(self, tmp_path):
-        p = tmp_path / "oauth_sessions.json"
-        upsert_session(_make_session(client_id="cli", account_id=42), p)
-
-        remove_session("cli", 42, p)
-
-        cache = read_session_cache(p)
-        assert len(cache.sessions) == 0
-
-    def test_noop_if_no_match(self, tmp_path):
-        p = tmp_path / "oauth_sessions.json"
-        upsert_session(_make_session(client_id="cli", account_id=42), p)
-
-        remove_session("other_cli", 42, p)
-
-        cache = read_session_cache(p)
-        assert len(cache.sessions) == 1
-
-    def test_preserves_other_sessions(self, tmp_path):
-        p = tmp_path / "oauth_sessions.json"
-        upsert_session(_make_session(client_id="cli", account_id=1), p)
-        upsert_session(_make_session(client_id="cli", account_id=2), p)
-
-        remove_session("cli", 1, p)
-
-        cache = read_session_cache(p)
-        assert len(cache.sessions) == 1
-        assert cache.sessions[0].account_id == 2

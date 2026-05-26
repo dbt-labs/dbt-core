@@ -20,18 +20,74 @@ class LoginTask(BaseTask):
             fire_event(Note(msg=f"Login failed: {e}"))
             return False
 
+        if credential is None:
+            fire_event(Note(msg="dbt State login successful."))
+            return True
+
         _warm_license_cache(credential)
         fire_event(
             Note(msg=f"Logged in as {credential.account_host} (account {credential.account_id}).")
         )
+
+        configured = _is_state_configured(credential)
+        enabled = getattr(self.args, "MANAGE_STATE", False) or False
+        _post_platform_login(configured=configured, enabled=enabled)
+
         return True
 
     def interpret_results(self, results):
         return results
 
 
+def _post_platform_login(configured: bool, enabled: bool) -> None:
+    if configured and enabled:
+        return
+    if not configured and not enabled:
+        return
+    if configured and not enabled:
+        fire_event(
+            Note(
+                msg=(
+                    "dbt State is available for your account but not enabled locally.\n"
+                    "To enable it, add to ~/.dbt/user_settings.yml:\n"
+                    "  flags:\n"
+                    "    manage_state: true\n"
+                    "Or set the environment variable: DBT_ENGINE_MANAGE_STATE=true"
+                )
+            )
+        )
+        return
+    # enabled but not configured
+    fire_event(
+        Note(
+            msg=(
+                "dbt State is enabled locally (manage_state: true) "
+                "but is not configured for your account.\n"
+                "Contact your account administrator to set up dbt State, "
+                "or visit https://docs.getdbt.com/docs/dbt-state"
+            )
+        )
+    )
+
+
+def _is_state_configured(credential) -> bool:
+    url = (
+        f"https://{credential.account_host}"
+        f"/api/private/accounts/{credential.account_id}/features/"
+    )
+    try:
+        resp = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {credential.token}"},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        return resp.json().get("data", {}).get("dbt-state", False) is True
+    except (requests.RequestException, ValueError, KeyError):
+        return False
+
+
 def _warm_license_cache(credential) -> None:
-    """Best-effort POST to warm the feature license cache. Non-fatal on failure."""
     url = (
         f"https://{credential.account_host}"
         f"/api/private/accounts/{credential.account_id}/feature-licenses/"

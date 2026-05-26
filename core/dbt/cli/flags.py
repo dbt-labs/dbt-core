@@ -15,6 +15,7 @@ from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
+from dbt.config.user_settings import get_user_setting_flags
 from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
 from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
@@ -307,6 +308,18 @@ class Flags:
                 project_level_flag_value,
             ) in project_flags.project_only_flags.items():
                 object.__setattr__(self, project_level_flag_name.upper(), project_level_flag_value)
+
+        # Apply user settings (~/.dbt/user_settings.yml) as lowest precedence.
+        user_flags = get_user_setting_flags()
+        for param_name in list(params_assigned_from_default):
+            value = user_flags.get(param_name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    param_name.upper(),
+                    convert_config(param_name, value),
+                )
+                params_assigned_from_default.remove(param_name)
 
         # Set hard coded flags.
         object.__setattr__(self, "WHICH", invoked_subcommand_name or ctx.info_name)

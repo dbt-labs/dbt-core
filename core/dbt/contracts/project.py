@@ -357,6 +357,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
+    manage_state: Optional[bool] = None
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_batched_execution_for_custom_microbatch_strategy: bool = False

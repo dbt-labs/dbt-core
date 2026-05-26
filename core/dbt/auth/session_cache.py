@@ -8,9 +8,11 @@ from pathlib import Path
 
 from dbt.auth.credentials import OAuthSession
 from dbt.auth.errors import InaccessibleSource, Malformed
+from dbt.cli.resolvers import default_dbt_home_dir
 
-DBT_HOME_DIR = Path.home() / ".dbt"
+DBT_HOME_DIR = default_dbt_home_dir()
 DEFAULT_CACHE_PATH = DBT_HOME_DIR / "oauth_sessions.json"
+STATE_AUTH_PATH = DBT_HOME_DIR / "state_auth.json"
 
 
 @dataclass
@@ -93,9 +95,31 @@ def upsert_session(session: OAuthSession, path: Path = DEFAULT_CACHE_PATH) -> No
     _write_atomic(json.dumps(cache.to_dict(), indent=2), path)
 
 
-def remove_session(client_id: str, account_id: int, path: Path = DEFAULT_CACHE_PATH) -> None:
-    cache = read_session_cache(path)
-    cache.sessions = [
-        s for s in cache.sessions if not (s.client_id == client_id and s.account_id == account_id)
-    ]
-    _write_atomic(json.dumps(cache.to_dict(), indent=2), path)
+def write_state_auth(token_data: dict, path: Path = STATE_AUTH_PATH) -> None:
+    _write_atomic(json.dumps(token_data, indent=2), path)
+
+
+def read_state_auth(path: Path = STATE_AUTH_PATH) -> dict | None:
+    try:
+        data = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise InaccessibleSource(str(path), e)
+
+    try:
+        parsed = json.loads(data)
+    except json.JSONDecodeError as e:
+        raise Malformed(f"invalid JSON in {path}: {e}")
+
+    if not isinstance(parsed, dict):
+        raise Malformed(f"expected object in {path}, got {type(parsed).__name__}")
+
+    return parsed
+
+
+def remove_state_auth(path: Path = STATE_AUTH_PATH) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass

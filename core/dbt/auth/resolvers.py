@@ -31,12 +31,19 @@ from dbt.auth.session_cache import (
     DEFAULT_CACHE_PATH,
     read_session_cache,
     upsert_session,
+    write_state_auth,
 )
 from dbt.clients.yaml_helper import safe_load
+from dbt.config.user_settings import set_user_setting_flag
 
 AUTH_SERVER_URL = "https://us1.dbt.com/register"
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
 OAUTH_SCOPES = "user_access offline_access"
+
+STATE_OAUTH_AUTH_URL = "https://auth.runcache.com"
+STATE_OAUTH_TOKEN_URL = "https://auth.runcache.com/token"
+STATE_OAUTH_CLIENT_ID = "2fd87cd5-69a6-4c5f-9097-747a58f0edf6"
+STATE_OAUTH_SCOPE = "runcache:scope:orgs"
 
 
 class ResolverKind(Enum):
@@ -287,13 +294,15 @@ class OAuthInteractiveResolver:
             return f"https://{host}"
         return None
 
-    def resolve(self) -> Credential:
+    def resolve(self) -> Optional[Credential]:
         pkce_verifier, pkce_challenge = _generate_pkce()
         oauth_state = secrets.token_urlsafe(16)
 
         server = _OAuthCallbackServer(expected_state=oauth_state)
         port = server.server_address[1]
         redirect_url = f"http://localhost:{port}/"
+
+        state_ctx = _build_state_oauth_context(redirect_url)
 
         params = {
             "redirect_url": redirect_url,
@@ -303,6 +312,7 @@ class OAuthInteractiveResolver:
             "scope": self.scopes,
             "response_type": "code",
             "code_challenge_method": "S256",
+            "dbt_state_oauth": state_ctx["encoded_param"],
         }
         auth_url = f"{self.auth_server_url.rstrip('/')}?{urlencode(params)}"
 
@@ -324,8 +334,33 @@ class OAuthInteractiveResolver:
                 f"interactive authentication timed out after {self.timeout}s"
             )
 
-        code = server.result["code"]
-        account_url = server.result["account_url"]
+        if self._is_callback_from_state(server.result):
+            return self._resolve_dbt_state_auth_from_callback(server.result, state_ctx)
+
+        return self._resolve_dbt_platform_auth_from_callback(
+            server.result, pkce_verifier, redirect_url
+        )
+
+    @staticmethod
+    def _is_callback_from_state(result: dict) -> bool:
+        return bool(result.get("dbt_state_oauth"))
+
+    def _resolve_dbt_state_auth_from_callback(self, result: dict, state_ctx: dict):
+        state_token_data = _exchange_state_code(
+            token_url=state_ctx["token_url"],
+            client_id=state_ctx["client_id"],
+            code=result["dbt_state_oauth"],
+            redirect_uri=state_ctx["redirect_uri"],
+            code_verifier=state_ctx["code_verifier"],
+        )
+        write_state_auth(state_token_data)
+        set_user_setting_flag("manage_state", True)
+
+    def _resolve_dbt_platform_auth_from_callback(
+        self, result: dict, pkce_verifier: str, redirect_url: str
+    ) -> Credential:
+        code = result["code"]
+        account_url = result["account_url"]
 
         token_data = _exchange_code(
             account_url=account_url,
@@ -357,6 +392,65 @@ class OAuthInteractiveResolver:
         upsert_session(session, self.cache_path)
 
         return Credential.from_oauth(session)
+
+
+def _build_state_oauth_context(redirect_url: str) -> dict:
+    client_id = (
+        os.environ.get("DBT_ENGINE_STATE_OAUTH_CLIENT_ID", "").strip()
+        or os.environ.get("RUN_CACHE_OAUTH_CLIENT_ID", "").strip()
+        or STATE_OAUTH_CLIENT_ID
+    )
+    auth_url = os.environ.get("RUN_CACHE_AUTH_URL", "").strip() or STATE_OAUTH_AUTH_URL
+    token_url = os.environ.get("RUN_CACHE_TOKEN_URL", "").strip() or STATE_OAUTH_TOKEN_URL
+    verifier, challenge = _generate_pkce()
+    state = secrets.token_urlsafe(16)
+
+    authorize_params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_url,
+        "scope": STATE_OAUTH_SCOPE,
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    authorize_url = f"{auth_url.rstrip('/')}?{urlencode(authorize_params)}"
+    return {
+        "encoded_param": base64.urlsafe_b64encode(authorize_url.encode()).decode(),
+        "code_verifier": verifier,
+        "client_id": client_id,
+        "token_url": token_url,
+        "redirect_uri": redirect_url,
+    }
+
+
+def _exchange_state_code(
+    token_url: str,
+    client_id: str,
+    code: str,
+    redirect_uri: str,
+    code_verifier: str,
+) -> dict:
+    form = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "code_verifier": code_verifier,
+    }
+    try:
+        resp = requests.post(token_url, data=form, timeout=30)
+        if not resp.ok:
+            raise InteractiveAuthError(
+                f"dbt State token exchange failed: HTTP {resp.status_code} — {resp.text}"
+            )
+    except requests.ConnectionError as e:
+        raise InteractiveAuthError(f"dbt State token exchange failed: {e}")
+
+    try:
+        return resp.json()
+    except ValueError as e:
+        raise InteractiveAuthError(f"invalid dbt State token response: {e}")
 
 
 def _default_opener(url: str) -> None:
@@ -491,20 +585,23 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
             self._send_response(500, "<h1>Error</h1><p>Invalid state</p>")
             return
 
+        dbt_state_code = params.get("dbt_state_oauth", [None])[0]
         code = params.get("code", [None])[0]
         account_url = params.get("account_url", [None])[0]
 
-        if not code:
+        if dbt_state_code:
+            self.server.result = {"dbt_state_oauth": dbt_state_code}
+        elif code and account_url:
+            self.server.result = {"code": code, "account_url": account_url}
+        elif not code:
             self.server.error = "redirect missing code parameter"
             self._send_response(500, "<h1>Error</h1><p>Missing code</p>")
             return
-
-        if not account_url:
+        else:
             self.server.error = "redirect missing account_url parameter"
             self._send_response(500, "<h1>Error</h1><p>Missing account_url</p>")
             return
 
-        self.server.result = {"code": code, "account_url": account_url}
         self._send_response(
             200,
             "<h1>Success</h1><p>You have logged in. You can close this window.</p>",
