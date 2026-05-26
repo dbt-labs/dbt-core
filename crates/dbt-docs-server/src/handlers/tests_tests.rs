@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/tests/:id`.
+//! Tests for `GET /api/v1/tests/:id`, `GET /api/v1/tests`, and
+//! `GET /api/v1/tests/facets`.
 //!
 //! TODO(#10255): the `RecordBatch` fixtures below are hand-rolled and not
 //! enforced against the production parquet schemas. A column rename or type
@@ -11,10 +12,11 @@ use std::sync::Arc;
 use arrow_array::builder::{ListBuilder, StringBuilder};
 use arrow_array::{Float64Array, ListArray, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
+use crate::handlers::pagination::Cursor;
 use crate::providers::{Backend, BackendError, Providers};
 use crate::state::AppState;
 
@@ -752,4 +754,598 @@ async fn execution_info_error_populated_on_failure() {
         body["execution_info"]["error"],
         "Compilation Error: invalid sql"
     );
+}
+
+// ===========================================================================
+// Tests: GET /api/v1/tests and GET /api/v1/tests/facets
+// ===========================================================================
+//
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index exposes fixture builders bound to the production
+// parquet schema.
+
+// ---------------------------------------------------------------------------
+// Mock backend for list + facets
+// ---------------------------------------------------------------------------
+
+/// Mock backend for list + facets. Routes COUNT(*) queries and row queries
+/// by sniffing keywords in the SQL. The UNION ALL query always touches
+/// `dbt.nodes`, `dbt.test_metadata`, and `dbt.unit_tests`.
+struct TestListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+    /// When `true`, the with-run_results count query returns `None`.
+    run_results_absent: bool,
+}
+
+impl TestListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+            run_results_absent: false,
+        }
+    }
+    fn without_run_results(mut self) -> Self {
+        self.run_results_absent = true;
+        self
+    }
+}
+
+impl Backend for TestListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if !sql.contains("count(*)") {
+            return None;
+        }
+        if self.run_results_absent && sql.contains("run_results") {
+            return None;
+        }
+        Some(self.total_count.to_string())
+    }
+    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: TestListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders for list
+// ---------------------------------------------------------------------------
+
+/// Schema for the UNION ALL output — matches the SELECT list in
+/// `build_test_list_sql`.
+fn test_list_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("resource_type", DataType::Utf8, false),
+        Field::new("package_name", DataType::Utf8, true),
+        Field::new("test_type", DataType::Utf8, true),
+        Field::new("tested_node_unique_id", DataType::Utf8, true),
+        Field::new("tested_column", DataType::Utf8, true),
+        Field::new("severity", DataType::Utf8, true),
+        Field::new("test_namespace", DataType::Utf8, true),
+        Field::new("kwargs_raw", DataType::Utf8, true),
+        Field::new("given_raw", DataType::Utf8, true),
+        Field::new("expect_raw", DataType::Utf8, true),
+        Field::new("rr_status", DataType::Utf8, true),
+        Field::new("rr_message", DataType::Utf8, true),
+        Field::new("rr_completed_at", DataType::Utf8, true),
+    ]))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn data_test_list_row(
+    unique_id: &str,
+    name: &str,
+    package_name: Option<&str>,
+    test_type: Option<&str>,
+    tested_node: Option<&str>,
+    tested_column: Option<&str>,
+    severity: Option<&str>,
+    namespace: Option<&str>,
+    kwargs_raw: Option<&str>,
+    rr_status: Option<&str>,
+    rr_message: Option<&str>,
+    rr_completed_at: Option<&str>,
+) -> RecordBatch {
+    RecordBatch::try_new(
+        test_list_schema(),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec!["test"])),
+            Arc::new(StringArray::from(vec![package_name])),
+            Arc::new(StringArray::from(vec![test_type])),
+            Arc::new(StringArray::from(vec![tested_node])),
+            Arc::new(StringArray::from(vec![tested_column])),
+            Arc::new(StringArray::from(vec![severity])),
+            Arc::new(StringArray::from(vec![namespace])),
+            Arc::new(StringArray::from(vec![kwargs_raw])),
+            Arc::new(StringArray::from(vec![None::<&str>])), // given_raw
+            Arc::new(StringArray::from(vec![None::<&str>])), // expect_raw
+            Arc::new(StringArray::from(vec![rr_status])),
+            Arc::new(StringArray::from(vec![rr_message])),
+            Arc::new(StringArray::from(vec![rr_completed_at])),
+        ],
+    )
+    .expect("valid data test list row")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn unit_test_list_row(
+    unique_id: &str,
+    name: &str,
+    package_name: Option<&str>,
+    tested_node: Option<&str>,
+    given_raw: Option<&str>,
+    expect_raw: Option<&str>,
+    rr_status: Option<&str>,
+    rr_completed_at: Option<&str>,
+) -> RecordBatch {
+    RecordBatch::try_new(
+        test_list_schema(),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec!["unit_test"])),
+            Arc::new(StringArray::from(vec![package_name])),
+            Arc::new(StringArray::from(vec![Some("unit")])), // test_type
+            Arc::new(StringArray::from(vec![tested_node])),
+            Arc::new(StringArray::from(vec![None::<&str>])), // tested_column
+            Arc::new(StringArray::from(vec![None::<&str>])), // severity
+            Arc::new(StringArray::from(vec![None::<&str>])), // test_namespace
+            Arc::new(StringArray::from(vec![None::<&str>])), // kwargs_raw
+            Arc::new(StringArray::from(vec![given_raw])),
+            Arc::new(StringArray::from(vec![expect_raw])),
+            Arc::new(StringArray::from(vec![rr_status])),
+            Arc::new(StringArray::from(vec![None::<&str>])), // rr_message
+            Arc::new(StringArray::from(vec![rr_completed_at])),
+        ],
+    )
+    .expect("valid unit test list row")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unknown_sort_column_returns_err() {
+    let params = TestListParams {
+        sort: Some("severity:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_test_list_sql(&params, true, 10, None).is_err());
+}
+
+#[test]
+fn sort_without_direction_returns_err() {
+    let params = TestListParams {
+        sort: Some("name".into()),
+        ..Default::default()
+    };
+    assert!(build_test_list_sql(&params, true, 10, None).is_err());
+}
+
+#[test]
+fn sort_name_asc_succeeds() {
+    let params = TestListParams {
+        sort: Some("name:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_test_list_sql(&params, true, 10, None).is_ok());
+}
+
+#[test]
+fn sort_name_desc_succeeds() {
+    let params = TestListParams {
+        sort: Some("name:desc".into()),
+        ..Default::default()
+    };
+    assert!(build_test_list_sql(&params, true, 10, None).is_ok());
+}
+
+#[test]
+fn invalid_test_type_param_returns_err() {
+    let params = TestListParams {
+        test_type: Some("unknown".into()),
+        ..Default::default()
+    };
+    assert!(build_test_list_sql(&params, true, 10, None).is_err());
+}
+
+#[test]
+fn test_type_unit_filters_resource_type() {
+    let params = TestListParams {
+        test_type: Some("unit".into()),
+        ..Default::default()
+    };
+    let (count_sql, rows_sql) = build_test_list_sql(&params, true, 10, None).unwrap();
+    assert!(count_sql.contains("'unit_test'"));
+    assert!(rows_sql.contains("'unit_test'"));
+}
+
+#[test]
+fn test_type_data_filters_resource_type() {
+    let params = TestListParams {
+        test_type: Some("data".into()),
+        ..Default::default()
+    };
+    let (_, rows_sql) = build_test_list_sql(&params, true, 10, None).unwrap();
+    // The WHERE clause must include 'test' but not 'unit_test' as a filter
+    // (note: 'unit_test' still appears in the CTE's UNION ALL construction,
+    // but the outer WHERE restricts it).
+    assert!(
+        rows_sql.contains("resource_type IN ('test')"),
+        "rows_sql must filter to 'test' resource_type"
+    );
+}
+
+#[test]
+fn count_sql_excludes_cursor_page_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("not_null_orders".into()),
+        unique_id: "test.pkg.not_null_orders".into(),
+    };
+    let params = TestListParams::default();
+    let (count, rows) = build_test_list_sql(&params, true, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("not_null_orders"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("not_null_orders"),
+        "rows must include cursor predicate"
+    );
+}
+
+#[test]
+fn no_run_results_emits_null_rr_columns() {
+    let params = TestListParams::default();
+    let (_, rows) = build_test_list_sql(&params, false, 10, None).unwrap();
+    assert!(rows.contains("NULL::VARCHAR AS rr_status"));
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_tests_empty_catalog() {
+    let state = make_list_state(TestListMockBackend::new(0, vec![]));
+    let r = list_tests(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_tests_data_test_fields_hydrated() {
+    let row = data_test_list_row(
+        "test.jaffle_shop.not_null_orders_order_id.d12f0947c8",
+        "not_null_orders_order_id",
+        Some("jaffle_shop"),
+        Some("not_null"),
+        Some("model.jaffle_shop.orders"),
+        Some("order_id"),
+        None, // severity null in sample project
+        None,
+        Some(r#"{"column_name":"order_id","model":"ref('orders')"}"#),
+        Some("pass"),
+        None,
+        Some("2026-05-15T10:32:11Z"),
+    );
+    let state = make_list_state(TestListMockBackend::new(1, vec![row]));
+    let r = list_tests(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let item = &body["data"][0];
+    assert_eq!(item["resource_type"], "test");
+    assert_eq!(
+        item["unique_id"],
+        "test.jaffle_shop.not_null_orders_order_id.d12f0947c8"
+    );
+    assert_eq!(item["name"], "not_null_orders_order_id");
+    assert_eq!(item["package_name"], "jaffle_shop");
+    assert_eq!(item["test_type"], "not_null");
+    assert_eq!(item["tested_node_unique_id"], "model.jaffle_shop.orders");
+    assert_eq!(item["tested_column"], "order_id");
+    assert_eq!(item["severity"], serde_json::Value::Null);
+    assert_eq!(item["execution_info"]["status"], "pass");
+    assert_eq!(
+        item["execution_info"]["completed_at"],
+        "2026-05-15T10:32:11Z"
+    );
+    // test_metadata present (has kwargs_raw).
+    assert_eq!(item["test_metadata"]["kwargs"]["column_name"], "order_id");
+    // Unit-test-only fields must be ABSENT (not null) on data-test rows.
+    assert!(
+        item.get("num_given").is_none(),
+        "num_given must be absent on data test rows"
+    );
+    assert_eq!(body["page_info"]["total_count"], 1);
+}
+
+#[tokio::test]
+async fn list_tests_unit_test_fields_hydrated() {
+    let given_json =
+        r#"[{"input":"ref('stg_orders')","rows":[{"id":1},{"id":2}],"format":"dict"}]"#;
+    let expect_json = r#"{"rows":[{"id":1}],"format":"dict"}"#;
+    let row = unit_test_list_row(
+        "unit_test.jaffle_shop.orders.test_supply_costs",
+        "test_supply_costs",
+        Some("jaffle_shop"),
+        Some("model.jaffle_shop.orders"),
+        Some(given_json),
+        Some(expect_json),
+        Some("pass"),
+        Some("2026-05-15T10:32:15Z"),
+    );
+    let state = make_list_state(TestListMockBackend::new(1, vec![row]));
+    let r = list_tests(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let item = &body["data"][0];
+    assert_eq!(item["resource_type"], "unit_test");
+    assert_eq!(item["test_type"], "unit");
+    assert_eq!(item["tested_node_unique_id"], "model.jaffle_shop.orders");
+    assert_eq!(item["tested_column"], serde_json::Value::Null);
+    assert_eq!(item["severity"], serde_json::Value::Null);
+    assert_eq!(item["num_given"], 1);
+    assert_eq!(item["num_given_rows"], 2);
+    assert_eq!(item["num_expect_rows"], 1);
+    assert_eq!(item["execution_info"]["status"], "pass");
+    // Data-test-only field must be ABSENT on unit-test rows.
+    assert!(
+        item.get("test_metadata").is_none(),
+        "test_metadata must be absent on unit test rows"
+    );
+}
+
+#[tokio::test]
+async fn list_tests_execution_info_null_when_run_results_absent() {
+    let row = data_test_list_row(
+        "test.pkg.t",
+        "t",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None, // rr_status null
+        None,
+        None,
+    );
+    let state = make_list_state(TestListMockBackend::new(1, vec![row]).without_run_results());
+    let r = list_tests(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["execution_info"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_tests_unknown_sort_returns_400() {
+    let state = make_list_state(TestListMockBackend::new(0, vec![]));
+    let params = TestListParams {
+        sort: Some("test_type:asc".into()),
+        ..Default::default()
+    };
+    let r = list_tests(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_tests_invalid_cursor_returns_400() {
+    let state = make_list_state(TestListMockBackend::new(0, vec![]));
+    let params = TestListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_tests(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_tests_multi_page_has_next_page_true() {
+    let row_a = data_test_list_row(
+        "test.pkg.alpha",
+        "alpha",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let row_b = data_test_list_row(
+        "test.pkg.beta",
+        "beta",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(TestListMockBackend::new(2, vec![row_a, row_b]));
+    let params = TestListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_tests(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_tests_last_page_end_cursor_null() {
+    let row = data_test_list_row(
+        "test.pkg.z",
+        "z",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(TestListMockBackend::new(1, vec![row]));
+    let r = list_tests(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page per ADR-6"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_tests_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "test.pkg.alpha".into(),
+    }
+    .encode();
+    let row = data_test_list_row(
+        "test.pkg.beta",
+        "beta",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let state = make_list_state(TestListMockBackend::new(1, vec![row]));
+    let params = TestListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_tests(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+#[tokio::test]
+async fn list_tests_invalid_test_type_param_returns_400() {
+    let state = make_list_state(TestListMockBackend::new(0, vec![]));
+    let params = TestListParams {
+        test_type: Some("unknown_type".into()),
+        ..Default::default()
+    };
+    let r = list_tests(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_test_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_test_facets_results_exact_set() {
+    let r = list_test_facets().await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let results: Vec<String> = body["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        results,
+        vec!["pass", "fail", "warn", "error", "skipped", "unknown"],
+        "results must match testStatusesPlusUnknown exactly"
+    );
+}
+
+#[tokio::test]
+async fn list_test_facets_run_statuses_exact_set() {
+    let r = list_test_facets().await;
+    let body = response_body(r).await;
+    let run_statuses: Vec<String> = body["run_statuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        run_statuses,
+        vec!["success", "error", "skipped", "reused"],
+        "run_statuses must match runStatuses exactly"
+    );
+}
+
+#[tokio::test]
+async fn list_test_facets_test_types_exact_set() {
+    let r = list_test_facets().await;
+    let body = response_body(r).await;
+    let test_types: Vec<String> = body["test_types"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["value"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        test_types,
+        vec!["unit", "data"],
+        "test_types must match testTypesDisplay exactly"
+    );
+}
+
+#[tokio::test]
+async fn list_test_facets_count_always_null() {
+    let r = list_test_facets().await;
+    let body = response_body(r).await;
+    // All values in all arrays must have count: null.
+    for key in &["results", "run_statuses", "test_types"] {
+        for item in body[key].as_array().unwrap() {
+            assert_eq!(
+                item["count"],
+                serde_json::Value::Null,
+                "{key}[*].count must be null"
+            );
+        }
+    }
 }

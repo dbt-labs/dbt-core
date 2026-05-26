@@ -60,6 +60,8 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             "/api/v1/snapshots/{unique_id}",
             get(snapshots::get_snapshot),
         )
+        .route("/api/v1/tests", get(tests::list_tests))
+        .route("/api/v1/tests/facets", get(tests::list_test_facets))
         .route("/api/v1/tests/{unique_id}", get(tests::get_test))
         .route(
             "/api/v1/exposures/{unique_id}",

@@ -1,12 +1,17 @@
-//! `GET /api/v1/tests/:id` — discriminated union over data tests and unit
-//! tests.
+//! `GET /api/v1/tests/:id`, `GET /api/v1/tests`, and
+//! `GET /api/v1/tests/facets`.
 //!
-//! Both `test.*` and `unit_test.*` `unique_id`s land on this endpoint. The
-//! handler routes by `resource_type`: data tests are stored in `dbt.nodes`
-//! with `resource_type = 'test'` and joined against `dbt.test_metadata` for
-//! generic-test fields (`column_name`, `severity`, `test_metadata.name`,
-//! `kwargs`); unit tests live in `dbt.unit_tests` (not in `dbt.nodes`) and
-//! carry inline fixture blobs (`given`, `expect`) serialized as JSON strings.
+//! Both `test.*` and `unit_test.*` `unique_id`s land on these endpoints. The
+//! detail handler routes by `resource_type`: data tests are stored in
+//! `dbt.nodes` with `resource_type = 'test'` and joined against
+//! `dbt.test_metadata` for generic-test fields (`column_name`, `severity`,
+//! `test_metadata.name`, `kwargs`); unit tests live in `dbt.unit_tests` (not
+//! in `dbt.nodes`) and carry inline fixture blobs (`given`, `expect`)
+//! serialized as JSON strings.
+//!
+//! The list handler issues a single UNION ALL query joining `dbt.nodes`
+//! (filtered to `resource_type = 'test'`) and `dbt.unit_tests`, then
+//! LEFT JOINs `dbt.test_metadata` and `dbt_rt.run_results`.
 //!
 //! `execution_info` is `null` when `dbt_rt.run_results` has no row for the
 //! resource. Tests are leaf nodes — no `referenced_by`.
@@ -16,14 +21,17 @@
 //! [`crate::handlers::json::json_parse_or_null`] so the response carries
 //! nested objects, not escaped strings.
 
+use std::fmt::Write as _;
+
 use arrow_array::{Array, Float64Array, RecordBatch, StringArray};
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::handlers::json::{bad_request, internal_error, json_parse_or_null, not_found};
 use crate::handlers::node_base::{EdgeRef, NodeBase, extract_edge_refs, extract_str_list, opt_str};
+use crate::handlers::pagination::{Cursor, PageInfo, SortDir, clamp_first, cursor_where_fragment};
 use crate::handlers::sql::escape_str;
 use crate::state::SharedState;
 
@@ -489,6 +497,611 @@ pub async fn get_test(State(state): State<SharedState>, Path(unique_id): Path<St
     }
 
     not_found(format!("test {unique_id} not found"))
+}
+
+// ---------------------------------------------------------------------------
+// Response types: GET /api/v1/tests and GET /api/v1/tests/facets
+// ---------------------------------------------------------------------------
+
+/// Execution snapshot for the list row — mirrors the detail `TestExecutionInfo`
+/// but omits `execution_time` (not rendered in the list view).
+#[derive(Serialize)]
+pub struct TestListExecutionInfo {
+    pub status: Option<String>,
+    pub error: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+/// Shared metadata summary for data-test list rows.
+#[derive(Serialize)]
+pub struct TestMetadataSummary {
+    pub namespace: Option<String>,
+    /// Parsed JSON object; `null` if `kwargs` column absent / unparseable.
+    pub kwargs: serde_json::Value,
+}
+
+/// List row for a `resource_type = 'test'` data test.
+#[derive(Serialize)]
+pub struct DataTestSummary {
+    pub unique_id: String,
+    pub name: String,
+    pub resource_type: String,
+    pub package_name: Option<String>,
+    /// `dbt.test_metadata.test_name` — e.g. `"not_null"`, `"unique"`.
+    pub test_type: Option<String>,
+    /// `dbt.test_metadata.attached_node`.
+    pub tested_node_unique_id: Option<String>,
+    /// `dbt.test_metadata.column_name`.
+    pub tested_column: Option<String>,
+    /// `dbt.test_metadata.severity` — `"ERROR"` or `"WARN"`, often `null`.
+    pub severity: Option<String>,
+    /// `null` when `dbt_rt.run_results` has no row or the view is absent.
+    pub execution_info: Option<TestListExecutionInfo>,
+    /// `null` when no `dbt.test_metadata` row (singular test).
+    pub test_metadata: Option<TestMetadataSummary>,
+}
+
+/// List row for a `resource_type = 'unit_test'` unit test.
+#[derive(Serialize)]
+pub struct UnitTestSummary {
+    pub unique_id: String,
+    pub name: String,
+    pub resource_type: String,
+    pub package_name: Option<String>,
+    /// Always `"unit"` for unit tests.
+    pub test_type: Option<String>,
+    /// `depends_on_nodes[0]` — the primary model under test.
+    pub tested_node_unique_id: Option<String>,
+    /// Always `null` for unit tests.
+    pub tested_column: Option<String>,
+    /// Always `null` for unit tests.
+    pub severity: Option<String>,
+    /// `null` when `dbt_rt.run_results` has no row or the view is absent.
+    pub execution_info: Option<TestListExecutionInfo>,
+    /// Count of `given` fixtures. Derived from `dbt.unit_tests.given` JSON.
+    pub num_given: Option<i64>,
+    /// Total input rows across all fixtures.
+    pub num_given_rows: Option<i64>,
+    /// Expected output row count from `dbt.unit_tests.expect` JSON.
+    pub num_expect_rows: Option<i64>,
+}
+
+/// ADR-3 discriminated union on `resource_type`.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum TestSummary {
+    Data(DataTestSummary),
+    Unit(UnitTestSummary),
+}
+
+/// ADR-6 cursor-paginated response for `GET /api/v1/tests`.
+#[derive(Serialize)]
+pub struct TestListResponse {
+    pub data: Vec<TestSummary>,
+    pub page_info: PageInfo,
+}
+
+/// One facet option for the tests endpoints; `count` is always `null` today.
+#[derive(Serialize)]
+pub struct TestFacetValue {
+    pub value: String,
+    pub count: Option<u64>,
+}
+
+impl TestFacetValue {
+    fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            count: None,
+        }
+    }
+}
+
+/// Response body for `GET /api/v1/tests/facets`.
+///
+/// All three facet arrays are server constants — no parquet query required.
+/// The value sets are closed enums defined by dbt-dag `resourceConstants.ts`.
+#[derive(Serialize)]
+pub struct TestFacetsResponse {
+    pub results: Vec<TestFacetValue>,
+    pub run_statuses: Vec<TestFacetValue>,
+    pub test_types: Vec<TestFacetValue>,
+}
+
+/// Query parameters for `GET /api/v1/tests`.
+#[derive(Debug, Default, Deserialize)]
+pub struct TestListParams {
+    /// Sort spec `<column>:<asc|desc>`. Allowlisted: `name` only.
+    pub sort: Option<String>,
+    pub first: Option<u32>,
+    pub after: Option<String>,
+    /// CSV-OR filter on `dbt_rt.run_results.status`; test-outcome values.
+    pub result: Option<String>,
+    /// CSV-OR filter on `dbt_rt.run_results.status`; run-engine values.
+    pub run_status: Option<String>,
+    /// `unit` → `resource_type = 'unit_test'`; `data` → `resource_type = 'test'`.
+    pub test_type: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// SQL: GET /api/v1/tests
+// ---------------------------------------------------------------------------
+
+/// Allowlisted sort columns for tests.
+const SORTABLE_COLUMNS: &[(&str, &str)] = &[("name", "t.name")];
+
+struct SortSelection {
+    sql_expr: &'static str,
+    dir: SortDir,
+}
+
+fn parse_sort(s: &str) -> Result<SortSelection, &'static str> {
+    let (col, dir_str) = match s.split_once(':') {
+        Some(pair) => pair,
+        None => return Err("sort must be in format <column>:<asc|desc>"),
+    };
+    let dir = match dir_str {
+        "asc" => SortDir::Asc,
+        "desc" => SortDir::Desc,
+        _ => return Err("sort direction must be 'asc' or 'desc'"),
+    };
+    for &(name, expr) in SORTABLE_COLUMNS {
+        if name == col {
+            return Ok(SortSelection {
+                sql_expr: expr,
+                dir,
+            });
+        }
+    }
+    Err("unknown sort column")
+}
+
+/// Build `(count_sql, rows_sql)` for `GET /api/v1/tests`.
+///
+/// `with_run_results` controls whether `dbt_rt.run_results` is LEFT JOINed.
+/// When `false`, execution-info columns are NULL and result/run_status filters
+/// produce zero matches (degenerate filter).
+///
+/// The base query is a UNION ALL of the `test` rows from `dbt.nodes` (LEFT
+/// JOINed with `dbt.test_metadata`) and the `unit_test` rows from
+/// `dbt.unit_tests`. The union is wrapped in a CTE `t` so filters and cursors
+/// apply uniformly.
+pub(crate) fn build_test_list_sql(
+    params: &TestListParams,
+    with_run_results: bool,
+    first: u32,
+    cursor: Option<&Cursor>,
+) -> Result<(String, String), &'static str> {
+    let sort = match params.sort.as_deref().filter(|s| !s.is_empty()) {
+        Some(s) => parse_sort(s)?,
+        None => SortSelection {
+            sql_expr: "t.name",
+            dir: SortDir::Asc,
+        },
+    };
+
+    // Build the resource_type filter from ?test_type= param.
+    let mut resource_type_filter = String::new();
+    if let Some(raw) = params.test_type.as_deref().filter(|s| !s.is_empty()) {
+        let types: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut resource_types: Vec<&str> = vec![];
+        for t in &types {
+            match *t {
+                "unit" => resource_types.push("'unit_test'"),
+                "data" => resource_types.push("'test'"),
+                _ => return Err("invalid test_type value; use 'unit' or 'data'"),
+            }
+        }
+        if !resource_types.is_empty() {
+            let list = resource_types.join(", ");
+            resource_type_filter = format!(" AND t.resource_type IN ({list})");
+        }
+    }
+
+    // Build status filter (both ?result and ?run_status map to the same column).
+    let mut status_filter = String::new();
+    if with_run_results {
+        let mut status_values: Vec<String> = vec![];
+        if let Some(raw) = params.result.as_deref().filter(|s| !s.is_empty()) {
+            for v in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                status_values.push(format!("'{}'", escape_str(v)));
+            }
+        }
+        if let Some(raw) = params.run_status.as_deref().filter(|s| !s.is_empty()) {
+            for v in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                status_values.push(format!("'{}'", escape_str(v)));
+            }
+        }
+        if !status_values.is_empty() {
+            let list = status_values.join(", ");
+            status_filter = format!(" AND rr.status IN ({list})");
+        }
+    } else if params.result.as_deref().filter(|s| !s.is_empty()).is_some()
+        || params
+            .run_status
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .is_some()
+    {
+        // run_results view absent but filter requested — return nothing.
+        status_filter = " AND 1=0".to_owned();
+    }
+
+    let filter_where = format!("WHERE 1=1{resource_type_filter}{status_filter}");
+
+    let mut page_where = filter_where.clone();
+    if let Some(c) = cursor {
+        let frag = cursor_where_fragment(
+            sort.sql_expr,
+            "t.unique_id",
+            sort.dir,
+            c.sort_value.as_deref(),
+            &c.unique_id,
+        );
+        let _ = write!(page_where, " AND {frag}");
+    }
+
+    // The UNION ALL CTE joins data tests (dbt.nodes + dbt.test_metadata) and
+    // unit tests (dbt.unit_tests). Columns not present in one side are NULL.
+    let union_cte = "\
+WITH tests_union AS (\
+  SELECT n.unique_id, n.name, n.package_name, 'test' AS resource_type, \
+         tm.test_name AS test_type, tm.attached_node AS tested_node_unique_id, \
+         tm.column_name AS tested_column, tm.severity, \
+         tm.test_namespace AS test_namespace, tm.kwargs AS kwargs_raw, \
+         NULL::VARCHAR AS given_raw, NULL::VARCHAR AS expect_raw, \
+         NULL::VARCHAR[] AS depends_on_nodes \
+  FROM dbt.nodes n \
+  LEFT JOIN dbt.test_metadata tm ON tm.unique_id = n.unique_id \
+  WHERE n.resource_type = 'test' \
+  UNION ALL \
+  SELECT ut.unique_id, ut.name, ut.package_name, 'unit_test' AS resource_type, \
+         'unit' AS test_type, ut.depends_on_nodes[1] AS tested_node_unique_id, \
+         NULL::VARCHAR AS tested_column, NULL::VARCHAR AS severity, \
+         NULL::VARCHAR AS test_namespace, NULL::VARCHAR AS kwargs_raw, \
+         ut.given AS given_raw, ut.expect AS expect_raw, \
+         ut.depends_on_nodes \
+  FROM dbt.unit_tests ut\
+)";
+
+    let (rr_cte, rr_join, rr_cols) = if with_run_results {
+        (
+            ", last_run AS (\
+               SELECT unique_id, status, message, \
+                      CAST(MAX(created_at) AS VARCHAR) AS completed_at \
+               FROM dbt_rt.run_results \
+               GROUP BY unique_id, status, message\
+             )",
+            "LEFT JOIN last_run rr ON rr.unique_id = t.unique_id",
+            "rr.status AS rr_status, rr.message AS rr_message, rr.completed_at AS rr_completed_at",
+        )
+    } else {
+        (
+            "",
+            "",
+            "NULL::VARCHAR AS rr_status, NULL::VARCHAR AS rr_message, NULL::VARCHAR AS rr_completed_at",
+        )
+    };
+
+    let full_cte = format!("{union_cte}{rr_cte}");
+
+    let count_sql = format!(
+        "{full_cte} \
+         SELECT count(*) FROM tests_union t {rr_join} {filter_where}"
+    );
+
+    let peek = first + 1;
+    let order_expr = sort.sql_expr;
+    let order_dir = sort.dir.as_sql();
+
+    let rows_sql = format!(
+        "{full_cte} \
+         SELECT t.unique_id, t.name, t.resource_type, t.package_name, \
+                t.test_type, t.tested_node_unique_id, t.tested_column, \
+                t.severity, t.test_namespace, t.kwargs_raw, \
+                t.given_raw, t.expect_raw, \
+                {rr_cols} \
+         FROM tests_union t {rr_join} \
+         {page_where} \
+         ORDER BY {order_expr} {order_dir} NULLS LAST, t.unique_id ASC \
+         LIMIT {peek}"
+    );
+
+    Ok((count_sql, rows_sql))
+}
+
+// ---------------------------------------------------------------------------
+// Extraction helpers: GET /api/v1/tests
+// ---------------------------------------------------------------------------
+
+fn parse_test_list_execution_info(
+    status: Option<&str>,
+    message: Option<&str>,
+    completed_at: Option<&str>,
+) -> Option<TestListExecutionInfo> {
+    let status_val = status?;
+    let error = match status_val {
+        "error" | "fail" => message.map(|m| m.to_owned()),
+        _ => None,
+    };
+    Some(TestListExecutionInfo {
+        status: Some(status_val.to_owned()),
+        error,
+        completed_at: completed_at.map(|s| s.to_owned()),
+    })
+}
+
+fn batches_to_test_summary_rows(batches: &[RecordBatch]) -> Vec<TestSummary> {
+    let mut rows = Vec::new();
+    for batch in batches {
+        if batch.num_rows() == 0 {
+            continue;
+        }
+        let unique_id_col = batch
+            .column_by_name("unique_id")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+            .expect("unique_id column missing");
+        let name_col = batch
+            .column_by_name("name")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+            .expect("name column missing");
+        let resource_type_col = batch
+            .column_by_name("resource_type")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+            .expect("resource_type column missing");
+        let s = |col_name: &str| -> &StringArray {
+            batch
+                .column_by_name(col_name)
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+                .expect("column missing")
+        };
+        let package_name = s("package_name");
+        let test_type = s("test_type");
+        let tested_node = s("tested_node_unique_id");
+        let tested_column = s("tested_column");
+        let severity = s("severity");
+        let test_namespace = s("test_namespace");
+        let kwargs_raw = s("kwargs_raw");
+        let given_raw = s("given_raw");
+        let expect_raw = s("expect_raw");
+        let rr_status = s("rr_status");
+        let rr_message = s("rr_message");
+        let rr_completed_at = s("rr_completed_at");
+
+        for i in 0..batch.num_rows() {
+            let get = |col: &StringArray| -> Option<String> {
+                if col.is_null(i) {
+                    None
+                } else {
+                    Some(col.value(i).to_owned())
+                }
+            };
+
+            let resource_type = resource_type_col.value(i);
+            let execution_info = parse_test_list_execution_info(
+                get(rr_status).as_deref(),
+                get(rr_message).as_deref(),
+                get(rr_completed_at).as_deref(),
+            );
+
+            match resource_type {
+                "test" => {
+                    // Build test_metadata only if test_namespace or kwargs present.
+                    let namespace = get(test_namespace);
+                    let kwargs = json_parse_or_null(get(kwargs_raw).as_deref());
+                    let test_metadata = if namespace.is_some() || !kwargs.is_null() {
+                        Some(TestMetadataSummary { namespace, kwargs })
+                    } else {
+                        None
+                    };
+                    rows.push(TestSummary::Data(DataTestSummary {
+                        unique_id: unique_id_col.value(i).to_owned(),
+                        name: name_col.value(i).to_owned(),
+                        resource_type: "test".to_owned(),
+                        package_name: get(package_name),
+                        test_type: get(test_type),
+                        tested_node_unique_id: get(tested_node),
+                        tested_column: get(tested_column),
+                        severity: get(severity),
+                        execution_info,
+                        test_metadata,
+                    }));
+                }
+                "unit_test" => {
+                    let given_str = get(given_raw);
+                    let expect_str = get(expect_raw);
+                    let (num_given, num_given_rows) = count_given(given_str.as_deref());
+                    let num_expect_rows = count_expect(expect_str.as_deref());
+                    let tested_node_uid =
+                        // The UNION ALL already computed depends_on_nodes[1] as
+                        // tested_node_unique_id in the SQL projection.
+                        get(tested_node);
+                    rows.push(TestSummary::Unit(UnitTestSummary {
+                        unique_id: unique_id_col.value(i).to_owned(),
+                        name: name_col.value(i).to_owned(),
+                        resource_type: "unit_test".to_owned(),
+                        package_name: get(package_name),
+                        test_type: Some("unit".to_owned()),
+                        tested_node_unique_id: tested_node_uid,
+                        tested_column: None,
+                        severity: None,
+                        execution_info,
+                        num_given,
+                        num_given_rows,
+                        num_expect_rows,
+                    }));
+                }
+                _ => {}
+            }
+        }
+    }
+    rows
+}
+
+/// Count `given` fixtures from the JSON string: returns `(num_given,
+/// num_given_rows)`. Falls back to `(None, None)` on parse failure.
+fn count_given(raw: Option<&str>) -> (Option<i64>, Option<i64>) {
+    let parsed = json_parse_or_null(raw);
+    let Some(arr) = parsed.as_array() else {
+        return (None, None);
+    };
+    let num_given = arr.len() as i64;
+    let mut total_rows: i64 = 0;
+    for item in arr {
+        if let Some(rows) = item.get("rows").and_then(|v| v.as_array()) {
+            total_rows += rows.len() as i64;
+        }
+    }
+    (Some(num_given), Some(total_rows))
+}
+
+/// Count `expect` rows from the JSON string. Falls back to `None` on parse
+/// failure.
+fn count_expect(raw: Option<&str>) -> Option<i64> {
+    let parsed = json_parse_or_null(raw);
+    if parsed.is_null() {
+        return None;
+    }
+    parsed
+        .get("rows")
+        .and_then(|v| v.as_array())
+        .map(|r| r.len() as i64)
+}
+
+// ---------------------------------------------------------------------------
+// Handlers: GET /api/v1/tests and GET /api/v1/tests/facets
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v1/tests` — cursor-paginated list of test nodes (both
+/// `resource_type = 'test'` and `resource_type = 'unit_test'`).
+///
+/// Default sort is `name:asc`; only `name` is allowlisted.
+/// Filters: `result`, `run_status` (both map to run_results.status),
+/// `test_type` (`unit` or `data`).
+/// `execution_info` is `null` when `dbt_rt.run_results` is absent or has no
+/// row for this test.
+pub async fn list_tests(
+    State(state): State<SharedState>,
+    Query(params): Query<TestListParams>,
+) -> Response {
+    let first = clamp_first(params.first);
+
+    let cursor = match params.after.as_deref().filter(|s| !s.is_empty()) {
+        Some(s) => match Cursor::decode(s) {
+            Ok(c) => Some(c),
+            Err(msg) => return bad_request(msg),
+        },
+        None => None,
+    };
+
+    // Build with run_results first; validates sort and other params.
+    let (count_sql, rows_sql) = match build_test_list_sql(&params, true, first, cursor.as_ref()) {
+        Ok(pair) => pair,
+        Err(msg) => return bad_request(msg),
+    };
+    // Fallback: run_results absent.
+    let (count_sql_no_rr, rows_sql_no_rr) =
+        build_test_list_sql(&params, false, first, cursor.as_ref())
+            .expect("params already validated");
+
+    let backend = state.providers.backend.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+        let (total, batches) = match backend.query_scalar(&count_sql) {
+            Some(count_str) => {
+                let total = count_str
+                    .parse::<u64>()
+                    .map_err(|e| format!("could not parse test count: {e}"))?;
+                let batches = backend.query_arrow(&rows_sql).map_err(|e| e.to_string())?;
+                (total, batches)
+            }
+            None => {
+                // run_results view absent; retry without it.
+                let total = backend
+                    .query_scalar(&count_sql_no_rr)
+                    .ok_or_else(|| "count query returned no rows".to_string())?
+                    .parse::<u64>()
+                    .map_err(|e| format!("could not parse test count: {e}"))?;
+                let batches = backend
+                    .query_arrow(&rows_sql_no_rr)
+                    .map_err(|e| e.to_string())?;
+                (total, batches)
+            }
+        };
+        Ok((total, batches))
+    })
+    .await;
+
+    let (total_count, batches) = match result {
+        Ok(Ok(t)) => t,
+        Ok(Err(err)) => return internal_error(err),
+        Err(err) => return internal_error(err.to_string()),
+    };
+
+    let mut rows = batches_to_test_summary_rows(&batches);
+
+    let has_next_page = rows.len() as u32 > first;
+    if has_next_page {
+        rows.truncate(first as usize);
+    }
+
+    fn make_cursor(row: &TestSummary) -> String {
+        let (name, uid) = match row {
+            TestSummary::Data(d) => (d.name.as_str(), d.unique_id.as_str()),
+            TestSummary::Unit(u) => (u.name.as_str(), u.unique_id.as_str()),
+        };
+        Cursor {
+            sort_value: Some(name.to_owned()),
+            unique_id: uid.to_owned(),
+        }
+        .encode()
+    }
+
+    let start_cursor = rows.first().map(make_cursor);
+    let end_cursor = if has_next_page {
+        rows.last().map(make_cursor)
+    } else {
+        None
+    };
+
+    Json(TestListResponse {
+        data: rows,
+        page_info: PageInfo {
+            total_count,
+            start_cursor,
+            end_cursor,
+            has_next_page,
+        },
+    })
+    .into_response()
+}
+
+/// `GET /api/v1/tests/facets` — filter facet values for the tests list.
+///
+/// All three arrays are server constants — no parquet query required. The
+/// value sets match dbt-dag `resourceConstants.ts`:
+/// - `results`: `testStatusesPlusUnknown`
+/// - `run_statuses`: `runStatuses`
+/// - `test_types`: `testTypesDisplay`
+pub async fn list_test_facets() -> Response {
+    Json(TestFacetsResponse {
+        results: ["pass", "fail", "warn", "error", "skipped", "unknown"]
+            .iter()
+            .map(|&v| TestFacetValue::new(v))
+            .collect(),
+        run_statuses: ["success", "error", "skipped", "reused"]
+            .iter()
+            .map(|&v| TestFacetValue::new(v))
+            .collect(),
+        test_types: ["unit", "data"]
+            .iter()
+            .map(|&v| TestFacetValue::new(v))
+            .collect(),
+    })
+    .into_response()
 }
 
 #[cfg(test)]
