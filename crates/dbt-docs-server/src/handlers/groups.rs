@@ -1,4 +1,6 @@
 //! `GET /api/v1/groups/:id` — typed group detail.
+//! `GET /api/v1/groups` — cursor-paginated group list.
+//! `GET /api/v1/groups/facets` — filter facet metadata (returns `{}`).
 //!
 //! Groups are definition-only: no SQL, no columns, no warehouse relation,
 //! no run results, no catalog, no freshness, no lineage edges. The endpoint
@@ -17,10 +19,15 @@
 //! `truncated` flag; `model_count` reports the unbounded total. Cursor
 //! pagination is deferred.
 //!
+//! `model_count` on list rows is aggregated at query time via a correlated
+//! subquery against `dbt.nodes` scoped by `(group_name, package_name)`.
+//!
 //! Data sources:
 //! - `dbt.groups` — group row + config JSON
 //! - `dbt.nodes` — `models[]` member list + `model_count` (filtered to
 //!   `resource_type = 'model'`, joined on `(group_name, package_name)`)
+
+use std::fmt::Write as _;
 
 use arrow_array::{Array, BooleanArray, Int64Array, RecordBatch, StringArray};
 use axum::Json;
@@ -30,6 +37,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::handlers::json::{bad_request, internal_error, json_parse_or_null, not_found};
 use crate::handlers::node_base::{NodeBase, opt_str, str_col};
+use crate::handlers::pagination::{Cursor, PageInfo, SortDir, clamp_first, cursor_where_fragment};
 use crate::handlers::sql::escape_str;
 use crate::state::SharedState;
 
@@ -332,6 +340,255 @@ pub async fn get_group(
     detail.truncated = detail.model_count > detail.models.len() as u64;
 
     Json(detail).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Response types: GET /api/v1/groups and GET /api/v1/groups/facets
+// ---------------------------------------------------------------------------
+
+/// One row in `GET /api/v1/groups`.
+///
+/// `owner_github` and `owner_slack` are sourced from `json_extract_string(config,
+/// '$.owner.github')` / `'$.owner.slack'` — there are no top-level parquet
+/// columns for these fields. Both are `null` when absent from the JSON.
+///
+/// `model_count` is aggregated at query time via a correlated subquery against
+/// `dbt.nodes` scoped by `(group_name, package_name)`; it is not a column
+/// in `dbt.groups`.
+#[derive(Serialize)]
+pub struct GroupSummary {
+    pub unique_id: String,
+    pub name: String,
+    pub owner_name: Option<String>,
+    pub owner_email: Option<String>,
+    pub owner_github: Option<String>,
+    pub owner_slack: Option<String>,
+    pub model_count: u64,
+}
+
+/// Cursor-paginated response for `GET /api/v1/groups`.
+#[derive(Serialize)]
+pub struct GroupListResponse {
+    pub data: Vec<GroupSummary>,
+    pub page_info: PageInfo,
+}
+
+/// Response body for `GET /api/v1/groups/facets`.
+///
+/// No filter parameters exist on `GET /api/v1/groups` in v0; this endpoint
+/// returns an empty object for API uniformity.
+#[derive(Serialize)]
+pub struct GroupFacetsResponse {}
+
+/// Query parameters for `GET /api/v1/groups`.
+#[derive(Debug, Default, Deserialize)]
+pub struct GroupListParams {
+    /// Sort: `name:asc` (default) or `name:desc`. Any other key returns 400.
+    pub sort: Option<String>,
+    pub first: Option<u32>,
+    pub after: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// SQL: GET /api/v1/groups
+// ---------------------------------------------------------------------------
+
+/// Build `(count_sql, rows_sql)` for `GET /api/v1/groups`.
+///
+/// Supports sort on `name` only; any other key returns `Err`.
+/// `model_count` is computed via a correlated subquery scoped by both
+/// `name` and `package_name` to prevent cross-package collisions.
+pub(crate) fn build_group_list_sql(
+    params: &GroupListParams,
+    first: u32,
+    cursor: Option<&Cursor>,
+) -> Result<(String, String), &'static str> {
+    let (sort_col, dir) = parse_group_sort(params.sort.as_deref())?;
+
+    let mut page_where = String::from("WHERE 1=1");
+    if let Some(c) = cursor {
+        let frag = cursor_where_fragment(
+            &format!("g.{sort_col}"),
+            "g.unique_id",
+            dir,
+            c.sort_value.as_deref(),
+            &c.unique_id,
+        );
+        let _ = write!(page_where, " AND {frag}");
+    }
+
+    let dir_sql = dir.as_sql();
+    let count_sql = "SELECT count(*) FROM dbt.groups g".to_owned();
+    let peek = first + 1;
+    let rows_sql = format!(
+        "SELECT g.unique_id, g.name, g.owner_name, g.owner_email, \
+                json_extract_string(g.config, '$.owner.github') AS owner_github, \
+                json_extract_string(g.config, '$.owner.slack') AS owner_slack, \
+                (SELECT COUNT(*) FROM dbt.nodes n \
+                 WHERE n.group_name = g.name \
+                   AND n.package_name = g.package_name \
+                   AND n.resource_type = 'model') AS model_count \
+         FROM dbt.groups g {page_where} \
+         ORDER BY g.{sort_col} {dir_sql} NULLS LAST, g.unique_id ASC \
+         LIMIT {peek}"
+    );
+
+    Ok((count_sql, rows_sql))
+}
+
+/// Parse the `?sort=` parameter.
+///
+/// Returns `("name", Asc)` by default. Returns `Err` on unknown column or
+/// unknown direction.
+fn parse_group_sort(sort: Option<&str>) -> Result<(&'static str, SortDir), &'static str> {
+    let Some(raw) = sort.filter(|s| !s.is_empty()) else {
+        return Ok(("name", SortDir::Asc));
+    };
+    let (col, dir_str) = raw
+        .split_once(':')
+        .ok_or("sort must be <column>:<asc|desc>")?;
+    let dir = match dir_str {
+        "asc" => SortDir::Asc,
+        "desc" => SortDir::Desc,
+        _ => return Err("sort direction must be asc or desc"),
+    };
+    match col {
+        "name" => Ok(("name", dir)),
+        _ => Err("unknown sort column; only 'name' is supported"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extraction helpers: GET /api/v1/groups
+// ---------------------------------------------------------------------------
+
+fn batches_to_group_summary_rows(batches: &[RecordBatch]) -> Vec<GroupSummary> {
+    let mut rows = Vec::new();
+    for batch in batches {
+        if batch.num_rows() == 0 {
+            continue;
+        }
+        let unique_id = str_col(batch, "unique_id");
+        let name = str_col(batch, "name");
+        let owner_name = str_col(batch, "owner_name");
+        let owner_email = str_col(batch, "owner_email");
+        let owner_github = str_col(batch, "owner_github");
+        let owner_slack = str_col(batch, "owner_slack");
+        let model_count_col = batch
+            .column_by_name("model_count")
+            .and_then(|c| c.as_any().downcast_ref::<Int64Array>());
+
+        for i in 0..batch.num_rows() {
+            let model_count = model_count_col
+                .and_then(|c| if c.is_null(i) { None } else { Some(c.value(i)) })
+                .unwrap_or(0)
+                .max(0) as u64;
+
+            rows.push(GroupSummary {
+                unique_id: unique_id.value(i).to_owned(),
+                name: name.value(i).to_owned(),
+                owner_name: opt_str(owner_name, i),
+                owner_email: opt_str(owner_email, i),
+                owner_github: opt_str(owner_github, i),
+                owner_slack: opt_str(owner_slack, i),
+                model_count,
+            });
+        }
+    }
+    rows
+}
+
+// ---------------------------------------------------------------------------
+// Handlers: GET /api/v1/groups and GET /api/v1/groups/facets
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v1/groups` — cursor-paginated list of groups.
+///
+/// Sort defaults to `name:asc`; only `name` is sortable.
+/// No filter parameters in v0. `model_count` is aggregated from `dbt.nodes`.
+pub async fn list_groups(
+    State(state): State<SharedState>,
+    Query(params): Query<GroupListParams>,
+) -> Response {
+    let first = clamp_first(params.first);
+
+    let cursor = match params.after.as_deref().filter(|s| !s.is_empty()) {
+        Some(s) => match Cursor::decode(s) {
+            Ok(c) => Some(c),
+            Err(msg) => return bad_request(msg),
+        },
+        None => None,
+    };
+
+    let (count_sql, rows_sql) = match build_group_list_sql(&params, first, cursor.as_ref()) {
+        Ok(pair) => pair,
+        Err(msg) => return bad_request(msg),
+    };
+
+    let backend = state.providers.backend.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<_, String> {
+        let total = backend
+            .query_scalar(&count_sql)
+            .ok_or_else(|| "count query returned no rows".to_string())?
+            .parse::<u64>()
+            .map_err(|e| format!("could not parse group count: {e}"))?;
+        let batches = backend.query_arrow(&rows_sql).map_err(|e| e.to_string())?;
+        Ok((total, batches))
+    })
+    .await;
+
+    let (total_count, batches) = match result {
+        Ok(Ok(t)) => t,
+        Ok(Err(err)) => return internal_error(err),
+        Err(err) => return internal_error(err.to_string()),
+    };
+
+    let mut rows = batches_to_group_summary_rows(&batches);
+
+    let has_next_page = rows.len() as u32 > first;
+    if has_next_page {
+        rows.truncate(first as usize);
+    }
+
+    let start_cursor = rows.first().map(|row| {
+        Cursor {
+            sort_value: Some(row.name.clone()),
+            unique_id: row.unique_id.clone(),
+        }
+        .encode()
+    });
+    let end_cursor = if has_next_page {
+        rows.last().map(|row| {
+            Cursor {
+                sort_value: Some(row.name.clone()),
+                unique_id: row.unique_id.clone(),
+            }
+            .encode()
+        })
+    } else {
+        None
+    };
+
+    Json(GroupListResponse {
+        data: rows,
+        page_info: PageInfo {
+            total_count,
+            start_cursor,
+            end_cursor,
+            has_next_page,
+        },
+    })
+    .into_response()
+}
+
+/// `GET /api/v1/groups/facets` — returns `{}`.
+///
+/// No filter parameters exist on the groups list in v0. The endpoint is
+/// implemented for API uniformity — every list endpoint has a matching
+/// facets endpoint so client codegen can treat all resource types
+/// identically.
+pub async fn list_group_facets(_state: State<SharedState>) -> Response {
+    Json(GroupFacetsResponse {}).into_response()
 }
 
 #[cfg(test)]

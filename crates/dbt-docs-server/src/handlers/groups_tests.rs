@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/groups/:id`.
+//! Tests for `GET /api/v1/groups/:id`, `GET /api/v1/groups`, and
+//! `GET /api/v1/groups/facets`.
 //!
 //! Schema anchoring (#10255): the `RecordBatch` fixtures below are hand-
 //! rolled and not enforced against the production parquet schemas. A column
@@ -15,6 +16,7 @@ use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
+use crate::handlers::pagination::Cursor;
 use crate::providers::{Backend, BackendError, Providers};
 use crate::state::AppState;
 
@@ -529,4 +531,303 @@ async fn models_truncated_flag_when_at_limit() {
     assert_eq!(body["models"].as_array().expect("array").len(), 2);
     assert_eq!(body["model_count"], 5);
     assert_eq!(body["truncated"], true);
+}
+
+// ---------------------------------------------------------------------------
+// Mock backend: list_groups / list_group_facets
+// ---------------------------------------------------------------------------
+
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index ships them. A column rename in `dbt.groups`
+// will pass these tests while silently breaking the handler.
+
+struct GroupListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+}
+
+impl GroupListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+        }
+    }
+}
+
+impl Backend for GroupListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if sql.contains("count(*)") {
+            Some(self.total_count.to_string())
+        } else {
+            None
+        }
+    }
+    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: GroupListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders: list rows
+// ---------------------------------------------------------------------------
+
+fn group_list_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("owner_name", DataType::Utf8, true),
+        Field::new("owner_email", DataType::Utf8, true),
+        Field::new("owner_github", DataType::Utf8, true),
+        Field::new("owner_slack", DataType::Utf8, true),
+        Field::new("model_count", DataType::Int64, true),
+    ]))
+}
+
+fn group_list_row(
+    unique_id: &str,
+    name: &str,
+    owner_name: Option<&str>,
+    owner_email: Option<&str>,
+    owner_github: Option<&str>,
+    owner_slack: Option<&str>,
+    model_count: i64,
+) -> RecordBatch {
+    RecordBatch::try_new(
+        group_list_schema(),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec![owner_name])),
+            Arc::new(StringArray::from(vec![owner_email])),
+            Arc::new(StringArray::from(vec![owner_github])),
+            Arc::new(StringArray::from(vec![owner_slack])),
+            Arc::new(Int64Array::from(vec![model_count])),
+        ],
+    )
+    .expect("valid group list row batch")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sort_default_is_name_asc() {
+    let params = GroupListParams::default();
+    let (_, rows) = build_group_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY g.name ASC NULLS LAST"));
+}
+
+#[test]
+fn sort_name_desc_accepted() {
+    let params = GroupListParams {
+        sort: Some("name:desc".into()),
+        ..Default::default()
+    };
+    let (_, rows) = build_group_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY g.name DESC NULLS LAST"));
+}
+
+#[test]
+fn sort_unknown_column_returns_err() {
+    let params = GroupListParams {
+        sort: Some("owner:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_group_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn sort_unknown_direction_returns_err() {
+    let params = GroupListParams {
+        sort: Some("name:random".into()),
+        ..Default::default()
+    };
+    assert!(build_group_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn count_sql_excludes_cursor_rows_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("finance".into()),
+        unique_id: "group.pkg.finance".into(),
+    };
+    let params = GroupListParams::default();
+    let (count, rows) = build_group_list_sql(&params, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("finance"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("finance"),
+        "rows must include cursor predicate"
+    );
+}
+
+#[test]
+fn model_count_correlated_subquery_present() {
+    let params = GroupListParams::default();
+    let (_, rows) = build_group_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("SELECT COUNT(*)"));
+    assert!(rows.contains("n.group_name = g.name"));
+    assert!(rows.contains("n.package_name = g.package_name"));
+    assert!(rows.contains("n.resource_type = 'model'"));
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_groups
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_groups_empty_catalog() {
+    let state = make_list_state(GroupListMockBackend::new(0, vec![]));
+    let r = list_groups(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_groups_all_fields_hydrated() {
+    let row = group_list_row(
+        "group.jaffle_shop.finance",
+        "finance",
+        Some("Finance Data Team"),
+        Some("finance-data@jaffle.example"),
+        Some("org/finance"),
+        Some("#finance-data"),
+        12,
+    );
+    let state = make_list_state(GroupListMockBackend::new(1, vec![row]));
+    let r = list_groups(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["unique_id"], "group.jaffle_shop.finance");
+    assert_eq!(body["data"][0]["name"], "finance");
+    assert_eq!(body["data"][0]["owner_name"], "Finance Data Team");
+    assert_eq!(
+        body["data"][0]["owner_email"],
+        "finance-data@jaffle.example"
+    );
+    assert_eq!(body["data"][0]["owner_github"], "org/finance");
+    assert_eq!(body["data"][0]["owner_slack"], "#finance-data");
+    assert_eq!(body["data"][0]["model_count"], 12);
+    assert_eq!(body["page_info"]["total_count"], 1);
+}
+
+#[tokio::test]
+async fn list_groups_owner_fields_null_when_absent() {
+    let row = group_list_row("group.pkg.g", "g", None, None, None, None, 0);
+    let state = make_list_state(GroupListMockBackend::new(1, vec![row]));
+    let r = list_groups(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["owner_name"], serde_json::Value::Null);
+    assert_eq!(body["data"][0]["owner_email"], serde_json::Value::Null);
+    assert_eq!(body["data"][0]["owner_github"], serde_json::Value::Null);
+    assert_eq!(body["data"][0]["owner_slack"], serde_json::Value::Null);
+    assert_eq!(body["data"][0]["model_count"], 0);
+}
+
+#[tokio::test]
+async fn list_groups_sort_unknown_column_returns_400() {
+    let state = make_list_state(GroupListMockBackend::new(0, vec![]));
+    let params = GroupListParams {
+        sort: Some("owner_name:asc".into()),
+        ..Default::default()
+    };
+    let r = list_groups(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_groups_invalid_cursor_returns_400() {
+    let state = make_list_state(GroupListMockBackend::new(0, vec![]));
+    let params = GroupListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_groups(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_groups_multi_page_has_next_page_true() {
+    let row_a = group_list_row("group.pkg.alpha", "alpha", None, None, None, None, 1);
+    let row_b = group_list_row("group.pkg.beta", "beta", None, None, None, None, 2);
+    let state = make_list_state(GroupListMockBackend::new(2, vec![row_a, row_b]));
+    let params = GroupListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_groups(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_groups_last_page_end_cursor_null() {
+    let row = group_list_row("group.pkg.z", "z", None, None, None, None, 0);
+    let state = make_list_state(GroupListMockBackend::new(1, vec![row]));
+    let r = list_groups(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_groups_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "group.pkg.alpha".into(),
+    }
+    .encode();
+    let row = group_list_row("group.pkg.beta", "beta", None, None, None, None, 0);
+    let state = make_list_state(GroupListMockBackend::new(1, vec![row]));
+    let params = GroupListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_groups(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_group_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_group_facets_returns_empty_object() {
+    let state = make_list_state(GroupListMockBackend::new(0, vec![]));
+    let r = list_group_facets(State(state)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body, serde_json::json!({}));
 }
