@@ -419,6 +419,18 @@ macro_debugging = _create_option_and_track_env_var(
 )
 
 
+manage_state = _create_option_and_track_env_var(
+    "--manage-state/--no-manage-state",
+    envvar="DBT_MANAGE_STATE",
+    help=(
+        "Whether to load the bundled dbt-state plugin (installed as a dependency of "
+        "dbt-core). Default true. Set to false to skip auto-discovery and avoid the "
+        "plugin's import-time side effects."
+    ),
+    default=True,
+)
+
+
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",
     envvar="DBT_ENGINE_SQLPARSE",

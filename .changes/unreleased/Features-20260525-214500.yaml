@@ -1,10 +1,11 @@
 kind: Features
 body: >-
     Bundle the dbt-state plugin (>=2.18,<3.0) as an install dependency of dbt-core.
-    The plugin loads by default and can be disabled via the DBT_ENGINE_STATE_DISABLED
-    env var or by setting state_plugin_disabled in the flags block of dbt_project.yml
-    (equivalently in the config block of profiles.yml). PluginManager skips disabled
-    modules before importlib.import_module is called, so opt-out incurs no import cost.
+    The plugin loads by default and can be disabled via the `--no-manage-state` CLI
+    flag, the DBT_ENGINE_MANAGE_STATE env var, or by setting manage_state to false
+    in the flags block of dbt_project.yml (equivalently in the config block of
+    profiles.yml). PluginManager skips disabled modules before importlib.import_module
+    is called, so opt-out incurs no import cost.
 time: 2026-05-25T21:45:00.000000000Z
 custom:
     Author: colin-rogers-dbt
