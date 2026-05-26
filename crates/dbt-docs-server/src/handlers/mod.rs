@@ -20,7 +20,7 @@ pub mod seeds;
 pub mod semantic_models;
 pub mod snapshots;
 pub mod sources;
-pub mod tests;
 
 pub(crate) mod json;
 mod sql;
+pub mod tests;

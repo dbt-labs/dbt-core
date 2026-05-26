@@ -68,6 +68,11 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             "/api/v1/semantic_models/{unique_id}",
             get(semantic_models::get_semantic_model),
         )
+        .route("/api/v1/snapshots", get(snapshots::list_snapshots))
+        .route(
+            "/api/v1/snapshots/facets",
+            get(snapshots::list_snapshot_facets),
+        )
         .route(
             "/api/v1/snapshots/{unique_id}",
             get(snapshots::get_snapshot),
