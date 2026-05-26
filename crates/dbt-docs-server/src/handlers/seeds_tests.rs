@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/seeds/:id`.
+//! Tests for `GET /api/v1/seeds/:id`, `GET /api/v1/seeds`, and
+//! `GET /api/v1/seeds/facets`.
 //!
 //! Schema anchoring (#10255): the `RecordBatch` fixtures below are hand-
 //! rolled and not enforced against the production parquet schemas. A column
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use arrow_array::builder::{ListBuilder, StringBuilder};
 use arrow_array::{BooleanArray, Float64Array, Int64Array, ListArray, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
@@ -614,4 +615,390 @@ async fn referenced_by_empty_array_when_no_downstream() {
     let body = response_body(r).await;
     assert_eq!(body["referenced_by"], serde_json::json!([]));
     assert!(body.get("depends_on").is_none());
+}
+
+// ===========================================================================
+// Tests: GET /api/v1/seeds and GET /api/v1/seeds/facets
+// ===========================================================================
+//
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index exposes fixture builders bound to the production
+// parquet schema.
+
+// ---------------------------------------------------------------------------
+// Mock backend for list + facets
+// ---------------------------------------------------------------------------
+
+struct SeedListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+    /// When `true`, the with-run_results count query returns `None` to trigger
+    /// the no-run_results fallback path.
+    run_results_absent: bool,
+    /// When `true`, the with-catalog_stats query also returns `None`.
+    catalog_stats_absent: bool,
+}
+
+impl SeedListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+            run_results_absent: false,
+            catalog_stats_absent: false,
+        }
+    }
+    fn without_run_results(mut self) -> Self {
+        self.run_results_absent = true;
+        self
+    }
+    fn without_catalog_stats(mut self) -> Self {
+        self.catalog_stats_absent = true;
+        self
+    }
+}
+
+impl Backend for SeedListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if !sql.contains("count(*)") {
+            return None;
+        }
+        if self.run_results_absent && sql.contains("run_results") {
+            return None;
+        }
+        if self.catalog_stats_absent && sql.contains("catalog_stats") {
+            return None;
+        }
+        Some(self.total_count.to_string())
+    }
+    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: SeedListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders for list
+// ---------------------------------------------------------------------------
+
+fn seed_list_schema() -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("resource_type", DataType::Utf8, false),
+        Field::new("package_name", DataType::Utf8, true),
+        Field::new("description", DataType::Utf8, true),
+        Field::new("original_file_path", DataType::Utf8, true),
+        Field::new("row_count", DataType::Int64, true),
+        Field::new("executed_at", DataType::Utf8, true),
+    ]))
+}
+
+fn seed_list_row(
+    unique_id: &str,
+    name: &str,
+    package_name: Option<&str>,
+    description: Option<&str>,
+    original_file_path: Option<&str>,
+    row_count: Option<i64>,
+    executed_at: Option<&str>,
+) -> RecordBatch {
+    RecordBatch::try_new(
+        seed_list_schema(),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec!["seed"])),
+            Arc::new(StringArray::from(vec![package_name])),
+            Arc::new(StringArray::from(vec![description])),
+            Arc::new(StringArray::from(vec![original_file_path])),
+            Arc::new(Int64Array::from(vec![row_count])),
+            Arc::new(StringArray::from(vec![executed_at])),
+        ],
+    )
+    .expect("valid seed list row batch")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builders
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unknown_sort_column_returns_err() {
+    let params = SeedListParams {
+        sort: Some("tags:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_seed_list_sql(&params, true, true, 10, None).is_err());
+}
+
+#[test]
+fn sort_without_direction_returns_err() {
+    let params = SeedListParams {
+        sort: Some("name".into()),
+        ..Default::default()
+    };
+    assert!(build_seed_list_sql(&params, true, true, 10, None).is_err());
+}
+
+#[test]
+fn sort_invalid_direction_returns_err() {
+    let params = SeedListParams {
+        sort: Some("name:random".into()),
+        ..Default::default()
+    };
+    assert!(build_seed_list_sql(&params, true, true, 10, None).is_err());
+}
+
+#[test]
+fn allowlisted_sort_columns_succeed() {
+    for col in &["name", "row_count", "executed_at"] {
+        let params = SeedListParams {
+            sort: Some(format!("{col}:asc")),
+            ..Default::default()
+        };
+        assert!(
+            build_seed_list_sql(&params, true, true, 10, None).is_ok(),
+            "expected ok for sort={col}:asc"
+        );
+        let params_desc = SeedListParams {
+            sort: Some(format!("{col}:desc")),
+            ..Default::default()
+        };
+        assert!(
+            build_seed_list_sql(&params_desc, true, true, 10, None).is_ok(),
+            "expected ok for sort={col}:desc"
+        );
+    }
+}
+
+#[test]
+fn count_sql_excludes_cursor_page_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("raw_customers".into()),
+        unique_id: "seed.pkg.raw_customers".into(),
+    };
+    let params = SeedListParams::default();
+    let (count, rows) = build_seed_list_sql(&params, true, true, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("raw_customers"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("raw_customers"),
+        "rows must include cursor predicate"
+    );
+}
+
+#[test]
+fn no_run_results_flag_emits_null_executed_at() {
+    let params = SeedListParams::default();
+    let (_, rows) = build_seed_list_sql(&params, false, false, 10, None).unwrap();
+    assert!(
+        rows.contains("NULL::VARCHAR AS executed_at"),
+        "fallback must emit NULL executed_at"
+    );
+}
+
+#[test]
+fn no_catalog_stats_flag_emits_null_row_count() {
+    let params = SeedListParams::default();
+    let (_, rows) = build_seed_list_sql(&params, false, false, 10, None).unwrap();
+    assert!(
+        rows.contains("NULL::BIGINT AS row_count"),
+        "fallback must emit NULL row_count"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_seeds
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_seeds_empty_catalog() {
+    let state = make_list_state(SeedListMockBackend::new(0, vec![]));
+    let r = list_seeds(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_seeds_all_fields_hydrated() {
+    let row = seed_list_row(
+        "seed.jaffle_shop.raw_customers",
+        "raw_customers",
+        Some("jaffle_shop"),
+        Some("Raw customer seed file loaded from CSV."),
+        Some("seeds/raw_customers.csv"),
+        Some(935),
+        Some("2026-05-15T10:28:03Z"),
+    );
+    let state = make_list_state(SeedListMockBackend::new(1, vec![row]));
+    let r = list_seeds(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(
+        body["data"][0]["unique_id"],
+        "seed.jaffle_shop.raw_customers"
+    );
+    assert_eq!(body["data"][0]["name"], "raw_customers");
+    assert_eq!(body["data"][0]["resource_type"], "seed");
+    assert_eq!(body["data"][0]["package_name"], "jaffle_shop");
+    assert_eq!(
+        body["data"][0]["description"],
+        "Raw customer seed file loaded from CSV."
+    );
+    assert_eq!(
+        body["data"][0]["original_file_path"],
+        "seeds/raw_customers.csv"
+    );
+    assert_eq!(body["data"][0]["row_count"], 935);
+    assert_eq!(body["data"][0]["executed_at"], "2026-05-15T10:28:03Z");
+    assert_eq!(body["page_info"]["total_count"], 1);
+}
+
+#[tokio::test]
+async fn list_seeds_executed_at_null_when_run_results_absent() {
+    let row = seed_list_row(
+        "seed.pkg.t",
+        "t",
+        None,
+        None,
+        None,
+        None,
+        None, // executed_at null
+    );
+    let state = make_list_state(SeedListMockBackend::new(1, vec![row]).without_run_results());
+    let r = list_seeds(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["executed_at"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_seeds_row_count_null_when_catalog_stats_absent() {
+    let row = seed_list_row(
+        "seed.pkg.t",
+        "t",
+        None,
+        None,
+        None,
+        None, // row_count null
+        None,
+    );
+    let state = make_list_state(
+        SeedListMockBackend::new(1, vec![row])
+            .without_run_results()
+            .without_catalog_stats(),
+    );
+    let r = list_seeds(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["row_count"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_seeds_unknown_sort_returns_400() {
+    let state = make_list_state(SeedListMockBackend::new(0, vec![]));
+    let params = SeedListParams {
+        sort: Some("database_name:asc".into()),
+        ..Default::default()
+    };
+    let r = list_seeds(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_seeds_invalid_cursor_returns_400() {
+    let state = make_list_state(SeedListMockBackend::new(0, vec![]));
+    let params = SeedListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_seeds(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_seeds_multi_page_has_next_page_true() {
+    let row_a = seed_list_row("seed.pkg.alpha", "alpha", None, None, None, None, None);
+    let row_b = seed_list_row("seed.pkg.beta", "beta", None, None, None, None, None);
+    let state = make_list_state(SeedListMockBackend::new(2, vec![row_a, row_b]));
+    let params = SeedListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_seeds(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_seeds_last_page_end_cursor_null() {
+    let row = seed_list_row("seed.pkg.z", "z", None, None, None, None, None);
+    let state = make_list_state(SeedListMockBackend::new(1, vec![row]));
+    let r = list_seeds(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page per ADR-6"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_seeds_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "seed.pkg.alpha".into(),
+    }
+    .encode();
+    let row = seed_list_row("seed.pkg.beta", "beta", None, None, None, None, None);
+    let state = make_list_state(SeedListMockBackend::new(1, vec![row]));
+    let params = SeedListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_seeds(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_seed_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_seed_facets_returns_empty_object() {
+    let r = list_seed_facets().await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(
+        body,
+        serde_json::json!({}),
+        "seeds facets must be an empty JSON object per contract"
+    );
 }

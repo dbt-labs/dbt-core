@@ -47,6 +47,8 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             "/api/v1/saved_queries/{unique_id}",
             get(saved_queries::get_saved_query),
         )
+        .route("/api/v1/seeds", get(seeds::list_seeds))
+        .route("/api/v1/seeds/facets", get(seeds::list_seed_facets))
         .route("/api/v1/seeds/{unique_id}", get(seeds::get_seed))
         .route(
             "/api/v1/semantic_models/{unique_id}",
