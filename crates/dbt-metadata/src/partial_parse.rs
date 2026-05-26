@@ -179,6 +179,13 @@ impl IncrementalState {
         for pkg in &self.packages {
             let root = Path::new(&pkg.package_root_path);
             for (kind, files) in &pkg.all_paths {
+                // Profile changes are covered by `profile_file_hash` in validate(); the
+                // path stored here is not reliably project-relative (it can escape via
+                // `..` when ~/.dbt/profiles.yml is in use, and DbtPath normalisation
+                // strips the `..` segments), so don't stat it.
+                if *kind == ResourcePathKind::ProfilePaths {
+                    continue;
+                }
                 let kind_safe_for_incremental = matches!(
                     kind,
                     ResourcePathKind::ModelPaths | ResourcePathKind::AnalysisPaths
@@ -917,6 +924,10 @@ pub fn load_parse_state_filtered_with_unique_ids(
 pub fn dbt_packages_have_no_file_changes(packages: &[DbtPackage]) -> bool {
     for pkg in packages {
         for (kind, files) in &pkg.all_paths {
+            // See needs_full_parse for why ProfilePaths must be skipped.
+            if *kind == ResourcePathKind::ProfilePaths {
+                continue;
+            }
             let is_docs_path = *kind == ResourcePathKind::DocsPaths;
             for (dbt_path, saved_time) in files {
                 if is_docs_path
