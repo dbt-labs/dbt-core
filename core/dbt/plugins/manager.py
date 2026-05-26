@@ -43,8 +43,7 @@ class ManageSignal(NamedTuple):
       plugin; False (the default) means skip. Populated by the CLI parser from one
       of three surfaces, in precedence order:
         * explicit `--manage-state` / `--no-manage-state` on the command line
-        * `DBT_ENGINE_MANAGE_STATE` env var (or its non-engine-prefixed alias
-          `DBT_MANAGE_STATE`)
+        * `DBT_ENGINE_MANAGE_STATE` env var
         * `manage_state` in dbt_project.yml's `flags:` block, or equivalently
           `manage_state` in profiles.yml's `config:` block
     - `cli_flag`: human-readable name of the corresponding CLI flag, used in log
