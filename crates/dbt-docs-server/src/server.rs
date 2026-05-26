@@ -10,8 +10,8 @@ use crate::DocsServeArgs;
 use crate::assets::serve_assets;
 use crate::handlers::{
     capabilities, column_lineage, distribution, exposures, files, groups, health, lineage, macros,
-    metrics, models, nodes, project, query, saved_queries, seeds, semantic_models, snapshots,
-    sources, tests,
+    metrics, models, nodes, project, query, saved_queries, search, seeds, semantic_models,
+    snapshots, sources, tests,
 };
 use crate::providers::Providers;
 use crate::resolve_index_dir;
@@ -72,6 +72,7 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
             "/api/v1/nodes/{unique_id}/column-lineage",
             get(column_lineage::get_column_lineage),
         )
+        .route("/api/v1/search", get(search::search))
         .route("/api/v1/tables", get(query::list_tables))
         .route("/api/v1/query", post(query::run_query))
         .fallback(serve_assets)

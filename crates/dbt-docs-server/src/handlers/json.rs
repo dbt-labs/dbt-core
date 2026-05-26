@@ -156,6 +156,17 @@ pub fn bad_request(msg: &str) -> Response {
         .into_response()
 }
 
+/// 400 with a stable machine-readable `code` and a human-readable `message`.
+/// Use for endpoints whose contracts document specific error codes (e.g. `GET
+/// /api/v1/search`), so clients can branch on `code` without parsing `message`.
+pub fn bad_request_coded(code: &str, message: &str) -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({"code": code, "message": message})),
+    )
+        .into_response()
+}
+
 pub fn not_found(msg: String) -> Response {
     (
         StatusCode::NOT_FOUND,

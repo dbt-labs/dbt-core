@@ -15,6 +15,7 @@ pub mod pagination;
 pub mod project;
 pub mod query;
 pub mod saved_queries;
+pub mod search;
 pub mod seeds;
 pub mod semantic_models;
 pub mod snapshots;
