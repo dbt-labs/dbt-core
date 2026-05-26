@@ -1,3 +1,4 @@
+import functools
 import importlib
 import logging
 import pkgutil
@@ -12,6 +13,23 @@ from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.tests import test_caching_enabled
 
 logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=4)
+def _walk_prefixed_module_names(prefix: str) -> Tuple[str, ...]:
+    """Cached walk of `pkgutil.iter_modules()` returning the names matching `prefix`.
+
+    `pkgutil.iter_modules()` walks every entry on `sys.path`, which is slow in
+    environments with many site-packages directories. The candidate name list is
+    process-stable (the import path doesn't change between calls in a normal
+    invocation), so we cache it process-wide. Opt-in signals are still evaluated
+    per `get_prefixed_modules` call, so users who change env vars / flags between
+    calls (e.g. via dbtRunner) still see the right behavior.
+
+    Tests that mock `pkgutil.iter_modules` must clear this cache to avoid leaking
+    fake results across cases -- the autouse fixture in
+    tests/unit/plugins/test_manager.py does this."""
+    return tuple(name for _, name, _ in pkgutil.iter_modules() if name.startswith(prefix))
 
 
 class ManageSignal(NamedTuple):
@@ -268,13 +286,11 @@ class PluginManager:
 
     @classmethod
     def get_prefixed_modules(cls):
-        # First pass: walk iter_modules without importing, so we can check bundled
-        # plugins' manage flags before paying the import cost.
-        names_on_path = [
-            name
-            for _, name, _ in pkgutil.iter_modules()
-            if name.startswith(cls.PLUGIN_MODULE_PREFIX)
-        ]
+        # First pass: get the list of candidate module names without importing them.
+        # The walk is cached process-wide via `_walk_prefixed_module_names` so
+        # repeated PluginManager construction (e.g. multiple dbtRunner invocations
+        # in the same process) doesn't re-scan sys.path each time.
+        names_on_path = list(_walk_prefixed_module_names(cls.PLUGIN_MODULE_PREFIX))
 
         # For each bundled plugin on disk, check whether the user has opted in via
         # `--manage-state` / `DBT_ENGINE_MANAGE_STATE=true` / `manage_state: true`.

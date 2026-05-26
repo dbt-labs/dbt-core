@@ -2,21 +2,46 @@ from unittest import mock
 
 import pytest
 
+import dbt.plugins.manager
 from dbt.exceptions import DbtRuntimeError
 from dbt.plugins import PluginManager, dbt_hook, dbtPlugin
 from dbt.plugins.contracts import PluginArtifact, PluginArtifacts
 from dbt.plugins.exceptions import dbtPluginError
-from dbt.plugins.manager import _DISCOVERY_NOTICES_EMITTED, _plugin_is_managed
+from dbt.plugins.manager import (
+    _DISCOVERY_NOTICES_EMITTED,
+    _plugin_is_managed,
+    _walk_prefixed_module_names,
+)
 from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
 
 
 @pytest.fixture(autouse=True)
-def _reset_discovery_notices():
-    """The discovery notice de-dupe set is process-global; clear it between tests
-    so a test that asserts on log emission isn't masked by an earlier test."""
-    _DISCOVERY_NOTICES_EMITTED.clear()
+def _reset_plugin_manager_process_state():
+    """PluginManager has three pieces of process-global state that can leak between
+    tests if not cleared:
+
+    1. `_DISCOVERY_NOTICES_EMITTED` -- the de-dupe set for one-time log notices.
+       A test that asserts on log emission would be masked by an earlier test
+       that already emitted the notice.
+    2. `_MODULES_CACHE` -- the `from_modules` cache that's active when
+       `test_caching_enabled()` returns True. A test that mocks
+       `pkgutil.iter_modules` would silently see another test's cached dict
+       instead of its own mock results -- making assertions pass for the wrong
+       reason (or fail unpredictably depending on ordering).
+    3. The `_walk_prefixed_module_names` lru_cache -- caches the candidate name
+       list at process scope. Tests that mock `pkgutil.iter_modules` would see
+       the cached pre-mock walk on subsequent calls.
+
+    Clear all three before AND after each test so ordering doesn't matter."""
+
+    def _clear() -> None:
+        _DISCOVERY_NOTICES_EMITTED.clear()
+        dbt.plugins.manager._MODULES_CACHE = None
+        _walk_prefixed_module_names.cache_clear()
+
+    _clear()
     yield
-    _DISCOVERY_NOTICES_EMITTED.clear()
+    _clear()
 
 
 class ExceptionInitializePlugin(dbtPlugin):
@@ -181,6 +206,25 @@ class TestBundledPluginGating:
         signal_run_cache = PluginManager.BUNDLED_PLUGIN_MODULES["dbt_run_cache"]
         assert signal_run_cache.flag_attr == "MANAGE_STATE"
         assert signal_run_cache.cli_flag == "--manage-state"
+
+    def test_walk_prefixed_module_names_is_cached(self):
+        """`_walk_prefixed_module_names` must cache the `pkgutil.iter_modules()`
+        walk so repeated PluginManager construction doesn't re-scan sys.path.
+        Multiple calls with the same prefix should hit `iter_modules` exactly once."""
+        call_count = 0
+
+        def counting_iter():
+            nonlocal call_count
+            call_count += 1
+            return iter([(None, "dbt_state", False), (None, "dbt_other", False)])
+
+        with mock.patch("dbt.plugins.manager.pkgutil.iter_modules", side_effect=counting_iter):
+            r1 = _walk_prefixed_module_names("dbt_")
+            r2 = _walk_prefixed_module_names("dbt_")
+            r3 = _walk_prefixed_module_names("dbt_")
+
+        assert call_count == 1, "iter_modules should be invoked exactly once"
+        assert r1 == r2 == r3 == ("dbt_state", "dbt_other")
 
     def test_bundled_registry_is_read_only(self):
         # Wrapped in MappingProxyType so a buggy caller can't silently flip behavior
