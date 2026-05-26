@@ -38,7 +38,7 @@ use crate::{
         },
         relations::default_dbt_quoting_for,
     },
-    state::ResolverState,
+    state::{Operations, ResolverState},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -117,7 +117,8 @@ pub fn serialize_with_resource_type(mut value: YmlValue, resource_type: &str) ->
 }
 
 pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> DbtManifest {
-    let (parent_map, child_map) = build_parent_and_child_maps(&resolver_state.nodes);
+    let (parent_map, child_map) =
+        build_parent_and_child_maps(&resolver_state.nodes, &resolver_state.operations);
     let group_map = build_group_map(&resolver_state.nodes);
 
     let disabled = build_disabled_map(resolver_state);
@@ -509,8 +510,12 @@ fn build_group_map(nodes: &Nodes) -> BTreeMap<String, Vec<String>> {
 /// Returns a tuple of (parent_map, child_map) where:
 /// - parent_map: maps each node ID to a list of node IDs it depends on
 /// - child_map: maps each node ID to a list of node IDs that depend on it
+///
+/// Mirrors dbt-core's `build_node_edges` invariant: every iterated node receives
+/// a key in BOTH maps, even when its list is empty (leaf / root nodes).
 fn build_parent_and_child_maps(
     nodes: &Nodes,
+    operations: &Operations,
 ) -> (BTreeMap<String, Vec<String>>, BTreeMap<String, Vec<String>>) {
     let mut parent_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut child_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -562,10 +567,25 @@ fn build_parent_and_child_maps(
         all_nodes.push((id.clone(), function.__base_attr__.depends_on.clone()));
     }
 
+    // on_run_start / on_run_end hooks land in the manifest as `operation.*` nodes
+    // but live on resolver_state.operations rather than resolver_state.nodes.
+    // Include them here so they receive entries in both maps too.
+    for op in operations
+        .on_run_start
+        .iter()
+        .chain(operations.on_run_end.iter())
+    {
+        all_nodes.push((
+            op.__common_attr__.unique_id.clone(),
+            op.__base_attr__.depends_on.clone(),
+        ));
+    }
+
     // Process all collected nodes
     for (node_id, depends_on) in all_nodes {
-        // Initialize parent list for this node
+        // Initialize both maps for this node so leaf / root nodes end up with `[]`.
         parent_map.entry(node_id.clone()).or_default();
+        child_map.entry(node_id.clone()).or_default();
 
         // Add parents and update child map
         for parent_id in &depends_on.nodes {
@@ -600,6 +620,16 @@ fn build_parent_and_child_maps(
     for parent_id in all_parent_ids {
         parent_map.entry(parent_id.clone()).or_default();
         child_map.entry(parent_id).or_default();
+    }
+
+    // Match dbt-core's `_sort_values`: deterministic, sorted, dedup'd values.
+    for v in parent_map.values_mut() {
+        v.sort();
+        v.dedup();
+    }
+    for v in child_map.values_mut() {
+        v.sort();
+        v.dedup();
     }
 
     (parent_map, child_map)
@@ -1519,7 +1549,10 @@ pub fn recalculate_checksum(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::manifest::operation::DbtOperation;
     use crate::schemas::{CommonAttributes, Nodes};
+    use crate::state::Operations;
+    use dbt_yaml::Spanned;
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
@@ -1564,15 +1597,38 @@ mod tests {
         })
     }
 
+    fn create_test_operation(id: &str, depends_on: Vec<String>) -> Spanned<DbtOperation> {
+        Spanned::new(DbtOperation {
+            __common_attr__: CommonAttributes {
+                unique_id: id.to_string(),
+                name: id.split('.').next_back().unwrap_or(id).to_string(),
+                package_name: "test".to_string(),
+                ..Default::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                depends_on: NodeDependsOn {
+                    nodes: depends_on,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            __other__: BTreeMap::new(),
+        })
+    }
+
     #[test]
     fn test_build_parent_and_child_maps_empty_nodes() {
         let nodes = create_test_nodes();
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         assert!(parent_map.is_empty());
         assert!(child_map.is_empty());
     }
 
+    /// Regression for fs#10382: every iterated node gets a key in BOTH maps,
+    /// even when it has zero parents AND zero children. A single leaf model
+    /// must produce `child_map = {id: []}`, not an empty `child_map`.
     #[test]
     fn test_build_parent_and_child_maps_single_model_no_deps() {
         let mut nodes = create_test_nodes();
@@ -1581,14 +1637,15 @@ mod tests {
             create_test_model("model.test.model_a", vec![]),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         assert_eq!(parent_map.len(), 1);
-        assert!(parent_map.contains_key("model.test.model_a"));
         assert_eq!(parent_map.get("model.test.model_a").unwrap().len(), 0);
 
-        // child_map should be empty since no dependencies
-        assert!(child_map.is_empty());
+        // child_map must contain the model with an empty list (was empty pre-fix).
+        assert_eq!(child_map.len(), 1);
+        assert_eq!(child_map.get("model.test.model_a").unwrap().len(), 0);
     }
 
     #[test]
@@ -1604,7 +1661,8 @@ mod tests {
             create_test_model("model.test.model_b", vec!["model.test.model_a".to_string()]),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         // Check parent_map
         assert_eq!(parent_map.len(), 2);
@@ -1614,12 +1672,13 @@ mod tests {
             &vec!["model.test.model_a".to_string()]
         );
 
-        // Check child_map
-        assert_eq!(child_map.len(), 1);
+        // child_map: model_a -> [model_b], plus model_b -> [] (leaf invariant).
+        assert_eq!(child_map.len(), 2);
         assert_eq!(
             child_map.get("model.test.model_a").unwrap(),
             &vec!["model.test.model_b".to_string()]
         );
+        assert_eq!(child_map.get("model.test.model_b").unwrap().len(), 0);
     }
 
     #[test]
@@ -1645,7 +1704,8 @@ mod tests {
             ),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         // Check parent_map
         assert_eq!(parent_map.len(), 3);
@@ -1659,8 +1719,8 @@ mod tests {
             ]
         );
 
-        // Check child_map
-        assert_eq!(child_map.len(), 2);
+        // child_map: every node now appears; the leaf model_c has an empty list.
+        assert_eq!(child_map.len(), 3);
         assert_eq!(
             child_map.get("model.test.model_a").unwrap(),
             &vec!["model.test.model_c".to_string()]
@@ -1669,6 +1729,7 @@ mod tests {
             child_map.get("model.test.model_b").unwrap(),
             &vec!["model.test.model_c".to_string()]
         );
+        assert_eq!(child_map.get("model.test.model_c").unwrap().len(), 0);
     }
 
     #[test]
@@ -1688,7 +1749,8 @@ mod tests {
             create_test_model("model.test.model_c", vec!["model.test.model_b".to_string()]),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         // Check parent_map
         assert_eq!(parent_map.len(), 3);
@@ -1702,8 +1764,8 @@ mod tests {
             &vec!["model.test.model_b".to_string()]
         );
 
-        // Check child_map
-        assert_eq!(child_map.len(), 2);
+        // child_map: a -> [b], b -> [c], and the leaf c -> [].
+        assert_eq!(child_map.len(), 3);
         assert_eq!(
             child_map.get("model.test.model_a").unwrap(),
             &vec!["model.test.model_b".to_string()]
@@ -1712,6 +1774,7 @@ mod tests {
             child_map.get("model.test.model_b").unwrap(),
             &vec!["model.test.model_c".to_string()]
         );
+        assert_eq!(child_map.get("model.test.model_c").unwrap().len(), 0);
     }
 
     #[test]
@@ -1737,7 +1800,8 @@ mod tests {
             ),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         // Check parent_map
         assert_eq!(parent_map.len(), 2);
@@ -1753,12 +1817,13 @@ mod tests {
             0
         );
 
-        // Check child_map
-        assert_eq!(child_map.len(), 1);
+        // child_map: source -> [model_a]; the leaf model_a -> [].
+        assert_eq!(child_map.len(), 2);
         assert_eq!(
             child_map.get("source.test.my_source.table1").unwrap(),
             &vec!["model.test.model_a".to_string()]
         );
+        assert_eq!(child_map.get("model.test.model_a").unwrap().len(), 0);
     }
 
     #[test]
@@ -1770,7 +1835,8 @@ mod tests {
             create_test_model("model.test.model_b", vec!["model.test.model_a".to_string()]),
         );
 
-        let (parent_map, child_map) = build_parent_and_child_maps(&nodes);
+        let operations = Operations::default();
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
 
         // Both the existing model and the missing dependency should have entries
         assert_eq!(parent_map.len(), 2);
@@ -1780,11 +1846,120 @@ mod tests {
         );
         assert_eq!(parent_map.get("model.test.model_a").unwrap().len(), 0); // Missing node gets empty entry
 
-        // Child map should track the relationship
-        assert_eq!(child_map.len(), 1);
+        // child_map: a -> [b], plus the leaf b -> [].
+        assert_eq!(child_map.len(), 2);
         assert_eq!(
             child_map.get("model.test.model_a").unwrap(),
             &vec!["model.test.model_b".to_string()]
+        );
+        assert_eq!(child_map.get("model.test.model_b").unwrap().len(), 0);
+    }
+
+    /// Regression for fs#10382: on_run_start / on_run_end hooks live on
+    /// `ResolverState.operations`, not `ResolverState.nodes`, but their
+    /// unique_ids surface in the manifest. They must appear in both maps.
+    #[test]
+    fn test_build_parent_and_child_maps_includes_operations() {
+        let mut nodes = create_test_nodes();
+        nodes.models.insert(
+            "model.test.upstream".to_string(),
+            create_test_model("model.test.upstream", vec![]),
+        );
+
+        let mut operations = Operations::default();
+        operations.on_run_start.push(create_test_operation(
+            "operation.test.hook-on-run-start-0",
+            vec![],
+        ));
+        operations.on_run_end.push(create_test_operation(
+            "operation.test.hook-on-run-end-0",
+            vec!["model.test.upstream".to_string()],
+        ));
+
+        let (parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
+
+        // Both hooks appear in parent_map (the 3 CSV violations under "parent_map")
+        assert!(parent_map.contains_key("operation.test.hook-on-run-start-0"));
+        assert_eq!(
+            parent_map
+                .get("operation.test.hook-on-run-start-0")
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(
+            parent_map.get("operation.test.hook-on-run-end-0").unwrap(),
+            &vec!["model.test.upstream".to_string()]
+        );
+
+        // Both hooks appear in child_map too (no children, so empty lists).
+        assert!(child_map.contains_key("operation.test.hook-on-run-start-0"));
+        assert_eq!(
+            child_map
+                .get("operation.test.hook-on-run-start-0")
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(
+            child_map
+                .get("operation.test.hook-on-run-end-0")
+                .unwrap()
+                .len(),
+            0
+        );
+
+        // The model the on_run_end hook depends on now sees the hook as a child.
+        assert_eq!(
+            child_map.get("model.test.upstream").unwrap(),
+            &vec!["operation.test.hook-on-run-end-0".to_string()]
+        );
+    }
+
+    /// Child lists must be deterministic and sorted, matching dbt-core's
+    /// `_sort_values`. Insertion-order BTreeMap iteration alone is not enough
+    /// because depends_on lists can carry arbitrary user-defined order.
+    #[test]
+    fn test_build_parent_and_child_maps_values_are_sorted() {
+        let mut nodes = create_test_nodes();
+        // Three children of one upstream model, inserted in non-sorted order.
+        nodes.models.insert(
+            "model.test.upstream".to_string(),
+            create_test_model("model.test.upstream", vec![]),
+        );
+        nodes.models.insert(
+            "model.test.z_child".to_string(),
+            create_test_model(
+                "model.test.z_child",
+                vec!["model.test.upstream".to_string()],
+            ),
+        );
+        nodes.models.insert(
+            "model.test.a_child".to_string(),
+            create_test_model(
+                "model.test.a_child",
+                vec!["model.test.upstream".to_string()],
+            ),
+        );
+        nodes.models.insert(
+            "model.test.m_child".to_string(),
+            create_test_model(
+                "model.test.m_child",
+                vec!["model.test.upstream".to_string()],
+            ),
+        );
+
+        let operations = Operations::default();
+        let (_parent_map, child_map) = build_parent_and_child_maps(&nodes, &operations);
+
+        // Children of upstream must come out alphabetically sorted.
+        assert_eq!(
+            child_map.get("model.test.upstream").unwrap(),
+            &vec![
+                "model.test.a_child".to_string(),
+                "model.test.m_child".to_string(),
+                "model.test.z_child".to_string(),
+            ]
         );
     }
 }
