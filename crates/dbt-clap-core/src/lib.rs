@@ -1195,12 +1195,17 @@ impl CloneArgs {
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RunOperationArgs {
-    #[arg(id = "MACRO")]
-    pub macro_name: String,
+    #[arg(id = "MACRO", conflicts_with = "sql", required_unless_present = "sql")]
+    pub macro_name: Option<String>,
 
     /// Supply arguments to the macro. This dictionary will be mapped to the keyword arguments defined in the selected macro. This argument should be a yml string.
-    #[arg(long,value_parser = check_key_value_cli_arg)]
+    #[arg(long, value_parser = check_key_value_cli_arg, conflicts_with = "sql")]
     pub args: Option<BTreeMap<String, YValue>>,
+
+    /// Execute an inline SQL/Jinja statement directly against the target database.
+    /// Mutually exclusive with the named-macro form and `--args`.
+    #[arg(long, conflicts_with_all = ["MACRO", "args"])]
+    pub sql: Option<String>,
 
     // Flattened IO args
     #[clap(flatten)]
@@ -1212,8 +1217,9 @@ impl RunOperationArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::RunOperation;
         eval_args.macro_name = self.macro_name.clone();
-        if self.args.is_some() {
-            eval_args.macro_args = self.args.as_ref().unwrap().clone();
+        eval_args.macro_sql = self.sql.clone();
+        if let Some(args) = &self.args {
+            eval_args.macro_args = args.clone();
         }
 
         eval_args
@@ -2079,8 +2085,9 @@ impl CommonArgs {
             state: self.state.clone(),
             defer_state: self.defer_state.clone(),
             connection: false,
-            macro_name: "".to_string(),
+            macro_name: None,
             macro_args: BTreeMap::new(),
+            macro_sql: None,
             selector: self.selector.clone(),
             resource_types: vec![],
             exclude_resource_types: vec![],
