@@ -10,8 +10,14 @@ def default_project_dir() -> Path:
     return next((x for x in paths if (x / "dbt_project.yml").exists()), Path.cwd())
 
 
+def default_dbt_home_dir() -> Path:
+    from dbt.constants import DBT_HOME_DIR_NAME
+
+    return Path.home() / DBT_HOME_DIR_NAME
+
+
 def default_profiles_dir() -> Path:
-    return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else Path.home() / ".dbt"
+    return Path.cwd() if (Path.cwd() / "profiles.yml").exists() else default_dbt_home_dir()
 
 
 def default_log_path(project_dir: Path, verify_version: bool = False) -> Path:
