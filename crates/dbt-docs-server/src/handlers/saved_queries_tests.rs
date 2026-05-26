@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/saved_queries/:id`.
+//! Tests for `GET /api/v1/saved_queries/:id`, `GET /api/v1/saved_queries`,
+//! and `GET /api/v1/saved_queries/facets`.
 //!
 //! Schema anchoring (#10255): the `RecordBatch` fixtures below are hand-
 //! rolled and not enforced against the production parquet schemas. A column
@@ -12,10 +13,11 @@ use std::sync::Arc;
 use arrow_array::builder::{ListBuilder, StringBuilder};
 use arrow_array::{Float64Array, ListArray, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
+use crate::handlers::pagination::Cursor;
 use crate::providers::{Backend, BackendError, Providers};
 use crate::state::AppState;
 
@@ -509,4 +511,359 @@ async fn referenced_by_populated_from_downstream_edges() {
         "exposure.jaffle_shop.weekly_dashboard"
     );
     assert_eq!(body["referenced_by"][0]["edge_type"], "exposure");
+}
+
+// ---------------------------------------------------------------------------
+// Mock backend: list_saved_queries / list_saved_query_facets
+// ---------------------------------------------------------------------------
+
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index ships them.
+
+struct SavedQueryListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+}
+
+impl SavedQueryListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+        }
+    }
+}
+
+impl Backend for SavedQueryListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if sql.contains("count(*)") {
+            Some(self.total_count.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: SavedQueryListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders: list rows
+// ---------------------------------------------------------------------------
+
+fn saved_query_list_schema(tags_field: &Field, deps_field: &Field) -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("package_name", DataType::Utf8, true),
+        Field::new("group_name", DataType::Utf8, true),
+        tags_field.clone(),
+        Field::new("description", DataType::Utf8, true),
+        Field::new("created_at", DataType::Float64, true),
+        deps_field.clone(),
+    ]))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn saved_query_list_row(
+    unique_id: &str,
+    name: &str,
+    package_name: Option<&str>,
+    group_name: Option<&str>,
+    tags: &[&str],
+    description: Option<&str>,
+    created_at: Option<f64>,
+    depends_on_nodes: &[&str],
+) -> RecordBatch {
+    let tags_arr = make_str_list(tags);
+    let deps_arr = make_str_list(depends_on_nodes);
+    let tags_field = Field::new("tags", tags_arr.data_type().clone(), true);
+    let deps_field = Field::new("depends_on_nodes", deps_arr.data_type().clone(), true);
+
+    RecordBatch::try_new(
+        saved_query_list_schema(&tags_field, &deps_field),
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec![package_name])),
+            Arc::new(StringArray::from(vec![group_name])),
+            Arc::new(tags_arr),
+            Arc::new(StringArray::from(vec![description])),
+            Arc::new(Float64Array::from(vec![created_at])),
+            Arc::new(deps_arr),
+        ],
+    )
+    .expect("valid saved query list row batch")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sort_default_is_name_asc() {
+    let params = SavedQueryListParams::default();
+    let (_, rows) = build_saved_query_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY sq.name ASC NULLS LAST"));
+}
+
+#[test]
+fn sort_name_desc_accepted() {
+    let params = SavedQueryListParams {
+        sort: Some("name:desc".into()),
+        ..Default::default()
+    };
+    let (_, rows) = build_saved_query_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY sq.name DESC NULLS LAST"));
+}
+
+#[test]
+fn sort_unknown_column_returns_err() {
+    let params = SavedQueryListParams {
+        sort: Some("package_name:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_saved_query_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn sort_unknown_direction_returns_err() {
+    let params = SavedQueryListParams {
+        sort: Some("name:random".into()),
+        ..Default::default()
+    };
+    assert!(build_saved_query_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn count_sql_excludes_cursor_rows_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("weekly_revenue".into()),
+        unique_id: "saved_query.jaffle_shop.weekly_revenue".into(),
+    };
+    let params = SavedQueryListParams::default();
+    let (count, rows) = build_saved_query_list_sql(&params, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("weekly_revenue"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("weekly_revenue"),
+        "rows must include cursor predicate"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_saved_queries
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_saved_queries_empty_catalog() {
+    let state = make_list_state(SavedQueryListMockBackend::new(0, vec![]));
+    let r = list_saved_queries(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_saved_queries_all_fields_hydrated() {
+    let row = saved_query_list_row(
+        "saved_query.jaffle_shop.weekly_revenue_summary",
+        "weekly_revenue_summary",
+        Some("jaffle_shop"),
+        Some("finance"),
+        &["finance", "weekly"],
+        Some("Weekly revenue by region."),
+        Some(1_747_320_731.0),
+        &[
+            "metric.jaffle_shop.revenue",
+            "metric.jaffle_shop.order_count",
+            "semantic_model.jaffle_shop.customers",
+        ],
+    );
+    let state = make_list_state(SavedQueryListMockBackend::new(1, vec![row]));
+    let r = list_saved_queries(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let row = &body["data"][0];
+    assert_eq!(
+        row["unique_id"],
+        "saved_query.jaffle_shop.weekly_revenue_summary"
+    );
+    assert_eq!(row["name"], "weekly_revenue_summary");
+    assert_eq!(row["package_name"], "jaffle_shop");
+    assert_eq!(row["group_name"], "finance");
+    assert_eq!(row["tags"], serde_json::json!(["finance", "weekly"]));
+    assert_eq!(row["description"], "Weekly revenue by region.");
+    assert_eq!(row["created_at"], 1_747_320_731.0);
+    assert_eq!(
+        row["depends_on_nodes"],
+        serde_json::json!([
+            "metric.jaffle_shop.revenue",
+            "metric.jaffle_shop.order_count",
+            "semantic_model.jaffle_shop.customers"
+        ])
+    );
+    assert_eq!(row["depends_on_nodes_truncated"], false);
+    assert_eq!(body["page_info"]["total_count"], 1);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_saved_queries_nullable_fields() {
+    let row = saved_query_list_row("saved_query.pkg.q", "q", None, None, &[], None, None, &[]);
+    let state = make_list_state(SavedQueryListMockBackend::new(1, vec![row]));
+    let r = list_saved_queries(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    let row = &body["data"][0];
+    assert_eq!(row["package_name"], serde_json::Value::Null);
+    assert_eq!(row["group_name"], serde_json::Value::Null);
+    assert_eq!(row["description"], serde_json::Value::Null);
+    assert_eq!(row["created_at"], serde_json::Value::Null);
+    assert_eq!(row["tags"], serde_json::json!([]));
+    assert_eq!(row["depends_on_nodes"], serde_json::json!([]));
+    assert_eq!(row["depends_on_nodes_truncated"], false);
+}
+
+#[tokio::test]
+async fn list_saved_queries_sort_unknown_column_returns_400() {
+    let state = make_list_state(SavedQueryListMockBackend::new(0, vec![]));
+    let params = SavedQueryListParams {
+        sort: Some("package_name:asc".into()),
+        ..Default::default()
+    };
+    let r = list_saved_queries(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_saved_queries_invalid_cursor_returns_400() {
+    let state = make_list_state(SavedQueryListMockBackend::new(0, vec![]));
+    let params = SavedQueryListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_saved_queries(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_saved_queries_multi_page_has_next_page_true() {
+    let row_a = saved_query_list_row(
+        "saved_query.pkg.alpha",
+        "alpha",
+        None,
+        None,
+        &[],
+        None,
+        None,
+        &[],
+    );
+    let row_b = saved_query_list_row(
+        "saved_query.pkg.beta",
+        "beta",
+        None,
+        None,
+        &[],
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SavedQueryListMockBackend::new(2, vec![row_a, row_b]));
+    let params = SavedQueryListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_saved_queries(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_saved_queries_last_page_end_cursor_null() {
+    let row = saved_query_list_row("saved_query.pkg.z", "z", None, None, &[], None, None, &[]);
+    let state = make_list_state(SavedQueryListMockBackend::new(1, vec![row]));
+    let r = list_saved_queries(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page"
+    );
+}
+
+#[tokio::test]
+async fn list_saved_queries_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "saved_query.pkg.alpha".into(),
+    }
+    .encode();
+    let row = saved_query_list_row(
+        "saved_query.pkg.beta",
+        "beta",
+        None,
+        None,
+        &[],
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SavedQueryListMockBackend::new(1, vec![row]));
+    let params = SavedQueryListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_saved_queries(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_saved_query_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_saved_query_facets_returns_empty_object() {
+    let r = list_saved_query_facets().await;
+    assert_eq!(r.status(), 200);
+    let bytes = axum::body::to_bytes(r.into_body(), usize::MAX)
+        .await
+        .expect("body bytes");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
+    assert_eq!(
+        body,
+        serde_json::json!({}),
+        "facets must be empty object in v0"
+    );
 }

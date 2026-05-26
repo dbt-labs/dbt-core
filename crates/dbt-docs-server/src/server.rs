@@ -48,6 +48,14 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
         .route("/api/v1/macros/{unique_id}", get(macros::get_macro))
         .route("/api/v1/metrics/{unique_id}", get(metrics::get_metric))
         .route(
+            "/api/v1/saved_queries",
+            get(saved_queries::list_saved_queries),
+        )
+        .route(
+            "/api/v1/saved_queries/facets",
+            get(saved_queries::list_saved_query_facets),
+        )
+        .route(
             "/api/v1/saved_queries/{unique_id}",
             get(saved_queries::get_saved_query),
         )
