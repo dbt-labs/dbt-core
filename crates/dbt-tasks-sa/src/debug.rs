@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Output};
 use std::sync::Arc;
 
 use dbt_agate::MappedSequence;
@@ -20,6 +20,11 @@ const ACTION_SKIPPED: &str = "Skipped";
 // dbt-core event codes for JSON compatibility
 const DBT_CORE_DEBUG_CMD_OUT: &str = "Z047";
 const DBT_CORE_DEBUG_CMD_RESULT: &str = "Z048";
+
+struct DependencyStatus {
+    installed: bool,
+    detail: Option<String>,
+}
 
 /// Helper to create progress message
 fn create_progress_msg(action: &str, target: &str) -> ProgressMessage {
@@ -110,11 +115,16 @@ pub async fn debug(
         let dependencies = ["git"];
         let mut dependency_displays = Vec::new();
         for dep in dependencies {
-            let status = if dependency_installed(dep).await? {
+            let dependency_status = dependency_installed(dep);
+            let status = if dependency_status.installed {
                 format!("{dep}: OK")
             } else {
                 all_debug_checks_passed = false;
-                format!("{dep}: ERROR")
+                let detail = dependency_status
+                    .detail
+                    .map(|detail| format!("\n    {}", detail.replace('\n', "\n    ")))
+                    .unwrap_or_default();
+                format!("{dep}: ERROR{detail}")
             };
             dependency_displays.push(status);
         }
@@ -228,21 +238,99 @@ pub async fn debug(
     Ok(())
 }
 
-async fn dependency_installed(dependency: &str) -> FsResult<bool> {
-    Ok(Command::new(dependency)
-        .arg("--help")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false))
+fn dependency_installed(dependency: &str) -> DependencyStatus {
+    match Command::new(dependency).arg("--help").output() {
+        Ok(output) if output.status.success() => DependencyStatus {
+            installed: true,
+            detail: None,
+        },
+        Ok(output) => DependencyStatus {
+            installed: false,
+            detail: Some(format_dependency_command_failure(dependency, &output)),
+        },
+        Err(error) => DependencyStatus {
+            installed: false,
+            detail: Some(format_dependency_spawn_failure(dependency, &error)),
+        },
+    }
+}
+
+fn format_dependency_command_failure(dependency: &str, output: &Output) -> String {
+    let output_text = String::from_utf8_lossy(if output.stderr.is_empty() {
+        &output.stdout
+    } else {
+        &output.stderr
+    })
+    .trim()
+    .to_string();
+
+    let mut lines = Vec::new();
+    if !output_text.is_empty() {
+        lines.push(format!("Error from {dependency} --help: {output_text}"));
+    } else if let Some(code) = output.status.code() {
+        lines.push(format!("`{dependency} --help` exited with status code {code}."));
+    } else {
+        lines.push(format!("`{dependency} --help` failed."));
+    }
+    lines.push(dependency_help_hint(dependency));
+    lines.join("\n")
+}
+
+fn format_dependency_spawn_failure(dependency: &str, error: &std::io::Error) -> String {
+    format!(
+        "Error from {dependency} --help: {error}\n{}",
+        dependency_help_hint(dependency)
+    )
+}
+
+fn dependency_help_hint(dependency: &str) -> String {
+    format!(
+        "Make sure that `{dependency}` is installed in your shell and that `{dependency} --help` can execute successfully."
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
 
-    #[tokio::test]
-    async fn test_dependency_not_installed() {
-        let result = dependency_installed("not_installed").await.unwrap();
-        assert!(!result);
+    #[test]
+    fn test_dependency_not_installed() {
+        let result = dependency_installed("not_installed");
+        assert!(!result.installed);
+        let detail = result.detail.as_deref().unwrap_or_default();
+        assert!(detail.contains("Make sure that `not_installed` is installed"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_dependency_command_failure_includes_stderr_and_hint() {
+        let output = Output {
+            status: std::process::ExitStatus::from_raw(256),
+            stdout: Vec::new(),
+            stderr: b"xcrun: error: invalid active developer path".to_vec(),
+        };
+
+        let message = format_dependency_command_failure("git", &output);
+
+        assert!(
+            message.contains("Error from git --help: xcrun: error: invalid active developer path")
+        );
+        assert!(message.contains("Make sure that `git` is installed in your shell"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_dependency_command_failure_falls_back_to_stdout() {
+        let output = Output {
+            status: std::process::ExitStatus::from_raw(256),
+            stdout: b"git help failed".to_vec(),
+            stderr: Vec::new(),
+        };
+
+        let message = format_dependency_command_failure("git", &output);
+
+        assert!(message.contains("Error from git --help: git help failed"));
     }
 }
