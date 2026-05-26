@@ -68,7 +68,7 @@ use dbt_common::{
     node_selector::{IndirectSelection, MethodName, SelectExpression},
     path::DbtPath,
 };
-use dbt_jinja_vars::DbtVars;
+use dbt_jinja_vars::{DEFAULT_ENV_PLACEHOLDER, DbtVars};
 use dbt_schemas::{
     schemas::{
         Nodes, common::ResolvedQuoting, macros::DbtDocsMacro, relations::base::RelationPattern,
@@ -158,6 +158,9 @@ impl IncrementalState {
         for (name, old_value) in &self.env_vars {
             match std::env::var(name) {
                 Ok(current) if current != *old_value => return Some("env var changed"),
+                // env_var(name, default) records DEFAULT_ENV_PLACEHOLDER when name is unset;
+                // a still-unset var is unchanged, not removed.
+                Err(_) if old_value == DEFAULT_ENV_PLACEHOLDER => {}
                 Err(_) => return Some("env var removed"),
                 _ => {}
             }
@@ -3337,6 +3340,28 @@ mod tests {
             "new env var not observed at parse time → not checked"
         );
         unsafe { std::env::remove_var("__DBT_MATRIX_NEW_VAR__") };
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn env_var_with_default_unset_is_not_removal() {
+        // env_var('FOO', 'default') with FOO unset records DEFAULT_ENV_PLACEHOLDER.
+        // A subsequent run where FOO is still unset must NOT invalidate the cache.
+        let mut state = test_state();
+        state.env_vars = HashMap::from([(
+            "__DBT_MATRIX_UNSET__".into(),
+            DEFAULT_ENV_PLACEHOLDER.into(),
+        )]);
+        unsafe { std::env::remove_var("__DBT_MATRIX_UNSET__") };
+        assert!(
+            state.validate(&None).is_none(),
+            "unset env var with default-placeholder snapshot → still unchanged"
+        );
+
+        // But if the var becomes set, treat it as a change.
+        unsafe { std::env::set_var("__DBT_MATRIX_UNSET__", "now-set") };
+        assert_eq!(state.validate(&None), Some("env var changed"));
+        unsafe { std::env::remove_var("__DBT_MATRIX_UNSET__") };
     }
 
     #[test]
