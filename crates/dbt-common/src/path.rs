@@ -150,6 +150,10 @@ impl DbtPath {
     pub fn display(&self) -> Display<'_> {
         self.0.display()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.as_path().as_os_str().is_empty()
+    }
 }
 
 impl From<String> for DbtPath {
@@ -439,5 +443,13 @@ mod tests {
             absolute,
             PathBuf::from("/projects/my_project/models/my_model.sql")
         );
+    }
+
+    #[test]
+    fn test_is_empty() {
+        let empty = DbtPath::default();
+        let relative = DbtPath::from("models/my_model.sql");
+        assert!(empty.is_empty());
+        assert!(!relative.is_empty());
     }
 }
