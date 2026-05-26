@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve `dbt debug` output when `git --help` fails by surfacing the underlying command output and installation guidance
+time: 2026-05-26T20:31:33.900000000Z
+custom:
+    Author: desusaiteja
+    Issue: "9537"

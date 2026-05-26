@@ -387,12 +387,26 @@ class DebugTask(BaseTask):
     def test_git(self) -> SubtaskStatus:
         try:
             dbt_common.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
-        except dbt_common.exceptions.ExecutableError as exc:
+        except (
+            dbt_common.exceptions.CommandResultError,
+            dbt_common.exceptions.ExecutableError,
+        ) as exc:
+            extra_message = ""
+            if isinstance(exc, dbt_common.exceptions.CommandResultError):
+                command_output = exc.stderr.strip() or exc.stdout.strip()
+                if command_output:
+                    extra_message = f"\nError from git --help: {command_output}"
+
             return SubtaskStatus(
                 log_msg=red("ERROR"),
                 run_status=RunStatus.Error,
                 details="git error",
-                summary_message="Error from git --help: {!s}".format(exc),
+                summary_message=(
+                    f"{exc!s}"
+                    f"{extra_message}\n\n"
+                    "Make sure that `git` is installed in your shell and that "
+                    "`git --help` can execute successfully."
+                ),
             )
         else:
             return SubtaskStatus(
