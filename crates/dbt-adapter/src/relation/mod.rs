@@ -6,7 +6,6 @@ pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, Rel
 // Relation and RelationConfig for different data warehouses
 pub mod bigquery;
 pub mod databricks;
-pub mod parse;
 pub mod redshift;
 pub mod snowflake;
 
@@ -22,12 +21,6 @@ pub use relation_object::{
 };
 
 pub(crate) mod config_v2;
-
-pub(crate) fn duckdb_should_include_database(database: Option<&str>) -> bool {
-    database.is_some_and(|db| {
-        !db.is_empty() && !db.eq_ignore_ascii_case("main") && !db.eq_ignore_ascii_case("memory")
-    })
-}
 
 #[cfg(test)]
 pub(crate) mod test_helpers;
@@ -261,20 +254,6 @@ mod tests {
             result,
             "(select * from my_table where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
         );
-    }
-
-    #[test]
-    fn test_duckdb_should_include_database_for_attached_catalog() {
-        assert!(duckdb_should_include_database(Some("stocks_dev")));
-    }
-
-    #[test]
-    fn test_duckdb_should_not_include_database_for_default_catalog() {
-        assert!(!duckdb_should_include_database(Some("main")));
-        assert!(!duckdb_should_include_database(Some("memory")));
-        assert!(!duckdb_should_include_database(Some("MEMORY")));
-        assert!(!duckdb_should_include_database(Some("")));
-        assert!(!duckdb_should_include_database(None));
     }
 
     #[test]

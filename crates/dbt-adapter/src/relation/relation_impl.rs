@@ -3,7 +3,6 @@ use crate::need_quotes::need_quotes;
 use crate::relation::RelationChangeSet;
 use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks;
-use crate::relation::duckdb_should_include_database;
 use crate::relation::redshift::materialized_view_config::{
     DescribeMaterializedViewResults, RedshiftMaterializedViewConfig,
     RedshiftMaterializedViewConfigChangeset,
@@ -37,6 +36,23 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+fn include_policy(adapter_type: AdapterType, path: &RelationPath) -> Policy {
+    match adapter_type {
+        AdapterType::DuckDB => Policy::new(
+            path.database.as_ref().is_some_and(|db| {
+                !db.is_empty()
+                    && !db.eq_ignore_ascii_case("main")
+                    && !db.eq_ignore_ascii_case("memory")
+            }),
+            true,
+            true,
+        ),
+        AdapterType::ClickHouse | AdapterType::Exasol => Policy::new(false, true, true),
+        AdapterType::Salesforce => Policy::new(false, false, true),
+        _ => Policy::trues(),
+    }
+}
+
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
 pub struct RelationStatic {
@@ -54,33 +70,19 @@ impl StaticBaseRelation for RelationStatic {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
-        let include_policy = match self.adapter_type {
-            // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
-            AdapterType::DuckDB => Policy::new(
-                duckdb_should_include_database(database.as_deref()),
-                true,
-                true,
-            ),
-            // Databases that do not support 3-part db.schema.table names.
-            AdapterType::ClickHouse | AdapterType::Exasol => Policy::new(false, true, true),
-            AdapterType::Salesforce => Policy::new(false, false, true),
-            _ => Policy::trues(),
+        let path = RelationPath {
+            // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
+            database: match self.adapter_type {
+                AdapterType::ClickHouse => Some(String::new()),
+                _ => database.filter(|s| !s.is_empty()),
+            },
+            schema,
+            identifier,
         };
-        // Upstream `ClickHouseRelation.__post_init__` forces `path.database = ''`
-        // regardless of the caller-supplied value — including `None`, which upstream
-        // macros do pass (see `clickhouse__get_or_create_relation`).
-        // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/relation.py
-        let database = match self.adapter_type {
-            AdapterType::ClickHouse => Some(String::new()),
-            _ => database.filter(|s| !s.is_empty()),
-        };
+        let include_policy = include_policy(self.adapter_type, &path);
         Ok(RelationObject::new(Arc::new(Relation::new_with_policy(
             self.adapter_type,
-            RelationPath {
-                database,
-                schema,
-                identifier,
-            },
+            path,
             relation_type,
             include_policy,
             custom_quoting.unwrap_or(self.quoting),
@@ -185,6 +187,13 @@ impl StaticBaseRelation for RelationStatic {
 /// gated on `adapter_type`.
 #[derive(Clone, Debug)]
 pub struct Relation {
+    /// Whether this relation should behave as a parse-time Relation
+    ///
+    /// NOTE: It is an unfortunate inheritance from dbt Core 1.0 where parse-time
+    /// relation does not behave the same as compile-time relation, and this has
+    /// consequences on deferral logic, manifest writing etc. So we need to emulate
+    /// the same behavior here...
+    pub is_parse_time: bool,
     /// The adapter type this relation instance is for.
     pub adapter_type: AdapterType,
     /// The path of the relation
@@ -328,24 +337,18 @@ impl Relation {
         is_delta: bool,
         temporary: bool,
     ) -> Self {
-        let include_policy = match adapter_type {
-            AdapterType::DuckDB => Policy::new(
-                duckdb_should_include_database(database.as_deref()),
-                true,
-                true,
-            ),
-            AdapterType::ClickHouse => Policy::new(false, true, true),
-            _ => Policy::trues(),
+        let path = RelationPath {
+            database: database.filter(|s| !s.is_empty()),
+            schema,
+            identifier,
         };
+        let include_policy = include_policy(adapter_type, &path);
         Self {
+            is_parse_time: false,
             adapter_type,
-            path: RelationPath {
-                database: database.filter(|s| !s.is_empty()),
-                schema,
-                identifier,
-            },
-            relation_type,
             include_policy,
+            path,
+            relation_type,
             quote_policy: custom_quoting,
             native_schema,
             metadata,
@@ -354,6 +357,32 @@ impl Relation {
             alter_constraints: Vec::new(),
             temporary,
             location: None,
+            external: None,
+            table_format: TableFormat::Default,
+        }
+    }
+
+    /// Create a relation that stubs some stuff to be used during `dbt parse`
+    pub(crate) fn new_parse_time(adapter_type: AdapterType) -> Self {
+        let path = RelationPath {
+            database: Some("".to_string()),
+            schema: Some("".to_string()),
+            identifier: Some("".to_string()),
+        };
+        Self {
+            is_parse_time: true,
+            adapter_type,
+            include_policy: Policy::falses(),
+            path,
+            relation_type: None,
+            quote_policy: Policy::falses(),
+            native_schema: None,
+            metadata: None,
+            is_delta: false,
+            create_constraints: Vec::default(),
+            alter_constraints: Vec::default(),
+            temporary: false,
+            location: Some("".to_string()),
             external: None,
             table_format: TableFormat::Default,
         }
@@ -408,6 +437,7 @@ impl Relation {
         }
 
         Ok(Self {
+            is_parse_time: false,
             adapter_type,
             path,
             relation_type,
@@ -517,6 +547,10 @@ impl BaseRelation for Relation {
     }
 
     fn database(&self) -> Option<&str> {
+        if self.is_parse_time {
+            return None;
+        }
+
         self.path.database.as_deref()
     }
 
@@ -552,6 +586,7 @@ impl BaseRelation for Relation {
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
         relation.external = self.external.clone();
+        relation.is_parse_time = self.is_parse_time;
 
         Ok(Arc::new(relation))
     }
@@ -569,6 +604,7 @@ impl BaseRelation for Relation {
         )?;
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
+        relation.is_parse_time = self.is_parse_time;
         Ok(Arc::new(relation))
     }
 
@@ -944,6 +980,7 @@ impl BaseRelation for Relation {
             rendered
         }
     }
+
     fn create_relation(
         &self,
         database: Option<String>,
@@ -952,24 +989,15 @@ impl BaseRelation for Relation {
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        let include_policy = match self.adapter_type {
-            AdapterType::DuckDB => Policy::new(
-                duckdb_should_include_database(database.as_deref()),
-                true,
-                true,
-            ),
-            AdapterType::Postgres => self.include_policy,
-            AdapterType::Salesforce => Policy::new(false, false, true),
-            AdapterType::ClickHouse => Policy::new(false, true, true),
-            _ => Policy::trues(),
+        let path = RelationPath {
+            database: database.filter(|s| !s.is_empty()),
+            schema,
+            identifier,
         };
+        let include_policy = include_policy(self.adapter_type, &path);
         Ok(Arc::new(Relation::new_with_policy(
             self.adapter_type,
-            RelationPath {
-                database: database.filter(|s| !s.is_empty()),
-                schema,
-                identifier,
-            },
+            path,
             relation_type,
             include_policy,
             custom_quoting,
@@ -1728,6 +1756,30 @@ mod tests {
             .with_external("'data/RawOrders.csv'".to_string());
 
             assert_eq!(relation.render_self_as_str(), "'data/RawOrders.csv'");
+        }
+
+        fn path_from_db(db: Option<&str>) -> RelationPath {
+            RelationPath {
+                database: db.map(|db| db.to_string()),
+                schema: Some("my_schema".to_string()),
+                identifier: Some("my_table".to_string()),
+            }
+        }
+
+        #[test]
+        fn test_include_policy_for_attached_catalog() {
+            assert!(
+                include_policy(AdapterType::DuckDB, &path_from_db(Some("stocks_dev"))).database
+            );
+        }
+
+        #[test]
+        fn test_should_not_include_database_for_default_catalog() {
+            assert!(!include_policy(AdapterType::DuckDB, &path_from_db(Some("main"))).database);
+            assert!(!include_policy(AdapterType::DuckDB, &path_from_db(Some("memory"))).database);
+            assert!(!include_policy(AdapterType::DuckDB, &path_from_db(Some("MEMORY"))).database);
+            assert!(!include_policy(AdapterType::DuckDB, &path_from_db(Some(""))).database);
+            assert!(!include_policy(AdapterType::DuckDB, &path_from_db(None)).database);
         }
     }
     mod snowflake {

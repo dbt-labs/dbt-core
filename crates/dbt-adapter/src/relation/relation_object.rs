@@ -15,7 +15,6 @@ use serde::Deserialize;
 
 use crate::relation::Relation;
 use crate::relation::databricks::typed_constraint::TypedConstraint;
-use crate::relation::duckdb_should_include_database;
 use crate::value::none_value;
 
 use std::collections::BTreeMap;
@@ -431,28 +430,18 @@ pub fn do_create_relation(
             false,
             false,
         )?) as Box<dyn BaseRelation>,
-        DuckDB => {
-            // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
-            let include_policy = Policy::new(
-                duckdb_should_include_database(Some(database.as_str())),
-                true,
-                true,
-            );
-            Box::new(Relation::new_with_policy(
-                DuckDB,
-                RelationPath {
-                    database: Some(database).filter(|s| !s.is_empty()),
-                    schema: Some(schema),
-                    identifier,
-                },
-                relation_type,
-                include_policy,
-                custom_quoting,
-                None,
-                false,
-                false,
-            )?) as Box<dyn BaseRelation>
-        }
+        DuckDB => Box::new(Relation::new(
+            DuckDB,
+            Some(database).filter(|s| !s.is_empty()),
+            Some(schema),
+            identifier,
+            relation_type,
+            None,
+            custom_quoting,
+            None,
+            false,
+            false,
+        )) as Box<dyn BaseRelation>,
         Snowflake => {
             let mut relation = Relation::new(
                 Snowflake,
@@ -584,27 +573,19 @@ pub fn create_relation_from_source(
     if adapter_type == AdapterType::DuckDB
         && let Some(external) = duckdb_external_location_for_source(source)?
     {
-        let include_policy = Policy::new(
-            duckdb_should_include_database(Some(database.as_str())),
-            true,
-            true,
-        );
         return Ok(Box::new(
-            Relation::new_with_policy(
+            Relation::new(
                 AdapterType::DuckDB,
-                RelationPath {
-                    database: Some(database).filter(|s| !s.is_empty()),
-                    schema: Some(schema),
-                    identifier: Some(identifier),
-                },
+                Some(database).filter(|s| !s.is_empty()),
+                Some(schema),
+                Some(identifier),
                 None,
-                include_policy,
+                None,
                 custom_quoting,
                 None,
                 false,
                 false,
             )
-            .map_err(|e| FsError::from_jinja_err(e, "Failed to create relation"))?
             .with_external(external),
         ));
     }

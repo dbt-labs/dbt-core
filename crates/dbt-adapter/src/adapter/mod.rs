@@ -10,10 +10,9 @@ use crate::macro_exec::*;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::relation::RelationObject;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
-use crate::relation::parse::EmptyRelation;
+use crate::relation::{Relation, RelationObject};
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
@@ -1164,7 +1163,10 @@ impl Adapter {
                 let adapter_type = adapter_parse_state.adapter_type;
                 adapter_parse_state
                     .record_get_relation_call(state, database, schema, identifier)?;
-                Ok(RelationObject::new(Arc::new(EmptyRelation::new(adapter_type))).into_value())
+                Ok(
+                    RelationObject::new(Arc::new(Relation::new_parse_time(adapter_type)))
+                        .into_value(),
+                )
             }
         }
     }
@@ -1745,7 +1747,7 @@ impl Adapter {
                 )?;
                 Ok(Value::from(result))
             }
-            Parse(_) => Ok(none_value()),
+            Parse(_) => Ok(Value::from("")),
         }
     }
 
