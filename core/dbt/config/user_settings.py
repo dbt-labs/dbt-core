@@ -17,33 +17,23 @@ def _default_path() -> Path:
     return default_dbt_home_dir() / USER_SETTINGS_FILE_NAME
 
 
-def _load_yaml_mapping(path: Path) -> dict | None:
-    if not path.is_file():
-        return None
-
-    try:
-        contents = load_file_contents(str(path), strip=False)
-    except OSError as e:
-        raise DbtValidationError(f"cannot read {path}: {e}") from e
-
-    parsed = load_yaml_text(contents)
-    if parsed is None:
-        return None
-    if not isinstance(parsed, dict):
-        raise DbtValidationError(f"expected mapping in {path}, got {type(parsed).__name__}")
-    return parsed
-
-
 def read_user_settings(path: Path | None = None) -> UserSettings:
     if path is None:
         path = _default_path()
-    parsed = _load_yaml_mapping(path)
-    if parsed is None:
-        return UserSettings()
-    try:
-        return UserSettings.from_dict(parsed)
-    except ValidationError as e:
-        raise DbtValidationError(f"invalid user settings in {path}: {e}") from e
+
+    if path.is_file():
+        try:
+            contents = load_file_contents(str(path), strip=False)
+            yaml_content = load_yaml_text(contents)
+
+            if not yaml_content:
+                return UserSettings()
+
+            return UserSettings.from_dict(yaml_content)
+        except (ValidationError, DbtValidationError, ValueError) as e:
+            raise DbtValidationError(f"invalid user settings in {path}: {e}") from e
+
+    return UserSettings()
 
 
 def write_user_settings(settings: UserSettings, path: Path | None = None) -> None:

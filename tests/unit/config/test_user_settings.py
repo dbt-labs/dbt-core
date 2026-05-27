@@ -32,7 +32,7 @@ class TestReadUserSettings:
     def test_non_mapping_raises(self, tmp_path):
         p = tmp_path / "user_settings.yml"
         p.write_text("- a\n- b\n")
-        with pytest.raises(DbtValidationError, match="expected mapping"):
+        with pytest.raises(DbtValidationError, match="invalid user settings"):
             read_user_settings(p)
 
     def test_invalid_yaml_raises(self, tmp_path):
