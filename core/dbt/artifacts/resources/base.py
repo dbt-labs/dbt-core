@@ -48,7 +48,7 @@ class FileHash(dbtClassMixin):
         if self.name == "none":
             return False
 
-        return self.from_contents(contents, name=self.name) == self.checksum
+        return self.from_contents(contents, name=self.name) == self
 
     @classmethod
     def from_contents(cls, contents: str, name="sha256") -> "FileHash":
