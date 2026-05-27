@@ -24,6 +24,14 @@ class CleanTask(BaseTask):
         project_dir = move_to_nearest_project_dir(self.args.project_dir)
 
         potential_clean_paths = set(Path(p).resolve() for p in self.project.clean_targets)
+        # Always include the effective target path so that `dbt clean` honours
+        # `--target-path` / `DBT_TARGET_PATH` overrides even when the user has
+        # explicitly defined `clean-targets` in their dbt_project.yml. Without
+        # this, an override is silently ignored and the directory dbt actually
+        # wrote to during the run is left behind (issue #11346). The existing
+        # source-path / outside-project safety checks still apply below.
+        effective_target_path = Path(self.project.target_path or "target").resolve()
+        potential_clean_paths.add(effective_target_path)
         source_paths = set(
             Path(p).resolve() for p in (*self.project.all_source_paths, *self.project.test_paths)
         )

@@ -1,0 +1,6 @@
+kind: Fixes
+body: `dbt clean` now honors `--target-path` / `DBT_TARGET_PATH` in addition to the project-level `clean-targets`
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "11346"
