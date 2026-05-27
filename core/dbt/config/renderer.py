@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from dbt.adapters.contracts.connection import HasCredentials
@@ -226,6 +227,9 @@ class SecretRenderer(BaseRenderer):
                 found = m.group(1)
                 value = get_invocation_context().env[found]
                 replace_this = SECRET_PLACEHOLDER.format(found)
+                # support for secret files
+                if found.lower().endswith("_file"):
+                    value = Path(value).read_text().rstrip()
                 return rendered.replace(replace_this, value)
         else:
             return rendered
