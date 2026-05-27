@@ -1,6 +1,7 @@
 import functools
 import importlib
 import logging
+import os
 import pkgutil
 from types import MappingProxyType
 from typing import Callable, Dict, List, Mapping, NamedTuple, Sequence, Set, Tuple
@@ -43,15 +44,23 @@ class ManageSignal(NamedTuple):
       plugin; False (the default) means skip. Populated by the CLI parser from one
       of three surfaces, in precedence order:
         * explicit `--manage-state` / `--no-manage-state` on the command line
-        * `DBT_ENGINE_MANAGE_STATE` env var
+        * `<env_var>` (read by Click via the option's `envvar=`)
         * `manage_state` in dbt_project.yml's `flags:` block, or equivalently
           `manage_state` in profiles.yml's `config:` block
     - `cli_flag`: human-readable name of the corresponding CLI flag, used in log
       messages so a curious user knows what to pass to opt in.
+    - `env_var`: name of the env var that backs the CLI option. PluginManager
+      normalizes `os.environ[env_var]` to "true" right before importing the
+      plugin so the plugin's own `initialize()` -- which may read the env var
+      directly rather than going through `get_flags()` -- agrees with the
+      Click-resolved value. Without this, a user who passes `--manage-state`
+      while `DBT_ENGINE_MANAGE_STATE=false` is set in the env gets the plugin
+      loaded by PluginManager but self-disabled inside the plugin.
     """
 
     flag_attr: str
     cli_flag: str
+    env_var: str
 
 
 # Track which (module_name, reason) combinations have already emitted a discovery
@@ -199,8 +208,16 @@ class PluginManager:
     # than silently flipping activation for the rest of the process.
     BUNDLED_PLUGIN_MODULES: Mapping[str, ManageSignal] = MappingProxyType(
         {
-            "dbt_state": ManageSignal(flag_attr="MANAGE_STATE", cli_flag="--manage-state"),
-            "dbt_run_cache": ManageSignal(flag_attr="MANAGE_STATE", cli_flag="--manage-state"),
+            "dbt_state": ManageSignal(
+                flag_attr="MANAGE_STATE",
+                cli_flag="--manage-state",
+                env_var="DBT_ENGINE_MANAGE_STATE",
+            ),
+            "dbt_run_cache": ManageSignal(
+                flag_attr="MANAGE_STATE",
+                cli_flag="--manage-state",
+                env_var="DBT_ENGINE_MANAGE_STATE",
+            ),
         }
     )
 
@@ -308,6 +325,17 @@ class PluginManager:
         candidates = [n for n in names_on_path if n not in disabled]
         conflict_skips = cls._resolve_bundled_plugin_conflicts(candidates)
         to_import = [n for n in candidates if n not in conflict_skips]
+
+        # Bridge the resolved Click value to the plugin's own internal gating.
+        # Bundled plugins (e.g. dbt-state) typically read their env var directly
+        # in initialize() rather than calling `get_flags()`. If a user passes
+        # `--manage-state` while the env var is set to "false", PluginManager
+        # decides to load (CLI > env), but the plugin then self-disables when
+        # its own check reads the env var. Normalize `os.environ` to "true" for
+        # bundled plugins we're about to load so the plugin's view agrees.
+        for name in to_import:
+            if name in cls.BUNDLED_PLUGIN_MODULES:
+                os.environ[cls.BUNDLED_PLUGIN_MODULES[name].env_var] = "true"
 
         return {name: importlib.import_module(name) for name in to_import}
 

@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 import pytest
@@ -576,9 +577,14 @@ class TestManageStateClickIntegration:
         assert result["plugin_is_managed"] is False
 
     def test_cli_flag_overrides_env_var_false(self, monkeypatch):
-        """Symmetric precedence: explicit CLI --manage-state beats
-        DBT_ENGINE_MANAGE_STATE=false. Same Click rule, opposite direction:
-        the explicit CLI value wins regardless of the env var's value."""
+        """Symmetric precedence at the PluginManager level: explicit CLI
+        --manage-state beats DBT_ENGINE_MANAGE_STATE=false. Same Click rule as
+        the inverse: explicit CLI value wins regardless of the env var.
+
+        NOTE: this only checks PluginManager's view. See
+        `test_cli_override_normalizes_env_var_for_plugin` below for the
+        critical end-to-end check that the plugin's own initialize() also
+        sees the resolved value."""
         monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
         monkeypatch.delenv("DBT_MANAGE_STATE", raising=False)
 
@@ -586,6 +592,52 @@ class TestManageStateClickIntegration:
             ["--manage-state"], env={"DBT_ENGINE_MANAGE_STATE": "false"}
         )
         assert result["plugin_is_managed"] is True
+
+    def test_cli_override_normalizes_env_var_for_plugin(self, monkeypatch):
+        """Real bug: bundled plugins read DBT_ENGINE_MANAGE_STATE directly in
+        their initialize() (rather than going through `get_flags()`). When the
+        user passes `--manage-state` while the env var is set to "false",
+        PluginManager correctly decides to load the plugin -- but if `os.environ`
+        still says "false", the plugin self-disables on import.
+
+        PluginManager normalizes `os.environ[env_var]` to "true" right before
+        importing each bundled plugin, so the plugin's view agrees with the
+        Click-resolved value. This test simulates exactly what real dbt-state
+        does: a plugin that reads the env var in its initialize()."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.setenv("DBT_ENGINE_MANAGE_STATE", "false")
+
+        # The plugin's own self-check: what real dbt-state does.
+        seen_by_plugin = {}
+
+        class _FakeBundledPlugin(dbtPlugin):
+            def initialize(self):
+                # Read directly from os.environ, as real dbt-state does.
+                seen_by_plugin["env_var"] = os.environ.get("DBT_ENGINE_MANAGE_STATE")
+
+        fake_module = mock.MagicMock()
+        fake_module.plugins = [_FakeBundledPlugin]
+
+        def fake_import(name):
+            if name == "dbt_state":
+                return fake_module
+            raise ImportError(name)
+
+        fake_iter_result = [(None, "dbt_state", False)]
+
+        # PluginManager must see manage_state=True (CLI override).
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=True), mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch("dbt.plugins.manager.importlib.import_module", side_effect=fake_import):
+            PluginManager.from_modules(project_name="test")
+
+        # Plugin's initialize() must have seen "true", not the original "false".
+        assert seen_by_plugin["env_var"] == "true", (
+            f"Plugin saw DBT_ENGINE_MANAGE_STATE={seen_by_plugin['env_var']!r}; "
+            "expected 'true' (PluginManager should have normalized os.environ "
+            "before plugin import so the plugin's own env-var check agrees "
+            "with the Click-resolved value)."
+        )
 
     def test_neither_flag_nor_env_var_skips_plugin(self, monkeypatch):
         """Default opt-in-off behavior: nothing set anywhere -> plugin skipped."""
