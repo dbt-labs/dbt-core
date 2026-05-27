@@ -12,6 +12,7 @@ mod run_tasks_args;
 pub mod span_manager;
 mod stats_to_results;
 pub mod task;
+pub mod task_runner_hooks;
 pub mod task_spans;
 pub mod test_aggregation;
 pub mod utils;
@@ -29,7 +30,7 @@ pub use stats_to_results::stats_to_results;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_common::stats::NodeStatus;
-use dbt_common::{FsError, FsResult, MacroSpan};
+use dbt_common::{FsResult, MacroSpan};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::{CommonAttributes, ContextRunResult};
@@ -153,9 +154,4 @@ pub struct RunTaskResults {
     pub resolved_state: Arc<ResolverState>,
     pub task_runner_ctx: Option<TaskRunnerCtx>,
     pub preview: Option<Result<Preview, String>>,
-}
-
-#[async_trait::async_trait]
-pub trait RootTaskRunner: Send {
-    async fn run(self: Box<Self>) -> Result<RunTaskResults, Box<FsError>>;
 }

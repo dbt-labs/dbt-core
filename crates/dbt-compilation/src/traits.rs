@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use async_trait::async_trait;
 use dbt_adapter_core::AdapterType;
@@ -16,6 +17,8 @@ use dbt_schemas::{
     schemas::{CommonAttributes, Nodes, project::DbtProject},
     state::{Macros, ModelStatus, ResolverState},
 };
+use dbt_tasks_core::task_runner_hooks::TaskRunnerHooksFactory;
+use dbt_tasks_core::{RunTaskResults, RunTasksArgs};
 
 use crate::core::DbtLoadedProject;
 use crate::schedule::{DbtProjectCompilationCacheChanges, DbtScheduleDescription};
@@ -78,4 +81,27 @@ pub trait CompilationDriver: Send + Sync {
         JinjaEnv,
         Option<DbtProjectCompilationCacheChanges>,
     )>;
+}
+
+#[allow(clippy::type_complexity)]
+pub type RunTasksResult = (Arc<RunTasksArgs>, RunTaskResults, Arc<dyn CompilationCache>);
+
+/// Runs tasks (static analysis, execution) against a compiled project.
+#[async_trait]
+pub trait TaskExecutionDriver: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
+    async fn run_tasks(
+        &self,
+        compiled: &dyn CompiledProject,
+        arg: &EvalArgs,
+        cli: &Cli,
+        start: SystemTime,
+        jinja_env: JinjaEnv,
+        schedule: &Schedule<String>,
+        compilation_cache_changes: Option<&DbtProjectCompilationCacheChanges>,
+        previous_cache: Option<Arc<dyn CompilationCache>>,
+        jinja_type_checking_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+        task_runner_hooks_factory: &dyn TaskRunnerHooksFactory,
+        token: &CancellationToken,
+    ) -> FsResult<RunTasksResult>;
 }

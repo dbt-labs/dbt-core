@@ -17,5 +17,7 @@ pub mod renderable;
 pub mod run_operation;
 pub mod runnable;
 pub mod task;
+pub mod task_runner;
+pub mod task_runner_hooks;
 pub mod utils;
 pub mod visitor;
