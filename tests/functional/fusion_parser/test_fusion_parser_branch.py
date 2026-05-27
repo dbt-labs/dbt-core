@@ -7,15 +7,42 @@ That gives us a known-good fusion-shaped artifact and lets us assert
 that dbt-core's load + dispatch logic round-trips through it correctly.
 """
 
-import shlex
 import shutil
 import stat
+import sys
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from dbt.tests.util import run_dbt
+
+FAKE_FS_PY = '''\
+"""Tiny stand-in for `fs parse`. Writes a stashed manifest.json into
+whatever --target-path argument we receive (defaults to ./target)."""
+import os
+import shutil
+import sys
+
+STASH = {stash!r}
+
+
+def main(argv):
+    target_path = "target"
+    args = iter(argv)
+    for arg in args:
+        if arg == "--target-path":
+            target_path = next(args)
+        elif arg == "--project-dir":
+            os.chdir(next(args))
+        # ignore everything else
+    os.makedirs(target_path, exist_ok=True)
+    shutil.copy(STASH, os.path.join(target_path, "manifest.json"))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+'''
 
 MODEL_A_SQL = """
 select 1 as id
@@ -56,8 +83,9 @@ class FusionParserFixture:
 
     @pytest.fixture(scope="class")
     def fake_fs(self, project, tmp_path_factory):
-        """Seed a real manifest.json via core's parser, then build a shell
-        script that copies it into <target>/manifest.json on invocation."""
+        """Seed a real manifest.json via core's parser, then build a fake
+        `fs` binary (Python script + thin platform-specific wrapper) that
+        copies the stash into <target>/manifest.json on invocation."""
         run_dbt(["parse"])
         seed_path = Path(project.project_root) / "target" / "manifest.json"
         assert seed_path.exists(), "core parse failed to produce manifest.json"
@@ -70,34 +98,18 @@ class FusionParserFixture:
         seed_path.unlink()
 
         bin_dir = tmp_path_factory.mktemp("fusion_bin")
-        fake = bin_dir / "fake_fs.sh"
-        fake.write_text(
-            f"""#!/usr/bin/env bash
-# Tiny stand-in for `fs parse`. Writes the stashed manifest.json into
-# whatever --target-path argument we receive (defaults to ./target).
-set -euo pipefail
-TARGET_PATH="target"
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --target-path)
-      TARGET_PATH="$2"
-      shift 2
-      ;;
-    --project-dir)
-      cd "$2"
-      shift 2
-      ;;
-    *)
-      shift
-      ;;
-  esac
-done
-mkdir -p "$TARGET_PATH"
-cp {shlex.quote(str(stash))} "$TARGET_PATH/manifest.json"
-"""
-        )
-        fake.chmod(fake.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        return fake
+        py_script = bin_dir / "fake_fs.py"
+        py_script.write_text(FAKE_FS_PY.format(stash=str(stash)))
+
+        python = sys.executable
+        if sys.platform == "win32":
+            wrapper = bin_dir / "fake_fs.cmd"
+            wrapper.write_text(f'@"{python}" "{py_script}" %*\r\n')
+        else:
+            wrapper = bin_dir / "fake_fs.sh"
+            wrapper.write_text(f'#!/usr/bin/env bash\nexec "{python}" "{py_script}" "$@"\n')
+            wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return wrapper
 
 
 class TestFusionParserBranch(FusionParserFixture):
