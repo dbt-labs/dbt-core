@@ -33,6 +33,8 @@ from tests.functional.defer_state.fixtures import (
     no_contract_schema_yml,
     numeric_precision_contract_schema_yml,
     numeric_precision_increased_contract_schema_yml,
+    prerelease_versioned_contract_schema_yml,
+    prerelease_versioned_modified_contract_schema_yml,
     schema_yml,
     seed_csv,
     semantic_model_schema_yml,
@@ -660,6 +662,72 @@ class TestChangedContractVersioned(BaseModifiedState):
         write_file(self.UNENFORCED_SCHEMA_YML, "models", "schema.yml")
         with pytest.raises(ContractBreakingChangeError):
             results = run_dbt(["run", "--models", "state:modified.contract", "--state", "./state"])
+
+
+class TestChangedContractPrereleaseVersioned(BaseModifiedState):
+    """Pre-release versioned models should warn (not error) on breaking contract changes."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "table_model_v1.sql": table_model_sql,
+            "table_model_v2.sql": table_model_sql,
+            "view_model.sql": view_model_sql,
+            "ephemeral_model.sql": ephemeral_model_sql,
+            "schema.yml": schema_yml,
+            "exposures.yml": exposures_yml,
+        }
+
+    def test_changed_contract_prerelease_versioned(self, project):
+        # Set up with v1 (latest) and v2 (prerelease), both with same columns
+        write_file(prerelease_versioned_contract_schema_yml, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # Make a breaking change ONLY to v2 (prerelease) via per-version columns
+        # v1 keeps the original columns, v2 gets a renamed column
+        write_file(prerelease_versioned_modified_contract_schema_yml, "models", "schema.yml")
+
+        # Should NOT raise ContractBreakingChangeError for the prerelease version (v2)
+        # The run will fail with a compilation error (SQL columns don't match contract)
+        # but it should NOT raise ContractBreakingChangeError
+        results = run_dbt(
+            ["run", "--models", "state:modified.contract", "--state", "./state"],
+            expect_pass=False,
+        )
+        # v2 was selected (contract changed) but no ContractBreakingChangeError
+        assert len(results) == 1
+        assert results[0].node.name == "table_model"
+
+
+class TestDeletePrereleaseVersionedContractedModel(BaseModifiedState):
+    """Deleting a pre-release versioned model should warn (not error)."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "table_model_v1.sql": table_model_sql,
+            "table_model_v2.sql": table_model_sql,
+            "view_model.sql": view_model_sql,
+            "ephemeral_model.sql": ephemeral_model_sql,
+            "schema.yml": schema_yml,
+            "exposures.yml": exposures_yml,
+        }
+
+    def test_delete_prerelease_versioned_contracted_model(self, project):
+        # Set up with v1 (latest) and v2 (prerelease)
+        write_file(prerelease_versioned_contract_schema_yml, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # Delete only the prerelease version (v2) and update schema to only have v1
+        rm_file(project.project_root, "models", "table_model_v2.sql")
+        write_file(versioned_contract_schema_yml, "models", "schema.yml")
+
+        # Should NOT raise ContractBreakingChangeError for the deleted prerelease version
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        assert "ContractBreakingChangeError" not in logs
+        assert "pre-release" in logs.lower()
 
 
 class TestDeleteUnversionedContractedModel(BaseModifiedState):

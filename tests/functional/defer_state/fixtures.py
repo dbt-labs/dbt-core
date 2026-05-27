@@ -242,6 +242,55 @@ models:
         data_type: text
 """
 
+prerelease_versioned_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    latest_version: 1
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+      - v: 2
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
+prerelease_versioned_modified_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    latest_version: 1
+    config:
+      contract:
+        enforced: True
+    versions:
+      - v: 1
+      - v: 2
+        columns:
+          - name: id
+            data_type: integer
+          - name: user_name
+            data_type: text
+    columns:
+      - name: id
+        data_type: integer
+        data_tests:
+          - unique:
+              severity: error
+          - not_null
+      - name: name
+        data_type: text
+"""
+
 versioned_modified_contract_schema_yml = """
 version: 2
 models:
