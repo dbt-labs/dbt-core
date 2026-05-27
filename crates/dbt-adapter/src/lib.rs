@@ -15,7 +15,6 @@ pub mod engine;
 pub mod errors;
 pub mod format_ident;
 pub mod formatter;
-pub mod information_schema;
 pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;

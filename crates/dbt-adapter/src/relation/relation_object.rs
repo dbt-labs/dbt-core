@@ -238,10 +238,12 @@ impl Object for RelationObject {
             }
             "information_schema" => {
                 let iter = ArgsIter::new("information_schema", &["view_name"], args);
+                // FIXME: An empty view name is actually illegal in BigQuery. What does it
+                // mean to call this with `None` as an argument? Should we error instead?
                 let view_name =
-                    iter.next_kwarg_aliased::<Option<String>>("view_name", &["identifier"])?;
+                    iter.next_kwarg_aliased::<Option<&str>>("view_name", &["identifier"])?;
                 iter.finish()?;
-                self.information_schema(view_name)
+                self.information_schema(view_name.unwrap_or_default())
                     .map(|r| Value::from_object(RelationObject::new(r)))
             }
             "relation_max_name_length" => self.relation_max_name_length().map(Value::from),

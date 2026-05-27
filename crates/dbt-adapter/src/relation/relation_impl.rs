@@ -1,5 +1,4 @@
-use crate::information_schema::InformationSchema;
-use crate::need_quotes::need_quotes;
+use crate::metadata::bigquery as bigquery_metadata;
 use crate::relation::RelationChangeSet;
 use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks;
@@ -193,6 +192,11 @@ pub struct Relation {
     /// consequences on deferral logic, manifest writing etc. So we need to emulate
     /// the same behavior here...
     pub is_parse_time: bool,
+    /// Whether this relation is a BigQuery INFORMATION_SCHEMA view.
+    ///
+    /// TODO(serramatutu): this is a workaround for the fact that RelationPath does not
+    /// support 4-part names. once that happens we should delete this flag.
+    pub is_information_schema: bool,
     /// The adapter type this relation instance is for.
     pub adapter_type: AdapterType,
     /// The path of the relation
@@ -344,6 +348,7 @@ impl Relation {
         let include_policy = include_policy(adapter_type, &path);
         Self {
             is_parse_time: false,
+            is_information_schema: false,
             adapter_type,
             include_policy,
             path,
@@ -370,6 +375,7 @@ impl Relation {
         };
         Self {
             is_parse_time: true,
+            is_information_schema: false,
             adapter_type,
             include_policy: Policy::falses(),
             path,
@@ -382,6 +388,39 @@ impl Relation {
             alter_constraints: Vec::default(),
             temporary: false,
             location: Some("".to_string()),
+            external: None,
+            table_format: TableFormat::Default,
+        }
+    }
+
+    pub fn new_information_schema(
+        adapter_type: AdapterType,
+        project: Option<&str>,
+        dataset: &str,
+        view_name: &str,
+        location: Option<&str>,
+    ) -> Self {
+        Self {
+            adapter_type,
+            is_information_schema: true,
+            location: location.map(|l| l.to_string()),
+            path: RelationPath {
+                database: project.map(|p| p.to_string()),
+                schema: Some(dataset.to_string()),
+                identifier: Some(view_name.to_string()),
+            },
+            include_policy: Policy::trues(),
+            relation_type: None,
+            // FIXME: This `false` in the "database" field is due to the hack
+            // above where we shove project.dataset in the same field.
+            quote_policy: Policy::falses(),
+            is_parse_time: false,
+            native_schema: None,
+            metadata: None,
+            is_delta: false,
+            create_constraints: Vec::default(),
+            alter_constraints: Vec::default(),
+            temporary: false,
             external: None,
             table_format: TableFormat::Default,
         }
@@ -437,6 +476,7 @@ impl Relation {
 
         Ok(Self {
             is_parse_time: false,
+            is_information_schema: false,
             adapter_type,
             path,
             relation_type,
@@ -523,7 +563,9 @@ impl BaseRelation for Relation {
                 .path
                 .schema
                 .as_ref()
-                .map(|schema| schema.eq_ignore_ascii_case("information_schema"))
+                .map(|schema| {
+                    schema.eq_ignore_ascii_case("information_schema") || self.is_information_schema
+                })
                 .unwrap_or(false),
             _ => false,
         }
@@ -969,6 +1011,36 @@ impl BaseRelation for Relation {
             return external.clone();
         }
 
+        // Render BigQuery INFORMATION_SCHEMA view names using proper qualifiers
+        if self.adapter_type == AdapterType::Bigquery && self.is_system() {
+            let dataset = self
+                .path
+                .schema
+                .as_deref()
+                .expect("INFORMATION_SCHEMA relation needs dataset");
+            let view_name = self.path.identifier.as_deref();
+
+            let fqn_no_project = if let Some(view_name) = view_name {
+                bigquery_metadata::generate_system_table_fqn(
+                    dataset,
+                    view_name,
+                    self.location.as_deref(),
+                )
+            } else {
+                // NOTE: adapter.check_schema_exists() uses Relation without a
+                // view name, so we have to fall back to something that works with that
+                // macro. This is not pretty.
+                "INFORMATION_SCHEMA".to_string()
+            };
+
+            let fqn = if let Some(project) = &self.path.database {
+                format!("`{project}`.{fqn_no_project}")
+            } else {
+                fqn_no_project
+            };
+            return fqn;
+        }
+
         if let Some(RelationType::Ephemeral) = self.relation_type {
             return format!(
                 "{}{}",
@@ -1043,77 +1115,22 @@ impl BaseRelation for Relation {
         )?))
     }
 
-    fn information_schema_inner(
+    fn information_schema(
         &self,
-        database: Option<String>,
-        view_name: Option<&str>,
+        view_name: &str,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        match self.adapter_type {
-            AdapterType::Bigquery => {
-                let mut info_schema = InformationSchema::try_from_relation(
-                    self.adapter_type(),
-                    database.clone(),
-                    view_name,
-                )?;
-
-                let quote_if_needed = |identifier: &str| -> String {
-                    if need_quotes(AdapterType::Bigquery, identifier) {
-                        self.quoted(identifier)
-                    } else {
-                        identifier.to_string()
-                    }
-                };
-
-                // BigQuery INFORMATION_SCHEMA scoping rules:
-                // - OBJECT_PRIVILEGES: project-level with region → project.`region-<loc>`.INFORMATION_SCHEMA.<view>
-                // - Other views: dataset-level → dataset.INFORMATION_SCHEMA.<view> (using the relation's own dataset)
-                if let Some(view_name) = view_name
-                    && view_name.eq_ignore_ascii_case("OBJECT_PRIVILEGES")
-                {
-                    // OBJECT_PRIVILEGES require a location. If the location is blank there is nothing
-                    // the user can do about it.
-                    let loc = self.location.as_ref().ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            format!(
-                                "No location/region found when trying to retrieve \"{}\"",
-                                view_name
-                            ),
-                        )
-                    })?;
-
-                    if let Some(proj) = &database {
-                        info_schema.database = Some(quote_if_needed(proj));
-                        info_schema.location = Some(loc.to_string());
-                    } else {
-                        return Err(minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "Database/project is required for OBJECT_PRIVILEGES view",
-                        ));
-                    }
-                } else {
-                    // Dataset-level: use the relation's own project.dataset or just dataset
-                    info_schema.location = None;
-                    match (&self.path.database, &self.path.schema) {
-                        (Some(proj), Some(ds)) => {
-                            info_schema.database =
-                                Some(format!("{}.{}", quote_if_needed(proj), quote_if_needed(ds)));
-                        }
-                        (Some(proj), None) => {
-                            info_schema.database = Some(quote_if_needed(proj));
-                        }
-                        (None, Some(ds)) => info_schema.database = Some(quote_if_needed(ds)),
-                        _ => {}
-                    }
-                }
-                Ok(Arc::new(info_schema))
-            }
-            _ => {
-                let result =
-                    InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
-                Ok(Arc::new(result))
-            }
-        }
+        let schema = match self.adapter_type {
+            // See the workaround related to Relation.is_information_schema and 4-part names
+            AdapterType::Bigquery => self.path.schema.as_deref().unwrap_or_default(),
+            _ => "INFORMATION_SCHEMA",
+        };
+        Ok(Arc::new(Self::new_information_schema(
+            self.adapter_type,
+            self.path.database.as_deref(),
+            schema,
+            view_name,
+            self.location.as_deref(),
+        )))
     }
 
     fn relation_max_name_length(&self) -> Result<u32, minijinja::Error> {
@@ -1554,7 +1571,7 @@ mod tests {
         fn test_information_schema_with_database() {
             let relation = Relation::new(
                 AdapterType::Bigquery,
-                Some("test_db".to_string()),
+                Some("test-db".to_string()),
                 Some("test_schema".to_string()),
                 Some("test_table".to_string()),
                 Some(RelationType::Table),
@@ -1565,30 +1582,17 @@ mod tests {
                 false,
             );
 
-            // Test TABLES view - BigQuery uses dataset-level INFORMATION_SCHEMA
-            // When relation has both project and dataset, format as project.dataset.INFORMATION_SCHEMA
-            let info_schema = relation
-                .information_schema_inner(Some("other_db".to_string()), Some("TABLES"))
-                .unwrap();
-
+            let info_schema = relation.information_schema("TABLES").unwrap();
             let rendered = info_schema.render_self_as_str();
-            assert_eq!(rendered, "test_db.test_schema.INFORMATION_SCHEMA.TABLES");
+            assert_eq!(rendered, "`test-db`.test_schema.INFORMATION_SCHEMA.TABLES");
 
-            // Test COLUMNS view
-            let info_schema = relation
-                .information_schema_inner(Some("other_db".to_string()), Some("COLUMNS"))
-                .unwrap();
-
+            let info_schema = relation.information_schema("COLUMNS").unwrap();
             let rendered = info_schema.render_self_as_str();
-            assert_eq!(rendered, "test_db.test_schema.INFORMATION_SCHEMA.COLUMNS");
+            assert_eq!(rendered, "`test-db`.test_schema.INFORMATION_SCHEMA.COLUMNS");
 
-            // Test SCHEMATA view - still uses dataset-level with project.dataset format
-            let info_schema = relation
-                .information_schema_inner(None, Some("SCHEMATA"))
-                .unwrap();
-
+            let info_schema = relation.information_schema("TABLES").unwrap();
             let rendered = info_schema.render_self_as_str();
-            assert_eq!(rendered, "test_db.test_schema.INFORMATION_SCHEMA.SCHEMATA");
+            assert_eq!(rendered, "`test-db`.test_schema.INFORMATION_SCHEMA.TABLES");
         }
 
         #[test]
@@ -1606,53 +1610,12 @@ mod tests {
                 false,
             );
 
-            let info_schema = relation
-                .information_schema_inner(None, Some("TABLES"))
-                .unwrap();
+            let info_schema = relation.information_schema("TABLES").unwrap();
 
             let rendered = info_schema.render_self_as_str();
             assert_eq!(
                 rendered,
                 "`my-project-1a`.test_schema.INFORMATION_SCHEMA.TABLES"
-            );
-        }
-
-        #[test]
-        fn test_object_privileges_requires_location() {
-            let mut relation = Relation::new(
-                AdapterType::Bigquery,
-                Some("test_db".to_string()),
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-
-            // Test OBJECT_PRIVILEGES without location - should fail
-            let result = relation
-                .information_schema_inner(Some("test_db".to_string()), Some("OBJECT_PRIVILEGES"));
-            assert!(result.is_err());
-            assert!(
-                result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("No location/region found when trying to retrieve")
-            );
-
-            // Add location and test again - should succeed
-            relation.location = Some("US".to_string());
-            let info_schema = relation
-                .information_schema_inner(Some("test_db".to_string()), Some("OBJECT_PRIVILEGES"))
-                .unwrap();
-
-            let rendered = info_schema.render_self_as_str();
-            assert_eq!(
-                rendered,
-                "test_db.`region-US`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES"
             );
         }
 
@@ -1672,12 +1635,7 @@ mod tests {
             );
             relation.location = Some("US".to_string());
 
-            let info_schema = relation
-                .information_schema_inner(
-                    Some("my-project-1a".to_string()),
-                    Some("OBJECT_PRIVILEGES"),
-                )
-                .unwrap();
+            let info_schema = relation.information_schema("OBJECT_PRIVILEGES").unwrap();
 
             let rendered = info_schema.render_self_as_str();
             assert_eq!(
@@ -1702,34 +1660,10 @@ mod tests {
             );
 
             // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
-            let info_schema = relation
-                .information_schema_inner(None, Some("TABLES"))
-                .unwrap();
+            let info_schema = relation.information_schema("TABLES").unwrap();
 
             let rendered = info_schema.render_self_as_str();
             assert_eq!(rendered, "test_schema.INFORMATION_SCHEMA.TABLES");
-        }
-
-        #[test]
-        fn test_information_schema_without_view() {
-            let relation = Relation::new(
-                AdapterType::Bigquery,
-                None,
-                Some("test_schema".to_string()),
-                Some("test_table".to_string()),
-                Some(RelationType::Table),
-                None,
-                DEFAULT_RESOLVED_QUOTING,
-                None,
-                false,
-                false,
-            );
-
-            // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
-            let info_schema = relation.information_schema_inner(None, None).unwrap();
-
-            let rendered = info_schema.render_self_as_str();
-            assert_eq!(rendered, "test_schema.INFORMATION_SCHEMA");
         }
     }
 

@@ -762,18 +762,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/0775dd27929337ea529cad868dd1722812b8e0fb/dbt-adapters/src/dbt/adapters/base/relation.py#L234
-    fn information_schema(
-        &self,
-        view_name: Option<String>,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-        self.information_schema_inner(self.database_as_str().ok(), view_name.as_deref())
-    }
-
-    fn information_schema_inner(
-        &self,
-        database: Option<String>,
-        view_name: Option<&str>,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
+    fn information_schema(&self, view_name: &str) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
     /// needs_to_drop
     fn needs_to_drop(
@@ -989,12 +978,11 @@ mod tests {
             unimplemented!("base relation creation from components")
         }
 
-        fn information_schema_inner(
+        fn information_schema(
             &self,
-            _database: Option<String>,
-            _view_name: Option<&str>,
-        ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-            unimplemented!("InformationSchema")
+            _view_name: &str,
+        ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+            unimplemented!("information_schema")
         }
     }
 

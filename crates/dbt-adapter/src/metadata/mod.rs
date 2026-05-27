@@ -488,14 +488,6 @@ impl BaseRelation for MockBaseRelation {
         unimplemented!("relation creation in metadata adapter")
     }
 
-    fn information_schema_inner(
-        &self,
-        _database: Option<String>,
-        _view_name: Option<&str>,
-    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        unimplemented!("information schema query generation in metadata adapter")
-    }
-
     fn include_inner(
         &self,
         _policy: ResolvedQuoting,
@@ -533,6 +525,13 @@ impl BaseRelation for MockBaseRelation {
 
     fn identifier_as_resolved_str(&self) -> Result<String, minijinja::Error> {
         Ok(self.identifier.clone())
+    }
+
+    fn information_schema(
+        &self,
+        _view_name: &str,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        unimplemented!("information_schema")
     }
 }
 

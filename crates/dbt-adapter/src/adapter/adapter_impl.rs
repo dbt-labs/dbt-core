@@ -9,7 +9,6 @@ use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
 use crate::formatter::format_sql_with_bindings;
-use crate::information_schema::InformationSchema;
 use crate::macro_exec::{
     convert_macro_result_to_record_batch, execute_macro, execute_macro_with_package,
     execute_macro_wrapper_with_package,
@@ -66,7 +65,7 @@ use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy, TableFormat};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::bigquery::*;
@@ -1234,6 +1233,8 @@ impl AdapterImpl {
         database: &str,
         schema: &str,
     ) -> Result<Value, minijinja::Error> {
+        // TODO: migrate this to ADBC Connection.GetObjects() with schema filter
+
         // Replay fast-path: consult trace-derived cache if available
         if let Replay(..) = self.inner_adapter() {
             // TODO: move this logic to the [ReplayAdapter]
@@ -1242,20 +1243,31 @@ impl AdapterImpl {
             }
         }
 
-        let information_schema = InformationSchema {
-            adapter_type: self.adapter_type(),
-            database: Some(database.to_string()),
-            schema: "INFORMATION_SCHEMA".to_string(),
-            identifier: None,
-            location: None,
-            is_delta: None,
-        };
+        // FIXME:
+        // 1. This is used in dbt Core 1.0 as just a "container" for a database/schema,
+        // but there is no actual "Relation" since it has no identifier. Using it here
+        // is wrong in principle.
+        //
+        // 2. this thing is hardcoded here but it's all BigQuery-specific, even though
+        // other platforms use it too
+        let info_schema = Relation::new(
+            self.adapter_type(),
+            Some(database.to_string()),
+            Some("INFORMATION_SCHEMA".to_string()),
+            None,
+            None,
+            None,
+            Policy::falses(),
+            None,
+            false,
+            false,
+        );
 
         let (package_name, macro_name) = self.check_schema_exists_macro(state, &[])?;
         let batch = execute_macro_wrapper_with_package(
             state,
             &[
-                RelationObject::new(Arc::new(information_schema)).into_value(),
+                RelationObject::new(Arc::new(info_schema)).into_value(),
                 Value::from(schema),
             ],
             &macro_name,

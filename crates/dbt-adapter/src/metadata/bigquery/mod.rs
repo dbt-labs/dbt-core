@@ -429,23 +429,26 @@ fn qualifier_options_for_info_schema_view(
     }
 }
 
-// Generate the fully qualified name of a BigQuery INFORMATION_SCHEMA table.
-//
-// BQ's info schema tables have unique way of handling qualifiers. Instead of a
-// "database", the qualifier is something like [<project_id>.]<region_or_dataset_id>.
-// but in some cases the region is also optional.
-//
-// See `qualifier_options_for_info_schema_view` for specific view requirements..
-//
-// TODO: We're currently ignoring any differences between the provided qualifier and
-//       the spericific requirements for the given view name since this is only used to
-//       fetch the view schema, so the specific location doesn't really matter.
-fn generate_system_table_fqn(
-    qualifier: &str,
-    table: &str,
+/// Generate the fully qualified name of a BigQuery INFORMATION_SCHEMA table.
+///
+/// BQ's info schema tables have unique way of handling qualifiers. Instead of a
+/// "database", the qualifier is something like [<project_id>.]<region_or_dataset_id>.
+/// but in some cases the region is also optional.
+///
+/// See `qualifier_options_for_info_schema_view` for specific view requirements.
+///
+/// NOTE: this function is lenient and will return invalid qualifiers if the specific
+/// requirements are not met. I.e it will return stuff that might break if ran on BigQuery.
+///
+/// TODO: We're currently ignoring any differences between the provided qualifier and
+///       the specific requirements for the given view name since this is only used to
+///       fetch the view schema, so the specific location doesn't really matter.
+pub(crate) fn generate_system_table_fqn(
+    dataset: &str,
+    view_name: &str,
     user_preferred_region: Option<&str>,
 ) -> String {
-    let sys_identifier = table.to_uppercase();
+    let sys_identifier = view_name.to_uppercase();
 
     match qualifier_options_for_info_schema_view(&sys_identifier) {
         Some(qualifier_option) => match qualifier_option.requirement {
@@ -454,13 +457,13 @@ fn generate_system_table_fqn(
                 format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
             }
             QualifierRequirement::DatasetOnly => {
-                format!("{qualifier}.INFORMATION_SCHEMA.{sys_identifier}")
+                format!("{dataset}.INFORMATION_SCHEMA.{sys_identifier}")
             }
             QualifierRequirement::DatasetOrRegion => {
                 // respect user's location preferences by querying the region directly if
                 // possible
                 match user_preferred_region {
-                    None => format!("{qualifier}.INFORMATION_SCHEMA.{sys_identifier}"),
+                    None => format!("{dataset}.INFORMATION_SCHEMA.{sys_identifier}"),
                     Some(region) => {
                         format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
                     }
