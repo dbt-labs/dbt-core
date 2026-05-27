@@ -4,7 +4,7 @@ use super::*;
 use crate::adapter::Adapter;
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::sql_types::SATypeOpsImpl;
-use crate::stmt_splitter::NaiveStmtSplitter;
+use crate::stmt_splitter::SqlparserStmtSplitter;
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::never_cancels;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
@@ -28,7 +28,7 @@ fn make_duckdb_adapter() -> Arc<Adapter> {
         BTreeMap::new(),
         DEFAULT_RESOLVED_QUOTING,
         Arc::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
-        Arc::new(NaiveStmtSplitter),
+        Arc::new(SqlparserStmtSplitter),
     );
     let adapter = Adapter::new(Arc::new(concrete), None, never_cancels());
     Arc::new(adapter)

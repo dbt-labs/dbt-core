@@ -57,6 +57,7 @@ scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 similar = { workspace = true }
+sqlparser = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracy-client = { workspace = true }

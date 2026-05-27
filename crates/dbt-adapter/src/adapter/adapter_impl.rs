@@ -4689,7 +4689,7 @@ mod tests {
 
     use crate::engine::query_comment::QueryCommentConfig;
     use crate::sql_types::SATypeOpsImpl;
-    use crate::stmt_splitter::NaiveStmtSplitter;
+    use crate::stmt_splitter::SqlparserStmtSplitter;
 
     use dbt_adapter_core::AdapterType;
     use dbt_auth::auth_for_backend;
@@ -4749,7 +4749,7 @@ mod tests {
             resolved_quoting,
             QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
             Arc::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
-            Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
+            Arc::new(SqlparserStmtSplitter),
             None,
             Arc::new(RelationCache::default()),
             BTreeMap::new(),
@@ -4861,7 +4861,7 @@ mod tests {
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
             Arc::new(SATypeOpsImpl::new(Databricks)),
-            Arc::new(NaiveStmtSplitter),
+            Arc::new(SqlparserStmtSplitter),
         );
 
         let env = Environment::new();
