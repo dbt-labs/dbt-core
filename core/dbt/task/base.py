@@ -32,6 +32,7 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.types import (
     CatchableExceptionOnRun,
+    TimingInfoCollected,
     GenericExceptionOnRun,
     InternalErrorOnRun,
     LogDbtProfileError,
@@ -322,6 +323,9 @@ class BaseRunner(Generic[NodeT, RunnerResultT], metaclass=ABCMeta):
                 # this has the benefit of showing a build path for the errant
                 # model.  This calls the 'compile' method in CompileTask
                 ctx.node = self.compile(manifest)
+            fire_event(
+                TimingInfoCollected(node_info=ctx.node.node_info, timing_info=ctx.timing[-1])
+            )    
 
             # for ephemeral nodes, we only want to compile, not run
             if not ctx.node.is_ephemeral_model or self.run_ephemeral_models:
@@ -334,6 +338,9 @@ class BaseRunner(Generic[NodeT, RunnerResultT], metaclass=ABCMeta):
                 with collect_timing_info("execute", ctx.timing.append):
                     result = self.run(ctx.node, manifest)
                     ctx.node = result.node
+                fire_event(    
+                    TimingInfoCollected(node_info=ctx.node.node_info, timing_info=ctx.timing[-1])
+                )
 
         return result
 
