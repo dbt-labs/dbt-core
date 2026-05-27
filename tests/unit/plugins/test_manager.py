@@ -563,6 +563,18 @@ class TestManageStateClickIntegration:
         )
         assert result["plugin_is_managed"] is False
 
+    def test_cli_flag_overrides_env_var(self, monkeypatch):
+        """Precedence: explicit CLI --no-manage-state beats DBT_ENGINE_MANAGE_STATE=true.
+        Click's resolution order is CLI > env var > default; the env var only
+        flips the source from DEFAULT to ENVIRONMENT when nothing's on the CLI."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.delenv("DBT_MANAGE_STATE", raising=False)
+
+        result = self._probe_manage_state(
+            ["--no-manage-state"], env={"DBT_ENGINE_MANAGE_STATE": "true"}
+        )
+        assert result["plugin_is_managed"] is False
+
     def test_neither_flag_nor_env_var_skips_plugin(self, monkeypatch):
         """Default opt-in-off behavior: nothing set anywhere -> plugin skipped."""
         monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
