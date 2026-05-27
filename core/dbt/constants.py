@@ -11,6 +11,8 @@ PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
 )
 
+DBT_HOME_DIR_NAME = ".dbt"
+USER_SETTINGS_FILE_NAME = "user_settings.yml"
 DBT_PROJECT_FILE_NAME = "dbt_project.yml"
 VARS_FILE_NAME = "vars.yml"
 PACKAGES_FILE_NAME = "packages.yml"
