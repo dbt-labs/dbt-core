@@ -99,7 +99,10 @@ pub fn include_frontend_error_codes(
 /// - `#[resolved(promote)]` → `self.field.unwrap_or_default()`
 /// - `#[resolved(promote, method = name)]` → `self.name()`
 /// - `#[resolved(promote, default = expr)]` → generates `pub fn default_field() -> T { expr }`
-///   on the struct and uses `self.field.unwrap_or_else(Self::default_field)` in `finalize_resolved`
+///   on the struct and uses `self.field.unwrap_or_else(Self::default_field)` in `finalize_resolved`.
+///   This default also reaches `deprecated_config` (the unresolved variant that today serializes
+///   to `manifest.config`), so **do not** also fill the field in
+///   `ResolvableConfig::apply_resolve_defaults` — that is redundant.
 /// - `#[resolved(promote, expect = "msg")]` → `self.field.expect("msg")`
 /// - `#[resolved(or_else = expr)]` → `self.field.or_else(|| expr)` (stays `Option<T>`)
 ///

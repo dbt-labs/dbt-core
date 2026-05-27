@@ -542,6 +542,7 @@ pub struct ModelConfig {
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     pub incremental_predicates: Option<Vec<String>>,
     pub batch_size: Option<DbtBatchSize>,
+    #[resolved(promote, default = 1)]
     pub lookback: Option<i32>,
     pub begin: Option<String>,
     pub persist_docs: Option<PersistDocsConfig>,
