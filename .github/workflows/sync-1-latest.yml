@@ -1,0 +1,77 @@
+# **what?**
+# Keep the `1.latest` branch in sync with `main` via a fast-forward push.
+# If `1.latest` cannot be fast-forwarded from `main` (i.e. it has diverged),
+# the workflow fails so the divergence can be resolved manually.
+#
+# **why?**
+# `1.latest` tracks the latest 1.x release line and should always point at the
+# same commit as `main` while we are still cutting 1.x releases from `main`.
+# Automating the fast-forward avoids manual drift between the two branches.
+#
+# **when?**
+# Runs on every push to `main` and can also be triggered manually.
+
+name: Sync 1.latest with main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: sync-1-latest-1.latest
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  SOURCE_BRANCH: "main"
+  TARGET_BRANCH: "1.latest"
+
+jobs:
+  fast-forward:
+    runs-on: ${{ vars.UBUNTU_LATEST }}
+
+    steps:
+      - name: "Checkout ${{ github.repository }}"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.SOURCE_BRANCH }}
+          token: ${{ secrets.FISHTOWN_BOT_PAT }}
+
+      - name: "Configure Git Identity"
+        run: |
+          git config user.name "Github Build Bot"
+          git config user.email "buildbot@fishtownanalytics.com"
+
+      - name: "Fast-forward ${{ env.TARGET_BRANCH }} to ${{ env.SOURCE_BRANCH }}"
+        run: |
+          set -euo pipefail
+
+          git fetch origin "${SOURCE_BRANCH}" "${TARGET_BRANCH}"
+
+          source_sha=$(git rev-parse "origin/${SOURCE_BRANCH}")
+          target_sha=$(git rev-parse "origin/${TARGET_BRANCH}")
+
+          echo "${SOURCE_BRANCH} is at ${source_sha}"
+          echo "${TARGET_BRANCH} is at ${target_sha}"
+
+          if [ "${source_sha}" = "${target_sha}" ]; then
+            echo "${TARGET_BRANCH} is already up to date with ${SOURCE_BRANCH}; nothing to do."
+            exit 0
+          fi
+
+          if ! git merge-base --is-ancestor "${target_sha}" "${source_sha}"; then
+            echo "::error::${TARGET_BRANCH} (${target_sha}) is not an ancestor of ${SOURCE_BRANCH} (${source_sha}); a fast-forward is not possible. Resolve the divergence manually."
+            exit 1
+          fi
+
+          git push origin "${source_sha}:refs/heads/${TARGET_BRANCH}"
+          echo "Fast-forwarded ${TARGET_BRANCH} to ${source_sha}."
