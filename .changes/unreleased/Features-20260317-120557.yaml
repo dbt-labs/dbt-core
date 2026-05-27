@@ -1,0 +1,6 @@
+kind: Features
+body: Support environment variables for selector parameters
+time: 2026-03-17T12:05:57.950375475+01:00
+custom:
+    Author: fornwall
+    Issue: "12193"
