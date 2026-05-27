@@ -1,0 +1,6 @@
+kind: Features
+body: Add `indent` kwarg to `tojson` and `toyaml` Jinja context methods to allow pretty-printed structured output
+time: 2026-05-09T12:00:00.000000-05:00
+custom:
+  Author: jbbqqf
+  Issue: "11210"
