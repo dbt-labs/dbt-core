@@ -512,6 +512,14 @@ class Compiler:
             context = generate_runtime_model_context(node, self.config, manifest)
         context.update(extra_context)
 
+        if getattr(self.config.args, "NO_FULL_REFRESH", False):
+            if getattr(self.config.args, "FULL_REFRESH", False):
+                raise DbtRuntimeError(
+                    "--no-full-refresh and --full-refresh are mutually exclusive."
+                )
+            context["is_incremental"] = lambda: True
+            context["should_full_refresh"] = lambda: False
+
         if isinstance(node, GenericTestNode):
             # for test nodes, add a special keyword args value to the context
             jinja.add_rendered_test_kwargs(context, node)

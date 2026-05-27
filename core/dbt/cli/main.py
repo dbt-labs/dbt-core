@@ -326,6 +326,7 @@ def docs_serve(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.full_refresh
+@p.no_full_refresh
 @p.show_output_format
 @p.introspect
 @p.profiles_dir
