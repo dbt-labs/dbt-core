@@ -114,7 +114,7 @@ class FreshnessExecutionResultArtifact(
         processed = [
             process_freshness_result(r)
             for r in base.results
-            if isinstance(r, SourceFreshnessResult)
+            if isinstance(r, (SourceFreshnessResult, PartialSourceFreshnessResult))
         ]
         return cls(
             metadata=base.metadata,
