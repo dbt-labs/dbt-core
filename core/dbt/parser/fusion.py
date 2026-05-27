@@ -10,6 +10,7 @@ manifest artifacts.
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -106,7 +107,9 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     When target_path_override is provided, it replaces the user's --target-path
     so fs writes its handoff manifest where dbt expects it (a temp dir).
     """
-    base = shlex.split(getattr(flags, "V2_PARSER", "fs parse"))
+    # posix=False on Windows so backslashes in paths (e.g. C:\path\to\fs.exe)
+    # aren't stripped as shell escapes.
+    base = shlex.split(getattr(flags, "V2_PARSER", "fs parse"), posix=(os.name != "nt"))
     forwarded: List[str] = []
 
     project_dir = getattr(flags, "PROJECT_DIR", None)
