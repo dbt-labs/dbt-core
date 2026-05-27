@@ -1,0 +1,7 @@
+kind: Fixes
+body: Apply +schema from dbt_project.yml for YAML snapshots that have no config block
+time: 2026-04-13T12:00:00Z
+custom:
+  Author: ahmedmajid22
+  Issue: "12756"
+  PR: "12825"
