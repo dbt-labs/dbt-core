@@ -30,6 +30,7 @@ from dbt.exceptions import (
     FusionParserVersionError,
 )
 from dbt.flags import get_flags
+from dbt_common.events.functions import get_invocation_id
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
@@ -152,6 +153,11 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     if cli_vars:
         forwarded += ["--vars", _serialize_vars(cli_vars)]
 
+    # Forward dbt-core's invocation_id so fs telemetry shares the same trace.
+    invocation_id = get_invocation_id()
+    if invocation_id:
+        forwarded += ["--invocation-id", str(invocation_id)]
+
     return base + forwarded
 
 
@@ -170,6 +176,21 @@ def _resolve_engine_command(command: str) -> str:
     if candidate.exists():
         return str(candidate)
     return command
+
+
+def _fusion_subprocess_env() -> dict:
+    """Return env for the fs subprocess, overriding DBT_INVOCATION_ENV.
+
+    Setting DBT_INVOCATION_ENV=dbt-core-v2-parser on the child only (not the
+    parent process env) tags every fs telemetry record from this run so the
+    internal-analytics warehouse can attribute it to the v2-parser pathway.
+    The host orchestrator's DBT_INVOCATION_ENV (set by dbt platform Orc/Sinter
+    or by CI) still applies to dbt-core's own telemetry — we only relabel the
+    embedded fs run.
+    """
+    env = os.environ.copy()
+    env["DBT_INVOCATION_ENV"] = "dbt-core-v2-parser"
+    return env
 
 
 def _run_fusion(argv: List[str]) -> None:
@@ -191,7 +212,7 @@ def _run_fusion(argv: List[str]) -> None:
     # Until then, capturing-then-printing-at-end would lose streaming (fusion
     # parsing can take minutes on large projects), so we inherit fds instead.
     try:
-        result = subprocess.run(argv, check=False)
+        result = subprocess.run(argv, check=False, env=_fusion_subprocess_env())
     except FileNotFoundError as e:
         raise FusionParserMissingError(
             f"Fusion parser command not found: {argv[0]!r}. "

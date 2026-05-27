@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -54,6 +55,13 @@ def _fake_parser(manifest_text: Optional[str], returncode: int = 0, stderr: str 
     return _run
 
 
+@pytest.fixture(autouse=True)
+def _no_invocation_id():
+    """Default to no invocation id so argv tests assert only the flags they set."""
+    with mock.patch("dbt.parser.fusion.get_invocation_id", return_value=None):
+        yield
+
+
 class TestBuildArgv:
     @pytest.fixture(autouse=True)
     def _identity_resolve(self):
@@ -102,6 +110,19 @@ class TestBuildArgv:
         assert argv[i + 1] == "/tmp/handoff"
         assert "user/target" not in argv
 
+    def test_forwards_invocation_id(self):
+        with mock.patch(
+            "dbt.parser.fusion.get_invocation_id",
+            return_value="11111111-1111-1111-1111-111111111111",
+        ):
+            argv = _build_argv(_flags())
+        i = argv.index("--invocation-id")
+        assert argv[i + 1] == "11111111-1111-1111-1111-111111111111"
+
+    def test_omits_invocation_id_when_unavailable(self):
+        argv = _build_argv(_flags())
+        assert "--invocation-id" not in argv
+
 
 class TestSerializeVars:
     def test_dict_to_yaml(self):
@@ -146,6 +167,33 @@ class TestParseWithFusion:
         ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
             with pytest.raises(FusionParserMissingError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+    def test_sets_dbt_invocation_env_on_subprocess(self, tmp_path: Path, _patch_fusion_deps):
+        """fs must see DBT_INVOCATION_ENV=dbt-core-v2-parser regardless of the
+        parent process's value, so analytics can attribute the embedded fs run
+        to the v2-parser pathway without clobbering the host's own telemetry."""
+        captured = {}
+
+        def _capture(argv, *args, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return _fake_fs(json.dumps({"metadata": {}}))(argv, *args, **kwargs)
+
+        with mock.patch.dict(
+            "os.environ", {"DBT_INVOCATION_ENV": "dbt-cloud-prod__host:cloud"}, clear=False
+        ), mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=_capture
+        ), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+            # parent process env is untouched (asserted inside the patch.dict
+            # block so the original value is still in place to compare against)
+            assert os.environ["DBT_INVOCATION_ENV"] == "dbt-cloud-prod__host:cloud"
+
+        assert captured["env"] is not None
+        assert captured["env"]["DBT_INVOCATION_ENV"] == "dbt-core-v2-parser"
 
     def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
         # Passthrough mode: the parser's stderr streams directly to the user,
