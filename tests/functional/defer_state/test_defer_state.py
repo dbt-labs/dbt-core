@@ -367,13 +367,15 @@ class TestDeferStateFlag(BaseDeferState):
         assert results.results[0].adapter_response["rows_affected"] == 2
 
 
-class TestFunctionDeferral(BaseDeferState):
+class BaseFunctionDeferState(BaseDeferState):
+    _functions = {
+        "double_it.sql": double_it_sql,
+        "double_it.yml": double_it_yml,
+    }
+
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.sql": double_it_sql,
-            "double_it.yml": double_it_yml,
-        }
+        return self._functions
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -382,14 +384,14 @@ class TestFunctionDeferral(BaseDeferState):
             "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
         }
 
-    def test_build_with_other_schema_defer(self, project, other_schema):
+    def build_and_defer(self, project, other_schema, command="compile"):
         project.create_test_schema(other_schema)
         run_dbt(["build"])
         self.copy_state(project.project_root)
 
-        result = run_dbt(
+        return run_dbt(
             [
-                "run",
+                command,
                 "-s",
                 "double_it_model",
                 "--state",
@@ -399,58 +401,34 @@ class TestFunctionDeferral(BaseDeferState):
                 "otherschema",
             ]
         )
+
+
+class TestFunctionDeferral(BaseFunctionDeferState):
+    def test_build_with_other_schema_defer(self, project, other_schema):
+        result = self.build_and_defer(project, other_schema, command="run")
         assert len(result.results) == 1
         assert result.results[0].node.name == "double_it_model"
 
 
-class TestFunctionDeferralWithConfigAlias(BaseDeferState):
+class TestFunctionDeferralWithConfigAlias(BaseFunctionDeferState):
     """Test that deferred function references use an alias set in config."""
 
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
         return {
-            "double_it.sql": double_it_sql,
+            **self._functions,
             "double_it.yml": double_it_with_alias_yml,
         }
 
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            **self._models,
-            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
-        }
-
     def test_defer_uses_config_alias(self, project, other_schema):
-        project.create_test_schema(other_schema)
-        run_dbt(["build"])
-        self.copy_state(project.project_root)
-
-        result = run_dbt(
-            [
-                "compile",
-                "-s",
-                "double_it_model",
-                "--state",
-                "state",
-                "--defer",
-                "--target",
-                "otherschema",
-            ]
-        )
+        result = self.build_and_defer(project, other_schema)
         compiled = result.results[0].node.compiled_code
         # The deferred function reference should use the config alias "my_custom_double"
         assert "my_custom_double" in compiled
 
 
-class TestFunctionDeferralWithAlias(BaseDeferState):
+class TestFunctionDeferralWithAlias(BaseFunctionDeferState):
     """Test that deferred function references use the alias from generate_alias_name."""
-
-    @pytest.fixture(scope="class")
-    def functions(self) -> Dict[str, str]:
-        return {
-            "double_it.sql": double_it_sql,
-            "double_it.yml": double_it_yml,
-        }
 
     @pytest.fixture(scope="class")
     def macros(self):
@@ -459,30 +437,8 @@ class TestFunctionDeferralWithAlias(BaseDeferState):
             "generate_alias_name.sql": generate_alias_name_sql,
         }
 
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            **self._models,
-            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
-        }
-
     def test_defer_uses_function_alias(self, project, other_schema):
-        project.create_test_schema(other_schema)
-        run_dbt(["build"])
-        self.copy_state(project.project_root)
-
-        result = run_dbt(
-            [
-                "compile",
-                "-s",
-                "double_it_model",
-                "--state",
-                "state",
-                "--defer",
-                "--target",
-                "otherschema",
-            ]
-        )
+        result = self.build_and_defer(project, other_schema)
         compiled = result.results[0].node.compiled_code
         # The deferred function reference should use the alias "generated_double_it"
         # (as produced by generate_alias_name), not the bare node name "double_it"
