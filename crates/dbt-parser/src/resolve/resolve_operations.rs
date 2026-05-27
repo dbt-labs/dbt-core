@@ -50,7 +50,7 @@ pub fn resolve_operations(
     for start in dbt_project.on_run_start.iter() {
         let operations: Vec<Spanned<String>> = start.clone().into();
         on_run_start.extend(new_operation(
-            "on_run_start",
+            "on-run-start",
             &operations,
             dbt_project,
             package_base_path,
@@ -69,7 +69,7 @@ pub fn resolve_operations(
     for end in dbt_project.on_run_end.iter() {
         let operations: Vec<Spanned<String>> = end.clone().into();
         on_run_end.extend(new_operation(
-            "on_run_end",
+            "on-run-end",
             &operations,
             dbt_project,
             package_base_path,
