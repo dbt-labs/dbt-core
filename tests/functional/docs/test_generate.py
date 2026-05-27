@@ -229,3 +229,104 @@ class TestGenerateSelectSeed(TestBaseGenerate):
         assert "seed.test.source_from_seed" in catalog.nodes
         # source with same relation that was not selected not in catalog
         assert len(catalog.sources) == 0
+
+
+source_with_column_descriptions_config = """
+sources:
+  - name: test_source
+    schema: "{{ target.schema }}"
+    tables:
+      - name: source_table
+        columns:
+          - name: id
+            description: "This is a YAML description for id column"
+          - name: name
+            # No description provided, should fall back to DB comment
+          - name: value
+            description: "This is a YAML description for value column"
+"""
+
+
+class TestGenerateSourceColumnDescriptions(TestBaseGenerate):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "source_config.yml": source_with_column_descriptions_config,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {}
+
+    def test_source_column_descriptions_from_db_and_yaml(self, project):
+        # Create a source table with column comments in the database
+        project.run_sql(
+            """
+            create table {schema}.source_table (
+                id int,
+                name varchar(100),
+                value decimal,
+                undocumented_column text
+            )
+            """.format(
+                schema=project.test_schema
+            )
+        )
+
+        # Add comments to columns in the database
+        # Note: This uses PostgreSQL-style COMMENT syntax
+        # The test framework typically uses PostgreSQL for tests
+        project.run_sql(
+            "COMMENT ON COLUMN {schema}.source_table.id IS 'DB comment for id'".format(
+                schema=project.test_schema
+            )
+        )
+        project.run_sql(
+            "COMMENT ON COLUMN {schema}.source_table.name IS 'DB comment for name'".format(
+                schema=project.test_schema
+            )
+        )
+        project.run_sql(
+            "COMMENT ON COLUMN {schema}.source_table.value IS 'DB comment for value'".format(
+                schema=project.test_schema
+            )
+        )
+        project.run_sql(
+            "COMMENT ON COLUMN {schema}.source_table.undocumented_column IS 'DB comment for undocumented'".format(
+                schema=project.test_schema
+            )
+        )
+
+        # Generate docs
+        catalog = run_dbt(["docs", "generate"])
+
+        # Verify the source is in the catalog
+        source_id = "source.test.test_source.source_table"
+        assert source_id in catalog.sources
+
+        source_catalog = catalog.sources[source_id]
+        columns = source_catalog.columns
+
+        # Test 1: Column with YAML description should use YAML (not DB comment)
+        assert "id" in columns
+        assert (
+            columns["id"].comment == "This is a YAML description for id column"
+        ), "YAML description should take priority over DB comment"
+
+        # Test 2: Column without YAML description should use DB comment
+        assert "name" in columns
+        assert (
+            columns["name"].comment == "DB comment for name"
+        ), "DB comment should be used when YAML description is missing"
+
+        # Test 3: Column with YAML description should use YAML (not DB comment)
+        assert "value" in columns
+        assert (
+            columns["value"].comment == "This is a YAML description for value column"
+        ), "YAML description should take priority over DB comment"
+
+        # Test 4: Column not in YAML should use DB comment
+        assert "undocumented_column" in columns
+        assert (
+            columns["undocumented_column"].comment == "DB comment for undocumented"
+        ), "DB comment should be used for columns not documented in YAML"
