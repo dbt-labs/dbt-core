@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix error message for missing `version` property in `packages.yml`
+time: 2026-03-17T13:31:44.7469465-07:00
+custom:
+    Author: benlevycmp
+    Issue: "12649"
