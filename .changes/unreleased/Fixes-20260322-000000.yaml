@@ -1,0 +1,6 @@
+kind: Fixes
+body: "Improve error message for similar database identifiers to reference the correct node type (source, model, seed, snapshot) instead of always saying 'model'"
+time: 2026-03-22T00:00:00.000000+00:00
+custom:
+    Author: chinar-amrutkar
+    Issue: "12691"
