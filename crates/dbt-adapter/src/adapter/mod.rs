@@ -27,6 +27,7 @@ use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
+use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
@@ -35,7 +36,6 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, TableFormat};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
-use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::QueryCtx;
 use indexmap::IndexMap;
 use minijinja::arg_utils::ArgsIter;
@@ -381,13 +381,16 @@ impl Adapter {
     /// ) -> None
     /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn cache_dropped(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn cache_dropped(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.cache_dropped(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("cache_dropped", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.cache_dropped(state, &relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -404,14 +407,18 @@ impl Adapter {
     /// ) -> None
     /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn cache_renamed(
-        &self,
-        state: &State,
-        from_relation: &Arc<dyn BaseRelation>,
-        to_relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn cache_renamed(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.cache_renamed(state, from_relation, to_relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("cache_renamed", &["from_relation", "to_relation"], args);
+                let from_relation_val = iter.next_arg::<&Value>()?;
+                let from_relation = downcast_value_to_dyn_base_relation(from_relation_val)?;
+                let to_relation_val = iter.next_arg::<&Value>()?;
+                let to_relation = downcast_value_to_dyn_base_relation(to_relation_val)?;
+                iter.finish()?;
+
+                adapter.cache_renamed(state, &from_relation, &to_relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -430,15 +437,30 @@ impl Adapter {
     pub fn standardize_grants_dict(
         &self,
         _state: &State,
-        grants_table: &Arc<AgateTable>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from_serialize(
-                &adapter.standardize_grants_dict(grants_table.clone())?,
-            )),
-            Parse(_) => unreachable!(
-                "standardize_grants_dict should be handled in dispatch for ParseAdapter"
-            ),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("standardize_grants_dict", &["grants_table"], args);
+                let grants_table = iter
+                    .next_arg::<&Value>()?
+                    .downcast_object::<AgateTable>()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "grants_table must be an AgateTable",
+                        )
+                    })?;
+
+                Ok(Value::from_serialize(
+                    &adapter.standardize_grants_dict(grants_table)?,
+                ))
+            }
+            // This method is typically called after show grants SQL + run_query.
+            // During parse phase, run_query returns Undefined since queries don't execute,
+            // so we don't have an actual AgateTable. Return an empty grants dict to avoid
+            // downcast errors on Undefined values.
+            Parse(_) => Ok(Value::from(BTreeMap::<Value, Vec<Value>>::new())),
         }
     }
 
@@ -454,7 +476,11 @@ impl Adapter {
     /// ) -> str
     /// ```
     #[tracing::instrument(skip_all, level = "trace")]
-    pub fn quote(&self, _state: &State, identifier: &str) -> Result<Value, minijinja::Error> {
+    pub fn quote(&self, _state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("quote", &["identifier"], args);
+        let identifier = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
         let quoted = quote_ident(self.adapter_type(), identifier);
         Ok(Value::from(quoted))
     }
@@ -474,11 +500,15 @@ impl Adapter {
     pub fn quote_as_configured(
         &self,
         state: &State,
-        identifier: &str,
-        quote_key: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("quote_as_configured", &["identifier", "quote_key"], args);
+                let identifier = iter.next_arg::<&str>()?;
+                let quote_key = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let quote_key = quote_key.parse::<ComponentName>().map_err(|_| {
                     minijinja::Error::new(
                         minijinja::ErrorKind::InvalidArgument,
@@ -509,11 +539,15 @@ impl Adapter {
     pub fn quote_seed_column(
         &self,
         state: &State,
-        column: &str,
-        quote_config: Option<bool>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("quote_seed_column", &["column", "quote_config"], args);
+                let column = iter.next_arg::<&str>()?;
+                let quote_config = iter.next_kwarg::<Option<bool>>("quote_config")?;
+                iter.finish()?;
+
                 let result = adapter.quote_seed_column(state, column, quote_config)?;
                 Ok(Value::from(result))
             }
@@ -533,15 +567,23 @@ impl Adapter {
     /// ) -> Optional[str]
     /// ```
     #[tracing::instrument(skip_all, level = "trace")]
-    pub fn convert_type(
-        &self,
-        state: &State,
-        table: &Arc<AgateTable>,
-        col_idx: i64,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn convert_type(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let result = adapter.convert_type(state, table.clone(), col_idx)?;
+                let iter = ArgsIter::new("convert_type", &["agate_table", "col_idx"], args);
+                let table = iter
+                    .next_arg::<&Value>()?
+                    .downcast_object::<AgateTable>()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "agate_table must be an AgateTable",
+                        )
+                    })?;
+                let col_idx = iter.next_arg::<i64>()?;
+                iter.finish()?;
+
+                let result = adapter.convert_type(state, table, col_idx)?;
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(empty_string_value()),
@@ -563,16 +605,30 @@ impl Adapter {
     pub fn render_raw_model_constraints(
         &self,
         state: &State,
-        raw_constraints: &[ModelConstraint],
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter =
+                    ArgsIter::new("render_raw_model_constraints", &["raw_constraints"], args);
+                let raw_constraints_val = iter.next_arg::<&Value>()?;
+                let raw_constraints = minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(
+                    raw_constraints_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+                iter.finish()?;
+
                 if let Some(replay_adapter) = adapter.as_replay() {
                     return replay_adapter
-                        .replay_render_raw_model_constraints(state, raw_constraints);
+                        .replay_render_raw_model_constraints(state, &raw_constraints);
                 }
                 let mut result = vec![];
-                for constraint in raw_constraints {
+                for constraint in &raw_constraints {
                     let rendered =
                         render_model_constraint(adapter.adapter_type(), constraint.clone());
                     if let Some(rendered) = rendered {
@@ -592,10 +648,14 @@ impl Adapter {
     pub fn render_raw_columns_constraints(
         &self,
         state: &State,
-        raw_columns: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("render_raw_columns_constraints", &["raw_columns"], args);
+                let raw_columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
                 let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(
                     raw_columns.clone(),
                 )
@@ -706,17 +766,24 @@ impl Adapter {
     ///    retry_limit: int = 1,
     /// ) -> Tuple[Connection, Any]:
     /// ```
-    #[tracing::instrument(skip(self, state, bindings), level = "trace")]
-    pub fn add_query(
-        &self,
-        state: &State,
-        sql: &str,
-        auto_begin: bool,
-        bindings: Option<&Value>,
-        abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
+    #[tracing::instrument(skip(self, state, args), level = "trace")]
+    pub fn add_query(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("add_query", &["sql"], args);
+                let sql = iter.next_arg::<&str>()?;
+                let auto_begin = iter
+                    .next_kwarg::<Option<bool>>("auto_begin")?
+                    .unwrap_or(true);
+                let bindings = iter.next_kwarg::<Option<&Value>>("bindings")?;
+                let abridge_sql_log = iter
+                    .next_kwarg::<Option<bool>>("abridge_sql_log")?
+                    .unwrap_or(false);
+                let _retryable_exceptions =
+                    iter.next_kwarg::<Option<&Value>>("retryable_exceptions")?;
+                let _retry_limit = iter.next_kwarg::<Option<i64>>("retry_limit")?.unwrap_or(1);
+                // TODO(harry): add iter.finish() and fix the tests
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 adapter.add_query(
@@ -728,9 +795,9 @@ impl Adapter {
                     abridge_sql_log,
                     self.cancellation_token.clone(),
                 )?;
-                Ok(())
+                Ok(Value::from(()))
             }
-            Parse(_) => Ok(()),
+            Parse(_) => Ok(Value::from(())),
         }
     }
 
@@ -747,30 +814,36 @@ impl Adapter {
     pub fn submit_python_job(
         &self,
         state: &State,
-        model: &Value,
-        compiled_code: &str,
-    ) -> AdapterResult<AdapterResponse> {
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("submit_python_job", &["model", "compiled_code"], args);
+                let model = iter.next_arg::<&Value>()?;
+                let compiled_code = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("submit_python_job adapter call");
 
-                adapter.submit_python_job(
+                let response = adapter.submit_python_job(
                     &ctx,
                     conn.as_mut(),
                     state,
                     model,
                     compiled_code,
                     self.cancellation_token.clone(),
-                )
+                )?;
+                Ok(Value::from_object(response))
             }
             Parse(_) => {
                 // Python models cannot be executed during parse phase
                 Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,
                     "submit_python_job can only be called in materialization macros",
-                ))
+                )
+                .into())
             }
         }
     }
@@ -786,18 +859,19 @@ impl Adapter {
     /// ) -> None
     /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn drop_relation(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("drop_relation", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
                 adapter
                     .engine()
                     .relation_cache()
                     .evict_relation(relation.as_ref() as &dyn BaseRelation);
-                Ok(adapter.drop_relation(state, relation)?)
+                Ok(adapter.drop_relation(state, &relation)?)
             }
             Parse(_) => Ok(none_value()),
         }
@@ -817,10 +891,17 @@ impl Adapter {
     pub fn truncate_relation(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(adapter.truncate_relation(state, relation)?),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("truncate_relation", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                Ok(adapter.truncate_relation(state, &relation)?)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -840,15 +921,22 @@ impl Adapter {
     pub fn rename_relation(
         &self,
         state: &State,
-        from_relation: &Arc<dyn BaseRelation>,
-        to_relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                // Update cache
-                self.cache_renamed(state, from_relation, to_relation)?;
+                let iter =
+                    ArgsIter::new("rename_relation", &["from_relation", "to_relation"], args);
+                let from_relation_val = iter.next_arg::<&Value>()?;
+                let from_relation = downcast_value_to_dyn_base_relation(from_relation_val)?;
+                let to_relation_val = iter.next_arg::<&Value>()?;
+                let to_relation = downcast_value_to_dyn_base_relation(to_relation_val)?;
+                iter.finish()?;
 
-                adapter.rename_relation(state, from_relation, to_relation)?;
+                // Update cache (call the typed AdapterImpl directly since we already have refs)
+                adapter.cache_renamed(state, &from_relation, &to_relation)?;
+
+                adapter.rename_relation(state, &from_relation, &to_relation)?;
                 Ok(Value::from(()))
             }
             Parse(_) => Ok(none_value()),
@@ -861,13 +949,23 @@ impl Adapter {
     pub fn expand_target_column_types(
         &self,
         state: &State,
-        from_relation: &Arc<dyn BaseRelation>,
-        to_relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "expand_target_column_types",
+                    &["from_relation", "to_relation"],
+                    args,
+                );
+                let from_relation_val = iter.next_arg::<&Value>()?;
+                let from_relation = downcast_value_to_dyn_base_relation(from_relation_val)?;
+                let to_relation_val = iter.next_arg::<&Value>()?;
+                let to_relation = downcast_value_to_dyn_base_relation(to_relation_val)?;
+                iter.finish()?;
+
                 let result =
-                    adapter.expand_target_column_types(state, from_relation, to_relation)?;
+                    adapter.expand_target_column_types(state, &from_relation, &to_relation)?;
                 Ok(result)
             }
             Parse(_) => Ok(none_value()),
@@ -892,26 +990,32 @@ impl Adapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn create_schema(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn create_schema(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.create_schema(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("create_schema", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.create_schema(state, &relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L172-L173
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn drop_schema(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.drop_schema(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("drop_schema", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.drop_schema(state, &relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -931,10 +1035,17 @@ impl Adapter {
     pub fn valid_snapshot_target(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.valid_snapshot_target(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("valid_snapshot_target", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.valid_snapshot_target(state, &relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -959,10 +1070,21 @@ impl Adapter {
     pub fn get_incremental_strategy_macro(
         &self,
         state: &State,
-        strategy: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.get_incremental_strategy_macro(state, strategy),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "get_incremental_strategy_macro",
+                    &["context", "strategy"],
+                    args,
+                );
+                let _context = iter.next_arg::<Value>()?; // unused, for backward compat
+                let strategy = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                adapter.get_incremental_strategy_macro(state, strategy)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -982,17 +1104,50 @@ impl Adapter {
     pub fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
-        column_names: Option<&BTreeMap<String, String>>,
-        strategy: &Arc<SnapshotStrategy>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "assert_valid_snapshot_target_given_strategy",
+                    &["relation", "column_names", "strategy"],
+                    args,
+                );
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let column_names_val = iter.next_arg::<&Value>()?;
+                let column_names = if column_names_val.is_none() || column_names_val.is_undefined()
+                {
+                    None
+                } else {
+                    Some(
+                        minijinja_value_to_typed_struct::<BTreeMap<String, String>>(
+                            column_names_val.clone(),
+                        )
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                e.to_string(),
+                            )
+                        })?,
+                    )
+                };
+                let strategy_val = iter.next_arg::<&Value>()?;
+                let strategy =
+                    minijinja_value_to_typed_struct::<SnapshotStrategy>(strategy_val.clone())
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                e.to_string(),
+                            )
+                        })?;
+                iter.finish()?;
+
                 adapter.assert_valid_snapshot_target_given_strategy(
                     state,
-                    relation,
-                    column_names.cloned(),
-                    strategy.clone(),
+                    &relation,
+                    column_names,
+                    Arc::new(strategy),
                 )?;
                 Ok(none_value())
             }
@@ -1014,10 +1169,38 @@ impl Adapter {
     pub fn get_hard_deletes_behavior(
         &self,
         _state: &State,
-        config: BTreeMap<String, Value>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(adapter.get_hard_deletes_behavior(config)?)),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_hard_deletes_behavior", &["config"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let hard_deletes = config_val.get_item(&Value::from("hard_deletes")).ok();
+                let invalidate_hard_deletes = config_val
+                    .get_item(&Value::from("invalidate_hard_deletes"))
+                    .ok();
+
+                let mut config = BTreeMap::<String, Value>::new();
+                if let Some(hard_deletes) = hard_deletes
+                    && !hard_deletes.is_undefined()
+                    && !hard_deletes.is_none()
+                {
+                    config.insert("hard_deletes".to_string(), hard_deletes);
+                }
+                if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
+                    && !invalidate_hard_deletes.is_undefined()
+                    && !invalidate_hard_deletes.is_none()
+                {
+                    config.insert(
+                        "invalidate_hard_deletes".to_string(),
+                        invalidate_hard_deletes,
+                    );
+                }
+
+                Ok(Value::from(adapter.get_hard_deletes_behavior(config)?))
+            }
             // For parse adapter, always return "ignore" as default behavior
             Parse(_) => Ok(none_value()),
         }
@@ -1217,12 +1400,22 @@ impl Adapter {
     pub fn get_missing_columns(
         &self,
         state: &State,
-        from_relation: &Arc<dyn BaseRelation>,
-        to_relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let result = adapter.get_missing_columns(state, from_relation, to_relation)?;
+                let iter = ArgsIter::new(
+                    "get_missing_columns",
+                    &["from_relation", "to_relation"],
+                    args,
+                );
+                let from_relation_val = iter.next_arg::<&Value>()?;
+                let from_relation = downcast_value_to_dyn_base_relation(from_relation_val)?;
+                let to_relation_val = iter.next_arg::<&Value>()?;
+                let to_relation = downcast_value_to_dyn_base_relation(to_relation_val)?;
+                iter.finish()?;
+
+                let result = adapter.get_missing_columns(state, &from_relation, &to_relation)?;
                 Ok(Value::from_object(result))
             }
             Parse(_) => Ok(empty_vec_value()),
@@ -1317,11 +1510,17 @@ impl Adapter {
     pub fn check_schema_exists(
         &self,
         state: &State,
-        database: &str,
-        schema: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.check_schema_exists(state, database, schema),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("check_schema_exists", &["database", "schema"], args);
+                let database = iter.next_arg::<&str>()?;
+                let schema = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                adapter.check_schema_exists(state, database, schema)
+            }
             Parse(_) => Ok(Value::from(true)),
         }
     }
@@ -1380,10 +1579,14 @@ impl Adapter {
     pub fn get_column_schema_from_query(
         &self,
         state: &State,
-        sql: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_column_schema_from_query", &["sql"], args);
+                let sql = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
@@ -1409,10 +1612,14 @@ impl Adapter {
     pub fn get_columns_in_select_sql(
         &self,
         state: &State,
-        sql: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_columns_in_select_sql", &["sql"], args);
+                let sql = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
@@ -1435,10 +1642,14 @@ impl Adapter {
     pub fn verify_database(
         &self,
         _state: &State,
-        database: String,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("verify_database", &["database"], args);
+                let database = iter.next_arg::<String>()?;
+                iter.finish()?;
+
                 let result = adapter.verify_database(database);
                 Ok(result?)
             }
@@ -1457,12 +1668,12 @@ impl Adapter {
     ///     macro_namespace: Optional[str] = None
     /// ) -> DispatchObject
     /// ```
-    pub fn dispatch(
-        &self,
-        state: &State,
-        macro_name: &str,
-        macro_namespace: Option<&str>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn dispatch(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("dispatch", &["macro_name"], args);
+        let macro_name = iter.next_arg::<&str>()?;
+        let macro_namespace = iter.next_kwarg::<Option<&str>>("macro_namespace")?;
+        iter.finish()?;
+
         if macro_name.contains('.') {
             let parts: Vec<&str> = macro_name.split('.').collect();
             return Err(minijinja::Error::new(
@@ -1491,23 +1702,32 @@ impl Adapter {
     pub fn nest_column_data_types(
         &self,
         state: &State,
-        columns: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.nest_column_data_types(state, columns),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("nest_column_data_types", &["columns"], args);
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                adapter.nest_column_data_types(state, columns)
+            }
             Parse(_) => Ok(empty_map_value()),
         }
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
-    pub fn get_bq_table(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn get_bq_table(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.get_bq_table(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_bq_table", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.get_bq_table(state, &relation)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1525,16 +1745,59 @@ impl Adapter {
     /// ) -> bool
     /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn is_replaceable(
-        &self,
-        state: &State,
-        relation: Option<&Arc<dyn BaseRelation>>,
-        partition_by: Option<BigqueryPartitionConfig>,
-        cluster_by: Option<ClusterConfig>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn is_replaceable(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let relation = match relation {
+                let iter = ArgsIter::new("is_replaceable", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = if relation_val.is_none() {
+                    None
+                } else {
+                    Some(downcast_value_to_dyn_base_relation(relation_val)?)
+                };
+                let partition_by_val = iter.next_kwarg::<Option<&Value>>("partition_by")?;
+                let cluster_by_val = iter.next_kwarg::<Option<&Value>>("cluster_by")?;
+                iter.finish()?;
+
+                let partition_by = if let Some(pb) = partition_by_val {
+                    // Match original behavior: check is_none() only, then deserialize
+                    if pb.is_none() {
+                        None
+                    } else {
+                        Some(
+                            minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(pb.clone())
+                                .map_err(|e| {
+                                    minijinja::Error::new(
+                                        minijinja::ErrorKind::SerdeDeserializeError,
+                                        e.to_string(),
+                                    )
+                                })?,
+                        )
+                    }
+                } else {
+                    None
+                };
+
+                let cluster_by = if let Some(cb) = cluster_by_val {
+                    if cb.is_none() {
+                        None
+                    } else {
+                        Some(
+                            minijinja_value_to_typed_struct::<ClusterConfig>(cb.clone()).map_err(
+                                |e| {
+                                    minijinja::Error::new(
+                                        minijinja::ErrorKind::SerdeDeserializeError,
+                                        e.to_string(),
+                                    )
+                                },
+                            )?,
+                        )
+                    }
+                } else {
+                    None
+                };
+
+                let relation = match relation.as_ref() {
                     None => {
                         // Replay compatibility: Mantle recordings may include an is_replaceable call even
                         // when relation=None (dbt-bigquery passes None when get_relation returns None).
@@ -1580,6 +1843,7 @@ impl Adapter {
                 )?;
                 Ok(Value::from(result))
             }
+            // In parse mode, return stub value early without validation
             Parse(_) => Ok(Value::from(false)),
         }
     }
@@ -1599,13 +1863,18 @@ impl Adapter {
     pub fn parse_partition_by(
         &self,
         _state: &State,
-        raw_partition_by: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("parse_partition_by", &["raw_partition_by"], args);
+                let raw_partition_by = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
                 let result = adapter.parse_partition_by(raw_partition_by.clone())?;
                 Ok(result)
             }
+            // In parse mode, return stub value early without validation
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1623,13 +1892,38 @@ impl Adapter {
     pub fn get_table_options(
         &self,
         state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
-        temporary: bool,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let options = adapter.get_table_options(state, config, node, temporary)?;
+                let iter = ArgsIter::new("get_table_options", &["config", "node"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                let node_val = iter.next_arg::<&Value>()?;
+                let temporary = iter
+                    .next_kwarg::<Option<bool>>("temporary")?
+                    .unwrap_or_default();
+                iter.finish()?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!("get_table_options: Failed to deserialize config: {e}"),
+                        )
+                    })?;
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    node_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                        ),
+                    )
+                })?;
+
+                let options = adapter.get_table_options(state, config, &node, temporary)?;
                 Ok(Value::from_serialize(options))
             }
             Parse(_) => Ok(none_value()),
@@ -1640,13 +1934,36 @@ impl Adapter {
     pub fn get_view_options(
         &self,
         state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let node = node.as_internal_node();
-                let options = adapter.get_view_options(state, config, node.common())?;
+                let iter = ArgsIter::new("get_view_options", &["config", "node"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                let node_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!("get_view_options: Failed to deserialize config: {e}"),
+                        )
+                    })?;
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    node_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                        ),
+                    )
+                })?;
+
+                let inner_node = node.as_internal_node();
+                let options = adapter.get_view_options(state, config, inner_node.common())?;
                 Ok(Value::from_serialize(options))
             }
             Parse(_) => Ok(none_value()),
@@ -1657,13 +1974,38 @@ impl Adapter {
     pub fn get_common_options(
         &self,
         state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
-        temporary: bool,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let options = adapter.get_common_options(state, config, node, temporary)?;
+                let iter = ArgsIter::new("get_common_options", &["config", "node"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                let node_val = iter.next_arg::<&Value>()?;
+                let temporary = iter
+                    .next_kwarg::<Option<bool>>("temporary")?
+                    .unwrap_or(false);
+                iter.finish()?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!("get_common_options: Failed to deserialize config: {e}"),
+                        )
+                    })?;
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    node_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "get_common_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                        ),
+                    )
+                })?;
+
+                let options = adapter.get_common_options(state, config, &node, temporary)?;
                 Ok(options)
             }
             Parse(_) => Ok(none_value()),
@@ -1686,15 +2028,43 @@ impl Adapter {
     pub fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
-        columns: &Value,
-        partition_config: BigqueryPartitionConfig,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "add_time_ingestion_partition_column",
+                    &["partition_by", "columns"],
+                    args,
+                );
+                let partition_by = iter.next_arg::<&Value>()?;
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                // Match original behavior: try to deserialize directly, let deserialization handle errors
+                let partition_by =
+                    minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone())
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                format!(
+                                    "adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"
+                                ),
+                            )
+                        })?;
+
+                let partition_config = partition_by.into_bigquery().ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "Expect a BigqueryPartitionConfigStruct",
+                    )
+                })?;
+
                 let result = adapter
                     .add_time_ingestion_partition_column(columns.clone(), partition_config)?;
                 Ok(result)
             }
+            // In parse mode, return stub value early without validation
             Parse(_) => Ok(empty_vec_value()),
         }
     }
@@ -1703,20 +2073,62 @@ impl Adapter {
     pub fn grant_access_to(
         &self,
         state: &State,
-        entity: &Arc<dyn BaseRelation>,
-        entity_type: &str,
-        role: Option<&str>,
-        database: &str,
-        schema: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "grant_access_to",
+                    &["entity", "entity_type", "role", "grant_target_dict"],
+                    args,
+                );
+                let entity_val = iter.next_arg::<&Value>()?;
+                let entity_type = iter.next_arg::<&str>()?;
+                let role_val = iter.next_arg::<&Value>()?;
+                let grant_target_dict = iter.next_arg::<&Value>()?;
+                let grant_target = minijinja_value_to_typed_struct::<GrantAccessToTarget>(
+                    grant_target_dict.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+                iter.finish()?;
+
+                let database = grant_target.project.as_deref().ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "project in a GrantAccessToTarget cannot be empty",
+                    )
+                })?;
+                let schema = grant_target.dataset.as_deref().ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "dataset in a GrantAccessToTarget cannot be empty",
+                    )
+                })?;
+
+                let role = if role_val.is_none() || role_val.is_undefined() {
+                    None
+                } else {
+                    Some(role_val.as_str().ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "role must be a string",
+                        )
+                    })?)
+                };
+
+                let entity = downcast_value_to_dyn_base_relation(entity_val)?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.grant_access_to(
                     state,
                     conn.as_mut(),
-                    entity,
+                    &entity,
                     entity_type,
                     role,
                     database,
@@ -1733,16 +2145,21 @@ impl Adapter {
     pub fn get_dataset_location(
         &self,
         state: &State,
-        relation: &dyn BaseRelation,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_dataset_location", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.get_dataset_location(
                     state,
                     conn.as_mut(),
-                    relation,
+                    relation.as_ref(),
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))
@@ -1755,13 +2172,21 @@ impl Adapter {
     pub fn update_table_description(
         &self,
         state: &State,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-        description: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "update_table_description",
+                    &["database", "schema", "identifier", "description"],
+                    args,
+                );
+                let database = iter.next_arg::<&str>()?;
+                let schema = iter.next_arg::<&str>()?;
+                let identifier = iter.next_arg::<&str>()?;
+                let description = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.update_table_description(
@@ -1783,17 +2208,22 @@ impl Adapter {
     pub fn alter_table_add_columns(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
-        columns: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("alter_table_add_columns", &["relation", "columns"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.alter_table_add_columns(
                     state,
                     conn.as_mut(),
-                    relation,
+                    &relation,
                     columns.clone(),
                     self.cancellation_token.clone(),
                 )?;
@@ -1804,20 +2234,30 @@ impl Adapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn update_columns(
-        &self,
-        state: &State,
-        relation: &Arc<dyn BaseRelation>,
-        columns: IndexMap<String, DbtColumn>,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn update_columns(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("update_columns", &["relation", "columns"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let columns_val = iter.next_arg::<&Value>()?;
+                let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(
+                    columns_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.update_columns_descriptions(
                     state,
                     conn.as_mut(),
-                    relation,
+                    &relation,
                     columns,
                     self.cancellation_token.clone(),
                 )?;
@@ -1841,10 +2281,16 @@ impl Adapter {
     pub fn list_relations_without_caching(
         &self,
         state: &State,
-        schema_relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter =
+                    ArgsIter::new("list_relations_without_caching", &["schema_relation"], args);
+                let schema_relation_val = iter.next_arg::<&Value>()?;
+                let schema_relation = downcast_value_to_dyn_base_relation(schema_relation_val)?;
+                iter.finish()?;
+
                 let resolved_catalog = schema_relation
                     .database_as_resolved_str()
                     .unwrap_or_default();
@@ -1887,10 +2333,14 @@ impl Adapter {
     pub fn has_dbr_capability(
         &self,
         state: &State,
-        capability_name: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
+                let capability_name = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 match adapter.adapter_type() {
                     AdapterType::Databricks => {
                         let has_feature = adapter.has_feature(state, capability_name, self.cancellation_token.clone())?;
@@ -1919,11 +2369,15 @@ impl Adapter {
     pub fn compare_dbr_version(
         &self,
         state: &State,
-        major: i64,
-        minor: i64,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("compare_dbr_version", &["major", "minor"], args);
+                let major = iter.next_arg::<i64>()?;
+                let minor = iter.next_arg::<i64>()?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.compare_dbr_version(
@@ -1941,14 +2395,18 @@ impl Adapter {
 
     /// Returns true if the adapter supports the given feature.
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn has_feature(&self, state: &State, name: &str) -> AdapterResult<Value> {
-        let result = match &self.inner {
+    pub fn has_feature(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
+        match &self.inner {
             Typed { adapter, .. } => {
-                adapter.has_feature(state, name, self.cancellation_token.clone())?
+                let iter = ArgsIter::new("has_feature", &["feature_name"], args);
+                let name = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                let result = adapter.has_feature(state, name, self.cancellation_token.clone())?;
+                Ok(Value::from(result))
             }
-            Parse(_) => None,
-        };
-        Ok(Value::from(result))
+            Parse(_) => Ok(Value::from(None::<bool>)),
+        }
     }
 
     /// Extract the database name from a Jinja relation Value and look up its table format.
@@ -1971,7 +2429,9 @@ impl Adapter {
     #[tracing::instrument(skip(self, state), level = "trace")]
     pub fn is_motherduck(&self, state: &State) -> AdapterResult<Value> {
         match self.adapter_type() {
-            AdapterType::DuckDB => self.has_feature(state, "motherduck"),
+            AdapterType::DuckDB => self
+                .has_feature(state, &[Value::from("motherduck")])
+                .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string())),
             _ => Err(AdapterError::new(
                 AdapterErrorKind::NotSupported,
                 "is_motherduck() is only available for the DuckDB adapter. Use the portable adapter.has_feature(\"motherduck\") instead.",
@@ -2033,13 +2493,23 @@ impl Adapter {
     pub fn external_write_options(
         &self,
         _state: &State,
-        write_location: &str,
-        rendered_options: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(
-                adapter.external_write_options(write_location, rendered_options),
-            )),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "external_write_options",
+                    &["write_location", "rendered_options"],
+                    args,
+                );
+                let write_location = iter.next_arg::<&str>()?;
+                let rendered_options = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                Ok(Value::from(
+                    adapter.external_write_options(write_location, rendered_options),
+                ))
+            }
             Parse(_) => Ok(empty_string_value()),
         }
     }
@@ -2048,13 +2518,22 @@ impl Adapter {
     pub fn external_read_location(
         &self,
         _state: &State,
-        write_location: &str,
-        rendered_options: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new(
+            "external_read_location",
+            &["write_location", "rendered_options"],
+            args,
+        );
+        let write_location = iter.next_arg::<&str>()?;
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(
-                adapter.external_read_location(write_location, rendered_options),
-            )),
+            Typed { adapter, .. } => {
+                let rendered_options = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(Value::from(
+                    adapter.external_read_location(write_location, rendered_options),
+                ))
+            }
             Parse(_) => Ok(Value::from(write_location)),
         }
     }
@@ -2063,10 +2542,14 @@ impl Adapter {
     pub fn location_exists(
         &self,
         state: &State,
-        location: &str,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { .. } => {
+                let iter = ArgsIter::new("location_exists", &["location"], args);
+                let location = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let sql = format!("select 1 from '{}' where 1=0", location);
                 let result = self.execute(state, None, &sql, false, false, None, None);
                 Ok(Value::from(result.is_ok()))
@@ -2082,12 +2565,38 @@ impl Adapter {
     pub fn compute_external_path(
         &self,
         _state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
-        is_incremental: bool,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("compute_external_path", &["config", "model"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                let model_val = iter.next_arg::<&Value>()?;
+                let is_incremental = iter
+                    .next_kwarg::<Option<bool>>("is_incremental")?
+                    .unwrap_or(false);
+                iter.finish()?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!("compute_external_path: Failed to deserialize config: {e}"),
+                        )
+                    })?;
+
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    model_val.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!(
+                            "compute_external_path: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                        ),
+                    )
+                })?;
+
                 let result = adapter.compute_external_path(
                     config,
                     node.as_internal_node(),
@@ -2112,9 +2621,7 @@ impl Adapter {
     pub fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
-        tblproperties: Option<Value>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -2124,7 +2631,40 @@ impl Adapter {
                     )
                 }
 
-                let mut tblproperties = match tblproperties {
+                let iter = ArgsIter::new(
+                    "update_tblproperties_for_uniform_iceberg",
+                    &["config"],
+                    args,
+                );
+                let config_val = iter.next_arg::<&Value>()?;
+                let tblproperties_val = iter.next_kwarg::<Option<Value>>("tblproperties")?;
+                iter.finish()?;
+
+                let model_val = config_val.get_attr("model").map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        format!(
+                            "update_tblproperties_for_uniform_iceberg: config.model is required: {e}"
+                        ),
+                    )
+                })?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+
+                let mut tblproperties = match tblproperties_val {
                     Some(v) if !v.is_none() => minijinja_value_to_typed_struct::<
                         BTreeMap<String, Value>,
                     >(v)
@@ -2150,7 +2690,7 @@ impl Adapter {
                     state,
                     conn.as_mut(),
                     config,
-                    node,
+                    &node,
                     &mut tblproperties,
                     self.cancellation_token.clone(),
                 )?;
@@ -2168,24 +2708,45 @@ impl Adapter {
     /// def is_uniform(self, config: BaseConfig) -> bool:
     /// ```
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn is_uniform(
-        &self,
-        state: &State,
-        config: ModelConfig,
-        node: &InternalDbtNodeWrapper,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn is_uniform(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 if adapter.adapter_type() != AdapterType::Databricks {
                     unimplemented!("is_uniform is only supported in Databricks")
                 }
+
+                let iter = ArgsIter::new("is_uniform", &["config"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let model_val = config_val.get_attr("model").map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        format!("is_uniform: config.model is required: {e}"),
+                    )
+                })?;
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.is_uniform(
                     state,
                     conn.as_mut(),
                     config,
-                    node,
+                    &node,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))
@@ -2201,14 +2762,26 @@ impl Adapter {
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
     /// DatabricksConfig has file_format: str = "delta"
-    #[tracing::instrument(skip(self, config), level = "trace")]
+    #[tracing::instrument(skip(self, args), level = "trace")]
     pub fn resolve_file_format(
         &self,
         _: &State,
-        config: ModelConfig,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("resolve_file_format", &["config"], args);
+                let config_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+
                 let file_format = adapter.resolve_file_format(config)?;
                 Ok(Value::from(file_format))
             }
@@ -2217,15 +2790,27 @@ impl Adapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn copy_table(
-        &self,
-        state: &State,
-        tmp_relation_partitioned: &Arc<dyn BaseRelation>,
-        target_relation_partitioned: &Arc<dyn BaseRelation>,
-        materialization: &str,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn copy_table(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "copy_table",
+                    &[
+                        "tmp_relation_partitioned",
+                        "target_relation_partitioned",
+                        "materialization",
+                    ],
+                    args,
+                );
+                let tmp_relation_val = iter.next_arg::<&Value>()?;
+                let tmp_relation_partitioned =
+                    downcast_value_to_dyn_base_relation(tmp_relation_val)?;
+                let target_relation_val = iter.next_arg::<&Value>()?;
+                let target_relation_partitioned =
+                    downcast_value_to_dyn_base_relation(target_relation_val)?;
+                let materialization = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 adapter
                     .engine()
                     .relation_cache()
@@ -2236,8 +2821,8 @@ impl Adapter {
                 adapter.copy_table(
                     state,
                     conn.as_mut(),
-                    tmp_relation_partitioned,
-                    target_relation_partitioned,
+                    &tmp_relation_partitioned,
+                    &target_relation_partitioned,
                     materialization.to_string(),
                     self.cancellation_token.clone(),
                 )?;
@@ -2251,14 +2836,19 @@ impl Adapter {
     pub fn describe_relation(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("describe_relation", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 Ok(adapter
-                    .describe_relation(conn.as_mut(), relation, Some(state))?
+                    .describe_relation(conn.as_mut(), &relation, Some(state))?
                     .map(Value::from_object)
                     .unwrap_or_else(none_value))
             }
@@ -2273,10 +2863,16 @@ impl Adapter {
     pub fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
-        suffix_initial: Option<String>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("generate_unique_temporary_table_suffix", &[], args);
+                let suffix_initial = iter
+                    .next_kwarg::<Option<String>>("suffix_initial")?
+                    .or(None);
+                iter.finish()?;
+
                 let suffix = adapter.generate_unique_temporary_table_suffix(suffix_initial)?;
 
                 Ok(Value::from(suffix))
@@ -2305,9 +2901,17 @@ impl Adapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    pub fn redact_credentials(&self, _state: &State, sql: &str) -> Result<Value, minijinja::Error> {
+    pub fn redact_credentials(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("redact_credentials", &["sql"], args);
+                let sql = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let sql_redacted = adapter.redact_credentials(sql)?;
                 Ok(Value::from(sql_redacted))
             }
@@ -2319,10 +2923,17 @@ impl Adapter {
     pub fn get_partitions_metadata(
         &self,
         state: &State,
-        relation: &dyn BaseRelation,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.get_partitions_metadata(state, relation),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_partitions_metadata", &["table"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.get_partitions_metadata(state, relation.as_ref())
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -2335,11 +2946,19 @@ impl Adapter {
     pub fn get_persist_doc_columns(
         &self,
         state: &State,
-        existing_columns: &Value,
-        model_columns: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "get_persist_doc_columns",
+                    &["existing_columns", "model_columns"],
+                    args,
+                );
+                let existing_columns = iter.next_arg::<&Value>()?;
+                let model_columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
                 adapter.get_persist_doc_columns(state, existing_columns, model_columns)
             }
             Parse(_) => Ok(none_value()),
@@ -2349,11 +2968,24 @@ impl Adapter {
     pub fn get_column_tags_from_model(
         &self,
         _state: &State,
-        node: &dyn InternalDbtNodeAttributes,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let result = adapter.get_column_tags_from_model(node)?;
+                let iter = ArgsIter::new("get_column_tags_from_model", &["model"], args);
+                let model_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let node =
+                    minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val.clone())
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                e.to_string(),
+                            )
+                        })?;
+
+                let result = adapter.get_column_tags_from_model(node.as_internal_node())?;
                 Ok(result)
             }
             Parse(_) => Ok(none_value()),
@@ -2367,17 +2999,27 @@ impl Adapter {
     pub fn parse_columns_and_constraints(
         &self,
         state: &State,
-        existing_columns: &Value,
-        model_columns: &Value,
-        model_constraints: &Value,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.parse_columns_and_constraints(
-                state,
-                existing_columns,
-                model_columns,
-                model_constraints,
-            ),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "parse_columns_and_constraints",
+                    &["existing_columns", "model_columns", "model_constraints"],
+                    args,
+                );
+                let existing_columns = iter.next_arg::<&Value>()?;
+                let model_columns = iter.next_arg::<&Value>()?;
+                let model_constraints = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                adapter.parse_columns_and_constraints(
+                    state,
+                    existing_columns,
+                    model_columns,
+                    model_constraints,
+                )
+            }
             Parse(_) => Ok(Value::from(vec![
                 Value::from(Vec::<Value>::new()),
                 Value::from(Vec::<Value>::new()),
@@ -2392,16 +3034,21 @@ impl Adapter {
     pub fn get_relation_config(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_relation_config", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let config = adapter.get_relation_config(
                     state,
                     conn.as_mut(),
-                    relation,
+                    &relation,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from_object(config))
@@ -2418,10 +3065,25 @@ impl Adapter {
     pub fn get_config_from_model(
         &self,
         _state: &State,
-        node: &InternalDbtNodeWrapper,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(adapter.get_config_from_model(node)?),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("get_config_from_model", &["model"], args);
+                let model_val = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let node =
+                    minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model_val.clone())
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                e.to_string(),
+                            )
+                        })?;
+
+                Ok(adapter.get_config_from_model(&node)?)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -2430,18 +3092,32 @@ impl Adapter {
     pub fn get_relations_without_caching(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.get_relations_without_caching(state, relation),
+            Typed { adapter, .. } => {
+                let iter =
+                    ArgsIter::new("get_relations_without_caching", &["schema_relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                iter.finish()?;
+
+                adapter.get_relations_without_caching(state, &relation)
+            }
             Parse(_) => Ok(empty_vec_value()),
         }
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    pub fn parse_index(&self, state: &State, raw_index: &Value) -> Result<Value, minijinja::Error> {
+    pub fn parse_index(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.parse_index(state, raw_index),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("parse_index", &["raw_index"], args);
+                let raw_index = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                adapter.parse_index(state, raw_index)
+            }
             Parse(_) => Ok(none_value()),
         }
     }
@@ -2450,9 +3126,15 @@ impl Adapter {
     ///
     /// Only available with Databricks adapter.
     #[tracing::instrument(skip_all, level = "trace")]
-    pub fn clean_sql(&self, sql: &str) -> Result<Value, minijinja::Error> {
+    pub fn clean_sql(&self, _state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(adapter.clean_sql(sql)?)),
+            Typed { adapter, .. } => {
+                let iter = ArgsIter::new("clean_sql", &["sql"], args);
+                let sql = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                Ok(Value::from(adapter.clean_sql(sql)?))
+            }
             Parse(_) => unimplemented!("clean_sql"),
         }
     }
@@ -2520,19 +3202,48 @@ impl Adapter {
 
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn load_dataframe(
-        &self,
-        state: &State,
-        database: &str,
-        schema: &str,
-        table_name: &str,
-        agate_table: Arc<AgateTable>,
-        file_path: &str,
-        column_overrides: IndexMap<String, String>,
-        field_delimiter: &str,
-    ) -> Result<Value, minijinja::Error> {
+    pub fn load_dataframe(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new(
+                    "load_dataframe",
+                    &[
+                        "database",
+                        "schema",
+                        "table_name",
+                        "file_path",
+                        "agate_table",
+                        "column_overrides",
+                        "field_delimiter",
+                    ],
+                    args,
+                );
+                let database = iter.next_arg::<&str>()?;
+                let schema = iter.next_arg::<&str>()?;
+                let table_name = iter.next_arg::<&str>()?;
+                let file_path = iter.next_arg::<&str>()?;
+                let agate_table = iter
+                    .next_arg::<&Value>()?
+                    .downcast_object::<AgateTable>()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "agate_table must be an agate.Table",
+                        )
+                    })?;
+                let column_overrides_val = iter.next_arg::<Value>()?;
+                let column_overrides = minijinja_value_to_typed_struct::<IndexMap<String, String>>(
+                    column_overrides_val,
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+                let field_delimiter = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
@@ -2567,17 +3278,24 @@ impl Adapter {
     pub fn describe_dynamic_table(
         &self,
         state: &State,
-        relation: &Arc<dyn BaseRelation>,
-        include_transient: bool,
+        args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let iter = ArgsIter::new("describe_dynamic_table", &["relation"], args);
+                let relation_val = iter.next_arg::<&Value>()?;
+                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let include_transient = iter
+                    .next_kwarg::<Option<bool>>("include_transient")?
+                    .unwrap_or(false);
+                iter.finish()?;
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 adapter.describe_dynamic_table(
                     state,
                     conn.as_mut(),
-                    relation,
+                    &relation,
                     include_transient,
                     self.cancellation_token.clone(),
                 )
@@ -2621,15 +3339,8 @@ impl Adapter {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         match name {
-            "dispatch" => {
-                // macro_name: str, macro_namespace: Optional[str] = None
-                let iter = ArgsIter::new(name, &["macro_name"], args);
-                let macro_name = iter.next_arg::<&str>()?;
-                let macro_namespace = iter.next_kwarg::<Option<&str>>("macro_namespace")?;
-                iter.finish()?;
-
-                self.dispatch(state, macro_name, macro_namespace)
-            }
+            // macro_name: str, macro_namespace: Optional[str] = None
+            "dispatch" => self.dispatch(state, args),
             "execute" => {
                 // sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
                 let iter = ArgsIter::new(name, &["sql"], args);
@@ -2668,46 +3379,15 @@ impl Adapter {
                     Value::from_object(table),
                 ]))
             }
-            "add_query" => {
-                // sql: str,
-                // auto_begin: bool = True,
-                // bindings: Optional[Any] = None,
-                // abridge_sql_log: bool = False,
-                // retryable_exceptions: Tuple[Type[Exception], ...] = tuple(),
-                // retry_limit: int = 1,
-                let iter = ArgsIter::new(name, &["sql"], args);
-                let sql = iter.next_arg::<&str>()?;
-                let auto_begin = iter
-                    .next_kwarg::<Option<bool>>("auto_begin")?
-                    .unwrap_or(true);
-                let bindings = iter.next_kwarg::<Option<&Value>>("bindings")?;
-                let abridge_sql_log = iter
-                    .next_kwarg::<Option<bool>>("abridge_sql_log")?
-                    .unwrap_or(false);
-                let _retryable_exceptions =
-                    iter.next_kwarg::<Option<&Value>>("retryable_exceptions")?;
-                let _retry_limit = iter.next_kwarg::<Option<i64>>("retry_limit")?.unwrap_or(1);
-                self.add_query(
-                    state,
-                    sql,
-                    auto_begin,
-                    bindings,
-                    abridge_sql_log,
-                    // _retryable_exceptions,
-                    // _retry_limit,
-                )?;
-                Ok(Value::from(()))
-            }
-            "submit_python_job" => {
-                // model: dict, compiled_code: str
-                let iter = ArgsIter::new(name, &["model", "compiled_code"], args);
-                let model = iter.next_arg::<&Value>()?;
-                let compiled_code = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                let response = self.submit_python_job(state, model, compiled_code)?;
-                Ok(Value::from_object(response))
-            }
+            // sql: str,
+            // auto_begin: bool = True,
+            // bindings: Optional[Any] = None,
+            // abridge_sql_log: bool = False,
+            // retryable_exceptions: Tuple[Type[Exception], ...] = tuple(),
+            // retry_limit: int = 1,
+            "add_query" => self.add_query(state, args),
+            // model: dict, compiled_code: str
+            "submit_python_job" => self.submit_python_job(state, args),
             "get_relation" => {
                 // database: str
                 // schema: str
@@ -2758,50 +3438,12 @@ impl Adapter {
 
                 self.build_catalog_relation(model)
             }
-            "describe_dynamic_table" => {
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                let include_transient = iter
-                    .next_kwarg::<Option<bool>>("include_transient")?
-                    .unwrap_or(false);
-                iter.finish()?;
-
-                self.describe_dynamic_table(state, &relation, include_transient)
-            }
+            // relation: BaseRelation, include_transient: bool = False
+            "describe_dynamic_table" => self.describe_dynamic_table(state, args),
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.adapter_type().to_string())),
-            "get_hard_deletes_behavior" => {
-                // config: dict
-                let iter = ArgsIter::new(name, &["config"], args);
-                let config = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                // Extract relevant fields from config dict
-                let hard_deletes = config.get_item(&Value::from("hard_deletes")).ok();
-                let invalidate_hard_deletes = config
-                    .get_item(&Value::from("invalidate_hard_deletes"))
-                    .ok();
-
-                let mut config_map = BTreeMap::<String, Value>::new();
-                if let Some(hard_deletes) = hard_deletes
-                    && !hard_deletes.is_undefined()
-                    && !hard_deletes.is_none()
-                {
-                    config_map.insert("hard_deletes".to_string(), hard_deletes);
-                }
-                if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
-                    && !invalidate_hard_deletes.is_undefined()
-                    && !invalidate_hard_deletes.is_none()
-                {
-                    config_map.insert(
-                        "invalidate_hard_deletes".to_string(),
-                        invalidate_hard_deletes,
-                    );
-                }
-
-                self.get_hard_deletes_behavior(state, config_map)
-            }
+            // config: dict
+            "get_hard_deletes_behavior" => self.get_hard_deletes_behavior(state, args),
             "cache_added" => {
                 // relation: BaseRelation
                 let iter = ArgsIter::new(name, &["relation"], args);
@@ -2811,99 +3453,24 @@ impl Adapter {
 
                 self.cache_added(state, relation)
             }
-            "cache_dropped" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.cache_dropped(state, &relation)
-            }
-            "cache_renamed" => {
-                // from_relation: BaseRelation, to_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
-                let from_relation = iter.next_arg::<&Value>()?;
-                let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-                let to_relation = iter.next_arg::<&Value>()?;
-                let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
-                iter.finish()?;
-
-                self.cache_renamed(state, &from_relation, &to_relation)
-            }
-            "quote" => {
-                // identifier: str
-                let iter = ArgsIter::new(name, &["identifier"], args);
-
-                let identifier = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.quote(state, identifier)
-            }
-            "quote_as_configured" => {
-                // identifier: str
-                // quote_key: str
-                let iter = ArgsIter::new(name, &["identifier", "quote_key"], args);
-
-                let identifier = iter.next_arg::<&str>()?;
-                let quote_key = iter.next_arg::<&str>()?;
-
-                iter.finish()?;
-
-                self.quote_as_configured(state, identifier, quote_key)
-            }
-            "quote_seed_column" => {
-                // column: str
-                // quote_config: Optional[bool]
-                let iter = ArgsIter::new(name, &["column", "quote_config"], args);
-
-                let column = iter.next_arg::<&str>()?;
-                let quote_config = iter.next_kwarg::<Option<bool>>("quote_config")?;
-
-                iter.finish()?;
-
-                self.quote_seed_column(state, column, quote_config)
-            }
-            "drop_relation" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.drop_relation(state, &relation)
-            }
-            "truncate_relation" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.truncate_relation(state, &relation)
-            }
-            "rename_relation" => {
-                // from_relation: BaseRelation, to_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
-                let from_relation = iter.next_arg::<&Value>()?;
-                let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-                let to_relation = iter.next_arg::<&Value>()?;
-                let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
-                iter.finish()?;
-
-                self.rename_relation(state, &from_relation, &to_relation)
-            }
-            "expand_target_column_types" => {
-                // from_relation: BaseRelation, to_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
-                let from_relation = iter.next_arg::<&Value>()?;
-                let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-                let to_relation = iter.next_arg::<&Value>()?;
-                let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
-                iter.finish()?;
-
-                self.expand_target_column_types(state, &from_relation, &to_relation)
-            }
+            // relation: BaseRelation
+            "cache_dropped" => self.cache_dropped(state, args),
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            "cache_renamed" => self.cache_renamed(state, args),
+            // identifier: str
+            "quote" => self.quote(state, args),
+            // identifier: str, quote_key: str
+            "quote_as_configured" => self.quote_as_configured(state, args),
+            // column: str, quote_config: Optional[bool]
+            "quote_seed_column" => self.quote_seed_column(state, args),
+            // relation: BaseRelation
+            "drop_relation" => self.drop_relation(state, args),
+            // relation: BaseRelation
+            "truncate_relation" => self.truncate_relation(state, args),
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            "rename_relation" => self.rename_relation(state, args),
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            "expand_target_column_types" => self.expand_target_column_types(state, args),
             "list_schemas" => {
                 // database: str
                 let iter = ArgsIter::new(name, &["database"], args);
@@ -2912,177 +3479,33 @@ impl Adapter {
 
                 self.list_schemas(state, database)
             }
-            "create_schema" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.create_schema(state, &relation)
-            }
-            "drop_schema" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.drop_schema(state, &relation)
-            }
-            "valid_snapshot_target" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.valid_snapshot_target(state, &relation)
-            }
+            // relation: BaseRelation
+            "create_schema" => self.create_schema(state, args),
+            // relation: BaseRelation
+            "drop_schema" => self.drop_schema(state, args),
+            // relation: BaseRelation
+            "valid_snapshot_target" => self.valid_snapshot_target(state, args),
+            // relation: BaseRelation, column_names: Optional[Dict[str, str]], strategy: SnapshotStrategy
             "assert_valid_snapshot_target_given_strategy" => {
-                // relation: BaseRelation, column_names: Optional[Dict[str, str]], strategy: SnapshotStrategy
-                let iter = ArgsIter::new(name, &["relation", "column_names", "strategy"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                let column_names_val = iter.next_arg::<&Value>()?;
-                let column_names = if column_names_val.is_none() || column_names_val.is_undefined()
-                {
-                    None
-                } else {
-                    Some(
-                        minijinja_value_to_typed_struct::<BTreeMap<String, String>>(
-                            column_names_val.clone(),
-                        )
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?,
-                    )
-                };
-                let strategy_val = iter.next_arg::<&Value>()?;
-                let strategy =
-                    minijinja_value_to_typed_struct::<SnapshotStrategy>(strategy_val.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?;
-                iter.finish()?;
-
-                let strategy_arc = Arc::new(strategy);
-                self.assert_valid_snapshot_target_given_strategy(
-                    state,
-                    &relation,
-                    column_names.as_ref(),
-                    &strategy_arc,
-                )
+                self.assert_valid_snapshot_target_given_strategy(state, args)
             }
-            "get_missing_columns" => {
-                // from_relation: BaseRelation, to_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
-                let from_relation = iter.next_arg::<&Value>()?;
-                let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-                let to_relation = iter.next_arg::<&Value>()?;
-                let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
-                iter.finish()?;
-
-                self.get_missing_columns(state, &from_relation, &to_relation)
-            }
-            "render_raw_model_constraints" => {
-                // raw_constraints: List[ModelConstraint]
-                let iter = ArgsIter::new(name, &["raw_constraints"], args);
-                let raw_constraints = iter.next_arg::<&Value>()?;
-                let constraints = minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(
-                    raw_constraints.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        e.to_string(),
-                    )
-                })?;
-                iter.finish()?;
-
-                self.render_raw_model_constraints(state, &constraints)
-            }
-            "standardize_grants_dict" => {
-                // This method is typically called after show grants SQL + run_query.
-                // During parse phase, run_query returns Undefined since queries don't execute,
-                // so we don't have an actual AgateTable. Short circuit and return empty grants dict
-                // to avoid downcast errors on Undefined values.
-                if self.is_parse() {
-                    return Ok(Value::from(BTreeMap::<Value, Vec<Value>>::new()));
-                }
-
-                // grants_table: AgateTable
-                let iter = ArgsIter::new(name, &["grants_table"], args);
-                let grants_table = iter
-                    .next_arg::<&Value>()?
-                    .downcast_object::<AgateTable>()
-                    .ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "grants_table must be an AgateTable",
-                        )
-                    })?;
-
-                self.standardize_grants_dict(state, &grants_table)
-            }
-            "convert_type" => {
-                // table: AgateTable, col_idx: int
-                let iter = ArgsIter::new(name, &["agate_table", "col_idx"], args);
-                let table = iter
-                    .next_arg::<&Value>()?
-                    .downcast_object::<AgateTable>()
-                    .ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "agate_table must be an AgateTable",
-                        )
-                    })?;
-                let col_idx = iter.next_arg::<i64>()?;
-                iter.finish()?;
-
-                self.convert_type(state, &table, col_idx)
-            }
-            "render_raw_columns_constraints" => {
-                // raw_columns: dict
-                let iter = ArgsIter::new(name, &["raw_columns"], args);
-                let raw_columns = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.render_raw_columns_constraints(state, raw_columns)
-            }
-            "verify_database" => {
-                // database: str
-                let iter = ArgsIter::new(name, &["database"], args);
-                let database = iter.next_arg::<String>()?;
-                iter.finish()?;
-
-                self.verify_database(state, database)
-            }
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            "get_missing_columns" => self.get_missing_columns(state, args),
+            // raw_constraints: List[ModelConstraint]
+            "render_raw_model_constraints" => self.render_raw_model_constraints(state, args),
+            // grants_table: AgateTable
+            "standardize_grants_dict" => self.standardize_grants_dict(state, args),
+            // agate_table: AgateTable, col_idx: int
+            "convert_type" => self.convert_type(state, args),
+            // raw_columns: dict
+            "render_raw_columns_constraints" => self.render_raw_columns_constraints(state, args),
+            // database: str
+            "verify_database" => self.verify_database(state, args),
             "commit" => self.commit(),
-            "get_incremental_strategy_macro" => {
-                // context: dict, strategy: str
-                let iter = ArgsIter::new(name, &["context", "strategy"], args);
-                let _context = iter.next_arg::<Value>()?; // unused, for backward compat
-                let strategy = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.get_incremental_strategy_macro(state, strategy)
-            }
-            "check_schema_exists" => {
-                // database: str, schema: str
-                let iter = ArgsIter::new(name, &["database", "schema"], args);
-                let database = iter.next_arg::<&str>()?;
-                let schema = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.check_schema_exists(state, database, schema)
-            }
+            // context: dict, strategy: str
+            "get_incremental_strategy_macro" => self.get_incremental_strategy_macro(state, args),
+            // database: str, schema: str
+            "check_schema_exists" => self.check_schema_exists(state, args),
             "get_relations_by_pattern" => {
                 // schema_pattern: str, table_pattern: str, exclude: Optional[str] = None,
                 // database: Optional[str] = None, quote_table: Optional[bool] = None,
@@ -3107,485 +3530,59 @@ impl Adapter {
                 )
             }
             // only available for BigQuery
-            "nest_column_data_types" => {
-                // columns: dict
-                let iter = ArgsIter::new(name, &["columns"], args);
-                let columns = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.nest_column_data_types(state, columns)
-            }
+            // columns: dict
+            "nest_column_data_types" => self.nest_column_data_types(state, args),
+            // partition_by: dict, columns: List[Column]
             "add_time_ingestion_partition_column" => {
-                // In parse mode, return stub value early without validation
-                if self.is_parse() {
-                    return Ok(empty_vec_value());
-                }
-
-                // partition_by: dict, columns: List[Column]
-                let iter = ArgsIter::new(name, &["partition_by", "columns"], args);
-                let partition_by = iter.next_arg::<&Value>()?;
-                let columns = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                // Match original behavior: try to deserialize directly, let deserialization handle errors
-                let partition_by =
-                    minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone()).map_err(
-                        |e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!(
-                                    "adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"
-                                ),
-                            )
-                        },
-                    )?;
-
-                let partition_config = partition_by.into_bigquery().ok_or_else(|| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::InvalidArgument,
-                        "Expect a BigqueryPartitionConfigStruct",
-                    )
-                })?;
-
-                self.add_time_ingestion_partition_column(state, columns, partition_config)
+                self.add_time_ingestion_partition_column(state, args)
             }
-            "parse_partition_by" => {
-                // In parse mode, return stub value early without validation
-                if self.is_parse() {
-                    return Ok(none_value());
-                }
-
-                // raw_partition_by: Optional[dict]
-                let iter = ArgsIter::new(name, &["raw_partition_by"], args);
-                let raw_partition_by = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.parse_partition_by(state, raw_partition_by)
-            }
-            "is_replaceable" => {
-                // In parse mode, return stub value early without validation
-                if self.is_parse() {
-                    return Ok(Value::from(false));
-                }
-
-                // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation_val = iter.next_arg::<&Value>()?;
-                let relation = if relation_val.is_none() {
-                    None
-                } else {
-                    Some(downcast_value_to_dyn_base_relation(relation_val)?)
-                };
-                let partition_by = iter.next_kwarg::<Option<&Value>>("partition_by")?;
-                let cluster_by = iter.next_kwarg::<Option<&Value>>("cluster_by")?;
-                iter.finish()?;
-
-                let partition_by = if let Some(pb) = partition_by {
-                    // Match original behavior: check is_none() only, then deserialize
-                    if pb.is_none() {
-                        None
-                    } else {
-                        Some(
-                            minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(pb.clone())
-                                .map_err(|e| {
-                                    minijinja::Error::new(
-                                        minijinja::ErrorKind::SerdeDeserializeError,
-                                        e.to_string(),
-                                    )
-                                })?,
-                        )
-                    }
-                } else {
-                    None
-                };
-
-                let cluster_by = if let Some(cb) = cluster_by {
-                    // Match original behavior: check is_none() only, then deserialize
-                    if cb.is_none() {
-                        None
-                    } else {
-                        Some(
-                            minijinja_value_to_typed_struct::<ClusterConfig>(cb.clone()).map_err(
-                                |e| {
-                                    minijinja::Error::new(
-                                        minijinja::ErrorKind::SerdeDeserializeError,
-                                        e.to_string(),
-                                    )
-                                },
-                            )?,
-                        )
-                    }
-                } else {
-                    None
-                };
-
-                self.is_replaceable(state, relation.as_ref(), partition_by, cluster_by)
-            }
-            "list_relations_without_caching" => {
-                // schema_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["schema_relation"], args);
-                let schema_relation = iter.next_arg::<&Value>()?;
-                let schema_relation = downcast_value_to_dyn_base_relation(schema_relation)?;
-                iter.finish()?;
-
-                self.list_relations_without_caching(state, &schema_relation)
-            }
-            "copy_table" => {
-                // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
-                let iter = ArgsIter::new(
-                    name,
-                    &[
-                        "tmp_relation_partitioned",
-                        "target_relation_partitioned",
-                        "materialization",
-                    ],
-                    args,
-                );
-                let tmp_relation_partitioned = iter.next_arg::<&Value>()?;
-                let tmp_relation_partitioned =
-                    downcast_value_to_dyn_base_relation(tmp_relation_partitioned)?;
-                let target_relation_partitioned = iter.next_arg::<&Value>()?;
-                let target_relation_partitioned =
-                    downcast_value_to_dyn_base_relation(target_relation_partitioned)?;
-                let materialization = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.copy_table(
-                    state,
-                    &tmp_relation_partitioned,
-                    &target_relation_partitioned,
-                    materialization,
-                )
-            }
-            "update_columns" => {
-                // relation: BaseRelation, columns: Dict[str, DbtColumn]
-                let iter = ArgsIter::new(name, &["relation", "columns"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                let columns = iter.next_arg::<&Value>()?;
-                let columns =
-                    minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?;
-                iter.finish()?;
-
-                self.update_columns(state, &relation, columns)
-            }
-            "update_table_description" => {
-                // In parse mode, skip parameter extraction and return early
-                if self.is_parse() {
-                    return Ok(none_value());
-                }
-
-                // database: str, schema: str, identifier: str, description: str
-                let iter = ArgsIter::new(
-                    name,
-                    &["database", "schema", "identifier", "description"],
-                    args,
-                );
-                let database = iter.next_arg::<&str>()?;
-                let schema = iter.next_arg::<&str>()?;
-                let identifier = iter.next_arg::<&str>()?;
-                let description = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.update_table_description(state, database, schema, identifier, description)
-            }
-            "alter_table_add_columns" => {
-                // relation: BaseRelation, columns: Value
-                let iter = ArgsIter::new(name, &["relation", "columns"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                let columns = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.alter_table_add_columns(state, &relation, columns)
-            }
-            "load_dataframe" => {
-                let iter = ArgsIter::new(
-                    name,
-                    &[
-                        "database",
-                        "schema",
-                        "table_name",
-                        "file_path",
-                        "agate_table",
-                        "column_overrides",
-                        "field_delimiter",
-                    ],
-                    args,
-                );
-                let database = iter.next_arg::<&str>()?;
-                let schema = iter.next_arg::<&str>()?;
-                let table_name = iter.next_arg::<&str>()?;
-                let file_path = iter.next_arg::<&str>()?;
-                let agate_table = iter
-                    .next_arg::<&Value>()?
-                    .downcast_object::<AgateTable>()
-                    .ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "agate_table must be an agate.Table",
-                        )
-                    })?;
-                let column_overrides = iter.next_arg::<Value>()?;
-                let column_overrides =
-                    minijinja_value_to_typed_struct::<IndexMap<String, String>>(column_overrides)
-                        .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    })?;
-                let field_delimiter = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.load_dataframe(
-                    state,
-                    database,
-                    schema,
-                    table_name,
-                    agate_table,
-                    file_path,
-                    column_overrides,
-                    field_delimiter,
-                )
-            }
+            // raw_partition_by: Optional[dict]
+            "parse_partition_by" => self.parse_partition_by(state, args),
+            // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
+            "is_replaceable" => self.is_replaceable(state, args),
+            // schema_relation: BaseRelation
+            "list_relations_without_caching" => self.list_relations_without_caching(state, args),
+            // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
+            "copy_table" => self.copy_table(state, args),
+            // relation: BaseRelation, columns: Dict[str, DbtColumn]
+            "update_columns" => self.update_columns(state, args),
+            // database: str, schema: str, identifier: str, description: str
+            "update_table_description" => self.update_table_description(state, args),
+            // relation: BaseRelation, columns: Value
+            "alter_table_add_columns" => self.alter_table_add_columns(state, args),
+            // database: str, schema: str, table_name: str, file_path: str,
+            // agate_table: AgateTable, column_overrides: dict, field_delimiter: str
+            "load_dataframe" => self.load_dataframe(state, args),
             "upload_file" => self.upload_file(state, args),
-            "get_bq_table" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.get_bq_table(state, &relation)
-            }
-            "describe_relation" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.describe_relation(state, &relation)
-            }
-            "grant_access_to" => {
-                // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
-                let iter = ArgsIter::new(
-                    name,
-                    &["entity", "entity_type", "role", "grant_target_dict"],
-                    args,
-                );
-                let entity = iter.next_arg::<&Value>()?;
-                let entity_type = iter.next_arg::<&str>()?;
-                let role = iter.next_arg::<&Value>()?;
-                let grant_target_dict = iter.next_arg::<&Value>()?;
-                let grant_target = minijinja_value_to_typed_struct::<GrantAccessToTarget>(
-                    grant_target_dict.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        e.to_string(),
-                    )
-                })?;
-                iter.finish()?;
-
-                let (database, schema) = (
-                    grant_target.project.as_deref().ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "project in a GrantAccessToTarget cannot be empty",
-                        )
-                    })?,
-                    grant_target.dataset.as_deref().ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "dataset in a GrantAccessToTarget cannot be empty",
-                        )
-                    })?,
-                );
-
-                let role = if role.is_none() || role.is_undefined() {
-                    None
-                } else {
-                    Some(role.as_str().ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "role must be a string",
-                        )
-                    })?)
-                };
-
-                let entity_relation = downcast_value_to_dyn_base_relation(entity)?;
-                self.grant_access_to(state, &entity_relation, entity_type, role, database, schema)
-            }
-            "get_dataset_location" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.get_dataset_location(state, relation.as_ref())
-            }
-            "get_column_schema_from_query" => {
-                // sql: str
-                let iter = ArgsIter::new(name, &["sql"], args);
-                let sql = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.get_column_schema_from_query(state, sql)
-            }
-            "get_columns_in_select_sql" => {
-                // sql: str
-                let iter = ArgsIter::new(name, &["sql"], args);
-                let sql = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.get_columns_in_select_sql(state, sql)
-            }
-            "get_common_options" => {
-                // config: dict, node: dict, temporary: Optional[bool] = False
-                let iter = ArgsIter::new(name, &["config", "node"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                let node_val = iter.next_arg::<&Value>()?;
-                let temporary = iter
-                    .next_kwarg::<Option<bool>>("temporary")?
-                    .unwrap_or(false);
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!("get_common_options: Failed to deserialize config: {e}"),
-                        )
-                    })?;
-
-                let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    node_val.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!(
-                            "get_common_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
-                        ),
-                    )
-                })?;
-
-                self.get_common_options(state, config, &node_wrapper, temporary)
-            }
-            "get_table_options" => {
-                // config: dict, node: dict, temporary
-                let iter = ArgsIter::new(name, &["config", "node"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                let node_val = iter.next_arg::<&Value>()?;
-                let temporary = iter
-                    .next_kwarg::<Option<bool>>("temporary")?
-                    .unwrap_or_default();
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!("get_table_options: Failed to deserialize config: {e}"),
-                        )
-                    })?;
-
-                let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    node_val.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!(
-                            "get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
-                        ),
-                    )
-                })?;
-
-                self.get_table_options(state, config, &node_wrapper, temporary)
-            }
-            "get_view_options" => {
-                // config: dict, node: dict
-                let iter = ArgsIter::new(name, &["config", "node"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                let node_val = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!("get_view_options: Failed to deserialize config: {e}"),
-                        )
-                    })?;
-
-                let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    node_val.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!(
-                            "get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
-                        ),
-                    )
-                })?;
-
-                self.get_view_options(state, config, &node_wrapper)
-            }
-            "get_partitions_metadata" => {
-                // table: BaseRelation
-                let iter = ArgsIter::new(name, &["table"], args);
-                let relation_val = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
-                iter.finish()?;
-
-                self.get_partitions_metadata(state, relation.as_ref())
-            }
-            "get_relations_without_caching" => {
-                // schema_relation: BaseRelation
-                let iter = ArgsIter::new(name, &["schema_relation"], args);
-                let relation_val = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
-                iter.finish()?;
-
-                self.get_relations_without_caching(state, &relation)
-            }
-            "parse_index" => {
-                // raw_index: dict
-                let iter = ArgsIter::new(name, &["raw_index"], args);
-                let raw_index = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.parse_index(state, raw_index)
-            }
-            "redact_credentials" => {
-                // sql: str
-                let iter = ArgsIter::new(name, &["sql"], args);
-                let sql = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.redact_credentials(state, sql)
-            }
+            // relation: BaseRelation
+            "get_bq_table" => self.get_bq_table(state, args),
+            // relation: BaseRelation
+            "describe_relation" => self.describe_relation(state, args),
+            // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
+            "grant_access_to" => self.grant_access_to(state, args),
+            // relation: BaseRelation
+            "get_dataset_location" => self.get_dataset_location(state, args),
+            // sql: str
+            "get_column_schema_from_query" => self.get_column_schema_from_query(state, args),
+            // sql: str
+            "get_columns_in_select_sql" => self.get_columns_in_select_sql(state, args),
+            // config: dict, node: dict, temporary: Optional[bool] = False
+            "get_common_options" => self.get_common_options(state, args),
+            // config: dict, node: dict, temporary: Optional[bool] = False
+            "get_table_options" => self.get_table_options(state, args),
+            // config: dict, node: dict
+            "get_view_options" => self.get_view_options(state, args),
+            // table: BaseRelation
+            "get_partitions_metadata" => self.get_partitions_metadata(state, args),
+            // schema_relation: BaseRelation
+            "get_relations_without_caching" => self.get_relations_without_caching(state, args),
+            // raw_index: dict
+            "parse_index" => self.parse_index(state, args),
+            // sql: str
+            "redact_credentials" => self.redact_credentials(state, args),
             "is_cluster" => self.is_cluster(),
-            "has_dbr_capability" => {
-                // capability_name: str
-                let iter = ArgsIter::new(name, &["capability_name"], args);
-                let capability_name = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.has_dbr_capability(state, capability_name)
-            }
+            // capability_name: str
+            "has_dbr_capability" => self.has_dbr_capability(state, args),
             "table_format" => {
                 // Returns the table format for a relation's database (e.g. "ducklake", "iceberg", "default").
                 // relation: Relation
@@ -3614,15 +3611,8 @@ impl Adapter {
             "disable_transactions" => Ok(self
                 .disable_transactions(state)
                 .map_err(minijinja::Error::from)?),
-            "has_feature" => {
-                let iter = ArgsIter::new(name, &["name"], args);
-                let feature_name = iter.next_arg::<&str>()?;
-                iter.finish()?;
-                let result = self
-                    .has_feature(state, feature_name)
-                    .map_err(minijinja::Error::from)?;
-                Ok(result)
-            }
+            // feature_name: str
+            "has_feature" => self.has_feature(state, args),
             "get_temp_relation_path" => {
                 // model: Any, batch_id: str = ""
                 let iter = ArgsIter::new(name, &["relation"], args);
@@ -3668,220 +3658,38 @@ impl Adapter {
                     .map_err(minijinja::Error::from)?;
                 Ok(Value::from_object(path))
             }
-            "compare_dbr_version" => {
-                // major: i64, minor: i64
-                let iter = ArgsIter::new(name, &["major", "minor"], args);
-                let major = iter.next_arg::<i64>()?;
-                let minor = iter.next_arg::<i64>()?;
-                iter.finish()?;
-
-                self.compare_dbr_version(state, major, minor)
-            }
-            "compute_external_path" => {
-                // config: dict, model: dict, is_incremental: Optional[bool] = False
-                let iter = ArgsIter::new(name, &["config", "model"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                let model_val = iter.next_arg::<&Value>()?;
-                let is_incremental = iter
-                    .next_kwarg::<Option<bool>>("is_incremental")?
-                    .unwrap_or(false);
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    })?;
-
-                let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    model_val.clone(),
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!(
-                            "adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"
-                        ),
-                    )
-                })?;
-
-                self.compute_external_path(state, config, &node, is_incremental)
-            }
+            // major: int, minor: int
+            "compare_dbr_version" => self.compare_dbr_version(state, args),
+            // config: dict, model: dict, is_incremental: Optional[bool] = False
+            "compute_external_path" => self.compute_external_path(state, args),
+            // config: dict, tblproperties: Optional[dict] = None
             "update_tblproperties_for_uniform_iceberg" => {
-                // config: dict, tblproperties: Optional[str] = None
-                let iter = ArgsIter::new(name, &["config"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                let tblproperties = iter.next_kwarg::<Option<Value>>("tblproperties")?;
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<
-                    ModelConfig,
-                    >(config_val.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize config: {e}"),
-                            )
-                        })?;
-
-                let node_val = config_val.get_attr("model")?;
-                let node_wrapper = minijinja_value_to_typed_struct::<
-                    InternalDbtNodeWrapper,
-                    >(node_val)
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                            )
-                        })?;
-
-                self.update_tblproperties_for_uniform_iceberg(
-                    state,
-                    config,
-                    &node_wrapper,
-                    tblproperties,
-                )
+                self.update_tblproperties_for_uniform_iceberg(state, args)
             }
-            "is_uniform" => {
-                // config: dict
-                let iter = ArgsIter::new(name, &["config"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!("is_uniform: Failed to deserialize config: {e}"),
-                        )
-                    })?;
-
-                let node_val = config_val.get_attr("model")?;
-                let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    node_val,
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!("is_uniform: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                    )
-                })?;
-
-                self.is_uniform(state, config, &node_wrapper)
-            }
-            "resolve_file_format" => {
-                // config: dict
-                let iter = ArgsIter::new(name, &["config"], args);
-                let config_val = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                let config = minijinja_value_to_typed_struct::<ModelConfig>(config_val.clone())
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!("resolve_file_format: Failed to deserialize config: {e}"),
-                        )
-                    })?;
-
-                self.resolve_file_format(state, config)
-            }
+            // config: dict
+            "is_uniform" => self.is_uniform(state, args),
+            // config: dict
+            "resolve_file_format" => self.resolve_file_format(state, args),
             "valid_incremental_strategies" => {
                 // No arguments required
                 self.valid_incremental_strategies(state)
             }
-            "get_relation_config" => {
-                // relation: BaseRelation
-                let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
-
-                self.get_relation_config(state, &relation)
-            }
-            "get_config_from_model" => {
-                // model: dict
-                let iter = ArgsIter::new(name, &["model"], args);
-                let model = iter.next_arg::<Value>()?;
-                iter.finish()?;
-
-                let deserialized_node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
-                    model,
-                )
-                .map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!(
-                            "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"
-                        ),
-                    )
-                })?;
-
-                self.get_config_from_model(state, &deserialized_node)
-            }
-            "get_persist_doc_columns" => {
-                // existing_columns: List[Column], model_columns: dict
-                let iter = ArgsIter::new(name, &["existing_columns", "model_columns"], args);
-                let existing_columns = iter.next_arg::<&Value>()?;
-                let model_columns = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.get_persist_doc_columns(state, existing_columns, model_columns)
-            }
-            "get_column_tags_from_model" => {
-                let iter = ArgsIter::new(name, &["model"], args);
-                let model = iter.next_arg::<Value>()?;
-                iter.finish()?;
-
-                let deserialized_node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model)
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            format!(
-                                "Failed to deserialize the node passed to adapter.get_column_tags_from_model: {}",
-                                e
-                            ),
-                        )
-                    })?;
-
-                self.get_column_tags_from_model(state, deserialized_node.as_internal_node())
-            }
+            // relation: BaseRelation
+            "get_relation_config" => self.get_relation_config(state, args),
+            // model: dict
+            "get_config_from_model" => self.get_config_from_model(state, args),
+            // existing_columns: List[Column], model_columns: dict
+            "get_persist_doc_columns" => self.get_persist_doc_columns(state, args),
+            // model: dict
+            "get_column_tags_from_model" => self.get_column_tags_from_model(state, args),
+            // suffix_initial: Optional[str] = None
             "generate_unique_temporary_table_suffix" => {
-                // suffix_initial: Optional[str] = None
-                let iter = ArgsIter::new(name, &[], args);
-                let suffix_initial = iter.next_kwarg::<Option<String>>("suffix_initial")?;
-                iter.finish()?;
-
-                self.generate_unique_temporary_table_suffix(state, suffix_initial)
+                self.generate_unique_temporary_table_suffix(state, args)
             }
-            "parse_columns_and_constraints" => {
-                // existing_columns: List[Column], model_columns: dict, model_constraints: List[dict]
-                let iter = ArgsIter::new(
-                    name,
-                    &["existing_columns", "model_columns", "model_constraints"],
-                    args,
-                );
-                let existing_columns = iter.next_arg::<&Value>()?;
-                let model_columns = iter.next_arg::<&Value>()?;
-                let model_constraints = iter.next_arg::<&Value>()?;
-                iter.finish()?;
-
-                self.parse_columns_and_constraints(
-                    state,
-                    existing_columns,
-                    model_columns,
-                    model_constraints,
-                )
-            }
-            "clean_sql" => {
-                // sql: str
-                let iter = ArgsIter::new(name, &["sql"], args);
-                let sql = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
-                self.clean_sql(sql)
-            }
+            // existing_columns: List[Column], model_columns: dict, model_constraints: List[dict]
+            "parse_columns_and_constraints" => self.parse_columns_and_constraints(state, args),
+            // sql: str
+            "clean_sql" => self.clean_sql(state, args),
             "get_seed_file_path" => {
                 // model: dict (seed node)
                 let iter = ArgsIter::new(name, &["model"], args);
@@ -3910,29 +3718,9 @@ impl Adapter {
                 iter.finish()?;
                 self.external_root(state)
             }
-            "external_write_options" => {
-                // write_location: str, rendered_options: dict
-                let iter = ArgsIter::new(name, &["write_location", "rendered_options"], args);
-                let write_location = iter.next_arg::<&str>()?;
-                let rendered_options = iter.next_arg::<Value>()?;
-                iter.finish()?;
-                self.external_write_options(state, write_location, &rendered_options)
-            }
-            "external_read_location" => {
-                // write_location: str, rendered_options: dict
-                let iter = ArgsIter::new(name, &["write_location", "rendered_options"], args);
-                let write_location = iter.next_arg::<&str>()?;
-                let rendered_options = iter.next_arg::<Value>()?;
-                iter.finish()?;
-                self.external_read_location(state, write_location, &rendered_options)
-            }
-            "location_exists" => {
-                // location: str
-                let iter = ArgsIter::new(name, &["location"], args);
-                let location = iter.next_arg::<&str>()?;
-                iter.finish()?;
-                self.location_exists(state, location)
-            }
+            "external_write_options" => self.external_write_options(state, args),
+            "external_read_location" => self.external_read_location(state, args),
+            "location_exists" => self.location_exists(state, args),
             // ---- ClickHouse adapter method stubs (MVP) ----
             // These methods are called from ClickHouse Jinja macros. They are
             // registered for all adapters (they only run when the dispatch
