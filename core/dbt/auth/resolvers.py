@@ -41,6 +41,7 @@ from dbt.exceptions import (
 
 AUTH_SERVER_URL = "http://localhost:3000/register"
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
+OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
 OAUTH_SCOPES = "user_access offline_access"
 
 
@@ -84,7 +85,7 @@ class OAuthPassiveResolver:
 
     def __init__(
         self,
-        client_id: str,
+        client_id: str = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         token_endpoint_override: Optional[str] = None,
     ) -> None:
@@ -258,7 +259,7 @@ class OAuthInteractiveResolver:
 
     def __init__(
         self,
-        client_id: str,
+        client_id: str = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         auth_server_url: Optional[str] = None,
         scopes: str = OAUTH_SCOPES,

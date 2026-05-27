@@ -11,8 +11,6 @@ from dbt.auth.resolvers import (
 )
 from dbt.exceptions import AuthError, NotAuthenticated
 
-OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
-
 
 class AuthChain:
     """Ordered chain of credential resolvers, tried in sequence.
@@ -32,7 +30,7 @@ class AuthChain:
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(client_id=OAUTH_CLIENT_ID),
+                OAuthPassiveResolver(),
                 CloudYamlResolver(),
             ]
         )
@@ -43,9 +41,9 @@ class AuthChain:
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(client_id=OAUTH_CLIENT_ID),
+                OAuthPassiveResolver(),
                 CloudYamlResolver(),
-                OAuthInteractiveResolver(client_id=OAUTH_CLIENT_ID),
+                OAuthInteractiveResolver(),
             ]
         )
 

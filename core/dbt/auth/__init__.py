@@ -1,4 +1,4 @@
-from dbt.auth.chain import OAUTH_CLIENT_ID, AuthChain  # noqa: F401
+from dbt.auth.chain import AuthChain  # noqa: F401
 from dbt.auth.credentials import (  # noqa: F401
     Credential,
     OAuthSession,
