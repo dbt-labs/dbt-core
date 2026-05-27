@@ -15,6 +15,7 @@ class Command(Enum):
     DEPS = "deps"
     INIT = "init"
     LIST = "list"
+    LOGIN = "login"
     PARSE = "parse"
     RUN = "run"
     RUN_OPERATION = "run-operation"

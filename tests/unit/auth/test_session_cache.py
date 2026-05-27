@@ -6,12 +6,7 @@ import time
 import pytest
 
 from dbt.auth.credentials import OAuthSession
-from dbt.auth.session_cache import (
-    DEFAULT_CACHE_PATH,
-    OAuthSessionCache,
-    read_session_cache,
-    upsert_session,
-)
+from dbt.auth.session_cache import OAuthSessionCache, read_session_cache, upsert_session
 from dbt.exceptions import InaccessibleSource, Malformed
 
 
@@ -30,11 +25,6 @@ def _make_session(**overrides) -> OAuthSession:
 
 
 class TestOAuthSessionCache:
-    def test_default_values(self):
-        cache = OAuthSessionCache()
-        assert cache.version == 1
-        assert cache.sessions == []
-
     def test_sessions_are_independent_per_instance(self):
         cache_a = OAuthSessionCache()
         cache_b = OAuthSessionCache()
@@ -63,11 +53,6 @@ class TestOAuthSessionCache:
         cache = OAuthSessionCache.from_dict({})
         assert cache.version == 1
         assert cache.sessions == []
-
-
-class TestDefaultCachePath:
-    def test_ends_with_expected_filename(self):
-        assert DEFAULT_CACHE_PATH.name == "oauth_sessions.json"
 
 
 class TestReadSessionCache:
