@@ -150,6 +150,34 @@ class TestFlags:
         flags = Flags(context, project_flags)
         assert flags.USE_COLORS
 
+    def test_prefer_user_settings_to_default(self, monkeypatch):
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.USE_COLORS is False
+
+    def test_prefer_project_flags_to_user_settings(self, monkeypatch, project_flags):
+        project_flags.use_colors = True
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context, project_flags)
+        assert flags.USE_COLORS is True
+
+    def test_prefer_cli_to_user_settings(self, monkeypatch):
+        monkeypatch.setattr(
+            "dbt.cli.flags.get_user_setting_flags",
+            lambda: {"use_colors": False},
+        )
+        context = self.make_dbt_context("run", ["--use-colors", "True", "run"])
+        flags = Flags(context)
+        assert flags.USE_COLORS is True
+
     def test_mutually_exclusive_options_passed_separately(self):
         """Assert options that are mutually exclusive can be passed separately without error"""
         warn_error_context = self.make_dbt_context("run", ["--warn-error", "run"])

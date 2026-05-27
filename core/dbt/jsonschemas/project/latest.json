@@ -582,6 +582,13 @@
           ]
         },
         {
+          "description": "legacy (ClickHouse only) — intermediate-table + swap approach https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/impl.py",
+          "type": "string",
+          "enum": [
+            "legacy"
+          ]
+        },
+        {
           "type": "object",
           "required": [
             "custom"
@@ -655,7 +662,6 @@
         "database": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -670,7 +676,6 @@
         "identifier": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -685,7 +690,6 @@
         "schema": {
           "anyOf": [
             {
-              "default": null,
               "type": [
                 "boolean",
                 "null"
@@ -796,6 +800,18 @@
           ]
         },
         "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
           "type": [
             "string",
             "null"
@@ -1059,6 +1075,70 @@
       },
       "additionalProperties": false
     },
+    "ModelState": {
+      "type": "object",
+      "properties": {
+        "evaluate_volatile_sql": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "execute_hooks_on_reuse": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "lag_tolerance": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelFreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre_clone": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StatePreClone"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "require_fresh_data_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UpdatesOn"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "OnConfigurationChange": {
       "type": "string",
       "enum": [
@@ -1099,6 +1179,30 @@
         },
         {
           "$ref": "#/definitions/BigqueryPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
+    "PartitionsConfig": {
+      "description": "External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`) or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/AnyValue"
+            }
+          }
         },
         {
           "type": "string",
@@ -1456,6 +1560,21 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+database": {
           "type": [
             "string",
@@ -1779,13 +1898,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+query_tag": {
           "anyOf": [
@@ -2737,6 +2857,21 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+create_notebook": {
           "anyOf": [
             {
@@ -3346,13 +3481,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -3603,6 +3739,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+state": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelState"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+static_analysis": {
@@ -4054,6 +4200,20 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+database": {
           "type": [
             "string",
@@ -4366,13 +4526,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -4911,6 +5072,21 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+database": {
           "type": [
             "string",
@@ -5267,13 +5443,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+persist_docs": {
           "anyOf": [
@@ -6042,13 +6219,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+quoting": {
           "anyOf": [
@@ -6414,6 +6592,21 @@
             }
           ]
         },
+        "+copy_tags": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+databricks_compute": {
           "type": [
             "string",
@@ -6683,13 +6876,14 @@
           ]
         },
         "+partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+query_tag": {
           "anyOf": [
@@ -7130,6 +7324,14 @@
           "type": "string",
           "pattern": "^\\{.*\\}$"
         }
+      ]
+    },
+    "StatePreClone": {
+      "type": "string",
+      "enum": [
+        "never",
+        "if_missing",
+        "always"
       ]
     },
     "StaticAnalysisKind": {

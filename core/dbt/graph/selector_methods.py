@@ -1,4 +1,5 @@
 import abc
+import sys
 from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
@@ -953,6 +954,19 @@ class VersionSelectorMethod(SelectorMethod):
 
 
 class SelectorSelectorMethod(SelectorMethod):
+    # Defensive recursion ceiling applied while resolving a `selector:` reference.
+    # `_search_for_matched_selector` can recurse arbitrarily deep when a user-defined
+    # selector references itself or another selector that references it. We rely on
+    # Python's RecursionError firing so we can re-raise it as DbtRecursionError and
+    # give the user a clear "circular dependency" message instead of a process
+    # crash. The default recursion limit (1000) leaves a thin margin on platforms
+    # with small OS thread stacks (notably Windows, ~1 MB default vs ~8 MB on Linux/
+    # macOS); add instrumentation (coverage) or stack-heavy plugins to the call chain
+    # and the OS stack can overflow before Python's check trips. Capping the limit
+    # locally to a value comfortably below any realistic OS-stack budget guarantees
+    # we hit the Python check first. Restored in `finally`.
+    _RECURSION_LIMIT_CEILING = 250
+
     def __init__(
         self,
         manifest: Manifest,
@@ -993,13 +1007,24 @@ class SelectorSelectorMethod(SelectorMethod):
                 f"Selector '{selector}' did not match any selector in selectors.yml"
             )
 
-        for matched_selector_dfn in matched_selector_dfns:
-            try:
-                yield from self._search_for_matched_selector(included_nodes, matched_selector_dfn)
-            except RecursionError as e:
-                raise DbtRecursionError(
-                    f"Circular dependency detected in selector: {matched_selector_dfn.raw}"
-                ) from e
+        # Temporarily lower the recursion limit so circular selectors trip a
+        # catchable RecursionError before the OS thread stack overflows. We only
+        # lower (never raise) the user's existing limit, and restore in `finally`.
+        original_limit = sys.getrecursionlimit()
+        effective_limit = min(original_limit, self._RECURSION_LIMIT_CEILING)
+        try:
+            sys.setrecursionlimit(effective_limit)
+            for matched_selector_dfn in matched_selector_dfns:
+                try:
+                    yield from self._search_for_matched_selector(
+                        included_nodes, matched_selector_dfn
+                    )
+                except RecursionError as e:
+                    raise DbtRecursionError(
+                        f"Circular dependency detected in selector: {matched_selector_dfn.raw}"
+                    ) from e
+        finally:
+            sys.setrecursionlimit(original_limit)
 
 
 class MethodManager:

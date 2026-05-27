@@ -2,11 +2,46 @@ from unittest import mock
 
 import pytest
 
+import dbt.plugins.manager
 from dbt.exceptions import DbtRuntimeError
 from dbt.plugins import PluginManager, dbt_hook, dbtPlugin
 from dbt.plugins.contracts import PluginArtifact, PluginArtifacts
 from dbt.plugins.exceptions import dbtPluginError
+from dbt.plugins.manager import (
+    _DISCOVERY_NOTICES_EMITTED,
+    _plugin_is_managed,
+    _walk_prefixed_module_names,
+)
 from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
+
+
+@pytest.fixture(autouse=True)
+def _reset_plugin_manager_process_state():
+    """PluginManager has three pieces of process-global state that can leak between
+    tests if not cleared:
+
+    1. `_DISCOVERY_NOTICES_EMITTED` -- the de-dupe set for one-time log notices.
+       A test that asserts on log emission would be masked by an earlier test
+       that already emitted the notice.
+    2. `_MODULES_CACHE` -- the `from_modules` cache that's active when
+       `test_caching_enabled()` returns True. A test that mocks
+       `pkgutil.iter_modules` would silently see another test's cached dict
+       instead of its own mock results -- making assertions pass for the wrong
+       reason (or fail unpredictably depending on ordering).
+    3. The `_walk_prefixed_module_names` lru_cache -- caches the candidate name
+       list at process scope. Tests that mock `pkgutil.iter_modules` would see
+       the cached pre-mock walk on subsequent calls.
+
+    Clear all three before AND after each test so ordering doesn't matter."""
+
+    def _clear() -> None:
+        _DISCOVERY_NOTICES_EMITTED.clear()
+        dbt.plugins.manager._MODULES_CACHE = None
+        _walk_prefixed_module_names.cache_clear()
+
+    _clear()
+    yield
+    _clear()
 
 
 class ExceptionInitializePlugin(dbtPlugin):
@@ -126,3 +161,304 @@ class TestPluginManager:
         pm = PluginManager(plugins=get_artifacts_plugins)
         artifacts = pm.get_manifest_artifacts(None)
         assert len(artifacts) == 2
+
+
+class TestBundledPluginGating:
+    """Bundled plugins (e.g. dbt-state) are opt-in. The user enables them via the
+    `--manage-state` CLI flag, the DBT_ENGINE_MANAGE_STATE env var (handled by
+    Click), or the `manage_state: true` project/profile flag -- all three resolve
+    to `get_flags().MANAGE_STATE`. PluginManager skips the module at discovery time
+    BEFORE `importlib.import_module` is called, so a not-opted-in plugin pays zero
+    import cost."""
+
+    def test_plugin_is_managed_default_false(self):
+        """`_plugin_is_managed` defaults to False when the flag attribute is missing.
+
+        Opt-in default: absent an explicit opt-in via flags, the helper returns
+        False so PluginManager skips the bundled plugin."""
+        with mock.patch("dbt.flags.get_flags", return_value=mock.MagicMock(spec=[])):
+            assert _plugin_is_managed("MANAGE_STATE") is False
+
+    def test_plugin_is_managed_reads_flags(self):
+        fake_flags = mock.MagicMock()
+        fake_flags.MANAGE_STATE = False
+        with mock.patch("dbt.flags.get_flags", return_value=fake_flags):
+            assert _plugin_is_managed("MANAGE_STATE") is False
+
+        fake_flags.MANAGE_STATE = True
+        with mock.patch("dbt.flags.get_flags", return_value=fake_flags):
+            assert _plugin_is_managed("MANAGE_STATE") is True
+
+    def test_plugin_is_managed_returns_false_on_exception(self):
+        """If `get_flags()` itself raises (e.g. during very early startup), fall
+        back to False -- opt-in plugins stay off unless explicitly enabled."""
+        with mock.patch("dbt.flags.get_flags", side_effect=RuntimeError("flags not ready")):
+            assert _plugin_is_managed("MANAGE_STATE") is False
+
+    def test_bundled_registry_contains_both_module_names(self):
+        """dbt-state is bundled with dbt-core and loads by default. Both `dbt_state`
+        (new package name) and `dbt_run_cache` (legacy name from before the rename)
+        refer to the same plugin and share the same manage signal."""
+        signal_state = PluginManager.BUNDLED_PLUGIN_MODULES["dbt_state"]
+        assert signal_state.flag_attr == "MANAGE_STATE"
+        assert signal_state.cli_flag == "--manage-state"
+
+        signal_run_cache = PluginManager.BUNDLED_PLUGIN_MODULES["dbt_run_cache"]
+        assert signal_run_cache.flag_attr == "MANAGE_STATE"
+        assert signal_run_cache.cli_flag == "--manage-state"
+
+    def test_walk_prefixed_module_names_is_cached(self):
+        """`_walk_prefixed_module_names` must cache the `pkgutil.iter_modules()`
+        walk so repeated PluginManager construction doesn't re-scan sys.path.
+        Multiple calls with the same prefix should hit `iter_modules` exactly once."""
+        call_count = 0
+
+        def counting_iter():
+            nonlocal call_count
+            call_count += 1
+            return iter([(None, "dbt_state", False), (None, "dbt_other", False)])
+
+        with mock.patch("dbt.plugins.manager.pkgutil.iter_modules", side_effect=counting_iter):
+            r1 = _walk_prefixed_module_names("dbt_")
+            r2 = _walk_prefixed_module_names("dbt_")
+            r3 = _walk_prefixed_module_names("dbt_")
+
+        assert call_count == 1, "iter_modules should be invoked exactly once"
+        assert r1 == r2 == r3 == ("dbt_state", "dbt_other")
+
+    def test_bundled_registry_is_read_only(self):
+        # Wrapped in MappingProxyType so a buggy caller can't silently flip behavior
+        # for the rest of the process.
+        with pytest.raises(TypeError):
+            PluginManager.BUNDLED_PLUGIN_MODULES["dbt_state"] = None  # type: ignore[index]
+        with pytest.raises((TypeError, AttributeError)):
+            PluginManager.BUNDLED_PLUGIN_MODULES.pop("dbt_state")  # type: ignore[attr-defined]
+
+    def test_disabled_bundled_modules_empty_when_opted_in(self):
+        """When `manage_state` is True (user has opted in), nothing is disabled --
+        bundled plugins load."""
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=True):
+            disabled = PluginManager._disabled_bundled_modules()
+        assert disabled == set()
+
+    def test_disabled_bundled_modules_when_not_opted_in(self):
+        """When `manage_state` is False (the default), both module names are
+        disabled."""
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=False):
+            disabled = PluginManager._disabled_bundled_modules()
+        assert "dbt_state" in disabled
+        assert "dbt_run_cache" in disabled
+
+    # NOTE on patch ordering in the tests below: `mock.patch` resolves its target via
+    # `importlib.import_module`. If we patch `dbt.plugins.manager.importlib.import_module`
+    # FIRST, any subsequent patch on `dbt.plugins.manager.<attr>` in the same with-block
+    # silently fails -- mock.patch's own resolver hits the mocked import_module and gets a
+    # MagicMock back instead of the real module. So `logger` / `_notify_*` /
+    # `_plugin_is_managed` patches go first; `importlib.import_module` last.
+
+    def test_get_prefixed_modules_loads_when_opted_in(self):
+        """When manage_state is True, bundled plugin imports normally."""
+        fake_iter_result = [
+            (None, "dbt_state", False),
+            (None, "dbt_someother", False),
+            (None, "unrelated_pkg", False),
+        ]
+        imported = []
+
+        def fake_import(name):
+            imported.append(name)
+            return mock.MagicMock()
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=True), mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch("dbt.plugins.manager.importlib.import_module", side_effect=fake_import):
+            modules = PluginManager.get_prefixed_modules()
+
+        assert "dbt_state" in modules
+        assert "dbt_someother" in modules
+        assert "unrelated_pkg" not in modules
+        assert "dbt_state" in imported
+
+    def test_get_prefixed_modules_skips_by_default(self):
+        """When manage_state is False (the default), bundled plugin must be filtered
+        out BEFORE `importlib.import_module` is called."""
+        fake_iter_result = [
+            (None, "dbt_state", False),
+            (None, "dbt_someother", False),
+        ]
+        imported = []
+
+        def fake_import(name):
+            imported.append(name)
+            return mock.MagicMock()
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=False), mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch("dbt.plugins.manager.importlib.import_module", side_effect=fake_import):
+            modules = PluginManager.get_prefixed_modules()
+
+        assert "dbt_state" not in modules
+        assert "dbt_someother" in modules
+        # Zero-cost: the disabled plugin is never imported.
+        assert "dbt_state" not in imported
+
+    def test_discovery_logs_debug_when_not_opted_in(self):
+        """Skipping should emit a one-time DEBUG mentioning the CLI flag the user
+        can pass to opt in. DEBUG (not INFO) because the not-opted-in state is the
+        default and shouldn't log INFO-level noise on every default invocation."""
+        fake_iter_result = [(None, "dbt_state", False)]
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=False), mock.patch(
+            "dbt.plugins.manager.logger"
+        ) as mock_logger, mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch(
+            "dbt.plugins.manager.importlib.import_module"
+        ):
+            PluginManager.get_prefixed_modules()
+
+        mock_logger.debug.assert_called_once()
+        mock_logger.info.assert_not_called()
+        args = mock_logger.debug.call_args[0]
+        assert "dbt_state" in args
+        # The CLI flag name appears in the message so a curious user knows how to opt in.
+        assert any("--manage-state" in str(a) for a in args)
+
+    def test_discovery_notice_is_emitted_only_once_per_process(self):
+        fake_iter_result = [(None, "dbt_state", False)]
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=False), mock.patch(
+            "dbt.plugins.manager.logger"
+        ) as mock_logger, mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch(
+            "dbt.plugins.manager.importlib.import_module"
+        ):
+            PluginManager.get_prefixed_modules()
+            PluginManager.get_prefixed_modules()
+            PluginManager.get_prefixed_modules()
+
+        assert mock_logger.debug.call_count == 1
+
+    def test_conflict_resolution_prefers_dbt_state_over_dbt_run_cache(self):
+        """If both packages happen to be installed (mid-rename) and the user has
+        opted in, we must NOT load both -- double monkey-patching of
+        CompileRunner/ModelRunner is non-deterministic. Prefer the canonical name
+        and warn about the loser."""
+        fake_iter_result = [
+            (None, "dbt_state", False),
+            (None, "dbt_run_cache", False),
+        ]
+        imported = []
+
+        def fake_import(name):
+            imported.append(name)
+            return mock.MagicMock()
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=True), mock.patch(
+            "dbt.plugins.manager.logger"
+        ) as mock_logger, mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch(
+            "dbt.plugins.manager.importlib.import_module", side_effect=fake_import
+        ):
+            modules = PluginManager.get_prefixed_modules()
+
+        assert "dbt_state" in imported
+        assert "dbt_run_cache" not in imported
+        assert "dbt_state" in modules
+        assert "dbt_run_cache" not in modules
+        mock_logger.warning.assert_called_once()
+        warn_args = mock_logger.warning.call_args[0]
+        assert "dbt_state" in warn_args and "dbt_run_cache" in warn_args
+
+    def test_from_modules_instantiates_when_opted_in(self):
+        """End-to-end contract: with manage_state True, the bundled plugin is
+        instantiated."""
+        instantiated = []
+
+        class _FakeStatePlugin(dbtPlugin):
+            def initialize(self):
+                instantiated.append("dbt_state")
+
+        fake_state_module = mock.MagicMock()
+        fake_state_module.plugins = [_FakeStatePlugin]
+
+        def fake_import(name):
+            if name == "dbt_state":
+                return fake_state_module
+            raise ImportError(name)
+
+        fake_iter_result = [(None, "dbt_state", False)]
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=True), mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch("dbt.plugins.manager.importlib.import_module", side_effect=fake_import):
+            PluginManager.from_modules(project_name="test")
+
+        assert instantiated == ["dbt_state"]
+
+    def test_from_modules_does_not_instantiate_by_default(self):
+        """End-to-end contract: when manage_state is False (the default; user has
+        not opted in via CLI / env / project / profile), the plugin is never
+        instantiated."""
+        instantiated = []
+
+        class _FakeStatePlugin(dbtPlugin):
+            def initialize(self):
+                instantiated.append("dbt_state")
+
+        fake_state_module = mock.MagicMock()
+        fake_state_module.plugins = [_FakeStatePlugin]
+
+        def fake_import(name):
+            if name == "dbt_state":
+                return fake_state_module
+            raise ImportError(name)
+
+        fake_iter_result = [(None, "dbt_state", False)]
+
+        with mock.patch("dbt.plugins.manager._plugin_is_managed", return_value=False), mock.patch(
+            "dbt.plugins.manager.pkgutil.iter_modules", return_value=fake_iter_result
+        ), mock.patch("dbt.plugins.manager.importlib.import_module", side_effect=fake_import):
+            pm = PluginManager.from_modules(project_name="test")
+
+        assert instantiated == [], "opt-in plugin must not be instantiated by default"
+        assert pm.hooks == {}
+
+
+class TestProjectFlagsExposeManageState:
+    """The `manage_state` flag must be wired through ProjectFlags so that
+    dbt_project.yml's `flags:` block and profiles.yml's `config:` block both work
+    (they share the same parser via `read_project_flags`). Because manage_state is
+    also backed by the `--manage-state` CLI option, the field lives in the regular
+    ProjectFlags section (NOT in project_only_flags) -- cli/flags.py reads it via
+    `params_assigned_from_default` to override the CLI default when not explicitly
+    passed."""
+
+    def test_default_is_none(self):
+        """ProjectFlags' field default is None so the CLI option's default (False)
+        wins when nothing is set in dbt_project.yml / profiles.yml. Opt-in by
+        default means: absent any explicit signal, the plugin doesn't load."""
+        from dbt.contracts.project import ProjectFlags
+
+        assert ProjectFlags().manage_state is None
+
+    def test_can_be_set_from_dict(self):
+        from dbt.contracts.project import ProjectFlags
+
+        pf = ProjectFlags.from_dict({"manage_state": False})
+        assert pf.manage_state is False
+
+        pf = ProjectFlags.from_dict({"manage_state": True})
+        assert pf.manage_state is True
+
+    def test_is_not_in_project_only_flags(self):
+        """manage_state has a CLI option backing it, so it must NOT be in
+        project_only_flags -- otherwise it would be set both via the regular
+        CLI-default-override path AND the project-only path, and the two could
+        disagree."""
+        from dbt.contracts.project import ProjectFlags
+
+        pf = ProjectFlags(manage_state=False)
+        assert "manage_state" not in pf.project_only_flags
