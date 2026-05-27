@@ -1,0 +1,12 @@
+kind: Under the Hood
+body: >-
+    Pin the precedence and source-handling of the manage_state flag (introduced
+    in #13014) with end-to-end tests that exercise the real Click parser, real
+    Flags constructor, and real ProjectFlags. Each opt-in surface
+    (--manage-state, DBT_ENGINE_MANAGE_STATE env var, manage_state: true in
+    dbt_project.yml or profiles.yml) enables the plugin on its own; explicit
+    --no-manage-state beats either env var or project flag.
+time: 2026-05-27T23:30:00.000000000Z
+custom:
+    Author: colin-rogers-dbt
+    Issue: "13014"
