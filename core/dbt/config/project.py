@@ -109,16 +109,27 @@ def load_yml_dict(file_path):
     return ret
 
 
-def vars_data_from_root(project_root: str) -> Dict[str, Any]:
-    """Load vars from vars.yml file if it exists.
+def vars_data_from_root(project_root: str, target: Optional[str] = None) -> Dict[str, Any]:
+    """Loads variables from vars.yml (default) and vars_<target>.yml (if it exists), merging them.
+    The target parameter can be passed explicitly; if None, it attempts to use DBT_TARGET from the environment.
+    Always returns a dictionary of merged variables, prioritizing the target."""
+    import re
 
-    Returns the contents of the 'vars' key, or empty dict if file doesn't exist or has no vars key.
-    """
     vars_yml_path = os.path.join(project_root, VARS_FILE_NAME)
     vars_file_dict = load_yml_dict(vars_yml_path)
-    if not vars_file_dict:
-        return {}
-    return vars_file_dict.get("vars", {})
+    base_vars = vars_file_dict.get("vars", {}) if vars_file_dict else {}
+
+    if not target:
+        return base_vars
+
+    sanitized_target = re.sub(r"[^A-Za-z0-9_\-]", "_", target)
+    target_vars_filename = f"vars_{sanitized_target}.yml"
+    target_vars_path = os.path.join(project_root, target_vars_filename)
+    target_vars_file_dict = load_yml_dict(target_vars_path)
+    target_vars = target_vars_file_dict.get("vars", {}) if target_vars_file_dict else {}
+
+    merged_vars = {**base_vars, **target_vars}
+    return merged_vars
 
 
 def validate_vars_not_in_both(
@@ -258,7 +269,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
 
 
 def _query_comment_from_cfg(
-    cfg_query_comment: Union[QueryComment, NoValue, str, None]
+    cfg_query_comment: Union[QueryComment, NoValue, str, None],
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment="")

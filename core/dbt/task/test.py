@@ -430,6 +430,32 @@ class TestTask(RunTask):
     def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return TestRunner
 
+    def _inject_test_vars(self):
+        """
+        Loads and merges test vars from tests/vars.yml and tests/vars_<target>.yml, if present.
+        These vars override project vars, but only for dbt test.
+        """
+        import os
+
+        from dbt.task.test_vars_loader import test_vars_data_from_root
+
+        # Find the tests/ directory relative to the project root
+        tests_root = os.path.join(self.config.project_root, "tests")
+        if not os.path.isdir(tests_root):
+            return  # No tests/ directory, nothing to do
+
+        # Use the current target
+        test_vars = test_vars_data_from_root(tests_root, self.config.target_name)
+        if test_vars:
+            # Merge: test vars take precedence over project vars
+            merged_vars = {**self.config.vars.to_dict(), **test_vars}
+            self.config.vars = type(self.config.vars)(merged_vars)
+
+    def run(self):
+        # Inject test vars before running tests
+        self._inject_test_vars()
+        return super().run()
+
 
 # This was originally in agate_helper, but that was moved out into dbt_common
 def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
