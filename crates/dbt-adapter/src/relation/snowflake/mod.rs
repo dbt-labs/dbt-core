@@ -1,1 +1,1 @@
-pub mod dynamic_table;
+pub(crate) mod config;

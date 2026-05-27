@@ -59,6 +59,11 @@ pub(crate) mod diff {
     /// The signature of a diff function
     pub(crate) type DiffFn<T> = fn(&T, &T) -> Option<T>;
 
+    /// The state is immutable; the diff is always None
+    pub(crate) fn immutable<T>(_desired_state: &T, _current_state: &T) -> Option<T> {
+        None
+    }
+
     /// The resulting diff is simply a clone of the desired state
     pub(crate) fn desired_state<T: Sized + PartialEq + Clone>(
         desired_state: &T,
@@ -561,7 +566,7 @@ impl Object for RelationComponentConfigChangeSet {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        use AdapterType::Bigquery;
+        use AdapterType::{Bigquery, Snowflake};
         match (self.adapter_type, key.as_str()?) {
             // Reference: https://github.com/dbt-labs/dbt-adapters/blob/bd80e5a9d4b7b3b0200872892ff41994586c72ef/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_options.py#L190
             (Bigquery, "options") => {
@@ -599,6 +604,19 @@ impl Object for RelationComponentConfigChangeSet {
                 }
             }
             (_, "requires_full_refresh") => Some(Value::from(self.requires_full_refresh())),
+            // Reference: https://github.com/dbt-labs/dbt-adapters/blob/cb1b4a0b0758fd307dc21583bb3acfc78397a077/dbt-snowflake/src/dbt/adapters/snowflake/relation_configs/dynamic_table.py#L250
+            // All Snowflake config changesets are like this, so we inject the `context` after calling to_jinja
+            (Snowflake, key) => {
+                if self.changes.is_empty() {
+                    None
+                } else {
+                    let context_value = self.changes.get(key).map(|v| v.to_jinja())?;
+                    Some(Value::from(ValueMap::from([(
+                        "context".into(),
+                        context_value,
+                    )])))
+                }
+            }
             (_, key) => self.changes.get(key).map(|v| v.to_jinja()),
         }
     }

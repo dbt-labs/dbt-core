@@ -7,9 +7,8 @@ use crate::relation::redshift::materialized_view_config::{
     DescribeMaterializedViewResults, RedshiftMaterializedViewConfig,
     RedshiftMaterializedViewConfigChangeset,
 };
-use crate::relation::snowflake::dynamic_table::{
-    DescribeDynamicTableResults, SnowflakeDynamicTableConfig, SnowflakeDynamicTableConfigChangeset,
-};
+use crate::relation::snowflake::config::DescribeDynamicTableResults;
+use crate::relation::snowflake::config::relation_types::dynamic_table::new_loader;
 use crate::relation::{RelationObject, StaticBaseRelation};
 use crate::value::none_value;
 
@@ -876,22 +875,38 @@ impl BaseRelation for Relation {
                         )
                     })?;
 
-                let existing_config = SnowflakeDynamicTableConfig::try_from(relation_results)
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError, format!("dynamic_table_config_changeset: Failed to deserialize SnowflakeDynamicTableConfig: {e}")
-                        )
-                    })?;
+                let loader = new_loader();
+                let current_state = loader.from_remote_state(&relation_results)?;
 
-                let new_config = node_value_to_snowflake_dynamic_table(relation_config_value)?;
+                // TODO(serramatutu): minijinja_value_to_typed_struct does not work with references, so we
+                // have to clone the value here...
+                let local_config = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(
+                    relation_config_value.clone(),
+                )
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                    )
+                })?;
+                let local_config = match local_config {
+                    InternalDbtNodeWrapper::Model(model) => model,
+                    _ => {
+                        return Err(minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "Expected a model node",
+                        ));
+                    }
+                };
 
-                let changeset =
-                    SnowflakeDynamicTableConfigChangeset::new(existing_config, new_config);
+                let desired_state = loader.from_local_config(local_config.as_ref())?;
 
-                if changeset.has_changes() {
-                    Ok(Value::from_object(changeset))
+                let changeset = RelationConfig::diff(&desired_state, &current_state);
+
+                if changeset.is_empty() {
+                    Ok(none_value())
                 } else {
-                    Ok(Value::from(()))
+                    Ok(Value::from_object(changeset))
                 }
             }
             _ => Err(minijinja::Error::new(
@@ -907,9 +922,30 @@ impl BaseRelation for Relation {
                 node_value_to_redshift_materialized_view(config)?,
             )),
             // https://github.com/dbt-labs/dbt-adapters/blob/816d190c9e31391a48cee979bd049aeb34c89ad3/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L81
-            AdapterType::Snowflake => Ok(Value::from_object(
-                node_value_to_snowflake_dynamic_table(config)?,
-            )),
+            AdapterType::Snowflake => {
+                // TODO(serramatutu): minijinja_value_to_typed_struct does not work with references, so we
+                // have to clone the value here...
+                let local_config =
+                    minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(config.clone())
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                            )
+                        })?;
+                let local_config = match local_config {
+                    InternalDbtNodeWrapper::Model(model) => model,
+                    _ => {
+                        return Err(minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "Expected a model node",
+                        ));
+                    }
+                };
+                let relation_config = new_loader().from_local_config(local_config.as_ref())?;
+
+                Ok(Value::from_object(relation_config))
+            }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 "from_config: Only available for Snowflake and Redshift",
@@ -1180,46 +1216,6 @@ impl BaseRelation for Relation {
             _ => unimplemented!("Available only for BigQuery and Redshift"),
         }
     }
-}
-
-// FIXME(serramatutu): this should be deleted from here once Snowflake Dynamic Tables
-// are migrated to RelationConfig v2.
-fn node_value_to_snowflake_dynamic_table(
-    node_value: &Value,
-) -> Result<SnowflakeDynamicTableConfig, minijinja::Error> {
-    let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
-        minijinja::Error::new(
-            minijinja::ErrorKind::SerdeDeserializeError,
-            format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
-        )
-    })?;
-
-    let model = match config_wrapper {
-        InternalDbtNodeWrapper::Model(model) => model,
-        _ => {
-            return Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
-                "Expected a model node",
-            ));
-        }
-    };
-
-    if model.__base_attr__.materialized != DbtMaterialization::DynamicTable {
-        return Err(minijinja::Error::new(
-            minijinja::ErrorKind::InvalidOperation,
-            format!(
-                "Unsupported operation for materialization type {}",
-                &model.__base_attr__.materialized
-            ),
-        ));
-    }
-
-    SnowflakeDynamicTableConfig::try_from(&*model).map_err(|e| {
-        minijinja::Error::new(
-            minijinja::ErrorKind::SerdeDeserializeError,
-            format!("Failed to deserialize SnowflakeDynamicTableConfig: {e}"),
-        )
-    })
 }
 
 // FIXME(serramatutu): this should be deleted from here once Redshift Materialized
