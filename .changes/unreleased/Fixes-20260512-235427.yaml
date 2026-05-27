@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixed Python model parsing so dbt detects refs nested inside chained subscripts and other Python expressions.
+time: 2026-05-12T23:54:27.479135+02:00
+custom:
+    Author: Sichej
+    Issue: "12939"
