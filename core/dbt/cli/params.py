@@ -306,9 +306,9 @@ full_refresh = _create_option_and_track_env_var(
     is_flag=True,
 )
 
-v2_parser_command = _create_option_and_track_env_var(
-    "--v2-parser-command",
-    envvar="DBT_ENGINE_V2_PARSER_COMMAND",
+v2_parser = _create_option_and_track_env_var(
+    "--v2-parser",
+    envvar="DBT_ENGINE_V2_PARSER",
     help="Command to invoke for the fusion parser when --use-v2-parser is set. Defaults to 'fs parse'.",
     default="fs parse",
     hidden=True,

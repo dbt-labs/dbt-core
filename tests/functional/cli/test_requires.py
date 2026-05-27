@@ -133,7 +133,7 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_LOG_LEVEL_FILE",
             "DBT_ENGINE_USE_EXPERIMENTAL_PARSER",
             "DBT_ENGINE_USE_V2_PARSER",
-            "DBT_ENGINE_V2_PARSER_COMMAND",
+            "DBT_ENGINE_V2_PARSER",
             "DBT_ENGINE_UPLOAD_TO_ARTIFACTS_INGEST_API",
             "DBT_ENGINE_DEBUG",
             "DBT_ENGINE_PRINT",

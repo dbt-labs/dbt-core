@@ -52,8 +52,8 @@ Three pieces:
 3. **The helpers** (`v2_self_parser.py::run_dbt_for_mode`,
    `run_dbt_and_capture_for_mode`). Drop-in replacements for
    `run_dbt` / `run_dbt_and_capture` that prepend
-   `--use-v2-parser --v2-parser-command=dbt parse` when the mode is
-   `v2_self`. The `--v2-parser-command` value is a placeholder — the
+   `--use-v2-parser --v2-parser=dbt parse` when the mode is
+   `v2_self`. The `--v2-parser` value is a placeholder — the
    shim replaces `_run_fusion`, so the command is never executed, but
    the CLI flag pair is required for `USE_V2_PARSER` validation.
 

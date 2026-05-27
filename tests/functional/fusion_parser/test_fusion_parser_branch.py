@@ -105,7 +105,7 @@ class TestFusionParserBranch(FusionParserFixture):
         results = run_dbt(
             [
                 "--use-v2-parser",
-                f"--v2-parser-command={fake_fs}",
+                f"--v2-parser={fake_fs}",
                 "parse",
             ]
         )
@@ -122,7 +122,7 @@ class TestFusionParserBranch(FusionParserFixture):
         run_dbt(
             [
                 "--use-v2-parser",
-                f"--v2-parser-command={fake_fs}",
+                f"--v2-parser={fake_fs}",
                 "parse",
             ]
         )
@@ -133,7 +133,7 @@ class TestFusionParserBranch(FusionParserFixture):
             run_dbt(
                 [
                     "--use-v2-parser",
-                    "--v2-parser-command=definitely-not-a-real-binary-xyz",
+                    "--v2-parser=definitely-not-a-real-binary-xyz",
                     "parse",
                 ],
                 expect_pass=False,

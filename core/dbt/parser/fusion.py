@@ -95,7 +95,7 @@ def parse_with_fusion(
 def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     """Translate dbt-core flags into fs CLI args.
 
-    The base command is taken from flags.V2_PARSER_COMMAND (default 'fs parse')
+    The base command is taken from flags.V2_PARSER (default 'fs parse')
     and split with shlex so users can configure subcommands or wrappers.
 
     Forwarded flags (must affect manifest output):
@@ -105,7 +105,7 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     When target_path_override is provided, it replaces the user's --target-path
     so fs writes its handoff manifest where dbt expects it (a temp dir).
     """
-    base = shlex.split(getattr(flags, "V2_PARSER_COMMAND", "fs parse"))
+    base = shlex.split(getattr(flags, "V2_PARSER", "fs parse"))
     forwarded: List[str] = []
 
     project_dir = getattr(flags, "PROJECT_DIR", None)
@@ -164,7 +164,7 @@ def _run_fusion(argv: List[str]) -> None:
     except FileNotFoundError as e:
         raise FusionParserMissingError(
             f"Fusion parser command not found: {argv[0]!r}. "
-            f"Ensure 'fs' is installed and on PATH, or set --v2-parser-command."
+            f"Ensure 'fs' is installed and on PATH, or set --v2-parser."
         ) from e
 
     if result.returncode != 0:

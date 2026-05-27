@@ -23,7 +23,7 @@ from dbt.parser.fusion import (
 
 def _flags(**overrides):
     base = {
-        "V2_PARSER_COMMAND": "fs parse",
+        "V2_PARSER": "fs parse",
         "PROJECT_DIR": None,
         "PROFILES_DIR": None,
         "PROFILE": None,
@@ -85,7 +85,7 @@ class TestBuildArgv:
         assert "k" in argv[i + 1] and "v" in argv[i + 1]
 
     def test_custom_command_split_with_shlex(self):
-        argv = _build_argv(_flags(V2_PARSER_COMMAND="uv run fs parse"))
+        argv = _build_argv(_flags(V2_PARSER="uv run fs parse"))
         assert argv == ["uv", "run", "fs", "parse"]
 
     def test_target_path_override_replaces_user_value(self):
@@ -134,7 +134,7 @@ class TestParseWithFusion:
     def test_missing_binary_raises_typed_error(self, tmp_path: Path, _patch_fusion_deps):
         with mock.patch(
             "dbt.parser.fusion.get_flags",
-            return_value=_flags(V2_PARSER_COMMAND="definitely-not-a-real-binary-xyz"),
+            return_value=_flags(V2_PARSER="definitely-not-a-real-binary-xyz"),
         ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
             with pytest.raises(FusionParserMissingError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)

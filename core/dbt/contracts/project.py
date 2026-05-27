@@ -354,7 +354,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     use_colors_file: Optional[bool] = None
     use_experimental_parser: Optional[bool] = None
     use_v2_parser: Optional[bool] = None
-    v2_parser_command: Optional[str] = None
+    v2_parser: Optional[str] = None
     version_check: Optional[bool] = None
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None

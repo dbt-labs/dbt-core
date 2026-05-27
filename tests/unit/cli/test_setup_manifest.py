@@ -22,7 +22,7 @@ def _ctx(flags, manifest=None):
 def _flags(use_fusion: bool = False):
     return SimpleNamespace(
         USE_V2_PARSER=use_fusion,
-        V2_PARSER_COMMAND="fs parse",
+        V2_PARSER="fs parse",
         USE_CATALOGS_V2=False,
         PROJECT_DIR="/proj",
         VARS={},

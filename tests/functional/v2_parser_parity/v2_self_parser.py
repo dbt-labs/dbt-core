@@ -68,11 +68,11 @@ def install_shim(monkeypatch) -> None:
     )
 
 
-_V2_FLAGS = ["--use-v2-parser", "--v2-parser-command=dbt parse"]
+_V2_FLAGS = ["--use-v2-parser", "--v2-parser=dbt parse"]
 
 
 def _prepend(parser_mode: str, args):
-    # The --v2-parser-command value is a placeholder; install_shim replaces
+    # The --v2-parser value is a placeholder; install_shim replaces
     # _run_fusion so the command is never executed, but the CLI flag pair is
     # required for USE_V2_PARSER validation.
     if parser_mode == "v2_self":
