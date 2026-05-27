@@ -462,3 +462,72 @@ class TestProjectFlagsExposeManageState:
 
         pf = ProjectFlags(manage_state=False)
         assert "manage_state" not in pf.project_only_flags
+
+
+class TestManageStateClickIntegration:
+    """End-to-end: --manage-state on the CLI must enable the plugin even when the
+    DBT_ENGINE_MANAGE_STATE env var is not set. Likewise the env var alone must
+    enable it without the CLI flag. These tests exercise the real Click parser
+    and the real Flags constructor (no mocks) so a future refactor of the
+    Click-to-Flags pipeline can't silently break the CLI-only path."""
+
+    @staticmethod
+    def _probe_manage_state(argv, env):
+        """Run a minimal Click command that applies the @p.manage_state decorator,
+        construct the Flags object from the resulting context, and return what
+        `_plugin_is_managed("MANAGE_STATE")` would see."""
+        import click
+        from click.testing import CliRunner
+
+        import dbt.flags
+        from dbt.cli import params as p
+        from dbt.cli.flags import Flags
+        from dbt.plugins.manager import _plugin_is_managed
+
+        results = {}
+
+        @click.command()
+        @p.manage_state
+        @click.pass_context
+        def probe(ctx, **kwargs):
+            flags = Flags(ctx)
+            dbt.flags.set_flags(flags)
+            results["ctx_param"] = ctx.params.get("manage_state")
+            results["flags_attr"] = getattr(flags, "MANAGE_STATE", None)
+            results["plugin_is_managed"] = _plugin_is_managed("MANAGE_STATE")
+
+        runner = CliRunner()
+        result = runner.invoke(probe, argv, env=env, catch_exceptions=False)
+        assert result.exit_code == 0, result.output
+        return results
+
+    def test_cli_flag_alone_enables_plugin(self, monkeypatch):
+        """The reported case: --manage-state supplied, DBT_ENGINE_MANAGE_STATE NOT
+        set -> plugin enabled."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.delenv("DBT_MANAGE_STATE", raising=False)
+
+        result = self._probe_manage_state(["--manage-state"], env={})
+        assert result["ctx_param"] is True
+        assert result["flags_attr"] is True
+        assert result["plugin_is_managed"] is True
+
+    def test_env_var_alone_enables_plugin(self, monkeypatch):
+        """Symmetric case: env var supplied, no CLI flag -> plugin enabled."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        result = self._probe_manage_state([], env={"DBT_ENGINE_MANAGE_STATE": "true"})
+        assert result["plugin_is_managed"] is True
+
+    def test_neither_flag_nor_env_var_skips_plugin(self, monkeypatch):
+        """Default opt-in-off behavior: nothing set anywhere -> plugin skipped."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        monkeypatch.delenv("DBT_MANAGE_STATE", raising=False)
+
+        result = self._probe_manage_state([], env={})
+        assert result["plugin_is_managed"] is False
+
+    def test_no_manage_state_flag_skips_plugin(self, monkeypatch):
+        """Explicit --no-manage-state overrides everything -> plugin skipped."""
+        monkeypatch.delenv("DBT_ENGINE_MANAGE_STATE", raising=False)
+        result = self._probe_manage_state(["--no-manage-state"], env={})
+        assert result["plugin_is_managed"] is False
