@@ -90,7 +90,7 @@ def _format_core_msg(lines: List[List[str]]) -> str:
     msg = "Core:\n"
     msg_lines = []
 
-    for name, version, update_msg in _pad_lines(lines, seperator=":"):
+    for name, version, update_msg in _pad_lines(lines, separator=":"):
         line_msg = f"  - {name} {version}"
         if update_msg != "":
             line_msg += f" - {update_msg}"
@@ -110,7 +110,7 @@ def _get_plugins_msg() -> str:
             display_update_msg = True
         plugins.append([name, version_s, compatability_msg])
 
-    for plugin in _pad_lines(plugins, seperator=":"):
+    for plugin in _pad_lines(plugins, separator=":"):
         msg_lines.append(_format_single_plugin(plugin, ""))
 
     if display_update_msg:
@@ -155,7 +155,7 @@ def _format_single_plugin(plugin: List[str], update_msg: str) -> str:
     return msg
 
 
-def _pad_lines(lines: List[List[str]], seperator: str = "") -> List[List[str]]:
+def _pad_lines(lines: List[List[str]], separator: str = "") -> List[List[str]]:
     if len(lines) == 0:
         return []
 
@@ -184,11 +184,11 @@ def _pad_lines(lines: List[List[str]], seperator: str = "") -> List[List[str]]:
                 result[i][j] = item
                 continue
 
-            # only add the seperator to the first column
+            # only add the separator to the first column
             offset = 0
-            if j == 0 and seperator != "":
-                item += seperator
-                offset = len(seperator)
+            if j == 0 and separator != "":
+                item += separator
+                offset = len(separator)
 
             result[i][j] = item.ljust(counter[j] + offset)
 
