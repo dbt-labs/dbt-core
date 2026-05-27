@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from dbt.config.project import PartialProject
+from dbt.constants import DBT_HOME_DIR_NAME
 from dbt.exceptions import DbtProjectError
 
 
@@ -11,7 +12,7 @@ def default_project_dir() -> Path:
 
 
 def default_dbt_home_dir() -> Path:
-    return Path.home() / ".dbt"
+    return Path.home() / DBT_HOME_DIR_NAME
 
 
 def default_profiles_dir() -> Path:
