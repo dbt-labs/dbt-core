@@ -4,9 +4,11 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
+from dbt.events.types import NoNodesForSelectionCriteria
 from dbt.exceptions import InvalidSelectorError
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.events.functions import warn_or_error
 from dbt_common.exceptions import DbtRuntimeError
 
 from .graph import UniqueId
@@ -21,6 +23,35 @@ RAW_SELECTOR_PATTERN = re.compile(
     r"\Z"
 )
 SELECTOR_METHOD_SEPARATOR = "."
+
+
+def _has_graph_operator(groupdict: Dict[str, Any]) -> bool:
+    """Return True if the parsed selector groupdict contains any graph operator."""
+    return bool(
+        groupdict.get("childrens_parents")
+        or groupdict.get("parents")
+        or groupdict.get("children")
+    )
+
+
+def _is_unaccompanied_graph_operator(groupdict: Dict[str, Any]) -> bool:
+    """Return True when a graph operator is present but has no accompanying model name.
+
+    A valid selector must pair a graph operator with a "stringy" value (a model name, tag,
+    path, etc.).  When the value is absent or purely numeric the operator is unaccompanied:
+
+    - ``+``       parents flag set, value is empty string
+    - ``1+``      parents flag set with depth, value is empty string
+    - ``@``       childrens_parents flag set, value is empty string
+    - ``1+1``     parents flag set, value is ``"1"`` (numeric only — looks like a depth)
+    - ``+2``      parents flag set, value is ``"2"`` (numeric only)
+    """
+    if not _has_graph_operator(groupdict):
+        return False
+    value = groupdict.get("value") or ""
+    # An empty value or a value that is purely numeric (i.e. looks like a depth modifier
+    # rather than a real model name) means the operator has no accompanying target.
+    return not value or value.isdigit()
 
 
 class IndirectSelection(StrEnum):
@@ -164,7 +195,11 @@ class SelectionCriteria:
             # bad spec!
             raise DbtRuntimeError(f'Invalid selector spec "{raw}"')
 
-        return cls.selection_criteria_from_dict(raw, result.groupdict())
+        groupdict = result.groupdict()
+        if _is_unaccompanied_graph_operator(groupdict):
+            warn_or_error(NoNodesForSelectionCriteria(spec_raw=raw))
+
+        return cls.selection_criteria_from_dict(raw, groupdict)
 
 
 class BaseSelectionGroup(dbtClassMixin, Iterable[SelectionSpec], metaclass=ABCMeta):
