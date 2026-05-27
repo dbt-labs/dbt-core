@@ -74,7 +74,7 @@ def exchange_code(
             raise InteractiveAuthError(
                 f"dbt State token exchange failed: HTTP {resp.status_code} — {resp.text}"
             )
-    except requests.ConnectionError as e:
+    except requests.RequestException as e:
         raise InteractiveAuthError(f"dbt State token exchange failed: {e}")
 
     try:

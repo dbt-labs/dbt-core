@@ -31,7 +31,6 @@ class dbtPlatformAPIClient:
             resp = requests.get(url, headers=self._headers, timeout=5)
             resp.raise_for_status()
             fire_event(Note(msg=f"features response: {resp.text}"))
-            return True
             return resp.json().get("data", {}).get("dbt-state", False) is True
         except (requests.RequestException, ValueError, KeyError):
             return False
@@ -147,7 +146,7 @@ def exchange_code(
             raise InteractiveAuthError(
                 f"token exchange failed: HTTP {resp.status_code} — {resp.text}"
             )
-    except requests.ConnectionError as e:
+    except requests.RequestException as e:
         raise InteractiveAuthError(f"token exchange failed: {e}")
 
     try:

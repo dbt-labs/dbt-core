@@ -5,10 +5,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from dbt.auth.credentials import OAuthSession
-from dbt.cli.resolvers import default_dbt_home_dir
 from dbt.exceptions import InaccessibleSource, Malformed
 
-DBT_HOME_DIR = default_dbt_home_dir()
+
+def _dbt_home_dir() -> Path:
+    from dbt.cli.resolvers import default_dbt_home_dir
+
+    return default_dbt_home_dir()
+
+
+DBT_HOME_DIR = _dbt_home_dir()
 DEFAULT_CACHE_PATH = DBT_HOME_DIR / "oauth_sessions.json"
 STATE_AUTH_PATH = DBT_HOME_DIR / "state_auth.json"
 

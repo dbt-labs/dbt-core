@@ -333,7 +333,7 @@ class OAuthInteractiveResolver:
                 f"interactive authentication timed out after {self.timeout}s"
             )
 
-        if server.result.get("state") == runcache_ctx["state"]:
+        if "dbt_state_oauth" in server.result:
             return resolve_runcache_auth(server.result, runcache_ctx)
 
         return resolve_platform_auth(

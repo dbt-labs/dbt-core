@@ -421,14 +421,6 @@ macro_debugging = _create_option_and_track_env_var(
 manage_state = _create_option_and_track_env_var(
     "--manage-state/--no-manage-state",
     envvar="DBT_ENGINE_MANAGE_STATE",
-    help="Enable dbt State for managed artifact storage.",
-    hidden=True,
-)
-
-
-manage_state = _create_option_and_track_env_var(
-    "--manage-state/--no-manage-state",
-    envvar="DBT_ENGINE_MANAGE_STATE",
     help=(
         "Opt in to loading the bundled dbt-state plugin (installed as a dependency "
         "of dbt-core). Default false. Pass --manage-state to enable auto-discovery "

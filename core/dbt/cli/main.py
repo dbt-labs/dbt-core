@@ -122,7 +122,6 @@ def global_flags(func):
     @p.log_cache_events
     @p.log_file_max_bytes
     @p.log_format
-    @p.manage_state
     @p.log_format_file
     @p.log_level
     @p.log_level_file
