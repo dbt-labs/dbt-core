@@ -894,6 +894,7 @@ class MicrobatchModelRunner(ModelRunner):
 
         batch_results: List[RunResult] = []
         batch_idx = 0
+        is_incremental = self._is_incremental(model=model)
 
         # Run first batch not in parallel
         relation_exists = self.parent_task._submit_batch(
@@ -905,7 +906,7 @@ class MicrobatchModelRunner(ModelRunner):
             batch_results=batch_results,
             pool=self.pool,
             force_sequential_run=True,
-            incremental_batch=self._is_incremental(model=model),
+            incremental_batch=is_incremental,
         )
         batch_idx += 1
         skip_batches = batch_results[0].status != RunStatus.Success
@@ -921,6 +922,7 @@ class MicrobatchModelRunner(ModelRunner):
                 batch_results=batch_results,
                 pool=self.pool,
                 skip=skip_batches,
+                incremental_batch=is_incremental,
             )
             batch_idx += 1
 
@@ -954,6 +956,7 @@ class MicrobatchModelRunner(ModelRunner):
                 pool=self.pool,
                 force_sequential_run=True,
                 skip=skip_batches,
+                incremental_batch=is_incremental,
             )
 
         # Finalize run: merge results, track model run, and print final result line
