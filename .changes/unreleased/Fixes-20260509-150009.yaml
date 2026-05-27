@@ -1,0 +1,6 @@
+kind: Fixes
+body: Install dbt-postgres from PyPI in the `dbt-postgres` Docker image target (the `plugins/postgres` subdir was removed when dbt-postgres moved to its own repo)
+time: 2026-05-09T15:00:00.000000+02:00
+custom:
+    Author: jbbqqf
+    Issue: "11904"
