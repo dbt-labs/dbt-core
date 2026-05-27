@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Optional
 
 from dbt.auth.credentials import Credential
-from dbt.auth.errors import AuthError, NotAuthenticated
 from dbt.auth.resolvers import (
     CloudYamlResolver,
     EnvVarResolver,
     OAuthInteractiveResolver,
     OAuthPassiveResolver,
 )
+from dbt.exceptions import AuthError, NotAuthenticated
 
 OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
 

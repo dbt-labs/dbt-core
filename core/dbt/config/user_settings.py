@@ -39,9 +39,8 @@ def read_user_settings(path: Path | None = None) -> dict:
 
 def write_user_settings(settings: dict, path: Path | None = None) -> None:
     path = _resolve_path(path)
-    from dbt.auth.session_cache import _write_atomic
-
-    _write_atomic(yaml.dump(settings, default_flow_style=False), path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.dump(settings, default_flow_style=False), encoding="utf-8")
 
 
 def get_user_setting_flags(path: Path | None = None) -> dict:

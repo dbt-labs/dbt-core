@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 
 from dbt.auth.chain import OAUTH_CLIENT_ID, AuthChain
-from dbt.auth.errors import Malformed, NotAuthenticated
 from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver, ResolverKind
+from dbt.exceptions import Malformed, NotAuthenticated
 
 
 class TestAuthChainConstructors:

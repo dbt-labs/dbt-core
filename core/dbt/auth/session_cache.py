@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from dbt.auth.credentials import OAuthSession
-from dbt.auth.errors import InaccessibleSource, Malformed
 from dbt.cli.resolvers import default_dbt_home_dir
+from dbt.exceptions import InaccessibleSource, Malformed
 
 DBT_HOME_DIR = default_dbt_home_dir()
 DEFAULT_CACHE_PATH = DBT_HOME_DIR / "oauth_sessions.json"
@@ -54,28 +52,6 @@ def read_session_cache(path: Path = DEFAULT_CACHE_PATH) -> OAuthSessionCache:
     return OAuthSessionCache.from_dict(parsed)
 
 
-def _write_atomic(content: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=target.parent,
-        prefix=".oauth_sessions_",
-        suffix=".tmp",
-        delete=False,
-    ) as f:
-        tmp_path = Path(f.name)
-        f.write(content)
-
-    try:
-        if os.name != "nt":
-            tmp_path.chmod(0o600)
-        tmp_path.replace(target)
-    except OSError:
-        tmp_path.unlink(missing_ok=True)
-        raise
-
-
 def upsert_session(session: OAuthSession, path: Path = DEFAULT_CACHE_PATH) -> None:
     cache = read_session_cache(path)
 
@@ -92,11 +68,13 @@ def upsert_session(session: OAuthSession, path: Path = DEFAULT_CACHE_PATH) -> No
     else:
         cache.sessions.append(session)
 
-    _write_atomic(json.dumps(cache.to_dict(), indent=2), path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cache.to_dict(), indent=2), encoding="utf-8")
 
 
 def write_state_auth(token_data: dict, path: Path = STATE_AUTH_PATH) -> None:
-    _write_atomic(json.dumps(token_data, indent=2), path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(token_data, indent=2), encoding="utf-8")
 
 
 def read_state_auth(path: Path = STATE_AUTH_PATH) -> dict | None:

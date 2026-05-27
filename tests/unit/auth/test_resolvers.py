@@ -7,13 +7,6 @@ from unittest import mock
 import pytest
 
 from dbt.auth.credentials import CredentialKind, OAuthSession
-from dbt.auth.errors import (
-    AuthenticationExpired,
-    InteractiveAuthError,
-    Malformed,
-    NotAuthenticated,
-    RefreshFailed,
-)
 from dbt.auth.resolvers import (
     CloudYamlResolver,
     EnvVarResolver,
@@ -22,6 +15,13 @@ from dbt.auth.resolvers import (
     _generate_pkce,
 )
 from dbt.auth.session_cache import upsert_session
+from dbt.exceptions import (
+    AuthenticationExpired,
+    InteractiveAuthError,
+    Malformed,
+    NotAuthenticated,
+    RefreshFailed,
+)
 
 
 def _make_session(**overrides) -> OAuthSession:

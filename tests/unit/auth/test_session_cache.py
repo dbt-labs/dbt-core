@@ -6,13 +6,13 @@ import time
 import pytest
 
 from dbt.auth.credentials import OAuthSession
-from dbt.auth.errors import InaccessibleSource, Malformed
 from dbt.auth.session_cache import (
     DEFAULT_CACHE_PATH,
     OAuthSessionCache,
     read_session_cache,
     upsert_session,
 )
+from dbt.exceptions import InaccessibleSource, Malformed
 
 
 def _make_session(**overrides) -> OAuthSession:

@@ -1,4 +1,4 @@
-from dbt.auth.errors import (
+from dbt.exceptions import (
     AuthAborted,
     AuthenticationExpired,
     AuthError,
