@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve error messaging for snapshot unique-key violations
+time: 2026-03-27T12:00:00.000000+01:00
+custom:
+  Author: knQzx
+  Issue: "10864"
