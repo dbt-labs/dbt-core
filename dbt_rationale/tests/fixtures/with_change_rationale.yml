@@ -1,0 +1,14 @@
+models:
+  - name: fct_revenue
+    meta:
+      rationale:
+        intent: "Canonical revenue definition"
+        owner: "finance@company.com"
+        change_rationale:
+          change_type: "Modification"
+          reason_category:
+            - "Regulatory"
+          summary: "Exclude refunds to align with GAAP"
+          approved_by:
+            - "cfo@company.com"
+          risk_level: "High"

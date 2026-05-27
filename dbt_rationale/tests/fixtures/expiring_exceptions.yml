@@ -1,0 +1,19 @@
+models:
+  - name: model_with_expiring
+    meta:
+      rationale:
+        intent: "Has expiring exception"
+        owner: "team@company.com"
+        exceptions:
+          - rule: "POLICY_1"
+            justification: "Temporary override"
+            approved_by: "manager@company.com"
+            expires: "2026-02-20"
+          - rule: "POLICY_2"
+            justification: "Already expired"
+            approved_by: "manager@company.com"
+            expires: "2026-01-01"
+          - rule: "POLICY_3"
+            justification: "Far future"
+            approved_by: "manager@company.com"
+            expires: "2027-12-31"

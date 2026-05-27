@@ -1,0 +1,7 @@
+models:
+  - name: broken_model
+    meta:
+      rationale:
+        # Missing intent and owner (both required)
+        domain: "Analytics"
+        decision_type: "Business Definition"

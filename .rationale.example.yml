@@ -1,0 +1,29 @@
+# .rationale.yml — Configuration for dbt rationale analyzer
+#
+# Place this file in your dbt project root. All fields are optional;
+# defaults are shown below.
+#
+# CLI flags (--enforce, --min-score, etc.) override these values.
+
+# Enforcement level:
+#   off  — Report only, always exit 0
+#   soft — Warn on issues, exit 0 (GitHub Actions annotations emitted)
+#   hard — Fail CI on validation errors or threshold violations
+enforcement: soft
+
+# Minimum aggregate quality score (0-100) to pass in hard mode.
+# Score is based on rationale completeness across all resources.
+min_score: 0
+
+# Minimum percentage of resources that must have a rationale block.
+min_coverage: 0
+
+# Only check these resource types (empty list = all supported types).
+# Supported: models, metrics, semantic_models, sources, exposures, tests
+resource_types: []
+
+# Warn about policy exceptions expiring within this many days.
+exception_warn_days: 30
+
+# Paths to exclude from scanning (relative to project root).
+exclude_paths: []

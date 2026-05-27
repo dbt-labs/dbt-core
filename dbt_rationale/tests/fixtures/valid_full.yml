@@ -1,0 +1,45 @@
+models:
+  - name: fct_revenue
+    description: "Revenue fact table"
+    meta:
+      rationale:
+        intent: "Canonical revenue definition for financial reporting"
+        owner: "finance@company.com"
+        domain: "Revenue Analytics"
+        decision_type: "Business Definition"
+        references:
+          - type: "jira"
+            id: "FIN-123"
+          - type: "notion"
+            url: "https://notion.so/revenue-spec"
+        policy_bindings:
+          - "GAAP_v1"
+        exceptions:
+          - rule: "GAAP_v1.refund_window"
+            justification: "90-day refund window excluded per CFO directive"
+            approved_by: "cfo@company.com"
+            expires: "2026-06-30"
+            reference:
+              type: "jira"
+              id: "FIN-456"
+
+  - name: dim_customers
+    description: "Customer dimension"
+    meta:
+      rationale:
+        intent: "Master customer entity for all downstream joins"
+        owner: "data-engineering@company.com"
+        domain: "Customer"
+        decision_type: "Business Definition"
+
+metrics:
+  - name: monthly_revenue
+    meta:
+      rationale:
+        intent: "Core KPI for board reporting"
+        owner: "finance@company.com"
+        domain: "Revenue Analytics"
+        decision_type: "Business Definition"
+        policy_bindings:
+          - "GAAP_v1"
+          - "SOX_reporting"
