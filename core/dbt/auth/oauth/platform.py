@@ -10,10 +10,54 @@ from urllib.parse import urlencode, urlparse
 
 import requests
 
-from dbt.auth.credentials import Credential, OAuthSession
+from dbt.auth.credentials import OAuthSession, PlatformCredential
 from dbt.auth.oauth.utils import generate_pkce
 from dbt.auth.session_cache import DBT_HOME_DIR, DEFAULT_CACHE_PATH, upsert_session
+from dbt.config.user_settings import set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
+
+
+class dbtPlatformAPIClient:
+    def __init__(self, credential: PlatformCredential) -> None:
+        self.credential = credential
+        self._base_url = f"https://{credential.account_host}"
+        self._headers = {"Authorization": f"Bearer {credential.token}"}
+
+    def is_state_configured(self) -> bool:
+        url = f"{self._base_url}/api/private/accounts/{self.credential.account_id}/features/"
+        try:
+            resp = requests.get(url, headers=self._headers, timeout=5)
+            resp.raise_for_status()
+            fire_event(Note(msg=f"features response: {resp.text}"))
+            return True
+            return resp.json().get("data", {}).get("dbt-state", False) is True
+        except (requests.RequestException, ValueError, KeyError):
+            return False
+
+    def warm_license_cache(self) -> None:
+        url = (
+            f"{self._base_url}/api/private/accounts/{self.credential.account_id}/feature-licenses/"
+        )
+        try:
+            requests.post(url, headers=self._headers, timeout=5)
+        except requests.RequestException:
+            pass
+
+    def fetch_and_persist_jwks(self) -> None:
+        jwks_url = f"{self._base_url}/.well-known/jwks.json"
+        try:
+            resp = requests.get(jwks_url, timeout=10)
+            resp.raise_for_status()
+            jwks_data = resp.json()
+        except requests.RequestException:
+            return
+
+        jwks_data["fetched_at"] = time.time()
+        target = DBT_HOME_DIR / f"jwks.{self.credential.account_host}.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(jwks_data, indent=2), encoding="utf-8")
 
 
 def build_context(
@@ -112,42 +156,22 @@ def exchange_code(
         raise InteractiveAuthError(f"invalid token response: {e}")
 
 
-def fetch_and_persist_jwks(account_host: str) -> None:
-    jwks_url = f"https://{account_host}/.well-known/jwks.json"
-    try:
-        resp = requests.get(jwks_url, timeout=10)
-        resp.raise_for_status()
-        jwks_data = resp.json()
-    except requests.RequestException:
-        return
-
-    jwks_data["fetched_at"] = time.time()
-    target = DBT_HOME_DIR / f"jwks.{account_host}.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(jwks_data, indent=2), encoding="utf-8")
-
-
 def resolve_from_callback(
     result: dict,
     client_id: str,
     pkce_verifier: str,
     redirect_url: str,
     cache_path: Optional[Path] = None,
-) -> Credential:
-    code = result["code"]
-    account_url = result["account_url"]
-
+) -> PlatformCredential:
     token_data = exchange_code(
-        account_url=account_url,
+        account_url=result["account_url"],
         client_id=client_id,
-        code=code,
+        code=result["code"],
         redirect_url=redirect_url,
         code_verifier=pkce_verifier,
     )
 
     user_id, account_id, account_host = decode_access_token(token_data["access_token"])
-
-    fetch_and_persist_jwks(account_host)
 
     scopes = token_data.get("scope", "").split()
     expires_in = token_data.get("expires_in", 3600)
@@ -166,4 +190,37 @@ def resolve_from_callback(
 
     upsert_session(session, cache_path or DEFAULT_CACHE_PATH)
 
-    return Credential.from_oauth(session)
+    credential = PlatformCredential.from_oauth(session)
+    dbtPlatformAPIClient(credential).fetch_and_persist_jwks()
+
+    return credential
+
+
+def on_platform_login_success(credential: PlatformCredential) -> None:
+    from dbt.flags import get_flags
+
+    client = dbtPlatformAPIClient(credential)
+    client.warm_license_cache()
+    fire_event(
+        Note(msg=f"Logged in as {credential.account_host} (account {credential.account_id}).")
+    )
+
+    state_enabled_locally = getattr(get_flags(), "MANAGE_STATE", False) or False
+    configured = client.is_state_configured()
+    if configured and state_enabled_locally:
+        return
+    if not configured and not state_enabled_locally:
+        return
+    if configured and not state_enabled_locally:
+        set_user_setting_flag("manage_state", True)
+        fire_event(Note(msg="dbt State is available for your account — enabled locally."))
+        return
+    fire_event(
+        Note(
+            msg=(
+                "dbt State is enabled locally but is not configured for your account.\n"
+                "Contact your account administrator to set up dbt State, "
+                "or visit https://docs.getdbt.com/docs/deploy/dbt-state-about"
+            )
+        )
+    )

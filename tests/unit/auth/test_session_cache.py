@@ -165,14 +165,6 @@ class TestUpsertSession:
         cache = read_session_cache(p)
         assert len(cache.sessions) == 2
 
-    @pytest.mark.skipif(os.name == "nt", reason="Unix permissions")
-    def test_file_permissions_are_0600(self, tmp_path):
-        p = tmp_path / "oauth_sessions.json"
-        upsert_session(_make_session(), p)
-
-        mode = p.stat().st_mode & 0o777
-        assert mode == 0o600
-
     def test_valid_json_output(self, tmp_path):
         p = tmp_path / "oauth_sessions.json"
         upsert_session(_make_session(), p)

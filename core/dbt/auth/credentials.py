@@ -1,14 +1,8 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
-
-
-class CredentialKind(Enum):
-    SERVICE_TOKEN = "service_token"
-    PAT = "pat"
-    OAUTH = "oauth"
 
 
 @dataclass
@@ -26,44 +20,65 @@ class OAuthSession:
 
 @dataclass
 class Credential:
-    kind: CredentialKind
-    _token: str
-    _account_host: str
-    _account_id: int
+    token: str
+    expires_at: float
+
+    @property
+    def valid(self) -> bool:
+        return bool(self.token) and not self.expired
+
+    @property
+    def expired(self) -> bool:
+        return time.time() >= self.expires_at
+
+    def apply(self, headers: dict) -> None:
+        headers["Authorization"] = f"Bearer {self.token}"
+
+
+@dataclass
+class PlatformCredential(Credential):
+    account_host: str = ""
+    account_id: int = 0
     oauth_session: Optional[OAuthSession] = field(default=None, repr=False)
 
     @staticmethod
-    def from_token(token: str, account_host: str, account_id: int) -> Credential:
-        """Classify by prefix: dbtu_ -> Pat, anything else -> ServiceToken."""
-        if token.startswith("dbtu_"):
-            kind = CredentialKind.PAT
-        else:
-            kind = CredentialKind.SERVICE_TOKEN
-        return Credential(
-            kind=kind,
-            _token=token,
-            _account_host=account_host,
-            _account_id=account_id,
+    def from_token(token: str, account_host: str, account_id: int) -> PlatformCredential:
+        return PlatformCredential(
+            token=token,
+            expires_at=float("inf"),
+            account_host=account_host,
+            account_id=account_id,
         )
 
     @staticmethod
-    def from_oauth(session: OAuthSession) -> Credential:
-        return Credential(
-            kind=CredentialKind.OAUTH,
-            _token=session.access_token,
-            _account_host=session.account_host,
-            _account_id=session.account_id,
+    def from_oauth(session: OAuthSession) -> PlatformCredential:
+        return PlatformCredential(
+            token=session.access_token,
+            expires_at=session.expires_at,
+            account_host=session.account_host,
+            account_id=session.account_id,
             oauth_session=session,
         )
 
-    @property
-    def token(self) -> str:
-        return self._token
 
-    @property
-    def account_host(self) -> str:
-        return self._account_host
+@dataclass
+class RuncacheCredential(Credential):
+    refresh_token: Optional[str] = None
+    id_token: Optional[str] = None
+    scopes: list[str] = field(default_factory=list)
+    client_id: str = ""
+    user_id: str = ""
+    email: str = ""
+    name: str = ""
 
-    @property
-    def account_id(self) -> int:
-        return self._account_id
+    @staticmethod
+    def from_token_response(token_data: dict) -> RuncacheCredential:
+        expires_in = token_data.get("expires_in", 900)
+        return RuncacheCredential(
+            token=token_data["access_token"],
+            expires_at=time.time() + expires_in,
+            refresh_token=token_data.get("refresh_token"),
+            id_token=token_data.get("id_token"),
+            scopes=token_data.get("scope", "").split(),
+            client_id=token_data.get("client_id", ""),
+        )

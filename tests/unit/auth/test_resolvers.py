@@ -6,14 +6,10 @@ from unittest import mock
 
 import pytest
 
-from dbt.auth.credentials import CredentialKind, OAuthSession
-from dbt.auth.resolvers import (
-    CloudYamlResolver,
-    EnvVarResolver,
-    OAuthPassiveResolver,
-    _decode_access_token,
-    _generate_pkce,
-)
+from dbt.auth.credentials import OAuthSession, PlatformCredential
+from dbt.auth.oauth.platform import decode_access_token
+from dbt.auth.oauth.utils import generate_pkce
+from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver, OAuthPassiveResolver
 from dbt.auth.session_cache import upsert_session
 from dbt.exceptions import (
     AuthenticationExpired,
@@ -84,7 +80,7 @@ class TestEnvVarResolver:
         }
         with mock.patch.dict(os.environ, env, clear=False):
             cred = EnvVarResolver().resolve()
-        assert cred.kind == CredentialKind.SERVICE_TOKEN
+        assert isinstance(cred, PlatformCredential)
         assert cred.token == "dbtc_abc123"
         assert cred.account_host == "ab123.us1.dbt.com"
         assert cred.account_id == 42
@@ -97,7 +93,7 @@ class TestEnvVarResolver:
         }
         with mock.patch.dict(os.environ, env, clear=False):
             cred = EnvVarResolver().resolve()
-        assert cred.kind == CredentialKind.PAT
+        assert isinstance(cred, PlatformCredential)
 
     def test_missing_env_vars_raises_not_authenticated(self):
         env = {}
@@ -142,7 +138,7 @@ class TestOAuthPassiveResolver:
         upsert_session(_make_session(), p)
 
         cred = OAuthPassiveResolver("test_client", cache_path=p).resolve()
-        assert cred.kind == CredentialKind.OAUTH
+        assert isinstance(cred, PlatformCredential)
         assert cred.token == "tok_abc"
         assert cred.account_id == 42
 
@@ -239,7 +235,7 @@ class TestCloudYamlResolver:
         p.write_text(_valid_cloud_yaml())
 
         cred = CloudYamlResolver(path=p).resolve()
-        assert cred.kind == CredentialKind.SERVICE_TOKEN
+        assert isinstance(cred, PlatformCredential)
         assert cred.token == "dbtc_abc123"
         assert cred.account_host == "ab123.us1.dbt.com"
         assert cred.account_id == 42
@@ -249,7 +245,7 @@ class TestCloudYamlResolver:
         p.write_text(_valid_cloud_yaml(token="dbtu_user_token"))
 
         cred = CloudYamlResolver(path=p).resolve()
-        assert cred.kind == CredentialKind.PAT
+        assert isinstance(cred, PlatformCredential)
 
     def test_missing_file_raises_not_authenticated(self, tmp_path):
         p = tmp_path / "nonexistent.yml"
@@ -362,13 +358,13 @@ projects:
 
 class TestPkce:
     def test_verifier_length(self):
-        verifier, _ = _generate_pkce()
+        verifier, _ = generate_pkce()
         assert len(verifier) >= 43
 
     def test_challenge_matches_sha256(self):
         import hashlib
 
-        verifier, challenge = _generate_pkce()
+        verifier, challenge = generate_pkce()
         expected = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
             .rstrip(b"=")
@@ -377,21 +373,21 @@ class TestPkce:
         assert challenge == expected
 
     def test_verifier_is_url_safe(self):
-        verifier, _ = _generate_pkce()
+        verifier, _ = generate_pkce()
         assert all(c.isalnum() or c in ("-", "_") for c in verifier)
 
 
 class TestDecodeAccessToken:
     def test_happy_path(self):
         jwt = _make_fake_jwt(user_id=5001, account_id=1001, account_host="ab123.us1.dbt.com")
-        user_id, account_id, account_host = _decode_access_token(jwt)
+        user_id, account_id, account_host = decode_access_token(jwt)
         assert user_id == 5001
         assert account_id == 1001
         assert account_host == "ab123.us1.dbt.com"
 
     def test_invalid_jwt_not_three_parts(self):
         with pytest.raises(InteractiveAuthError, match="not a valid JWT"):
-            _decode_access_token("just.two")
+            decode_access_token("just.two")
 
     def test_missing_sub_claim(self):
         payload = json.dumps({"https://dbt.com/account_id": "1", "iss": "https://host"})
@@ -400,7 +396,7 @@ class TestDecodeAccessToken:
         jwt = f"{header}.{body}.sig"
 
         with pytest.raises(InteractiveAuthError, match="sub"):
-            _decode_access_token(jwt)
+            decode_access_token(jwt)
 
     def test_missing_account_id_claim(self):
         payload = json.dumps({"sub": "1", "iss": "https://host"})
@@ -409,7 +405,7 @@ class TestDecodeAccessToken:
         jwt = f"{header}.{body}.sig"
 
         with pytest.raises(InteractiveAuthError, match="account_id"):
-            _decode_access_token(jwt)
+            decode_access_token(jwt)
 
     def test_missing_iss_claim(self):
         payload = json.dumps({"sub": "1", "https://dbt.com/account_id": "1"})
@@ -418,4 +414,4 @@ class TestDecodeAccessToken:
         jwt = f"{header}.{body}.sig"
 
         with pytest.raises(InteractiveAuthError, match="iss"):
-            _decode_access_token(jwt)
+            decode_access_token(jwt)

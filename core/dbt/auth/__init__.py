@@ -1,5 +1,10 @@
 from dbt.auth.chain import OAUTH_CLIENT_ID, AuthChain  # noqa: F401
-from dbt.auth.credentials import Credential, CredentialKind, OAuthSession  # noqa: F401
+from dbt.auth.credentials import (  # noqa: F401
+    Credential,
+    OAuthSession,
+    PlatformCredential,
+    RuncacheCredential,
+)
 from dbt.auth.resolvers import (  # noqa: F401
     CloudYamlResolver,
     EnvVarResolver,

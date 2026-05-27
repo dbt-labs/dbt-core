@@ -7,10 +7,13 @@ from urllib.parse import urlencode
 
 import requests
 
+from dbt.auth.credentials import RuncacheCredential
 from dbt.auth.oauth.utils import generate_pkce
 from dbt.auth.session_cache import write_state_auth
 from dbt.config.user_settings import set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 
 RUNCACHE_OAUTH_AUTH_URL = "https://auth.runcache.com"
 RUNCACHE_OAUTH_TOKEN_URL = "https://auth.runcache.com/token"
@@ -80,7 +83,7 @@ def exchange_code(
         raise InteractiveAuthError(f"invalid dbt State token response: {e}")
 
 
-def resolve_from_callback(result: dict, ctx: dict) -> None:
+def resolve_from_callback(result: dict, ctx: dict) -> RuncacheCredential:
     token_data = exchange_code(
         token_url=ctx["token_url"],
         client_id=ctx["client_id"],
@@ -90,4 +93,9 @@ def resolve_from_callback(result: dict, ctx: dict) -> None:
         state=ctx["state"],
     )
     write_state_auth(token_data)
+    return RuncacheCredential.from_token_response(token_data)
+
+
+def on_runcache_login_success(credential: RuncacheCredential) -> None:
     set_user_setting_flag("manage_state", True)
+    fire_event(Note(msg="dbt State login successful."))

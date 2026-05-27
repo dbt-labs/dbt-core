@@ -10,7 +10,12 @@ from typing import Callable, Optional
 import requests
 import yaml
 
-from dbt.auth.credentials import Credential, OAuthSession
+from dbt.auth.credentials import (
+    Credential,
+    OAuthSession,
+    PlatformCredential,
+    RuncacheCredential,
+)
 from dbt.auth.oauth.callback_server import OAuthCallbackServer
 from dbt.auth.oauth.platform import build_context as build_platform_oauth_context
 from dbt.auth.oauth.platform import decode_access_token
@@ -64,7 +69,7 @@ class EnvVarResolver:
         except ValueError:
             raise Malformed(f"DBT_CLOUD_ACCOUNT_ID {account_id_str!r} is not a valid integer")
 
-        return Credential.from_token(token, host, account_id)
+        return PlatformCredential.from_token(token, host, account_id)
 
 
 class OAuthPassiveResolver:
@@ -98,7 +103,7 @@ class OAuthPassiveResolver:
         non_expired = [s for s in matching if s.expires_at > now]
 
         if non_expired:
-            return Credential.from_oauth(non_expired[0])
+            return PlatformCredential.from_oauth(non_expired[0])
 
         refreshable = next((s for s in matching if s.refresh_token is not None), None)
         if refreshable is None:
@@ -158,7 +163,7 @@ class OAuthPassiveResolver:
         # Atomic write BEFORE returning — refresh tokens are one-time-use.
         upsert_session(new_session, self.cache_path)
 
-        return Credential.from_oauth(new_session)
+        return PlatformCredential.from_oauth(new_session)
 
 
 class CloudYamlResolver:
@@ -236,7 +241,9 @@ class CloudYamlResolver:
                 f"account-id {account_id_str!r} in {cloud_path} is not a valid integer"
             )
 
-        return Credential.from_token(token_value, project.get("account-host", ""), account_id)
+        return PlatformCredential.from_token(
+            token_value, project.get("account-host", ""), account_id
+        )
 
 
 class OAuthInteractiveResolver:
@@ -287,7 +294,7 @@ class OAuthInteractiveResolver:
             return f"https://{host}"
         return None
 
-    def resolve(self) -> Optional[Credential]:
+    def resolve(self) -> PlatformCredential | RuncacheCredential:
         server = OAuthCallbackServer()
         port = server.server_address[1]
         redirect_url = f"http://localhost:{port}/"
@@ -326,8 +333,7 @@ class OAuthInteractiveResolver:
             )
 
         if server.result.get("state") == runcache_ctx["state"]:
-            resolve_runcache_auth(server.result, runcache_ctx)
-            return None
+            return resolve_runcache_auth(server.result, runcache_ctx)
 
         return resolve_platform_auth(
             server.result,
