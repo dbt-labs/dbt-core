@@ -1180,7 +1180,33 @@ class ProviderContext(ManifestContext):
                 self.sql_results[name] = None
                 return ret_val
         else:
-            # Handle trying to load a result that was never stored
+            # Handle trying to load a result that was never stored.
+            #
+            # During the parse phase `execute == False`, so no SQL has been run
+            # and `sql_results` is always empty. A `load_result` call that
+            # lands here is almost always a user who forgot to wrap an
+            # introspective query (e.g. `run_query` / `load_result`) in an
+            # `{% if execute %}` block — which later surfaces as the cryptic
+            # "'None' has no attribute 'table'" compilation error. Emit an
+            # upfront warning pointing at the execute docs so the root cause
+            # is visible before the downstream error.
+            #
+            # See dbt-labs/dbt-core#11070.
+            if not self.provider.execute:
+                model_name = getattr(self.model, "name", None) or getattr(
+                    self.model, "unique_id", "<unknown>"
+                )
+                fire_event(
+                    JinjaLogWarning(
+                        msg=(
+                            f"`load_result('{name}')` was called in {model_name} during "
+                            "the parse phase and returned None because no SQL has been "
+                            "run yet. Wrap introspective calls like `run_query` / "
+                            "`load_result` in an `{% if execute %}` block — see "
+                            "https://docs.getdbt.com/reference/dbt-jinja-functions/execute"
+                        )
+                    )
+                )
             return None
 
     @contextmember()
