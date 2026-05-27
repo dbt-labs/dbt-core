@@ -7,6 +7,7 @@ use dbt_common::FsResult;
 use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
 use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
+use dbt_tasks_core::context::TaskRunnerCtx;
 use minijinja::Value as MinijinjaValue;
 use uuid::Uuid;
 
@@ -18,6 +19,7 @@ use crate::index::IndexFeature;
 use crate::index::IndexHooks;
 use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
+use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
 
 struct NoOpExtensionHooks;
@@ -75,7 +77,7 @@ impl CliExtensionHooks for NoOpExtensionHooks {
         _arg: &EvalArgs,
         _cli: &dbt_clap_core::Cli,
         _previous_state: Option<&dbt_schemas::schemas::PreviousState>,
-        _run_tasks_ok: &dbt_tasks_core::RunTasksOk,
+        _run_task_results: &dbt_tasks_core::RunTaskResults,
         _resolved_state: &dbt_schemas::state::ResolverState,
         _token: &CancellationToken,
     ) -> FsResult<()> {
@@ -87,7 +89,7 @@ impl CliExtensionHooks for NoOpExtensionHooks {
         _arg: &EvalArgs,
         _resolved_state: &dbt_schemas::state::ResolverState,
         _jinja_env: &Arc<dbt_jinja_utils::jinja_environment::JinjaEnv>,
-        _compute_backend: &Arc<dyn std::any::Any + Send + Sync>,
+        _task_runner_ctx: Option<&TaskRunnerCtx>,
         _schema_store: &Arc<dyn dbt_schema_store::SchemaStoreTrait>,
         _data_store: &Arc<dyn dbt_schema_store::DataStoreTrait>,
         _map_compiled_sql: &HashMap<String, Option<String>>,
@@ -146,15 +148,21 @@ pub struct SourceAvailableFeatureStackBuilder {
     tracing: TracingFeature,
     adapter: AdapterFeature,
     antlr_parser: AntlrParserFeature,
+    task_runner: TaskRunnerFeature,
 }
 
 impl SourceAvailableFeatureStackBuilder {
-    pub fn new(tracing: TracingFeature, adapter: AdapterFeature) -> Self {
+    pub fn new(
+        tracing: TracingFeature,
+        adapter: AdapterFeature,
+        task_runner: TaskRunnerFeature,
+    ) -> Self {
         Self {
             send_anonymous_usage_stats: false,
             tracing,
             adapter,
             antlr_parser: Default::default(),
+            task_runner,
         }
     }
 
@@ -165,6 +173,11 @@ impl SourceAvailableFeatureStackBuilder {
 
     pub fn antlr_parser(mut self, feature: AntlrParserFeature) -> Self {
         self.antlr_parser = feature;
+        self
+    }
+
+    pub fn task_runner(mut self, feature: TaskRunnerFeature) -> Self {
+        self.task_runner = feature;
         self
     }
 
@@ -187,6 +200,7 @@ impl SourceAvailableFeatureStackBuilder {
             antlr_parser: self.antlr_parser,
             sidecar: SidecarFeature::default(),
             metricflow: MetricflowFeature::default(),
+            task_runner: self.task_runner,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

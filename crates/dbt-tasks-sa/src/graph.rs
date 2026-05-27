@@ -68,17 +68,17 @@ pub trait CompareTaskGraphBuilder: Send + Sync {
 pub struct GraphBuilder {
     arg: Arc<RunTasksArgs>,
     execute: Execute,
-    static_analysis_buckets: Box<dyn StaticAnalysisBuckets>,
-    tasks_for_node_factory: Box<dyn TasksForNodeFactory>,
-    compare_task_graph_builder: Option<Box<dyn CompareTaskGraphBuilder>>,
+    static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+    tasks_for_node_factory: Arc<dyn TasksForNodeFactory>,
+    compare_task_graph_builder: Option<Arc<dyn CompareTaskGraphBuilder>>,
 }
 
 impl GraphBuilder {
     pub fn new(
         arg: Arc<RunTasksArgs>,
-        static_analysis_buckets: Box<dyn StaticAnalysisBuckets>,
-        tasks_for_node_factory: Box<dyn TasksForNodeFactory>,
-        compare_task_graph_builder: Option<Box<dyn CompareTaskGraphBuilder>>,
+        static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        tasks_for_node_factory: Arc<dyn TasksForNodeFactory>,
+        compare_task_graph_builder: Option<Arc<dyn CompareTaskGraphBuilder>>,
     ) -> Self {
         let execute = Execute::from_compute_flag(arg.local_execution_backend);
         Self {

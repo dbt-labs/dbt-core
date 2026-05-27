@@ -26,7 +26,7 @@ pub trait MetricflowClientFactory: Send + Sync {
         &self,
         arg: &EvalArgs,
         semantic_manifest: &SemanticManifest,
-        dbt_cloud_config: &Option<ResolvedCloudConfig>,
+        dbt_cloud_config: Option<&ResolvedCloudConfig>,
         semantic_layer_spec_is_legacy: bool,
     ) -> FsResult<Option<Arc<dyn MetricflowClient>>>;
 }

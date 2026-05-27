@@ -25,6 +25,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
+dbt-tasks-sa = { workspace = true }
 
 minijinja = { workspace = true }
 uuid = { workspace = true }

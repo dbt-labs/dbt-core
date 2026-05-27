@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::Path;
 use std::sync::Arc;
 
 use arrow_schema::SchemaRef;
@@ -637,7 +638,7 @@ pub fn filter_missing_schemas(
 }
 
 pub fn mirror_schema_to_frontier_cache(
-    io_args: &IoArgs,
+    io_args_out_dir: &Path,
     canonical_fqn: &CanonicalFqn,
     unique_id: &str,
     schema_store: &dyn SchemaStoreTrait,
@@ -657,7 +658,7 @@ pub fn mirror_schema_to_frontier_cache(
     // For legacy per-file formats (StoreFormat::Parquet), copy the analyzed
     // parquet file to the sourced_remote path. This is a no-op for ParquetCache
     // because the analyzed file no longer exists on disk.
-    let schema_root = io_args.out_dir.join("schemas");
+    let schema_root = io_args_out_dir.join("schemas");
     let analyzed_path = schema_root
         .join("analyzed")
         .join(unique_id)
@@ -697,7 +698,7 @@ pub fn mirror_schema_to_frontier_cache(
 }
 
 pub fn typecheck_macros(
-    resolver_state: Arc<ResolverState>,
+    resolver_state: &ResolverState,
     env: Arc<JinjaEnv>,
     jinja_typechecking_listener_factory: Arc<
         dyn dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory,
@@ -828,7 +829,7 @@ fn collect_noqa_comments(
 /// Write decompiled SQL to out_dir/decompiled/{path}
 /// Mirrors dbt's compiled output structure. Path should be the common.path from the node
 /// (e.g., "models/staging/stg_users.sql")
-pub fn write_decompiled_sql(out_dir: &std::path::Path, relative_path: &std::path::Path, sql: &str) {
+pub fn write_decompiled_sql(out_dir: &Path, relative_path: &Path, sql: &str) {
     let decompiled_path = out_dir.join("decompiled").join(relative_path);
 
     if let Some(parent) = decompiled_path.parent() {

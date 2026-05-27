@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -15,7 +14,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::state::{DbtState, ResolverState};
-use dbt_tasks_core::{PreTaskRunData, RunTasksOk};
+use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::{PreTaskRunData, RunTaskResults};
 use minijinja::Value as MinijinjaValue;
 use uuid::Uuid;
 
@@ -102,7 +102,7 @@ pub trait CliExtensionHooks: Send + Sync {
         arg: &EvalArgs,
         cli: &Cli,
         previous_state: Option<&PreviousState>,
-        run_tasks_ok: &RunTasksOk,
+        run_task_results: &RunTaskResults,
         resolved_state: &ResolverState,
         token: &CancellationToken,
     ) -> FsResult<()>;
@@ -115,7 +115,7 @@ pub trait CliExtensionHooks: Send + Sync {
         arg: &EvalArgs,
         resolved_state: &ResolverState,
         jinja_env: &Arc<JinjaEnv>,
-        compute_backend: &Arc<dyn Any + Send + Sync>,
+        task_runner_ctx: Option<&TaskRunnerCtx>,
         schema_store: &Arc<dyn SchemaStoreTrait>,
         data_store: &Arc<dyn DataStoreTrait>,
         map_compiled_sql: &HashMap<String, Option<String>>,

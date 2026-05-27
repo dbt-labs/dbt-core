@@ -10,7 +10,7 @@ mod upload_artifact_ingest;
 pub mod loader;
 
 pub use deps::execute_deps_command;
-pub use download_manifest::hydrate_or_download_manifest_from_cloud;
+pub use download_manifest::CloudManifestDownloader;
 pub use load_packages::{
     construct_internal_packages, load_internal_packages, load_packages, persist_internal_packages,
 };

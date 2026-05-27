@@ -1,15 +1,15 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    time::Duration,
-};
+use std::collections::{BTreeSet, HashMap};
+use std::time::Duration;
 
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::{IntrospectionKind, Nodes};
 
 use crate::RunTasksArgs;
 
-pub trait StaticAnalysisBuckets: Send {
+pub trait StaticAnalysisBuckets: Send + Sync {
     fn global_static_analysis(&self) -> Option<StaticAnalysisKind>;
+    fn deferred_unique_ids(&self) -> &HashMap<CanonicalFqn, String>;
 
     fn in_off_closure(&self, node_id: &str) -> bool;
     fn in_baseline_closure(&self, node_id: &str) -> bool;

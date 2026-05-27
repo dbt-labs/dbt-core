@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf};
 
 use dbt_common::{
     FsResult, MacroSpan,
@@ -9,34 +9,14 @@ use dbt_common::{
 };
 use dbt_schemas::schemas::CommonAttributes;
 
-pub trait CompiledSqlCache: Any + Send + Sync {
-    fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf;
-
-    fn try_get_compiled_sql(
-        &self,
-        io: &IoArgs,
-        common: &CommonAttributes,
-    ) -> Option<(String, Vec<MacroSpan>)>;
-
-    fn set_compiled_sql(
-        &self,
-        io: &IoArgs,
-        common: &CommonAttributes,
-        rendered_sql_maybe_with_cte: &str,
-        macro_spans: &[MacroSpan],
-    ) -> FsResult<()>;
-
-    fn clear(&self, unique_id: &str);
-}
-
-pub type CompiledSqlCacheRef = Arc<dyn CompiledSqlCache>;
+use dbt_tasks_core::CompiledSqlCache;
 
 #[derive(Default)]
-pub struct DefaultCompiledSqlCache {
+pub struct CompiledSqlCacheImpl {
     valid_nodes: parking_lot::RwLock<HashSet<String>>,
 }
 
-impl CompiledSqlCache for DefaultCompiledSqlCache {
+impl CompiledSqlCache for CompiledSqlCacheImpl {
     fn get_compiled_sql_path(&self, io: &IoArgs, common: &CommonAttributes) -> PathBuf {
         // Snapshots always use the many-to-one nested path: original_file_path/name.sql.
         // A single .sql file can contain multiple snapshot blocks, so the basename

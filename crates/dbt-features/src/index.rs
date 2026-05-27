@@ -6,7 +6,7 @@ use dbt_common::io_args::EvalArgs;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::manifest::DbtManifest;
 use dbt_schemas::state::ResolverState;
-use dbt_tasks_core::RunTasksOk;
+use dbt_tasks_core::RunTaskResults;
 
 #[async_trait]
 pub trait IndexHooks: Send + Sync {
@@ -17,7 +17,7 @@ pub trait IndexHooks: Send + Sync {
         _manifest: &DbtManifest,
         _resolved_state: &ResolverState,
         _schema_store: Option<&dyn SchemaStoreTrait>,
-        _run_tasks_ok: &RunTasksOk,
+        _run_task_results: &RunTaskResults,
     ) -> FsResult<()> {
         Ok(())
     }

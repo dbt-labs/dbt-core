@@ -11,5 +11,6 @@ pub mod cli_extension;
 pub mod index;
 pub mod metricflow;
 pub mod sidecar;
+pub mod task_runner;
 pub mod tracing;
 // add more features here...

@@ -536,6 +536,21 @@ impl ResolverState {
         }
         reverse_deps
     }
+
+    pub fn deep_clone(&self) -> Self {
+        // XXX: for some reason, Clone is not a deep clone yet
+        let mut resolved_state = self.clone();
+        resolved_state.node_resolver = resolved_state.node_resolver.deep_clone().into();
+        resolved_state
+    }
+
+    pub fn get_defer_node_by_id(&self, node_id: &str) -> Option<&dyn InternalDbtNodeAttributes> {
+        if let Some(defer_nodes) = &self.defer_nodes {
+            defer_nodes.get_node(node_id)
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for ResolverState {

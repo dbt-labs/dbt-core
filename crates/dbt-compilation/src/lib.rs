@@ -3,4 +3,5 @@
 pub mod config;
 pub mod core;
 pub mod schedule;
+pub mod schema_hydration;
 pub mod traits;

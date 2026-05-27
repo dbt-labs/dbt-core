@@ -1,7 +1,7 @@
 use crate::cloud_http_client::{
     CloudAuthScheme, build_cloud_api_client, build_private_api_url, build_retry_client,
 };
-use dbt_cloud_config::ResolvedCloudConfig;
+use dbt_cloud_config::{CloudCredentials, ResolvedCloudConfig};
 use dbt_common::constants::{DBT_MANIFEST_INFO, DBT_MANIFEST_JSON};
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
@@ -44,276 +44,292 @@ fn process_manifest_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-/// Downloads manifest from dbt Cloud if available and not recently cached
-#[allow(clippy::cognitive_complexity)]
-pub async fn hydrate_or_download_manifest_from_cloud(
-    dbt_cloud_config: Option<&ResolvedCloudConfig>,
-    io: &IoArgs,
-) -> FsResult<Option<PathBuf>> {
-    let Some(config) = dbt_cloud_config else {
-        return Ok(None);
-    };
-    let Some(creds) = &config.credentials else {
-        return Ok(None);
-    };
-    let project_id = config.project_id.as_deref().unwrap_or_default();
+/// Downloader for dbt Cloud deferral manifests (with caching).
+pub struct CloudManifestDownloader {
+    project_id: String,
+    creds: CloudCredentials,
+    defer_env_id: Option<String>,
+}
 
-    // Create directory for manifest
-    let default_dir = io.out_dir.join("dbt_cloud_defer");
-    std::fs::create_dir_all(&default_dir)?;
+impl CloudManifestDownloader {
+    pub fn try_new(config: &ResolvedCloudConfig) -> Option<Self> {
+        let Some(project_id) = &config.project_id else {
+            return None;
+        };
+        let Some(creds) = &config.credentials else {
+            return None;
+        };
+        Some(Self {
+            project_id: project_id.clone(),
+            creds: creds.clone(),
+            defer_env_id: config.defer_env_id.clone(),
+        })
+    }
+}
 
-    let manifest_path = default_dir.join(DBT_MANIFEST_JSON);
-    let info_path = default_dir.join(DBT_MANIFEST_INFO);
+impl CloudManifestDownloader {
+    /// Downloads manifest from dbt Cloud if available and not recently cached
+    ///
+    /// NOTE: won't download again if local cache is valid.
+    #[allow(clippy::cognitive_complexity)]
+    pub async fn download_manifest(&self, io: &IoArgs) -> FsResult<Option<PathBuf>> {
+        // Create directory for manifest
+        let default_dir = io.out_dir.join("dbt_cloud_defer");
+        std::fs::create_dir_all(&default_dir)?;
 
-    // Check if manifest already exists and is recent (less than an hour old)
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get system time: {}", e))?
-        .as_secs();
+        let manifest_path = default_dir.join(DBT_MANIFEST_JSON);
+        let info_path = default_dir.join(DBT_MANIFEST_INFO);
 
-    if manifest_path.exists() && info_path.exists() {
-        // Read the timestamp from info file
-        if let Ok(timestamp_str) = std::fs::read_to_string(&info_path)
-            && let Ok(last_download_time) = timestamp_str.trim().parse::<u64>()
-        {
-            // If less than an hour has passed, use existing manifest
-            if now - last_download_time <= DOWNLOAD_INTERVAL {
-                return Ok(Some(default_dir));
+        // Check if manifest already exists and is recent (less than an hour old)
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get system time: {}", e))?
+            .as_secs();
+
+        if manifest_path.exists() && info_path.exists() {
+            // Read the timestamp from info file
+            if let Ok(timestamp_str) = std::fs::read_to_string(&info_path)
+                && let Ok(last_download_time) = timestamp_str.trim().parse::<u64>()
+            {
+                // If less than an hour has passed, use existing manifest
+                if now - last_download_time <= DOWNLOAD_INTERVAL {
+                    return Ok(Some(default_dir));
+                }
             }
         }
-    }
 
-    // Determine which manifest path to use based on defer_env_id
-    // If defer_env_id is specified, use the manifest/{env_id}/ path
-    // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
-    let manifest_path_suffix = match &config.defer_env_id {
-        Some(env_id) => {
-            emit_info_progress_message(
-                ProgressMessage::new_from_action_and_target(
-                    "INFO".to_string(),
-                    format!("Using defer_env_id '{}' for manifest download", env_id),
-                ),
-                io.status_reporter.as_ref(),
-            );
-            format!("manifest/{env_id}/")
-        }
-        None => "manifest/latest/".to_string(),
-    };
+        // Determine which manifest path to use based on defer_env_id
+        // If defer_env_id is specified, use the manifest/{env_id}/ path
+        // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
+        let manifest_path_suffix = match &self.defer_env_id {
+            Some(env_id) => {
+                emit_info_progress_message(
+                    ProgressMessage::new_from_action_and_target(
+                        "INFO".to_string(),
+                        format!("Using defer_env_id '{}' for manifest download", env_id),
+                    ),
+                    io.status_reporter.as_ref(),
+                );
+                format!("manifest/{env_id}/")
+            }
+            None => "manifest/latest/".to_string(),
+        };
 
-    let account_id = creds.account_id.as_str();
-    let account_host = creds.host.as_str();
-    let token = creds.token.as_str();
+        let account_id = self.creds.account_id.as_str();
+        let account_host = self.creds.host.as_str();
+        let token = self.creds.token.as_str();
 
-    // Construct API URL to get presigned link
-    let url = build_private_api_url(
-        account_host,
-        account_id,
-        &format!("projects/{project_id}/{manifest_path_suffix}"),
-    );
+        // Construct API URL to get presigned link
+        let url = build_private_api_url(
+            account_host,
+            account_id,
+            &format!("projects/{}/{manifest_path_suffix}", self.project_id),
+        );
 
-    // Log download attempt
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            "DOWNLOADING".to_string(),
-            "deferral manifest".to_string(),
-        ),
-        io.status_reporter.as_ref(),
-    );
+        // Log download attempt
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(
+                "DOWNLOADING".to_string(),
+                "deferral manifest".to_string(),
+            ),
+            io.status_reporter.as_ref(),
+        );
 
-    // First request to get presigned URL
-    let cloud_client = match build_cloud_api_client(token, CloudAuthScheme::Bearer, None) {
-        Ok(client) => client,
-        Err(err) => {
-            emit_warn_log_message(
-                ErrorCode::NetworkError,
-                format!(
-                    "Failed to create cloud HTTP client for deferral manifest, continuing without deferral. Error: {}",
-                    err
-                ),
-                io.status_reporter.as_ref(),
-            );
-            return Ok(None);
-        }
-    };
+        // First request to get presigned URL
+        let cloud_client = match build_cloud_api_client(token, CloudAuthScheme::Bearer, None) {
+            Ok(client) => client,
+            Err(err) => {
+                emit_warn_log_message(
+                    ErrorCode::NetworkError,
+                    format!(
+                        "Failed to create cloud HTTP client for deferral manifest, continuing without deferral. Error: {}",
+                        err
+                    ),
+                    io.status_reporter.as_ref(),
+                );
+                return Ok(None);
+            }
+        };
 
-    let response = match cloud_client.get(&url).send().await {
-        Ok(response) => response,
-        Err(e) => {
-            // Don't fail the entire operation if API request fails
+        let response = match cloud_client.get(&url).send().await {
+            Ok(response) => response,
+            Err(e) => {
+                // Don't fail the entire operation if API request fails
 
-            emit_warn_log_message(
-                ErrorCode::NetworkError,
-                format!(
-                    "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
-                    project_id, url, e
-                ),
-                io.status_reporter.as_ref(),
-            );
+                emit_warn_log_message(
+                    ErrorCode::NetworkError,
+                    format!(
+                        "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
+                        self.project_id, url, e
+                    ),
+                    io.status_reporter.as_ref(),
+                );
 
-            return Ok(None);
-        }
-    };
+                return Ok(None);
+            }
+        };
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_message = if let Ok(text) = response.text().await {
-            // Try to parse JSON and extract user_message
-            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&text) {
-                if let Some(user_message) = json_value["status"]["user_message"].as_str() {
-                    format!(": {user_message}")
+        let status = response.status();
+        if !status.is_success() {
+            let error_message = if let Ok(text) = response.text().await {
+                // Try to parse JSON and extract user_message
+                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(user_message) = json_value["status"]["user_message"].as_str() {
+                        format!(": {user_message}")
+                    } else {
+                        format!(" - {text}")
+                    }
                 } else {
                     format!(" - {text}")
                 }
             } else {
-                format!(" - {text}")
-            }
-        } else {
-            "".to_string()
-        };
+                "".to_string()
+            };
 
-        let defer_env_hint = if config.defer_env_id.is_none() {
-            " To target a specific environment, set `defer-env-id` in your dbt_project.yml under the `dbt-cloud` block.".to_string()
-        } else {
-            String::new()
-        };
-        emit_warn_log_message(
-            if status.as_u16() == 429 {
-                ErrorCode::RateLimited
-            } else {
-                ErrorCode::HttpError
-            },
-            format!(
-                "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. {}{}{}",
-                project_id, status, error_message, defer_env_hint
-            ),
-            io.status_reporter.as_ref(),
-        );
-
-        return Ok(None);
-    }
-
-    // Parse response to get presigned URL
-    let response_json: serde_json::Value = response.json().await.map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to parse response as JSON: {}",
-            e
-        )
-    })?;
-
-    let presigned_url = response_json["data"]["manifest_href"]
-        .as_str()
-        .ok_or_else(|| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to extract manifest_href from response"
-            )
-        })?;
-
-    // Download manifest from presigned URL
-    // Presigned URL requests should not include cloud auth headers.
-    let manifest_download_client = build_retry_client(reqwest::Client::new());
-    let manifest_response = match manifest_download_client.get(presigned_url).send().await {
-        Ok(response) => response,
-        Err(e) => {
-            // Extract the source error from middleware/retry errors
-            let source_error = if let Some(source) = e.source() {
-                format!(" (source: {source})")
+            let defer_env_hint = if self.defer_env_id.is_none() {
+                " To target a specific environment, set `defer-env-id` in your dbt_project.yml under the `dbt-cloud` block.".to_string()
             } else {
                 String::new()
             };
-
             emit_warn_log_message(
-                ErrorCode::NetworkError,
-                format!("Failed to download manifest: {}{}", e, source_error),
+                if status.as_u16() == 429 {
+                    ErrorCode::RateLimited
+                } else {
+                    ErrorCode::HttpError
+                },
+                format!(
+                    "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. {}{}{}",
+                    self.project_id, status, error_message, defer_env_hint
+                ),
                 io.status_reporter.as_ref(),
             );
 
             return Ok(None);
         }
-    };
 
-    if !manifest_response.status().is_success() {
-        let status = manifest_response.status();
-        let status_text = if let Ok(text) = manifest_response.text().await {
-            format!(" - {text}")
-        } else {
-            "".to_string()
+        // Parse response to get presigned URL
+        let response_json: serde_json::Value = response.json().await.map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to parse response as JSON: {}",
+                e
+            )
+        })?;
+
+        let presigned_url = response_json["data"]["manifest_href"]
+            .as_str()
+            .ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to extract manifest_href from response"
+                )
+            })?;
+
+        // Download manifest from presigned URL
+        // Presigned URL requests should not include cloud auth headers.
+        let manifest_download_client = build_retry_client(reqwest::Client::new());
+        let manifest_response = match manifest_download_client.get(presigned_url).send().await {
+            Ok(response) => response,
+            Err(e) => {
+                // Extract the source error from middleware/retry errors
+                let source_error = if let Some(source) = e.source() {
+                    format!(" (source: {source})")
+                } else {
+                    String::new()
+                };
+
+                emit_warn_log_message(
+                    ErrorCode::NetworkError,
+                    format!("Failed to download manifest: {}{}", e, source_error),
+                    io.status_reporter.as_ref(),
+                );
+
+                return Ok(None);
+            }
         };
 
-        emit_warn_log_message(
-            if status.as_u16() == 429 {
-                ErrorCode::RateLimited
+        if !manifest_response.status().is_success() {
+            let status = manifest_response.status();
+            let status_text = if let Ok(text) = manifest_response.text().await {
+                format!(" - {text}")
             } else {
-                ErrorCode::HttpError
-            },
-            format!(
-                "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
-                project_id, status, status_text
+                "".to_string()
+            };
+
+            emit_warn_log_message(
+                if status.as_u16() == 429 {
+                    ErrorCode::RateLimited
+                } else {
+                    ErrorCode::HttpError
+                },
+                format!(
+                    "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
+                    self.project_id, status, status_text
+                ),
+                io.status_reporter.as_ref(),
+            );
+
+            return Ok(None);
+        }
+
+        // Download manifest bytes
+        let manifest_bytes = manifest_response
+            .bytes()
+            .await
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read manifest body: {}", e))?;
+
+        // Process the manifest bytes to ensure we have valid JSON
+        let json_bytes = match process_manifest_bytes(&manifest_bytes) {
+            Some(json) => {
+                // Log if we had to decompress
+                if json.len() != manifest_bytes.len() {
+                    emit_info_progress_message(
+                        ProgressMessage::new_from_action_and_target(
+                            "INFO".to_string(),
+                            "Decompressed gzip-encoded deferral manifest".to_string(),
+                        ),
+                        io.status_reporter.as_ref(),
+                    );
+                }
+                json
+            }
+            None => {
+                // Invalid manifest data, fail gracefully
+
+                emit_warn_log_message(
+                    ErrorCode::ManifestLoadFailed,
+                    "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral.",
+                    io.status_reporter.as_ref(),
+                );
+
+                return Ok(None);
+            }
+        };
+
+        // Write the valid JSON to file
+        std::fs::write(&manifest_path, json_bytes).map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to write manifest to file: {}",
+                e
+            )
+        })?;
+
+        // Write timestamp to info file
+        std::fs::write(&info_path, now.to_string())
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to write info file: {}", e))?;
+
+        // Log successful download
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(
+                "DOWNLOADED".to_string(),
+                format!("deferral manifest to {}", manifest_path.display()),
             ),
             io.status_reporter.as_ref(),
         );
 
-        return Ok(None);
+        Ok(Some(default_dir))
     }
-
-    // Download manifest bytes
-    let manifest_bytes = manifest_response
-        .bytes()
-        .await
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read manifest body: {}", e))?;
-
-    // Process the manifest bytes to ensure we have valid JSON
-    let json_bytes = match process_manifest_bytes(&manifest_bytes) {
-        Some(json) => {
-            // Log if we had to decompress
-            if json.len() != manifest_bytes.len() {
-                emit_info_progress_message(
-                    ProgressMessage::new_from_action_and_target(
-                        "INFO".to_string(),
-                        "Decompressed gzip-encoded deferral manifest".to_string(),
-                    ),
-                    io.status_reporter.as_ref(),
-                );
-            }
-            json
-        }
-        None => {
-            // Invalid manifest data, fail gracefully
-
-            emit_warn_log_message(
-                ErrorCode::ManifestLoadFailed,
-                "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral.",
-                io.status_reporter.as_ref(),
-            );
-
-            return Ok(None);
-        }
-    };
-
-    // Write the valid JSON to file
-    std::fs::write(&manifest_path, json_bytes).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to write manifest to file: {}",
-            e
-        )
-    })?;
-
-    // Write timestamp to info file
-    std::fs::write(&info_path, now.to_string())
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to write info file: {}", e))?;
-
-    // Log successful download
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            "DOWNLOADED".to_string(),
-            format!("deferral manifest to {}", manifest_path.display()),
-        ),
-        io.status_reporter.as_ref(),
-    );
-
-    Ok(Some(default_dir))
 }
 
 #[cfg(test)]

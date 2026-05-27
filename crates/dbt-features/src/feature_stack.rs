@@ -10,6 +10,7 @@ use crate::cli_extension::CliExtensionFeature;
 use crate::index::IndexFeature;
 use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
+use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
 
 /// The instrumentation feature. Exposed as a set of instrumentation services.
@@ -29,6 +30,7 @@ pub struct FeatureStack {
     pub antlr_parser: AntlrParserFeature,
     pub sidecar: SidecarFeature,
     pub metricflow: MetricflowFeature,
+    pub task_runner: TaskRunnerFeature,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).

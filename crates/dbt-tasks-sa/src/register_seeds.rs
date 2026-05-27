@@ -208,7 +208,7 @@ async fn register_seed_parquet_async(
 /// `persist_seed_data` boolean controls seed's data persistence.
 #[allow(clippy::too_many_arguments)]
 pub async fn pre_register_seeds(
-    sorted_nodes: &[String],
+    sorted_nodes: &[&String],
     seeds: &BTreeMap<String, Arc<DbtSeed>>,
     adapter_type: AdapterType,
     schema_cache: Arc<dyn SchemaStoreTrait>,
@@ -227,7 +227,7 @@ pub async fn pre_register_seeds(
     let mut handles: Vec<tokio::task::JoinHandle<FsResult<RegisteredSeed>>> = Vec::new();
 
     for unique_id in sorted_nodes {
-        let Some(seed) = seeds.get(unique_id) else {
+        let Some(seed) = seeds.get(*unique_id) else {
             continue;
         };
         let seed = Arc::clone(seed);
