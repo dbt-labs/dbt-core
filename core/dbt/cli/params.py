@@ -306,6 +306,14 @@ full_refresh = _create_option_and_track_env_var(
     is_flag=True,
 )
 
+v2_parser_command = _create_option_and_track_env_var(
+    "--v2-parser-command",
+    envvar="DBT_ENGINE_V2_PARSER_COMMAND",
+    help="Command to invoke for the fusion parser when --use-v2-parser is set. Defaults to 'fs parse'.",
+    default="fs parse",
+    hidden=True,
+)
+
 host = _create_option_and_track_env_var(
     "--host",
     envvar="DBT_HOST",
@@ -784,6 +792,14 @@ use_experimental_parser = _create_option_and_track_env_var(
 use_fast_test_edges = _create_option_and_track_env_var(
     "--use-fast-test-edges/--no-use-fast-test-edges",
     envvar="DBT_USE_FAST_TEST_EDGES",
+    default=False,
+    hidden=True,
+)
+
+use_v2_parser = _create_option_and_track_env_var(
+    "--use-v2-parser/--no-use-v2-parser",
+    envvar="DBT_ENGINE_USE_V2_PARSER",
+    help="Delegate parsing to the fusion parser (fs) instead of running dbt-core's own parser. Hidden in v1.",
     default=False,
     hidden=True,
 )

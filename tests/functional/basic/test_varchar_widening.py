@@ -2,7 +2,8 @@ import os
 
 import pytest
 
-from dbt.tests.util import check_relations_equal, run_dbt
+from dbt.tests.util import check_relations_equal
+from tests.functional.v2_parser_parity.v2_self_parser import run_dbt_for_mode
 
 incremental_sql = """
 {{
@@ -36,11 +37,12 @@ def models():
     return {"incremental.sql": incremental_sql, "materialized.sql": materialized_sql}
 
 
-def test_varchar_widening(project):
+@pytest.mark.v2_parser_parity
+def test_varchar_widening(project, parser_mode):
     path = os.path.join(project.test_data_dir, "varchar10_seed.sql")
     project.run_sql_file(path)
 
-    results = run_dbt(["run"])
+    results = run_dbt_for_mode(parser_mode, ["run"])
     assert len(results) == 2
 
     check_relations_equal(project.adapter, ["seed", "incremental"])
@@ -49,7 +51,7 @@ def test_varchar_widening(project):
     path = os.path.join(project.test_data_dir, "varchar300_seed.sql")
     project.run_sql_file(path)
 
-    results = run_dbt(["run"])
+    results = run_dbt_for_mode(parser_mode, ["run"])
     assert len(results) == 2
 
     check_relations_equal(project.adapter, ["seed", "incremental"])

@@ -468,6 +468,8 @@ def test_project_flag_defaults():
         "use_colors",
         "use_colors_file",
         "use_experimental_parser",
+        "use_v2_parser",
+        "v2_parser_command",
         "version_check",
         "warn_error",
         "warn_error_options",
@@ -475,3 +477,56 @@ def test_project_flag_defaults():
     ]
     for flag in project_flags:
         assert getattr(flags, flag) is None
+
+
+class TestFusionParserFlags:
+    def make_dbt_context(
+        self, context_name: str, args: List[str], parent: Optional[click.Context] = None
+    ) -> click.Context:
+        return cli.make_context(context_name, args.copy(), parent)
+
+    def test_default_off(self):
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is False
+        assert flags.V2_PARSER_COMMAND == "fs parse"
+
+    def test_cli_arg_enables(self):
+        ctx = self.make_dbt_context("run", ["--use-v2-parser", "run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is True
+
+    def test_cli_arg_command(self):
+        ctx = self.make_dbt_context("run", ["--v2-parser-command", "/opt/fs/bin/fs parse", "run"])
+        flags = Flags(ctx)
+        assert flags.V2_PARSER_COMMAND == "/opt/fs/bin/fs parse"
+
+    def test_env_var_enables(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_USE_V2_PARSER", "True")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.USE_V2_PARSER is True
+
+    def test_env_var_command(self, monkeypatch):
+        monkeypatch.setenv("DBT_ENGINE_V2_PARSER_COMMAND", "fs parse --foo")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx)
+        assert flags.V2_PARSER_COMMAND == "fs parse --foo"
+
+    def test_project_flags_set_use_v2_parser(self):
+        project_flags = ProjectFlags(use_v2_parser=True)
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.USE_V2_PARSER is True
+
+    def test_project_flags_set_command(self):
+        project_flags = ProjectFlags(v2_parser_command="fs parse --strict")
+        ctx = self.make_dbt_context("run", ["run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.V2_PARSER_COMMAND == "fs parse --strict"
+
+    def test_cli_overrides_project_flags(self):
+        project_flags = ProjectFlags(use_v2_parser=True)
+        ctx = self.make_dbt_context("run", ["--no-use-v2-parser", "run"])
+        flags = Flags(ctx, project_flags)
+        assert flags.USE_V2_PARSER is False

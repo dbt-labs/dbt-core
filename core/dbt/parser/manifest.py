@@ -100,6 +100,7 @@ from dbt.exceptions import (
     InvalidAccessTypeError,
     ParsingError,
     TargetNotFoundError,
+    dbtPluginError,
     scrub_secrets,
 )
 from dbt.flags import get_flags
@@ -910,6 +911,8 @@ class ManifestLoader:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
+        if get_flags().USE_V2_PARSER:
+            return
         path = os.path.join(self.root_project.project_target_path, PARTIAL_PARSE_FILE_NAME)
         try:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
@@ -1033,7 +1036,7 @@ class ManifestLoader:
 
     def read_manifest_for_partial_parse(self) -> Optional[Manifest]:
         flags = get_flags()
-        if not flags.PARTIAL_PARSE:
+        if flags.USE_V2_PARSER or not flags.PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
         path = flags.PARTIAL_PARSE_FILE_PATH or os.path.join(
@@ -2497,6 +2500,60 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_docs_for_node(ctx, node, manifest)
 
 
+# Plugins whose get_nodes contribution has a native equivalent inside the
+# fusion parser. The fusion parser reads the same env-var contract
+# (DBT_CLOUD_AUTO_EXPOSURES_FILE_PATH, DBT_CLOUD_PUBLICATIONS_DIR, ...) and
+# produces the same downstream nodes/artifacts, so skipping the Python hook
+# is safe — running it would double-inject.
+FUSION_PARITY_GET_NODES_PLUGINS = {
+    "dbtCloudAutoExposures",
+    "dbtCloudCrossProjectRef",
+}
+
+
+def assert_no_get_nodes_plugins(project_name: str) -> None:
+    """Fail fast if any registered plugin advertises a get_nodes hook
+    that fusion does not natively cover.
+
+    get_nodes plugins inject manifest nodes mid-parse; fusion mode skips
+    dbt-core's parse entirely, so those nodes never make it into the
+    runtime manifest and downstream compile/run would silently miss them.
+    Plugins listed in FUSION_PARITY_GET_NODES_PLUGINS are exempt because
+    fusion implements the same contribution natively.
+    """
+    pm = plugins.get_plugin_manager(project_name)
+    get_nodes_hooks = pm.hooks.get("get_nodes", [])
+    offenders = sorted(
+        {
+            h.__self__.name  # type: ignore[attr-defined]
+            for h in get_nodes_hooks
+            if h.__self__.name not in FUSION_PARITY_GET_NODES_PLUGINS  # type: ignore[attr-defined]
+        }
+    )
+    if offenders:
+        raise dbtPluginError(
+            f"Plugin(s) {offenders} register a get_nodes hook, which is not "
+            f"supported in fusion parser mode."
+        )
+
+
+def enrich_manifest_with_plugin_artifacts(manifest: Manifest, project_name: str) -> None:
+    """Run the read-only plugin enrichment hook against an externally-produced
+    manifest (e.g. from the fusion parser) and write the resulting artifacts.
+
+    Mirrors the plugin handling in parse_manifest's tail. Callers must have
+    already run assert_no_get_nodes_plugins; this function only handles the
+    artifact-writing side and assumes the check has passed.
+    """
+    pm = plugins.get_plugin_manager(project_name)
+    plugin_artifacts = pm.get_manifest_artifacts(manifest)
+    for path, plugin_artifact in plugin_artifacts.items():
+        plugin_artifact.write(path)
+        fire_event(
+            ArtifactWritten(artifact_type=plugin_artifact.__class__.__name__, artifact_path=path)
+        )
+
+
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
     semantic_manifest = SemanticManifest(manifest)
     semantic_manifest.write_json_to_file(os.path.join(target_path, SEMANTIC_MANIFEST_FILE_NAME))
@@ -2509,7 +2566,10 @@ def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = 
     manifest.write(path)
     add_artifact_produced(path)
 
-    write_semantic_manifest(manifest=manifest, target_path=target_path)
+    if not get_flags().USE_V2_PARSER:
+        # In fusion mode, fs writes a higher-fidelity semantic_manifest.json;
+        # don't clobber it with dbt-core's view.
+        write_semantic_manifest(manifest=manifest, target_path=target_path)
 
 
 def parse_manifest(

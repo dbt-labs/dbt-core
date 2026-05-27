@@ -1,6 +1,7 @@
 import pytest
 
-from dbt.tests.util import get_manifest, run_dbt
+from dbt.tests.util import get_manifest
+from tests.functional.v2_parser_parity.v2_self_parser import run_dbt_for_mode
 
 model_sql = """
   select 1 as id
@@ -34,14 +35,15 @@ def dbt_profile_data(unique_schema):
     }
 
 
-def test_basic(project_root, project):
+@pytest.mark.v2_parser_parity
+def test_basic(project_root, project, parser_mode):
 
     assert project.database == "dbtMixedCase"
 
     # Tests that a project with a single model works
-    results = run_dbt(["run"])
+    results = run_dbt_for_mode(parser_mode, ["run"])
     assert len(results) == 1
     manifest = get_manifest(project_root)
     assert "model.test.model" in manifest.nodes
     # Running a second time works
-    results = run_dbt(["run"])
+    results = run_dbt_for_mode(parser_mode, ["run"])
