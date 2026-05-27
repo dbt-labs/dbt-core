@@ -7,7 +7,7 @@ import pytest
 
 from dbt.auth.credentials import OAuthSession
 from dbt.auth.session_cache import OAuthSessionCache, read_session_cache, upsert_session
-from dbt.exceptions import InaccessibleSource, Malformed
+from dbt.exceptions import InaccessibleSource, MalformedAuthConfig
 
 
 def _make_session(**overrides) -> OAuthSession:
@@ -82,14 +82,14 @@ class TestReadSessionCache:
         p = tmp_path / "oauth_sessions.json"
         p.write_text("not json {{{")
 
-        with pytest.raises(Malformed, match="invalid JSON"):
+        with pytest.raises(MalformedAuthConfig, match="invalid JSON"):
             read_session_cache(p)
 
     def test_non_object_json_raises(self, tmp_path):
         p = tmp_path / "oauth_sessions.json"
         p.write_text('"just a string"')
 
-        with pytest.raises(Malformed, match="expected object"):
+        with pytest.raises(MalformedAuthConfig, match="expected object"):
             read_session_cache(p)
 
     @pytest.mark.skipif(os.name == "nt", reason="Unix permissions")

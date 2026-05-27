@@ -5,7 +5,7 @@ import pytest
 
 from dbt.auth.chain import AuthChain
 from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver
-from dbt.exceptions import Malformed, NotAuthenticated
+from dbt.exceptions import MalformedAuthConfig, NotAuthenticated
 
 
 class TestAuthChainResolve:
@@ -59,7 +59,7 @@ projects:
                 CloudYamlResolver(path=missing),
             ]
         )
-        with pytest.raises(Malformed):
+        with pytest.raises(MalformedAuthConfig):
             chain.resolve()
 
     def test_continues_past_error_succeeds_on_next(self, tmp_path):

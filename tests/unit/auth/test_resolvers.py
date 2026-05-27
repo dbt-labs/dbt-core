@@ -14,7 +14,7 @@ from dbt.auth.session_cache import upsert_session
 from dbt.exceptions import (
     AuthenticationExpired,
     InteractiveAuthError,
-    Malformed,
+    MalformedAuthConfig,
     NotAuthenticated,
     RefreshFailed,
 )
@@ -128,7 +128,7 @@ class TestEnvVarResolver:
             "DBT_CLOUD_ACCOUNT_ID": "not-a-number",
         }
         with mock.patch.dict(os.environ, env, clear=False):
-            with pytest.raises(Malformed, match="not a valid integer"):
+            with pytest.raises(MalformedAuthConfig, match="not a valid integer"):
                 EnvVarResolver().resolve()
 
 
@@ -279,21 +279,21 @@ projects:
         p = tmp_path / "dbt_cloud.yml"
         p.write_text("not: valid: yaml: [[[")
 
-        with pytest.raises(Malformed):
+        with pytest.raises(MalformedAuthConfig):
             CloudYamlResolver(path=p).resolve()
 
     def test_empty_token_value_raises_malformed(self, tmp_path):
         p = tmp_path / "dbt_cloud.yml"
         p.write_text(_valid_cloud_yaml(token=""))
 
-        with pytest.raises(Malformed, match="token-value is empty"):
+        with pytest.raises(MalformedAuthConfig, match="token-value is empty"):
             CloudYamlResolver(path=p).resolve()
 
     def test_non_numeric_account_id_raises_malformed(self, tmp_path):
         p = tmp_path / "dbt_cloud.yml"
         p.write_text(_valid_cloud_yaml(account_id="not-a-number"))
 
-        with pytest.raises(Malformed, match="not a valid integer"):
+        with pytest.raises(MalformedAuthConfig, match="not a valid integer"):
             CloudYamlResolver(path=p).resolve()
 
     def test_env_var_overrides_active_project(self, tmp_path):

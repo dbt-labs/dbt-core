@@ -1524,9 +1524,9 @@ class InaccessibleSource(AuthError):
         super().__init__(f"inaccessible source ({source}): {cause}")
 
 
-class Malformed(AuthError):
+class MalformedAuthConfig(AuthError):
     def __init__(self, detail: str):
-        super().__init__(f"malformed config: {detail}")
+        super().__init__(f"malformed auth config: {detail}")
 
 
 class InteractiveAuthError(AuthError):

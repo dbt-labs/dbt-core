@@ -507,6 +507,7 @@ def init(ctx, **kwargs):
 @click.pass_context
 @global_flags
 @p.profiles_dir_exists_false
+@p.skip_browser_auth
 @requires.postflight
 @requires.preflight
 def login(ctx, **kwargs):

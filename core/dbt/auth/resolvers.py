@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import time
 from enum import Enum
 from pathlib import Path
@@ -34,10 +33,12 @@ from dbt.exceptions import (
     AuthenticationExpired,
     InaccessibleSource,
     InteractiveAuthError,
-    Malformed,
+    MalformedAuthConfig,
     NotAuthenticated,
     RefreshFailed,
 )
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 
 AUTH_SERVER_URL = "http://localhost:3000/register"
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
@@ -68,7 +69,9 @@ class EnvVarResolver:
         try:
             account_id = int(account_id_str)
         except ValueError:
-            raise Malformed(f"DBT_CLOUD_ACCOUNT_ID {account_id_str!r} is not a valid integer")
+            raise MalformedAuthConfig(
+                f"DBT_CLOUD_ACCOUNT_ID {account_id_str!r} is not a valid integer"
+            )
 
         return PlatformCredential.from_token(token, host, account_id)
 
@@ -200,10 +203,10 @@ class CloudYamlResolver:
         try:
             config = safe_load(content)
         except (ValueError, yaml.YAMLError) as e:
-            raise Malformed(f"failed to parse {cloud_path}: {e}")
+            raise MalformedAuthConfig(f"failed to parse {cloud_path}: {e}")
 
         if not isinstance(config, dict):
-            raise Malformed(f"expected mapping in {cloud_path}")
+            raise MalformedAuthConfig(f"expected mapping in {cloud_path}")
 
         context = config.get("context", {})
         projects = config.get("projects", [])
@@ -230,7 +233,7 @@ class CloudYamlResolver:
 
         token_value = project.get("token-value", "")
         if not token_value:
-            raise Malformed(
+            raise MalformedAuthConfig(
                 "token-value is empty in dbt_cloud.yml; re-download from the dbt platform UI"
             )
 
@@ -238,7 +241,7 @@ class CloudYamlResolver:
         try:
             account_id = int(account_id_str)
         except (ValueError, TypeError):
-            raise Malformed(
+            raise MalformedAuthConfig(
                 f"account-id {account_id_str!r} in {cloud_path} is not a valid integer"
             )
 
@@ -317,10 +320,15 @@ class OAuthInteractiveResolver:
 
         server.timeout = self.timeout
 
-        if os.environ.get("DBT_SKIP_BROWSER_AUTH", "").strip():
-            print(f"Open this URL to authenticate:\n{auth_url}", file=sys.stderr)
+        # TODO: remove lazy import once dbt.cli.__init__ circular dep is resolved
+        # dbt.flags -> dbt.cli.main -> dbt.auth.resolvers
+        from dbt.flags import get_flags
+
+        skip_browser = getattr(get_flags(), "SKIP_BROWSER_AUTH", False) or False
+        if skip_browser:
+            fire_event(Note(msg=f"Open this URL to authenticate:\n{auth_url}"))
         else:
-            print("Opening browser for dbt platform login...", file=sys.stderr)
+            fire_event(Note(msg="Opening browser for dbt platform login..."))
             self.opener(auth_url)
 
         server.handle_request()

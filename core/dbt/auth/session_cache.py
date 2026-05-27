@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dbt.auth.credentials import OAuthSession
 from dbt.auth.utils import secure_open
-from dbt.exceptions import InaccessibleSource, Malformed
+from dbt.exceptions import InaccessibleSource, MalformedAuthConfig
 
 
 def _dbt_home_dir() -> Path:
@@ -51,10 +51,10 @@ def read_session_cache(path: Path = DEFAULT_CACHE_PATH) -> OAuthSessionCache:
     try:
         parsed = json.loads(data)
     except json.JSONDecodeError as e:
-        raise Malformed(f"invalid JSON in {path}: {e}")
+        raise MalformedAuthConfig(f"invalid JSON in {path}: {e}")
 
     if not isinstance(parsed, dict):
-        raise Malformed(f"expected object in {path}, got {type(parsed).__name__}")
+        raise MalformedAuthConfig(f"expected object in {path}, got {type(parsed).__name__}")
 
     return OAuthSessionCache.from_dict(parsed)
 
@@ -95,10 +95,10 @@ def read_state_auth(path: Path = STATE_AUTH_PATH) -> dict | None:
     try:
         parsed = json.loads(data)
     except json.JSONDecodeError as e:
-        raise Malformed(f"invalid JSON in {path}: {e}")
+        raise MalformedAuthConfig(f"invalid JSON in {path}: {e}")
 
     if not isinstance(parsed, dict):
-        raise Malformed(f"expected object in {path}, got {type(parsed).__name__}")
+        raise MalformedAuthConfig(f"expected object in {path}, got {type(parsed).__name__}")
 
     return parsed
 

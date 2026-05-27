@@ -197,6 +197,8 @@ def resolve_from_callback(
 
 
 def on_platform_login_success(credential: PlatformCredential) -> None:
+    # TODO: remove lazy import once dbt.cli.__init__ circular dep is resolved
+    # dbt.flags -> dbt.cli.main -> dbt.auth.oauth.platform
     from dbt.flags import get_flags
 
     client = dbtPlatformAPIClient(credential)
