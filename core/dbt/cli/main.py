@@ -128,6 +128,7 @@ def global_flags(func):
     @p.log_level_file
     @p.log_path
     @p.macro_debugging
+    @p.manage_state
     @p.partial_parse
     @p.partial_parse_file_path
     @p.partial_parse_file_diff
