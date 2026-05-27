@@ -11,9 +11,11 @@ manifest artifacts.
 from __future__ import annotations
 
 import os
+import platform
 import shlex
 import shutil
 import subprocess
+import sysconfig
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
@@ -109,7 +111,12 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     """
     # posix=False on Windows so backslashes in paths (e.g. C:\path\to\fs.exe)
     # aren't stripped as shell escapes.
-    base = shlex.split(getattr(flags, "V2_PARSER", "fs parse"), posix=(os.name != "nt"))
+    base = shlex.split(
+        getattr(flags, "V2_PARSER", "dbt-core-experimental-parser parse"),
+        posix=(os.name != "nt"),
+    )
+    if base:
+        base[0] = _resolve_engine_command(base[0])
     forwarded: List[str] = []
 
     project_dir = getattr(flags, "PROJECT_DIR", None)
@@ -146,6 +153,23 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     return base + forwarded
 
 
+def _resolve_engine_command(command: str) -> str:
+    """Resolve a bare engine binary name to the wheel-installed path.
+
+    If the user supplied an absolute/relative path or a multi-segment command,
+    leave it alone. Otherwise, look for the binary in this Python install's
+    scripts directory so we use the version pinned by dbt-core's dependency
+    on dbt-core-experimental-parser rather than whatever's on PATH.
+    """
+    if os.sep in command or (os.altsep and os.altsep in command):
+        return command
+    name = f"{command}.exe" if platform.system() == "Windows" else command
+    candidate = Path(sysconfig.get_path("scripts")) / name
+    if candidate.exists():
+        return str(candidate)
+    return command
+
+
 def _run_fusion(argv: List[str]) -> None:
     # Passthrough mode: fs inherits dbt's stdout/stderr so users see progress
     # and errors live. This bypasses dbt's event system (no log-file capture,
@@ -168,7 +192,8 @@ def _run_fusion(argv: List[str]) -> None:
     except FileNotFoundError as e:
         raise FusionParserMissingError(
             f"Fusion parser command not found: {argv[0]!r}. "
-            f"Ensure 'fs' is installed and on PATH, or set --v2-parser."
+            f"Reinstall dbt-core-experimental-parser, or set --v2-parser to "
+            f"point to an alternate engine binary."
         ) from e
 
     if result.returncode != 0:

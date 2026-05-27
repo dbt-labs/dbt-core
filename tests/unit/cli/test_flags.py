@@ -489,7 +489,7 @@ class TestFusionParserFlags:
         ctx = self.make_dbt_context("run", ["run"])
         flags = Flags(ctx)
         assert flags.USE_V2_PARSER is False
-        assert flags.V2_PARSER == "fs parse"
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse"
 
     def test_cli_arg_enables(self):
         ctx = self.make_dbt_context("run", ["--use-v2-parser", "run"])
