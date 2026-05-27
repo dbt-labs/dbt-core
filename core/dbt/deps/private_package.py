@@ -182,12 +182,19 @@ class PrivatePackageDefinition:
                 )
         else:
             resolved_provider = provider
-        # Use legacy name format only for azure_active_directory/azure_devops (not ado)
+        # Use legacy name format only for 2-part azure_active_directory/azure_devops paths.
+        # 3-part paths (org/project/repo) must use full PrivatePackageName so the project
+        # segment is compared during URL matching — otherwise cross-project references
+        # silently resolve against the wrong project.
         if resolved_provider is not None and resolved_provider.value in (
             GitProvider.AZURE_ACTIVE_DIRECTORY.value,
             GitProvider.AZURE_DEVOPS.value,
         ):
-            resolved_name: PrivatePackageName = ADOLegacyPrivatePackageName(name)
+            parts = name.split("/")
+            if len(parts) >= 3:
+                resolved_name: PrivatePackageName = PrivatePackageName(name)
+            else:
+                resolved_name = ADOLegacyPrivatePackageName(name)
         else:
             resolved_name = PrivatePackageName(name)
         return cls(name=resolved_name, provider=resolved_provider)
