@@ -251,6 +251,11 @@ class GenerateSchemaNameNullValueDeprecation(DBTDeprecation):
     _event = "GenerateSchemaNameNullValueDeprecation"
 
 
+class UnknownFlagsDeprecation(DBTDeprecation):
+    _name = "unknown-flags-deprecation"
+    _event = "UnknownFlagsDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -342,6 +347,7 @@ deprecations_list: List[DBTDeprecation] = [
     TimeDimensionsRequireGranularityDeprecation(),
     GenericSemanticLayerDeprecation(),
     GenerateSchemaNameNullValueDeprecation(),
+    UnknownFlagsDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

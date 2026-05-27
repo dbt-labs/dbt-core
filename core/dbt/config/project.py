@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
@@ -916,6 +916,19 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
             project_flags = profile_project_flags
 
         if project_flags is not None:
+            # Warn on unknown flags so users catch typos.
+            # Buffered because the event logger isn't set up yet when flags are read.
+            known_flag_names = {f.name for f in fields(ProjectFlags)}
+            unknown_flags = set(project_flags.keys()) - known_flag_names
+            if unknown_flags:
+                flag_names = list(sorted(unknown_flags))
+                if project_flags.get("require_no_unknown_flags", False):
+                    raise DbtProjectError(
+                        f"Unknown flags in dbt_project.yml: {', '.join(flag_names)}. "
+                        "Please remove or correct these flags."
+                    )
+                deprecations.buffer("unknown-flags-deprecation", flag_names=flag_names)
+
             # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
             # for warn_error_options
             warn_error_options = project_flags.get("warn_error_options", {})
