@@ -137,10 +137,6 @@ class memoized:
         return functools.partial(self.__call__, obj)
 
 
-def add_ephemeral_model_prefix(s: str) -> str:
-    return "__dbt__cte__{}".format(s)
-
-
 def timestring() -> str:
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
