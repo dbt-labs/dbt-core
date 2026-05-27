@@ -476,7 +476,6 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
                 ctx.obj["flags"].write_json,
                 active_integrations,
             )
-            adapter = get_adapter(runtime_config)
     else:
         _wire_adapter_for_external_manifest(
             runtime_config, ctx.obj["manifest"], active_integrations
