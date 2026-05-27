@@ -607,11 +607,18 @@ impl AdapterImpl {
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
         // BigQuery is the exception to this deduping
-        let last_batch = if self.adapter_type() != Bigquery {
-            let node_id = state.and_then(node_id_from_state);
-            last_batch.disambiguate_column_names(Some(warn_duplicate_columns(node_id)))
-        } else {
-            last_batch
+        let last_batch = match self.adapter_type() {
+            Bigquery => last_batch,
+            _ => {
+                let node_id = state.and_then(node_id_from_state);
+                last_batch.disambiguate_column_names(Some(warn_duplicate_columns(node_id)))
+            }
+        };
+
+        // Flatten nested struct fields as JSON-strings (some Core adapters do that)
+        let last_batch = match self.adapter_type() {
+            Databricks => last_batch.jsonify_nested_columns(),
+            _ => last_batch,
         };
 
         let table = AgateTable::from_record_batch(Arc::new(last_batch));

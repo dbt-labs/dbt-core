@@ -5,10 +5,11 @@ use crate::AdapterResult;
 use crate::AdapterType;
 use crate::errors::{AdapterError, AdapterErrorKind};
 
-use arrow::array::{Array, Int64Array};
+use arrow::array::{Array, Int64Array, StringBuilder};
 use arrow::compute::{CastOptions, cast_with_options};
-use arrow::datatypes::{DataType, Schema};
+use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+use arrow_json::writer::{EncoderOptions, make_encoder};
 
 pub(crate) const SNOWFLAKE_DML_COLUMNS: &[&str] = &[
     "number of rows inserted",
@@ -38,6 +39,7 @@ pub trait RecordBatchExt {
         self,
         on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
     ) -> RecordBatch;
+    fn jsonify_nested_columns(self) -> RecordBatch;
 }
 
 impl RecordBatchExt for RecordBatch {
@@ -160,6 +162,59 @@ impl RecordBatchExt for RecordBatch {
         RecordBatch::try_new(new_schema, self.columns().to_vec())
             .expect("disambiguate_column_names: schema and columns should be compatible")
     }
+
+    /// Stringify nested columns, ignoring struct fields
+    ///
+    /// dbt Core flattens struct fields as JSON strings for certain adapters, only keeping the
+    /// root-level columns.
+    ///
+    /// Reference: https://github.com/dbt-labs/dbt-common/blob/f21aa0d3093e98c7c35ed93163832c84f46eb3d8/dbt_common/clients/agate_helper.py#L110
+    fn jsonify_nested_columns(self) -> RecordBatch {
+        let schema = self.schema();
+        let fields = schema.fields();
+
+        if !fields.iter().any(|f| f.data_type().is_nested()) {
+            return self;
+        }
+
+        let options = EncoderOptions::default();
+        let mut new_fields: Vec<Arc<Field>> = Vec::with_capacity(fields.len());
+        let mut new_columns: Vec<Arc<dyn Array>> = Vec::with_capacity(self.num_columns());
+
+        for (field, column) in fields.iter().zip(self.columns().iter()) {
+            if field.data_type().is_nested() {
+                let mut encoder = make_encoder(field, column.as_ref(), &options)
+                    .expect("make_encoder for nested column should not fail");
+                let mut builder = StringBuilder::with_capacity(column.len(), column.len() * 32);
+                let mut buf: Vec<u8> = Vec::with_capacity(64);
+                for row in 0..column.len() {
+                    if encoder.is_null(row) {
+                        builder.append_null();
+                    } else {
+                        buf.clear();
+                        encoder.encode(row, &mut buf);
+                        let s = std::str::from_utf8(&buf).expect("arrow_json::Encoder emits UTF-8");
+                        builder.append_value(s);
+                    }
+                }
+                new_columns.push(Arc::new(builder.finish()));
+                new_fields.push(Arc::new(
+                    Field::new(field.name(), DataType::Utf8, field.is_nullable())
+                        .with_metadata(field.metadata().clone()),
+                ));
+            } else {
+                new_columns.push(column.clone());
+                new_fields.push(field.clone());
+            }
+        }
+
+        let new_schema = Arc::new(Schema::new_with_metadata(
+            new_fields,
+            schema.metadata().clone(),
+        ));
+        RecordBatch::try_new(new_schema, new_columns)
+            .expect("jsonify_nested_columns: rewritten schema and columns are consistent")
+    }
 }
 
 pub trait SchemaExt {
@@ -202,12 +257,15 @@ fn cast_column_to_i64(column: &dyn Array) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow::array::{Decimal128Array, Float64Array, Int32Array, Int64Array, StringArray};
-    use arrow::datatypes::{DataType, Field};
+    use arrow::array::{
+        ArrayRef, Decimal128Array, Float64Array, Int32Array, Int64Array, ListArray, MapBuilder,
+        StringArray, StringBuilder, StructArray,
+    };
+    use arrow::datatypes::{DataType, Field, Int32Type};
     use dbt_test_primitives::assert_contains;
 
     #[test]
-    fn test_has_dml_columns() {
+    fn has_dml_columns() {
         let dml_schema = Schema::new(vec![Field::new(
             "number of rows inserted",
             DataType::Int64,
@@ -220,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn test_named_value_as_i64_missing_column_returns_none() {
+    fn named_value_as_i64_missing_column_returns_none() {
         let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
         let batch =
             RecordBatch::try_new(Arc::new(schema), vec![Arc::new(Int64Array::from(vec![99]))])
@@ -229,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_merge_sums_dml_counts() {
+    fn snowflake_merge_sums_dml_counts() {
         let schema = Schema::new(vec![
             Field::new("number of rows inserted", DataType::Int64, false),
             Field::new("number of rows updated", DataType::Int64, false),
@@ -249,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_merge_decimal128_high_precision() {
+    fn snowflake_merge_decimal128_high_precision() {
         let schema = Schema::new(vec![
             Field::new(
                 "number of rows inserted",
@@ -284,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_insert_only_partial_dml_columns() {
+    fn snowflake_insert_only_partial_dml_columns() {
         let schema = Schema::new(vec![Field::new(
             "number of rows inserted",
             DataType::Int64,
@@ -297,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_empty_batch_returns_zero() {
+    fn snowflake_empty_batch_returns_zero() {
         let schema = Schema::new(vec![
             Field::new("number of rows inserted", DataType::Int64, false),
             Field::new("number of rows updated", DataType::Int64, false),
@@ -310,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_null_dml_values_treated_as_zero() {
+    fn snowflake_null_dml_values_treated_as_zero() {
         let schema = Schema::new(vec![
             Field::new("number of rows inserted", DataType::Int64, true),
             Field::new("number of rows updated", DataType::Int64, true),
@@ -329,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn test_snowflake_select_uses_num_rows() {
+    fn snowflake_select_uses_num_rows() {
         let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
         let batch = RecordBatch::try_new(
             Arc::new(schema),
@@ -356,13 +414,13 @@ mod tests {
     });
 
     #[test]
-    fn test_column_values_success() {
+    fn column_values_success() {
         let result: AdapterResult<StringArray> = TEST_DATA.column_values("name");
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_column_values_column_not_found() {
+    fn column_values_column_not_found() {
         let result: AdapterResult<Int32Array> = TEST_DATA.column_values("nonexistent");
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -374,7 +432,7 @@ mod tests {
     }
 
     #[test]
-    fn test_column_values_wrong_type() {
+    fn column_values_wrong_type() {
         let result: AdapterResult<Int32Array> = TEST_DATA.column_values("name");
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -386,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn test_disambiguate_no_duplicates() {
+    fn disambiguate_no_duplicates() {
         let schema = Schema::new(vec![
             Field::new("a", DataType::Int32, false),
             Field::new("b", DataType::Int32, false),
@@ -413,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn test_disambiguate_with_duplicates() {
+    fn disambiguate_with_duplicates() {
         let schema = Schema::new(vec![
             Field::new("A", DataType::Int32, false),
             Field::new("B", DataType::Int32, false),
@@ -450,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn test_disambiguate_multiple_duplicates() {
+    fn disambiguate_multiple_duplicates() {
         let schema = Schema::new(vec![
             Field::new("x", DataType::Int32, false),
             Field::new("y", DataType::Int32, false),
@@ -466,5 +524,183 @@ mod tests {
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["x", "y", "x_2", "y_2", "x_3"]);
+    }
+
+    fn column_as_string<'a>(batch: &'a RecordBatch, name: &str) -> &'a StringArray {
+        batch
+            .column_by_name(name)
+            .unwrap_or_else(|| panic!("column {name} missing"))
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap_or_else(|| panic!("column {name} is not Utf8"))
+    }
+
+    #[test]
+    fn jsonify_no_nested_columns_passthrough() {
+        let schema = Schema::new(vec![
+            Field::new("a", DataType::Int64, false),
+            Field::new("b", DataType::Utf8, true),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema.clone()),
+            vec![
+                Arc::new(Int64Array::from(vec![1, 2])),
+                Arc::new(StringArray::from(vec![Some("x"), None])),
+            ],
+        )
+        .unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().as_ref(), &schema);
+        assert_eq!(result.num_rows(), 2);
+    }
+
+    #[test]
+    fn jsonify_struct_column() {
+        let struct_fields = vec![
+            Arc::new(Field::new("a", DataType::Int32, false)),
+            Arc::new(Field::new("b", DataType::Utf8, false)),
+        ];
+        let struct_array = StructArray::from(vec![
+            (
+                struct_fields[0].clone(),
+                Arc::new(Int32Array::from(vec![1, 2])) as ArrayRef,
+            ),
+            (
+                struct_fields[1].clone(),
+                Arc::new(StringArray::from(vec!["x", "y"])) as ArrayRef,
+            ),
+        ]);
+
+        let schema = Schema::new(vec![Field::new(
+            "s",
+            DataType::Struct(struct_fields.into()),
+            false,
+        )]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(struct_array) as ArrayRef])
+                .unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "s");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        let row1: serde_json::Value = serde_json::from_str(col.value(1)).unwrap();
+        assert_eq!(row0, serde_json::json!({"a": 1, "b": "x"}));
+        assert_eq!(row1, serde_json::json!({"a": 2, "b": "y"}));
+    }
+
+    #[test]
+    fn jsonify_list_column() {
+        let list_array = ListArray::from_iter_primitive::<Int32Type, _, _>(vec![
+            Some(vec![Some(1), Some(2), Some(3)]),
+            Some(vec![]),
+            None,
+        ]);
+        let list_field = list_array.data_type().clone();
+        let schema = Schema::new(vec![Field::new("l", list_field, true)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(list_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "l");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        let row1: serde_json::Value = serde_json::from_str(col.value(1)).unwrap();
+        assert_eq!(row0, serde_json::json!([1, 2, 3]));
+        assert_eq!(row1, serde_json::json!([]));
+        assert!(col.is_null(2));
+    }
+
+    #[test]
+    fn jsonify_map_column() {
+        let mut builder = MapBuilder::new(None, StringBuilder::new(), Int32Array::builder(0));
+        builder.keys().append_value("k1");
+        builder.values().append_value(10);
+        builder.keys().append_value("k2");
+        builder.values().append_value(20);
+        builder.append(true).unwrap();
+        builder.append(true).unwrap();
+        let map_array = builder.finish();
+
+        let map_field = map_array.data_type().clone();
+        let schema = Schema::new(vec![Field::new("m", map_field, false)]);
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(map_array) as ArrayRef]).unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Utf8);
+
+        let col = column_as_string(&result, "m");
+        let row0: serde_json::Value = serde_json::from_str(col.value(0)).unwrap();
+        assert_eq!(row0, serde_json::json!({"k1": 10, "k2": 20}));
+        let row1: serde_json::Value = serde_json::from_str(col.value(1)).unwrap();
+        assert_eq!(row1, serde_json::json!({}));
+    }
+
+    #[test]
+    fn jsonify_mixed_columns() {
+        let struct_fields = vec![Arc::new(Field::new("n", DataType::Int32, false))];
+        let struct_array = StructArray::from(vec![(
+            struct_fields[0].clone(),
+            Arc::new(Int32Array::from(vec![7, 8])) as ArrayRef,
+        )]);
+
+        let schema = Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("s", DataType::Struct(struct_fields.into()), false),
+        ]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(Int64Array::from(vec![100, 200])),
+                Arc::new(struct_array) as ArrayRef,
+            ],
+        )
+        .unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().field(0).data_type(), &DataType::Int64);
+        assert_eq!(result.schema().field(1).data_type(), &DataType::Utf8);
+
+        let id_col = result
+            .column_by_name("id")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap();
+        assert_eq!(id_col.value(0), 100);
+        assert_eq!(id_col.value(1), 200);
+
+        let s_col = column_as_string(&result, "s");
+        let row0: serde_json::Value = serde_json::from_str(s_col.value(0)).unwrap();
+        assert_eq!(row0, serde_json::json!({"n": 7}));
+    }
+
+    #[test]
+    fn jsonify_preserves_schema_metadata() {
+        let struct_fields = vec![Arc::new(Field::new("a", DataType::Int32, false))];
+        let struct_array = StructArray::from(vec![(
+            struct_fields[0].clone(),
+            Arc::new(Int32Array::from(vec![1])) as ArrayRef,
+        )]);
+
+        let metadata = HashMap::from([("DATABRICKS_QUERY_ID".to_string(), "abc-123".to_string())]);
+        let schema = Schema::new_with_metadata(
+            vec![Field::new(
+                "s",
+                DataType::Struct(struct_fields.into()),
+                false,
+            )],
+            metadata.clone(),
+        );
+        let batch =
+            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(struct_array) as ArrayRef])
+                .unwrap();
+
+        let result = batch.jsonify_nested_columns();
+        assert_eq!(result.schema().metadata(), &metadata);
     }
 }
