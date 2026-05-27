@@ -34,14 +34,13 @@ pub(crate) struct ConnectionRetryPolicy {
     adapter_type: AdapterType,
     /// Retries on top of the initial attempt. `0` is effectively no-retry.
     pub max_retries: u32,
-    /// Maximum cumulative time spent *sleeping between* retry attempts.
-    ///
-    /// This is a sleep budget, not a wall-clock cap on the whole loop —
-    /// per-attempt time is bounded separately by gosnowflake's
-    /// `LOGIN_TIMEOUT` (also sourced from `connect_timeout`). Naming and
-    /// semantics match the dbt-core convention for `connect_timeout`.
-    pub max_retry_wait: Duration,
-    /// See [`BackoffStrategy`].
+    /// Per-iteration sleep between retry attempts, sourced from the profile
+    /// field `connect_timeout`. `None` means "use [`BackoffStrategy`]".
+    /// Matches the role of `retry_timeout` in Python's
+    /// `dbt-adapters/base/connections.py::retry_connection` (Snowflake and
+    /// Databricks pass `connect_timeout if not None else exponential_backoff`).
+    pub retry_sleep: Option<Duration>,
+    /// See [`BackoffStrategy`]. Used only when `retry_sleep` is `None`.
     pub backoff: BackoffStrategy,
 }
 
@@ -54,10 +53,10 @@ impl ConnectionRetryPolicy {
     /// Profile fields (all optional):
     /// - `connect_retries: int` — retries on top of the initial attempt
     ///   (default per [`default_connect_retries`])
-    /// - `connect_timeout: int (seconds) | duration string` — drives BOTH
-    ///   the per-attempt gosnowflake `LOGIN_TIMEOUT` (in `dbt-auth`) and
-    ///   the retry-loop's cumulative-sleep budget [`max_retry_wait`] (here).
-    ///   Matches dbt-core's interpretation.
+    /// - `connect_timeout: int (seconds) | duration string` — per-iteration
+    ///   sleep between attempts. When unset, [`BackoffStrategy::Quadratic`]
+    ///   provides the delay sequence (1s, 4s, 9s, …). Matches Python's
+    ///   `retry_timeout` semantics in `dbt-adapters::retry_connection`.
     /// - `retry_all: bool = false` — catch every error class
     /// - `retry_on_database_errors: bool = false` — broaden the retryable set
     ///   to include database-level / unknown errors
@@ -68,91 +67,83 @@ impl ConnectionRetryPolicy {
             .unwrap_or_else(|| Self::default_connect_retries(adapter_type));
 
         // `connect_timeout` is typed as `Option<i64>` in the profile schema
-        // (see `dbt-schemas/src/schemas/profiles.rs`), so customer profiles
-        // set a bare integer (seconds). `dbt-auth::apply_connection_args`
-        // already reads it via `get_string` and treats it as seconds for
-        // gosnowflake's per-attempt `LOGIN_TIMEOUT`; mirror that here so the
-        // retry-loop's sleep budget honors the same field. Also accept a
-        // duration string (e.g. "60s") for symmetry with `parse_duration`.
-        let max_retry_wait = config
-            .get_string("connect_timeout")
-            .and_then(|v| {
-                let s = v.as_ref();
-                s.parse::<u64>()
-                    .ok()
-                    .map(Duration::from_secs)
-                    .or_else(|| parse_duration(s).ok())
-            })
-            .unwrap_or_else(|| Self::default_max_retry_wait(adapter_type));
+        // (see `dbt-schemas/src/schemas/profiles.rs`). Accept both bare
+        // integer seconds and duration strings (e.g. "30s", "2m") for
+        // symmetry with `parse_duration`. Per Python's
+        // `dbt-adapters::retry_connection` semantics, this is the
+        // per-iteration sleep between attempts — not a cumulative budget
+        // and not a per-attempt driver deadline.
+        let retry_sleep = config.get_string("connect_timeout").and_then(|v| {
+            let s = v.as_ref();
+            s.parse::<u64>()
+                .ok()
+                .map(Duration::from_secs)
+                .or_else(|| parse_duration(s).ok())
+        });
 
         ConnectionRetryPolicy {
             adapter_type,
             max_retries,
-            max_retry_wait,
+            retry_sleep,
             backoff: BackoffStrategy::Quadratic,
         }
     }
 
     /// Execute a connection attempt with retry according to the policy.
     ///
-    /// `connect_fn` is called for each attempt. On retryable failures the
-    /// policy's `backoff` is applied before the next attempt. The final error
-    /// after exhausting retries is the error from the last attempt.
+    /// `connect_fn` is called for each attempt. On retryable failures, the
+    /// per-iteration sleep [`retry_sleep`](Self::retry_sleep) (or the
+    /// quadratic [`backoff`](Self::backoff) when unset) is applied before
+    /// the next attempt. The final error after exhausting retries is the
+    /// error from the last attempt.
     ///
-    /// `max_retry_wait` bounds the *sleep* time across retries — per-attempt
-    /// time is bounded separately by `LOGIN_TIMEOUT`. Worst-case total
-    /// wallclock is `(max_retries + 1) * LOGIN_TIMEOUT + max_retry_wait`.
+    /// The loop terminates when any of:
+    /// - the connect succeeds,
+    /// - `attempt >= self.max_retries`, or
+    /// - the error is not retryable per [`is_retryable`](Self::is_retryable).
     pub fn execute(
         &self,
         config: &AdapterConfig,
         mut connect_fn: impl FnMut() -> adbc_core::error::Result<Box<dyn Connection>>,
     ) -> adbc_core::error::Result<Box<dyn Connection>> {
-        let mut sleep_elapsed = Duration::ZERO;
         let mut attempt: u32 = 0;
         loop {
             match connect_fn() {
                 Ok(conn) => return Ok(conn),
                 Err(err) => {
-                    if attempt >= self.max_retries
-                        || sleep_elapsed >= self.max_retry_wait
-                        || !self.is_retryable(config, &err)
-                    {
+                    if attempt >= self.max_retries || !self.is_retryable(config, &err) {
                         return Err(err);
                     }
                     // XXX: consider printing the error as a warning before hanging on the user
-                    let next = attempt + 1;
-                    let want = self.backoff.delay_before_next_attempt(next);
-                    // Cap the delay so the sleep budget is respected.
-                    let remaining = self.max_retry_wait.saturating_sub(sleep_elapsed);
-                    let delay = want.min(remaining);
+                    let delay = match self.retry_sleep {
+                        Some(t) => t,
+                        None => self.backoff.delay_before_next_attempt(attempt + 1),
+                    };
                     if !delay.is_zero() {
                         std::thread::sleep(delay);
-                        sleep_elapsed += delay;
                     }
-                    attempt = next;
+                    attempt += 1;
                 }
             }
         }
     }
 
     /// Per-adapter default for the `connect_retries` profile field.
+    ///
+    /// Snowflake intentionally diverges from `dbt-snowflake`'s upstream
+    /// default of `1`: with `LOGIN_TIMEOUT=60s` in `dbt-auth`, each outer
+    /// attempt has up to 60s for gosnowflake to do its own internal HTTP
+    /// retries (capped at `MaxRetryCount=7` with 1s/16s exponential backoff
+    /// — see `snowflakedb/gosnowflake::retry.go`). 7 outer retries gives 8
+    /// total outer attempts × ≤60s ≈ Python's 8-HTTP-attempt total budget
+    /// (`DEFAULT_AUTH_CLASS_TIMEOUT × (MAX_CON_RETRY_ATTEMPTS+1) ×
+    /// dbt-adapter connect_retries+1 = 120 × 2 × 2 = 480s`).
     fn default_connect_retries(adapter_type: AdapterType) -> u32 {
         use AdapterType::*;
         match adapter_type {
-            Snowflake => 4,
+            Snowflake => 1,
             // XXX: expand if customization is required
             _ => 1,
-        }
-    }
-
-    /// Per-adapter default for [`max_retry_wait`](ConnectionRetryPolicy::max_retry_wait).
-    /// Used when `connect_timeout` is not set on the profile.
-    fn default_max_retry_wait(adapter_type: AdapterType) -> Duration {
-        use AdapterType::*;
-        match adapter_type {
-            Snowflake => Duration::from_secs(60),
-            // XXX: expand if customization is required
-            _ => Duration::from_secs(60),
         }
     }
 
@@ -240,6 +231,7 @@ fn is_retryable_snowflake_login_error(
 mod tests {
     use super::*;
     use adbc_core::error::{Error as AdbcError, Status};
+    use std::time::Instant;
 
     fn adbc_err(status: Status, msg: &str) -> AdbcError {
         AdbcError::with_message_and_status(msg, status)
@@ -292,10 +284,13 @@ mod tests {
     }
 
     #[test]
-    fn connect_retry_policy_snowflake_defaults_match_python() {
+    fn connect_retry_policy_snowflake_defaults() {
         let cfg = AdapterConfig::new(dbt_yaml::Mapping::new());
         let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
-        assert_eq!(policy.max_retries, 4);
+        // Snowflake intentionally diverges from upstream Python's 1: with
+        // LOGIN_TIMEOUT=60s in dbt-auth + gosnowflake's internal retries,
+        // 8 outer attempts × 60s ≈ Python's 8-HTTP-attempt total budget.
+        assert_eq!(policy.max_retries, 1);
         // Quadratic backoff: attempt=1 → 1s, attempt=2 → 4s.
         assert_eq!(
             policy.backoff.delay_before_next_attempt(1),
@@ -325,10 +320,12 @@ mod tests {
     }
 
     #[test]
-    fn connect_timeout_defaults_to_60s() {
+    fn retry_sleep_defaults_to_none() {
+        // With `connect_timeout` unset, retry_sleep is None and the loop
+        // falls back to quadratic backoff for inter-attempt sleeps.
         let cfg = AdapterConfig::new(dbt_yaml::Mapping::new());
         let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
-        assert_eq!(policy.max_retry_wait, Duration::from_secs(60));
+        assert_eq!(policy.retry_sleep, None);
     }
 
     #[test]
@@ -336,7 +333,7 @@ mod tests {
         let mapping = dbt_yaml::Mapping::from_iter([("connect_timeout".into(), "30s".into())]);
         let cfg = AdapterConfig::new(mapping);
         let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
-        assert_eq!(policy.max_retry_wait, Duration::from_secs(30));
+        assert_eq!(policy.retry_sleep, Some(Duration::from_secs(30)));
     }
 
     #[test]
@@ -344,16 +341,94 @@ mod tests {
         let mapping = dbt_yaml::Mapping::from_iter([("connect_timeout".into(), "2m".into())]);
         let cfg = AdapterConfig::new(mapping);
         let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
-        assert_eq!(policy.max_retry_wait, Duration::from_secs(120));
+        assert_eq!(policy.retry_sleep, Some(Duration::from_secs(120)));
     }
 
     #[test]
-    fn connect_timeout_invalid_falls_back_to_default() {
+    fn connect_timeout_parses_bare_integer_seconds() {
+        // Profile schema types `connect_timeout` as `Option<i64>` so YAML may
+        // surface it as a number; `get_string` normalizes to a digit string.
+        let mapping = dbt_yaml::Mapping::from_iter([(
+            "connect_timeout".into(),
+            dbt_yaml::Value::number(45i64.into()),
+        )]);
+        let cfg = AdapterConfig::new(mapping);
+        let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
+        assert_eq!(policy.retry_sleep, Some(Duration::from_secs(45)));
+    }
+
+    #[test]
+    fn connect_timeout_invalid_falls_back_to_none() {
         let mapping =
             dbt_yaml::Mapping::from_iter([("connect_timeout".into(), "not_a_duration".into())]);
         let cfg = AdapterConfig::new(mapping);
         let policy = ConnectionRetryPolicy::new(AdapterType::Snowflake, &cfg);
-        assert_eq!(policy.max_retry_wait, Duration::from_secs(60));
+        // Unparseable → fall back to quadratic backoff (not the internal cap).
+        assert_eq!(policy.retry_sleep, None);
+    }
+
+    // -- execute() behavior ---------------------------------------------------
+
+    fn test_policy(max_retries: u32, retry_sleep: Option<Duration>) -> ConnectionRetryPolicy {
+        ConnectionRetryPolicy {
+            adapter_type: AdapterType::Snowflake,
+            max_retries,
+            retry_sleep,
+            backoff: BackoffStrategy::Quadratic,
+        }
+    }
+
+    #[test]
+    fn execute_runs_initial_plus_max_retries_attempts_on_persistent_failure() {
+        let policy = test_policy(3, Some(Duration::ZERO));
+        let cfg = cfg_default();
+        let mut calls: u32 = 0;
+        let result = policy.execute(&cfg, || {
+            calls += 1;
+            Err(adbc_err(Status::IO, "i/o timeout"))
+        });
+        assert!(result.is_err());
+        // 1 initial attempt + 3 retries = 4 total calls.
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn execute_stops_immediately_on_non_retryable_error() {
+        let policy = test_policy(5, Some(Duration::ZERO));
+        let cfg = cfg_default();
+        let mut calls: u32 = 0;
+        let result = policy.execute(&cfg, || {
+            calls += 1;
+            Err(adbc_err(Status::Unauthenticated, "bad creds"))
+        });
+        assert!(result.is_err());
+        // No retries because the error is permanent.
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn execute_uses_fixed_retry_sleep_when_connect_timeout_set() {
+        // Verifies that retry_sleep takes precedence over quadratic backoff:
+        // the loop sleeps exactly `retry_sleep` between attempts.
+        let policy = test_policy(3, Some(Duration::from_millis(20)));
+        let cfg = cfg_default();
+        let mut calls: u32 = 0;
+        let start = Instant::now();
+        let _ = policy.execute(&cfg, || {
+            calls += 1;
+            Err(adbc_err(Status::IO, "i/o timeout"))
+        });
+        let elapsed = start.elapsed();
+        assert_eq!(calls, 4);
+        // 3 sleeps × 20ms = 60ms minimum; generous upper bound for CI jitter.
+        assert!(
+            elapsed >= Duration::from_millis(60),
+            "expected at least 60ms of fixed sleeps, got {elapsed:?}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "fixed 20ms sleeps shouldn't take seconds, got {elapsed:?}"
+        );
     }
 
     // -- Snowflake retryable-error classifier ---------------------------------

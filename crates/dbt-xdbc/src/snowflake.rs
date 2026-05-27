@@ -20,6 +20,7 @@ pub const LOGIN_TIMEOUT: &str = "adbc.snowflake.sql.client_option.login_timeout"
 pub const REQUEST_TIMEOUT: &str = "adbc.snowflake.sql.client_option.request_timeout";
 pub const JWT_EXPIRE_TIMEOUT: &str = "adbc.snowflake.sql.client_option.jwt_expire_timeout";
 pub const CLIENT_TIMEOUT: &str = "adbc.snowflake.sql.client_option.client_timeout";
+pub const AUTH_CLIENT_TIMEOUT: &str = "adbc.snowflake.sql.client_option.auth_client_timeout";
 pub const USE_HIGH_PRECISION: &str = "adbc.snowflake.sql.client_option.use_high_precision";
 pub const APPLICATION_NAME: &str = "adbc.snowflake.sql.client_option.app_name";
 pub const SSL_SKIP_VERIFY: &str = "adbc.snowflake.sql.client_option.tls_skip_verify";

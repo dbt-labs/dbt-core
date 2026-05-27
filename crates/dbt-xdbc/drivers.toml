@@ -24,6 +24,7 @@ drivers = [
   "snowflake-0.21.0.dev+dbt0.21.9",
   "snowflake-0.21.0.dev+dbt0.21.10",
   "snowflake-0.21.0.dev+dbt0.21.11",
+  "snowflake-0.21.0.dev+dbt0.21.12",
   "redshift-0.18.0+dbt0.18.2",
   "redshift-0.18.0+dbt0.18.3",
   "redshift-0.18.0+dbt0.18.4",
