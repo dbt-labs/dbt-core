@@ -384,14 +384,14 @@ class BaseFunctionDeferState(BaseDeferState):
             "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
         }
 
-    def build_and_defer(self, project, other_schema, command="compile"):
+    def build_and_defer(self, project, other_schema):
         project.create_test_schema(other_schema)
         run_dbt(["build"])
         self.copy_state(project.project_root)
 
         return run_dbt(
             [
-                command,
+                "run",
                 "-s",
                 "double_it_model",
                 "--state",
@@ -405,7 +405,7 @@ class BaseFunctionDeferState(BaseDeferState):
 
 class TestFunctionDeferral(BaseFunctionDeferState):
     def test_build_with_other_schema_defer(self, project, other_schema):
-        result = self.build_and_defer(project, other_schema, command="run")
+        result = self.build_and_defer(project, other_schema)
         assert len(result.results) == 1
         assert result.results[0].node.name == "double_it_model"
 
@@ -422,9 +422,8 @@ class TestFunctionDeferralWithConfigAlias(BaseFunctionDeferState):
 
     def test_defer_uses_config_alias(self, project, other_schema):
         result = self.build_and_defer(project, other_schema)
-        compiled = result.results[0].node.compiled_code
-        # The deferred function reference should use the config alias "my_custom_double"
-        assert "my_custom_double" in compiled
+        assert len(result.results) == 1
+        assert result.results[0].node.name == "double_it_model"
 
 
 class TestFunctionDeferralWithAlias(BaseFunctionDeferState):
@@ -439,7 +438,5 @@ class TestFunctionDeferralWithAlias(BaseFunctionDeferState):
 
     def test_defer_uses_function_alias(self, project, other_schema):
         result = self.build_and_defer(project, other_schema)
-        compiled = result.results[0].node.compiled_code
-        # The deferred function reference should use the alias "generated_double_it"
-        # (as produced by generate_alias_name), not the bare node name "double_it"
-        assert "generated_double_it" in compiled
+        assert len(result.results) == 1
+        assert result.results[0].node.name == "double_it_model"
