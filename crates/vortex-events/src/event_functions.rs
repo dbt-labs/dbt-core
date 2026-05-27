@@ -232,6 +232,14 @@ pub fn run_model_event(
             skipped = true;
             skipped_reason = "reused_still_fresh".to_string();
         }
+        NodeStatus::ReusedCloned(None) => {
+            skipped = true;
+            skipped_reason = "reused_cloned_from_cache".to_string();
+        }
+        NodeStatus::ReusedCloned(Some(_)) => {
+            skipped = true;
+            skipped_reason = "reused_cloned_from_cache_still_fresh".to_string();
+        }
         NodeStatus::NoOp => {
             skipped = true;
             skipped_reason = "no-op".to_string();

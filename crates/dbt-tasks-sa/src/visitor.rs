@@ -232,7 +232,8 @@ impl SkipSet {
                 ),
                 NodeStatus::ReusedNoChanges(_)
                 | NodeStatus::ReusedStillFresh(_, _, _)
-                | NodeStatus::ReusedStillFreshNoChanges(_) => (
+                | NodeStatus::ReusedStillFreshNoChanges(_)
+                | NodeStatus::ReusedCloned(_) => (
                     Vec::new(),
                     // TODO: Unfortunately, we have diverging logic for data tests vs all other node types,
                     // when it comes to upstream being reused. All other node tasks will run and just

@@ -89,6 +89,10 @@ enum NodeCacheReason {
   NODE_CACHE_REASON_STILL_FRESH = 1;
   // Reused from cache - changes detected but update criteria not met.
   NODE_CACHE_REASON_UPDATE_CRITERIA_NOT_MET = 2;
+  // Reused by cloning an existing relation.
+  NODE_CACHE_REASON_CLONED_EXISTING = 3;
+  // Reused by cloning an existing relation within freshness tolerance.
+  NODE_CACHE_REASON_CLONED_EXISTING_STILL_FRESH = 4;
 }
 
 enum NodeMaterialization {
@@ -153,6 +157,9 @@ message SourceFreshnessDetail {
 }
 
 message NodeCacheDetail {
+  reserved 4;
+  reserved "message";
+
   NodeCacheReason node_cache_reason = 1;
 
   // If node_cache_reason == NODE_CACHE_REASON_STILL_FRESH, this field indicates
@@ -162,17 +169,6 @@ message NodeCacheDetail {
   // If node_cache_reason == NODE_CACHE_REASON_STILL_FRESH, this field indicates
   // time since last update in seconds.
   optional uint64 last_updated_seconds = 3;
-
-  // Optional human-readable description of the cache decision. When set, the
-  // formatter prefers this string over the enum-derived default text.
-  //
-  // TODO: this field is a stopgap so the cache service's "Cloned
-  // from cached relation" decision renders correctly in the terminal without
-  // committing to a NodeCacheReason variant. Per discussion on
-  // PR #10184, the longer-term plan is to move clone into NodeOutcome as a
-  // sub-outcome of Success (not Skipped). Once that lands, this field can
-  // likely be removed.
-  optional string message = 4;
 }
 
 message NodeSkipUpstreamDetail {

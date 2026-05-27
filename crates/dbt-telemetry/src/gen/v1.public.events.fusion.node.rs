@@ -65,7 +65,7 @@ impl ::prost::Name for SourceFreshnessDetail {
 }
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(crate::macros::ProtoNew)]
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NodeCacheDetail {
     #[prost(enumeration = "NodeCacheReason", tag = "1")]
     #[cfg_attr(
@@ -81,17 +81,6 @@ pub struct NodeCacheDetail {
     /// time since last update in seconds.
     #[prost(uint64, optional, tag = "3")]
     pub last_updated_seconds: ::core::option::Option<u64>,
-    /// Optional human-readable description of the cache decision. When set, the
-    /// formatter prefers this string over the enum-derived default text.
-    ///
-    /// TODO: this field is a stopgap so the cache service's "Cloned
-    /// from cached relation" decision renders correctly in the terminal without
-    /// committing to a NodeCacheReason variant. Per discussion on
-    /// PR #10184, the longer-term plan is to move clone into NodeOutcome as a
-    /// sub-outcome of Success (not Skipped). Once that lands, this field can
-    /// likely be removed.
-    #[prost(string, optional, tag = "4")]
-    pub message: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl crate::StaticName for NodeCacheDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeCacheDetail";
@@ -721,6 +710,10 @@ pub enum NodeCacheReason {
     StillFresh = 1,
     /// Reused from cache - changes detected but update criteria not met.
     UpdateCriteriaNotMet = 2,
+    /// Reused by cloning an existing relation.
+    ClonedExisting = 3,
+    /// Reused by cloning an existing relation within freshness tolerance.
+    ClonedExistingStillFresh = 4,
 }
 impl NodeCacheReason {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -732,6 +725,10 @@ impl NodeCacheReason {
             Self::NoChanges => "NODE_CACHE_REASON_NO_CHANGES",
             Self::StillFresh => "NODE_CACHE_REASON_STILL_FRESH",
             Self::UpdateCriteriaNotMet => "NODE_CACHE_REASON_UPDATE_CRITERIA_NOT_MET",
+            Self::ClonedExisting => "NODE_CACHE_REASON_CLONED_EXISTING",
+            Self::ClonedExistingStillFresh => {
+                "NODE_CACHE_REASON_CLONED_EXISTING_STILL_FRESH"
+            }
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -741,6 +738,10 @@ impl NodeCacheReason {
             "NODE_CACHE_REASON_STILL_FRESH" => Some(Self::StillFresh),
             "NODE_CACHE_REASON_UPDATE_CRITERIA_NOT_MET" => {
                 Some(Self::UpdateCriteriaNotMet)
+            }
+            "NODE_CACHE_REASON_CLONED_EXISTING" => Some(Self::ClonedExisting),
+            "NODE_CACHE_REASON_CLONED_EXISTING_STILL_FRESH" => {
+                Some(Self::ClonedExistingStillFresh)
             }
             _ => None,
         }

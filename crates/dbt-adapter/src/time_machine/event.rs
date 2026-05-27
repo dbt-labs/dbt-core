@@ -141,6 +141,9 @@ pub enum SaoStatus {
         last_updated_seconds: u64,
     },
     ReusedStillFreshNoChanges,
+    ReusedCloned {
+        freshness_seconds: Option<u64>,
+    },
 }
 
 impl SaoEvent {
@@ -159,6 +162,9 @@ impl SaoEvent {
             ),
             SaoStatus::ReusedStillFreshNoChanges => {
                 NodeStatus::ReusedStillFreshNoChanges(self.message.clone())
+            }
+            SaoStatus::ReusedCloned { freshness_seconds } => {
+                NodeStatus::ReusedCloned(*freshness_seconds)
             }
         }
     }
@@ -181,6 +187,9 @@ impl From<SaoStatus> for dbt_common::stats::NodeStatus {
             ),
             SaoStatus::ReusedStillFreshNoChanges => {
                 NodeStatus::ReusedStillFreshNoChanges("Reused (SAO replay)".to_string())
+            }
+            SaoStatus::ReusedCloned { freshness_seconds } => {
+                NodeStatus::ReusedCloned(freshness_seconds)
             }
         }
     }
@@ -424,5 +433,23 @@ mod tests {
         } else {
             panic!("Expected Sao event");
         }
+    }
+
+    #[test]
+    fn test_sao_status_with_clone_freshness() {
+        let event = SaoEvent {
+            node_id: "model.my_project.orders".to_string(),
+            status: SaoStatus::ReusedCloned {
+                freshness_seconds: Some(3600),
+            },
+            message: "Cloned from cached relation within freshness tolerance".to_string(),
+            stored_hash: "ghi789".to_string(),
+            timestamp_ns: 67890,
+        };
+
+        assert_eq!(
+            event.to_node_status(),
+            dbt_common::stats::NodeStatus::ReusedCloned(Some(3600))
+        );
     }
 }

@@ -67,7 +67,7 @@ pub fn update_node_outcome_from_skip_reason(ev: &mut NodeEvaluated, skip_reason:
         SkipReason::Reused => {
             ev.set_node_skip_reason(NodeSkipReason::Cached);
             ev.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
-                NodeCacheDetail::new(NodeCacheReason::NoChanges, None, None, None),
+                NodeCacheDetail::new(NodeCacheReason::NoChanges, None, None),
             ));
         }
     }
@@ -113,20 +113,13 @@ fn update_node_outcome_from_legacy_status(event: &mut NodeEvaluated, status: Nod
             event.set_node_outcome(NodeOutcome::Skipped);
             event.set_node_skip_reason(NodeSkipReason::Upstream);
         }
-        NodeStatus::ReusedNoChanges(ref message) => {
+        NodeStatus::ReusedNoChanges(_) => {
             event.set_node_outcome(NodeOutcome::Skipped);
             event.set_node_skip_reason(NodeSkipReason::Cached);
 
-            // Carry the task-supplied message so the formatter can render
-            // decision-specific text (e.g. "Cloned from cached relation")
-            // without needing a dedicated NodeCacheReason variant.
-            event.node_outcome_detail =
-                Some(NodeOutcomeDetail::NodeCacheDetail(NodeCacheDetail::new(
-                    NodeCacheReason::NoChanges,
-                    None,
-                    None,
-                    Some(message.clone()),
-                )));
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
+                NodeCacheDetail::new(NodeCacheReason::NoChanges, None, None),
+            ));
         }
         NodeStatus::ReusedStillFresh(_, freshness_sec, last_updated_secs) => {
             event.set_node_outcome(NodeOutcome::Skipped);
@@ -137,7 +130,6 @@ fn update_node_outcome_from_legacy_status(event: &mut NodeEvaluated, status: Nod
                     NodeCacheReason::StillFresh,
                     Some(freshness_sec),
                     Some(last_updated_secs),
-                    None,
                 )));
         }
         NodeStatus::ReusedStillFreshNoChanges(_) => {
@@ -145,7 +137,20 @@ fn update_node_outcome_from_legacy_status(event: &mut NodeEvaluated, status: Nod
             event.set_node_skip_reason(NodeSkipReason::Cached);
 
             event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
-                NodeCacheDetail::new(NodeCacheReason::UpdateCriteriaNotMet, None, None, None),
+                NodeCacheDetail::new(NodeCacheReason::UpdateCriteriaNotMet, None, None),
+            ));
+        }
+        NodeStatus::ReusedCloned(freshness_sec) => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::Cached);
+
+            let node_cache_reason = if freshness_sec.is_some() {
+                NodeCacheReason::ClonedExistingStillFresh
+            } else {
+                NodeCacheReason::ClonedExisting
+            };
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
+                NodeCacheDetail::new(node_cache_reason, freshness_sec, None),
             ));
         }
         NodeStatus::NoOp => {

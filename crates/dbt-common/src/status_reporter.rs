@@ -18,7 +18,8 @@ fn status_action(node_status: &NodeStatus) -> &'static str {
         NodeStatus::SkippedUpstreamFailed => SKIPPED,
         NodeStatus::ReusedNoChanges(_)
         | NodeStatus::ReusedStillFresh(_, _, _)
-        | NodeStatus::ReusedStillFreshNoChanges(_) => REUSED,
+        | NodeStatus::ReusedStillFreshNoChanges(_)
+        | NodeStatus::ReusedCloned(_) => REUSED,
         NodeStatus::NoOp => "",
     }
 }
