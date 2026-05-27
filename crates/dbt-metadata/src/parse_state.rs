@@ -713,6 +713,8 @@ pub struct SaveArgs<'a> {
     pub profile_file_hash: &'a str,
     pub project_file_hash: &'a str,
     pub cli_vars_hash: &'a str,
+    /// blake3 hash of `package-lock.yml`. Empty string when no lock file exists.
+    pub packages_lock_hash: &'a str,
     pub dbt_profile_json: &'a str,
     pub vars_json: &'a str,
     pub env_vars_json: &'a str,
@@ -732,6 +734,47 @@ pub struct SaveArgs<'a> {
     pub git_sha: &'a str,
     pub git_branch: &'a str,
     pub git_is_dirty: bool,
+}
+
+// ── SaveArgs default (for tests) ─────────────────────────────────────────────
+
+static EMPTY_NODES: std::sync::OnceLock<Nodes> = std::sync::OnceLock::new();
+static EMPTY_MACROS: std::sync::OnceLock<Macros> = std::sync::OnceLock::new();
+
+impl<'a> SaveArgs<'a> {
+    /// Returns a `SaveArgs` with all fields set to safe empty/zero defaults.
+    /// Use with struct-update syntax in tests: `SaveArgs { version: 9999, ..SaveArgs::test_default(out_dir) }`.
+    pub fn test_default(out_dir: &'a Path) -> Self {
+        SaveArgs {
+            out_dir,
+            version: 0,
+            dbt_version: "",
+            profile_hash: "",
+            profile_file_hash: "",
+            project_file_hash: "",
+            cli_vars_hash: "",
+            packages_lock_hash: "",
+            dbt_profile_json: "{}",
+            vars_json: "{}",
+            env_vars_json: "{}",
+            get_relation_calls_json: "{}",
+            get_columns_in_relation_calls_json: "{}",
+            patterned_dangling_sources_json: "{}",
+            nodes_with_resolution_errors_json: "[]",
+            nodes_with_access_errors_json: "[]",
+            operations_json: "{\"on_run_start\":[],\"on_run_end\":[]}",
+            selectors_json: "",
+            git_sha: "",
+            git_branch: "",
+            git_is_dirty: false,
+            packages: &[],
+            nodes: EMPTY_NODES.get_or_init(Nodes::default),
+            disabled_nodes: EMPTY_NODES.get_or_init(Nodes::default),
+            macros: EMPTY_MACROS.get_or_init(Macros::default),
+            changed_nodes: None,
+            ingested_at: 0,
+        }
+    }
 }
 
 pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
@@ -829,6 +872,7 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         ),
         ("pkg_deps_json", pkg_deps_json),
         ("pkg_kinds_json", pkg_kinds_json),
+        ("packages_lock_hash", args.packages_lock_hash.to_string()),
     ]
     .into_iter()
     .map(|(k, v)| KvRow {
@@ -975,6 +1019,7 @@ pub struct LoadedState {
     pub profile_file_hash: String,
     pub project_file_hash: String,
     pub cli_vars_hash: String,
+    pub packages_lock_hash: String,
     pub dbt_profile_json: String,
     pub vars_json: String,
     pub env_vars_json: String,
@@ -1056,6 +1101,7 @@ pub fn load_filtered_with_unique_ids(
     let profile_file_hash = get_kv("profile_file_hash");
     let project_file_hash = get_kv("project_file_hash");
     let cli_vars_hash = get_kv("cli_vars_hash");
+    let packages_lock_hash = get_kv("packages_lock_hash");
     let dbt_profile_json = get_kv("dbt_profile_json");
     let vars_json = get_kv("vars_json");
     let env_vars_json = get_kv("env_vars_json");
@@ -1095,6 +1141,7 @@ pub fn load_filtered_with_unique_ids(
         profile_file_hash,
         project_file_hash,
         cli_vars_hash,
+        packages_lock_hash,
         dbt_profile_json,
         vars_json,
         env_vars_json,
@@ -1197,6 +1244,7 @@ pub(crate) fn load_packages(dir: &Path, project: &[KvRow]) -> Option<Vec<Package
             package_name: name.clone(),
             all_paths: pkg_paths.remove(&name).unwrap_or_default(),
             dependencies: pkg_deps.remove(&name).unwrap_or_default(),
+            is_local_dep: false, // re-derived below after root is placed at index 0
         })
         .collect();
 
@@ -1212,6 +1260,15 @@ pub(crate) fn load_packages(dir: &Path, project: &[KvRow]) -> Option<Vec<Package
         .position(|p| !all_deps.contains(p.package_name.as_str()))
     {
         snapshots.swap(0, root_idx);
+    }
+
+    // Re-derive is_local_dep: non-root packages without a `dbt_packages` path component
+    // are local-path deps. Root (index 0) is always false.
+    for (i, snap) in snapshots.iter_mut().enumerate() {
+        snap.is_local_dep = i > 0
+            && !Path::new(&snap.package_root_path)
+                .components()
+                .any(|c| c.as_os_str() == "dbt_packages");
     }
 
     Some(snapshots)
@@ -1328,7 +1385,8 @@ fn deserialize_into(
 pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
     packages
         .iter()
-        .filter(|pkg| {
+        .enumerate()
+        .filter(|(_, pkg)| {
             // Internal packages are embedded in the binary and reconstructed at load time.
             // Saving them to the parquet cache is redundant and causes package-count mismatches
             // when the loader re-adds them fresh on top of a prev_dbt_state that already has them.
@@ -1336,7 +1394,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
                 .components()
                 .any(|c| c.as_os_str() == "dbt_internal_packages")
         })
-        .map(|pkg| {
+        .map(|(i, pkg)| {
             let all_paths: HashMap<ResourcePathKind, Vec<(String, u64)>> = pkg
                 .all_paths
                 .iter()
@@ -1350,11 +1408,20 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
                     (kind.clone(), rows)
                 })
                 .collect();
+            // Non-root deps installed via `dbt deps` land under dbt_packages/<name>.
+            // Local-path deps (`local: ../foo`) live at an arbitrary path outside dbt_packages.
+            // We detect local deps by the absence of the `dbt_packages` path component.
+            let is_local_dep = i > 0
+                && !pkg
+                    .package_root_path
+                    .components()
+                    .any(|c| c.as_os_str() == "dbt_packages");
             PackageSnapshot {
                 package_root_path: pkg.package_root_path.display().to_string(),
                 package_name: pkg.dbt_project.name.clone(),
                 all_paths,
                 dependencies: pkg.dependencies.clone(),
+                is_local_dep,
             }
         })
         .collect()

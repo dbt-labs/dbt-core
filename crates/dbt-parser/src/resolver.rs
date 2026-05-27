@@ -164,10 +164,10 @@ pub async fn resolve(
         dbt_state.root_project_flags(),
         dbt_state.run_started_at,
         invocation_args,
-        dbt_state
-            .packages
-            .iter()
-            .map(|p| p.dbt_project.name.clone())
+        macros
+            .macros
+            .values()
+            .map(|m| m.package_name.clone())
             .collect(),
         arg.io.clone(),
         dbt_state.catalogs.clone(),

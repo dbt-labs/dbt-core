@@ -79,64 +79,83 @@ fn drop_unchanged_nodes_from_assets(
 }
 
 /// Drops all seen assets from the dbt state.
+///
+/// For the root package (index 0) and local-path deps: filter all asset lists
+/// so only changed files remain for re-resolution.
+///
+/// For pinned dep packages (hub / git / tarball / private): their content is
+/// guaranteed unchanged by the `package-lock.yml` hash check in `validate()`.
+/// We keep the package entry in `dbt_state.packages` so that:
+///
+///   1. The macro-resolution loop in `resolver.rs` can re-register their macro
+///      namespaces in `THREAD_LOCAL_DEPENDENCIES` (fixes dispatch for all dep
+///      namespaces, e.g. `dbt_utils.generate_surrogate_key`).
+///   2. All dep package names appear in `macros.macros.keys()`, which is now
+///      the source of truth for namespace registration.
+///
+/// We clear their asset lists so no files are re-parsed — their resolved nodes
+/// and macros come from the cache via `add_all_unchanged_nodes`.
 pub fn drop_all_unchanged_nodes(
     io: &IoArgs,
     dbt_state: &mut DbtState,
     unchanged_files: &HashSet<DbtPath>,
 ) {
-    // For each package in dbt_state
-    for package in &mut dbt_state.packages {
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.dbt_properties);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.analysis_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.model_sql_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.macro_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.test_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.seed_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.docs_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.snapshot_files);
-        drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.fixture_files);
+    for (i, package) in dbt_state.packages.iter_mut().enumerate() {
+        let is_root = i == 0;
+        // Non-root deps installed via `dbt deps` land under dbt_packages/<name>.
+        // Local-path deps (`local: ../foo`) live outside dbt_packages — they need
+        // file scanning because the lock file doesn't pin their content.
+        let is_local_dep = i > 0
+            && !package
+                .package_root_path
+                .components()
+                .any(|c| c.as_os_str() == "dbt_packages");
 
-        let package_root_path = &package.package_root_path;
+        if is_root || is_local_dep {
+            // Root package and local deps: filter each asset list to keep only
+            // changed files so they get re-parsed/re-resolved.
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.dbt_properties);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.analysis_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.model_sql_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.macro_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.test_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.seed_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.docs_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.snapshot_files);
+            drop_unchanged_nodes_from_assets(io, unchanged_files, &mut package.fixture_files);
 
-        // drop all seen files
-        package.all_paths.retain(|_, assets| {
-            assets.retain(|(path, _mtime)| {
-                let absolute_path = package_root_path.join(path.as_path());
-                let rel_path = DbtPath::from_path(
-                    absolute_path
-                        .strip_prefix(&io.in_dir)
-                        .unwrap_or(path.as_path()),
-                );
-                !unchanged_files.contains(&rel_path)
+            let package_root_path = &package.package_root_path;
+            package.all_paths.retain(|_, assets| {
+                assets.retain(|(path, _mtime)| {
+                    let absolute_path = package_root_path.join(path.as_path());
+                    let rel_path = DbtPath::from_path(
+                        absolute_path
+                            .strip_prefix(&io.in_dir)
+                            .unwrap_or(path.as_path()),
+                    );
+                    !unchanged_files.contains(&rel_path)
+                });
+                !assets.is_empty()
             });
-            !assets.is_empty()
-        });
-    }
-
-    let mut i = 0;
-    dbt_state.packages.retain(|x| {
-        if i == 0 {
-            i += 1;
-            true // always retain the root package
         } else {
-            let result = !x.all_paths.is_empty();
-            i += 1;
-            result
+            // Pinned dep (hub/git/tarball/private): lock-file hash guarantees
+            // content unchanged. Clear all asset lists so nothing is re-parsed.
+            // The package entry itself stays so its name is registered as a
+            // known macro namespace in the JinjaEnv.
+            package.dbt_properties.clear();
+            package.analysis_files.clear();
+            package.model_sql_files.clear();
+            package.macro_files.clear();
+            package.test_files.clear();
+            package.seed_files.clear();
+            package.docs_files.clear();
+            package.snapshot_files.clear();
+            package.fixture_files.clear();
+            package.all_paths.clear();
         }
-    });
-
-    // Fixup package dependencies.
-    let mut i = 0;
-    while i < dbt_state.packages.len() {
-        let cloned_dependencies = dbt_state.packages[i].dependencies.clone();
-        for dep in cloned_dependencies {
-            if !dbt_state.packages.iter().any(|x| x.dbt_project.name == dep) {
-                // Remove dependency from package as it is not included anymore
-                dbt_state.packages[i].dependencies.remove(&dep);
-            }
-        }
-        i += 1;
     }
+    // All packages are retained — dep packages are needed for namespace
+    // registration even when they have no files to re-parse.
 }
 
 /// Adds all nodes from the cached `ResolvedNodes` to the `ResolverState`.
