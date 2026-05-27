@@ -53,7 +53,7 @@ pub trait MetadataAdapter: Send + Sync {
     /// The adapter type backing this metadata adapter (Snowflake, BigQuery, ...).
     /// Used by callers (e.g. `ViewDefinitionTraverser`) that need to construct
     /// dialect-shaped relations without an external mapping table.
-    fn adapter_type(&self) -> AdapterType; // TODO: remove this and pass Arc 
+    fn adapter_type(&self) -> AdapterType; // TODO: remove this and pass Arc
     // into ViewDefinitionTraverser instead
 
     fn build_schemas_from_stats_sql(
