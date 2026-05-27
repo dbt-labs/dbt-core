@@ -530,6 +530,10 @@ pub struct EvalArgs {
     pub skip_post_hooks: bool,
     /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
     pub write_metadata: bool,
+    /// Also write snapshot index parquet to target/index/ (implies write_metadata)
+    pub write_index: bool,
+    /// Directory for index parquet output (default: <target>/index/)
+    pub index_dir: Option<PathBuf>,
     /// Directory for metadata parquet output (default: <target>/metadata/)
     pub metadata_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
@@ -674,6 +678,13 @@ impl EvalArgs {
         self.metadata_dir
             .clone()
             .unwrap_or_else(|| self.io.out_dir.join(DBT_METADATA_DIR_NAME))
+    }
+
+    /// Resolves the index output directory: `--index-dir` if set, else `<out_dir>/index`.
+    pub fn index_dir(&self) -> PathBuf {
+        self.index_dir
+            .clone()
+            .unwrap_or_else(|| self.io.out_dir.join("index"))
     }
 
     // this could accept a SelectExpression in case we want to join more complex selections together.

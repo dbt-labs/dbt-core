@@ -1489,9 +1489,18 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new())]
     pub write_metadata: bool,
 
+    /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
+    /// is produced, then converts metadata → index parquet via the snapshot writer.
+    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new())]
+    pub write_index: bool,
+
     /// Directory for metadata parquet output (default: <target>/metadata/)
     #[arg(global = true, long, env = "DBT_METADATA_DIR")]
     pub metadata_dir: Option<PathBuf>,
+
+    /// Directory for index parquet output (default: <target>/index/)
+    #[arg(global = true, long, env = "DBT_INDEX_DIR")]
+    pub index_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
     /// Requires --write-metadata and --static-analysis strict. Omitting this flag
@@ -1974,8 +1983,10 @@ impl CommonArgs {
     /// `--verify-partial-load` → `--partial-load` → `--partial-parse`
     /// `--verify-partial-parse` → `--partial-parse`
     /// `--dirty` → `--partial-parse`
+    /// `--write-index` → `--write-metadata` → `--partial-parse`
     pub fn effective_partial_parse(&self) -> bool {
         self.write_metadata
+            || self.write_index
             || self.partial_parse
             || self.partial_load
             || self.verify_partial_load
@@ -1984,8 +1995,9 @@ impl CommonArgs {
     }
 
     /// `--verify-partial-load` implies `--partial-load`. `--write-metadata` implies both.
+    /// `--write-index` implies `--write-metadata` implies both.
     pub fn effective_partial_load(&self) -> bool {
-        self.write_metadata || self.partial_load || self.verify_partial_load
+        self.write_metadata || self.write_index || self.partial_load || self.verify_partial_load
     }
 
     /// Resolve the effective value of `--quiet` / `--no-quiet`.
@@ -2125,13 +2137,15 @@ impl CommonArgs {
             project_dir: self.project_dir.clone(),
             quiet: self.get_quiet(),
             send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
-            write_json: if self.write_metadata || self.no_write_json {
+            write_json: if self.write_metadata || self.write_index || self.no_write_json {
                 false
             } else {
                 self.write_json
             },
             write_catalog: self.write_catalog,
-            write_metadata: self.write_metadata,
+            write_metadata: self.write_metadata || self.write_index,
+            write_index: self.write_index,
+            index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
             fail_fast: self.fail_fast,
             target_path: self.target_path.clone(),
