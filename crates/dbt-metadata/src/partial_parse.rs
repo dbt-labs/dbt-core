@@ -1079,6 +1079,7 @@ mod tests {
         DbtProfile {
             profile: "test".into(),
             target: "dev".into(),
+            defer_to_target: None,
             db_config: DbConfig::Datafusion(Box::new(DatafusionDbConfig {
                 database: Some("testdb".into()),
                 schema: Some("public".into()),

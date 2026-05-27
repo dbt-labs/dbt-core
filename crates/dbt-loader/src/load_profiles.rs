@@ -85,6 +85,8 @@ pub fn load_profiles(
             },
         )?;
 
+    let defer_to_target = profile_defer_to_target(&resolved.credentials);
+
     // Convert the rendered credentials mapping into a typed DbConfig
     let credentials_value = dbt_yaml::Value::Mapping(resolved.credentials, Span::default());
     let db_config: DbConfig = dbt_yaml::from_value(credentials_value).map_err(|e| {
@@ -129,10 +131,18 @@ pub fn load_profiles(
         schema,
         profile: profile.into_inner(),
         target: resolved.target_name,
+        defer_to_target,
         db_config,
         relative_profile_path,
         threads: arg.threads,
     })
+}
+
+fn profile_defer_to_target(credentials: &dbt_yaml::Mapping) -> Option<String> {
+    match credentials.get("defer_to_target") {
+        Some(dbt_yaml::Value::String(target, _)) if !target.is_empty() => Some(target.clone()),
+        _ => None,
+    }
 }
 
 fn experimental_adapters_allowed() -> bool {

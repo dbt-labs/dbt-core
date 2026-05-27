@@ -170,6 +170,8 @@ impl fmt::Display for GenericTestAsset {
 pub struct DbtProfile {
     pub profile: String,
     pub target: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defer_to_target: Option<String>,
     pub db_config: DbConfig,
     pub schema: String,
     pub database: String,
