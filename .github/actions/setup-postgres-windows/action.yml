@@ -22,5 +22,9 @@ runs:
         Write-Host -Object "Starting PostgreSQL 16 Service..."
         $pgService = Get-Service -Name postgresql-x64-16
         Set-Service -InputObject $pgService -Status running -StartupType automatic
+
+        Write-Host -Object "Disabling fsync for faster test runs..."
+        & "$env:PGBIN\psql" -U postgres -c "ALTER SYSTEM SET fsync = off;"
+        Restart-Service -Name postgresql-x64-16
         $env:Path += ";$env:PGBIN"
         bash ${{ github.action_path }}/setup_db.sh
