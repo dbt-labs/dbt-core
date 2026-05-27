@@ -11,6 +11,9 @@ message LogMessage {
   // Optional fusion error/warning code
   optional uint32 code = 1;
 
+  // Optional fusion error/warning code variant name (e.g. "Generic").
+  optional string code_name = 16;
+
   // Optional legacy dbt-core code (e.g. "Z048") if this event has a strict mapping to a dbt core event.
   optional string dbt_core_event_code = 2;
 

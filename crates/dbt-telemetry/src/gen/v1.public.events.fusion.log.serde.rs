@@ -466,6 +466,9 @@ impl serde::Serialize for LogMessage {
         if self.code.is_some() {
             len += 1;
         }
+        if self.code_name.is_some() {
+            len += 1;
+        }
         if self.dbt_core_event_code.is_some() {
             len += 1;
         }
@@ -511,6 +514,9 @@ impl serde::Serialize for LogMessage {
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.log.LogMessage", len)?;
         if let Some(v) = self.code.as_ref() {
             struct_ser.serialize_field("code", v)?;
+        }
+        if let Some(v) = self.code_name.as_ref() {
+            struct_ser.serialize_field("code_name", v)?;
         }
         if let Some(v) = self.dbt_core_event_code.as_ref() {
             struct_ser.serialize_field("dbt_core_event_code", v)?;
@@ -569,6 +575,8 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
     {
         const FIELDS: &[&str] = &[
             "code",
+            "code_name",
+            "codeName",
             "dbt_core_event_code",
             "dbtCoreEventCode",
             "original_severity_number",
@@ -599,6 +607,7 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Code,
+            CodeName,
             DbtCoreEventCode,
             OriginalSeverityNumber,
             OriginalSeverityText,
@@ -636,6 +645,7 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                     {
                         match value {
                             "code" => Ok(GeneratedField::Code),
+                            "codeName" | "code_name" => Ok(GeneratedField::CodeName),
                             "dbtCoreEventCode" | "dbt_core_event_code" => Ok(GeneratedField::DbtCoreEventCode),
                             "originalSeverityNumber" | "original_severity_number" => Ok(GeneratedField::OriginalSeverityNumber),
                             "originalSeverityText" | "original_severity_text" => Ok(GeneratedField::OriginalSeverityText),
@@ -670,6 +680,7 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut code__ = None;
+                let mut code_name__ = None;
                 let mut dbt_core_event_code__ = None;
                 let mut original_severity_number__ = None;
                 let mut original_severity_text__ = None;
@@ -693,6 +704,12 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                             code__ = 
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
+                        }
+                        GeneratedField::CodeName => {
+                            if code_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("codeName"));
+                            }
+                            code_name__ = map_.next_value()?;
                         }
                         GeneratedField::DbtCoreEventCode => {
                             if dbt_core_event_code__.is_some() {
@@ -795,6 +812,7 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                 }
                 Ok(LogMessage {
                     code: code__,
+                    code_name: code_name__,
                     dbt_core_event_code: dbt_core_event_code__,
                     original_severity_number: original_severity_number__.unwrap_or_default(),
                     original_severity_text: original_severity_text__.unwrap_or_default(),

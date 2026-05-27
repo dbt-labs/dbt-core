@@ -7,12 +7,17 @@ use crate::proto::v1::public::events::fusion::{
 };
 
 impl LogMessage {
-    /// Create a new LogMessage with just the original severity level and an error code.
-    pub fn new_from_level_and_code(code: impl Into<u32>, level: impl Into<SeverityNumber>) -> Self {
+    /// Create a new LogMessage with the original severity level, error code, and code name.
+    pub fn new_from_level_and_code(
+        code: impl Into<u32>,
+        code_name: impl Into<String>,
+        level: impl Into<SeverityNumber>,
+    ) -> Self {
         let original_severity_number = level.into();
 
         Self {
             code: Some(code.into()),
+            code_name: Some(code_name.into()),
             dbt_core_event_code: None,
             original_severity_number: original_severity_number as i32,
             original_severity_text: original_severity_number.as_str().to_string(),
@@ -37,6 +42,7 @@ impl LogMessage {
 
         Self {
             code: None,
+            code_name: None,
             dbt_core_event_code: None,
             original_severity_number: original_severity_number as i32,
             original_severity_text: original_severity_number.as_str().to_string(),

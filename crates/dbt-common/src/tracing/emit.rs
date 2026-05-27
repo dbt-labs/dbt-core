@@ -434,7 +434,8 @@ fn emit_fs_error_log_message(
         }
     };
 
-    let mut log_message = LogMessage::new_from_level_and_code(error.code as u32, level);
+    let mut log_message =
+        LogMessage::new_from_level_and_code(error.code as u32, error.code.name(), level);
     if let Some(location) = error.location.as_ref() {
         let fields = log_message_location_fields(location);
         log_message.relative_path = fields.relative_path;
@@ -473,7 +474,7 @@ pub fn emit_error_log_message(
     };
 
     emit_error_event(
-        LogMessage::new_from_level_and_code(code as u32, tracing::Level::ERROR),
+        LogMessage::new_from_level_and_code(code as u32, code.name(), tracing::Level::ERROR),
         Some(message.as_ref()),
     );
 }
@@ -490,7 +491,8 @@ pub fn emit_error_log_message_package_scoped(
         status_reporter.collect_error(&fs_err!(code, "{}", message.as_ref()));
     };
 
-    let mut log_message = LogMessage::new_from_level_and_code(code as u32, tracing::Level::ERROR);
+    let mut log_message =
+        LogMessage::new_from_level_and_code(code as u32, code.name(), tracing::Level::ERROR);
     log_message.package_name = Some(package_name.to_string());
     emit_error_event(log_message, Some(message.as_ref()));
 }
@@ -520,7 +522,7 @@ pub fn emit_warn_log_message(
     };
 
     emit_warn_event(
-        LogMessage::new_from_level_and_code(code as u32, tracing::Level::WARN),
+        LogMessage::new_from_level_and_code(code as u32, code.name(), tracing::Level::WARN),
         Some(message.as_ref()),
     );
 }
@@ -537,7 +539,8 @@ pub fn emit_warn_log_message_package_scoped(
         status_reporter.collect_warning(&fs_err!(code, "{}", message.as_ref()));
     };
 
-    let mut log_message = LogMessage::new_from_level_and_code(code as u32, tracing::Level::WARN);
+    let mut log_message =
+        LogMessage::new_from_level_and_code(code as u32, code.name(), tracing::Level::WARN);
     log_message.package_name = Some(package_name.to_string());
     emit_warn_event(log_message, Some(message.as_ref()));
 }
@@ -567,8 +570,11 @@ pub fn emit_strict_parse_error(
 ) {
     use super::middlewares::parse_error_filter::ParsingErrorMessage;
 
-    let mut log_message =
-        LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR);
+    let mut log_message = LogMessage::new_from_level_and_code(
+        error.code as u32,
+        error.code.name(),
+        tracing::Level::ERROR,
+    );
     log_message.package_name = package_name.as_ref().map(|s| s.as_ref().to_string());
     if let Some(location) = error.location.as_ref() {
         let fields = log_message_location_fields(location);

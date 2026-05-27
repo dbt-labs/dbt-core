@@ -90,6 +90,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
 
         ArrowAttributes {
             code: self.code,
+            code_name: self.code_name.as_deref().map(Cow::Borrowed),
             dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
             original_severity_number: Some(self.original_severity_number),
             original_severity_text: Some(Cow::Borrowed(self.original_severity_text.as_str())),
@@ -120,6 +121,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
 
         Ok(Self {
             code: record.code,
+            code_name: record.code_name.as_deref().map(str::to_string),
             dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
             original_severity_number: record.original_severity_number.ok_or_else(|| {
                 format!(

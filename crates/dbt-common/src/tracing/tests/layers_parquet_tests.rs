@@ -46,6 +46,7 @@ fn test_tracing_parquet_filtering() {
     // Pre-create attrs to compare them later
     let mut test_log_attrs: TelemetryAttributes = LogMessage {
         code: Some(42),
+        code_name: None,
         dbt_core_event_code: Some("test_code".to_string()),
         original_severity_number: SeverityNumber::Warn as i32,
         original_severity_text: "WARN".to_string(),

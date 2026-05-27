@@ -777,6 +777,7 @@ where
         } else {
             LogMessage {
                 code: None,
+                code_name: None,
                 dbt_core_event_code: None,
                 original_severity_number: severity_number as i32,
                 original_severity_text: severity_number.as_str().to_string(),

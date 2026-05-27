@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use dbt_proc_macros::include_frontend_error_codes;
 use int_enum::IntEnum;
-use strum_macros::EnumString;
+use strum_macros::{EnumString, IntoStaticStr};
 
 /// Error codes for the SDF CLI.
 ///
@@ -12,7 +12,7 @@ use strum_macros::EnumString;
 #[include_frontend_error_codes]
 #[repr(u16)]
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum, EnumString, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum, EnumString, IntoStaticStr, Default)]
 pub enum ErrorCode {
     // ----------------- Frontend errors [0, 999] -----------------------------
     //
@@ -307,8 +307,12 @@ impl Display for ErrorCode {
 }
 
 impl ErrorCode {
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
+
     pub fn name_and_code(self) -> String {
-        format!("{self:?} (dbt{self})")
+        format!("{} (dbt{self})", self.name())
     }
 
     pub fn is_bug(&self) -> bool {

@@ -114,6 +114,7 @@ pub struct ArrowAttributes<'a> {
     pub line: Option<u32>,
     // Log fields
     pub code: Option<u32>,
+    pub code_name: Option<Cow<'a, str>>,
     pub original_severity_number: Option<i32>,
     pub original_severity_text: Option<Cow<'a, str>>,
     pub package_name: Option<Cow<'a, str>>,
@@ -435,6 +436,7 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         Field::new("line", DataType::UInt32, true),
         // Log fields
         Field::new("code", DataType::UInt32, true),
+        dict_utf8_field("code_name", true),
         Field::new("original_severity_number", DataType::Int32, true),
         dict_utf8_field("original_severity_text", true),
         dict_utf8_field("package_name", true),

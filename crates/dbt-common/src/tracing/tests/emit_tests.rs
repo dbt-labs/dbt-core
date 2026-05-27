@@ -60,6 +60,7 @@ fn test_create_span() {
 
     let mut event1_attrs: TelemetryAttributes = LogMessage {
         code: Some(300),
+        code_name: None,
         dbt_core_event_code: Some("event1_code".to_string()),
         original_severity_number: SeverityNumber::Warn as i32,
         original_severity_text: "WARN".to_string(),
@@ -79,6 +80,7 @@ fn test_create_span() {
 
     let mut event2_attrs: TelemetryAttributes = LogMessage {
         code: Some(400),
+        code_name: None,
         dbt_core_event_code: Some("event2_code".to_string()),
         original_severity_number: SeverityNumber::Error as i32,
         original_severity_text: "ERROR".to_string(),

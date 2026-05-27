@@ -413,6 +413,7 @@ mod tests {
             severity_text: "INFO".to_string(),
             attributes: LogMessage {
                 code: Some(i as u32),
+                code_name: None,
                 dbt_core_event_code: Some(format!("test_code_{i}")),
                 original_severity_number: SeverityNumber::Info as i32,
                 original_severity_text: "INFO".to_string(),

@@ -136,6 +136,9 @@ pub struct LogMessage {
     /// Optional fusion error/warning code
     #[prost(uint32, optional, tag = "1")]
     pub code: ::core::option::Option<u32>,
+    /// Optional fusion error/warning code variant name (e.g. "Generic").
+    #[prost(string, optional, tag = "16")]
+    pub code_name: ::core::option::Option<::prost::alloc::string::String>,
     /// Optional legacy dbt-core code (e.g. "Z048") if this event has a strict mapping to a dbt core event.
     #[prost(string, optional, tag = "2")]
     pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
