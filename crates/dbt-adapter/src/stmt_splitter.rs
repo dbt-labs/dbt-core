@@ -21,23 +21,6 @@ pub trait StmtSplitter: Send + Sync + Debug {
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool;
 }
 
-/// Naive implementation of StmtSplitter
-///
-/// Used as a placeholder until a more robust solution is made available
-/// to this crate.
-#[derive(Debug)]
-pub struct NaiveStmtSplitter;
-
-impl StmtSplitter for NaiveStmtSplitter {
-    fn split(&self, sql: &str, _adapter_type: AdapterType) -> Vec<String> {
-        sql.split(';').map(|s| s.trim().to_string()).collect()
-    }
-
-    fn is_empty(&self, sql: &str, _adapter_type: AdapterType) -> bool {
-        sql.trim().is_empty()
-    }
-}
-
 /// Implementation of [`StmtSplitter`] backed by the `sqlparser` crate's tokenizer.
 #[derive(Debug)]
 pub struct SqlparserStmtSplitter;
@@ -50,7 +33,7 @@ impl StmtSplitter for SqlparserStmtSplitter {
         let sql = sql.trim();
         let dialect = sqlparser_dialect_for(adapter_type);
         let mut tokens = Vec::new();
-        let aborted = Tokenizer::new(dialect.as_ref(), sql)
+        let aborted = Tokenizer::new(dialect, sql)
             .tokenize_with_location_into_buf(&mut tokens)
             .is_err();
 
@@ -87,7 +70,7 @@ impl StmtSplitter for SqlparserStmtSplitter {
         let mut tokens = Vec::new();
         // If tokenization fails, there is at least some non-whitespace content
         // (e.g. an unterminated quoted string), so it's not empty.
-        if Tokenizer::new(dialect.as_ref(), sql)
+        if Tokenizer::new(dialect, sql)
             .tokenize_with_location_into_buf(&mut tokens)
             .is_err()
         {
@@ -102,26 +85,33 @@ impl StmtSplitter for SqlparserStmtSplitter {
 /// Maps a dbt [`AdapterType`] to the closest `sqlparser` [`Dialect`].
 ///
 /// Adapter types without a close match fall back to [`GenericDialect`].
-fn sqlparser_dialect_for(adapter_type: AdapterType) -> Box<dyn Dialect> {
+fn sqlparser_dialect_for(adapter_type: AdapterType) -> &'static dyn Dialect {
     use AdapterType::*;
+    static SNOWFLAKE: SnowflakeDialect = SnowflakeDialect {};
+    static BIGQUERY: BigQueryDialect = BigQueryDialect {};
+    static DATABRICKS: DatabricksDialect = DatabricksDialect {};
+    static REDSHIFT: RedshiftSqlDialect = RedshiftSqlDialect {};
+    static POSTGRES: PostgreSqlDialect = PostgreSqlDialect {};
+    static DUCKDB: DuckDbDialect = DuckDbDialect {};
+    static HIVE: HiveDialect = HiveDialect {};
+    static MSSQL: MsSqlDialect = MsSqlDialect {};
+    static CLICKHOUSE: ClickHouseDialect = ClickHouseDialect {};
+    static GENERIC: GenericDialect = GenericDialect {};
     match adapter_type {
-        Snowflake => Box::new(SnowflakeDialect {}),
-        Bigquery => Box::new(BigQueryDialect {}),
-        Databricks => Box::new(DatabricksDialect {}),
-        Redshift => Box::new(RedshiftSqlDialect {}),
-        Postgres => Box::new(PostgreSqlDialect {}),
-        DuckDB => Box::new(DuckDbDialect {}),
+        Snowflake => &SNOWFLAKE,
+        Bigquery => &BIGQUERY,
+        Databricks => &DATABRICKS,
+        Redshift => &REDSHIFT,
+        Postgres => &POSTGRES,
+        DuckDB => &DUCKDB,
         // Spark SQL is closest to Hive / Databricks; HiveDialect is a safe
         // baseline for tokenization (string/comment forms match).
-        Spark => Box::new(HiveDialect {}),
-        // Microsoft Fabric DWH uses T-SQL.
-        Fabric => Box::new(MsSqlDialect {}),
-        ClickHouse => Box::new(ClickHouseDialect {}),
+        Spark => &HIVE,
+        Fabric => &MSSQL,
+        ClickHouse => &CLICKHOUSE,
         // No close sqlparser match — generic SQL tokenizer is permissive enough
         // for statement splitting.
-        Trino | Athena | Starburst | Datafusion | Dremio | Oracle | Salesforce | Exasol => {
-            Box::new(GenericDialect {})
-        }
+        Trino | Athena | Starburst | Datafusion | Dremio | Oracle | Salesforce | Exasol => &GENERIC,
     }
 }
 
