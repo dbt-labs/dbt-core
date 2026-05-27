@@ -4,7 +4,8 @@ Delegates parsing to an external `fs parse` subprocess that produces a
 manifest.json on disk. dbt-core then loads that manifest and converts it
 to a runtime Manifest, bypassing its own parser entirely.
 
-See docs/arch/fusion_parser_design.md for the full design and rollout plan.
+This module implements the handoff to Fusion and loading of the resulting
+manifest artifacts.
 """
 
 from __future__ import annotations
