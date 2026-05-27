@@ -25,13 +25,17 @@ from dbt.exceptions import (
     FusionParserSchemaError,
     FusionParserVersionError,
 )
+from dbt.flags import get_flags
 
 if TYPE_CHECKING:
-    from dbt.cli.flags import Flags
     from dbt.config import RuntimeConfig
 
 
-def parse_with_fusion(flags: "Flags", runtime_config: "RuntimeConfig") -> Manifest:
+def parse_with_fusion(
+    runtime_config: "RuntimeConfig",
+    write: bool,
+    write_json: bool,
+) -> Manifest:
     """Invoke fs parse, load the resulting manifest.json, return runtime Manifest.
 
     fs is run into a temp handoff dir rather than the project's target dir so
@@ -39,6 +43,14 @@ def parse_with_fusion(flags: "Flags", runtime_config: "RuntimeConfig") -> Manife
     loading a stale manifest from a prior run, and (b) `--no-write-json`
     doesn't leak a manifest.json into the user's target dir.
     """
+    from dbt.parser.manifest import (
+        assert_no_get_nodes_plugins,
+        enrich_manifest_with_plugin_artifacts,
+    )
+
+    assert_no_get_nodes_plugins(runtime_config.project_name)
+
+    flags = get_flags()
     project_target_path = Path(runtime_config.project_target_path)
 
     with tempfile.TemporaryDirectory(prefix="dbt-fusion-") as handoff_dir:
@@ -54,13 +66,19 @@ def parse_with_fusion(flags: "Flags", runtime_config: "RuntimeConfig") -> Manife
                 f"in the handoff directory."
             )
 
-        writable = _load_writable_manifest(manifest_path)
+        writable_manifest = _load_writable_manifest(manifest_path)
 
-        if getattr(flags, "WRITE_JSON", False):
+        if write and write_json:
+            # Copy v2 parser artifacts rather than re-serializing through write_manifest
             project_target_path.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(manifest_path, project_target_path / "manifest.json")
+            semantic_manifest_path = handoff / "semantic_manifest.json"
+            if semantic_manifest_path.exists():
+                shutil.copyfile(
+                    semantic_manifest_path, project_target_path / "semantic_manifest.json"
+                )
 
-    manifest = Manifest.from_writable_manifest(writable)
+    manifest = Manifest.from_writable_manifest(writable_manifest)
     # build_flat_graph is normally called by ManifestLoader.get_full_manifest;
     # the fusion path bypasses that loader, so populate flat_graph here to
     # power the `graph` context variable (graph.nodes, graph.sources, ...).
@@ -68,10 +86,13 @@ def parse_with_fusion(flags: "Flags", runtime_config: "RuntimeConfig") -> Manife
 
     _delete_stale_partial_parse(project_target_path)
 
+    if write and write_json:
+        enrich_manifest_with_plugin_artifacts(manifest, runtime_config.project_name)
+
     return manifest
 
 
-def _build_argv(flags: "Flags", target_path_override: Optional[str] = None) -> List[str]:
+def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     """Translate dbt-core flags into fs CLI args.
 
     The base command is taken from flags.V2_PARSER_COMMAND (default 'fs parse')

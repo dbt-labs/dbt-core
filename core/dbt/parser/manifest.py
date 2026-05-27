@@ -2561,15 +2561,14 @@ def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
 
 
 def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = None):
+    if get_flags().USE_V2_PARSER:
+        return
     file_name = MANIFEST_FILE_NAME
     path = os.path.join(target_path, file_name)
     manifest.write(path)
     add_artifact_produced(path)
 
-    if not get_flags().USE_V2_PARSER:
-        # In fusion mode, fs writes a higher-fidelity semantic_manifest.json;
-        # don't clobber it with dbt-core's view.
-        write_semantic_manifest(manifest=manifest, target_path=target_path)
+    write_semantic_manifest(manifest=manifest, target_path=target_path)
 
 
 def parse_manifest(
@@ -2592,13 +2591,5 @@ def parse_manifest(
     # If we should (over)write the manifest in the target path, do that now
     if write and write_json:
         write_manifest(manifest, runtime_config.project_target_path)
-        pm = plugins.get_plugin_manager(runtime_config.project_name)
-        plugin_artifacts = pm.get_manifest_artifacts(manifest)
-        for path, plugin_artifact in plugin_artifacts.items():
-            plugin_artifact.write(path)
-            fire_event(
-                ArtifactWritten(
-                    artifact_type=plugin_artifact.__class__.__name__, artifact_path=path
-                )
-            )
+        enrich_manifest_with_plugin_artifacts(manifest, runtime_config.project_name)
     return manifest

@@ -53,7 +53,7 @@ class TestSetupManifestFusionBranch:
 
     def test_use_fusion_calls_parse_with_fusion(self):
         ctx = _ctx(_flags(use_fusion=True))
-        with self._common_patches() as patches, self._enrich_patch(), self._assert_no_get_nodes_patch() as assert_no_get_nodes, mock.patch(
+        with self._common_patches() as patches, self._enrich_patch(), self._assert_no_get_nodes_patch(), mock.patch(
             "dbt.parser.fusion.parse_with_fusion"
         ) as parse_with_fusion, mock.patch(
             "dbt.cli.requires.parse_manifest"
@@ -65,7 +65,6 @@ class TestSetupManifestFusionBranch:
 
             parse_with_fusion.assert_called_once()
             parse_manifest.assert_not_called()
-            assert_no_get_nodes.assert_called_once_with("test_project")
             patches["_wire_adapter_for_external_manifest"].assert_called_once()
 
     def test_default_calls_parse_manifest(self):

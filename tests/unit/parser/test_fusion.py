@@ -115,68 +115,78 @@ class TestDeleteStalePartialParse:
         _delete_stale_partial_parse(tmp_path)
 
 
+@pytest.fixture
+def _patch_fusion_deps():
+    """parse_with_fusion now resolves flags via get_flags() and calls
+    assert_no_get_nodes_plugins / enrich_manifest_with_plugin_artifacts on the
+    real plugin manager. Stub them so tests focus on fs invocation behavior.
+    """
+    with mock.patch("dbt.parser.fusion.get_flags", return_value=_flags()), mock.patch(
+        "dbt.parser.manifest.assert_no_get_nodes_plugins"
+    ), mock.patch("dbt.parser.manifest.enrich_manifest_with_plugin_artifacts"):
+        yield
+
+
 class TestParseWithFusion:
     def _runtime_config(self, target_path: Path):
-        return SimpleNamespace(project_target_path=str(target_path))
+        return SimpleNamespace(project_target_path=str(target_path), project_name="test")
 
-    def test_missing_binary_raises_typed_error(self, tmp_path: Path):
-        flags = _flags(V2_PARSER_COMMAND="definitely-not-a-real-binary-xyz")
-        with mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
+    def test_missing_binary_raises_typed_error(self, tmp_path: Path, _patch_fusion_deps):
+        with mock.patch(
+            "dbt.parser.fusion.get_flags",
+            return_value=_flags(V2_PARSER_COMMAND="definitely-not-a-real-binary-xyz"),
+        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=FileNotFoundError()):
             with pytest.raises(FusionParserMissingError):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_nonzero_exit_raises(self, tmp_path: Path):
+    def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
         # Passthrough mode: fs's stderr streams directly to the user, so the
         # exception only carries the exit code, not the captured stderr.
-        flags = _flags()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run",
             side_effect=_fake_fs(manifest_text=None, returncode=2),
         ):
             with pytest.raises(FusionParserError, match="exit 2"):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_missing_manifest_after_success_raises(self, tmp_path: Path):
+    def test_missing_manifest_after_success_raises(self, tmp_path: Path, _patch_fusion_deps):
         """fs exits 0 but writes nothing — must raise, not silently load a stale file."""
-        flags = _flags()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_stale_target_manifest_not_loaded(self, tmp_path: Path):
+    def test_stale_target_manifest_not_loaded(self, tmp_path: Path, _patch_fusion_deps):
         """A stale manifest left in target/ from a prior run must not satisfy
         the fusion handoff — fs writes into a fresh temp dir."""
         (tmp_path / "manifest.json").write_text(json.dumps({"stale": True}))
-        flags = _flags()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_invalid_json_raises_schema_error(self, tmp_path: Path):
-        flags = _flags()
+    def test_invalid_json_raises_schema_error(self, tmp_path: Path, _patch_fusion_deps):
         with mock.patch(
             "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs("{ not valid json")
         ):
             with pytest.raises(FusionParserSchemaError):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_incompatible_schema_version_raises_version_error(self, tmp_path: Path):
-        flags = _flags()
+    def test_incompatible_schema_version_raises_version_error(
+        self, tmp_path: Path, _patch_fusion_deps
+    ):
         bad_version = json.dumps(
             {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
         )
         with mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(bad_version)):
             with pytest.raises(FusionParserVersionError):
-                parse_with_fusion(flags, self._runtime_config(tmp_path))
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_no_write_json_leaves_target_dir_untouched(self, tmp_path: Path):
-        """With --no-write-json, the fusion handoff manifest must not be
+    def test_no_write_json_leaves_target_dir_untouched(self, tmp_path: Path, _patch_fusion_deps):
+        """With write_json=False, the fusion handoff manifest must not be
         copied into the user's target dir."""
-        flags = _flags(WRITE_JSON=False)
         # Pre-create target dir but leave it empty.
         target = tmp_path / "target"
         target.mkdir()
@@ -190,11 +200,10 @@ class TestParseWithFusion:
             "dbt.parser.fusion.Manifest.from_writable_manifest",
             return_value=mock.MagicMock(),
         ):
-            parse_with_fusion(flags, self._runtime_config(target))
+            parse_with_fusion(self._runtime_config(target), write=True, write_json=False)
         assert list(target.iterdir()) == []
 
-    def test_write_json_copies_manifest_to_target_dir(self, tmp_path: Path):
-        flags = _flags(WRITE_JSON=True)
+    def test_write_json_copies_manifest_to_target_dir(self, tmp_path: Path, _patch_fusion_deps):
         target = tmp_path / "target"
         target.mkdir()
         with mock.patch(
@@ -207,5 +216,5 @@ class TestParseWithFusion:
             "dbt.parser.fusion.Manifest.from_writable_manifest",
             return_value=mock.MagicMock(),
         ):
-            parse_with_fusion(flags, self._runtime_config(target))
+            parse_with_fusion(self._runtime_config(target), write=True, write_json=True)
         assert (target / "manifest.json").exists()
