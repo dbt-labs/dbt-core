@@ -2538,11 +2538,12 @@ def assert_no_get_nodes_plugins(project_name: str) -> None:
 
 
 def enrich_manifest_with_plugin_artifacts(manifest: Manifest, project_name: str) -> None:
-    """Run the read-only plugin enrichment hook against an externally-produced
-    manifest (e.g. from the fusion parser) and write the resulting artifacts.
+    """Run the read-only plugin enrichment hook against a fully-loaded
+    manifest and write the resulting artifacts.
 
-    Mirrors the plugin handling in parse_manifest's tail. Callers must have
-    already run assert_no_get_nodes_plugins; this function only handles the
+    Called from both parse paths (parse_manifest and parse_with_fusion) after
+    the manifest has been written. Callers must have already run
+    assert_no_get_nodes_plugins; this function only handles the
     artifact-writing side and assumes the check has passed.
     """
     pm = plugins.get_plugin_manager(project_name)
