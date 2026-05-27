@@ -2,6 +2,7 @@ import requests
 
 from dbt.auth import AuthChain, AuthError
 from dbt.cli.flags import Flags
+from dbt.config.user_settings import set_user_setting_flag
 from dbt.task.base import BaseTask
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
@@ -45,17 +46,8 @@ def _post_platform_login(configured: bool, enabled: bool) -> None:
     if not configured and not enabled:
         return
     if configured and not enabled:
-        fire_event(
-            Note(
-                msg=(
-                    "dbt State is available for your account but not enabled locally.\n"
-                    "To enable it, add to ~/.dbt/user_settings.yml:\n"
-                    "  flags:\n"
-                    "    manage_state: true\n"
-                    "Or set the environment variable: DBT_ENGINE_MANAGE_STATE=true"
-                )
-            )
-        )
+        set_user_setting_flag("manage_state", True)
+        fire_event(Note(msg="dbt State is available for your account — enabled locally."))
         return
     # enabled but not configured
     fire_event(
