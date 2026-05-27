@@ -322,6 +322,14 @@ indirect_selection = _create_option_and_track_env_var(
     default="eager",
 )
 
+maximum_seed_size_mib = click.option(
+    "--maximum-seed-size-mib",
+    envvar="DBT_ENGINE_MAXIMUM_SEED_SIZE_MIB",
+    help="Specify max size (MiB) for seed files that will be hashed for state comparison. Set to 0 for no limit.",
+    type=click.INT,
+    default=1,
+)
+
 inline = _create_option_and_track_env_var(
     "--inline",
     envvar=None,
