@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from dbt.artifacts.resources import NodeVersion
+from dbt.artifacts.resources.v1.components import ColumnInfo
 from dbt.node_types import AccessType, NodeType
 
 
@@ -17,6 +18,8 @@ class ModelNodeArgs:
     version: Optional[NodeVersion] = None
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
+    description: str = ""
+    columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     access: Optional[str] = AccessType.Protected.value
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
