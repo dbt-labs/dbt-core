@@ -142,6 +142,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 "{:x}",
                 md5::compute(resolver_state.root_project_name.as_bytes())
             )),
+            quoting: Some(DbtQuoting {
+                database: Some(resolver_state.root_project_quoting.database),
+                schema: Some(resolver_state.root_project_quoting.schema),
+                identifier: Some(resolver_state.root_project_quoting.identifier),
+                ..Default::default()
+            }),
             ..Default::default()
         },
         nodes: resolver_state
