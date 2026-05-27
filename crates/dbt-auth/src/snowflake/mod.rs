@@ -472,12 +472,13 @@ fn parse_auth_inner<'a>(
                         })
                     }
                     "oauth_client_id" | "oauth_client_secret" => {
-                        if config.contains_key("user") {
-                            warn_ignored_auth_field(warnings, "OAuth", "user");
-                        }
-                        if config.contains_key("password") {
-                            warn_ignored_auth_field(warnings, "OAuth", "password");
-                        }
+                        // TODO(versusfacit): reenable warnings when possible
+                        // if config.contains_key("user") {
+                        //     warn_ignored_auth_field(warnings, "OAuth", "user");
+                        // }
+                        // if config.contains_key("password") {
+                        //     warn_ignored_auth_field(warnings, "OAuth", "password");
+                        // }
 
                         let cid = config.get_str("oauth_client_id");
                         let sec = config.get_str("oauth_client_secret");
