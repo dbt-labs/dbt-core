@@ -1571,13 +1571,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "primary_key": {
           "default": null,
@@ -3474,13 +3475,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "primary_key": {
           "default": null,
@@ -5619,13 +5621,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "persist_docs": {
           "anyOf": [
@@ -6530,6 +6533,30 @@
         },
         {
           "$ref": "#/definitions/BigqueryPartitionConfig"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
+    "PartitionsConfig": {
+      "description": "External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`) or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/AnyValue"
+            }
+          }
         },
         {
           "type": "string",
@@ -7613,13 +7640,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "persist_docs": {
           "anyOf": [
@@ -8757,13 +8785,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "persist_docs": {
           "anyOf": [
@@ -9899,13 +9928,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "primary_key": {
           "default": null,
@@ -11198,13 +11228,14 @@
           ]
         },
         "partitions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "primary_key": {
           "default": null,
