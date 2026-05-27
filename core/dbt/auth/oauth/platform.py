@@ -13,6 +13,7 @@ import requests
 from dbt.auth.credentials import OAuthSession, PlatformCredential
 from dbt.auth.oauth.utils import generate_pkce
 from dbt.auth.session_cache import DBT_HOME_DIR, DEFAULT_CACHE_PATH, upsert_session
+from dbt.auth.utils import secure_open
 from dbt.config.user_settings import set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError
 from dbt_common.events.functions import fire_event
@@ -55,8 +56,8 @@ class dbtPlatformAPIClient:
 
         jwks_data["fetched_at"] = time.time()
         target = DBT_HOME_DIR / f"jwks.{self.credential.account_host}.json"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(jwks_data, indent=2), encoding="utf-8")
+        with secure_open(target) as f:
+            json.dump(jwks_data, f, indent=2)
 
 
 def build_context(

@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from dbt.auth.credentials import OAuthSession
+from dbt.auth.utils import secure_open
 from dbt.exceptions import InaccessibleSource, Malformed
 
 
@@ -74,13 +75,13 @@ def upsert_session(session: OAuthSession, path: Path = DEFAULT_CACHE_PATH) -> No
     else:
         cache.sessions.append(session)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cache.to_dict(), indent=2), encoding="utf-8")
+    with secure_open(path) as f:
+        json.dump(cache.to_dict(), f, indent=2)
 
 
 def write_state_auth(token_data: dict, path: Path = STATE_AUTH_PATH) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(token_data, indent=2), encoding="utf-8")
+    with secure_open(path) as f:
+        json.dump(token_data, f, indent=2)
 
 
 def read_state_auth(path: Path = STATE_AUTH_PATH) -> dict | None:
