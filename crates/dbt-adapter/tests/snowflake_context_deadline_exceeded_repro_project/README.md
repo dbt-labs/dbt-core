@@ -10,7 +10,7 @@ context deadline exceeded (Client.Timeout exceeded while awaiting headers)
 
 In gosnowflake, each HTTP call uses `http.Client` with a timeout. When the request (connect, wait for headers, read body) exceeds that limit, Go's `context.Context` is cancelled and you get **`context deadline exceeded`**. It is a timeout signal: stop waiting and fail the request so the client does not hang forever.
 
-Here the black-hole server never sends headers, so the client waits until `CLIENT_TIMEOUT` fires.
+Here the black-hole server never sends headers, so the client waits until `AUTH_CLIENT_TIMEOUT` fires.
 
 ## Run
 
@@ -20,10 +20,10 @@ Here the black-hole server never sends headers, so the client waits until `CLIEN
 python3 blackhole.py
 ```
 
-**Terminal 2** — set `DBT_SNOWFLAKE_CLIENT_TIMEOUT` so the repro fails fast (default is 900s):
+**Terminal 2** — set `DBT_SNOWFLAKE_AUTH_CLIENT_TIMEOUT` so the repro fails fast (default is 900s):
 
 ```sh
-export DBT_SNOWFLAKE_CLIENT_TIMEOUT=1ms
+export DBT_SNOWFLAKE_AUTH_CLIENT_TIMEOUT=1ms
 fsd run --profiles-dir . --target snowflake
 ```
 
@@ -31,4 +31,4 @@ Expect a connection error containing `Client.Timeout exceeded while awaiting hea
 
 ## Rust unit test
 
-`../snowflake_context_deadline_exceeded.rs` — same setup in-process; sets `CLIENT_TIMEOUT=1ms` on the builder instead of the env var.
+`../snowflake_context_deadline_exceeded.rs` — same setup in-process; sets `AUTH_CLIENT_TIMEOUT=1ms` on the builder instead of the env var.

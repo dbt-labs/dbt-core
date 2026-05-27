@@ -111,7 +111,7 @@ fn build_stub_database_with(port: u16, login_timeout: &str) -> Box<dyn Database>
         .with_named_option(snowflake::LOG_TRACING, LogLevel::Warn.to_string())
         .unwrap()
         // always set a shorter per http request timeout to speed up retrying
-        .with_named_option(snowflake::CLIENT_TIMEOUT, "1ms")
+        .with_named_option(snowflake::AUTH_CLIENT_TIMEOUT, "1ms")
         .unwrap();
 
     builder
