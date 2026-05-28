@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 
+from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
     FusionParserMissingError,
@@ -272,3 +273,91 @@ class TestParseWithFusion:
         ):
             parse_with_fusion(self._runtime_config(target), write=True, write_json=True)
         assert (target / "manifest.json").exists()
+
+
+class TestParseWithFusionTelemetry:
+    """V2ParserStart/V2ParserEnd must fire around every v2-parser handoff so
+    internal analytics can attribute v2-parser invocations and measure success
+    rate end-to-end. Both events must fire on success; on each typed-exception
+    failure path the end event must carry status="failure" + the exception
+    class name. exit_code is -1 except for FusionParserError, which surfaces
+    fs's process exit code via FusionParserError.returncode."""
+
+    def _runtime_config(self, target_path: Path):
+        return SimpleNamespace(project_target_path=str(target_path), project_name="test")
+
+    def _patch_fire_event(self):
+        events: list = []
+        return events, mock.patch("dbt.parser.fusion.fire_event", side_effect=events.append)
+
+    def test_success_fires_start_and_end_success(self, tmp_path: Path, _patch_fusion_deps):
+        events, patch_fire = self._patch_fire_event()
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run",
+            side_effect=_fake_parser(json.dumps({"metadata": {}})),
+        ), mock.patch(
+            "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
+        ), mock.patch(
+            "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
+        ):
+            parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
+
+        types = [type(e).__name__ for e in events]
+        assert types == ["V2ParserStart", "V2ParserEnd"]
+        start, end = events
+        assert isinstance(start, V2ParserStart)
+        assert start.project_name == "test"
+        assert isinstance(end, V2ParserEnd)
+        assert end.status == "success"
+        assert end.error_class == ""
+        assert end.exit_code == -1
+        assert end.execution_time >= 0
+
+    @pytest.mark.parametrize(
+        "subprocess_side_effect, expected_error_class, expected_exit_code",
+        [
+            (FileNotFoundError(), "FusionParserMissingError", -1),
+            # fs exits non-zero — exit code surfaced via FusionParserError.returncode
+            (_fake_parser(manifest_text=None, returncode=2), "FusionParserError", 2),
+            # fs exits 0 but writes no manifest — generic FusionParserError, no returncode
+            (_fake_parser(manifest_text=None), "FusionParserError", -1),
+            (_fake_parser("{ not valid json"), "FusionParserSchemaError", -1),
+        ],
+    )
+    def test_failure_fires_end_failure(
+        self,
+        tmp_path: Path,
+        _patch_fusion_deps,
+        subprocess_side_effect,
+        expected_error_class,
+        expected_exit_code,
+    ):
+        events, patch_fire = self._patch_fire_event()
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=subprocess_side_effect
+        ):
+            with pytest.raises(FusionParserError):
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+        types = [type(e).__name__ for e in events]
+        assert types == ["V2ParserStart", "V2ParserEnd"]
+        end = events[1]
+        assert end.status == "failure"
+        assert end.error_class == expected_error_class
+        assert end.exit_code == expected_exit_code
+
+    def test_failure_version_error_fires_end_failure(self, tmp_path: Path, _patch_fusion_deps):
+        events, patch_fire = self._patch_fire_event()
+        bad_version = json.dumps(
+            {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
+        )
+        with patch_fire, mock.patch(
+            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(bad_version)
+        ):
+            with pytest.raises(FusionParserVersionError):
+                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
+
+        end = events[1]
+        assert end.status == "failure"
+        assert end.error_class == "FusionParserVersionError"
+        assert end.exit_code == -1

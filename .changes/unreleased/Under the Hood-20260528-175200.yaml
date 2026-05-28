@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Emit V2ParserStart/V2ParserEnd telemetry events around the embedded fs parse subprocess so internal analytics can attribute v2-parser invocations and measure success rate. Bumps dbt-protos lower bound to 1.0.514 for the new event messages.
+time: 2026-05-28T17:52:00.460905-06:00
+custom:
+    Author: aiguofer
+    Issue: "13029"

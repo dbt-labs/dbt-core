@@ -90,6 +90,10 @@ class FusionParserError(DbtRuntimeError):
     CODE = 10025
     MESSAGE = "Fusion Parser Error"
 
+    def __init__(self, msg: str, returncode: int = -1, node=None) -> None:
+        super().__init__(msg, node=node)
+        self.returncode = returncode
+
 
 class FusionParserMissingError(FusionParserError):
     CODE = 10026
