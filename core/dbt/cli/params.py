@@ -805,7 +805,7 @@ use_v2_parser = _create_option_and_track_env_var(
     envvar="DBT_ENGINE_USE_V2_PARSER",
     help="Delegate parsing to the fusion parser (fs) instead of running dbt-core's own parser. Hidden in v1.",
     default=False,
-    hidden=True,
+    hidden=False,
 )
 
 v2_parser = _create_option_and_track_env_var(
