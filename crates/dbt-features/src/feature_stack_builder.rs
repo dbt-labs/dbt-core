@@ -1,0 +1,367 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use dbt_adapter::adapter::{AdapterFactory, backend_of};
+use dbt_adapter::auth::Auth;
+use dbt_adapter::cache::RelationCache;
+use dbt_adapter::config::AdapterConfig;
+use dbt_adapter::engine::query_comment::QueryCommentConfig;
+use dbt_adapter::engine::{SidecarClient, XdbcEngine};
+use dbt_adapter::query_cache::QueryCache;
+use dbt_adapter::sql_types::{DefaultTypeOpsImpl, TypeOps, TypeOpsFactory};
+use dbt_adapter::stmt_splitter::StmtSplitter;
+use dbt_adapter::{Adapter, AdapterEngine, AdapterImpl};
+use dbt_adapter_core::AdapterType;
+use dbt_auth::auth_for_backend;
+use dbt_cloud_config::ResolvedCloudConfig;
+use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
+use dbt_common::collections::DashMap;
+use dbt_common::fail_fast::FailFast;
+use dbt_common::io_args::ReplayMode;
+use dbt_common::{FsError, FsResult};
+use dbt_compilation::config::CompilationConfig;
+use dbt_compilation::schema_hydration::{SchemaHydrator, SchemaHydratorFactory};
+use dbt_dag::schedule::Schedule;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::listener::{
+    DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
+};
+use dbt_schema_store::SchemaStoreTrait;
+use dbt_schema_store::store::SchemaStore;
+use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::profiles::Execute;
+use dbt_schemas::schemas::project::QueryComment;
+use dbt_schemas::schemas::properties::UnitTestOverrides;
+use dbt_schemas::schemas::relations::base::BaseRelation;
+use dbt_schemas::schemas::{
+    InternalDbtNodeAttributes, Nodes, PreviousState,
+    ResolvedCloudConfig as SchemasResolvedCloudConfig,
+};
+use dbt_schemas::state::ResolverState;
+use dbt_tasks_core::CompiledSqlCache;
+use dbt_tasks_core::context::ExtendedCtx;
+use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
+use dbt_tasks_core::run_task_hooks::RunTaskHooks;
+use dbt_tasks_core::task::{TP, TasksForNode, TasksForNodeFactory};
+use dbt_tasks_core::test_aggregation::GenericTestAggregation;
+use dbt_tasks_core::{PreTaskRunData, RunTasksArgs};
+use dbt_tasks_sa::compiled_sql_cache::CompiledSqlCacheImpl;
+use dbt_tasks_sa::task_runner_hooks::DefaultTaskRunnerHooksFactory;
+use minijinja::Value as MinijinjaValue;
+
+use crate::adapter::AdapterFeature;
+use crate::antlr_parser::AntlrParserFeature;
+use crate::cli_extension::{
+    CliExtensionFeature, CliExtensionFeatureBuilder, DefaultCliExtensionHooks,
+};
+use crate::feature_stack::{FeatureStack, InstrumentationFeature};
+use crate::index::{IndexFeature, IndexHooks};
+use crate::metricflow::{MetricflowClient, MetricflowFeature};
+use crate::sidecar::SidecarFeature;
+use crate::task_runner::TaskRunnerFeature;
+use crate::tracing::TracingFeature;
+
+struct DefaultTypeOpsFactoryImpl;
+impl TypeOpsFactory for DefaultTypeOpsFactoryImpl {
+    fn create(&self, adapter_type: AdapterType) -> Arc<dyn TypeOps> {
+        Arc::new(DefaultTypeOpsImpl::new(adapter_type))
+    }
+}
+
+struct DefaultAdapterFactoryImpl {
+    stmt_splitter: Arc<dyn StmtSplitter>,
+}
+
+impl DefaultAdapterFactoryImpl {
+    fn create_engine(
+        &self,
+        adapter_type: AdapterType,
+        adapter_config: AdapterConfig,
+        type_ops_factory: Arc<dyn TypeOpsFactory>,
+        quoting: ResolvedQuoting,
+        query_comment: Option<QueryComment>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
+        cloud_config: Option<&ResolvedCloudConfig>,
+        threads: Option<usize>,
+    ) -> FsResult<Arc<dyn AdapterEngine>> {
+        let backend = backend_of(adapter_type);
+        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
+        let stmt_splitter = Arc::clone(&self.stmt_splitter);
+        let type_ops = type_ops_factory.create(adapter_type);
+        let relation_cache = Arc::new(RelationCache::default());
+
+        let query_comment =
+            QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
+
+        let engine = Arc::new(XdbcEngine::new(
+            adapter_type,
+            auth,
+            adapter_config,
+            quoting,
+            query_comment,
+            type_ops,
+            stmt_splitter,
+            None,
+            relation_cache,
+            behavior_flag_overrides,
+            threads,
+        ));
+        Ok(engine)
+    }
+}
+
+impl AdapterFactory for DefaultAdapterFactoryImpl {
+    fn create_adapter(
+        &self,
+        adapter_type: AdapterType,
+        config: dbt_yaml::Mapping,
+        type_ops_factory: Arc<dyn TypeOpsFactory>,
+        _replay_mode: Option<ReplayMode>,
+        flags: BTreeMap<String, MinijinjaValue>,
+        schema_cache: Option<Arc<dyn SchemaStoreTrait>>,
+        _query_cache: Option<Arc<dyn QueryCache>>,
+        quoting: ResolvedQuoting,
+        query_comment: Option<QueryComment>,
+        token: CancellationToken,
+        cloud_config: Option<&SchemasResolvedCloudConfig>,
+        threads: Option<usize>,
+    ) -> FsResult<Arc<Adapter>> {
+        let adapter_config = AdapterConfig::new(config);
+
+        let behavior_flag_overrides = flags
+            .iter()
+            .map(|(key, value)| {
+                let bool_val = if value.is_true() {
+                    true
+                } else if let Some(s) = value.as_str() {
+                    s == "true" || s.parse::<bool>().unwrap_or(false)
+                } else {
+                    false
+                };
+                (key.clone(), bool_val)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let engine = self.create_engine(
+            adapter_type,
+            AdapterConfig::new(adapter_config.repr().clone()),
+            type_ops_factory,
+            quoting,
+            query_comment,
+            behavior_flag_overrides,
+            cloud_config,
+            threads,
+        )?;
+
+        let adapter_impl = Arc::new(AdapterImpl::new(engine, schema_cache));
+
+        // Create adapter with appropriate time machine mode
+        let adapter: Arc<Adapter> = Arc::new(Adapter::new(adapter_impl, None, token));
+        Ok(adapter)
+    }
+
+    fn stmt_splitter(&self) -> Arc<dyn StmtSplitter> {
+        unimplemented!()
+    }
+
+    fn create_relation_from_node(
+        &self,
+        _node: &dyn InternalDbtNodeAttributes,
+        _adapter_type: AdapterType,
+    ) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
+        unimplemented!()
+    }
+}
+
+struct UnimplementedSchemaHydratorFactory;
+impl SchemaHydratorFactory for UnimplementedSchemaHydratorFactory {
+    fn create(
+        &self,
+        _adapter: Arc<Adapter>,
+        _execute_mode: Execute,
+        _compilation_config: CompilationConfig,
+        _cloud_config: Option<&ResolvedCloudConfig>,
+        _previous_state: Option<Arc<PreviousState>>,
+        _root_project_quoting: ResolvedQuoting,
+        _schema_store: Arc<SchemaStore>,
+        _sidecar_client: Option<Arc<dyn SidecarClient>>,
+        _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
+    ) -> Box<dyn SchemaHydrator> {
+        unimplemented!()
+    }
+}
+
+struct UnimplementedTasksForNodeFactory;
+impl TasksForNodeFactory for UnimplementedTasksForNodeFactory {
+    fn tasks_for_node(
+        &self,
+        _unique_id: &str,
+        _nodes: &Nodes,
+        _schedule: &Schedule<String>,
+        _execute: Execute,
+        _phases: &[TP],
+        _generic_test_aggregation: Option<&GenericTestAggregation>,
+        _unit_test_overrides: Option<&UnitTestOverrides>,
+        _reverse_deps: &HashMap<String, HashSet<String>>,
+    ) -> TasksForNode {
+        unimplemented!()
+    }
+
+    fn create_render_task_hooks(&self) -> Arc<dyn RenderTaskHooks> {
+        unimplemented!()
+    }
+
+    fn create_run_task_hooks(&self) -> Arc<dyn RunTaskHooks> {
+        unimplemented!()
+    }
+}
+
+struct DefaultTaskRunnerCtxFactory {
+    rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>,
+    compiled_sql_cache: Arc<dyn CompiledSqlCache>,
+}
+impl DefaultTaskRunnerCtxFactory {
+    fn new(rendering_listener_factory: Arc<dyn RenderingEventListenerFactory>) -> Self {
+        Self {
+            rendering_listener_factory,
+            compiled_sql_cache: Arc::new(CompiledSqlCacheImpl::default()),
+        }
+    }
+}
+
+impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
+    fn rendering_listener_factory(&self) -> Arc<dyn RenderingEventListenerFactory> {
+        Arc::clone(&self.rendering_listener_factory)
+    }
+
+    fn compiled_sql_cache(&self) -> Arc<dyn CompiledSqlCache> {
+        Arc::clone(&self.compiled_sql_cache)
+    }
+
+    fn build_node_hashes<'a>(
+        &'a self,
+        _arg: &'a RunTasksArgs,
+        _schedule: &'a Schedule<String>,
+        _worker_id: &'a str,
+        _resolver_state: &'a ResolverState,
+        _env: &'a JinjaEnv,
+        _freshness_results: Option<&'a dyn PreTaskRunData>,
+        _extended_ctx: &'a dyn ExtendedCtx,
+    ) -> Pin<Box<dyn Future<Output = Result<DashMap<String, String>, Box<FsError>>> + Send + 'a>>
+    {
+        Box::pin(async move { Ok(DashMap::default()) })
+    }
+}
+
+struct NoOpIndexHooks;
+#[async_trait]
+impl IndexHooks for NoOpIndexHooks {}
+
+pub struct FeatureStackBuilder {
+    send_anonymous_usage_stats: bool,
+    tracing: TracingFeature,
+    adapter: AdapterFeature,
+    antlr_parser: AntlrParserFeature,
+    sidecar: SidecarFeature,
+    cli_extension: CliExtensionFeature,
+    task_runner: TaskRunnerFeature,
+}
+
+impl FeatureStackBuilder {
+    pub fn new(tracing: TracingFeature) -> Self {
+        let adapter = {
+            let type_ops_factory = Arc::new(DefaultTypeOpsFactoryImpl);
+            let adapter_factory: Arc<dyn AdapterFactory> = {
+                let stmt_splitter = Arc::new(dbt_adapter::stmt_splitter::SqlparserStmtSplitter {});
+                Arc::new(DefaultAdapterFactoryImpl { stmt_splitter })
+            };
+
+            AdapterFeature {
+                type_ops_factory,
+                adapter_factory,
+            }
+        };
+        let task_runner = {
+            let rendering_listener_factory: Arc<dyn RenderingEventListenerFactory> =
+                Arc::new(DefaultRenderingEventListenerFactory::default());
+
+            let task_runner_ctx_factory = Arc::new(DefaultTaskRunnerCtxFactory::new(Arc::clone(
+                &rendering_listener_factory,
+            ))) as Arc<dyn TaskRunnerCtxFactory>;
+
+            TaskRunnerFeature {
+                schema_hydrator_factory: Arc::new(UnimplementedSchemaHydratorFactory),
+                tasks_for_node_factory: Arc::new(UnimplementedTasksForNodeFactory),
+                compare_task_graph_builder: None,
+                rendering_listener_factory,
+                task_runner_ctx_factory,
+                hooks_factory: Arc::new(DefaultTaskRunnerHooksFactory),
+            }
+        };
+        let cli_extension = {
+            let hooks = Box::new(DefaultCliExtensionHooks);
+            CliExtensionFeatureBuilder::with_hooks(hooks).build()
+        };
+        Self {
+            send_anonymous_usage_stats: false,
+            tracing,
+            adapter,
+            antlr_parser: Default::default(),
+            sidecar: SidecarFeature::default(),
+            cli_extension,
+            task_runner,
+        }
+    }
+
+    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
+        self.send_anonymous_usage_stats = enabled;
+        self
+    }
+
+    pub fn adapter(mut self, feature: AdapterFeature) -> Self {
+        self.adapter = feature;
+        self
+    }
+
+    pub fn antlr_parser(mut self, feature: AntlrParserFeature) -> Self {
+        self.antlr_parser = feature;
+        self
+    }
+
+    pub fn cli_extension(mut self, feature: CliExtensionFeature) -> Self {
+        self.cli_extension = feature;
+        self
+    }
+
+    pub fn task_runner(mut self, feature: TaskRunnerFeature) -> Self {
+        self.task_runner = feature;
+        self
+    }
+
+    pub fn build(self) -> Box<FeatureStack> {
+        let instrumentation = InstrumentationFeature {
+            event_emitter: vortex_events::fusion_sa_event_emitter(self.send_anonymous_usage_stats),
+        };
+        let index = IndexFeature {
+            hooks: Box::new(NoOpIndexHooks),
+        };
+        let stack = FeatureStack {
+            instrumentation,
+            cli_extension: self.cli_extension,
+            index,
+            tracing: self.tracing,
+            adapter: self.adapter,
+            antlr_parser: self.antlr_parser,
+            sidecar: self.sidecar,
+            metricflow: MetricflowFeature::default(),
+            task_runner: self.task_runner,
+            cancellation_token_source: CancellationTokenSource::new(),
+            fail_fast: FailFast::new(),
+        };
+        Box::new(stack)
+    }
+}

@@ -551,7 +551,7 @@ impl ColumnBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sql_types::SATypeOpsImpl;
+    use crate::sql_types::DefaultTypeOpsImpl;
     use arrow_schema::{DataType, Field};
     use dbt_adapter_sql::types::metadata_sql_type_key;
     use std::collections::HashMap;
@@ -570,7 +570,7 @@ mod tests {
         );
 
         let builder = ColumnBuilder::new(AdapterType::ClickHouse);
-        let type_ops = SATypeOpsImpl::new(AdapterType::ClickHouse);
+        let type_ops = DefaultTypeOpsImpl::new(AdapterType::ClickHouse);
         let column = builder.build(&field, &type_ops).unwrap();
 
         assert_eq!(column.name(), "amount");

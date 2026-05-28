@@ -172,7 +172,7 @@ impl TaskRunner {
             .create_extended_ctx_factory(&run_task_args)
             .await?;
         let invocation_id = run_task_args.io.invocation_id.to_string();
-        self.ctx_factory
+        Arc::clone(&self.ctx_factory)
             .build(
                 run_task_args,
                 invocation_id,

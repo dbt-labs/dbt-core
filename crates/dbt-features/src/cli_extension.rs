@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dbt_adapter::Adapter;
-use dbt_clap_core::{Cli, InitArgs};
+use dbt_clap_core::commands::ExtensionCommandParser;
+use dbt_clap_core::{Cli, CliParser, CliParserFactory, InitArgs};
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::EvalArgs;
@@ -24,24 +25,56 @@ use crate::metricflow::MetricflowClient;
 
 pub struct CliExtensionFeature {
     pub hooks: Box<dyn CliExtensionHooks>,
+    pub cli_parser_factory: Arc<dyn CliParserFactory>,
 }
 
 pub struct CliExtensionFeatureBuilder {
     pub hooks: Box<dyn CliExtensionHooks>,
+    pub cli_parser_factory: Arc<dyn CliParserFactory>,
 }
 
 impl CliExtensionFeatureBuilder {
     pub fn with_hooks(hooks: Box<dyn CliExtensionHooks>) -> Self {
-        Self { hooks }
+        Self {
+            hooks,
+            cli_parser_factory: Arc::new(DefaultCliParserFactory),
+        }
+    }
+
+    pub fn cli_parser_factory(mut self, factory: Arc<dyn CliParserFactory>) -> Self {
+        self.cli_parser_factory = factory;
+        self
     }
 
     pub fn build(self) -> CliExtensionFeature {
-        CliExtensionFeature { hooks: self.hooks }
+        CliExtensionFeature {
+            hooks: self.hooks,
+            cli_parser_factory: self.cli_parser_factory,
+        }
+    }
+}
+
+struct DefaultCliParserFactory;
+
+impl CliParserFactory for DefaultCliParserFactory {
+    fn create(&self) -> CliParser {
+        CliParser::new(Box::new(NoopExtensionCommandParser))
+    }
+}
+
+pub fn default_cli_parser_factory() -> Box<dyn CliParserFactory> {
+    Box::new(DefaultCliParserFactory)
+}
+
+struct NoopExtensionCommandParser;
+
+impl ExtensionCommandParser for NoopExtensionCommandParser {
+    fn has_subcommand(&self, _name: &str) -> bool {
+        false
     }
 }
 
 #[async_trait]
-#[allow(clippy::too_many_arguments)]
 pub trait CliExtensionHooks: Send + Sync {
     /// Called before CLI compilation argument validation.
     ///
@@ -170,4 +203,120 @@ pub trait CliExtensionHooks: Send + Sync {
         metricflow_client: Option<Arc<dyn MetricflowClient>>,
         token: &CancellationToken,
     ) -> FsResult<()>;
+}
+
+pub(crate) struct DefaultCliExtensionHooks;
+
+#[async_trait]
+impl CliExtensionHooks for DefaultCliExtensionHooks {
+    fn will_validate_compilation_cli_args(
+        &self,
+        _cli: &Cli,
+        _eval_arg: &mut Cow<EvalArgs>,
+        _dbt_state: &Arc<DbtState>,
+        _config: &CompilationConfig,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn will_init_project(
+        &self,
+        _invocation_id: Uuid,
+        _cli: &Cli,
+        _init_args: &InitArgs,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn will_execute(
+        &self,
+        _cli: &Cli,
+        _eval_arg: &EvalArgs,
+        _feature_stack: &Arc<FeatureStack>,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_resolve_project(
+        &self,
+        _arg: &EvalArgs,
+        _resolved_state: &ResolverState,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn will_run_tasks(
+        &self,
+        _cli: &Cli,
+        _arg: &EvalArgs,
+        _resolved_state: &ResolverState,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_schedule_and_run_tasks(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _previous_state: Option<&PreviousState>,
+        _run_task_results: &RunTaskResults,
+        _resolved_state: &ResolverState,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_emit_selected_compile_output(
+        &self,
+        _arg: &EvalArgs,
+        _resolved_state: &ResolverState,
+        _jinja_env: &Arc<JinjaEnv>,
+        _task_runner_ctx: Option<&TaskRunnerCtx>,
+        _schema_store: &Arc<dyn SchemaStoreTrait>,
+        _data_store: &Arc<dyn DataStoreTrait>,
+        _map_compiled_sql: &HashMap<String, Option<String>>,
+        _feature_stack: &Arc<FeatureStack>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_compile(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    async fn did_pre_run(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _jinja_env: Cow<'_, JinjaEnv>,
+        _augmented_resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _adapter: Arc<Adapter>,
+        _base_context: &BTreeMap<String, MinijinjaValue>,
+        _token: &CancellationToken,
+    ) -> FsResult<Option<Box<dyn PreTaskRunData>>> {
+        Ok(None)
+    }
+
+    async fn did_handle_defer(
+        &self,
+        _arg: &EvalArgs,
+        _cli: &Cli,
+        _jinja_env: Cow<'_, JinjaEnv>,
+        _augmented_resolved_state: &ResolverState,
+        _schedule: &Schedule<String>,
+        _metricflow_client: Option<Arc<dyn MetricflowClient>>,
+        _token: &CancellationToken,
+    ) -> FsResult<()> {
+        Ok(())
+    }
 }

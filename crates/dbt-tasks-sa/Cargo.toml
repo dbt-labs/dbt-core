@@ -35,10 +35,12 @@ dbt-telemetry = { workspace = true }
 dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
+adbc-core = { workspace = true }
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+datafusion-expr = { workspace = true }
 itertools = { workspace = true }
 minijinja = { workspace = true }
 parking_lot = { workspace = true }

@@ -111,15 +111,15 @@ pub trait TypeOpsFactory: Send + Sync {
 }
 
 /// Source-available [TypeOps] implementation.
-pub struct SATypeOpsImpl(AdapterType);
+pub struct DefaultTypeOpsImpl(AdapterType);
 
-impl SATypeOpsImpl {
+impl DefaultTypeOpsImpl {
     pub fn new(adapter_type: AdapterType) -> Self {
         Self(adapter_type)
     }
 }
 
-impl TypeOps for SATypeOpsImpl {
+impl TypeOps for DefaultTypeOpsImpl {
     fn adapter_type(&self) -> AdapterType {
         self.0
     }

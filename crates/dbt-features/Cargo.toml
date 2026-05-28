@@ -15,19 +15,25 @@ workspace = true
 [dependencies]
 async-trait = { workspace = true }
 dbt-adapter = { workspace = true }
+dbt-adapter-core = { workspace = true }
+dbt-auth = { workspace = true }
 dbt-clap-core = { workspace = true }
+dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-docs-server = { workspace = true }
+dbt-frontend-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
+dbt-yaml = { workspace = true }
 
 minijinja = { workspace = true }
+petgraph = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }
 

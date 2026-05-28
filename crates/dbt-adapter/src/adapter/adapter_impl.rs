@@ -4688,7 +4688,7 @@ mod tests {
     use crate::engine::XdbcEngine;
 
     use crate::engine::query_comment::QueryCommentConfig;
-    use crate::sql_types::SATypeOpsImpl;
+    use crate::sql_types::DefaultTypeOpsImpl;
     use crate::stmt_splitter::SqlparserStmtSplitter;
 
     use dbt_adapter_core::AdapterType;
@@ -4748,8 +4748,8 @@ mod tests {
             AdapterConfig::new(config),
             resolved_quoting,
             QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
-            Arc::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
-            Arc::new(SqlparserStmtSplitter),
+            Arc::new(DefaultTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
+            Arc::new(SqlparserStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,
             Arc::new(RelationCache::default()),
             BTreeMap::new(),
@@ -4860,7 +4860,7 @@ mod tests {
             Databricks,
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
-            Arc::new(SATypeOpsImpl::new(Databricks)),
+            Arc::new(DefaultTypeOpsImpl::new(Databricks)),
             Arc::new(SqlparserStmtSplitter),
         );
 

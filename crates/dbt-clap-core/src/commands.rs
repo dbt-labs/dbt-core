@@ -171,6 +171,8 @@ pub trait AbstractExtensionCommand: Send + Sync + fmt::Debug + Any {
     fn extend_cli_options(&self, options: &mut Vec<String>);
     fn with_sample(&self) -> Option<String>;
     fn sampled(&self) -> Vec<String>;
+    fn sample_select(&self) -> Option<Vec<String>>;
+    fn sample_exclude(&self) -> Option<Vec<String>>;
 }
 
 #[allow(clippy::large_enum_variant)] // the CoreCommand is expected to be much larger than a [Box].

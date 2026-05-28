@@ -15,6 +15,7 @@ arrow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
+dbt-clap-core = { workspace = true }
 dbt-cli-lib = { workspace = true }
 dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }

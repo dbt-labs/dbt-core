@@ -13,32 +13,11 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+dbt-clap-core = { workspace = true }
 dbt-common = { workspace = true }
-dbt-error = { workspace = true }
-dbt-init = { workspace = true }
-dbt-jinja-utils = { workspace = true }
-dbt-loader = { workspace = true }
-dbt-parser = { workspace = true }
-
-dbt-schemas = { workspace = true }
-dbt-telemetry = { workspace = true }
-
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-
-clap = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true }
-
-chrono = { workspace = true }
-console = { workspace = true }
+dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
-dbt-yaml = { workspace = true }
-git-version = { version = "0.3.9" }
-strum = { workspace = true }
-uuid = { workspace = true }
-vortex-events = { workspace = true }
-
+dbt-main = { workspace = true }
 
 [dev-dependencies]
 
@@ -46,8 +25,3 @@ vortex-events = { workspace = true }
 doctest = false
 name = "dbt-sa-cli"
 path = "src/main.rs"
-
-[lib]
-doctest = false
-name = "dbt_sa_lib"
-path = "src/lib.rs"

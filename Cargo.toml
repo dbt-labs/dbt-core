@@ -50,6 +50,7 @@ members = [
   "crates/dbt-adapter-sql",
   "crates/dbt-ident",
   "crates/dbt-jinja-utils",
+  "crates/dbt-main",
   "crates/dbt-sa-cli",
   "crates/dbt-xdbc",
   "crates/xdbc-record-replay",
@@ -234,6 +235,7 @@ dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-login = { path = "crates/dbt-login" }
+dbt-main = { path = "crates/dbt-main", default-features = false }
 dbt-metricflow = { path = "crates/dbt-metricflow" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-platform-auth = { path = "crates/dbt-platform-auth" }
@@ -625,6 +627,7 @@ inefficient_to_string = "warn"
 or_fun_call = "warn"
 unnecessary_lazy_evaluations = "warn"
 collapsible_if = "allow"
+too_many_arguments = "allow"
 
 [workspace.lints.rust]
 unused_qualifications = "warn"

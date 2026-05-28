@@ -8,6 +8,8 @@ pub mod local_schema_builder;
 pub mod metricflow;
 pub mod precompile;
 pub mod pretty_table;
+pub mod render_task_hooks;
+pub mod run_task_hooks;
 mod run_tasks_args;
 pub mod span_manager;
 mod stats_to_results;
@@ -21,6 +23,7 @@ pub mod visitor;
 use std::any::Any;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{fmt, io};
 
@@ -95,6 +98,23 @@ pub trait CompiledSqlCache: Send + Sync {
     ) -> FsResult<()>;
 
     fn clear(&self, unique_id: &str);
+}
+
+/// Trait for executing ad-hoc SQL queries via dynamic dispatch.
+pub trait AdhocRunner: Send + Sync {
+    fn run_adhoc<'a>(
+        self: Arc<Self>,
+        instruction: &'a dbt_scheduler::instructions::Instruction,
+        rendered_sql: &'a str,
+        unique_id: Option<&'a str>,
+        connection: &'a mut Option<Box<dyn dbt_xdbc::Connection>>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = FsResult<(Vec<arrow::array::RecordBatch>, arrow_schema::SchemaRef)>>
+                + Send
+                + 'a,
+        >,
+    >;
 }
 
 pub struct TaskRunnerStats {

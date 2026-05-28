@@ -23,9 +23,11 @@ dbt-dag = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-pretty-table = { workspace = true }
+dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-xdbc = { workspace = true }
 dbt-yaml = { workspace = true }
 
 arrow = { workspace = true }

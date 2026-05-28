@@ -2,9 +2,10 @@ use super::TestResult;
 use super::log_capture::JsonLogEvent;
 use crate::task::env::TracingReloadHandle;
 use crate::task::task_seq::FeatureStackFactory;
+use dbt_clap_core::{Cli, CliParser};
 use dbt_cli_lib::ctrl_c::run_future_with_ctrlc_support;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::{FsError, cli_parser_trait::CliParserTrait, tracing::FsTraceConfig};
+use dbt_common::{FsError, tracing::FsTraceConfig};
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::{
@@ -342,15 +343,16 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 
 // Util function to execute fusion commands in tests
 #[allow(clippy::too_many_arguments)]
-pub fn exec_fs<'a, P: CliParserTrait + Default, Fut>(
+pub fn exec_fs<'a, Fut>(
     feature_stack_factory: Arc<FeatureStackFactory>,
+    parser: &CliParser,
     cmd_vec: Vec<String>,
     project_dir: PathBuf,
     target_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
-    execute_fs: impl FnOnce(SystemArgs, Box<P::CliType>, Arc<FeatureStack>, CancellationToken) -> Fut,
-    from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
+    execute_fs: impl FnOnce(SystemArgs, Box<Cli>, Arc<FeatureStack>, CancellationToken) -> Fut,
+    from_lib: impl FnOnce(&Cli) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
 ) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
 where
@@ -364,11 +366,10 @@ where
         dotenvy::from_path(conformance_file).unwrap();
     }
 
-    let parser = P::default();
     let cli = parser.parse_from(cmd_vec);
     let arg = from_lib(&cli);
     let warn_error_options = parser.warn_error_options(&cli);
-    let fail_fast_flag = parser.fail_fast_flag(&cli);
+    let fail_fast_flag = cli.common_args.fail_fast;
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
         Some(&project_dir),

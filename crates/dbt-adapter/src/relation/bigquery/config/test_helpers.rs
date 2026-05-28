@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::AdapterType;
-use crate::sql_types::{SATypeOpsImpl, TypeOps};
+use crate::sql_types::{DefaultTypeOpsImpl, TypeOps};
 use arrow_schema::{Field, Fields, Schema};
 use chrono::{DateTime, TimeDelta};
 use dbt_schemas::schemas::{common::*, manifest::*, nodes::*, project::*};
@@ -24,7 +24,7 @@ pub(crate) struct TestTableConfig {
 }
 
 pub(crate) fn make_driver_data(cfg: TestTableConfig) -> Schema {
-    let ty = SATypeOpsImpl::new(AdapterType::Bigquery);
+    let ty = DefaultTypeOpsImpl::new(AdapterType::Bigquery);
     let mut fields = Vec::new();
     let mut metadata = HashMap::from_iter(
         [

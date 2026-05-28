@@ -1,64 +1,27 @@
-use clap::error::ErrorKind;
-
-use dbt_common::cancellation::CancellationTokenSource;
+use dbt_clap_core::from_main;
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
-use dbt_common::{
-    constants::{ERROR, PANIC},
-    pretty_string::{GREEN, RED},
-};
-use dbt_error::FsError;
-use dbt_sa_lib::dbt_sa_clap::CliParser;
-use dbt_sa_lib::dbt_sa_clap::from_main;
-use dbt_sa_lib::dbt_sa_lib::execute_fs;
-use std::io::{self, Write};
+use dbt_features::cli_extension::default_cli_parser_factory;
+use dbt_features::feature_stack::FeatureStack;
+use dbt_features::tracing::TracingFeature;
+use dbt_lib::print_trimmed_error;
+
 use std::process::ExitCode;
-
-const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
-
-/// Maximum number of threads used for running blocking operations (based on the tokio runtime
-/// default).
-///
-/// These threads are used mostly for blocking I/O operations, so they don't really
-/// consume CPU resources. That's why we can afford and should have a lot of them.
-const FS_DEFAULT_MAX_BLOCKING_THREADS: usize = 512;
+use std::sync::Arc;
 
 fn main() -> ExitCode {
-    use dbt_common::cli_parser_trait::CliParserTrait as _;
+    let cli_parser = default_cli_parser_factory().create();
+    let cli = dbt_lib::prepare_cli_or_exit(&cli_parser);
 
-    let cst = CancellationTokenSource::new();
-    // TODO(felipecrv): cancel the token (through the cst) on Ctrl-C
-    let token = cst.token();
+    let mut arg = from_main(&cli);
 
-    let cli = match CliParser::default().try_parse() {
-        Ok(cli) => {
-            // Continue as normal
-            cli
-        }
-        Err(e) => {
-            if e.kind() == ErrorKind::UnknownArgument {
-                // todo make this for more than just unknown arguments
-                // Only show the actual error message
-                let msg = e.to_string(); // includes both "error:" and possibly "tip:"
-                print_trimmed_error(msg); // prints to stderr
-                std::process::exit(1);
-            } else {
-                // For other errors, show full help as usual
-                e.exit();
-            }
-        }
-    };
-
-    let arg = from_main(&cli);
-
-    // Init tracing
-    let (telemetry_shutdown_handle, _tracing_config_provider) =
+    let (telemetry_handle, tracing_config_provider) =
         match init_tracing(FsTraceConfig::new_from_io_args(
             arg.command,
             cli.project_dir().as_ref(),
             cli.target_path().as_ref(),
             &arg.io,
-            None,
-            "dbt-sa",
+            Some(&cli.common_args().get_cli_warn_error_options()),
+            "dbt",
         )) {
             Ok(handle) => handle,
             Err(e) => {
@@ -68,100 +31,19 @@ fn main() -> ExitCode {
             }
         };
 
-    // XXX: when dbt-sa-cli and dbt-cli are unified, this will be the event emitter
-    // we inject into execute_fs. This instantiation is here as proof that our build
-    // and dependencies are configured such that private .proto files aren't linked
-    // into the SA code.
-    let _event_emitter = vortex_events::fusion_sa_event_emitter(false);
+    let tracing = TracingFeature::default()
+        .with_config_provider(tracing_config_provider)
+        .with_shutdown_handle(telemetry_handle);
 
-    // Setup tokio runtime and set stack-size to 8MB
-    // DO NOT USE Rayon, it is not compatible with Tokio
+    if let Some(resolved_file_log_path) = tracing.config_provider.get_file_log_path() {
+        arg.io.log_path = Some(resolved_file_log_path.to_path_buf());
+    }
 
-    // Only `--no-parallel` pins the tokio runtime to a single worker.
-    // `--threads` is exclusively the adapter connection-backpressure knob
-    // and does not affect the runtime.
-    let tokio_rt = if arg.no_parallel {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .thread_stack_size(FS_DEFAULT_STACK_SIZE)
-            .worker_threads(1)
-            .max_blocking_threads(1)
+    let feature_stack: Arc<FeatureStack> =
+        dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
+            .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
             .build()
-            .expect("failed to initialize 'single-worker' tokio runtime")
-    } else {
-        // Multi-threaded runtime: use default (max parallelism)
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .max_blocking_threads(FS_DEFAULT_MAX_BLOCKING_THREADS)
-            .thread_stack_size(FS_DEFAULT_STACK_SIZE)
-            .build()
-            .expect("failed to initialize default multi-threaded tokio runtime")
-    };
+            .into();
 
-    // If execution panics, exit with a status 2 (but not if RUST_BACKTRACE is
-    // set to 1, in which case we want to see the backtrace):
-    if std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
-        std::panic::set_hook(Box::new(|info| {
-            eprintln!("{} {}", RED.apply_to(format!("{PANIC}:")), info);
-            let _ = io::stdout().flush();
-            let _ = io::stderr().flush();
-
-            std::process::exit(2);
-        }));
-    }
-
-    // Run within the process span
-    let future = Box::pin(execute_fs(arg, cli, token));
-
-    let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
-
-    // Shut down telemetry
-    if let Err(errors) = telemetry_shutdown_handle.shutdown_once() {
-        for err in errors {
-            let err = FsError::from(err);
-            eprintln!("{}", err.pretty());
-        }
-    }
-
-    // Remove the panic hook
-    let _ = std::panic::take_hook();
-
-    // Handle regular execution
-    match result {
-        Ok(()) => ExitCode::from(0),
-        Err(err) => ExitCode::from(err.exit_status().unwrap_or(1) as u8),
-    }
-}
-
-fn print_trimmed_error(msg: String) {
-    let mut stderr = io::stderr();
-
-    let mut lines = msg.lines();
-    let mut command = String::new();
-
-    for line in lines.by_ref() {
-        if let Some(rest) = line.strip_prefix("error:") {
-            let _ = write!(stderr, "{}:", RED.apply_to(ERROR));
-            let _ = writeln!(stderr, "{rest}");
-        } else if let Some(rest) = line.trim_start().strip_prefix("tip:") {
-            let prefix = if line.starts_with("tip:") { "" } else { "  " };
-            let _ = write!(stderr, "{}{}", prefix, GREEN.apply_to("tip"));
-            let _ = writeln!(stderr, ":{rest}");
-        } else if line.trim().starts_with("Usage:") {
-            //let command = drop "Usage:"; take everything until the first '<'; trim
-            command = line.strip_prefix("Usage:").unwrap_or(line).to_string();
-            command = command
-                .split_once('<')
-                .unwrap_or(("", ""))
-                .0
-                .trim()
-                .to_string();
-            break; // stop before dumping giant usage block
-        } else {
-            let _ = writeln!(stderr, "{line}");
-        }
-    }
-
-    // Always print this footer
-    let _ = writeln!(stderr, "\nFor more information, try '{command} --help'.");
+    dbt_lib::run_cli(cli, arg, feature_stack)
 }

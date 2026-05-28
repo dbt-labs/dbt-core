@@ -7,12 +7,13 @@ use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_pretty_table::batches_to_json_rows;
+use dbt_pretty_table::make_column_names;
 use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::PreviousState;
 use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::state::ResolverState;
-use dbt_tasks_core::CompiledSqlCache;
 use dbt_tasks_core::Preview;
 use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::ShowableResults;
@@ -22,9 +23,13 @@ use dbt_tasks_core::context_factory::ExtendedTaskRunnerCtxFactory;
 use dbt_tasks_core::metricflow::MetricflowClient;
 use dbt_tasks_core::precompile::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
-pub use dbt_tasks_core::task_runner_hooks::{TaskRunnerHooks, TaskRunnerHooksFactory};
 use petgraph::Graph;
 
+use crate::context::EmptyExtendedTaskRunnerCtxFactory;
+
+pub use dbt_tasks_core::task_runner_hooks::{TaskRunnerHooks, TaskRunnerHooksFactory};
+
+// TODO: implement this
 pub struct DefaultTaskRunnerHooksFactory;
 
 impl TaskRunnerHooksFactory for DefaultTaskRunnerHooksFactory {
@@ -33,36 +38,41 @@ impl TaskRunnerHooksFactory for DefaultTaskRunnerHooksFactory {
         _cloud_config: Option<ResolvedCloudConfig>,
         _previous_state: Option<Arc<PreviousState>>,
         _adapter: Arc<Adapter>,
-        _resolved_state: Arc<ResolverState>,
+        resolved_state: Arc<ResolverState>,
         _jinja_env: Arc<JinjaEnv>,
         _schema_store: Arc<SchemaStore>,
         _data_store: Arc<dyn DataStoreTrait>,
-        _compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
         _static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
     ) -> Box<dyn TaskRunnerHooks> {
-        Box::new(DefaultTaskRunnerHooks)
+        Box::new(DefaultTaskRunnerHooks { resolved_state })
     }
 }
 
-struct DefaultTaskRunnerHooks;
+struct DefaultTaskRunnerHooks {
+    resolved_state: Arc<ResolverState>,
+}
 
 #[async_trait]
 impl TaskRunnerHooks for DefaultTaskRunnerHooks {
-    fn should_persist_seed_data(&self, _run_task_args: &RunTasksArgs) -> bool {
-        false
+    fn resolved_state(&self) -> &ResolverState {
+        &self.resolved_state
     }
 
     async fn create_extended_ctx_factory(
         &self,
         _run_task_args: &Arc<RunTasksArgs>,
     ) -> FsResult<Box<dyn ExtendedTaskRunnerCtxFactory>> {
-        todo!("create_extended_ctx_factory")
+        Ok(Box::new(EmptyExtendedTaskRunnerCtxFactory))
     }
 
-    fn show_taskgraph(&self, _graph: &Graph<Arc<dyn Task>, ()>) {}
+    fn show_taskgraph(&self, _graph: &Graph<Arc<dyn Task>, ()>) {
+        // TODO: implement show_taskgraph
+    }
 
-    fn will_run(&self, _run_task_args: &RunTasksArgs, _schedule: &Schedule<String>) {}
+    fn will_run(&self, _run_task_args: &RunTasksArgs, _schedule: &Schedule<String>) {
+        // No-op
+    }
 
     async fn did_register_schemas(
         &self,
@@ -71,6 +81,7 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _schedule: &Schedule<String>,
         _ctx: &mut TaskRunnerCtx,
     ) -> Result<(), Box<FsError>> {
+        // TODO: implement cache invalidation logic here
         Ok(())
     }
 
@@ -78,8 +89,22 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         vec![]
     }
 
-    fn collect_preview(&self, _ctx: &mut TaskRunnerCtx) -> Option<Result<Preview, String>> {
-        None
+    fn collect_preview(&self, ctx: &mut TaskRunnerCtx) -> Option<Result<Preview, String>> {
+        let results = {
+            let mut guard = ctx.inner.preview_results.lock();
+            guard.take().map(|(batches, schema)| {
+                let columns = make_column_names(schema.as_ref());
+                let rows = batches_to_json_rows(&batches);
+                (columns, rows)
+            })
+        };
+
+        let error = ctx.inner.preview_error.lock().take();
+        match (results, error) {
+            (_, Some(e)) => Some(Err(e)),
+            (Some((columns, rows)), None) => Some(Ok(Preview { columns, rows })),
+            (None, None) => None,
+        }
     }
 
     fn collect_storeables(
@@ -87,6 +112,7 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _run_task_args: &RunTasksArgs,
         _ctx: &mut TaskRunnerCtx,
     ) -> Vec<Box<dyn StoreableResults>> {
+        // No-op
         vec![]
     }
 
@@ -95,6 +121,7 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _run_task_args: &RunTasksArgs,
         _ctx: &mut TaskRunnerCtx,
     ) {
+        // No-op
     }
 
     async fn will_visit_taskgraph(
@@ -118,6 +145,7 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _ctx: &mut TaskRunnerCtx,
         _token: &CancellationToken,
     ) -> FsResult<()> {
-        todo!("did_visit_taskgraph")
+        // No-op
+        Ok(())
     }
 }

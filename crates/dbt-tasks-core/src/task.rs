@@ -16,6 +16,8 @@ use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType};
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, Nodes};
 
 use crate::context::TaskRunnerCtx;
+use crate::render_task_hooks::RenderTaskHooks;
+use crate::run_task_hooks::RunTaskHooks;
 use crate::span_manager::{SpanLevel, SpanTreeRequest};
 use crate::task_spans::{
     node_processed_span_key, phase_span_key, task_span_on_close, task_span_on_skip,
@@ -251,4 +253,8 @@ pub trait TasksForNodeFactory: Send + Sync {
         unit_test_overrides: Option<&UnitTestOverrides>,
         reverse_deps: &HashMap<String, HashSet<String>>,
     ) -> TasksForNode;
+
+    fn create_render_task_hooks(&self) -> Arc<dyn RenderTaskHooks>;
+
+    fn create_run_task_hooks(&self) -> Arc<dyn RunTaskHooks>;
 }

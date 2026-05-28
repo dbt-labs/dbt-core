@@ -1,5 +1,9 @@
+#[allow(clippy::too_many_arguments)]
 /// Feature definitions and the [FeatureStack] struct.
 pub mod feature_stack;
+
+/// Builder for constructing a [FeatureStack].
+pub mod feature_stack_builder;
 
 /// Source-available feature implementations.
 pub mod sa;

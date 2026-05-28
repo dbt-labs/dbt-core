@@ -1,5 +1,4 @@
 use console::Style;
-use dbt_common::cli_parser_trait::CliParserTrait;
 use dbt_common::collections::HashSet;
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
@@ -7,7 +6,8 @@ use dbt_yaml::Value as YValue;
 use serde::{Deserialize, Serialize};
 
 use std::any::Any;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fmt;
 use std::sync::LazyLock;
 use std::{
@@ -36,7 +36,8 @@ use dbt_common::io_args::{
 };
 use dbt_common::io_args::{DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::row_limit::RowLimit;
-use dbt_common::warn_error_options::{WarnErrorOptions, parse_warn_error_options};
+use dbt_common::warn_error_options::WarnErrorOptions;
+use dbt_common::warn_error_options::parse_warn_error_options;
 
 use dbt_common::node_selector::{
     IndirectSelection, MethodName, SelectionCriteria, parse_model_specifiers,
@@ -83,6 +84,10 @@ const CLI_HELP_TEMPLATE: &str = "\
 {usage-heading} {usage}
 
 {subcommands}{after-help}";
+
+pub trait CliParserFactory: Send + Sync {
+    fn create(&self) -> CliParser;
+}
 
 /// An equivalent of [clap::Parser] that produces a [Cli] instead of parsing into itself.
 ///
@@ -147,29 +152,21 @@ impl CliParser {
     pub fn write_completions<W: std::io::Write>(&self, shell: Shell, writer: &mut W) {
         clap_complete::generate(shell, &mut self.app(), "dbt", writer);
     }
-}
-
-impl CliParserTrait for CliParser {
-    type CliType = Cli;
 
     /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
-    fn parse(&self) -> Box<Cli> {
+    pub fn parse(&self) -> Box<Cli> {
         let mut matches = self.app().get_matches();
         let res = self
             .try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err));
         match res {
             Ok(s) => Box::new(s),
-            Err(e) => {
-                // Since this is more of a development-time error, we aren't doing as fancy of a quit
-                // as `get_matches`
-                e.exit()
-            }
+            Err(e) => e.exit(),
         }
     }
 
     /// Parse from `std::env::args_os()`, return Err on error.
-    fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
+    pub fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
         let mut matches = self.app().try_get_matches()?;
         let cli = self
             .try_parse_from_arg_matches_mut(&mut matches)
@@ -178,7 +175,7 @@ impl CliParserTrait for CliParser {
     }
 
     /// Parse from iterator, [exit][clap::Error::exit] on error.
-    fn parse_from<I, T>(&self, itr: I) -> Box<Self::CliType>
+    pub fn parse_from<I, T>(&self, itr: I) -> Box<Cli>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
@@ -189,16 +186,12 @@ impl CliParserTrait for CliParser {
             .map_err(|err| self.format_error(err));
         match res {
             Ok(s) => Box::new(s),
-            Err(e) => {
-                // Since this is more of a development-time error, we aren't doing as fancy of a quit
-                // as `get_matches_from`
-                e.exit()
-            }
+            Err(e) => e.exit(),
         }
     }
 
     /// Parse from iterator, return Err on error.
-    fn try_parse_from<I, T>(&self, itr: I) -> Result<Box<Cli>, clap::Error>
+    pub fn try_parse_from<I, T>(&self, itr: I) -> Result<Box<Cli>, clap::Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
@@ -210,11 +203,8 @@ impl CliParserTrait for CliParser {
         Ok(Box::new(cli))
     }
 
-    fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {
-        cli.common_args.fail_fast
-    }
-
-    fn warn_error_options(&self, cli: &Self::CliType) -> Option<WarnErrorOptions> {
+    /// Extract warn-error options from the parsed CLI.
+    pub fn warn_error_options(&self, cli: &Cli) -> Option<WarnErrorOptions> {
         Some(cli.common_args.get_cli_warn_error_options())
     }
 }
@@ -442,6 +432,20 @@ got {:?}, expected an instance of {}",
                 _ => vec![],
             },
             Command::Extension(ext_cmd) => ext_cmd.sampled(),
+        }
+    }
+
+    pub fn sample_select(&self) -> Option<Vec<String>> {
+        match &self.command {
+            Command::Core(_) => None,
+            Command::Extension(ext_cmd) => ext_cmd.sample_select(),
+        }
+    }
+
+    pub fn sample_exclude(&self) -> Option<Vec<String>> {
+        match &self.command {
+            Command::Core(_) => None,
+            Command::Extension(ext_cmd) => ext_cmd.sample_exclude(),
         }
     }
 }

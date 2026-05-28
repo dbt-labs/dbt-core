@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
-use crate::cli_extension::{CliExtensionFeature, CliExtensionHooks};
+use crate::cli_extension::{CliExtensionFeatureBuilder, CliExtensionHooks};
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::IndexFeature;
 use crate::index::IndexHooks;
@@ -185,9 +185,8 @@ impl SourceAvailableFeatureStackBuilder {
         let instrumentation = InstrumentationFeature {
             event_emitter: vortex_events::fusion_sa_event_emitter(self.send_anonymous_usage_stats),
         };
-        let cli_extension = CliExtensionFeature {
-            hooks: Box::new(NoOpExtensionHooks),
-        };
+        let cli_extension =
+            CliExtensionFeatureBuilder::with_hooks(Box::new(NoOpExtensionHooks)).build();
         let index = IndexFeature {
             hooks: Box::new(NoOpIndexHooks),
         };

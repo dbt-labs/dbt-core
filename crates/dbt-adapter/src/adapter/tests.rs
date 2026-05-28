@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::adapter::Adapter;
 use crate::adapter::adapter_impl::AdapterImpl;
-use crate::sql_types::SATypeOpsImpl;
+use crate::sql_types::DefaultTypeOpsImpl;
 use crate::stmt_splitter::SqlparserStmtSplitter;
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::never_cancels;
@@ -27,7 +27,7 @@ fn make_duckdb_adapter() -> Arc<Adapter> {
         AdapterType::DuckDB,
         BTreeMap::new(),
         DEFAULT_RESOLVED_QUOTING,
-        Arc::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
+        Arc::new(DefaultTypeOpsImpl::new(AdapterType::DuckDB)),
         Arc::new(SqlparserStmtSplitter),
     );
     let adapter = Adapter::new(Arc::new(concrete), None, never_cancels());
@@ -40,7 +40,7 @@ fn make_duckdb_parse_adapter() -> Arc<Adapter> {
         AdapterType::DuckDB,
         dbt_yaml::Mapping::new(),
         DEFAULT_DBT_QUOTING,
-        Arc::new(SATypeOpsImpl::new(AdapterType::DuckDB)),
+        Arc::new(DefaultTypeOpsImpl::new(AdapterType::DuckDB)),
         None,
     );
     Arc::new(adapter)

@@ -2,6 +2,8 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 
+pub mod context;
+
 pub mod barrier;
 pub mod base_context;
 pub mod cloneable;
@@ -14,6 +16,7 @@ pub mod materialize;
 pub mod microbatch;
 pub mod register_seeds;
 pub mod renderable;
+pub mod run_adhoc;
 pub mod run_operation;
 pub mod runnable;
 pub mod task;
