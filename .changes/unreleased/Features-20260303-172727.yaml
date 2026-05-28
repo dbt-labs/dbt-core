@@ -1,0 +1,7 @@
+kind: Features
+body: Integrate the ClickHouse ADBC driver in dbt-xdbc
+time: 2026-03-03T17:27:27.040794827-03:00
+custom:
+    author: felipecrv
+    issue: ""
+    project: dbt-fusion

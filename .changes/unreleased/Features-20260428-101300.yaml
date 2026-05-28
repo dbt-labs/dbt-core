@@ -1,0 +1,7 @@
+kind: Features
+body: Add Exasol ADBC driver support (profile schema, macro assets, relation stubs)
+time: 2026-04-28T10:13:00.000000+02:00
+custom:
+    author: marconae
+    issue: ""
+    project: dbt-fusion

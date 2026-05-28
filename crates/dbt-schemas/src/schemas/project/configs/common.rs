@@ -1,0 +1,1594 @@
+use dbt_yaml::DbtSchema;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
+use serde::{Deserialize, Serialize};
+// Type aliases for clarity
+type YmlValue = dbt_yaml::Value;
+use indexmap::IndexMap;
+use serde_with::skip_serializing_none;
+use std::collections::BTreeMap;
+
+use dbt_common::tracing::emit::emit_trace_event;
+use dbt_telemetry::StateModifiedDiff;
+
+use crate::default_to;
+use crate::schemas::common::Hooks;
+use crate::schemas::common::PartitionConfig;
+use crate::schemas::common::merge_meta;
+use crate::schemas::common::merge_tags;
+use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
+use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
+use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
+use crate::schemas::serde::PartitionsConfig;
+use crate::schemas::serde::QueryTag;
+use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::schemas::serde::{
+    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64,
+    u64_or_string_u64,
+};
+
+#[track_caller]
+pub fn log_state_mod_diff<I>(unique_id: impl AsRef<str>, node_type: impl AsRef<str>, checks: I)
+where
+    I: IntoIterator<Item = (&'static str, bool, Option<(String, String)>)>,
+{
+    let unique_id = unique_id.as_ref();
+    let node_type = node_type.as_ref();
+
+    for check in checks {
+        let (check_name, check_result, values) = check;
+        if check_result {
+            continue;
+        }
+
+        let (self_value, other_value) = values
+            .map(|(self_value, other_value)| (Some(self_value), Some(other_value)))
+            .unwrap_or((None, None));
+
+        emit_trace_event(|| {
+            (
+                StateModifiedDiff {
+                    unique_id: Some(unique_id.to_string()),
+                    node_type_or_category: node_type.to_string(),
+                    check: check_name.to_string(),
+                    self_value,
+                    other_value,
+                }
+                .into(),
+                None,
+            )
+        });
+    }
+}
+
+/// Helper function to handle default_to logic for hooks (pre_hook/post_hook)
+/// Hooks should be extended, not replaced when merging configs
+pub fn default_hooks(
+    child_hooks: &mut Verbatim<Option<Hooks>>,
+    parent_hooks: &Verbatim<Option<Hooks>>,
+) {
+    if let Some(parent_hooks) = &**parent_hooks {
+        if let Some(child_hooks) = &mut **child_hooks {
+            child_hooks.extend(parent_hooks);
+        } else {
+            *child_hooks = Verbatim::from(Some(parent_hooks.clone()));
+        }
+    }
+}
+
+/// Helper function to handle default_to logic for quoting configs
+/// Quoting has its own default_to method that should be called
+pub fn default_quoting(
+    child_quoting: &mut Option<DbtQuoting>,
+    parent_quoting: &Option<DbtQuoting>,
+) {
+    if let Some(quoting) = child_quoting {
+        if let Some(parent_quoting) = parent_quoting {
+            quoting.default_to(parent_quoting);
+        }
+    } else {
+        *child_quoting = *parent_quoting;
+    }
+}
+
+/// Helper function to handle default_to logic for meta and tags
+/// Uses the existing merge functions for proper merging behavior
+pub fn default_meta_and_tags(
+    child_meta: &mut Option<IndexMap<String, YmlValue>>,
+    parent_meta: &Option<IndexMap<String, YmlValue>>,
+    child_tags: &mut Option<StringOrArrayOfStrings>,
+    parent_tags: &Option<StringOrArrayOfStrings>,
+) {
+    // Handle meta using existing merge function
+    *child_meta = merge_meta(parent_meta.clone(), child_meta.take());
+
+    // Handle tags using existing merge function
+    let child_tags_vec = child_tags.take().map(|tags| tags.into());
+    let parent_tags_vec = parent_tags.clone().map(|tags| tags.into());
+    *child_tags =
+        merge_tags(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
+}
+
+/// Helper function to handle default_to logic for packages
+/// Packages should append parent values to child values (parent first, then child)
+/// Note: Unlike tags, packages are NOT deduplicated or sorted, matching dbt-core behavior
+pub fn default_packages(
+    child_packages: &mut Option<StringOrArrayOfStrings>,
+    parent_packages: &Option<StringOrArrayOfStrings>,
+) {
+    // Convert to Vec<String> for merging
+    let child_vec: Option<Vec<String>> = child_packages.take().map(|packages| packages.into());
+    let parent_vec: Option<Vec<String>> = parent_packages.clone().map(|packages| packages.into());
+
+    // Simple append without deduplication or sorting (matches dbt-core)
+    let merged = match (parent_vec, child_vec) {
+        (None, None) => None,
+        (Some(mut parent), Some(child)) => {
+            parent.extend(child);
+            Some(parent)
+        }
+        (Some(parent), None) => Some(parent),
+        (None, Some(child)) => Some(child),
+    };
+
+    *child_packages = merged.map(StringOrArrayOfStrings::ArrayOfStrings);
+}
+
+/// Compare Option<StringOrArrayOfStrings>, treating None and empty array as equal
+pub fn array_of_strings_eq(
+    a: &Option<StringOrArrayOfStrings>,
+    b: &Option<StringOrArrayOfStrings>,
+) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(StringOrArrayOfStrings::ArrayOfStrings(values))) => values.is_empty(),
+        (Some(StringOrArrayOfStrings::ArrayOfStrings(values)), None) => values.is_empty(),
+        _ => false,
+    }
+}
+
+/// Compare optional tag fields with set semantics.
+///
+/// dbt-core builds tag lists by *concatenating* inherited tags (project + model +
+/// column + test level), which produces duplicates in the manifest — e.g. a column
+/// with `tags: [weekly]` under a model with `tags: [weekly]` ends up serialized as
+/// `tags: ['weekly', 'weekly']`. Fusion deduplicates. For `state:modified` parity
+/// against dbt-core-produced manifests, tag equality must ignore both ordering and
+/// multiplicity, since tags are conceptually a set (selection via `tag:foo` is set
+/// membership, not a count).
+///
+/// Use this only for tag-shaped fields. For ordered/multiset fields like Python
+/// `packages` (where order or duplicates can be meaningful), use
+/// `array_of_strings_eq` instead.
+pub fn tags_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStrings>) -> bool {
+    use std::collections::BTreeSet;
+    let to_set = |v: &Option<StringOrArrayOfStrings>| -> BTreeSet<String> {
+        match v {
+            None => BTreeSet::new(),
+            Some(StringOrArrayOfStrings::String(s)) => BTreeSet::from([s.clone()]),
+            Some(StringOrArrayOfStrings::ArrayOfStrings(arr)) => arr.iter().cloned().collect(),
+        }
+    };
+    to_set(a) == to_set(b)
+}
+
+/// Same set semantics as [`tags_eq`], for plain `Vec<String>` tag fields
+/// (e.g. `CommonAttributes.tags`). Same caveat: only use for tag-shaped fields.
+pub fn tags_eq_vec(a: &[String], b: &[String]) -> bool {
+    use std::collections::BTreeSet;
+    a.iter().cloned().collect::<BTreeSet<_>>() == b.iter().cloned().collect::<BTreeSet<_>>()
+}
+
+/// Helper function to handle default_to logic for column_types
+/// Column types should be merged, with parent values filling in missing keys
+pub fn default_column_types(
+    child_column_types: &mut Option<BTreeMap<Spanned<String>, String>>,
+    parent_column_types: &Option<BTreeMap<Spanned<String>, String>>,
+) {
+    match (child_column_types, parent_column_types) {
+        (Some(inner_column_types), Some(parent_column_types)) => {
+            for (key, value) in parent_column_types {
+                inner_column_types
+                    .entry(key.clone())
+                    .or_insert_with(|| value.clone());
+            }
+        }
+        (column_types, Some(parent_column_types)) => {
+            *column_types = Some(parent_column_types.clone())
+        }
+        (_, None) => {}
+    }
+}
+
+/// helper function to handle default_to for grants
+/// if the key of a grant starts with a + append the child grant to the parents, otherwise replace the parent grant
+pub fn default_to_grants(
+    child_grants: &mut OmissibleGrantConfig,
+    parent_grants: &OmissibleGrantConfig,
+) {
+    use crate::schemas::serde::OmissibleGrantConfig;
+    use dbt_common::serde_utils::Omissible;
+
+    match (child_grants.as_mut(), parent_grants.as_ref()) {
+        (None, Some(parent)) => {
+            // Child not set, inherit from parent
+            *child_grants = OmissibleGrantConfig(Omissible::Present(parent.clone()));
+        }
+        (Some(child), Some(parent)) => {
+            // Both set, merge them following dbt-core DictKeyAppend:
+            // 1. Start with all parent keys
+            // 2. For each child key:
+            //    - +key: extend parent's list with child's values (parent first)
+            //    - key with no prefix: clobber
+            let child_grants_map = &mut child.0;
+            let parent_grants_map = &parent.0;
+
+            // Collect keys that need to be processed to avoid borrow conflicts
+            let child_keys: Vec<String> = child_grants_map.keys().cloned().collect();
+
+            // First, inherit parent keys that child doesn't have
+            for (parent_key, parent_value) in parent_grants_map.iter() {
+                // Check if child has this key (with or without + prefix)
+                let child_has_key = child_grants_map.contains_key(parent_key)
+                    || child_grants_map.contains_key(&format!("+{}", parent_key));
+                if !child_has_key {
+                    child_grants_map.insert(parent_key.clone(), parent_value.clone());
+                }
+            }
+
+            for child_key in child_keys {
+                // + prefix indicates append
+                if child_key.starts_with('+') {
+                    let actual_key = child_key.trim_start_matches('+');
+
+                    if let Some(child_value) = child_grants_map.swap_remove(&child_key) {
+                        let child_array: Vec<String> = child_value.into();
+
+                        if let Some(parent_value) = parent_grants_map.get(actual_key) {
+                            // parent values first, then child values
+                            let mut merged: Vec<String> = parent_value.clone().into();
+                            merged.extend(child_array);
+                            child_grants_map.insert(
+                                actual_key.to_string(),
+                                StringOrArrayOfStrings::ArrayOfStrings(merged),
+                            );
+                        } else {
+                            // Parent doesn't have this key, just use child value
+                            child_grants_map.insert(
+                                actual_key.to_string(),
+                                StringOrArrayOfStrings::ArrayOfStrings(child_array),
+                            );
+                        }
+                    }
+                }
+                // Non prefix keys clobber, so just use what the child has
+            }
+        }
+        (Some(child), None) => {
+            // Child set but parent not set - just strip + prefixes
+            let child_grants_map = &mut child.0;
+            let keys_to_process: Vec<String> = child_grants_map
+                .keys()
+                .filter(|key| key.starts_with('+'))
+                .cloned()
+                .collect();
+
+            for child_key in keys_to_process {
+                // Remove the + prefix to get the actual key
+                let actual_key = child_key.trim_start_matches('+');
+
+                // Get the value and remove the + prefixed key
+                if let Some(value) = child_grants_map.swap_remove(&child_key) {
+                    // No parent to merge with, just insert the child value with stripped prefix
+                    child_grants_map.insert(actual_key.to_string(), value);
+                }
+            }
+        }
+        (None, None) => {
+            // Neither child nor parent exists, nothing to do
+        }
+    }
+}
+
+/// This configuration is a superset of all warehouse specific configurations
+/// that users can set
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
+pub struct WarehouseSpecificNodeConfig {
+    // Shared
+    pub partition_by: Option<PartitionConfig>,
+    pub cluster_by: Option<ClusterConfig>,
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
+
+    // BigQuery
+    pub description: Option<String>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub hours_to_expiration: Option<u64>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub job_execution_timeout_seconds: Option<u64>,
+    pub labels: Option<IndexMap<String, String>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub labels_from_meta: Option<bool>,
+    pub kms_key_name: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub require_partition_filter: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub partition_expiration_days: Option<u64>,
+    pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
+    pub partitions: Option<PartitionsConfig>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enable_refresh: Option<bool>,
+    #[serde(default, deserialize_with = "f64_or_string_f64")]
+    pub refresh_interval_minutes: Option<f64>,
+    pub resource_tags: Option<IndexMap<String, String>>,
+    pub max_staleness: Option<String>,
+    pub jar_file_uri: Option<String>,
+    pub timeout: Option<u64>,
+    pub batch_id: Option<String>,
+    pub dataproc_cluster_name: Option<String>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub notebook_template_id: Option<u64>,
+    pub intermediate_format: Option<String>,
+    pub enable_list_inference: Option<bool>,
+    pub storage_uri: Option<String>,
+
+    // Used by both Databricks and Bigquery
+    pub file_format: Option<String>,
+
+    // Databricks
+    pub catalog_name: Option<String>,
+    pub location_root: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub use_uniform: Option<bool>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub include_full_name_in_path: Option<bool>,
+    pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub auto_liquid_cluster: Option<bool>,
+    pub clustered_by: Option<StringOrArrayOfStrings>,
+    pub buckets: Option<i64>,
+    pub catalog: Option<String>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub compression: Option<String>,
+    pub databricks_compute: Option<String>,
+    pub target_alias: Option<String>,
+    pub source_alias: Option<String>,
+    pub matched_condition: Option<String>,
+    pub not_matched_condition: Option<String>,
+    pub not_matched_by_source_condition: Option<String>,
+    pub not_matched_by_source_action: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub merge_with_schema_evolution: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub skip_matched_step: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub skip_not_matched_step: Option<bool>,
+    pub schedule: Option<Schedule>,
+
+    // Snowflake
+    pub table_tag: Option<String>,
+    pub row_access_policy: Option<String>,
+    pub external_volume: Option<String>,
+    pub base_location_root: Option<String>,
+    pub base_location_subpath: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub change_tracking: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub data_retention_time_in_days: Option<u64>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub max_data_extension_time_in_days: Option<u64>,
+    pub storage_serialization_policy: Option<String>,
+    pub target_file_size: Option<String>,
+    pub target_lag: Option<String>,
+    pub snowflake_initialization_warehouse: Option<String>,
+    pub snowflake_warehouse: Option<String>,
+    pub immutable_where: Option<String>,
+    pub refresh_mode: Option<String>,
+    pub initialize: Option<String>,
+    pub scheduler: Option<String>,
+    pub tmp_relation_type: Option<String>,
+    pub query_tag: Option<QueryTag>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub automatic_clustering: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub copy_grants: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub copy_tags: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub secure: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub transient: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub iceberg_version: Option<u64>,
+
+    // Redshift
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub auto_refresh: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub backup: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub bind: Option<bool>,
+    pub dist: Option<String>,
+    pub sort: Option<StringOrArrayOfStrings>,
+    pub sort_type: Option<String>,
+
+    // MsSql
+    // XXX: This is an incomplete set of configs
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub as_columnstore: Option<bool>,
+
+    // Athena
+    // XXX: This is an incomplete set of configs
+    pub table_type: Option<String>,
+
+    // Postgres
+    // XXX: This is an incomplete set of configs
+    #[serde(default)]
+    pub indexes: IndexesConfig,
+
+    // Salesforce
+    #[serde(default)]
+    pub primary_key: PrimaryKeyConfig,
+    pub category: Option<DataLakeObjectCategory>,
+}
+
+impl ResolvedConfig for WarehouseSpecificNodeConfig {
+    fn enabled(&self) -> bool {
+        true
+    }
+}
+
+impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
+    type Resolved = Self;
+    type PackageDefaults = ();
+    type ResolveDefaults = ();
+
+    fn get_enabled_with_default(&self) -> bool {
+        true
+    }
+
+    fn disable(&mut self) {}
+
+    fn apply_package_defaults(&mut self, _: ()) {}
+
+    fn finalize(self) -> Self {
+        self
+    }
+
+    #[allow(clippy::cognitive_complexity)]
+    fn default_to(&mut self, parent: &WarehouseSpecificNodeConfig) {
+        // Exhaustive destructuring ensures all fields are handled
+        let WarehouseSpecificNodeConfig {
+            // Shared
+            partition_by,
+
+            // BigQuery
+            description,
+            cluster_by,
+            hours_to_expiration,
+            job_execution_timeout_seconds,
+            labels,
+            labels_from_meta,
+            kms_key_name,
+            require_partition_filter,
+            partition_expiration_days,
+            grant_access_to,
+            partitions,
+            enable_refresh,
+            refresh_interval_minutes,
+            resource_tags,
+            max_staleness,
+            jar_file_uri,
+            timeout,
+            batch_id,
+            dataproc_cluster_name,
+            notebook_template_id,
+            enable_list_inference,
+            intermediate_format,
+            storage_uri,
+
+            // Databricks
+            file_format,
+            catalog_name,
+            location_root,
+            use_uniform,
+            tblproperties,
+            include_full_name_in_path,
+            liquid_clustered_by,
+            auto_liquid_cluster,
+            clustered_by,
+            buckets,
+            catalog,
+            databricks_tags,
+            compression,
+            databricks_compute,
+            target_alias,
+            source_alias,
+            matched_condition,
+            not_matched_condition,
+            not_matched_by_source_condition,
+            not_matched_by_source_action,
+            merge_with_schema_evolution,
+            skip_matched_step,
+            skip_not_matched_step,
+            schedule,
+
+            // Snowflake
+            adapter_properties,
+            table_tag,
+            row_access_policy,
+            external_volume,
+            base_location_root,
+            base_location_subpath,
+            change_tracking,
+            data_retention_time_in_days,
+            max_data_extension_time_in_days,
+            storage_serialization_policy,
+            target_file_size,
+            target_lag,
+            snowflake_initialization_warehouse,
+            snowflake_warehouse,
+            immutable_where,
+            refresh_mode,
+            initialize,
+            scheduler,
+            tmp_relation_type,
+            query_tag,
+            automatic_clustering,
+            copy_grants,
+            copy_tags,
+            secure,
+            transient,
+            iceberg_version,
+
+            // Redshift
+            auto_refresh,
+            backup,
+            bind,
+            dist,
+            sort,
+            sort_type,
+
+            // MsSql
+            as_columnstore,
+
+            // Athena
+            table_type,
+
+            // Postgres
+            indexes,
+
+            // Salesforce
+            primary_key,
+            category,
+        } = self;
+
+        default_to!(
+            parent,
+            [
+                // Shared
+                partition_by,
+                // BigQuery
+                description,
+                cluster_by,
+                hours_to_expiration,
+                job_execution_timeout_seconds,
+                labels,
+                labels_from_meta,
+                kms_key_name,
+                require_partition_filter,
+                partition_expiration_days,
+                grant_access_to,
+                partitions,
+                enable_refresh,
+                refresh_interval_minutes,
+                resource_tags,
+                max_staleness,
+                // Databricks
+                file_format,
+                catalog_name,
+                location_root,
+                use_uniform,
+                tblproperties,
+                include_full_name_in_path,
+                liquid_clustered_by,
+                auto_liquid_cluster,
+                clustered_by,
+                buckets,
+                catalog,
+                databricks_tags,
+                compression,
+                databricks_compute,
+                target_alias,
+                source_alias,
+                matched_condition,
+                not_matched_condition,
+                not_matched_by_source_condition,
+                not_matched_by_source_action,
+                merge_with_schema_evolution,
+                skip_matched_step,
+                skip_not_matched_step,
+                schedule,
+                jar_file_uri,
+                timeout,
+                batch_id,
+                dataproc_cluster_name,
+                notebook_template_id,
+                enable_list_inference,
+                intermediate_format,
+                storage_uri,
+                // Snowflake
+                table_tag,
+                row_access_policy,
+                adapter_properties,
+                external_volume,
+                base_location_root,
+                base_location_subpath,
+                change_tracking,
+                data_retention_time_in_days,
+                max_data_extension_time_in_days,
+                storage_serialization_policy,
+                target_file_size,
+                target_lag,
+                snowflake_initialization_warehouse,
+                snowflake_warehouse,
+                immutable_where,
+                refresh_mode,
+                initialize,
+                scheduler,
+                tmp_relation_type,
+                query_tag,
+                automatic_clustering,
+                copy_grants,
+                copy_tags,
+                secure,
+                transient,
+                iceberg_version,
+                // Redshift
+                auto_refresh,
+                backup,
+                bind,
+                dist,
+                sort,
+                sort_type,
+                // MsSql
+                as_columnstore,
+                // Athena
+                table_type,
+                // Postgres
+                indexes,
+                // Salesforce
+                primary_key,
+                category,
+            ]
+        );
+    }
+}
+
+// Shared comparison helper functions
+use crate::schemas::common::Access;
+use dbt_common::serde_utils::Omissible;
+
+/// Helper function to compare Omissible<Option<T>> fields
+pub fn omissible_option_eq<T: PartialEq>(
+    a: &Omissible<Option<T>>,
+    b: &Omissible<Option<T>>,
+) -> bool {
+    match (a, b) {
+        // Both omitted
+        (Omissible::Omitted, Omissible::Omitted) => true,
+        // Both present
+        (Omissible::Present(a_val), Omissible::Present(b_val)) => a_val == b_val,
+        // One omitted, one present with None - treat as equivalent
+        (Omissible::Omitted, Omissible::Present(None)) => true,
+        (Omissible::Present(None), Omissible::Omitted) => true,
+        // Any other combination is not equal
+        _ => false,
+    }
+}
+
+/// Helper function to compare docs fields, treating None and default DocsConfig as equivalent
+pub fn docs_eq(a: &Option<DocsConfig>, b: &Option<DocsConfig>) -> bool {
+    // Default value in dbt-core
+    // See https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/artifacts/resources/base.py#L65
+    let default_docs = DocsConfig {
+        show: true,
+        node_color: None,
+    };
+
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_docs), Some(b_docs)) => a_docs == b_docs,
+        // One None, one Some - check if the Some value equals default
+        (None, Some(b_docs)) => b_docs == &default_docs,
+        (Some(a_docs), None) => a_docs == &default_docs,
+    }
+}
+
+/// Helper function to compare access fields, treating None and default Access as equivalent
+pub fn access_eq(a: &Option<Access>, b: &Option<Access>) -> bool {
+    // Default value in dbt-core is "protected"
+    // See https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/resources/v1/model.py#L72-L75
+    let default_access = Access::Protected;
+
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value equals default
+        (None, Some(b_val)) => b_val == &default_access,
+        (Some(a_val), None) => a_val == &default_access,
+    }
+}
+
+/// Helper function to compare meta fields, treating None and empty IndexMap as equivalent
+pub fn meta_eq(
+    a: &Option<IndexMap<String, YmlValue>>,
+    b: &Option<IndexMap<String, YmlValue>>,
+) -> bool {
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value is empty (equals default)
+        (None, Some(b_val)) => b_val.is_empty(),
+        (Some(a_val), None) => a_val.is_empty(),
+    }
+}
+
+/// Helper function to compare grants fields, treating Omitted and empty as equivalent
+pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
+    match (a.as_ref(), b.as_ref()) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(b_val)) => b_val.is_empty(),
+        (Some(a_val), None) => a_val.is_empty(),
+    }
+}
+
+/// Compare warehouse-specific configurations field by field
+pub fn same_warehouse_config(
+    self_wh: &WarehouseSpecificNodeConfig,
+    other_wh: &WarehouseSpecificNodeConfig,
+) -> bool {
+    let partition_by_eq = self_wh.partition_by == other_wh.partition_by;
+    let cluster_by_eq = self_wh.cluster_by == other_wh.cluster_by;
+    let hours_to_expiration_eq = self_wh.hours_to_expiration == other_wh.hours_to_expiration;
+    let job_execution_timeout_seconds_eq =
+        self_wh.job_execution_timeout_seconds == other_wh.job_execution_timeout_seconds;
+    let labels_eq = self_wh.labels == other_wh.labels;
+    let labels_from_meta_eq = self_wh.labels_from_meta == other_wh.labels_from_meta;
+    let kms_key_name_eq = self_wh.kms_key_name == other_wh.kms_key_name;
+    let require_partition_filter_eq =
+        self_wh.require_partition_filter == other_wh.require_partition_filter;
+    let partition_expiration_days_eq =
+        self_wh.partition_expiration_days == other_wh.partition_expiration_days;
+    let grant_access_to_eq = self_wh.grant_access_to == other_wh.grant_access_to;
+    let partitions_eq = self_wh.partitions == other_wh.partitions;
+    let enable_refresh_eq = self_wh.enable_refresh == other_wh.enable_refresh;
+    let refresh_interval_minutes_eq =
+        self_wh.refresh_interval_minutes == other_wh.refresh_interval_minutes;
+    let max_staleness_eq = self_wh.max_staleness == other_wh.max_staleness;
+    let file_format_eq = self_wh.file_format == other_wh.file_format;
+    let catalog_name_eq = self_wh.catalog_name == other_wh.catalog_name;
+    let location_root_eq = self_wh.location_root == other_wh.location_root;
+    let tblproperties_eq = self_wh.tblproperties == other_wh.tblproperties;
+    let include_full_name_in_path_eq =
+        self_wh.include_full_name_in_path == other_wh.include_full_name_in_path;
+    let liquid_clustered_by_eq = self_wh.liquid_clustered_by == other_wh.liquid_clustered_by;
+    let auto_liquid_cluster_eq = self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster;
+    let clustered_by_eq = self_wh.clustered_by == other_wh.clustered_by;
+    let buckets_eq = self_wh.buckets == other_wh.buckets;
+    let catalog_eq = self_wh.catalog == other_wh.catalog;
+    let databricks_tags_eq = self_wh.databricks_tags == other_wh.databricks_tags;
+    let compression_eq = self_wh.compression == other_wh.compression;
+    let databricks_compute_eq = self_wh.databricks_compute == other_wh.databricks_compute;
+    let target_alias_eq = self_wh.target_alias == other_wh.target_alias;
+    let source_alias_eq = self_wh.source_alias == other_wh.source_alias;
+    let matched_condition_eq = self_wh.matched_condition == other_wh.matched_condition;
+    let not_matched_condition_eq = self_wh.not_matched_condition == other_wh.not_matched_condition;
+    let not_matched_by_source_condition_eq =
+        self_wh.not_matched_by_source_condition == other_wh.not_matched_by_source_condition;
+    let not_matched_by_source_action_eq =
+        self_wh.not_matched_by_source_action == other_wh.not_matched_by_source_action;
+    let merge_with_schema_evolution_eq =
+        self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution;
+    let skip_matched_step_eq = self_wh.skip_matched_step == other_wh.skip_matched_step;
+    let skip_not_matched_step_eq = self_wh.skip_not_matched_step == other_wh.skip_not_matched_step;
+    let schedule_eq = self_wh.schedule == other_wh.schedule;
+    let adapter_properties_eq = self_wh.adapter_properties == other_wh.adapter_properties;
+    let table_tag_eq = self_wh.table_tag == other_wh.table_tag;
+    let row_access_policy_eq = self_wh.row_access_policy == other_wh.row_access_policy;
+    let external_volume_eq = self_wh.external_volume == other_wh.external_volume;
+    let base_location_root_eq = self_wh.base_location_root == other_wh.base_location_root;
+    let base_location_subpath_eq = self_wh.base_location_subpath == other_wh.base_location_subpath;
+    let target_lag_eq = self_wh.target_lag == other_wh.target_lag;
+    let snowflake_initialization_warehouse_eq =
+        self_wh.snowflake_initialization_warehouse == other_wh.snowflake_initialization_warehouse;
+    let immutable_where_eq = self_wh.immutable_where == other_wh.immutable_where;
+    let refresh_mode_eq = self_wh.refresh_mode == other_wh.refresh_mode;
+    let initialize_eq = self_wh.initialize == other_wh.initialize;
+    let scheduler_eq = self_wh.scheduler == other_wh.scheduler;
+    let tmp_relation_type_eq = self_wh.tmp_relation_type == other_wh.tmp_relation_type;
+    let query_tag_eq = self_wh.query_tag == other_wh.query_tag;
+    let automatic_clustering_eq = self_wh.automatic_clustering == other_wh.automatic_clustering;
+    let copy_grants_eq = self_wh.copy_grants == other_wh.copy_grants;
+    let copy_tags_eq = self_wh.copy_tags == other_wh.copy_tags;
+    let secure_eq = self_wh.secure == other_wh.secure;
+    let transient_eq = self_wh.transient == other_wh.transient;
+    let iceberg_version_eq = self_wh.iceberg_version == other_wh.iceberg_version;
+    let auto_refresh_eq = self_wh.auto_refresh == other_wh.auto_refresh;
+    let backup_eq = self_wh.backup == other_wh.backup;
+    let bind_eq = self_wh.bind == other_wh.bind;
+    let dist_eq = self_wh.dist == other_wh.dist;
+    let sort_eq = self_wh.sort == other_wh.sort;
+    let sort_type_eq = self_wh.sort_type == other_wh.sort_type;
+    let as_columnstore_eq = self_wh.as_columnstore == other_wh.as_columnstore;
+    let table_type_eq = self_wh.table_type == other_wh.table_type;
+    let indexes_eq = self_wh.indexes == other_wh.indexes;
+    let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
+    let category_eq = self_wh.category == other_wh.category;
+
+    let result = partition_by_eq
+        && cluster_by_eq
+        && hours_to_expiration_eq
+        && job_execution_timeout_seconds_eq
+        && labels_eq
+        && labels_from_meta_eq
+        && kms_key_name_eq
+        && require_partition_filter_eq
+        && partition_expiration_days_eq
+        && grant_access_to_eq
+        && partitions_eq
+        && enable_refresh_eq
+        && refresh_interval_minutes_eq
+        && max_staleness_eq
+        && file_format_eq
+        && catalog_name_eq
+        && location_root_eq
+        && tblproperties_eq
+        && include_full_name_in_path_eq
+        && liquid_clustered_by_eq
+        && auto_liquid_cluster_eq
+        && clustered_by_eq
+        && buckets_eq
+        && catalog_eq
+        && databricks_tags_eq
+        && compression_eq
+        && databricks_compute_eq
+        && target_alias_eq
+        && source_alias_eq
+        && matched_condition_eq
+        && not_matched_condition_eq
+        && not_matched_by_source_condition_eq
+        && not_matched_by_source_action_eq
+        && merge_with_schema_evolution_eq
+        && skip_matched_step_eq
+        && skip_not_matched_step_eq
+        && schedule_eq
+        && adapter_properties_eq
+        && table_tag_eq
+        && row_access_policy_eq
+        && external_volume_eq
+        && base_location_root_eq
+        && base_location_subpath_eq
+        && target_lag_eq
+        && snowflake_initialization_warehouse_eq
+        && immutable_where_eq
+        && refresh_mode_eq
+        && initialize_eq
+        && scheduler_eq
+        && tmp_relation_type_eq
+        && query_tag_eq
+        && automatic_clustering_eq
+        && copy_grants_eq
+        && copy_tags_eq
+        && secure_eq
+        && transient_eq
+        && iceberg_version_eq
+        && auto_refresh_eq
+        && backup_eq
+        && bind_eq
+        && dist_eq
+        && sort_eq
+        && sort_type_eq
+        && as_columnstore_eq
+        && table_type_eq
+        && indexes_eq
+        && primary_key_eq
+        && category_eq;
+
+    if !result {
+        log_state_mod_diff(
+            "unique_id in next config log",
+            "warehouse_config",
+            [
+                (
+                    "partition_by",
+                    partition_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.partition_by),
+                        format!("{:?}", &other_wh.partition_by),
+                    )),
+                ),
+                (
+                    "cluster_by",
+                    cluster_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.cluster_by),
+                        format!("{:?}", &other_wh.cluster_by),
+                    )),
+                ),
+                (
+                    "hours_to_expiration",
+                    hours_to_expiration_eq,
+                    Some((
+                        format!("{:?}", &self_wh.hours_to_expiration),
+                        format!("{:?}", &other_wh.hours_to_expiration),
+                    )),
+                ),
+                (
+                    "job_execution_timeout_seconds",
+                    job_execution_timeout_seconds_eq,
+                    Some((
+                        format!("{:?}", &self_wh.job_execution_timeout_seconds),
+                        format!("{:?}", &other_wh.job_execution_timeout_seconds),
+                    )),
+                ),
+                (
+                    "labels",
+                    labels_eq,
+                    Some((
+                        format!("{:?}", &self_wh.labels),
+                        format!("{:?}", &other_wh.labels),
+                    )),
+                ),
+                (
+                    "labels_from_meta",
+                    labels_from_meta_eq,
+                    Some((
+                        format!("{:?}", &self_wh.labels_from_meta),
+                        format!("{:?}", &other_wh.labels_from_meta),
+                    )),
+                ),
+                (
+                    "kms_key_name",
+                    kms_key_name_eq,
+                    Some((
+                        format!("{:?}", &self_wh.kms_key_name),
+                        format!("{:?}", &other_wh.kms_key_name),
+                    )),
+                ),
+                (
+                    "require_partition_filter",
+                    require_partition_filter_eq,
+                    Some((
+                        format!("{:?}", &self_wh.require_partition_filter),
+                        format!("{:?}", &other_wh.require_partition_filter),
+                    )),
+                ),
+                (
+                    "partition_expiration_days",
+                    partition_expiration_days_eq,
+                    Some((
+                        format!("{:?}", &self_wh.partition_expiration_days),
+                        format!("{:?}", &other_wh.partition_expiration_days),
+                    )),
+                ),
+                (
+                    "grant_access_to",
+                    grant_access_to_eq,
+                    Some((
+                        format!("{:?}", &self_wh.grant_access_to),
+                        format!("{:?}", &other_wh.grant_access_to),
+                    )),
+                ),
+                (
+                    "partitions",
+                    partitions_eq,
+                    Some((
+                        format!("{:?}", &self_wh.partitions),
+                        format!("{:?}", &other_wh.partitions),
+                    )),
+                ),
+                (
+                    "enable_refresh",
+                    enable_refresh_eq,
+                    Some((
+                        format!("{:?}", &self_wh.enable_refresh),
+                        format!("{:?}", &other_wh.enable_refresh),
+                    )),
+                ),
+                (
+                    "refresh_interval_minutes",
+                    refresh_interval_minutes_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refresh_interval_minutes),
+                        format!("{:?}", &other_wh.refresh_interval_minutes),
+                    )),
+                ),
+                (
+                    "max_staleness",
+                    max_staleness_eq,
+                    Some((
+                        format!("{:?}", &self_wh.max_staleness),
+                        format!("{:?}", &other_wh.max_staleness),
+                    )),
+                ),
+                (
+                    "file_format",
+                    file_format_eq,
+                    Some((
+                        format!("{:?}", &self_wh.file_format),
+                        format!("{:?}", &other_wh.file_format),
+                    )),
+                ),
+                (
+                    "catalog_name",
+                    catalog_name_eq,
+                    Some((
+                        format!("{:?}", &self_wh.catalog_name),
+                        format!("{:?}", &other_wh.catalog_name),
+                    )),
+                ),
+                (
+                    "location_root",
+                    location_root_eq,
+                    Some((
+                        format!("{:?}", &self_wh.location_root),
+                        format!("{:?}", &other_wh.location_root),
+                    )),
+                ),
+                (
+                    "tblproperties",
+                    tblproperties_eq,
+                    Some((
+                        format!("{:?}", &self_wh.tblproperties),
+                        format!("{:?}", &other_wh.tblproperties),
+                    )),
+                ),
+                (
+                    "include_full_name_in_path",
+                    include_full_name_in_path_eq,
+                    Some((
+                        format!("{:?}", &self_wh.include_full_name_in_path),
+                        format!("{:?}", &other_wh.include_full_name_in_path),
+                    )),
+                ),
+                (
+                    "liquid_clustered_by",
+                    liquid_clustered_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.liquid_clustered_by),
+                        format!("{:?}", &other_wh.liquid_clustered_by),
+                    )),
+                ),
+                (
+                    "auto_liquid_cluster",
+                    auto_liquid_cluster_eq,
+                    Some((
+                        format!("{:?}", &self_wh.auto_liquid_cluster),
+                        format!("{:?}", &other_wh.auto_liquid_cluster),
+                    )),
+                ),
+                (
+                    "clustered_by",
+                    clustered_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.clustered_by),
+                        format!("{:?}", &other_wh.clustered_by),
+                    )),
+                ),
+                (
+                    "buckets",
+                    buckets_eq,
+                    Some((
+                        format!("{:?}", &self_wh.buckets),
+                        format!("{:?}", &other_wh.buckets),
+                    )),
+                ),
+                (
+                    "catalog",
+                    catalog_eq,
+                    Some((
+                        format!("{:?}", &self_wh.catalog),
+                        format!("{:?}", &other_wh.catalog),
+                    )),
+                ),
+                (
+                    "databricks_tags",
+                    databricks_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.databricks_tags),
+                        format!("{:?}", &other_wh.databricks_tags),
+                    )),
+                ),
+                (
+                    "compression",
+                    compression_eq,
+                    Some((
+                        format!("{:?}", &self_wh.compression),
+                        format!("{:?}", &other_wh.compression),
+                    )),
+                ),
+                (
+                    "databricks_compute",
+                    databricks_compute_eq,
+                    Some((
+                        format!("{:?}", &self_wh.databricks_compute),
+                        format!("{:?}", &other_wh.databricks_compute),
+                    )),
+                ),
+                (
+                    "target_alias",
+                    target_alias_eq,
+                    Some((
+                        format!("{:?}", &self_wh.target_alias),
+                        format!("{:?}", &other_wh.target_alias),
+                    )),
+                ),
+                (
+                    "source_alias",
+                    source_alias_eq,
+                    Some((
+                        format!("{:?}", &self_wh.source_alias),
+                        format!("{:?}", &other_wh.source_alias),
+                    )),
+                ),
+                (
+                    "matched_condition",
+                    matched_condition_eq,
+                    Some((
+                        format!("{:?}", &self_wh.matched_condition),
+                        format!("{:?}", &other_wh.matched_condition),
+                    )),
+                ),
+                (
+                    "not_matched_condition",
+                    not_matched_condition_eq,
+                    Some((
+                        format!("{:?}", &self_wh.not_matched_condition),
+                        format!("{:?}", &other_wh.not_matched_condition),
+                    )),
+                ),
+                (
+                    "not_matched_by_source_condition",
+                    not_matched_by_source_condition_eq,
+                    Some((
+                        format!("{:?}", &self_wh.not_matched_by_source_condition),
+                        format!("{:?}", &other_wh.not_matched_by_source_condition),
+                    )),
+                ),
+                (
+                    "not_matched_by_source_action",
+                    not_matched_by_source_action_eq,
+                    Some((
+                        format!("{:?}", &self_wh.not_matched_by_source_action),
+                        format!("{:?}", &other_wh.not_matched_by_source_action),
+                    )),
+                ),
+                (
+                    "merge_with_schema_evolution",
+                    merge_with_schema_evolution_eq,
+                    Some((
+                        format!("{:?}", &self_wh.merge_with_schema_evolution),
+                        format!("{:?}", &other_wh.merge_with_schema_evolution),
+                    )),
+                ),
+                (
+                    "skip_matched_step",
+                    skip_matched_step_eq,
+                    Some((
+                        format!("{:?}", &self_wh.skip_matched_step),
+                        format!("{:?}", &other_wh.skip_matched_step),
+                    )),
+                ),
+                (
+                    "skip_not_matched_step",
+                    skip_not_matched_step_eq,
+                    Some((
+                        format!("{:?}", &self_wh.skip_not_matched_step),
+                        format!("{:?}", &other_wh.skip_not_matched_step),
+                    )),
+                ),
+                (
+                    "schedule",
+                    schedule_eq,
+                    Some((
+                        format!("{:?}", &self_wh.schedule),
+                        format!("{:?}", &other_wh.schedule),
+                    )),
+                ),
+                (
+                    "adapter_properties",
+                    adapter_properties_eq,
+                    Some((
+                        format!("{:?}", &self_wh.adapter_properties),
+                        format!("{:?}", &other_wh.adapter_properties),
+                    )),
+                ),
+                (
+                    "table_tag",
+                    table_tag_eq,
+                    Some((
+                        format!("{:?}", &self_wh.table_tag),
+                        format!("{:?}", &other_wh.table_tag),
+                    )),
+                ),
+                (
+                    "row_access_policy",
+                    row_access_policy_eq,
+                    Some((
+                        format!("{:?}", &self_wh.row_access_policy),
+                        format!("{:?}", &other_wh.row_access_policy),
+                    )),
+                ),
+                (
+                    "external_volume",
+                    external_volume_eq,
+                    Some((
+                        format!("{:?}", &self_wh.external_volume),
+                        format!("{:?}", &other_wh.external_volume),
+                    )),
+                ),
+                (
+                    "base_location_root",
+                    base_location_root_eq,
+                    Some((
+                        format!("{:?}", &self_wh.base_location_root),
+                        format!("{:?}", &other_wh.base_location_root),
+                    )),
+                ),
+                (
+                    "base_location_subpath",
+                    base_location_subpath_eq,
+                    Some((
+                        format!("{:?}", &self_wh.base_location_subpath),
+                        format!("{:?}", &other_wh.base_location_subpath),
+                    )),
+                ),
+                (
+                    "target_lag",
+                    target_lag_eq,
+                    Some((
+                        format!("{:?}", &self_wh.target_lag),
+                        format!("{:?}", &other_wh.target_lag),
+                    )),
+                ),
+                (
+                    "snowflake_initialization_warehouse",
+                    snowflake_initialization_warehouse_eq,
+                    Some((
+                        format!("{:?}", &self_wh.snowflake_initialization_warehouse),
+                        format!("{:?}", &other_wh.snowflake_initialization_warehouse),
+                    )),
+                ),
+                (
+                    "immutable_where",
+                    immutable_where_eq,
+                    Some((
+                        format!("{:?}", &self_wh.immutable_where),
+                        format!("{:?}", &other_wh.immutable_where),
+                    )),
+                ),
+                (
+                    "refresh_mode",
+                    refresh_mode_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refresh_mode),
+                        format!("{:?}", &other_wh.refresh_mode),
+                    )),
+                ),
+                (
+                    "initialize",
+                    initialize_eq,
+                    Some((
+                        format!("{:?}", &self_wh.initialize),
+                        format!("{:?}", &other_wh.initialize),
+                    )),
+                ),
+                (
+                    "scheduler",
+                    scheduler_eq,
+                    Some((
+                        format!("{:?}", &self_wh.scheduler),
+                        format!("{:?}", &other_wh.scheduler),
+                    )),
+                ),
+                (
+                    "tmp_relation_type",
+                    tmp_relation_type_eq,
+                    Some((
+                        format!("{:?}", &self_wh.tmp_relation_type),
+                        format!("{:?}", &other_wh.tmp_relation_type),
+                    )),
+                ),
+                (
+                    "query_tag",
+                    query_tag_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_tag),
+                        format!("{:?}", &other_wh.query_tag),
+                    )),
+                ),
+                (
+                    "automatic_clustering",
+                    automatic_clustering_eq,
+                    Some((
+                        format!("{:?}", &self_wh.automatic_clustering),
+                        format!("{:?}", &other_wh.automatic_clustering),
+                    )),
+                ),
+                (
+                    "copy_grants",
+                    copy_grants_eq,
+                    Some((
+                        format!("{:?}", &self_wh.copy_grants),
+                        format!("{:?}", &other_wh.copy_grants),
+                    )),
+                ),
+                (
+                    "copy_tags",
+                    copy_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.copy_tags),
+                        format!("{:?}", &other_wh.copy_tags),
+                    )),
+                ),
+                (
+                    "secure",
+                    secure_eq,
+                    Some((
+                        format!("{:?}", &self_wh.secure),
+                        format!("{:?}", &other_wh.secure),
+                    )),
+                ),
+                (
+                    "transient",
+                    transient_eq,
+                    Some((
+                        format!("{:?}", &self_wh.transient),
+                        format!("{:?}", &other_wh.transient),
+                    )),
+                ),
+                (
+                    "iceberg_version",
+                    iceberg_version_eq,
+                    Some((
+                        format!("{:?}", &self_wh.iceberg_version),
+                        format!("{:?}", &other_wh.iceberg_version),
+                    )),
+                ),
+                (
+                    "auto_refresh",
+                    auto_refresh_eq,
+                    Some((
+                        format!("{:?}", &self_wh.auto_refresh),
+                        format!("{:?}", &other_wh.auto_refresh),
+                    )),
+                ),
+                (
+                    "backup",
+                    backup_eq,
+                    Some((
+                        format!("{:?}", &self_wh.backup),
+                        format!("{:?}", &other_wh.backup),
+                    )),
+                ),
+                (
+                    "bind",
+                    bind_eq,
+                    Some((
+                        format!("{:?}", &self_wh.bind),
+                        format!("{:?}", &other_wh.bind),
+                    )),
+                ),
+                (
+                    "dist",
+                    dist_eq,
+                    Some((
+                        format!("{:?}", &self_wh.dist),
+                        format!("{:?}", &other_wh.dist),
+                    )),
+                ),
+                (
+                    "sort",
+                    sort_eq,
+                    Some((
+                        format!("{:?}", &self_wh.sort),
+                        format!("{:?}", &other_wh.sort),
+                    )),
+                ),
+                (
+                    "sort_type",
+                    sort_type_eq,
+                    Some((
+                        format!("{:?}", &self_wh.sort_type),
+                        format!("{:?}", &other_wh.sort_type),
+                    )),
+                ),
+                (
+                    "as_columnstore",
+                    as_columnstore_eq,
+                    Some((
+                        format!("{:?}", &self_wh.as_columnstore),
+                        format!("{:?}", &other_wh.as_columnstore),
+                    )),
+                ),
+                (
+                    "table_type",
+                    table_type_eq,
+                    Some((
+                        format!("{:?}", &self_wh.table_type),
+                        format!("{:?}", &other_wh.table_type),
+                    )),
+                ),
+                (
+                    "indexes",
+                    indexes_eq,
+                    Some((
+                        format!("{:?}", &self_wh.indexes),
+                        format!("{:?}", &other_wh.indexes),
+                    )),
+                ),
+                (
+                    "primary_key",
+                    primary_key_eq,
+                    Some((
+                        format!("{:?}", &self_wh.primary_key),
+                        format!("{:?}", &other_wh.primary_key),
+                    )),
+                ),
+                (
+                    "category",
+                    category_eq,
+                    Some((
+                        format!("{:?}", &self_wh.category),
+                        format!("{:?}", &other_wh.category),
+                    )),
+                ),
+            ],
+        );
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_array_of_strings_eq_none_and_empty_array() {
+        let none_val: Option<StringOrArrayOfStrings> = None;
+        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
+
+        assert!(array_of_strings_eq(&none_val, &empty_array));
+        assert!(array_of_strings_eq(&empty_array, &none_val));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_same_values() {
+        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+
+        assert!(array_of_strings_eq(&left, &right));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_different_values() {
+        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "gamma".to_string(),
+        ]));
+
+        assert!(!array_of_strings_eq(&left, &right));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_string_and_array_equal() {
+        let string_val = Some(StringOrArrayOfStrings::String("alpha".to_string()));
+        let array_val = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+        ]));
+
+        assert!(array_of_strings_eq(&string_val, &array_val));
+    }
+
+    #[test]
+    fn test_tags_eq_ignores_duplicates_and_ordering() {
+        // Regression: dbt-core concatenates inherited tag lists (model + column +
+        // test level), producing duplicates in the manifest like ['weekly', 'weekly'].
+        // Fusion deduplicates. For state:modified parity, equality must be set-based.
+        let with_dupes = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "weekly".to_string(),
+            "weekly".to_string(),
+        ]));
+        let dedup = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "weekly".to_string(),
+        ]));
+        let single_string = Some(StringOrArrayOfStrings::String("weekly".to_string()));
+
+        assert!(tags_eq(&with_dupes, &dedup));
+        assert!(tags_eq(&dedup, &with_dupes));
+        assert!(tags_eq(&with_dupes, &single_string));
+        assert!(tags_eq(&single_string, &with_dupes));
+
+        // Order should also be ignored.
+        let abc = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+        ]));
+        let cab = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "c".to_string(),
+            "a".to_string(),
+            "b".to_string(),
+        ]));
+        assert!(tags_eq(&abc, &cab));
+    }
+
+    #[test]
+    fn test_tags_eq_none_and_empty_array() {
+        // Same none/empty equivalence as array_of_strings_eq.
+        let none_val: Option<StringOrArrayOfStrings> = None;
+        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
+
+        assert!(tags_eq(&none_val, &empty_array));
+        assert!(tags_eq(&empty_array, &none_val));
+        assert!(tags_eq(&none_val, &none_val));
+    }
+
+    #[test]
+    fn test_tags_eq_vec_set_semantics() {
+        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — same set
+        // semantics as tags_eq. Saved queries store tags as Vec<String>.
+        let with_dupes = vec!["weekly".to_string(), "weekly".to_string()];
+        let dedup = vec!["weekly".to_string()];
+        assert!(tags_eq_vec(&with_dupes, &dedup));
+        assert!(tags_eq_vec(&dedup, &with_dupes));
+        assert!(tags_eq_vec(&[], &[]));
+
+        // Order-insensitive
+        let abc = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let cab = vec!["c".to_string(), "a".to_string(), "b".to_string()];
+        assert!(tags_eq_vec(&abc, &cab));
+
+        // Real differences still flagged
+        let with_extra = vec!["weekly".to_string(), "critical".to_string()];
+        assert!(!tags_eq_vec(&with_extra, &dedup));
+    }
+
+    #[test]
+    fn test_tags_eq_genuinely_different_tags() {
+        // Set semantics must still flag real differences as unequal.
+        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "weekly".to_string(),
+            "critical".to_string(),
+        ]));
+        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "weekly".to_string(),
+        ]));
+
+        assert!(!tags_eq(&left, &right));
+        assert!(!tags_eq(&right, &left));
+    }
+}

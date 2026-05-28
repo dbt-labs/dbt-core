@@ -1,0 +1,2249 @@
+//! Replay infrastructure for time-machine recordings.
+//!
+//! This module provides functionality to load and navigate recorded adapter events.
+//!
+//! # Replay Modes
+//!
+//! The replay system supports two ordering modes:
+//!
+//! - **Strict**: Events must match in exact recorded sequence order.
+//!   This is the default and ensures deterministic replay.
+//!
+//! - **Semantic**: Events are matched based on semantic constraints:
+//!   - Write operations are barriers and must match in strict order
+//!   - Read operations can match flexibly within a "segment" (between writes)
+//!   - This enables replay tolerance for minor ordering variations
+//!
+//! The semantic mode treats the recording as a graph segmentation problem where
+//! write operations create ordering constraints (barriers) while read operations
+//! within a segment can be matched in any order.
+
+use std::collections::{BTreeMap, HashMap};
+use std::io::{self, BufRead, BufReader};
+use std::path::Path;
+
+use flate2::read::GzDecoder;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
+
+use super::event::{
+    AdapterCallEvent, CacheInvalidationEvent, MetadataCallArgs, MetadataCallEvent, RecordedEvent,
+    RecordingHeader, RunRemoteAdhocEvent, SaoEvent,
+};
+use super::semantic::SemanticCategory;
+use super::serde::values_match;
+use crate::AdapterType;
+use crate::sql::diff::compare_sql;
+
+/// Extract the SQL string from args (first string in array, or the string itself).
+///
+/// For execute/run_query, args are serialized as `[sql, auto_begin, fetch, limit, options]`
+/// so SQL is the first element of the array.
+fn extract_sql_from_args(args: &serde_json::Value) -> Option<&str> {
+    match args {
+        serde_json::Value::String(s) => Some(s.as_str()),
+        serde_json::Value::Array(arr) => arr.first().and_then(|v| v.as_str()),
+        _ => None,
+    }
+}
+
+/// Check if a method executes input SQL.
+fn is_sql_method(method: &str) -> bool {
+    method == "execute" || method == "run_query"
+}
+
+/// Compare two MetadataCallArgs for semantic equality.
+///
+/// This compares the structured arguments to ensure we match the correct
+/// recorded event when replaying.
+fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -> bool {
+    match (recorded, actual) {
+        // For ListRelationsSchemas, check if recorded is a superset of actual.
+        // If recorded contains all the relations requested in actual, we have
+        // all the data needed to satisfy this request.
+        (
+            MetadataCallArgs::ListRelationsSchemas {
+                relations: recorded_relations,
+                ..
+            },
+            MetadataCallArgs::ListRelationsSchemas {
+                relations: actual_relations,
+                ..
+            },
+        ) => {
+            // Case-insensitive superset check: semantic_fqn strings may differ
+            // only in casing due to identifier normalization (e.g. Snowflake
+            // uppercasing unquoted identifiers), so we compare uppercased forms.
+            let recorded_set: std::collections::HashSet<String> = recorded_relations
+                .iter()
+                .map(|r| r.to_ascii_uppercase())
+                .collect();
+            actual_relations
+                .iter()
+                .all(|rel| recorded_set.contains(&rel.to_ascii_uppercase()))
+        }
+        // For other types, use exact value matching
+        _ => {
+            std::mem::discriminant(recorded) == std::mem::discriminant(actual) && {
+                match (serde_json::to_value(recorded), serde_json::to_value(actual)) {
+                    (Ok(r), Ok(a)) => values_match(&r, &a),
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn adapter_args_match(
+    method: &str,
+    recorded: &serde_json::Value,
+    actual: &serde_json::Value,
+) -> bool {
+    match method {
+        "get_relation" => match (
+            GetRelationArgs::try_from(recorded),
+            GetRelationArgs::try_from(actual),
+        ) {
+            (Ok(recorded), Ok(actual)) => recorded == actual,
+            _ => values_match(recorded, actual),
+        },
+        _ => values_match(recorded, actual),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GetRelationArgs {
+    database: String,
+    schema: String,
+    identifier: String,
+    needs_information: bool,
+}
+
+impl TryFrom<&serde_json::Value> for GetRelationArgs {
+    type Error = ();
+
+    fn try_from(args: &serde_json::Value) -> Result<Self, Self::Error> {
+        let args = args.as_array().ok_or(())?;
+
+        if args.len() == 1
+            && let Some(kwargs) = args[0].as_object()
+        {
+            return Self::try_from_kwargs(kwargs);
+        }
+
+        let database = args.first().and_then(|arg| arg.as_str()).ok_or(())?;
+        let schema = args.get(1).and_then(|arg| arg.as_str()).ok_or(())?;
+        let identifier = args.get(2).and_then(|arg| arg.as_str()).ok_or(())?;
+        let needs_information = args
+            .get(3)
+            .and_then(|arg| arg.as_bool())
+            .or_else(|| {
+                args.iter()
+                    .filter_map(|arg| arg.as_object())
+                    .find_map(|obj| obj.get("needs_information").and_then(|v| v.as_bool()))
+            })
+            .unwrap_or(false);
+
+        Ok(Self {
+            database: database.to_string(),
+            schema: schema.to_string(),
+            identifier: identifier.to_string(),
+            needs_information,
+        })
+    }
+}
+
+impl GetRelationArgs {
+    fn try_from_kwargs(kwargs: &serde_json::Map<String, serde_json::Value>) -> Result<Self, ()> {
+        Ok(Self {
+            database: kwargs
+                .get("database")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            schema: kwargs
+                .get("schema")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            identifier: kwargs
+                .get("identifier")
+                .and_then(|value| value.as_str())
+                .ok_or(())?
+                .to_string(),
+            needs_information: kwargs
+                .get("needs_information")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        })
+    }
+}
+
+/// Replay ordering mode.
+///
+/// Controls how events are matched during replay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplayMode {
+    /// Events must match in exact recorded sequence order.
+    ///
+    /// This is the most restrictive mode and enforces deterministic replay.
+    /// Used if calls must all strictly be in the same order.
+    #[default]
+    Strict,
+
+    /// Events are matched based on semantic constraints.
+    ///
+    /// Write operations act as barriers and must match in strict order.
+    /// Read operations can match flexibly within a "segment" (between writes).
+    ///
+    /// This mode is useful when:
+    /// - The code version being tested may have minor reordering of reads
+    /// - You want to test semantic equivalence rather than exact call sequence
+    Semantic,
+}
+
+impl ReplayMode {
+    /// Returns true if this mode allows flexible matching of reads.
+    pub fn allows_flexible_reads(&self) -> bool {
+        matches!(self, Self::Semantic)
+    }
+}
+
+impl std::fmt::Display for ReplayMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Strict => write!(f, "strict"),
+            Self::Semantic => write!(f, "semantic"),
+        }
+    }
+}
+
+/// Errors that can occur during replay.
+#[derive(Debug)]
+pub enum ReplayError {
+    /// IO error
+    Io(io::Error),
+    /// JSON parse error
+    Json(serde_json::Error),
+    /// Recording not found
+    NotFound(String),
+    /// Invalid recording format
+    InvalidFormat(String),
+    /// Method mismatch
+    MethodMismatch { expected: String, actual: String },
+    /// No recorded event found
+    NoRecordedEvent {
+        node_id: String,
+        method: String,
+        seq: u32,
+    },
+    /// Recorded call failed
+    RecordedFailure(String),
+}
+
+impl std::fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "IO error: {}", e),
+            Self::Json(e) => write!(f, "JSON parse error: {}", e),
+            Self::NotFound(path) => write!(f, "Recording not found at: {}", path),
+            Self::InvalidFormat(msg) => write!(f, "Invalid recording format: {}", msg),
+            Self::MethodMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Method mismatch: expected '{}', got '{}'",
+                    expected, actual
+                )
+            }
+            Self::NoRecordedEvent {
+                node_id,
+                method,
+                seq,
+            } => {
+                write!(
+                    f,
+                    "No recorded event for node '{}' method '{}' (seq {})",
+                    node_id, method, seq
+                )
+            }
+            Self::RecordedFailure(msg) => write!(f, "Recorded call failed: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ReplayError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Json(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<io::Error> for ReplayError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for ReplayError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Json(e)
+    }
+}
+
+/// A loaded recording ready for replay.
+#[derive(Debug)]
+pub struct Recording {
+    /// Recording metadata
+    pub header: RecordingHeader,
+    /// Adapter call events indexed by node_id, sorted by seq
+    adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>>,
+    /// Metadata call events indexed by caller_id, sorted by seq
+    metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>>,
+    /// SAO skip events indexed by node_id
+    sao_events: BTreeMap<String, SaoEvent>,
+    /// Run-remote-adhoc events in order
+    run_remote_adhoc_events: Vec<RunRemoteAdhocEvent>,
+    /// Cache invalidation events in order
+    cache_invalidation_events: Vec<CacheInvalidationEvent>,
+    /// Current replay position per node for adapter calls (strict mode)
+    adapter_positions: RwLock<HashMap<String, usize>>,
+    /// Current replay position per caller for metadata calls (strict mode)
+    metadata_positions: RwLock<HashMap<String, usize>>,
+    /// Current replay position for run_remote_adhoc events
+    run_remote_adhoc_position: RwLock<usize>,
+    /// Current replay position for cache invalidation events
+    cache_invalidation_position: RwLock<usize>,
+    /// Semantic mode state: tracks write barriers per node.
+    /// Only writes are tracked - reads can be matched any number of times.
+    semantic_adapter_state: RwLock<HashMap<String, SemanticReplayState>>,
+    /// Semantic mode state for metadata calls
+    semantic_metadata_state: RwLock<HashMap<String, SemanticReplayState>>,
+}
+
+/// State for semantic replay mode per node/caller.
+///
+/// In semantic mode:
+/// - Writes are barriers that must match in order (tracked via segment_start)
+/// - Reads can match any number of times within a segment (NOT tracked)
+#[derive(Debug, Clone, Default)]
+struct SemanticReplayState {
+    /// Index of the first event in the current segment.
+    /// A segment is the range of events between two write barriers.
+    /// After consuming a write at index N, segment_start becomes N+1.
+    segment_start: usize,
+    /// Index of the last write barrier we've passed (for debugging/stats)
+    last_write_barrier: Option<usize>,
+}
+
+impl Recording {
+    /// Load a recording from disk.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, ReplayError> {
+        let path = path.as_ref();
+
+        if !path.exists() {
+            return Err(ReplayError::NotFound(path.display().to_string()));
+        }
+
+        // Load header
+        let header_path = path.join("header.json");
+        let header_content = std::fs::read_to_string(&header_path).map_err(|e| {
+            ReplayError::InvalidFormat(format!("Failed to read header.json: {}", e))
+        })?;
+        let header: RecordingHeader = serde_json::from_str(&header_content)?;
+
+        // Load events
+        let events_path = path.join("events.ndjson.gz");
+        let events = if events_path.exists() {
+            load_events_gzipped(&events_path)?
+        } else {
+            let events_path = path.join("events.ndjson");
+            if events_path.exists() {
+                load_events_plain(&events_path)?
+            } else {
+                return Err(ReplayError::InvalidFormat(
+                    "No events.ndjson.gz or events.ndjson found".to_string(),
+                ));
+            }
+        };
+
+        // Index events by node_id/caller_id
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
+        let mut metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>> =
+            BTreeMap::new();
+        let mut sao_events: BTreeMap<String, SaoEvent> = BTreeMap::new();
+        let mut run_remote_adhoc_events: Vec<RunRemoteAdhocEvent> = Vec::new();
+        let mut cache_invalidation_events: Vec<CacheInvalidationEvent> = Vec::new();
+
+        for event in events {
+            match event {
+                RecordedEvent::AdapterCall(adapter_event) => {
+                    adapter_events_by_node
+                        .entry(adapter_event.node_id.clone())
+                        .or_default()
+                        .push(adapter_event);
+                }
+                RecordedEvent::MetadataCall(metadata_event) => {
+                    metadata_events_by_caller
+                        .entry(metadata_event.caller_id.clone())
+                        .or_default()
+                        .push(metadata_event);
+                }
+                RecordedEvent::Sao(sao_event) => {
+                    // SAO events are keyed by node_id
+                    // ASSUMPTION: node_id is unique and 1-1 with SAO events
+                    sao_events.insert(sao_event.node_id.clone(), sao_event);
+                }
+                RecordedEvent::RunRemoteAdhoc(event) => {
+                    run_remote_adhoc_events.push(event);
+                }
+                RecordedEvent::CacheInvalidation(event) => {
+                    cache_invalidation_events.push(event);
+                }
+            }
+        }
+
+        // Sort each node's events by seq
+        for events in adapter_events_by_node.values_mut() {
+            events.sort_by_key(|e| e.seq);
+        }
+        for events in metadata_events_by_caller.values_mut() {
+            events.sort_by_key(|e| e.seq);
+        }
+
+        // Sort run_remote_adhoc events by seq
+        run_remote_adhoc_events.sort_by_key(|e| e.seq);
+
+        Ok(Self {
+            header,
+            adapter_events_by_node,
+            metadata_events_by_caller,
+            sao_events,
+            run_remote_adhoc_events,
+            cache_invalidation_events,
+            adapter_positions: RwLock::new(HashMap::new()),
+            metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
+            semantic_adapter_state: RwLock::new(HashMap::new()),
+            semantic_metadata_state: RwLock::new(HashMap::new()),
+        })
+    }
+
+    // -------------------------------------------------------------------------
+    // SAO (State Aware Orchestration) methods
+    // -------------------------------------------------------------------------
+
+    /// Get SAO skip event for a node, if one was recorded.
+    ///
+    /// Returns the SAO event if the node was skipped due to a cache hit during recording.
+    pub fn get_sao_event(&self, node_id: &str) -> Option<&SaoEvent> {
+        self.sao_events.get(node_id)
+    }
+
+    /// Check if a node has a recorded SAO skip event.
+    pub fn has_sao_event(&self, node_id: &str) -> bool {
+        self.sao_events.contains_key(node_id)
+    }
+
+    /// Get all node IDs that have SAO skip events.
+    pub fn sao_node_ids(&self) -> impl Iterator<Item = &str> {
+        self.sao_events.keys().map(|s| s.as_str())
+    }
+
+    /// Get total number of SAO skip events.
+    pub fn total_sao_events(&self) -> usize {
+        self.sao_events.len()
+    }
+
+    // -------------------------------------------------------------------------
+    // Adapter call methods
+    // -------------------------------------------------------------------------
+
+    /// Get the next recorded adapter event for a node without advancing the position.
+    pub fn peek_next(&self, node_id: &str) -> Option<&AdapterCallEvent> {
+        let positions = self.adapter_positions.read();
+        let pos = positions.get(node_id).copied().unwrap_or(0);
+        self.adapter_events_by_node.get(node_id)?.get(pos)
+    }
+
+    /// Get the next recorded adapter event for a node and advance the position.
+    pub fn take_next(&self, node_id: &str) -> Option<&AdapterCallEvent> {
+        let events = self.adapter_events_by_node.get(node_id)?;
+        let mut positions = self.adapter_positions.write();
+        let pos = positions.entry(node_id.to_string()).or_insert(0);
+        let event = events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
+    /// Get all recorded adapter events for a node.
+    pub fn events_for_node(&self, node_id: &str) -> Option<&[AdapterCallEvent]> {
+        self.adapter_events_by_node
+            .get(node_id)
+            .map(|v| v.as_slice())
+    }
+
+    /// Get all node IDs in the recording.
+    pub fn node_ids(&self) -> impl Iterator<Item = &str> {
+        self.adapter_events_by_node.keys().map(|s| s.as_str())
+    }
+
+    // -------------------------------------------------------------------------
+    // Semantic mode adapter methods
+    // -------------------------------------------------------------------------
+
+    /// Find and consume a matching adapter event using semantic rules.
+    ///
+    /// For Write operations: Must match the next write in sequence (barrier semantics).
+    ///     Writes are tracked and consumed - they act as segment barriers.
+    ///     Args are verified to ensure we're matching the correct write.
+    /// For MetadataRead operations: Can match any read in the current segment with matching args.
+    ///     Reads are NOT tracked - the same read can be matched multiple times.
+    ///
+    /// PRECONDITION: Pure/Cache operations are filtered at the adapter level and should never reach here.
+    ///
+    /// Returns the matched event if found.
+    pub fn take_semantic_match(
+        &self,
+        node_id: &str,
+        method: &str,
+        args: &serde_json::Value,
+        category: SemanticCategory,
+    ) -> Option<&AdapterCallEvent> {
+        let events = self.adapter_events_by_node.get(node_id)?;
+        let mut state = self.semantic_adapter_state.write();
+        let node_state = state.entry(node_id.to_string()).or_default();
+
+        match category {
+            SemanticCategory::Write => {
+                // Writes are barriers - must match the next write in sequence.
+                // Writes ARE tracked and consumed.
+                self.find_next_write_in_segment(events, node_state, method)
+            }
+            SemanticCategory::MetadataRead => {
+                // Reads can match any read in the current segment with matching args.
+                // Reads are NOT tracked - same read can be matched 0 or more times.
+                self.find_read_in_segment_untracked(events, node_state, method, args)
+            }
+            SemanticCategory::Pure | SemanticCategory::Cache => {
+                unreachable!()
+            }
+        }
+    }
+
+    /// Find the next write operation in sequence (barrier semantics).
+    ///
+    /// Writes are tracked and consumed. They act as segment barriers.
+    /// Matching is by method name only - the sequence order provides correctness.
+    /// SQL validation happens separately via `validate_replay()`.
+    fn find_next_write_in_segment<'a>(
+        &'a self,
+        events: &'a [AdapterCallEvent],
+        state: &mut SemanticReplayState,
+        method: &str,
+    ) -> Option<&'a AdapterCallEvent> {
+        let search_start = state.segment_start;
+
+        // Find the first write from segment_start onwards
+        for (idx, event) in events[search_start..].iter().enumerate() {
+            // Skip non-write operations
+            if !event.semantic_category.is_mutating() {
+                continue;
+            }
+
+            // Found a write - check method name matches
+            if event.method != method {
+                // Write mismatch (method) - sequencing error
+                return None;
+            }
+
+            // Match found. SQL validation should happen separately
+
+            // Advance the segment past this write
+            let abs_idx = search_start + idx;
+            state.segment_start = abs_idx + 1;
+            state.last_write_barrier = Some(abs_idx);
+            return Some(event);
+        }
+
+        None
+    }
+
+    /// Find a matching read operation within the current segment (untracked).
+    ///
+    /// In semantic mode, reads are NOT tracked for consumption. The same read
+    /// can be matched multiple times. This reflects that reads are idempotent
+    /// and the replay code may call them more or fewer times than recorded.
+    ///
+    /// Matching is done on both method name AND arguments to ensure we return
+    /// the correct result for the specific call. SQL strings within the args
+    /// are compared using fuzzy SQL matching to tolerate formatting differences.
+    fn find_read_in_segment_untracked<'a>(
+        &'a self,
+        events: &'a [AdapterCallEvent],
+        state: &SemanticReplayState,
+        method: &str,
+        args: &serde_json::Value,
+    ) -> Option<&'a AdapterCallEvent> {
+        let search_start = state.segment_start;
+
+        // Determine segment end (next write or end of events)
+        let segment_end = events[search_start..]
+            .iter()
+            .position(|e| e.semantic_category.is_mutating())
+            .map(|pos| search_start + pos)
+            .unwrap_or(events.len());
+
+        // Search within the segment for a matching read (method + args)
+        events[search_start..segment_end]
+            .iter()
+            .find(|event| event.method == method && adapter_args_match(method, &event.args, args))
+    }
+
+    /// Peek at the next event in semantic mode without consuming it.
+    ///
+    /// For reads: Returns the first matching event in the current segment
+    /// For writes: Returns the next write barrier
+    pub fn peek_semantic(
+        &self,
+        node_id: &str,
+        category: SemanticCategory,
+    ) -> Option<&AdapterCallEvent> {
+        let events = self.adapter_events_by_node.get(node_id)?;
+        let state = self.semantic_adapter_state.read();
+        let node_state = state.get(node_id).cloned().unwrap_or_default();
+
+        let search_start = node_state.segment_start;
+
+        match category {
+            SemanticCategory::Write => {
+                // Find the next write (writes ARE tracked)
+                events[search_start..]
+                    .iter()
+                    .find(|e| e.semantic_category.is_mutating())
+            }
+            SemanticCategory::MetadataRead => {
+                // Find first read in segment (reads are NOT tracked)
+                let segment_end = events[search_start..]
+                    .iter()
+                    .position(|e| e.semantic_category.is_mutating())
+                    .map(|pos| search_start + pos)
+                    .unwrap_or(events.len());
+
+                events[search_start..segment_end].first()
+            }
+            SemanticCategory::Pure | SemanticCategory::Cache => {
+                // Already handled above
+                unreachable!()
+            }
+        }
+    }
+
+    /// Check if the current segment has any reads available.
+    ///
+    /// Note: In semantic mode, reads are not tracked for consumption,
+    /// so this just checks if any reads exist in the current segment.
+    pub fn has_reads_in_segment(&self, node_id: &str) -> bool {
+        let Some(events) = self.adapter_events_by_node.get(node_id) else {
+            return false;
+        };
+        let state = self.semantic_adapter_state.read();
+        let node_state = state.get(node_id).cloned().unwrap_or_default();
+
+        let search_start = node_state.segment_start;
+        let segment_end = events[search_start..]
+            .iter()
+            .position(|e| e.semantic_category.is_mutating())
+            .map(|pos| search_start + pos)
+            .unwrap_or(events.len());
+
+        // Check if there are any non-write events in the segment
+        events[search_start..segment_end]
+            .iter()
+            .any(|e| !e.semantic_category.is_mutating())
+    }
+
+    /// Check if there is a pending write barrier for a node.
+    pub fn has_pending_write(&self, node_id: &str) -> bool {
+        let Some(events) = self.adapter_events_by_node.get(node_id) else {
+            return false;
+        };
+        let state = self.semantic_adapter_state.read();
+        let node_state = state.get(node_id).cloned().unwrap_or_default();
+
+        events[node_state.segment_start..]
+            .iter()
+            .any(|e| e.semantic_category.is_mutating())
+    }
+
+    // -------------------------------------------------------------------------
+    // Semantic mode metadata methods
+    // -------------------------------------------------------------------------
+
+    /// Find and consume a matching metadata event using semantic rules.
+    ///
+    /// Same semantics as adapter calls:
+    /// - Writes are tracked and must match in order (barriers)
+    /// - Reads are NOT tracked and can match 0 or more times
+    ///
+    /// Args are matched to ensure we return the correct result.
+    pub fn take_semantic_metadata_match(
+        &self,
+        caller_id: &str,
+        method: &str,
+        args: &MetadataCallArgs,
+        category: SemanticCategory,
+    ) -> Option<&MetadataCallEvent> {
+        let events = self.metadata_events_by_caller.get(caller_id)?;
+        let mut state = self.semantic_metadata_state.write();
+        let caller_state = state.entry(caller_id.to_string()).or_default();
+
+        match category {
+            SemanticCategory::Write => {
+                // Writes are barriers - tracked and consumed
+                self.find_next_metadata_write(events, caller_state, method, args)
+            }
+            SemanticCategory::MetadataRead => {
+                // Reads can match any read in segment with matching args - NOT tracked
+                self.find_metadata_read_in_segment_untracked(events, caller_state, method, args)
+            }
+            SemanticCategory::Pure | SemanticCategory::Cache => {
+                unreachable!()
+            }
+        }
+    }
+
+    /// Find the next metadata write operation in sequence (tracked).
+    fn find_next_metadata_write<'a>(
+        &'a self,
+        events: &'a [MetadataCallEvent],
+        state: &mut SemanticReplayState,
+        method: &str,
+        args: &MetadataCallArgs,
+    ) -> Option<&'a MetadataCallEvent> {
+        let search_start = state.segment_start;
+
+        // Find the first write from segment_start onwards
+        for (idx, event) in events[search_start..].iter().enumerate() {
+            if !event.semantic_category.is_mutating() {
+                continue;
+            }
+
+            // Found a write - method and args must match
+            if event.method == method && metadata_args_match(&event.args, args) {
+                let abs_idx = search_start + idx;
+                state.segment_start = abs_idx + 1; // Advance past this write
+                state.last_write_barrier = Some(abs_idx);
+                return Some(event);
+            } else {
+                // Write mismatch (method or args) - sequencing error
+                return None;
+            }
+        }
+
+        None
+    }
+
+    /// Find a matching metadata read within the current segment (untracked).
+    fn find_metadata_read_in_segment_untracked<'a>(
+        &'a self,
+        events: &'a [MetadataCallEvent],
+        state: &SemanticReplayState,
+        method: &str,
+        args: &MetadataCallArgs,
+    ) -> Option<&'a MetadataCallEvent> {
+        let search_start = state.segment_start;
+
+        let segment_end = events[search_start..]
+            .iter()
+            .position(|e| e.semantic_category.is_mutating())
+            .map(|pos| search_start + pos)
+            .unwrap_or(events.len());
+
+        // Search for matching read (method + args) - no consumption tracking
+        events[search_start..segment_end]
+            .iter()
+            .find(|event| event.method == method && metadata_args_match(&event.args, args))
+    }
+
+    // -------------------------------------------------------------------------
+    // Metadata call methods (strict mode)
+    // -------------------------------------------------------------------------
+
+    /// Check if we have any recorded metadata events for a caller.
+    pub fn has_metadata_events_for_caller(&self, caller_id: &str) -> bool {
+        self.metadata_events_by_caller.contains_key(caller_id)
+    }
+
+    /// Find a matching metadata read across ALL callers using superset matching
+    /// within their current segment.
+    /// This cross-node check is necessary as there may be non-determinism in
+    /// which node facilitates hydration of shared resources such as the schema cache.
+    pub fn find_metadata_read_across_all_callers(
+        &self,
+        method: &str,
+        args: &MetadataCallArgs,
+    ) -> Option<&MetadataCallEvent> {
+        let state = self.semantic_metadata_state.read();
+
+        for (caller_id, events) in &self.metadata_events_by_caller {
+            // Get segment start for this caller (0 if not yet visited)
+            let segment_start = state.get(caller_id).map(|s| s.segment_start).unwrap_or(0);
+
+            // Find segment end (next write or end of events)
+            let segment_end = events[segment_start..]
+                .iter()
+                .position(|e| e.semantic_category.is_mutating())
+                .map(|pos| segment_start + pos)
+                .unwrap_or(events.len());
+
+            // Search within this caller's current segment
+            if let Some(event) = events[segment_start..segment_end]
+                .iter()
+                .find(|e| e.method == method && metadata_args_match(&e.args, args))
+            {
+                return Some(event);
+            }
+        }
+        None
+    }
+
+    /// Get the next recorded metadata event for a caller without advancing the position.
+    pub fn peek_next_metadata(&self, caller_id: &str) -> Option<&MetadataCallEvent> {
+        let positions = self.metadata_positions.read();
+        let pos = positions.get(caller_id).copied().unwrap_or(0);
+        self.metadata_events_by_caller.get(caller_id)?.get(pos)
+    }
+
+    /// Get the next recorded metadata event for a caller and advance the position.
+    pub fn take_next_metadata(&self, caller_id: &str) -> Option<&MetadataCallEvent> {
+        let events = self.metadata_events_by_caller.get(caller_id)?;
+        let mut positions = self.metadata_positions.write();
+        let pos = positions.entry(caller_id.to_string()).or_insert(0);
+        let event = events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
+    /// Get all recorded metadata events for a caller.
+    pub fn metadata_events_for_caller(&self, caller_id: &str) -> Option<&[MetadataCallEvent]> {
+        self.metadata_events_by_caller
+            .get(caller_id)
+            .map(|v| v.as_slice())
+    }
+
+    /// Get all caller IDs for metadata events.
+    pub fn metadata_caller_ids(&self) -> impl Iterator<Item = &str> {
+        self.metadata_events_by_caller.keys().map(|s| s.as_str())
+    }
+
+    // -------------------------------------------------------------------------
+    // Statistics and reset
+    // -------------------------------------------------------------------------
+
+    /// Get the total number of events (adapter, metadata, SAO, and run_remote_adhoc).
+    pub fn total_events(&self) -> usize {
+        self.adapter_events_by_node
+            .values()
+            .map(|v| v.len())
+            .sum::<usize>()
+            + self
+                .metadata_events_by_caller
+                .values()
+                .map(|v| v.len())
+                .sum::<usize>()
+            + self.sao_events.len()
+            + self.run_remote_adhoc_events.len()
+    }
+
+    /// Get total adapter events count.
+    pub fn total_adapter_events(&self) -> usize {
+        self.adapter_events_by_node.values().map(|v| v.len()).sum()
+    }
+
+    /// Get total metadata events count.
+    pub fn total_metadata_events(&self) -> usize {
+        self.metadata_events_by_caller
+            .values()
+            .map(|v| v.len())
+            .sum()
+    }
+
+    /// Get total run_remote_adhoc events count.
+    pub fn total_run_remote_adhoc_events(&self) -> usize {
+        self.run_remote_adhoc_events.len()
+    }
+
+    /// Get the next run_remote_adhoc event, advancing the position.
+    pub fn take_next_run_remote_adhoc(&self) -> Option<&RunRemoteAdhocEvent> {
+        let mut pos = self.run_remote_adhoc_position.write();
+        let event = self.run_remote_adhoc_events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
+    /// Get the next cache invalidation event, advancing the position.
+    pub fn take_next_cache_invalidation(&self) -> Option<&CacheInvalidationEvent> {
+        let mut pos = self.cache_invalidation_position.write();
+        let event = self.cache_invalidation_events.get(*pos)?;
+        *pos += 1;
+        Some(event)
+    }
+
+    /// Reset replay positions for all nodes and callers.
+    pub fn reset(&self) {
+        self.adapter_positions.write().clear();
+        self.metadata_positions.write().clear();
+        *self.run_remote_adhoc_position.write() = 0;
+        *self.cache_invalidation_position.write() = 0;
+        self.semantic_adapter_state.write().clear();
+        self.semantic_metadata_state.write().clear();
+    }
+
+    /// Reset replay position for a specific node.
+    pub fn reset_node(&self, node_id: &str) {
+        self.adapter_positions.write().remove(node_id);
+        self.semantic_adapter_state.write().remove(node_id);
+    }
+
+    /// Reset replay position for a specific metadata caller.
+    pub fn reset_metadata_caller(&self, caller_id: &str) {
+        self.metadata_positions.write().remove(caller_id);
+        self.semantic_metadata_state.write().remove(caller_id);
+    }
+}
+
+/// Load events from a gzipped NDJSON file.
+fn load_events_gzipped(path: &Path) -> Result<Vec<RecordedEvent>, ReplayError> {
+    let file = std::fs::File::open(path)?;
+    let decoder = GzDecoder::new(file);
+    let reader = BufReader::new(decoder);
+    load_events_from_reader(reader)
+}
+
+/// Load events from a plain NDJSON file.
+fn load_events_plain(path: &Path) -> Result<Vec<RecordedEvent>, ReplayError> {
+    let file = std::fs::File::open(path)?;
+    let reader = BufReader::new(file);
+    load_events_from_reader(reader)
+}
+
+/// Load events from a reader.
+fn load_events_from_reader<R: BufRead>(reader: R) -> Result<Vec<RecordedEvent>, ReplayError> {
+    let mut events = Vec::new();
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let event: RecordedEvent = serde_json::from_str(&line)?;
+        events.push(event);
+    }
+    Ok(events)
+}
+
+// -----------------------------------------------------------------------------
+// Replay validation
+// -----------------------------------------------------------------------------
+
+/// Result of replaying an event.
+#[derive(Debug)]
+pub struct ReplayResult {
+    /// The recorded event that was matched
+    pub recorded: AdapterCallEvent,
+    /// Whether the replay matched the recording
+    pub matched: bool,
+    /// Differences found (if any)
+    pub differences: Vec<ReplayDifference>,
+}
+
+/// A difference found during replay.
+#[derive(Debug)]
+pub enum ReplayDifference {
+    MethodMismatch {
+        expected: String,
+        actual: String,
+    },
+    ArgCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
+    ArgValueMismatch {
+        index: usize,
+        expected: serde_json::Value,
+        actual: serde_json::Value,
+    },
+    SqlMismatch {
+        expected: String,
+        actual: String,
+    },
+}
+
+impl std::fmt::Display for ReplayDifference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReplayDifference::MethodMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Method mismatch: expected '{}', got '{}'",
+                    expected, actual
+                )
+            }
+            ReplayDifference::ArgCountMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Arg count mismatch: expected {}, got {}",
+                    expected, actual
+                )
+            }
+            ReplayDifference::ArgValueMismatch {
+                index,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Arg[{}] mismatch:\n  expected: {}\n  actual: {}",
+                    index, expected, actual
+                )
+            }
+            ReplayDifference::SqlMismatch { expected, actual } => {
+                writeln!(f, "SQL mismatch:")?;
+                let diff = TextDiff::from_lines(expected, actual);
+                for change in diff.iter_all_changes() {
+                    let sign = match change.tag() {
+                        ChangeTag::Delete => "-",
+                        ChangeTag::Insert => "+",
+                        ChangeTag::Equal => " ",
+                    };
+                    write!(f, "{}{}", sign, change)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Validate a replay call against a recorded event.
+pub fn validate_replay(
+    recorded: &AdapterCallEvent,
+    method: &str,
+    args: &serde_json::Value,
+    adapter_type: AdapterType,
+) -> ReplayResult {
+    let mut differences = Vec::new();
+
+    // Check method name
+    if recorded.method != method {
+        differences.push(ReplayDifference::MethodMismatch {
+            expected: recorded.method.clone(),
+            actual: method.to_string(),
+        });
+    }
+
+    // For SQL methods, validate the SQL string
+    if is_sql_method(method) {
+        // Extract SQL from first arg
+        let recorded_sql = extract_sql_from_args(&recorded.args);
+        let actual_sql = extract_sql_from_args(args);
+
+        match (recorded_sql, actual_sql) {
+            (Some(exp_sql), Some(act_sql)) => {
+                match compare_sql(exp_sql, act_sql, adapter_type) {
+                    Ok(()) => {
+                        // SQL is semantically equivalent, no difference to report
+                    }
+                    Err(_) => {
+                        differences.push(ReplayDifference::SqlMismatch {
+                            expected: exp_sql.to_string(),
+                            actual: act_sql.to_string(),
+                        });
+                    }
+                }
+            }
+            (None, None) => {}
+            _ => {
+                differences.push(ReplayDifference::ArgValueMismatch {
+                    index: 0,
+                    expected: recorded.args.clone(),
+                    actual: args.clone(),
+                });
+            }
+        }
+    } else if let (Some(recorded_args), Some(actual_args)) =
+        (recorded.args.as_array(), args.as_array())
+    {
+        // Non-SQL methods: validate all args
+        if recorded_args.len() != actual_args.len() {
+            differences.push(ReplayDifference::ArgCountMismatch {
+                expected: recorded_args.len(),
+                actual: actual_args.len(),
+            });
+        } else {
+            for (i, (expected, actual)) in recorded_args.iter().zip(actual_args.iter()).enumerate()
+            {
+                if !values_match(expected, actual) {
+                    differences.push(ReplayDifference::ArgValueMismatch {
+                        index: i,
+                        expected: expected.clone(),
+                        actual: actual.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    ReplayResult {
+        recorded: recorded.clone(),
+        matched: differences.is_empty(),
+        differences,
+    }
+}
+
+// Tests for serde functionality have been moved to the `serde` module.
+// See `super::serde::tests` for json_to_value and values_match tests.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sql::diff::compare_sql;
+
+    /// Compare SQL args for execute/run_query methods.
+    fn sql_args_match(
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+        adapter_type: AdapterType,
+    ) -> bool {
+        let recorded_sql = extract_sql_from_args(recorded);
+        let actual_sql = extract_sql_from_args(actual);
+
+        match (recorded_sql, actual_sql) {
+            (Some(r), Some(a)) => compare_sql(r, a, adapter_type).is_ok(),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    /// Helper to create a test AdapterCallEvent
+    fn make_event(
+        node_id: &str,
+        seq: u32,
+        method: &str,
+        category: SemanticCategory,
+    ) -> AdapterCallEvent {
+        AdapterCallEvent {
+            node_id: node_id.to_string(),
+            seq,
+            method: method.to_string(),
+            semantic_category: category,
+            args: serde_json::json!([]),
+            result: serde_json::json!(null),
+            success: true,
+            error: None,
+            timestamp_ns: seq as u64 * 1000,
+        }
+    }
+
+    /// Helper to get empty args for test calls
+    fn empty_args() -> serde_json::Value {
+        serde_json::json!([])
+    }
+
+    /// Helper to create a test Recording from events
+    fn make_recording(events: Vec<AdapterCallEvent>) -> Recording {
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
+        for event in events {
+            adapter_events_by_node
+                .entry(event.node_id.clone())
+                .or_default()
+                .push(event);
+        }
+        for events in adapter_events_by_node.values_mut() {
+            events.sort_by_key(|e| e.seq);
+        }
+
+        Recording {
+            header: RecordingHeader {
+                format_version: 1,
+                fusion_version: "test".to_string(),
+                adapter_type: "snowflake".to_string(),
+                recorded_at: "2024-01-01T00:00:00Z".to_string(),
+                invocation_id: "test-123".to_string(),
+                invocation_command: None,
+                metadata: serde_json::Map::new(),
+            },
+            adapter_events_by_node,
+            metadata_events_by_caller: BTreeMap::new(),
+            sao_events: BTreeMap::new(),
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
+            adapter_positions: RwLock::new(HashMap::new()),
+            metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
+            semantic_adapter_state: RwLock::new(HashMap::new()),
+            semantic_metadata_state: RwLock::new(HashMap::new()),
+        }
+    }
+
+    #[test]
+    fn test_replay_mode_default_is_strict() {
+        assert_eq!(ReplayMode::default(), ReplayMode::Strict);
+    }
+
+    #[test]
+    fn test_replay_mode_display() {
+        assert_eq!(format!("{}", ReplayMode::Strict), "strict");
+        assert_eq!(format!("{}", ReplayMode::Semantic), "semantic");
+    }
+
+    #[test]
+    fn test_replay_mode_serialization() {
+        let strict = ReplayMode::Strict;
+        let json = serde_json::to_string(&strict).unwrap();
+        assert_eq!(json, "\"strict\"");
+
+        let semantic = ReplayMode::Semantic;
+        let json = serde_json::to_string(&semantic).unwrap();
+        assert_eq!(json, "\"semantic\"");
+
+        let parsed: ReplayMode = serde_json::from_str("\"semantic\"").unwrap();
+        assert_eq!(parsed, ReplayMode::Semantic);
+    }
+
+    #[test]
+    fn test_strict_mode_sequential_matching() {
+        // In strict mode, events must match in exact sequence
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event(
+                "node1",
+                1,
+                "get_columns_in_relation",
+                SemanticCategory::MetadataRead,
+            ),
+            make_event("node1", 2, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // First call should match first event
+        let event = recording.take_next("node1").unwrap();
+        assert_eq!(event.method, "get_relation");
+
+        // Second call should match second event
+        let event = recording.take_next("node1").unwrap();
+        assert_eq!(event.method, "get_columns_in_relation");
+
+        // Third call should match third event
+        let event = recording.take_next("node1").unwrap();
+        assert_eq!(event.method, "execute");
+
+        // No more events
+        assert!(recording.take_next("node1").is_none());
+    }
+
+    #[test]
+    fn test_semantic_mode_reads_can_match_out_of_order() {
+        // In semantic mode, reads within a segment can match in any order
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event(
+                "node1",
+                1,
+                "get_columns_in_relation",
+                SemanticCategory::MetadataRead,
+            ),
+            make_event("node1", 2, "list_schemas", SemanticCategory::MetadataRead),
+            make_event("node1", 3, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Request in different order than recorded
+        // First, get_columns_in_relation (recorded as seq 1)
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_columns_in_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.method, "get_columns_in_relation");
+
+        // Second, list_schemas (recorded as seq 2)
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "list_schemas",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.method, "list_schemas");
+
+        // Third, get_relation (recorded as seq 0)
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.method, "get_relation");
+
+        // Now the write barrier - must still be next
+        let event = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+        assert_eq!(event.method, "execute");
+    }
+
+    #[test]
+    fn test_semantic_mode_writes_are_barriers() {
+        // Writes must match in sequence order - they act as barriers
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+            make_event("node1", 2, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 3, "drop_relation", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Consume the read in first segment
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 0);
+
+        // Now we must match the write barrier
+        let event = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+        assert_eq!(event.seq, 1);
+
+        // Now we're in a new segment - can match the second get_relation
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 2);
+
+        // Match the second write barrier
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "drop_relation",
+                &empty_args(),
+                SemanticCategory::Write,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 3);
+    }
+
+    #[test]
+    fn test_semantic_mode_wrong_write_order_fails() {
+        // Trying to match writes out of order should fail
+        let events = vec![
+            make_event("node1", 0, "execute", SemanticCategory::Write),
+            make_event("node1", 1, "drop_relation", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Try to match drop_relation first (but execute is the next write barrier)
+        let result = recording.take_semantic_match(
+            "node1",
+            "drop_relation",
+            &empty_args(),
+            SemanticCategory::Write,
+        );
+        assert!(result.is_none(), "Should not match wrong write order");
+    }
+
+    #[test]
+    fn test_semantic_mode_read_not_in_segment_fails() {
+        // Trying to match a read that's past the current segment boundary should fail
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+            make_event("node1", 2, "list_schemas", SemanticCategory::MetadataRead),
+        ];
+        let recording = make_recording(events);
+
+        // Try to match list_schemas (which is after the write barrier in segment 2)
+        let result = recording.take_semantic_match(
+            "node1",
+            "list_schemas",
+            &empty_args(),
+            SemanticCategory::MetadataRead,
+        );
+        assert!(
+            result.is_none(),
+            "Should not match read from future segment"
+        );
+
+        // But we can match get_relation from current segment
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 0);
+    }
+
+    #[test]
+    fn test_semantic_mode_multiple_segments() {
+        // Test behavior across multiple segments
+        let events = vec![
+            // Segment 1
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event(
+                "node1",
+                1,
+                "get_columns_in_relation",
+                SemanticCategory::MetadataRead,
+            ),
+            make_event("node1", 2, "execute", SemanticCategory::Write),
+            // Segment 2
+            make_event("node1", 3, "list_schemas", SemanticCategory::MetadataRead),
+            make_event(
+                "node1",
+                4,
+                "check_schema_exists",
+                SemanticCategory::MetadataRead,
+            ),
+            make_event("node1", 5, "create_schema", SemanticCategory::Write),
+            // Segment 3
+            make_event("node1", 6, "get_relation", SemanticCategory::MetadataRead),
+        ];
+        let recording = make_recording(events);
+
+        // Segment 1: Match reads in reverse order
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "get_columns_in_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        let _ = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+
+        // Segment 2: Match reads in reverse order
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "check_schema_exists",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "list_schemas",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "create_schema",
+                &empty_args(),
+                SemanticCategory::Write,
+            )
+            .unwrap();
+
+        // Segment 3 (no write barrier at end)
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 6);
+    }
+
+    #[test]
+    fn test_semantic_mode_peek_does_not_consume() {
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Peek multiple times
+        let event1 = recording.peek_semantic("node1", SemanticCategory::MetadataRead);
+        let event2 = recording.peek_semantic("node1", SemanticCategory::MetadataRead);
+
+        assert!(event1.is_some());
+        assert!(event2.is_some());
+        assert_eq!(event1.unwrap().method, event2.unwrap().method);
+
+        // Now actually consume it
+        let consumed = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(consumed.method, "get_relation");
+    }
+
+    #[test]
+    fn test_reset_clears_semantic_state() {
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Consume the read
+        let _ = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+
+        // Reset
+        recording.reset();
+
+        // Should be able to match again
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event.seq, 0);
+    }
+
+    #[test]
+    fn test_has_reads_in_segment() {
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+            make_event("node1", 2, "list_schemas", SemanticCategory::MetadataRead),
+        ];
+        let recording = make_recording(events);
+
+        // Initially has reads in segment
+        assert!(recording.has_reads_in_segment("node1"));
+
+        // Consume the write to advance to next segment
+        let _ = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+
+        // New segment also has reads
+        assert!(recording.has_reads_in_segment("node1"));
+    }
+
+    #[test]
+    fn test_semantic_mode_reads_can_match_multiple_times() {
+        // In semantic mode, reads are NOT tracked - same read can be matched multiple times
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Match the same read multiple times - should succeed each time
+        let event1 = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event1.method, "get_relation");
+
+        let event2 = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event2.method, "get_relation");
+
+        let event3 = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &empty_args(),
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        assert_eq!(event3.method, "get_relation");
+
+        // But writes are still tracked - can only match once
+        let write = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+        assert_eq!(write.method, "execute");
+
+        // Trying to match the write again fails (no more writes)
+        let no_write = recording.take_semantic_match(
+            "node1",
+            "execute",
+            &empty_args(),
+            SemanticCategory::Write,
+        );
+        assert!(no_write.is_none());
+    }
+
+    #[test]
+    fn test_has_pending_write() {
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+            make_event("node1", 2, "get_relation", SemanticCategory::MetadataRead),
+        ];
+        let recording = make_recording(events);
+
+        // Has pending write
+        assert!(recording.has_pending_write("node1"));
+
+        // Consume the write
+        let _ = recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+
+        // No more pending writes
+        assert!(!recording.has_pending_write("node1"));
+    }
+
+    #[test]
+    fn test_semantic_mode_matches_by_args() {
+        // Helper to create an event with specific args
+        fn make_event_with_args(
+            node_id: &str,
+            seq: u32,
+            method: &str,
+            args: serde_json::Value,
+            category: SemanticCategory,
+        ) -> AdapterCallEvent {
+            AdapterCallEvent {
+                node_id: node_id.to_string(),
+                seq,
+                method: method.to_string(),
+                semantic_category: category,
+                args,
+                result: serde_json::json!({"seq": seq}), // Different result for each
+                success: true,
+                error: None,
+                timestamp_ns: seq as u64 * 1000,
+            }
+        }
+
+        // Create events with same method but different args
+        let events = vec![
+            make_event_with_args(
+                "node1",
+                0,
+                "get_relation",
+                serde_json::json!(["DB", "SCHEMA", "TABLE_A"]),
+                SemanticCategory::MetadataRead,
+            ),
+            make_event_with_args(
+                "node1",
+                1,
+                "get_relation",
+                serde_json::json!(["DB", "SCHEMA", "TABLE_B"]),
+                SemanticCategory::MetadataRead,
+            ),
+            make_event_with_args(
+                "node1",
+                2,
+                "execute",
+                serde_json::json!(["CREATE TABLE foo"]),
+                SemanticCategory::Write,
+            ),
+        ];
+
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
+        for event in events {
+            adapter_events_by_node
+                .entry(event.node_id.clone())
+                .or_default()
+                .push(event);
+        }
+
+        let recording = Recording {
+            header: RecordingHeader {
+                format_version: 1,
+                fusion_version: "test".to_string(),
+                adapter_type: "snowflake".to_string(),
+                recorded_at: "2024-01-01T00:00:00Z".to_string(),
+                invocation_id: "test-123".to_string(),
+                metadata: serde_json::Map::new(),
+                invocation_command: None,
+            },
+            adapter_events_by_node,
+            metadata_events_by_caller: BTreeMap::new(),
+            sao_events: BTreeMap::new(),
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
+            adapter_positions: RwLock::new(HashMap::new()),
+            metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
+            semantic_adapter_state: RwLock::new(HashMap::new()),
+            semantic_metadata_state: RwLock::new(HashMap::new()),
+        };
+
+        // Request TABLE_B first (out of order by seq, but should match by args)
+        let args_b = serde_json::json!(["DB", "SCHEMA", "TABLE_B"]);
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &args_b,
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        // Should get the TABLE_B result (seq 1)
+        assert_eq!(event.result, serde_json::json!({"seq": 1}));
+
+        // Request TABLE_A (should still find it since reads aren't consumed)
+        let args_a = serde_json::json!(["DB", "SCHEMA", "TABLE_A"]);
+        let event = recording
+            .take_semantic_match(
+                "node1",
+                "get_relation",
+                &args_a,
+                SemanticCategory::MetadataRead,
+            )
+            .unwrap();
+        // Should get the TABLE_A result (seq 0)
+        assert_eq!(event.result, serde_json::json!({"seq": 0}));
+
+        // Request TABLE_C which doesn't exist - should return None
+        let args_c = serde_json::json!(["DB", "SCHEMA", "TABLE_C"]);
+        let result = recording.take_semantic_match(
+            "node1",
+            "get_relation",
+            &args_c,
+            SemanticCategory::MetadataRead,
+        );
+        assert!(result.is_none(), "Should not find TABLE_C");
+    }
+
+    #[test]
+    fn test_get_relation_args_match_positional_and_kwargs() {
+        let positional = serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let kwargs = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions"
+            }
+        ]);
+
+        assert!(adapter_args_match("get_relation", &kwargs, &positional));
+        assert!(adapter_args_match("get_relation", &positional, &kwargs));
+    }
+
+    #[test]
+    fn test_semantic_mode_read_does_not_advance_over_skipped_write() {
+        let events = vec![
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 0,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "model_executions"]),
+                result: serde_json::json!({"seq": 0}),
+                success: true,
+                error: None,
+                timestamp_ns: 0,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 1,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert model_executions"]),
+                result: serde_json::json!({"seq": 1}),
+                success: true,
+                error: None,
+                timestamp_ns: 1,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 2,
+                method: "get_relation".to_string(),
+                semantic_category: SemanticCategory::MetadataRead,
+                args: serde_json::json!(["DB", "SCHEMA", "test_executions"]),
+                result: serde_json::json!({"seq": 2}),
+                success: true,
+                error: None,
+                timestamp_ns: 2,
+            },
+            AdapterCallEvent {
+                node_id: "node1".to_string(),
+                seq: 3,
+                method: "execute".to_string(),
+                semantic_category: SemanticCategory::Write,
+                args: serde_json::json!(["insert test_executions"]),
+                result: serde_json::json!({"seq": 3}),
+                success: true,
+                error: None,
+                timestamp_ns: 3,
+            },
+        ];
+        let recording = make_recording(events);
+
+        let test_args = serde_json::json!(["DB", "SCHEMA", "test_executions"]);
+        let read = recording.take_semantic_match(
+            "node1",
+            "get_relation",
+            &test_args,
+            SemanticCategory::MetadataRead,
+        );
+        assert!(
+            read.is_none(),
+            "Should not match a future read across a skipped write"
+        );
+    }
+
+    #[test]
+    fn test_get_relation_args_match_needs_information() {
+        let default_needs_information =
+            serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions"]);
+        let explicit_false = serde_json::json!([
+            "rioter_dbt",
+            "dbt_artifacts",
+            "model_executions",
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "needs_information": false
+            }
+        ]);
+        let explicit_true = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "database": "rioter_dbt",
+                "schema": "dbt_artifacts",
+                "identifier": "model_executions",
+                "needs_information": true
+            }
+        ]);
+        let positional_true =
+            serde_json::json!(["rioter_dbt", "dbt_artifacts", "model_executions", true]);
+
+        assert!(adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_false
+        ));
+        assert!(!adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &explicit_true
+        ));
+        assert!(!adapter_args_match(
+            "get_relation",
+            &default_needs_information,
+            &positional_true
+        ));
+        assert!(adapter_args_match(
+            "get_relation",
+            &explicit_true,
+            &positional_true
+        ));
+    }
+
+    #[test]
+    fn test_sql_args_match_handles_whitespace_differences() {
+        // Test that SQL values are matched using fuzzy comparison
+        let sql1 = serde_json::json!(["SELECT   *\nFROM    users"]);
+        let sql2 = serde_json::json!(["SELECT*FROMusers"]);
+        assert!(
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "SQL strings should match ignoring whitespace"
+        );
+    }
+
+    #[test]
+    fn test_sql_args_match_handles_query_tag_differences() {
+        // Test that query tag payloads are canonicalized
+        let sql1 = serde_json::json!([r#"alter session set query_tag = '{"model": "a"}'"#]);
+        let sql2 = serde_json::json!([r#"alter session set query_tag = '{"model": "b"}'"#]);
+        assert!(
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "Query tag payloads should be canonicalized"
+        );
+    }
+
+    #[test]
+    fn test_sql_args_match_handles_uuid_differences() {
+        // Test that UUID literals are canonicalized
+        let sql1 = serde_json::json!(["SELECT '8f439b7e-752f-460a-8d1a-f469231d169c' AS id"]);
+        let sql2 = serde_json::json!(["SELECT '019a71ca-e5ad-7ca3-99d8-49b58a470d82' AS id"]);
+        assert!(
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "UUID literals should be canonicalized"
+        );
+    }
+
+    #[test]
+    fn test_sql_args_match_handles_timestamp_differences() {
+        // Test that timestamp literals are matched flexibly
+        let sql1 = serde_json::json!(["WHERE created_at >= '2025-09-10T18:07:45'"]);
+        let sql2 = serde_json::json!(["WHERE created_at >= '2025-09-10T14:16:52'"]);
+        assert!(
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "Timestamp literals should be matched flexibly"
+        );
+    }
+
+    #[test]
+    fn test_sql_args_match_detects_real_differences() {
+        // Test that actual semantic differences are still detected
+        let sql1 = serde_json::json!(["SELECT * FROM users"]);
+        let sql2 = serde_json::json!(["SELECT * FROM orders"]);
+        assert!(
+            !sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "Different table names should not match"
+        );
+    }
+
+    #[test]
+    fn test_sql_args_match_string_format() {
+        // Test that SQL can be passed as a direct string (not wrapped in array)
+        let sql1 = serde_json::json!("SELECT   *  FROM  users");
+        let sql2 = serde_json::json!("SELECT * FROM users");
+        assert!(
+            sql_args_match(&sql1, &sql2, AdapterType::Snowflake),
+            "Direct SQL strings should be matched with fuzzy comparison"
+        );
+    }
+
+    #[test]
+    fn test_semantic_mode_matches_sql_with_whitespace_differences() {
+        // Helper to create an event with SQL args
+        fn make_sql_event(
+            node_id: &str,
+            seq: u32,
+            method: &str,
+            sql: &str,
+            category: SemanticCategory,
+        ) -> AdapterCallEvent {
+            AdapterCallEvent {
+                node_id: node_id.to_string(),
+                seq,
+                method: method.to_string(),
+                semantic_category: category,
+                args: serde_json::json!([sql]),
+                result: serde_json::json!({"rows": 0}),
+                success: true,
+                error: None,
+                timestamp_ns: seq as u64 * 1000,
+            }
+        }
+
+        // Create events with SQL that differs only by whitespace
+        let events = vec![make_sql_event(
+            "node1",
+            0,
+            "execute",
+            "SELECT   *\nFROM    users\nWHERE   id = 1",
+            SemanticCategory::Write,
+        )];
+        let recording = make_recording(events);
+
+        // Should match with compact SQL (whitespace removed)
+        let compact_sql = serde_json::json!(["SELECT * FROM users WHERE id = 1"]);
+        let event = recording
+            .take_semantic_match("node1", "execute", &compact_sql, SemanticCategory::Write)
+            .expect("Should match SQL ignoring whitespace differences");
+        assert_eq!(event.method, "execute");
+    }
+
+    // -------------------------------------------------------------------------
+    // SAO (State Aware Orchestration) tests
+    // -------------------------------------------------------------------------
+
+    use super::super::event::SaoStatus;
+
+    /// Helper to create a test Recording with SAO events
+    fn make_recording_with_sao(
+        adapter_events: Vec<AdapterCallEvent>,
+        sao_events: Vec<SaoEvent>,
+    ) -> Recording {
+        let mut adapter_events_by_node: BTreeMap<String, Vec<AdapterCallEvent>> = BTreeMap::new();
+        for event in adapter_events {
+            adapter_events_by_node
+                .entry(event.node_id.clone())
+                .or_default()
+                .push(event);
+        }
+        for events in adapter_events_by_node.values_mut() {
+            events.sort_by_key(|e| e.seq);
+        }
+
+        let mut sao_events_map: BTreeMap<String, SaoEvent> = BTreeMap::new();
+        for event in sao_events {
+            sao_events_map.insert(event.node_id.clone(), event);
+        }
+
+        Recording {
+            header: RecordingHeader {
+                format_version: 1,
+                fusion_version: "test".to_string(),
+                adapter_type: "snowflake".to_string(),
+                recorded_at: "2024-01-01T00:00:00Z".to_string(),
+                invocation_id: "test-123".to_string(),
+                invocation_command: None,
+                metadata: serde_json::Map::new(),
+            },
+            adapter_events_by_node,
+            metadata_events_by_caller: BTreeMap::new(),
+            sao_events: sao_events_map,
+            run_remote_adhoc_events: Vec::new(),
+            cache_invalidation_events: Vec::new(),
+            adapter_positions: RwLock::new(HashMap::new()),
+            metadata_positions: RwLock::new(HashMap::new()),
+            run_remote_adhoc_position: RwLock::new(0),
+            cache_invalidation_position: RwLock::new(0),
+            semantic_adapter_state: RwLock::new(HashMap::new()),
+            semantic_metadata_state: RwLock::new(HashMap::new()),
+        }
+    }
+
+    #[test]
+    fn test_sao_event_lookup() {
+        let sao_events = vec![
+            SaoEvent {
+                node_id: "model.test.orders".to_string(),
+                status: SaoStatus::ReusedNoChanges,
+                message: "No new changes on any upstreams".to_string(),
+                stored_hash: "abc123".to_string(),
+                timestamp_ns: 1000,
+            },
+            SaoEvent {
+                node_id: "model.test.customers".to_string(),
+                status: SaoStatus::ReusedStillFresh {
+                    freshness_seconds: 3600,
+                    last_updated_seconds: 1800,
+                },
+                message: "Still within freshness period".to_string(),
+                stored_hash: "def456".to_string(),
+                timestamp_ns: 2000,
+            },
+        ];
+        let recording = make_recording_with_sao(vec![], sao_events);
+
+        // Should find SAO events by node_id
+        let event = recording.get_sao_event("model.test.orders").unwrap();
+        assert!(matches!(event.status, SaoStatus::ReusedNoChanges));
+        assert_eq!(event.message, "No new changes on any upstreams");
+        assert_eq!(event.stored_hash, "abc123");
+
+        let event = recording.get_sao_event("model.test.customers").unwrap();
+        if let SaoStatus::ReusedStillFresh {
+            freshness_seconds,
+            last_updated_seconds,
+        } = event.status
+        {
+            assert_eq!(freshness_seconds, 3600);
+            assert_eq!(last_updated_seconds, 1800);
+        } else {
+            panic!("Expected ReusedStillFresh status");
+        }
+
+        // Should return None for unknown node
+        assert!(recording.get_sao_event("model.test.unknown").is_none());
+    }
+
+    #[test]
+    fn test_has_sao_event() {
+        let sao_events = vec![SaoEvent {
+            node_id: "model.test.orders".to_string(),
+            status: SaoStatus::ReusedNoChanges,
+            message: "No new changes".to_string(),
+            stored_hash: "abc123".to_string(),
+            timestamp_ns: 1000,
+        }];
+        let recording = make_recording_with_sao(vec![], sao_events);
+
+        assert!(recording.has_sao_event("model.test.orders"));
+        assert!(!recording.has_sao_event("model.test.unknown"));
+    }
+
+    #[test]
+    fn test_sao_node_ids() {
+        let sao_events = vec![
+            SaoEvent {
+                node_id: "model.test.orders".to_string(),
+                status: SaoStatus::ReusedNoChanges,
+                message: "No new changes".to_string(),
+                stored_hash: "abc123".to_string(),
+                timestamp_ns: 1000,
+            },
+            SaoEvent {
+                node_id: "model.test.customers".to_string(),
+                status: SaoStatus::ReusedStillFreshNoChanges,
+                message: "Still fresh".to_string(),
+                stored_hash: "def456".to_string(),
+                timestamp_ns: 2000,
+            },
+        ];
+        let recording = make_recording_with_sao(vec![], sao_events);
+
+        let node_ids: Vec<_> = recording.sao_node_ids().collect();
+        assert_eq!(node_ids.len(), 2);
+        assert!(node_ids.contains(&"model.test.orders"));
+        assert!(node_ids.contains(&"model.test.customers"));
+    }
+
+    #[test]
+    fn test_total_sao_events() {
+        let sao_events = vec![
+            SaoEvent {
+                node_id: "model.test.orders".to_string(),
+                status: SaoStatus::ReusedNoChanges,
+                message: "No new changes".to_string(),
+                stored_hash: "abc123".to_string(),
+                timestamp_ns: 1000,
+            },
+            SaoEvent {
+                node_id: "model.test.customers".to_string(),
+                status: SaoStatus::ReusedNoChanges,
+                message: "No new changes".to_string(),
+                stored_hash: "def456".to_string(),
+                timestamp_ns: 2000,
+            },
+        ];
+        let recording = make_recording_with_sao(vec![], sao_events);
+
+        assert_eq!(recording.total_sao_events(), 2);
+    }
+
+    #[test]
+    fn test_total_events_includes_sao() {
+        let adapter_events = vec![make_event("node1", 0, "execute", SemanticCategory::Write)];
+        let sao_events = vec![SaoEvent {
+            node_id: "model.test.orders".to_string(),
+            status: SaoStatus::ReusedNoChanges,
+            message: "No new changes".to_string(),
+            stored_hash: "abc123".to_string(),
+            timestamp_ns: 1000,
+        }];
+        let recording = make_recording_with_sao(adapter_events, sao_events);
+
+        // Total should include both adapter events and SAO events
+        assert_eq!(recording.total_events(), 2);
+        assert_eq!(recording.total_adapter_events(), 1);
+        assert_eq!(recording.total_sao_events(), 1);
+    }
+
+    #[test]
+    fn test_mixed_adapter_and_sao_events() {
+        // Some nodes have adapter events, some have SAO events
+        let adapter_events = vec![make_event(
+            "model.test.executed",
+            0,
+            "execute",
+            SemanticCategory::Write,
+        )];
+        let sao_events = vec![SaoEvent {
+            node_id: "model.test.skipped".to_string(),
+            status: SaoStatus::ReusedNoChanges,
+            message: "No new changes".to_string(),
+            stored_hash: "abc123".to_string(),
+            timestamp_ns: 1000,
+        }];
+        let recording = make_recording_with_sao(adapter_events, sao_events);
+
+        // Should have adapter events for executed node
+        assert!(recording.events_for_node("model.test.executed").is_some());
+        assert!(!recording.has_sao_event("model.test.executed"));
+
+        // Should have SAO event for skipped node
+        assert!(recording.events_for_node("model.test.skipped").is_none());
+        assert!(recording.has_sao_event("model.test.skipped"));
+    }
+
+    #[test]
+    fn test_metadata_args_match_list_relations_case_insensitive() {
+        let recorded = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: Some("model.proj.my_model".to_string()),
+            phase: Some("analyze".to_string()),
+            relations: vec![
+                "\"my_database\".\"public\".\"TABLE_A\"".to_string(),
+                "\"my_database\".\"public\".\"TABLE_B\"".to_string(),
+            ],
+        };
+
+        let actual = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: Some("model.proj.my_model".to_string()),
+            phase: Some("analyze".to_string()),
+            relations: vec!["\"MY_DATABASE\".\"PUBLIC\".\"TABLE_A\"".to_string()],
+        };
+
+        assert!(
+            metadata_args_match(&recorded, &actual),
+            "should match relations with different identifier casing"
+        );
+
+        let actual_exact = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: None,
+            phase: None,
+            relations: vec!["\"my_database\".\"public\".\"TABLE_A\"".to_string()],
+        };
+        assert!(metadata_args_match(&recorded, &actual_exact));
+
+        let actual_missing = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: None,
+            phase: None,
+            relations: vec!["\"MY_DATABASE\".\"PUBLIC\".\"TABLE_C\"".to_string()],
+        };
+        assert!(
+            !metadata_args_match(&recorded, &actual_missing),
+            "should not match a relation that was never recorded"
+        );
+    }
+}

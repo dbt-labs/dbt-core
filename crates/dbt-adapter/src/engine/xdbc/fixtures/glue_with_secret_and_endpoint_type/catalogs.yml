@@ -1,0 +1,11 @@
+# Scenario: Glue catalog with explicit secret and endpoint_type GLUE.
+# Exercises: SECRET option, ENDPOINT_TYPE GLUE -> source defaults to ':'.
+catalogs:
+  - name: aws_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        attach_as: aws_glue
+        secret: my_secret

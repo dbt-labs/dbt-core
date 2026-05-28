@@ -1,0 +1,1313 @@
+use crate::adapter::adapter_impl::*;
+use crate::connection::AdapterConnectionFactory;
+use crate::metadata::FreshnessOverride;
+use crate::metadata::freshness_overrides::{
+    FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
+};
+use crate::metadata::{CatalogAndSchema, *};
+use crate::record_batch::RecordBatchExt;
+use crate::relation::Relation;
+use crate::sql_types::{TypeOps, make_arrow_field};
+use crate::{AdapterEngine, AdapterResult, AdapterType};
+
+use arrow_array::{
+    Array, BooleanArray, Decimal128Array, RecordBatch, StringArray, TimestampMillisecondArray,
+};
+use arrow_schema::Schema;
+use dbt_adapter_core::ExecutionPhase;
+use dbt_common::AsyncAdapterResult;
+use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::CancellationToken;
+use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::legacy_catalog::*;
+use dbt_schemas::schemas::relations::base::*;
+use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use indexmap::IndexMap;
+use minijinja::State;
+use once_cell::sync::Lazy;
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Arc;
+
+/// Detect a `CREATE [<modifiers>] TABLE <name>` DDL.
+///
+/// Used to filter out tables from `GET_DDL('VIEW', ...)` results, since
+/// Snowflake returns `CREATE TABLE` for tables instead of an error.
+fn is_table_ddl(ddl: &str) -> bool {
+    static TABLE_REGEX: Lazy<fancy_regex::Regex> = Lazy::new(|| {
+        fancy_regex::Regex::new(
+            r"(?ix)
+                ^\s*create\b
+                (?:\s+(?!table\b)\w+)*
+                \s+table\b
+                ",
+        )
+        .expect("valid regex")
+    });
+
+    if ddl.trim().is_empty() {
+        return false;
+    }
+    // `is_match` returns Result because fancy-regex's backtracking engine
+    // can fail on pathological inputs; treat any engine error as "not a
+    // table" so a malformed DDL doesn't get cached as a view by mistake.
+    TABLE_REGEX.is_match(ddl).unwrap_or(false)
+}
+
+/// Render the anonymous block (the body that goes inside `EXECUTE IMMEDIATE $$...$$`)
+/// that calls `GET_DDL` over a list of FQNs and captures per-object errors as
+/// part of the result set.
+///
+/// The caller is responsible for wrapping the returned string in
+/// `EXECUTE IMMEDIATE $$ ... $$`. The rendered block accepts no parameters
+/// and returns a result set with columns (fqn, view_definition, error).
+fn build_view_definition_script(fqns: &[String]) -> String {
+    let array_literals = fqns
+        .iter()
+        .map(|fqn| format!("'{}'", fqn.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        r#"
+begin
+    let objects array := array_construct(
+        {array_literals}
+    );
+
+    let i integer := 0;
+    let results array := array_construct();
+
+    while (i < array_size(objects)) do
+        let obj_name string := objects[i]::string;
+
+        begin
+            let ddl_text string := (select get_ddl('VIEW', :obj_name));
+
+            results := array_append(results, object_construct(
+                'OBJECT_NAME', :obj_name,
+                'DEFINITION', :ddl_text,
+                'ERROR', null
+            ));
+
+        exception
+            when other then
+                results := array_append(results, object_construct(
+                    'OBJECT_NAME', :obj_name,
+                    'DEFINITION', null,
+                    'ERROR', :sqlerrm
+                ));
+        end;
+
+        i := i + 1;
+    end while;
+
+    let rs resultset := (
+        select
+            f.value['OBJECT_NAME']::string as fqn,
+            f.value['DEFINITION']::string as view_definition,
+            f.value['ERROR']::string as error
+        from table(flatten(input => :results)) f
+        order by 1
+    );
+
+    return table(rs);
+end;"#
+    )
+}
+
+pub const ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY: &str = "SNOWFLAKE:field_width";
+
+/// Normalize all column names in a RecordBatch to lowercase.
+///
+/// Snowflake may uppercase column aliases (e.g. `table_catalog as "table_database"`) depending
+/// on account-level settings, even when the alias is double-quoted. Lowercasing the schema up
+/// front lets all downstream `get_column_values` calls use their expected lowercase names without
+/// needing per-call case-insensitive logic.
+fn lowercase_column_names(batch: &RecordBatch) -> RecordBatch {
+    let schema = batch.schema();
+    let fields: Vec<_> = schema
+        .fields()
+        .iter()
+        .map(|f| Arc::new(f.as_ref().clone().with_name(f.name().to_lowercase())))
+        .collect();
+    let new_schema = Arc::new(Schema::new_with_metadata(fields, schema.metadata().clone()));
+    RecordBatch::try_new(new_schema, batch.columns().to_vec())
+        .expect("column name normalization preserves schema compatibility")
+}
+
+/// Helper to differentiate between tables and dynamic tables using the is_dynamic flag.
+/// TODO: When we implement iceberg tables, we might want to pass in the is_iceberg flag here.
+pub fn relation_type_from_table_flags(is_dynamic: &str) -> Result<RelationType, AdapterError> {
+    if is_dynamic.eq_ignore_ascii_case("y") {
+        Ok(RelationType::DynamicTable)
+    } else if is_dynamic.eq_ignore_ascii_case("n") {
+        Ok(RelationType::Table)
+    } else {
+        Err(AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            format!("Unexpected `is_dynamic` value {is_dynamic}"),
+        ))
+    }
+}
+
+// Helper for serializing query results within `list_relations`
+fn build_relations_from_show_objects(
+    show_objects_result: &RecordBatch,
+    quoting: ResolvedQuoting,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let mut relations = Vec::new();
+
+    let name = show_objects_result.column_values::<StringArray>("name")?;
+    let database_name = show_objects_result.column_values::<StringArray>("database_name")?;
+    let schema_name = show_objects_result.column_values::<StringArray>("schema_name")?;
+    let table_kind = show_objects_result.column_values::<StringArray>("kind")?;
+    let is_dynamic = show_objects_result.column_values::<StringArray>("is_dynamic")?;
+    let is_iceberg = show_objects_result.column_values::<StringArray>("is_iceberg")?;
+
+    for i in 0..show_objects_result.num_rows() {
+        let name = name.value(i);
+        let database_name = database_name.value(i);
+        let schema_name = schema_name.value(i);
+        let table_kind = table_kind.value(i);
+        let is_dynamic = is_dynamic.value(i);
+        let is_iceberg = is_iceberg.value(i);
+
+        let relation_type = if table_kind.eq_ignore_ascii_case("table") {
+            Some(relation_type_from_table_flags(is_dynamic)?)
+        } else if table_kind.eq_ignore_ascii_case("view") {
+            Some(RelationType::View)
+        } else {
+            Some(RelationType::from(table_kind))
+        };
+
+        let table_format = if try_canonicalize_bool_column_field(is_iceberg)? {
+            TableFormat::Iceberg
+        } else {
+            TableFormat::Default
+        };
+
+        let mut relation = Relation::new(
+            AdapterType::Snowflake,
+            Some(database_name.to_string()),
+            Some(schema_name.to_string()),
+            Some(name.to_string()),
+            relation_type,
+            None,
+            quoting,
+            None,
+            false,
+            false,
+        );
+        relation.table_format = table_format;
+        relations.push(Arc::new(relation) as Arc<dyn BaseRelation>);
+    }
+
+    Ok(relations)
+}
+
+pub fn list_relations(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    // Paginate through the results
+    let limit_size = 10000;
+    let mut from_name = None;
+    let mut batches = Vec::new();
+    loop {
+        let sql = format!(
+            "SHOW OBJECTS IN SCHEMA {} LIMIT {}{}",
+            db_schema,
+            limit_size,
+            from_name
+                .map(|name| format!(" FROM '{name}'"))
+                .unwrap_or_default()
+        );
+        let batch = engine.execute(None, conn, ctx, &sql, token.clone())?;
+
+        // From the RecordBatch, get the last row of the vector of name 'name'
+        let names = batch.column_values::<StringArray>("name")?;
+
+        let last_name = match batch.num_rows().checked_sub(1) {
+            Some(idx) => names.value(idx).to_string(),
+            None => break,
+        };
+
+        from_name = Some(last_name);
+        batches.push(batch);
+        if names.len() < limit_size {
+            break;
+        }
+    }
+    // Create Relations from the batches
+    let mut relations = Vec::new();
+    for batch in batches {
+        relations.extend(build_relations_from_show_objects(
+            &batch,
+            ResolvedQuoting::trues(),
+        )?);
+    }
+    Ok(relations)
+}
+
+pub struct SnowflakeMetadataAdapter {
+    pub adapter: AdapterImpl,
+}
+
+impl SnowflakeMetadataAdapter {
+    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
+        let adapter = AdapterImpl::new(engine, None);
+        Self { adapter }
+    }
+}
+
+impl MetadataAdapter for SnowflakeMetadataAdapter {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter.adapter_type()
+    }
+
+    fn build_schemas_from_stats_sql(
+        &self,
+        stats_sql_result: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
+        if stats_sql_result.num_rows() == 0 {
+            return Ok(BTreeMap::new());
+        }
+
+        let stats_sql_result = lowercase_column_names(&stats_sql_result);
+
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+        let data_types = stats_sql_result.column_values::<StringArray>("table_type")?;
+        let comments = stats_sql_result.column_values::<StringArray>("table_comment")?;
+        let table_owners = stats_sql_result.column_values::<StringArray>("table_owner")?;
+
+        let clustering_key_label =
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:label")?;
+        let clustering_key_value =
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:value")?;
+        let clustering_key_description =
+            stats_sql_result.column_values::<StringArray>("stats:clustering_key:description")?;
+        let clustering_key_include =
+            stats_sql_result.column_values::<BooleanArray>("stats:clustering_key:include")?;
+
+        let row_count_label =
+            stats_sql_result.column_values::<StringArray>("stats:row_count:label")?;
+        let row_count_value =
+            stats_sql_result.column_values::<Decimal128Array>("stats:row_count:value")?;
+        let row_count_description =
+            stats_sql_result.column_values::<StringArray>("stats:row_count:description")?;
+        let row_count_include =
+            stats_sql_result.column_values::<BooleanArray>("stats:row_count:include")?;
+
+        let bytes_label = stats_sql_result.column_values::<StringArray>("stats:bytes:label")?;
+        let bytes_value = stats_sql_result.column_values::<Decimal128Array>("stats:bytes:value")?;
+        let bytes_description =
+            stats_sql_result.column_values::<StringArray>("stats:bytes:description")?;
+        let bytes_include =
+            stats_sql_result.column_values::<BooleanArray>("stats:bytes:include")?;
+
+        let last_modified_label =
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:label")?;
+        let last_modified_value =
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:value")?;
+        let last_modified_description =
+            stats_sql_result.column_values::<StringArray>("stats:last_modified:description")?;
+        let last_modified_include =
+            stats_sql_result.column_values::<BooleanArray>("stats:last_modified:include")?;
+
+        let mut result = BTreeMap::<String, CatalogTable>::new();
+
+        for i in 0..table_catalogs.len() {
+            let catalog = table_catalogs.value(i).to_string();
+            let schema = table_schemas.value(i).to_string();
+            let table = table_names.value(i).to_string();
+            let data_type = data_types.value(i).to_string();
+            let comment = comments.value(i);
+            let owner = table_owners.value(i).to_string();
+
+            let fully_qualified_name = format!("{catalog}.{schema}.{table}").to_lowercase();
+
+            if !result.contains_key(&fully_qualified_name) {
+                let clustering_key_label_i = clustering_key_label.value(i);
+                let clustering_key_value_i = clustering_key_value.value(i);
+                let clustering_key_description_i = clustering_key_description.value(i);
+                let clustering_key_include_i = clustering_key_include.value(i);
+
+                let row_count_label_i = row_count_label.value(i);
+                let row_count_value_i = row_count_value.value(i);
+                let row_count_description_i = row_count_description.value(i);
+                let row_count_include_i = row_count_include.value(i);
+
+                let bytes_label_i = bytes_label.value(i);
+                let bytes_value_i = bytes_value.value(i);
+                let bytes_description_i = bytes_description.value(i);
+                let bytes_include_i = bytes_include.value(i);
+
+                let last_modified_label_i = last_modified_label.value(i);
+                let last_modified_value_i = last_modified_value.value(i);
+                let last_modified_description_i = last_modified_description.value(i);
+                let last_modified_include_i = last_modified_include.value(i);
+
+                let mut stats = BTreeMap::new();
+                if clustering_key_include_i {
+                    stats.insert(
+                        "clustering_key".to_string(),
+                        CatalogNodeStats {
+                            id: "clustering_key".to_string(),
+                            label: clustering_key_label_i.to_string(),
+                            value: serde_json::Value::String(clustering_key_value_i.to_string()),
+                            description: Some(clustering_key_description_i.to_string()),
+                            include: clustering_key_include_i,
+                        },
+                    );
+                }
+                if bytes_include_i {
+                    stats.insert(
+                        "bytes".to_string(),
+                        CatalogNodeStats {
+                            id: "bytes".to_string(),
+                            label: bytes_label_i.to_string(),
+                            value: serde_json::Number::from_i128(bytes_value_i).into(),
+                            description: Some(bytes_description_i.to_string()),
+                            include: bytes_include_i,
+                        },
+                    );
+                }
+                if row_count_include_i {
+                    stats.insert(
+                        "row_count".to_string(),
+                        CatalogNodeStats {
+                            id: "row_count".to_string(),
+                            label: row_count_label_i.to_string(),
+                            value: serde_json::Number::from_i128(row_count_value_i).into(),
+                            description: Some(row_count_description_i.to_string()),
+                            include: row_count_include_i,
+                        },
+                    );
+                }
+                if last_modified_include_i {
+                    stats.insert(
+                        "last_modified".to_string(),
+                        CatalogNodeStats {
+                            id: "last_modified".to_string(),
+                            label: last_modified_label_i.to_string(),
+                            value: serde_json::Value::String(last_modified_value_i.to_string()),
+                            description: Some(last_modified_description_i.to_string()),
+                            include: last_modified_include_i,
+                        },
+                    );
+                }
+
+                stats.insert(
+                    "has_stats".to_string(),
+                    CatalogNodeStats {
+                        id: "has_stats".to_string(),
+                        label: "Has Stats?".to_string(),
+                        value: serde_json::Value::Bool(!stats.is_empty()),
+                        description: Some(
+                            "Indicates whether there are statistics for this table".to_string(),
+                        ),
+                        include: false,
+                    },
+                );
+
+                let node_metadata = TableMetadata {
+                    materialization_type: data_type.to_string(),
+                    schema: schema.to_string(),
+                    name: table.to_string(),
+                    database: Some(catalog.to_string()),
+                    comment: match comment {
+                        "" => None,
+                        _ => Some(comment.to_string()),
+                    },
+                    owner: Some(owner.to_string()),
+                };
+
+                let node = CatalogTable {
+                    metadata: node_metadata,
+                    columns: IndexMap::new(),
+                    stats,
+                    unique_id: None,
+                };
+
+                result.insert(fully_qualified_name.clone(), node);
+            }
+        }
+        Ok(result)
+    }
+
+    fn build_columns_from_get_columns(
+        &self,
+        stats_sql_result: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+        if stats_sql_result.num_rows() == 0 {
+            return Ok(BTreeMap::new());
+        }
+
+        let stats_sql_result = lowercase_column_names(&stats_sql_result);
+
+        // Can probably zip these into a table metadata tuple array
+        let table_catalogs = stats_sql_result.column_values::<StringArray>("table_database")?;
+        let table_schemas = stats_sql_result.column_values::<StringArray>("table_schema")?;
+        let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
+
+        let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
+        let column_indices = stats_sql_result.column_values::<Decimal128Array>("column_index")?;
+        let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
+        let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
+
+        let mut columns_by_relation = BTreeMap::new();
+
+        for i in 0..table_catalogs.len() {
+            let catalog = table_catalogs.value(i);
+            let schema = table_schemas.value(i);
+            let table = table_names.value(i);
+
+            let fully_qualified_name = format!("{catalog}.{schema}.{table}").to_lowercase();
+
+            let column_name_i = column_names.value(i);
+            let column_index_i = column_indices.value(i);
+            let column_type_i = column_types.value(i);
+            let column_comment_i = column_comments.value(i);
+
+            let column = ColumnMetadata {
+                name: column_name_i.to_string(),
+                index: column_index_i,
+                data_type: column_type_i.to_string(),
+                comment: match column_comment_i {
+                    "" => None,
+                    _ => Some(column_comment_i.to_string()),
+                },
+            };
+
+            columns_by_relation
+                .entry(fully_qualified_name.clone())
+                .or_insert(BTreeMap::new())
+                .insert(column_name_i.to_string(), column);
+        }
+        Ok(columns_by_relation)
+    }
+
+    fn list_user_defined_functions_inner(
+        &self,
+        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, Vec<UDF>> {
+        type Acc = Vec<UDF>;
+
+        // https://docs.snowflake.com/en/sql-reference/sql/show-user-functions
+        // this is chosen over `information_schema.views` because the latter takes tens of seconds to complete
+        // when running against the `ska67070` account
+        let queries = catalog_schemas
+            .iter()
+            .flat_map(|(catalog, schemas)| {
+                schemas
+                    .iter()
+                    .map(move |schema| format!("SHOW USER FUNCTIONS IN SCHEMA {catalog}.{schema}"))
+            })
+            .collect::<Vec<_>>();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f =
+            move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
+                let ctx = QueryCtx::default().with_desc("List user functions");
+                let (_, table) = adapter.query(&ctx, conn, sql, None, token_clone.clone())?;
+                let batch = table.original_record_batch();
+                Ok(batch)
+            };
+
+        let reduce_f = |acc: &mut Acc,
+                        _sql: String,
+                        batch_res: AdapterResult<Arc<RecordBatch>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+
+            if batch.num_rows() == 0 {
+                return Ok(());
+            }
+
+            let catalog_names = batch.column_values::<StringArray>("catalog_name")?;
+            let schema_names = batch.column_values::<StringArray>("schema_name")?;
+            let names = batch.column_values::<StringArray>("name")?;
+            let descriptions = batch.column_values::<StringArray>("description")?;
+            let is_table = batch.column_values::<StringArray>("is_table_function")?;
+            let is_aggregate = batch.column_values::<StringArray>("is_aggregate")?;
+            let language = batch.column_values::<StringArray>("language")?;
+            let arguments = batch.column_values::<StringArray>("arguments")?;
+
+            // possible values are either "Y" or "N"
+            let is_true = |s: &str| s.to_uppercase() == "Y";
+            for i in 0..batch.num_rows() {
+                let language = language.value(i).to_string();
+                if language.to_uppercase() != "SQL" {
+                    continue;
+                }
+
+                let catalog = catalog_names.value(i).to_string();
+                let schema = schema_names.value(i).to_string();
+                let name = names.value(i).to_string();
+
+                let description = descriptions.value(i).to_string();
+                let is_table = is_true(is_table.value(i));
+                let is_aggregate = is_true(is_aggregate.value(i));
+                // Data types of the arguments and return value.
+                let signature = arguments.value(i).to_string();
+
+                // Snowflake doesn't tell if a function is a window function or not in either
+                // `show functions` or `information_schema.functions view`
+                let kind = if is_aggregate {
+                    UDFKind::Aggregate
+                } else if is_table {
+                    UDFKind::Table
+                } else {
+                    UDFKind::Scalar
+                };
+
+                let fqn = format!("{catalog}.{schema}.{name}");
+                acc.push(UDF {
+                    name: fqn,
+                    description,
+                    signature,
+                    adapter_type: AdapterType::Snowflake,
+                    kind,
+                });
+            }
+
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(queries), token)
+    }
+
+    fn list_relations_schemas_inner(
+        &self,
+        unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
+        relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
+        // All results are accumulated in an unordered map
+        type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
+
+        let table_names = relations
+            .iter()
+            .map(|relation| relation.semantic_fqn())
+            .collect::<Vec<_>>();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          table_name: &String|
+              -> AdapterResult<Arc<Schema>> {
+            let sql = format!("describe table {};", &table_name);
+            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
+            if let Some(node_id) = unique_id.clone() {
+                ctx = ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase.as_str());
+            }
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+            let batch = table.original_record_batch();
+            let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops().as_ref())?;
+            Ok(schema)
+        };
+        let reduce_f = |acc: &mut Acc,
+                        table_name: String,
+                        schema: AdapterResult<Arc<Schema>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            acc.insert(table_name, schema);
+            Ok(())
+        };
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(table_names), token)
+    }
+
+    /// List relations schemas by patterns (use information schema query)
+    fn list_relations_schemas_by_patterns_inner(
+        &self,
+        relations_pattern: &[RelationPattern],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
+        // All results are accumulated in a Vec of pairs
+        type Acc = Vec<(String, AdapterResult<RelationSchemaPair>)>;
+
+        // Group patterns by database to minimize queries needed
+        let mut patterns_by_database = BTreeMap::new();
+        for pat in relations_pattern {
+            patterns_by_database
+                .entry(pat.database.clone())
+                .or_insert_with(Vec::new)
+                .push(pat);
+        }
+
+        let queries = patterns_by_database
+            .into_iter()
+            .map(|(database, patterns)| {
+                // Build the query for all relations in this database
+                let predicates = patterns
+                    .iter()
+                    .map(|pat| {
+                        format!(
+                            "(TABLE_SCHEMA ILIKE '{}' AND TABLE_NAME ILIKE '{}')",
+                            pat.schema_pattern, pat.table_pattern
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let predicates_union = predicates.join(" OR ");
+                format!(
+                    "SELECT
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    IS_NULLABLE,
+    CHARACTER_MAXIMUM_LENGTH,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE,
+    COMMENT
+FROM {database}.INFORMATION_SCHEMA.COLUMNS
+WHERE {predicates_union}
+ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
+                )
+            });
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        // map_f runs the queries, reduce_f decodes the result set and builds the schemas
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f =
+            move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
+                let ctx = QueryCtx::default().with_desc("Get schema by pattern");
+                let (_, table) = adapter.query(&ctx, conn, sql, None, token_clone.clone())?;
+                let batch = table.original_record_batch();
+                Ok(batch)
+            };
+
+        let quoting = self.adapter.quoting();
+
+        let adapter = self.adapter.clone();
+        let reduce_f = move |acc: &mut Acc,
+                             _sql: String,
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let mut schemas_from_batch = build_schemas_from_information_schema(
+                batch,
+                quoting,
+                adapter.engine().type_ops().as_ref(),
+            )?;
+            acc.append(&mut schemas_from_batch);
+            Ok(())
+        };
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        let keys = queries.collect::<Vec<_>>();
+        map_reduce.run(Arc::new(keys), token)
+    }
+
+    fn create_schemas_if_not_exists(
+        &self,
+        state: &State<'_, '_>,
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
+        create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
+    }
+
+    fn freshness_inner(
+        &self,
+        relations: &[Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
+        // Build the where clause for all relations grouped by databases
+        let (where_clauses_by_database, relations_by_database) =
+            match build_relation_clauses(relations) {
+                Ok(result) => result,
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            };
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          database_and_where_clauses: &(String, Vec<String>)|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let (database, where_clauses) = &database_and_where_clauses;
+            // Query to get last modified times
+            let sql = format!(
+                "SELECT
+                table_schema,
+                table_name,
+                last_altered,
+                (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
+             FROM {}.INFORMATION_SCHEMA.TABLES
+             WHERE {}",
+                database,
+                where_clauses.join(" OR ")
+            );
+
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+            let (_adapter_response, agate_table) =
+                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
+            let batch = agate_table.original_record_batch();
+            Ok(batch)
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             database_and_where_clauses: (String, Vec<String>),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+            let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+            let timestamps = batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+            let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+
+            let (database, _where_clauses) = &database_and_where_clauses;
+            for i in 0..batch.num_rows() {
+                let schema = schemas.value(i);
+                let table = tables.value(i);
+                let timestamp = timestamps.value(i);
+                let relations = &relations_by_database[database];
+                let is_view = is_views.value(i);
+
+                for table_name in find_matching_relation(schema, table, relations)? {
+                    acc.insert(
+                        table_name,
+                        MetadataFreshness::from_millis(timestamp, is_view)?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
+        map_reduce.run(Arc::new(keys), token)
+    }
+
+    /// Honors per-source `loaded_at_field` / `loaded_at_query` config. Mirrors the
+    /// dbt-core run-cache plugin: relations without overrides go through the bulk
+    /// INFORMATION_SCHEMA path; each override runs as one targeted query in
+    /// parallel. Net call count: 1 bulk (over the non-override subset) + N
+    /// override queries — same shape as the plugin.
+    fn freshness_with_overrides<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness(relations, token);
+        }
+
+        // Partition relations: those with overrides run their own targeted query;
+        // the rest go through the existing bulk INFORMATION_SCHEMA path.
+        let mut override_targets = Vec::new();
+        let mut bulk_relations = Vec::new();
+        for relation in relations {
+            if let Some(ovr) = overrides.get(&relation.semantic_fqn()) {
+                override_targets.push((Arc::clone(relation), ovr.clone()));
+            } else {
+                bulk_relations.push(Arc::clone(relation));
+            }
+        }
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+
+        // Run the bulk and per-override queries through one MapReduce pass so
+        // they share the same connection-factory threadpool — same parallelism
+        // model as the plugin.
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            tasks.push(FreshnessTask::Bulk(bulk_relations));
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
+            match task {
+                FreshnessTask::Bulk(bulk) => {
+                    let (where_clauses_by_database, relations_by_database) =
+                        build_relation_clauses(bulk)?;
+                    let mut acc: Acc = BTreeMap::new();
+                    for (database, where_clauses) in where_clauses_by_database {
+                        let sql = format!(
+                            "SELECT
+                            table_schema,
+                            table_name,
+                            last_altered,
+                            (table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW') AS is_view
+                         FROM {}.INFORMATION_SCHEMA.TABLES
+                         WHERE {}",
+                            database,
+                            where_clauses.join(" OR ")
+                        );
+                        let ctx = QueryCtx::default()
+                            .with_desc("Extracting freshness from information schema");
+                        let (_resp, agate_table) = adapter_for_map.query(
+                            &ctx,
+                            &mut *conn,
+                            &sql,
+                            None,
+                            token_clone.clone(),
+                        )?;
+                        let batch = agate_table.original_record_batch();
+                        let schemas = batch.column_values::<StringArray>("TABLE_SCHEMA")?;
+                        let tables = batch.column_values::<StringArray>("TABLE_NAME")?;
+                        let timestamps =
+                            batch.column_values::<TimestampMillisecondArray>("LAST_ALTERED")?;
+                        let is_views = batch.column_values::<BooleanArray>("IS_VIEW")?;
+                        let relations = &relations_by_database[&database];
+                        for i in 0..batch.num_rows() {
+                            let schema = schemas.value(i);
+                            let table = tables.value(i);
+                            let timestamp = timestamps.value(i);
+                            let is_view = is_views.value(i);
+                            for table_name in find_matching_relation(schema, table, relations)? {
+                                acc.insert(
+                                    table_name,
+                                    MetadataFreshness::from_millis(timestamp, is_view)?,
+                                );
+                            }
+                        }
+                    }
+                    Ok(FreshnessTaskResult::Bulk(acc))
+                }
+                FreshnessTask::Override(relation, ovr) => {
+                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
+                }
+            }
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            apply_freshness_task_result(acc, res?)?;
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
+    }
+
+    /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql
+    fn list_relations_in_parallel_inner(
+        &self,
+        db_schemas: &[CatalogAndSchema],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
+        type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          db_schema: &CatalogAndSchema|
+              -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
+            adapter.list_relations(&query_ctx, conn, db_schema, token_clone.clone())
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             db_schema: CatalogAndSchema,
+                             relations: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match relations {
+                Ok(relations) => {
+                    acc.insert(db_schema, Ok(relations));
+                    Ok(())
+                }
+                Err(e) => {
+                    // Empty schema error code - no relations in this schema
+                    // XXX: The AdapterError struct is not properly being built at the moment, rely on string search for now
+                    if e.message().contains("Object does not exist") {
+                        acc.insert(db_schema, Ok(Vec::new()));
+                        Ok(())
+                    } else {
+                        // Other errors should be propagated
+                        Err(Cancellable::Error(e))
+                    }
+                }
+            }
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(db_schemas.to_vec()), token)
+    }
+
+    fn is_permission_error(&self, e: &AdapterError) -> bool {
+        // this is supposed to be using/extended from ANSI SQL standard but I didn't find any Snowflake documentation
+        // the magic strings here are from inspecting the results from fs run on a project with a new database,
+        // and a weak role that lack permissions to create a database
+
+        // 42501: insufficient privileges
+        // 02000: does not exist or not authorized error
+        e.sqlstate() == "42501" || e.sqlstate() == "02000"
+    }
+
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        type Acc = Vec<ViewDefinition>;
+
+        if relations.is_empty() {
+            return Box::pin(async { Ok(vec![]) });
+        }
+
+        // Dedupe FQNs while preserving an order; Snowflake fans them out itself.
+        let fqns: Vec<String> = {
+            let mut seen = std::collections::HashSet::new();
+            let mut out = Vec::with_capacity(relations.len());
+            for r in relations {
+                let f = r.semantic_fqn();
+                if seen.insert(f.clone()) {
+                    out.push(f);
+                }
+            }
+            out
+        };
+
+        let script = build_view_definition_script(&fqns);
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        let adapter = self.adapter.clone();
+        let token_clone = token.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          script: &String|
+              -> AdapterResult<Arc<RecordBatch>> {
+            let ctx = QueryCtx::default().with_desc("Fetch view definitions");
+            let sql = format!("EXECUTE IMMEDIATE $${script}$$");
+            let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+            Ok(table.original_record_batch())
+        };
+
+        let reduce_f = |acc: &mut Acc,
+                        _key: String,
+                        batch_res: AdapterResult<Arc<RecordBatch>>|
+         -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            // Snowflake may uppercase result-set column names depending on
+            // account settings, even though the EXECUTE IMMEDIATE block aliases
+            // them lowercase. Normalize the schema before name-based lookups.
+            let batch = lowercase_column_names(&batch);
+            // Result schema: (fqn STRING, view_definition STRING, error STRING)
+            let fqns_arr = batch.column_values::<StringArray>("fqn")?;
+            let defs_arr = batch.column_values::<StringArray>("view_definition")?;
+
+            for i in 0..batch.num_rows() {
+                let fqn = fqns_arr.value(i).to_string();
+                if defs_arr.is_null(i) {
+                    continue;
+                }
+                let definition = defs_arr.value(i);
+
+                if is_table_ddl(definition) {
+                    continue;
+                }
+
+                let parsed = match dbt_frontend_common::Dialect::Snowflake.parse_fqn(&fqn) {
+                    Ok(p) => p,
+                    Err(_) => continue, // unparseable — skip
+                };
+
+                acc.push(ViewDefinition {
+                    fqn,
+                    definition: definition.to_string(),
+                    dialect: dbt_frontend_common::Dialect::Snowflake,
+                    default_catalog: parsed.catalog().name().to_string(),
+                    default_schema: parsed.schema().name().to_string(),
+                });
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![script]), token)
+    }
+}
+
+/// reference: https://github.com/sdf-labs/sdf/blob/main/crates/sdf-cli/src/providers/database/snowflake.rs#L177-L178
+fn build_schema_from_desc_table(
+    show_columns_result: Arc<RecordBatch>,
+    type_ops: &dyn TypeOps,
+) -> AdapterResult<Arc<Schema>> {
+    let column_names = show_columns_result.column_values::<StringArray>("name")?;
+    let data_types = show_columns_result.column_values::<StringArray>("type")?;
+    let comments = show_columns_result.column_values::<StringArray>("comment")?;
+    let nullability = show_columns_result.column_values::<StringArray>("null?")?;
+
+    let mut fields = vec![];
+    for i in 0..show_columns_result.num_rows() {
+        let name = column_names.value(i);
+        let nullable = nullability.value(i).to_uppercase() == "Y";
+        let text_data_type = data_types.value(i);
+        let comment = match comments.value(i) {
+            "" => None,
+            c => Some(c.to_string()),
+        };
+
+        let field = make_arrow_field(
+            type_ops,
+            name.to_string(),
+            text_data_type,
+            Some(nullable),
+            comment,
+        )?;
+        fields.push(field);
+    }
+
+    let schema = Schema::new(fields);
+    Ok(Arc::new(schema))
+}
+
+#[allow(clippy::type_complexity)]
+fn build_schemas_from_information_schema(
+    information_schema_result: Arc<RecordBatch>,
+    quoting: ResolvedQuoting,
+    type_ops: &dyn TypeOps,
+) -> AdapterResult<Vec<(String, AdapterResult<RelationSchemaPair>)>> {
+    if information_schema_result.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+
+    let table_catalogs = information_schema_result.column_values::<StringArray>("TABLE_CATALOG")?;
+    let table_schemas = information_schema_result.column_values::<StringArray>("TABLE_SCHEMA")?;
+    let table_names = information_schema_result.column_values::<StringArray>("TABLE_NAME")?;
+    let column_names = information_schema_result.column_values::<StringArray>("COLUMN_NAME")?;
+    let data_types = information_schema_result.column_values::<StringArray>("DATA_TYPE")?;
+    let is_nullable = information_schema_result.column_values::<StringArray>("IS_NULLABLE")?;
+    let numeric_precision =
+        information_schema_result.column_values::<Decimal128Array>("NUMERIC_PRECISION")?;
+    let numeric_scale =
+        information_schema_result.column_values::<Decimal128Array>("NUMERIC_SCALE")?;
+    let comments = information_schema_result.column_values::<StringArray>("COMMENT")?;
+
+    let mut result = Vec::<(String, AdapterResult<RelationSchemaPair>)>::new();
+    let mut current_table = String::new();
+    let mut current_fields = Vec::new();
+    let mut current_relation: Option<Arc<dyn BaseRelation>> = None;
+
+    for i in 0..information_schema_result.num_rows() {
+        let catalog = table_catalogs.value(i);
+        let schema = table_schemas.value(i);
+        let table = table_names.value(i);
+        let fully_qualified_name = format!("{catalog}.{schema}.{table}");
+
+        // If we're starting a new table, save the previous one and start fresh
+        if fully_qualified_name != current_table {
+            if !current_table.is_empty() {
+                let relation_schema: RelationSchemaPair = (
+                    current_relation.expect("current_relation should not be None"),
+                    Arc::new(Schema::new(current_fields.clone())),
+                );
+                result.push((current_table.clone(), Ok(relation_schema)));
+            }
+            current_table = fully_qualified_name;
+            current_fields = Vec::new();
+
+            let relation = match crate::relation::do_create_relation(
+                type_ops.adapter_type(),
+                catalog.to_string(),
+                schema.to_string(),
+                Some(table.to_string()),
+                None,
+                quoting,
+            ) {
+                Ok(relation) => relation,
+                Err(e) => {
+                    result.push((current_table, Err(e.into())));
+                    return Ok(result);
+                }
+            };
+            current_relation = Some(relation.into());
+        }
+
+        let name = column_names.value(i);
+        let data_type = data_types.value(i);
+        let nullable = is_nullable.value(i).to_uppercase() == "YES";
+        let comment = match comments.value(i) {
+            "" => None,
+            c => Some(c.to_string()),
+        };
+
+        // Handle numeric types
+        let data_type = if data_type == "NUMBER" || data_type == "DECIMAL" {
+            let (precision, scale) = (
+                numeric_precision.value(i).to_string(),
+                numeric_scale.value(i).to_string(),
+            );
+            format!("decimal({precision},{scale})")
+        } else {
+            data_type.to_string()
+        };
+
+        // Add a Schema Field
+        let field = match make_arrow_field(
+            type_ops,
+            name.to_string(),
+            &data_type,
+            Some(nullable),
+            comment,
+        ) {
+            Ok(field) => field,
+            Err(e) => {
+                // Place the error in the accumulator output and return immediately
+                // instead of trying to read more tables. Progress on the previously
+                // read tables is not lost.
+                result.push((current_table, Err(e)));
+                return Ok(result);
+            }
+        };
+        current_fields.push(field);
+    }
+
+    // If there is only 1 table in the query result set, it won't be captured in the loop, so save it at the end
+    if !current_table.is_empty() {
+        let relation_schema = (
+            current_relation.expect("current_relation should not be None"),
+            Arc::new(Schema::new(current_fields.clone())),
+        );
+        result.push((current_table, Ok(relation_schema)));
+    }
+
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_table_ddl_recognizes_create_table() {
+        assert!(is_table_ddl("CREATE TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_transient_table() {
+        assert!(is_table_ddl("CREATE TRANSIENT TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_or_replace_table() {
+        assert!(is_table_ddl("CREATE OR REPLACE TABLE foo (x INT)"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_create_view() {
+        assert!(!is_table_ddl("CREATE VIEW foo AS SELECT 1"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_or_replace_view() {
+        assert!(!is_table_ddl("CREATE OR REPLACE VIEW foo AS SELECT 1"));
+    }
+    #[test]
+    fn is_table_ddl_rejects_empty() {
+        assert!(!is_table_ddl(""));
+        assert!(!is_table_ddl("   "));
+    }
+    #[test]
+    fn is_table_ddl_rejects_view_with_table_function_in_body() {
+        // The TABLE keyword appears in the body of the view's SELECT — the
+        // header still says VIEW, so this must not be misclassified as a table.
+        assert!(!is_table_ddl(
+            "CREATE VIEW foo AS SELECT * FROM TABLE(generator(rowcount => 10))"
+        ));
+        assert!(!is_table_ddl(
+            "CREATE OR REPLACE VIEW foo AS SELECT * FROM TABLE(generator(rowcount => 10))"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_rejects_view_referencing_table_in_from() {
+        // Same idea but with a plain FROM clause — `tables` here is part of
+        // an INFORMATION_SCHEMA reference, not a header keyword.
+        assert!(!is_table_ddl(
+            "CREATE VIEW foo AS SELECT * FROM information_schema.tables"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_dynamic_table() {
+        assert!(is_table_ddl(
+            "CREATE OR REPLACE DYNAMIC TABLE foo TARGET_LAG = '1 minute' WAREHOUSE = w AS SELECT 1"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_recognizes_external_table() {
+        assert!(is_table_ddl(
+            "CREATE EXTERNAL TABLE foo WITH LOCATION = '@stage' FILE_FORMAT = (TYPE = CSV)"
+        ));
+    }
+    #[test]
+    fn is_table_ddl_rejects_materialized_view() {
+        assert!(!is_table_ddl(
+            "CREATE MATERIALIZED VIEW foo AS SELECT * FROM bar"
+        ));
+    }
+
+    #[test]
+    fn build_view_definition_script_default_get_ddl() {
+        let fqns = vec![
+            r#""DB"."S"."V1""#.to_string(),
+            r#""DB"."S"."V2""#.to_string(),
+        ];
+        let script = build_view_definition_script(&fqns);
+        assert!(
+            script.contains("get_ddl('VIEW', :obj_name)"),
+            "got: {script}"
+        );
+        assert!(script.contains(r#""DB"."S"."V1""#));
+        assert!(script.contains(r#""DB"."S"."V2""#));
+        assert!(script.contains("array_construct"));
+        assert!(script.contains("OBJECT_NAME"));
+        assert!(script.contains("DEFINITION"));
+        assert!(script.contains("ERROR"));
+    }
+}

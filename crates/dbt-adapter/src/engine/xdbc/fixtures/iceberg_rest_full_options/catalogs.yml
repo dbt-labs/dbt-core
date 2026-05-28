@@ -1,0 +1,24 @@
+# Scenario: iceberg_rest catalog exercising every supported option.
+# Exercises: SECRET, ENDPOINT, DEFAULT_REGION, DEFAULT_SCHEMA,
+# MAX_TABLE_STALENESS, AUTHORIZATION_TYPE, ACCESS_DELEGATION_MODE,
+# SUPPORT_NESTED_NAMESPACES, SUPPORT_STAGE_CREATE, PURGE_REQUESTED,
+# ENCODE_ENTIRE_PREFIX.
+catalogs:
+  - name: rest_full
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://rest.example.com"
+        warehouse: "warehouse_name"
+        secret: "iceberg_secret"
+        attach_as: "iceberg_db"
+        default_region: "us-east-1"
+        default_schema: "demo"
+        max_table_staleness: "10 minutes"
+        authorization_type: "OAUTH2"
+        access_delegation_mode: "VENDED_CREDENTIALS"
+        support_nested_namespaces: false
+        support_stage_create: true
+        purge_requested: false
+        encode_entire_prefix: true

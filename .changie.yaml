@@ -5,86 +5,26 @@ versionHeaderPath: ""
 changelogPath: CHANGELOG.md
 versionExt: md
 envPrefix: "CHANGIE_"
-versionFormat: '## dbt-core {{.Version}} - {{.Time.Format "January 02, 2006"}}'
-kindFormat: '### {{.Kind}}'
-changeFormat: |-
-  {{- $IssueList := list }}
-  {{- $changes := splitList " " $.Custom.Issue }}
-  {{- range $issueNbr := $changes }}
-    {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
-    {{- $IssueList = append $IssueList $changeLink  }}
-  {{- end -}}
-  - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
+versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
+kindFormat: "### {{.Kind}}"
+
+custom:
+  - key: issue
+    label: dbt-fusion issue number (leave empty if not applicable)
+    type: string
+  - key: author
+    label: Your GitHub handle (without the @ symbol)
+    type: string
 
 kinds:
   - label: Breaking Changes
   - label: Features
   - label: Fixes
-  - label: Docs
-    changeFormat: |-
-      {{- $IssueList := list }}
-      {{- $changes := splitList " " $.Custom.Issue }}
-      {{- range $issueNbr := $changes }}
-        {{- $changeLink := "[dbt-docs/#nbr](https://github.com/dbt-labs/dbt-docs/issues/nbr)" | replace "nbr" $issueNbr }}
-        {{- $IssueList = append $IssueList $changeLink }}
-      {{- end -}}
-      - {{.Body}} ({{ range $index, $element := $IssueList }}{{if $index}}, {{end}}{{$element}}{{end}})
   - label: Under the Hood
   - label: Dependencies
   - label: Security
 
-newlines:
-  afterChangelogHeader: 1
-  afterKind: 1
-  afterChangelogVersion: 1
-  beforeKind: 1
-  endOfVersion: 1
-
-custom:
-  - key: Author
-    label: GitHub Username(s) (separated by a single space if multiple)
-    type: string
-    minLength: 3
-  - key: Issue
-    label: GitHub Issue Number (separated by a single space if multiple)
-    type: string
-    minLength: 1
-
-footerFormat: |
-  {{- $contributorDict := dict }}
-  {{- /* ensure we always skip snyk and dependabot */}}
-  {{- $bots := list "dependabot[bot]" "snyk-bot"}}
-  {{- range $change := .Changes }}
-    {{- $authorList := splitList " " $change.Custom.Author }}
-    {{- /* loop through all authors for a single changelog */}}
-    {{- range $author := $authorList }}
-      {{- $authorLower := lower $author }}
-      {{- /* we only want to include non-bot contributors */}}
-      {{- if not (has $authorLower $bots)}}
-        {{- $changeList := splitList " " $change.Custom.Author }}
-          {{- $IssueList := list }}
-          {{- $changeLink := $change.Kind }}
-          {{- $changes := splitList " " $change.Custom.Issue }}
-          {{- range $issueNbr := $changes }}
-            {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
-            {{- $IssueList = append $IssueList $changeLink  }}
-          {{- end }}
-          {{- /* check if this contributor has other changes associated with them already */}}
-          {{- if hasKey $contributorDict $author }}
-            {{- $contributionList := get $contributorDict $author }}
-            {{- $contributionList = concat $contributionList $IssueList  }}
-            {{- $contributorDict := set $contributorDict $author $contributionList }}
-          {{- else }}
-            {{- $contributionList := $IssueList }}
-            {{- $contributorDict := set $contributorDict $author $contributionList }}
-          {{- end }}
-        {{- end}}
-    {{- end}}
-  {{- end }}
-  {{- /* no indentation here for formatting so the final markdown doesn't have unneeded indentations */}}
-  {{- if $contributorDict}}
-  ### Contributors
-  {{- range $k,$v := $contributorDict }}
-  - [@{{$k}}](https://github.com/{{$k}}) ({{ range $index, $element := $v }}{{if $index}}, {{end}}{{$element}}{{end}})
-  {{- end }}
-  {{- end }}
+# these changelogs are always for dbt-fusion
+post:
+  - key: project
+    value: dbt-fusion

@@ -1,0 +1,5 @@
+---
+source: fs/sa/crates/dbt-adapter/src/engine/xdbc/duckdb_attach_snapshot_tests.rs
+input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/glue_with_secret_and_endpoint_type/catalogs.yml
+---
+ATTACH IF NOT EXISTS ':' AS aws_glue (TYPE ICEBERG, SECRET my_secret, ENDPOINT_TYPE GLUE)

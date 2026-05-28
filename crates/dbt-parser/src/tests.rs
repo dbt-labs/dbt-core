@@ -1,0 +1,1153 @@
+//! Render tests for the dbt-parser crate
+#[cfg(test)]
+#[allow(clippy::module_inception)]
+mod tests {
+    use dbt_adapter::Adapter;
+    use dbt_adapter::sql_types::DefaultTypeOpsImpl;
+    use dbt_adapter_core::AdapterType;
+    use dbt_common::io_args::StaticAnalysisKind;
+    use dbt_common::{FsResult, io_args::IoArgs};
+    use dbt_frontend_common::error::CodeLocation;
+    use dbt_jinja_utils::invocation_args::InvocationArgs;
+    use dbt_jinja_utils::jinja_environment::JinjaEnv;
+    use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;
+    use dbt_jinja_utils::phases::parse::build_resolve_model_context;
+    use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
+    use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
+    use dbt_jinja_utils::utils::render_sql;
+    use dbt_schemas::schemas::profiles::PostgresDbConfig;
+    use dbt_schemas::schemas::project::ProjectModelConfig;
+    use dbt_schemas::schemas::project::{ModelConfig, ResolvableConfig};
+    use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
+    use dbt_schemas::schemas::serde::StringOrInteger;
+    use dbt_schemas::state::DbtRuntimeConfig;
+    use dbt_test_primitives::assert_contains;
+    use minijinja::ArgSpec;
+    use minijinja::constants::TARGET_PACKAGE_NAME;
+    use minijinja::machinery::Span;
+    use minijinja::{AutoEscape, Error};
+    use minijinja::{Environment, Value};
+
+    use crate::utils::{get_node_fqn, parse_macro_statements};
+
+    use chrono::{DateTime, Utc};
+    use chrono_tz::Tz;
+    use std::collections::BTreeSet;
+    use std::path::Path;
+    use std::rc::Rc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, Mutex};
+    use std::{collections::BTreeMap, path::PathBuf};
+
+    fn create_resolve_model_context<T: ResolvableConfig<T> + serde::Serialize + 'static>(
+        init_config: &T,
+        sql_resources: &Arc<Mutex<Vec<SqlResource<T>>>>,
+    ) -> BTreeMap<String, Value> {
+        let mut context = build_resolve_model_context(
+            init_config,
+            AdapterType::Postgres,
+            "db",
+            "schema",
+            "my_model",
+            get_node_fqn(
+                "common",
+                PathBuf::from("test"),
+                vec!["my_model".to_string()],
+                &["models".to_string()],
+            ),
+            "common",
+            "test",
+            DEFAULT_DBT_QUOTING,
+            Arc::new(DbtRuntimeConfig::default()),
+            sql_resources.clone(),
+            Arc::new(AtomicBool::new(false)),
+            &PathBuf::from("test"),
+            &IoArgs::default(),
+            Some(StaticAnalysisKind::Strict),
+        );
+        context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
+        context
+    }
+
+    fn setup_test_env() -> (
+        JinjaEnv,
+        Arc<Mutex<Vec<SqlResource<ModelConfig>>>>,
+        ModelConfig,
+    ) {
+        let init_config = ModelConfig {
+            alias: Some("alias".to_string()),
+            ..Default::default()
+        };
+        let invocation_args = InvocationArgs {
+            ..Default::default()
+        };
+        let tz_now: DateTime<Tz> = Utc::now().with_timezone(&Tz::UTC);
+
+        let env = initialize_parse_jinja_environment(
+            "common",
+            "profile",
+            "target",
+            AdapterType::Postgres,
+            (PostgresDbConfig {
+                port: Some(StringOrInteger::Integer(5432)),
+                database: Some("postgres".to_string()),
+                host: Some("localhost".to_string()),
+                user: Some("postgres".to_string()),
+                password: Some("postgres".to_string()),
+                schema: Some("schema".to_string()),
+                ..Default::default()
+            })
+            .into(),
+            DEFAULT_DBT_QUOTING,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            tz_now,
+            &invocation_args,
+            BTreeSet::from(["common".to_string()]),
+            IoArgs::default(),
+            None,
+        )
+        .unwrap();
+
+        let sql_resources = Arc::new(Mutex::new(Vec::new()));
+
+        (env, sql_resources, init_config)
+    }
+
+    #[test]
+    fn test_meta_field_renders_at_parse_time() {
+        // +meta Jinja is rendered eagerly at parse time (matching dbt-core behavior),
+        // just like other string config fields such as +description.
+        let yaml = r#"
+        +meta:
+          demo: "{{ 1 + 2 }}"
+        +description: "prefix {{ 1 + 2 }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let cfg: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        let meta = cfg.meta.as_ref().expect("+meta should be present");
+        let demo_val = meta.get("demo").expect("demo key in +meta");
+        // `{{ 1 + 2 }}` renders to the integer 3; the YAML value reflects the evaluated type.
+        match demo_val {
+            dbt_yaml::Value::Number(n, _) => assert_eq!(n.as_i64(), Some(3)),
+            other => panic!("expected number in +meta.demo, got {other:?}"),
+        }
+
+        assert_eq!(cfg.description.as_deref(), Some("prefix 3"));
+    }
+
+    #[test]
+    fn test_freshness_dict_literal_renders_as_typed() {
+        use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod};
+
+        // Body contains a dict literal, so inner `{`/`}` are present. The
+        // outer `{{ ... }}` is still a single expression and must deserialize
+        // into FreshnessRules rather than collapsing to the string
+        // "{'count': 38, 'period': 'day'}".
+        let yaml = r#"
+        error_after: "{{ {'count': 38, 'period': 'day'} }}"
+        warn_after:
+          count: 10
+          period: hour
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        let error = freshness
+            .error_after
+            .expect("error_after should deserialize as FreshnessRules");
+        assert_eq!(error.count, Some(38));
+        assert_eq!(error.period, Some(FreshnessPeriod::day));
+
+        let warn = freshness
+            .warn_after
+            .expect("warn_after should deserialize as FreshnessRules");
+        assert_eq!(warn.count, Some(10));
+        assert_eq!(warn.period, Some(FreshnessPeriod::hour));
+    }
+
+    #[test]
+    fn test_freshness_dict_literal_ternary_renders_as_null() {
+        use dbt_schemas::schemas::common::FreshnessDefinition;
+
+        // Ternary where the `none` branch is taken. The dict literal on the
+        // other branch injects inner `{`/`}` into the expression body, but
+        // the rendered result must still be YAML null — not the string "None".
+        let yaml = r#"
+        error_after: "{{ none if true else {'count': 1, 'period': 'day'} }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        assert!(
+            freshness.error_after.is_none(),
+            "expected error_after to deserialize as null, got {:?}",
+            freshness.error_after
+        );
+    }
+
+    #[tokio::test]
+    async fn test_render_sql_with_ref_macro() {
+        let (env, sql_resources, init_config) = setup_test_env();
+        // Set the package name for the current context
+        {
+            let resolve_model_context = create_resolve_model_context(&init_config, &sql_resources);
+            let sql = "SELECT * FROM {{ ref('my_table') }};";
+
+            let rendered = render_sql(
+                sql,
+                &env,
+                &resolve_model_context,
+                &DefaultRenderingEventListenerFactory::default(),
+                &PathBuf::from("test"),
+            )
+            .unwrap();
+
+            let sql_resources_locked = sql_resources.lock().unwrap().clone();
+
+            assert_eq!(
+                rendered.trim(),
+                "SELECT * FROM \"db\".\"schema\".\"my_table\";"
+            );
+            assert_eq!(
+                sql_resources_locked,
+                vec![SqlResource::Ref((
+                    "my_table".to_string(),
+                    None,
+                    None,
+                    CodeLocation::new(1, 15, 14)
+                ))]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_render_sql_with_source_macro() {
+        let (env, sql_resources, init_config) = setup_test_env();
+        // Set the package name for the current context
+        {
+            let resolve_model_scope = create_resolve_model_context(&init_config, &sql_resources);
+            let sql = "SELECT * FROM {{ source('my_schema', 'my_table') }};";
+
+            let rendered = render_sql(
+                sql,
+                &env,
+                &resolve_model_scope,
+                &DefaultRenderingEventListenerFactory::default(),
+                &PathBuf::from("test"),
+            )
+            .unwrap();
+
+            let sql_resources_locked = sql_resources.lock().unwrap().clone();
+
+            assert_eq!(
+                rendered.trim(),
+                "SELECT * FROM \"db\".\"schema\".\"my_table\";"
+            );
+            assert_eq!(
+                sql_resources_locked,
+                vec![SqlResource::Source((
+                    "my_schema".to_string(),
+                    "my_table".to_string(),
+                    CodeLocation::new(1, 15, 14)
+                ))]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_render_sql_with_metric_macro() {
+        let (env, sql_resources, init_config) = setup_test_env();
+        // Set the package name for the current context
+        {
+            let resolve_model_scope = create_resolve_model_context(&init_config, &sql_resources);
+            let sql = "{{ metric('metric') }} {{ metric('metric_package', 'metric_two') }}";
+
+            let rendered = render_sql(
+                sql,
+                &env,
+                &resolve_model_scope,
+                &DefaultRenderingEventListenerFactory::default(),
+                &PathBuf::from("test"),
+            )
+            .unwrap();
+
+            let sql_resources_locked = sql_resources.lock().unwrap().clone();
+
+            assert_eq!(rendered.trim(), "metric metric_two");
+            assert_eq!(
+                sql_resources_locked,
+                vec![
+                    SqlResource::Metric(("metric".to_string(), None)),
+                    SqlResource::Metric((
+                        "metric_two".to_string(),
+                        Some("metric_package".to_string())
+                    )),
+                ]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_render_sql_with_config_macro() {
+        let (env, sql_resources, init_config) = setup_test_env();
+        // Set the package name for the current context
+        {
+            let resolve_model_scope = create_resolve_model_context(&init_config, &sql_resources);
+            let sql = r#"
+        {{
+            config(
+                schema = 'my_schema',
+                alias = 'my_alias'~'suffix',
+                materialized = 'view'
+            )
+        }}
+        "#;
+            let rendered = render_sql(
+                sql,
+                &env,
+                &resolve_model_scope,
+                &DefaultRenderingEventListenerFactory::default(),
+                &PathBuf::from("test"),
+            )
+            .unwrap();
+
+            assert_eq!(rendered.trim(), "");
+
+            let expected_config = {
+                let mut map = BTreeMap::new();
+                map.insert("schema".to_string(), Value::from("my_schema"));
+                map.insert("alias".to_string(), Value::from("my_aliassuffix"));
+                map.insert("materialized".to_string(), Value::from("view"));
+                map.insert("enabled".to_string(), Value::from(true)); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
+                let config: ModelConfig =
+                    dbt_yaml::from_value(dbt_yaml::to_value(map).unwrap()).unwrap();
+                SqlResource::ConfigCall(Box::new(config))
+            };
+
+            let sql_resources_locked = sql_resources.lock().unwrap().clone();
+            assert_eq!(sql_resources_locked, vec![expected_config]);
+        }
+    }
+
+    #[test]
+    #[ignore = "This test does not work due to dispatch not getting context of macros defined below"]
+    fn test_adapter_dispatch() {
+        #[allow(unused_imports)] // required to compile code with various feature flags
+        use minijinja::compiler::parser::Parser;
+        #[allow(unused_imports)] // required to compile code with various feature flags
+        use minijinja::machinery::WhitespaceConfig;
+        #[allow(unused_imports)] // required to compile code with various feature flags
+        use minijinja::machinery::{CodeGenerator, Instructions, Vm};
+        #[allow(unused_imports)] // required to compile code with various feature flags
+        use minijinja::syntax::SyntaxConfig;
+        #[allow(dead_code)]
+        fn simple_eval<S: serde::Serialize>(
+            instructions: &Instructions<'_>,
+            ctx: S,
+        ) -> Result<String, Error> {
+            let mut env = Environment::new();
+            let adapter = Arc::new(Adapter::new_parse_phase_adapter(
+                AdapterType::Postgres,
+                dbt_yaml::Mapping::default(),
+                DEFAULT_DBT_QUOTING,
+                Arc::new(DefaultTypeOpsImpl::new(AdapterType::Postgres)),
+                None,
+            ));
+            env.add_global("adapter", adapter.as_value());
+            let empty_blocks = BTreeMap::new();
+            let vm = Vm::new(&env);
+            let root = Value::from_serialize(&ctx);
+
+            Ok(vm
+                .eval(instructions, root, &empty_blocks, AutoEscape::None, &[])?
+                .0
+                .as_str()
+                .unwrap()
+                .to_string())
+        }
+        panic!("test code disabled below");
+    }
+
+    #[tokio::test]
+    async fn test_fromjson() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set json_str = '{"abc": 123}' %}
+        {% set parsed = fromjson(json_str) %}
+        {{ parsed['abc'] }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.trim(), "123");
+    }
+
+    #[tokio::test]
+    async fn test_tojson() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_dict = {"abc": 123, "def": 456} %}
+        {% set json_str = tojson(my_dict) %}
+        {{ json_str }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        let rendered = rendered.trim().replace(" ", "").replace("\n", "");
+        assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
+    }
+
+    #[tokio::test]
+    async fn test_tojson_with_sort_keys() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_dict = {"def": 456, "abc": 123} %}
+        {% set json_str = tojson(my_dict, sort_keys=true) %}
+        {{ json_str }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        let rendered = rendered.trim().replace(" ", "").replace("\n", "");
+        assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
+    }
+
+    #[tokio::test]
+    async fn test_tojson_with_default() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set invalid_json = undefined %}
+        {% set json_str = tojson(invalid_json, '{"default": true}') %}
+        {{ json_str }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.trim(), r#"{"default": true}"#);
+    }
+
+    #[tokio::test]
+    async fn test_fromyaml() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_yml_str -%}
+        dogs:
+         - good
+         - bad
+        {%- endset %}
+        {% set my_dict = fromyaml(my_yml_str) %}
+        {{ my_dict['dogs'] | join(", ") }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.trim(), "good, bad");
+    }
+
+    #[tokio::test]
+    async fn test_toyaml_basic() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_dict = {"abc": 123, "def": 456} %}
+        {% set yaml_str = toyaml(my_dict) %}
+        {{ yaml_str }}
+        "#;
+
+        // Render the snippet
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        let trimmed = rendered.trim().replace('\n', " ").replace('\r', "");
+        assert_contains!(trimmed, "abc: 123");
+        assert_contains!(trimmed, "def: 456");
+    }
+
+    #[tokio::test]
+    async fn test_set_strict_function() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_list = [1, 2, 2, 3] %}
+        {% set my_set = set_strict(my_list) %}
+        {{ my_set | join(", ") }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        let trimmed = rendered.trim();
+        assert!(
+            trimmed == "1, 2, 3"
+                || trimmed == "1, 3, 2"
+                || trimmed == "2, 1, 3"
+                || trimmed == "2, 3, 1"
+                || trimmed == "3, 1, 2"
+                || trimmed == "3, 2, 1"
+        );
+
+        // Test error case with non-iterable
+        let sql_error = r#"
+        {% set my_set = set_strict(42) %}
+        {{ my_set }}
+        "#;
+
+        let result = render_sql(
+            sql_error,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_local_md5() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set value = "hello world" %}
+        {{ local_md5(value) }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.trim(), "5eb63bbbe01eeed093cb22bb8f5acdc3");
+    }
+
+    #[test]
+    fn test_parse_regular_macro() -> FsResult<()> {
+        let sql = r#"
+            {% macro my_macro() %}
+                select 1 as col
+            {% endmacro %}
+        "#;
+
+        let resources = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro"])?;
+        assert_eq!(
+            resources,
+            vec![SqlResource::Macro(
+                "my_macro".to_string(),
+                Span {
+                    start_line: 2,
+                    start_col: 13,
+                    start_offset: 13,
+                    end_line: 4,
+                    end_col: 27,
+                    end_offset: 94
+                },
+                None,
+                vec![],
+                Span {
+                    start_line: 2,
+                    start_col: 22,
+                    start_offset: 22,
+                    end_line: 2,
+                    end_col: 30,
+                    end_offset: 30
+                }
+            )]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_test_macro() -> FsResult<()> {
+        let sql = r#"
+            {% test positive_value(model, column_name) %}
+                select *
+                from {{ model }}
+                where {{ column_name }} < 0
+            {% endtest %}
+        "#;
+
+        let resources = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["test"])?;
+        assert_eq!(
+            resources,
+            vec![SqlResource::Test(
+                "test_positive_value".to_string(),
+                Span {
+                    start_line: 2,
+                    start_col: 13,
+                    start_offset: 13,
+                    end_line: 6,
+                    end_col: 26,
+                    end_offset: 186
+                },
+                vec![
+                    ArgSpec {
+                        name: "model".to_string(),
+                        is_optional: false
+                    },
+                    ArgSpec {
+                        name: "column_name".to_string(),
+                        is_optional: false
+                    },
+                ],
+                Span {
+                    start_line: 2,
+                    start_col: 21,
+                    start_offset: 21,
+                    end_line: 2,
+                    end_col: 35,
+                    end_offset: 35
+                }
+            )]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_multiple_macros() -> FsResult<()> {
+        let sql = r#"
+            {% macro first() %}
+                select 1
+            {% endmacro %}
+
+            {% test second(model) %}
+                select * from {{ model }}
+            {% endtest %}
+
+            {% macro third() %}
+                select 3
+            {% endmacro %}
+        "#;
+
+        let resources =
+            parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro", "test"])?;
+        assert_eq!(
+            resources,
+            vec![
+                SqlResource::Macro(
+                    "first".to_string(),
+                    Span {
+                        start_line: 2,
+                        start_col: 13,
+                        start_offset: 13,
+                        end_line: 4,
+                        end_col: 27,
+                        end_offset: 84
+                    },
+                    None,
+                    vec![],
+                    Span {
+                        start_line: 2,
+                        start_col: 22,
+                        start_offset: 22,
+                        end_line: 2,
+                        end_col: 27,
+                        end_offset: 27
+                    }
+                ),
+                SqlResource::Test(
+                    "test_second".to_string(),
+                    Span {
+                        start_line: 6,
+                        start_col: 13,
+                        start_offset: 98,
+                        end_line: 8,
+                        end_col: 26,
+                        end_offset: 190
+                    },
+                    vec![ArgSpec {
+                        name: "model".to_string(),
+                        is_optional: false
+                    }],
+                    Span {
+                        start_line: 6,
+                        start_col: 21,
+                        start_offset: 106,
+                        end_line: 6,
+                        end_col: 27,
+                        end_offset: 112
+                    }
+                ),
+                SqlResource::Macro(
+                    "third".to_string(),
+                    Span {
+                        start_line: 10,
+                        start_col: 13,
+                        start_offset: 204,
+                        end_line: 12,
+                        end_col: 27,
+                        end_offset: 275
+                    },
+                    None,
+                    vec![],
+                    Span {
+                        start_line: 10,
+                        start_col: 22,
+                        start_offset: 213,
+                        end_line: 10,
+                        end_col: 27,
+                        end_offset: 218
+                    }
+                ),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_nested_macros() -> FsResult<()> {
+        let sql = r#"
+            {% macro outer() %}
+                {% macro inner() %}
+                    select 1
+                {% endmacro %}
+            {% endmacro %}
+        "#;
+
+        let resources = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro"])?;
+        assert_eq!(
+            resources,
+            vec![
+                SqlResource::Macro(
+                    "outer".to_string(),
+                    Span {
+                        start_line: 2,
+                        start_col: 13,
+                        start_offset: 13,
+                        end_line: 6,
+                        end_col: 27,
+                        end_offset: 155
+                    },
+                    None,
+                    vec![],
+                    Span {
+                        start_line: 2,
+                        start_col: 22,
+                        start_offset: 22,
+                        end_line: 2,
+                        end_col: 27,
+                        end_offset: 27
+                    }
+                ),
+                SqlResource::Macro(
+                    "inner".to_string(),
+                    Span {
+                        start_line: 3,
+                        start_col: 17,
+                        start_offset: 49,
+                        end_line: 5,
+                        end_col: 31,
+                        end_offset: 128
+                    },
+                    None,
+                    vec![],
+                    Span {
+                        start_line: 3,
+                        start_col: 26,
+                        start_offset: 58,
+                        end_line: 3,
+                        end_col: 31,
+                        end_offset: 63
+                    }
+                ),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_invalid_sql() {
+        let sql = r#"
+            {% macro unclosed() %}
+                select 1
+            {# Missing endmacro #}
+        "#;
+
+        let result = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro"]);
+        println!("result: {result:?}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_unclosed_if_inside_macro_gives_rich_error() {
+        // Reproducer from https://github.com/dbt-labs/dbt-fusion/issues/130
+        let sql = r#"
+            {% macro my_macro() %}
+              {% if true %}
+            {% endmacro %}
+        "#;
+
+        let err = parse_macro_statements(sql, &PathBuf::from("macros/my_macro.sql"), &["macro"])
+            .unwrap_err();
+        let msg = err.to_string();
+        println!("error: {msg}");
+        assert!(
+            msg.contains("Encountered unknown tag 'endmacro'"),
+            "expected 'Encountered unknown tag' in: {msg}"
+        );
+        assert!(
+            msg.contains("innermost block that needs to be closed is 'if'"),
+            "expected innermost block hint in: {msg}"
+        );
+        assert!(
+            msg.contains("looking for"),
+            "expected 'looking for' hint in: {msg}"
+        );
+        assert!(
+            msg.contains("'endif'") || msg.contains("endif"),
+            "expected 'endif' in expected tags hint: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parse_unclosed_for_inside_if_gives_rich_error() {
+        let sql = r#"
+            {% macro my_macro() %}
+              {% if true %}
+                {% for x in [] %}
+              {% endif %}
+            {% endmacro %}
+        "#;
+
+        let err = parse_macro_statements(sql, &PathBuf::from("macros/my_macro.sql"), &["macro"])
+            .unwrap_err();
+        let msg = err.to_string();
+        println!("error: {msg}");
+        assert!(
+            msg.contains("Encountered unknown tag 'endif'"),
+            "expected 'Encountered unknown tag' in: {msg}"
+        );
+        assert!(
+            msg.contains("innermost block that needs to be closed is 'for'"),
+            "expected innermost block hint in: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parse_materialization_macro() -> FsResult<()> {
+        let sql_default = r#"
+            {% materialization name, default %}
+
+            {% endmaterialization %}
+        "#;
+
+        let resources = parse_macro_statements(
+            sql_default,
+            &PathBuf::from("test.sql"),
+            &["materialization"],
+        )?;
+        assert_eq!(
+            resources,
+            vec![SqlResource::Materialization(
+                "materialization_name_default".to_string(),
+                "default".to_string(),
+                Span {
+                    start_line: 2,
+                    start_col: 13,
+                    end_line: 4,
+                    end_col: 37,
+                    start_offset: 13,
+                    end_offset: 86
+                },
+                Span {
+                    start_line: 2,
+                    start_col: 32,
+                    start_offset: 32,
+                    end_line: 2,
+                    end_col: 36,
+                    end_offset: 36
+                }
+            )]
+        );
+
+        let sql_custom = r#"
+        {% materialization name, adapter='redshift', supported_languages=['sql', 'python'] %}
+
+        {% endmaterialization %}
+    "#;
+
+        let resources =
+            parse_macro_statements(sql_custom, &PathBuf::from("test.sql"), &["materialization"])?;
+        assert_eq!(
+            resources,
+            vec![SqlResource::Materialization(
+                "materialization_name_redshift".to_string(),
+                "redshift".to_string(),
+                Span {
+                    start_line: 2,
+                    start_col: 9,
+                    end_line: 4,
+                    end_col: 33,
+                    start_offset: 9,
+                    end_offset: 128
+                },
+                Span {
+                    start_line: 2,
+                    start_col: 28,
+                    start_offset: 28,
+                    end_line: 2,
+                    end_col: 32,
+                    end_offset: 32
+                }
+            )]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_dict_update() {
+        let (env, _, _) = setup_test_env();
+        let env = Arc::new(env);
+        let sql = r#"
+        {% set my_dict = dict(
+            a=1,
+            b=2,
+            c=3
+        ) %}
+        {% do my_dict.update({"d": 4, "c": 5}) %}
+        {{ tojson(my_dict, sort_keys=true) }}
+        "#;
+
+        let rendered = render_sql(
+            sql,
+            &env,
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            &PathBuf::from("test"),
+        )
+        .unwrap();
+
+        let rendered = rendered.trim().replace(" ", "").replace("\n", "");
+        assert_eq!(rendered, r#"{"a":1,"b":2,"c":5,"d":4}"#);
+    }
+
+    #[test]
+    fn test_process_markdown_single_doc() {
+        let sql = r#"
+        {% docs cloud_plan_tier %}
+        An identifier to group specific plans by targeted user groups.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(doc_names, vec!["cloud_plan_tier".to_string()]);
+    }
+
+    #[test]
+    fn test_process_markdown_multiple_docs() {
+        let sql = r#"
+
+
+        {% docs cloud_plan %}
+        The plan name representing the pricing and features for a given Cloud account.
+        {% enddocs %}
+
+        {% docs database_source %}
+        The source Postgres database the Cloud account information comes from.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(
+            doc_names,
+            vec!["cloud_plan".to_string(), "database_source".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_process_markdown_with_md_suffix() {
+        let sql = r#"
+        {% docs cloud_plan_tier.md %}
+        An identifier to group specific plans by targeted user groups.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(doc_names, vec!["cloud_plan_tier".to_string()]);
+    }
+
+    #[test]
+    fn test_process_markdown_no_docs() {
+        let sql = r#"
+        This is a readme.md file with {{ invalid-ish jinja }} in it
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        assert!(docs.is_empty());
+    }
+    #[test]
+    fn test_process_markdown_unclosed_docs() {
+        let sql = r#"
+    {% docs cloud_plan_tier %}
+    An identifier to group specific plans by targeted user groups.
+    "#;
+
+        let res = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]);
+        println!("res: {res:?}");
+        assert!(res.is_err());
+    }
+
+    /// Regression test for GitHub issue #998: doc block names starting with a digit
+    /// previously caused a parse error: `'_' may not occur at end of number`.
+    /// dbt Core allows this; Fusion should too.
+    /// https://github.com/dbt-labs/dbt-fusion/issues/998
+    #[test]
+    fn test_process_markdown_doc_name_starting_with_digit() {
+        let sql = r#"
+        {% docs 3_months_prior_date %}
+        The date 3 months prior to today.
+        {% enddocs %}
+        "#;
+
+        let docs = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]).unwrap();
+        let doc_names: Vec<String> = docs
+            .iter()
+            .filter_map(|x| {
+                if let SqlResource::Doc(name, _) = x {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(doc_names, vec!["3_months_prior_date".to_string()]);
+    }
+}

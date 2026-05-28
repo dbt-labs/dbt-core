@@ -1,0 +1,7 @@
+kind: Features
+body: Add Legacy incremental strategy and wire ClickHouse into valid_incremental_strategies
+time: 2026-05-06T16:06:22.650028-04:00
+custom:
+    author: dataders
+    issue: "1676"
+    project: dbt-fusion

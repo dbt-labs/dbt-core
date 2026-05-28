@@ -1,0 +1,58 @@
+[package]
+name = "dbt-loader"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+dbt-adapter-core = { workspace = true }
+dbt-common = { workspace = true }
+dbt-adapter = { workspace = true }
+dbt-cloud-config = { workspace = true }
+dbt-deps = { workspace = true }
+dbt-env = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-jinja-utils = { workspace = true }
+dbt-jinja-vars = { workspace = true }
+dbt-profile = { workspace = true }
+dbt-schemas = { workspace = true }
+dbt-telemetry = { workspace = true }
+dbt-yaml = { workspace = true }
+dirs = { workspace = true }
+flate2 = { workspace = true }
+ignore = { workspace = true }
+indexmap = { workspace = true }
+minijinja = { workspace = true }
+pathdiff = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
+rust-embed = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+walkdir = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+dbt-jinja-utils = { workspace = true, features = ["testing"] }
+dbt-parser = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
+[lib]
+name = "dbt_loader"
+path = "src/mod.rs"
+doctest = false

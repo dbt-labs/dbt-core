@@ -1,0 +1,5 @@
+---
+source: fs/sa/crates/dbt-adapter/src/engine/xdbc/duckdb_attach_snapshot_tests.rs
+input_file: fs/sa/crates/dbt-adapter/src/engine/xdbc/fixtures/glue_minimal/catalogs.yml
+---
+ATTACH IF NOT EXISTS 'aws_glue' AS aws_glue (TYPE ICEBERG)
