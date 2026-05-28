@@ -176,13 +176,11 @@ class TestParseWithFusion:
 
         def _capture(argv, *args, **kwargs):
             captured["env"] = kwargs.get("env")
-            return _fake_fs(json.dumps({"metadata": {}}))(argv, *args, **kwargs)
+            return _fake_parser(json.dumps({"metadata": {}}))(argv, *args, **kwargs)
 
         with mock.patch.dict(
             "os.environ", {"DBT_INVOCATION_ENV": "dbt-cloud-prod__host:cloud"}, clear=False
-        ), mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_capture
-        ), mock.patch(
+        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_capture), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
         ), mock.patch(
             "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
