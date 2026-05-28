@@ -423,7 +423,6 @@ skip_browser_auth = _create_option_and_track_env_var(
     envvar="DBT_ENGINE_SKIP_BROWSER_AUTH",
     help="Skip opening the browser and print the authentication URL instead.",
     default=False,
-    hidden=True,
 )
 
 

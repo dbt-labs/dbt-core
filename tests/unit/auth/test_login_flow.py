@@ -156,10 +156,10 @@ class TestPostPlatformLogin:
                 fired_messages.append(event.msg)
 
         with mock.patch("dbt.flags.get_flags", return_value=flags), mock.patch(
-            "dbt.auth.oauth.platform.dbtPlatformAPIClient.is_state_configured",
+            "dbt.auth.oauth.platform.DbtPlatformAPIClient.is_state_configured",
             return_value=configured,
         ), mock.patch(
-            "dbt.auth.oauth.platform.dbtPlatformAPIClient.warm_license_cache"
+            "dbt.auth.oauth.platform.DbtPlatformAPIClient.warm_license_cache"
         ), mock.patch(
             "dbt.auth.oauth.platform.fire_event", side_effect=capture_event
         ), mock.patch(

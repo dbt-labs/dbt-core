@@ -1,6 +1,6 @@
 import stat
 
-from dbt.auth.utils import secure_open
+from dbt.auth.secure_file import secure_open
 
 
 class TestSecureOpen:

@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import time
@@ -7,8 +8,7 @@ from unittest import mock
 import pytest
 
 from dbt.auth.credentials import OAuthSession, PlatformCredential
-from dbt.auth.oauth.platform import decode_access_token
-from dbt.auth.oauth.utils import generate_pkce
+from dbt.auth.oauth.platform import decode_access_token, generate_pkce
 from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver, OAuthPassiveResolver
 from dbt.auth.session_cache import upsert_session
 from dbt.exceptions import (
@@ -362,8 +362,6 @@ class TestPkce:
         assert len(verifier) >= 43
 
     def test_challenge_matches_sha256(self):
-        import hashlib
-
         verifier, challenge = generate_pkce()
         expected = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())

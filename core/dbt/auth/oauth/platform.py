@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import secrets
 import time
@@ -11,16 +12,15 @@ from urllib.parse import urlencode, urlparse
 import requests
 
 from dbt.auth.credentials import OAuthSession, PlatformCredential
-from dbt.auth.oauth.utils import generate_pkce
+from dbt.auth.secure_file import secure_open
 from dbt.auth.session_cache import DBT_HOME_DIR, DEFAULT_CACHE_PATH, upsert_session
-from dbt.auth.utils import secure_open
 from dbt.config.user_settings import set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
 
-class dbtPlatformAPIClient:
+class DbtPlatformAPIClient:
     def __init__(self, credential: PlatformCredential) -> None:
         self.credential = credential
         self._base_url = f"https://{credential.account_host}"
@@ -31,7 +31,6 @@ class dbtPlatformAPIClient:
         try:
             resp = requests.get(url, headers=self._headers, timeout=5)
             resp.raise_for_status()
-            fire_event(Note(msg=f"features response: {resp.text}"))
             return resp.json().get("data", {}).get("dbt-state", False) is True
         except (requests.RequestException, ValueError, KeyError):
             return False
@@ -58,6 +57,14 @@ class dbtPlatformAPIClient:
         target = DBT_HOME_DIR / f"jwks.{self.credential.account_host}.json"
         with secure_open(target) as f:
             json.dump(jwks_data, f, indent=2)
+
+
+def generate_pkce() -> tuple[str, str]:
+    verifier_bytes = secrets.token_bytes(32)
+    verifier = base64.urlsafe_b64encode(verifier_bytes).rstrip(b"=").decode("ascii")
+    challenge_hash = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(challenge_hash).rstrip(b"=").decode("ascii")
+    return verifier, challenge
 
 
 def build_context(
@@ -191,7 +198,7 @@ def resolve_from_callback(
     upsert_session(session, cache_path or DEFAULT_CACHE_PATH)
 
     credential = PlatformCredential.from_oauth(session)
-    dbtPlatformAPIClient(credential).fetch_and_persist_jwks()
+    DbtPlatformAPIClient(credential).fetch_and_persist_jwks()
 
     return credential
 
@@ -201,7 +208,7 @@ def on_platform_login_success(credential: PlatformCredential) -> None:
     # dbt.flags -> dbt.cli.main -> dbt.auth.oauth.platform
     from dbt.flags import get_flags
 
-    client = dbtPlatformAPIClient(credential)
+    client = DbtPlatformAPIClient(credential)
     client.warm_license_cache()
     fire_event(
         Note(msg=f"Logged in as {credential.account_host} (account {credential.account_id}).")

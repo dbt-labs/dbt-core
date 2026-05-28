@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import requests
 
 from dbt.auth.credentials import RuncacheCredential
-from dbt.auth.oauth.utils import generate_pkce
+from dbt.auth.oauth.platform import generate_pkce
 from dbt.auth.session_cache import write_state_auth
 from dbt.config.user_settings import set_user_setting_flag
 from dbt.exceptions import InteractiveAuthError

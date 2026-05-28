@@ -12,6 +12,11 @@ def secure_open(
     flags: int = os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
     mode: int = 0o600,
 ) -> Iterator[IO[str]]:
+    """Open a file for writing with restrictive permissions (0o600 by default).
+
+    Used by session_cache and JWKS persistence to avoid leaking tokens via
+    world-readable files.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, flags, mode)
     with os.fdopen(fd, "w", encoding="utf-8") as f:

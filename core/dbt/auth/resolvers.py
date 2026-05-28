@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import webbrowser
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
@@ -21,7 +22,6 @@ from dbt.auth.oauth.platform import decode_access_token
 from dbt.auth.oauth.platform import resolve_from_callback as resolve_platform_auth
 from dbt.auth.oauth.runcache import build_context as build_runcache_oauth_context
 from dbt.auth.oauth.runcache import resolve_from_callback as resolve_runcache_auth
-from dbt.auth.oauth.utils import default_opener
 from dbt.auth.session_cache import (
     DBT_HOME_DIR,
     DEFAULT_CACHE_PATH,
@@ -40,9 +40,9 @@ from dbt.exceptions import (
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
-AUTH_SERVER_URL = "http://localhost:3000/register"
+AUTH_SERVER_URL = None
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
-OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
+OAUTH_CLIENT_ID = None
 OAUTH_SCOPES = "user_access offline_access"
 
 
@@ -88,7 +88,7 @@ class OAuthPassiveResolver:
 
     def __init__(
         self,
-        client_id: str = OAUTH_CLIENT_ID,
+        client_id: Optional[str] = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         token_endpoint_override: Optional[str] = None,
     ) -> None:
@@ -97,6 +97,9 @@ class OAuthPassiveResolver:
         self.token_endpoint_override = token_endpoint_override
 
     def resolve(self) -> Credential:
+        if not self.client_id:
+            raise NotAuthenticated()
+
         cache = read_session_cache(self.cache_path)
         matching = [s for s in cache.sessions if s.client_id == self.client_id]
 
@@ -123,6 +126,7 @@ class OAuthPassiveResolver:
         return f"{base}/oauth/token"
 
     def _refresh(self, session: OAuthSession) -> Credential:
+        assert self.client_id is not None
         url = self._refresh_token_url(session.account_host)
         form = {
             "grant_type": "refresh_token",
@@ -262,7 +266,7 @@ class OAuthInteractiveResolver:
 
     def __init__(
         self,
-        client_id: str = OAUTH_CLIENT_ID,
+        client_id: Optional[str] = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         auth_server_url: Optional[str] = None,
         scopes: str = OAUTH_SCOPES,
@@ -275,11 +279,10 @@ class OAuthInteractiveResolver:
             auth_server_url
             or os.environ.get("DBT_CLOUD_STAGING_URL", "").strip()
             or self._auth_server_from_cloud_yaml()
-            or AUTH_SERVER_URL
         )
         self.scopes = scopes
         self.timeout = timeout
-        self.opener = opener or default_opener
+        self.opener = opener or webbrowser.open
 
     @staticmethod
     def _auth_server_from_cloud_yaml() -> Optional[str]:
@@ -299,6 +302,13 @@ class OAuthInteractiveResolver:
         return None
 
     def resolve(self) -> PlatformCredential | RuncacheCredential:
+        if not self.client_id:
+            raise InteractiveAuthError("OAuth client_id is required but not configured")
+        if not self.auth_server_url:
+            raise InteractiveAuthError(
+                "auth server URL is required; set DBT_CLOUD_STAGING_URL or configure active-host in ~/.dbt/dbt_cloud.yml"
+            )
+
         server = OAuthCallbackServer()
         port = server.server_address[1]
         redirect_url = f"http://localhost:{port}/"

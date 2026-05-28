@@ -50,6 +50,7 @@ def get_user_setting_flags(path: Path | None = None) -> dict:
     try:
         settings = read_user_settings(path)
     except (DbtValidationError, RuntimeError):
+        # RuntimeError: Path.home() fails when HOME/USERPROFILE env vars are absent.
         return {}
     return settings.flags
 
