@@ -1,5 +1,5 @@
 kind: Features
-body: Add `--use-v2-parser` to delegate parsing to the fusion parser (`fs parse`),
+body: Add `--use-v2-parser` to delegate parsing to the fusion parser,
   load its `manifest.json` into a runtime Manifest, and bypass dbt-core's parser.
   Configurable via `--v2-parser` / `DBT_ENGINE_V2_PARSER` (defaults to `dbt-core-experimental-parser parse`)
   or the `flags:` section of `dbt_project.yml`.
