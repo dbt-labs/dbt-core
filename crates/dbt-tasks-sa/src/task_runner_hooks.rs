@@ -21,7 +21,6 @@ use dbt_tasks_core::StoreableResults;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::ExtendedTaskRunnerCtxFactory;
 use dbt_tasks_core::metricflow::MetricflowClient;
-use dbt_tasks_core::precompile::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use petgraph::Graph;
 
@@ -43,7 +42,6 @@ impl TaskRunnerHooksFactory for DefaultTaskRunnerHooksFactory {
         _schema_store: Arc<SchemaStore>,
         _data_store: Arc<dyn DataStoreTrait>,
         _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
-        _static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
     ) -> Box<dyn TaskRunnerHooks> {
         Box::new(DefaultTaskRunnerHooks { resolved_state })
     }

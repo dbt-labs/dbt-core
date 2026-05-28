@@ -6,9 +6,13 @@ use crate::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;
+use crate::need_quotes::need_quotes;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_sql::types::{SqlType, metadata_sql_type_key};
+use dbt_common::adapter::dialect_of;
+use dbt_frontend_common::FullyQualifiedName;
+use dbt_frontend_common::named_reference::NamedReference;
 
 // TODO: Add keys here as necessary
 pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
@@ -104,6 +108,55 @@ pub trait TypeOps: Send + Sync {
 
     /// Normalize two SQL type strings and compare them for equality.
     fn normalize_and_compare_sql_types(&self, lhs: &str, rhs: &str) -> AdapterResult<bool>;
+
+    /// Check whether a SQL literal is compatible with the given Arrow DataType.
+    ///
+    /// Returns `Ok(false)` when the literal's precision/scale would overflow the column type
+    /// (currently only relevant for Decimal on Snowflake and DuckDB). All other adapters and
+    /// all non-Decimal types return `Ok(true)`.
+    fn can_cast_literal_to_type(
+        &self,
+        _literal: &str,
+        _data_type: &DataType,
+    ) -> AdapterResult<bool> {
+        Ok(true)
+    }
+
+    /// Format a SQL identifier, quoting it if necessary for this dialect.
+    fn format_ident(&self, id: &str) -> String {
+        crate::format_ident::format_ident(id, self.adapter_type())
+    }
+
+    /// Determine whether a SQL identifier needs to be quoted for this dialect.
+    fn need_quotes_for_ident(&self, id: &str) -> bool {
+        need_quotes(self.adapter_type(), id)
+    }
+
+    /// Extract identifiers from a SQL string, normalizing them for comparison with identifiers from the binding context.
+    fn try_extract_identifiers(
+        &self,
+        sql: &str,
+        default_catalog: &str,
+        default_schema: &str,
+        _quoted_name_ignore_case: bool,
+    ) -> AdapterResult<Vec<NamedReference<FullyQualifiedName>>> {
+        let dialect = dialect_of(self.adapter_type()).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                format!("Dialect not found for adapter type {}", self.adapter_type()),
+            )
+        })?;
+        Ok(crate::sql::extract_sources::extract_sources_from_str(
+            sql,
+            dialect,
+            default_catalog,
+            default_schema,
+        )
+        .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e.to_string()))?
+        .into_iter()
+        .map(|entity| entity.into())
+        .collect::<Vec<_>>())
+    }
 }
 
 pub trait TypeOpsFactory: Send + Sync {
@@ -135,6 +188,37 @@ impl TypeOps for DefaultTypeOpsImpl {
                 postgres::try_format_type(data_type, true, out)
             }
             _ => {
+                // sdf-specific distinct types are encoded as FixedSizeList(field, 1).
+                // Render them as the uppercased field name (e.g. "variant" → "VARIANT").
+                if let DataType::FixedSizeList(field, 1) = data_type {
+                    out.push_str(&field.name().to_ascii_uppercase());
+                    return Ok(());
+                }
+                // List types: Snowflake uses unparameterized ARRAY; other dialects use ARRAY<T>.
+                if let DataType::List(field) = data_type {
+                    if adapter_type == AdapterType::Snowflake {
+                        out.push_str("ARRAY");
+                    } else {
+                        out.push_str("ARRAY<");
+                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                        out.push('>');
+                    }
+                    return Ok(());
+                }
+                // Struct types: render as STRUCT<name TYPE, ...>.
+                if let DataType::Struct(fields) = data_type {
+                    out.push_str("STRUCT<");
+                    for (i, field) in fields.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        out.push_str(field.name());
+                        out.push(' ');
+                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                    }
+                    out.push('>');
+                    return Ok(());
+                }
                 let hint: SqlTypeHint = data_type.try_into()?;
                 // TODO: handle has_decimal_places correctly
                 let has_decimal_places = false;

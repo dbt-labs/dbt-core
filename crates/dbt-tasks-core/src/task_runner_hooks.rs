@@ -23,7 +23,6 @@ use crate::StoreableResults;
 use crate::context::TaskRunnerCtx;
 use crate::context_factory::ExtendedTaskRunnerCtxFactory;
 use crate::metricflow::MetricflowClient;
-use crate::precompile::StaticAnalysisBuckets;
 use crate::task::Task;
 
 #[async_trait]
@@ -107,6 +106,5 @@ pub trait TaskRunnerHooksFactory: Send + Sync {
         schema_store: Arc<SchemaStore>,
         data_store: Arc<dyn DataStoreTrait>,
         metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
-        static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
     ) -> Box<dyn TaskRunnerHooks>;
 }

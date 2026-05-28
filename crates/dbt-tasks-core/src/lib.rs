@@ -9,6 +9,7 @@ pub mod metricflow;
 pub mod precompile;
 pub mod pretty_table;
 pub mod render_task_hooks;
+pub mod run_cache_lifecycle;
 pub mod run_task_hooks;
 mod run_tasks_args;
 pub mod span_manager;

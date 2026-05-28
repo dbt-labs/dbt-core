@@ -2,12 +2,15 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use dbt_adapter::Adapter;
+use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::collections::DashMap;
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::RenderingEventListenerFactory;
+use dbt_run_cache::view_traversal::ViewDefinitionTraverser;
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::state::ResolverState;
@@ -15,7 +18,9 @@ use petgraph::graph::DiGraph;
 
 use crate::PreTaskRunData;
 use crate::RunTasksArgs;
-use crate::context::{ExtendedCtx, TaskRunnerCtx, TaskRunnerCtxInner};
+use crate::context::{ExtendedCtx, RunCacheCtx, TaskRunnerCtx, TaskRunnerCtxInner};
+use crate::precompile::StaticAnalysisBuckets;
+use crate::run_cache_lifecycle::RunCacheLifecycle;
 use crate::span_manager::SpanManager;
 use crate::task::Task;
 use crate::task_spans::populate_span_manager;
@@ -41,6 +46,8 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         schedule: Schedule<String>,
         jinja_env: Arc<JinjaEnv>,
         freshness_results: Option<Box<dyn PreTaskRunData>>,
+        static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        adapter: Arc<Adapter>,
     ) -> Pin<Box<dyn Future<Output = Result<TaskRunnerCtx, Box<FsError>>> + Send>> {
         let rendering_listener_factory = self.rendering_listener_factory();
         let span_manager = Arc::new({
@@ -62,7 +69,13 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
             resolver_state.root_project_name.clone(),
         );
         Box::pin(async move {
-            let extended_ctx = extended_ctx_factory.build().await?;
+            let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
+            let run_cache_lifecycle =
+                RunCacheLifecycle::initialize(run_task_args.as_ref(), execute).await;
+
+            let extended_ctx = extended_ctx_factory
+                .build(run_cache_lifecycle.is_requested())
+                .await?;
 
             let node_hashes = self
                 .build_node_hashes(
@@ -82,9 +95,34 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
             );
 
             let schema_cache = schema_store as Arc<dyn SchemaStoreTrait>;
-            let data_store = data_store as Arc<dyn DataStoreTrait>;
 
-            let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
+            let run_cache_deferred_fqns = static_analysis_buckets
+                .deferred_unique_ids()
+                .values()
+                .filter_map(|unique_id| {
+                    let node = resolver_state.get_defer_node_by_id(unique_id)?;
+                    let relation =
+                        create_relation_from_node(resolver_state.adapter_type, node, None).ok()?;
+                    Some(relation.semantic_fqn())
+                })
+                .collect();
+
+            let RunCacheLifecycle {
+                service: run_cache_service,
+                metadata: run_cache_metadata,
+            } = run_cache_lifecycle;
+
+            let run_cache_ctx = RunCacheCtx {
+                run_cache_metadata,
+                run_cache_dev_cloned_nodes: DashMap::default(),
+                run_cache_deferred_fqns,
+                run_cache_service_requested: run_cache_service.requested,
+                run_cache_service_config: run_cache_service.config,
+                run_cache_service_client: run_cache_service.client,
+                view_traverser: adapter
+                    .metadata_adapter()
+                    .map(|adapter| Arc::new(ViewDefinitionTraverser::new(Arc::from(adapter)))),
+            };
 
             Ok(TaskRunnerCtx {
                 inner: Arc::new(TaskRunnerCtxInner::new(
@@ -100,6 +138,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                     generic_test_relationships,
                     span_manager,
                     execute,
+                    run_cache_ctx,
                 )),
                 schema_cache,
                 data_store,
@@ -137,5 +176,6 @@ pub trait ExtendedTaskRunnerCtxFactory: Send + Sync {
     #[allow(clippy::type_complexity)]
     fn build(
         self: Box<Self>,
+        run_cache_enabled: bool,
     ) -> Pin<Box<dyn Future<Output = Result<Box<dyn ExtendedCtx>, Box<FsError>>> + Send>>;
 }

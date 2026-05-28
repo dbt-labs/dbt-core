@@ -54,6 +54,12 @@ pub fn need_quotes(id: &str, adapter: AdapterType) -> bool {
         return true;
     }
 
+    // Snowflake normalizes unquoted identifiers to uppercase, so any lowercase
+    // letter forces quoting to preserve case.
+    if adapter == AdapterType::Snowflake && id.chars().any(|c| c.is_ascii_lowercase()) {
+        return true;
+    }
+
     false
 }
 
@@ -69,9 +75,9 @@ static EMPTY_KEYWORDS: Lazy<HashSet<&'static str>> = Lazy::new(HashSet::new);
 pub fn reserved_keywords(adapter: AdapterType) -> &'static HashSet<&'static str> {
     match adapter {
         AdapterType::Fabric => &FABRIC_KEYWORDS,
-        // TODO: add clickhouse keywords to `dbt-sql-keywords`
-        AdapterType::ClickHouse => &EMPTY_KEYWORDS,
-        _ => unimplemented!("Reserved keyword unimplemented for adapter {}", adapter),
+        // For other adapters the proprietary TypeOpsImpl handles keyword checks via sdf-frontend;
+        // the source-available fallback uses an empty set.
+        _ => &EMPTY_KEYWORDS,
     }
 }
 
@@ -514,10 +520,10 @@ mod tests {
 
     #[test]
     fn test_format_ident_quoted_default() {
+        // Non-Fabric/ClickHouse adapters use an empty keyword baseline, so reserved
+        // words are not detected and the identifier comes back unquoted.
         let id = "select";
-        // Should panic because Postgres reserved is unimplemented
-        let result = std::panic::catch_unwind(|| format_ident(id, AdapterType::Postgres));
-        assert!(result.is_err());
+        assert_eq!(format_ident(id, AdapterType::Postgres), "select");
     }
 
     #[test]

@@ -24,6 +24,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::precompile::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
 use dbt_tasks_core::test_aggregation::GenericTestRelationships;
@@ -66,6 +67,7 @@ pub struct TaskRunner {
     schema_store: Arc<SchemaStore>,
     data_store: Arc<dyn DataStoreTrait>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
+    static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
 }
 
 impl TaskRunner {
@@ -77,6 +79,7 @@ impl TaskRunner {
         schema_store: Arc<SchemaStore>,
         data_store: Arc<dyn DataStoreTrait>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
+        static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
     ) -> Self {
         Self {
             hooks,
@@ -86,6 +89,7 @@ impl TaskRunner {
             schema_store,
             data_store,
             ctx_factory,
+            static_analysis_buckets,
         }
     }
 
@@ -186,6 +190,8 @@ impl TaskRunner {
                 schedule,
                 Arc::clone(&self.jinja_env),
                 freshness_results,
+                Arc::clone(&self.static_analysis_buckets),
+                Arc::clone(&self.adapter),
             )
             .await
     }

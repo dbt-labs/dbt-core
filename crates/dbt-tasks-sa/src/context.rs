@@ -56,6 +56,7 @@ impl ExtendedTaskRunnerCtxFactory for EmptyExtendedTaskRunnerCtxFactory {
 
     fn build(
         self: Box<Self>,
+        _run_cache_enabled: bool,
     ) -> Pin<Box<dyn Future<Output = Result<Box<dyn ExtendedCtx>, Box<FsError>>> + Send>> {
         Box::pin(async { Ok(Box::new(EmptyExtendedTaskRunnerCtxImpl) as Box<dyn ExtendedCtx>) })
     }

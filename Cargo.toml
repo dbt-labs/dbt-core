@@ -39,6 +39,7 @@ members = [
   "crates/dbt-metadata",
   "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
+  "crates/dbt-run-cache",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
   "crates/dbt-telemetry",
@@ -242,6 +243,7 @@ dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
+dbt-run-cache = { path = "crates/dbt-run-cache" }
 dbt-scheduler = { path = "crates/dbt-scheduler" }
 
 dbt-metadata = { path = "crates/dbt-metadata" }
@@ -581,7 +583,7 @@ quote = "1"
 syn = { version = "2", features = ["full"] }
 
 # gRPC dependencies
-tonic = "0.14.1"
+tonic = { version = "0.14.1", features = ["transport", "tls-native-roots"] }
 tonic-build = "0.14.1"
 tonic-prost = "0.14.1"
 tonic-prost-build = "0.14.1"

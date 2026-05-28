@@ -1838,7 +1838,6 @@ impl DbtProjectCompilation {
             schema_store.clone(),
             data_store.clone(),
             metricflow_server_client,
-            static_analysis_buckets,
         );
         let task_runner = TaskRunner::new(
             hooks,
@@ -1848,6 +1847,7 @@ impl DbtProjectCompilation {
             schema_store.clone(),
             data_store.clone(),
             Arc::clone(&feature_stack.task_runner.task_runner_ctx_factory),
+            static_analysis_buckets,
         );
         let run_task_results = {
             if run_task_args.command == FsCommand::Extension("jinja-check")
