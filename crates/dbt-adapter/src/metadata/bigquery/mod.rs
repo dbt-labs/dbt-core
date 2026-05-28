@@ -204,24 +204,32 @@ impl TrieNode {
 /// The implementation is purely based on the pydoc and the limited observations of how dbt
 /// compile behehaves on the test example so there probably exist corner cases not handled
 /// properly
-/// TODO: support constraints
+///
+/// When `constraints` is supplied (keyed by top-level column name), the rendered constraint
+/// clause is appended to the column's data type so that the resulting DDL emits e.g.
+/// `id INT64 NOT NULL`. BigQuery treats `NOT NULL` in the column spec as `mode: REQUIRED`.
 pub fn nest_column_data_types(
     columns: IndexMap<String, DbtColumn>,
-    _constraints: Option<BTreeMap<String, String>>,
+    constraints: Option<BTreeMap<String, String>>,
 ) -> AdapterResult<IndexMap<String, DbtColumn>> {
     let mut result = NestedColumnDataTypes::default();
     for (column_name, column) in &columns {
         result.insert(column_name, column.data_type.as_ref())
     }
     let column_to_data_type = result.format_top_level_columns_data_types();
+    let constraints = constraints.unwrap_or_default();
     let mut result = IndexMap::new();
     for (column_name, data_type) in &column_to_data_type {
+        let data_type_with_constraints = match constraints.get(column_name) {
+            Some(c) if !c.is_empty() => format!("{data_type} {c}"),
+            _ => data_type.clone(),
+        };
         match columns.get(column_name) {
             Some(column) => result.insert(
                 column_name.clone(),
                 DbtColumn {
                     name: column.name.clone(),
-                    data_type: Some(data_type.clone()),
+                    data_type: Some(data_type_with_constraints),
                     description: column.description.clone(),
                     constraints: column.constraints.clone(),
                     meta: column.meta.clone(),
@@ -240,7 +248,7 @@ pub fn nest_column_data_types(
                 column_name.clone(),
                 DbtColumn {
                     name: column_name.to_owned(),
-                    data_type: Some(data_type.to_owned()),
+                    data_type: Some(data_type_with_constraints),
                     description: None,
                     constraints: vec![],
                     meta: IndexMap::new(),

@@ -2110,11 +2110,13 @@ impl AdapterImpl {
                         if let Some(rendered) =
                             render_column_constraint(adapter_type, constraint.clone())
                         {
-                            if let Some(s) = rendered_constraints.get_mut(&rendered) {
-                                s.push_str(&format!(" {rendered}"));
-                            } else {
-                                rendered_constraints.insert(column.name.clone(), rendered);
-                            }
+                            rendered_constraints
+                                .entry(column.name.clone())
+                                .and_modify(|s| {
+                                    s.push(' ');
+                                    s.push_str(&rendered);
+                                })
+                                .or_insert(rendered);
                         }
                     }
                 }

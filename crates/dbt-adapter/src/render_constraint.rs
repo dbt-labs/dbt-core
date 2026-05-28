@@ -53,17 +53,14 @@ pub fn render_model_constraint(
         ConstraintType::NotNull => None,
     };
 
-    rendered.and_then(|rendered| {
-        if adapter_type == AdapterType::Bigquery
-            && (constraint.type_ == ConstraintType::PrimaryKey
-                || constraint.type_ == ConstraintType::ForeignKey)
-        {
-            Some(format!("{rendered} not enforced"))
-        } else if adapter_type == AdapterType::Bigquery {
-            None
-        } else {
-            Some(rendered)
-        }
+    rendered.and_then(|rendered| match adapter_type {
+        AdapterType::Bigquery => match constraint.type_ {
+            ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
+                Some(format!("{rendered} not enforced"))
+            }
+            _ => None,
+        },
+        _ => Some(rendered),
     })
 }
 
@@ -97,15 +94,19 @@ pub fn render_column_constraint(
     };
 
     rendered.and_then(|r| {
-        if adapter_type == AdapterType::Bigquery
-            && (constraint.type_ == ConstraintType::PrimaryKey
-                || constraint.type_ == ConstraintType::ForeignKey)
-        {
-            Some(format!("{r} not enforced"))
-        } else if adapter_type == AdapterType::Bigquery {
-            None
-        } else {
-            Some(r.trim().to_string())
+        match adapter_type {
+            AdapterType::Bigquery => {
+                match constraint.type_ {
+                    ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
+                        Some(format!("{} not enforced", r.trim()))
+                    }
+                    // BigQuery enforces NOT NULL (equivalent to mode: REQUIRED on the column).
+                    ConstraintType::NotNull => Some(r.trim().to_string()),
+                    // BigQuery does not support column-level CHECK or UNIQUE constraints.
+                    _ => None,
+                }
+            }
+            _ => Some(r.trim().to_string()),
         }
     })
 }
