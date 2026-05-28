@@ -86,6 +86,26 @@ class DependencyError(DbtRuntimeError):
     MESSAGE = "Dependency Error"
 
 
+class FusionParserError(DbtRuntimeError):
+    CODE = 10025
+    MESSAGE = "Fusion Parser Error"
+
+
+class FusionParserMissingError(FusionParserError):
+    CODE = 10026
+    MESSAGE = "Fusion Parser Missing"
+
+
+class FusionParserSchemaError(FusionParserError):
+    CODE = 10027
+    MESSAGE = "Fusion Parser Schema Error"
+
+
+class FusionParserVersionError(FusionParserError):
+    CODE = 10028
+    MESSAGE = "Fusion Parser Version Error"
+
+
 class FailFastError(DbtRuntimeError):
     CODE = 10013
     MESSAGE = "FailFast Error"

@@ -149,14 +149,21 @@ def get_logging_events(log_output, event_name):
 # Note: this uses an internal version of the manifest, and in the future
 # parts of it will not be supported for external use.
 def get_manifest(project_root) -> Optional[Manifest]:
-    path = os.path.join(project_root, "target", "partial_parse.msgpack")
-    if os.path.exists(path):
-        with open(path, "rb") as fp:
+    msgpack_path = os.path.join(project_root, "target", "partial_parse.msgpack")
+    if os.path.exists(msgpack_path):
+        with open(msgpack_path, "rb") as fp:
             manifest_mp = fp.read()
         manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore[attr-defined]
         return manifest
-    else:
-        return None
+    # Fusion parse (parse_with_fusion) deletes partial_parse.msgpack and only
+    # writes manifest.json. Fall back so tests under both flows work.
+    json_path = os.path.join(project_root, "target", "manifest.json")
+    if os.path.exists(json_path):
+        from dbt.artifacts.schemas.manifest import WritableManifest
+
+        writable = WritableManifest.read_and_check_versions(json_path)
+        return Manifest.from_writable_manifest(writable)
+    return None
 
 
 # Used in test cases to get the run_results.json file.
