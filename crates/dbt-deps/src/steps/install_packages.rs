@@ -168,7 +168,9 @@ pub async fn install_packages(
     }
     let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
-    package_listing.hydrate_dbt_packages_lock(dbt_packages_lock, ctx.jinja_env)?;
+    package_listing
+        .hydrate_dbt_packages_lock(dbt_packages_lock, ctx.jinja_env)
+        .await?;
 
     // Update telemetry with resolved package count
     find_and_update_span_attrs(|ev: &mut DepsAllPackagesInstalled| {
@@ -207,6 +209,7 @@ pub async fn install_packages(
     Ok(())
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn install_package(
     ctx: &DepsOperationContext<'_>,
     packages_install_path: &Path,
@@ -290,7 +293,8 @@ async fn install_package(
                 false,
                 ctx.jinja_env,
                 ctx.vars,
-            )?;
+            )
+            .await?;
             let project_name = dbt_project.name;
 
             // Update span with resolved package info
@@ -357,7 +361,8 @@ async fn install_package(
                 false,
                 ctx.jinja_env,
                 ctx.vars,
-            )?;
+            )
+            .await?;
             let project_name = dbt_project.name;
 
             // Update span with resolved package info
@@ -408,7 +413,8 @@ async fn install_package(
                 false,
                 ctx.jinja_env,
                 ctx.vars,
-            )?;
+            )
+            .await?;
             let project_name = dbt_project.name;
 
             // Update span with resolved package info

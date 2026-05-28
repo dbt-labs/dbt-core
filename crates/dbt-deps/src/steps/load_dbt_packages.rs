@@ -2,8 +2,7 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
-    err,
-    io_utils::try_read_yml_to_str,
+    err, tokiofs,
 };
 use dbt_schemas::schemas::packages::DbtPackages;
 use std::path::Path;
@@ -23,22 +22,23 @@ impl std::fmt::Display for DbtPackageType {
     }
 }
 
-pub fn load_dbt_packages(
+pub async fn load_dbt_packages(
     io: &IoArgs,
     in_dir: &Path,
 ) -> FsResult<(Option<DbtPackages>, DbtPackageType)> {
     let package_yml_path = in_dir.join(DBT_PACKAGES_YML);
-    let dbt_package_yml: Option<DbtPackages> = if package_yml_path.exists() {
-        Some(read_dbt_package_yml(io, &package_yml_path)?)
+    let dbt_package_yml: Option<DbtPackages> = if tokiofs::path_exists(&package_yml_path).await {
+        Some(read_dbt_package_yml(io, &package_yml_path).await?)
     } else {
         None
     };
     let dbt_dependencies_yml_path = in_dir.join(DBT_DEPENDENCIES_YML);
-    let dbt_dependencies_yml: Option<DbtPackages> = if dbt_dependencies_yml_path.exists() {
-        Some(read_dbt_package_yml(io, &dbt_dependencies_yml_path)?)
-    } else {
-        None
-    };
+    let dbt_dependencies_yml: Option<DbtPackages> =
+        if tokiofs::path_exists(&dbt_dependencies_yml_path).await {
+            Some(read_dbt_package_yml(io, &dbt_dependencies_yml_path).await?)
+        } else {
+            None
+        };
     // Determine which package definition to use
     // If both are present, we need to check if they are empty
     // If one is present and the other is not, we use the present one
@@ -80,12 +80,7 @@ pub fn load_dbt_packages(
     }
 }
 
-fn read_dbt_package_yml(io: &IoArgs, package_yml_path: &Path) -> FsResult<DbtPackages> {
-    dbt_jinja_utils::serde::from_yaml_raw(
-        io,
-        &try_read_yml_to_str(package_yml_path)?,
-        Some(package_yml_path),
-        true,
-        None,
-    )
+async fn read_dbt_package_yml(io: &IoArgs, package_yml_path: &Path) -> FsResult<DbtPackages> {
+    let content = tokiofs::read_to_string(package_yml_path).await?;
+    dbt_jinja_utils::serde::from_yaml_raw(io, &content, Some(package_yml_path), true, None)
 }

@@ -110,29 +110,33 @@ impl<'a> PackageListing<'a> {
         &self.io_args.in_dir
     }
 
-    pub fn hydrate_dbt_packages(
+    pub async fn hydrate_dbt_packages(
         &mut self,
         packages: &DbtPackages,
         jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in packages.packages.iter() {
-            self.incorporate(package.clone(), jinja_env)?;
+            self.incorporate(package.clone(), jinja_env).await?;
         }
         Ok(())
     }
 
-    pub fn hydrate_dbt_packages_lock(
+    pub async fn hydrate_dbt_packages_lock(
         &mut self,
         dbt_packages_lock: &DbtPackagesLock,
         jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in dbt_packages_lock.packages.iter() {
-            self.incorporate(package.clone().into(), jinja_env)?;
+            self.incorporate(package.clone().into(), jinja_env).await?;
         }
         Ok(())
     }
 
-    fn incorporate(&mut self, package: DbtPackageEntry, jinja_env: &JinjaEnv) -> FsResult<()> {
+    async fn incorporate(
+        &mut self,
+        package: DbtPackageEntry,
+        jinja_env: &JinjaEnv,
+    ) -> FsResult<()> {
         let deps_context = LoadContext::new(self.vars.clone());
         match package {
             DbtPackageEntry::Hub(hub_package) => {
@@ -168,7 +172,7 @@ impl<'a> PackageListing<'a> {
                 } else {
                     self.packages.insert(
                         hub_package.package.clone(),
-                        UnpinnedPackage::Hub(hub_package.clone().try_into()?),
+                        UnpinnedPackage::Hub(hub_package.try_into()?),
                     );
                 }
             }
@@ -253,7 +257,8 @@ impl<'a> PackageListing<'a> {
                     true,
                     jinja_env,
                     &self.vars,
-                )?;
+                )
+                .await?;
                 let package_key = full_path.to_string_lossy().to_string();
                 match self.packages.entry(package_key) {
                     Entry::Occupied(_) => {
@@ -561,13 +566,13 @@ impl<'a> PackageListing<'a> {
         Ok(())
     }
 
-    pub fn update_from(
+    pub async fn update_from(
         &mut self,
         packages: &Vec<DbtPackageEntry>,
         jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in packages {
-            self.incorporate(package.clone(), jinja_env)?;
+            self.incorporate(package.clone(), jinja_env).await?;
         }
         Ok(())
     }

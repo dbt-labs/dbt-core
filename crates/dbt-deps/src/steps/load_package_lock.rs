@@ -1,9 +1,6 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err,
-    io_utils::try_read_yml_to_str, stdfs,
-};
+use dbt_common::{ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::packages::{
@@ -19,7 +16,7 @@ use crate::semver::{Version, VersionSpecifier, versions_compatible};
 use crate::types::HubUnpinnedPackage;
 use crate::utils::{fusion_sha1_hash_packages, read_and_validate_dbt_project};
 
-pub fn try_load_valid_dbt_packages_lock(
+pub async fn try_load_valid_dbt_packages_lock(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     dbt_packages: &DbtPackages,
@@ -31,7 +28,7 @@ pub fn try_load_valid_dbt_packages_lock(
     let sha1_hash =
         fusion_sha1_hash_packages(&dbt_packages.packages, use_v2_compatible_package_downloads);
     if packages_lock_path.exists() {
-        let yml_str = try_read_yml_to_str(&packages_lock_path)?;
+        let yml_str = stdfs::read_to_string(&packages_lock_path)?;
         let rendered_yml: DbtPackagesLock =
             match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true, None) {
                 Ok(rendered_yml) => rendered_yml,
@@ -46,7 +43,8 @@ pub fn try_load_valid_dbt_packages_lock(
                             &yml_str,
                             jinja_env,
                             vars,
-                        );
+                        )
+                        .await;
                     }
                     return err!(
                         ErrorCode::IoError,
@@ -64,7 +62,7 @@ pub fn try_load_valid_dbt_packages_lock(
 
 // This is a hack to support the old dbt_packages_lock.yml file format
 // In the future, we should not support just checking for directory names
-fn try_load_from_deprecated_dbt_packages_lock(
+async fn try_load_from_deprecated_dbt_packages_lock(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     dbt_packages: Option<&DbtPackages>,
@@ -202,7 +200,8 @@ fn try_load_from_deprecated_dbt_packages_lock(
                             true,
                             jinja_env,
                             vars,
-                        )?;
+                        )
+                        .await?;
                         let package_name = dbt_project.name;
                         packages.push(DbtPackageLock::Local(LocalPackageLock {
                             name: package_name,
@@ -330,7 +329,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
 /// Load package-lock.yml without validating against packages.yml
 /// Used when packages.yml doesn't exist but we want to install from the lock file
 /// This matches dbt-core behavior where the lock file can be used independently
-pub fn load_dbt_packages_lock_without_validation(
+pub async fn load_dbt_packages_lock_without_validation(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     jinja_env: &JinjaEnv,
@@ -341,7 +340,7 @@ pub fn load_dbt_packages_lock_without_validation(
         return Ok(None);
     }
 
-    let yml_str = try_read_yml_to_str(&packages_lock_path)?;
+    let yml_str = stdfs::read_to_string(&packages_lock_path)?;
     let rendered_yml: DbtPackagesLock =
         match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true, None) {
             Ok(rendered_yml) => rendered_yml,
@@ -359,7 +358,8 @@ pub fn load_dbt_packages_lock_without_validation(
                         &yml_str,
                         jinja_env,
                         vars,
-                    );
+                    )
+                    .await;
                 }
                 return err!(
                     ErrorCode::IoError,

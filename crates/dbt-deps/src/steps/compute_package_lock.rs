@@ -32,7 +32,9 @@ pub async fn compute_package_lock(
     let mut dbt_packages_lock = DbtPackagesLock::default();
     let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
-    package_listing.hydrate_dbt_packages(dbt_packages, ctx.jinja_env)?;
+    package_listing
+        .hydrate_dbt_packages(dbt_packages, ctx.jinja_env)
+        .await?;
     let mut final_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
     resolve_packages(ctx, &mut final_listing, &mut package_listing).await?;
@@ -137,6 +139,7 @@ pub async fn compute_package_lock(
     Ok(dbt_packages_lock)
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn resolve_packages(
     ctx: &DepsOperationContext<'_>,
     final_listing: &mut PackageListing<'_>,
@@ -150,7 +153,9 @@ async fn resolve_packages(
             UnpinnedPackage::Hub(hub_unpinned_package) => {
                 let resolved = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
                 ctx.notices.collect(&resolved);
-                next_listing.update_from(&resolved.version.packages, ctx.jinja_env)?;
+                next_listing
+                    .update_from(&resolved.version.packages, ctx.jinja_env)
+                    .await?;
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
                 let tmp_dir = make_tempdir(None)?;
@@ -172,20 +177,26 @@ async fn resolve_packages(
                     true,
                     ctx.jinja_env,
                     ctx.vars,
-                )?;
+                )
+                .await?;
                 git_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
                     ctx.notices.collect(&dbt_packages);
-                    next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
+                    next_listing
+                        .update_from(&dbt_packages.packages, ctx.jinja_env)
+                        .await?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
             }
             UnpinnedPackage::Local(local_unpinned_package) => {
-                let (dbt_packages, _) = load_dbt_packages(ctx.io, &local_unpinned_package.local)?;
+                let (dbt_packages, _) =
+                    load_dbt_packages(ctx.io, &local_unpinned_package.local).await?;
                 if let Some(dbt_packages) = dbt_packages {
                     ctx.notices.collect(&dbt_packages);
-                    next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
+                    next_listing
+                        .update_from(&dbt_packages.packages, ctx.jinja_env)
+                        .await?;
                 }
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
@@ -208,11 +219,14 @@ async fn resolve_packages(
                     true,
                     ctx.jinja_env,
                     ctx.vars,
-                )?;
+                )
+                .await?;
                 private_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
                     ctx.notices.collect(&dbt_packages);
-                    next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
+                    next_listing
+                        .update_from(&dbt_packages.packages, ctx.jinja_env)
+                        .await?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
@@ -231,11 +245,14 @@ async fn resolve_packages(
                     true,
                     ctx.jinja_env,
                     ctx.vars,
-                )?;
+                )
+                .await?;
                 tarball_unpinned_package.name = Some(dbt_project.name);
-                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
+                if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path).await?.0 {
                     ctx.notices.collect(&dbt_packages);
-                    next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
+                    next_listing
+                        .update_from(&dbt_packages.packages, ctx.jinja_env)
+                        .await?;
                 }
             }
         }

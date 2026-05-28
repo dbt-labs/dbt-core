@@ -77,7 +77,7 @@ use std::{
 
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, tracing::emit::emit_strict_parse_error,
+    io_utils::try_read_yml_to_str, tokiofs, tracing::emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_yaml::Value;
@@ -104,6 +104,23 @@ pub fn value_from_file(
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = try_read_yml_to_str(path)?;
+    value_from_str(
+        io_args,
+        dbt_sanitize_yml(&input),
+        Some(path),
+        show_errors_or_warnings,
+        dependency_package_name,
+    )
+}
+
+/// Async variant of [`value_from_file`].
+pub async fn value_from_file_async(
+    io_args: &IoArgs,
+    path: &Path,
+    show_errors_or_warnings: bool,
+    dependency_package_name: Option<&str>,
+) -> FsResult<Value> {
+    let input = tokiofs::read_to_string(path).await?;
     value_from_str(
         io_args,
         dbt_sanitize_yml(&input),

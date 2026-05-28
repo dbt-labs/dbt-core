@@ -62,7 +62,8 @@ pub async fn get_or_install_packages(
     if is_time_machine_replay {
         // Just load the existing package-lock.yml without any validation or fetching
         let dbt_packages_lock =
-            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
+            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)
+                .await?
                 .unwrap_or_default();
 
         emit_info_progress_message(
@@ -93,7 +94,7 @@ pub async fn get_or_install_packages(
     }
 
     // This gets the package entries from packages.yml or dependencies.yml
-    let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir)?;
+    let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir).await?;
 
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
         deps_context.notices.collect(dbt_packages);
@@ -107,6 +108,7 @@ pub async fn get_or_install_packages(
                 &vars,
                 use_v2_compatible_package_downloads,
             )
+            .await
             .inspect_err(|_| {
                 deps_context.flush_notices(&DbtPackagesLock::default());
             })?
@@ -168,7 +170,7 @@ pub async fn get_or_install_packages(
         }
 
         if let Some(dbt_packages_lock) =
-            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
+            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars).await?
         {
             emit_info_progress_message(
                 dbt_telemetry::ProgressMessage::new_from_action_and_target(

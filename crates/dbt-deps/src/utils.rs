@@ -16,7 +16,7 @@ use dbt_common::{
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     phases::load::LoadContext,
-    serde::{into_typed_with_jinja, value_from_file},
+    serde::{into_typed_with_jinja, value_from_file_async},
     utils::SECRET_ENV_VAR_PREFIX,
 };
 use dbt_schemas::schemas::project::DbtProject;
@@ -139,7 +139,7 @@ pub fn scrub_package_name_secret_env_vars(package_name: &str) -> Option<Cow<'_, 
     }
 }
 
-pub fn read_and_validate_dbt_project(
+pub async fn read_and_validate_dbt_project(
     io: &IoArgs,
     checkout_path: &Path,
     show_errors_or_warnings: bool,
@@ -147,7 +147,7 @@ pub fn read_and_validate_dbt_project(
     vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
-    if !path_to_dbt_project.exists() {
+    if !tokiofs::path_exists(&path_to_dbt_project).await {
         return err!(
             ErrorCode::IoError,
             "Package does not contain a dbt_project.yml file: {}",
@@ -157,7 +157,8 @@ pub fn read_and_validate_dbt_project(
 
     // Try to deserialize only the package name for error reporting,
     // falling back to the path if deserialization fails
-    let dependency_package_name = value_from_file(io, &path_to_dbt_project, false, None)
+    let dependency_package_name = value_from_file_async(io, &path_to_dbt_project, false, None)
+        .await
         .ok()
         .and_then(|value| {
             let deps_context = LoadContext::new(vars.clone());
@@ -179,12 +180,13 @@ pub fn read_and_validate_dbt_project(
     let deps_context = LoadContext::new(vars.clone());
     into_typed_with_jinja(
         io,
-        value_from_file(
+        value_from_file_async(
             io,
             &path_to_dbt_project,
             show_errors_or_warnings,
             Some(&dependency_package_name),
-        )?,
+        )
+        .await?,
         false,
         jinja_env,
         &deps_context,

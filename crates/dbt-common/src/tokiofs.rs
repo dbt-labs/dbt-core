@@ -76,6 +76,54 @@ pub async fn metadata(path: impl AsRef<Path>) -> FsResult<std::fs::Metadata> {
         .lift(ectx!("Failed to get metadata for: {}", path.display()))
 }
 
+/// Check if a path exists (follows symlinks). Returns false on any error.
+pub async fn path_exists(path: impl AsRef<Path>) -> bool {
+    tokio::fs::metadata(path.as_ref()).await.is_ok()
+}
+
+/// Check if a path exists, returning false on permission errors rather than panicking.
+pub async fn try_exists(path: impl AsRef<Path>) -> bool {
+    tokio::fs::try_exists(path.as_ref()).await.unwrap_or(false)
+}
+
+/// Wrapper around [`tokio::fs::remove_file`] that returns a useful error in case of failure.
+pub async fn remove_file(path: impl AsRef<Path>) -> FsResult<()> {
+    let path = path.as_ref();
+    tokio::fs::remove_file(path)
+        .await
+        .lift(ectx!("Failed to remove file: {}", path.display()))
+}
+
+/// Wrapper around [`tokio::fs::read_link`] that returns a useful error in case of failure.
+pub async fn read_link(path: impl AsRef<Path>) -> FsResult<std::path::PathBuf> {
+    let path = path.as_ref();
+    tokio::fs::read_link(path)
+        .await
+        .lift(ectx!("Failed to read symlink: {}", path.display()))
+}
+
+/// Wrapper around [`tokio::fs::symlink`] (Unix) or [`tokio::fs::symlink_dir`] (Windows).
+pub async fn symlink(target: impl AsRef<Path>, link: impl AsRef<Path>) -> FsResult<()> {
+    let target = target.as_ref();
+    let link = link.as_ref();
+    #[cfg(unix)]
+    {
+        tokio::fs::symlink(target, link).await.lift(ectx!(
+            "Failed to create symlink from {} to {}",
+            link.display(),
+            target.display()
+        ))
+    }
+    #[cfg(windows)]
+    {
+        tokio::fs::symlink_dir(target, link).await.lift(ectx!(
+            "Failed to create symlink from {} to {}",
+            link.display(),
+            target.display()
+        ))
+    }
+}
+
 /// Wrapper around [`tokio::fs::rename`] that returns a useful error in case of failure.
 pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> FsResult<()> {
     let from = from.as_ref();
