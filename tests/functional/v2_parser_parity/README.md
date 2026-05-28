@@ -9,24 +9,24 @@ in-memory `Manifest` that `ManifestLoader` builds.
 ## Why
 
 The v2 parser flow (`core/dbt/parser/fusion.py::parse_with_fusion`) shells
-out to `fs parse`, reads the resulting `manifest.json`, hydrates a
-`Manifest` via `Manifest.from_writable_manifest`, and hands that to
+out to the fusion parser, reads the resulting `manifest.json`, hydrates
+a `Manifest` via `Manifest.from_writable_manifest`, and hands that to
 compile/run/etc. The classic dbt parse flow builds `Manifest` directly in
 memory and never serializes through `manifest.json`. Any attribute that
 `ManifestLoader` populates but doesn't survive the
 `WritableManifest → Manifest` round-trip is a latent bug for the v2 flow.
 
-Running real `fs` binaries in CI is heavy and only validates what `fs`
-chooses to emit. By substituting in-process `dbt parse` for `fs`, we keep
-the `parse_with_fusion` machinery (handoff dir, `WritableManifest` load,
-`build_flat_graph`, `partial_parse` cleanup) but exercise it against a
-parser whose output we control. If a downstream phase misbehaves, the
-divergence is between in-memory `Manifest` and `manifest.json` — not
-between dbt and `fs`.
+Running the real fusion parser binary in CI is heavy and only validates
+what it chooses to emit. By substituting in-process `dbt parse` for the
+external parser, we keep the `parse_with_fusion` machinery (handoff dir,
+`WritableManifest` load, `build_flat_graph`, `partial_parse` cleanup) but
+exercise it against a parser whose output we control. If a downstream
+phase misbehaves, the divergence is between in-memory `Manifest` and
+`manifest.json` — not between dbt and the external parser.
 
 This trades subprocess fidelity for breadth. It will not catch bugs in
-`_build_argv` flag translation or in the `fs` binary itself. Pair it with
-a small set of real subprocess tests (see
+`_build_argv` flag translation or in the external parser binary itself.
+Pair it with a small set of real subprocess tests (see
 `tests/functional/fusion_parser/`) for argv coverage.
 
 ## How it works
@@ -121,7 +121,7 @@ change is scoped to test infrastructure.
 is `xfail` under `v2_self`. The test expects parse to raise
 `CompilationError`. Under the v2 dispatch:
 
-- Real fusion: `fs` exits non-zero, `_run_fusion` raises
+- Real fusion: the parser exits non-zero, `_run_fusion` raises
   `FusionParserError` with the captured stderr. Never
   `CompilationError`.
 - v2_self shim: the inner `run_dbt(["parse"])` raises

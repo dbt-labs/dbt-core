@@ -1,11 +1,11 @@
 """Fusion parser integration.
 
-Delegates parsing to an external `fs parse` subprocess that produces a
+Delegates parsing to an external fusion parser subprocess that produces a
 manifest.json on disk. dbt-core then loads that manifest and converts it
 to a runtime Manifest, bypassing its own parser entirely.
 
-This module implements the handoff to Fusion and loading of the resulting
-manifest artifacts.
+This module implements the handoff to the fusion parser and loading of the
+resulting manifest artifacts.
 """
 
 from __future__ import annotations
@@ -40,12 +40,12 @@ def parse_with_fusion(
     write: bool,
     write_json: bool,
 ) -> Manifest:
-    """Invoke fs parse, load the resulting manifest.json, return runtime Manifest.
+    """Invoke the fusion parser, load the resulting manifest.json, return runtime Manifest.
 
-    fs is run into a temp handoff dir rather than the project's target dir so
-    that (a) we can detect "fs exited 0 without writing" instead of silently
-    loading a stale manifest from a prior run, and (b) `--no-write-json`
-    doesn't leak a manifest.json into the user's target dir.
+    The fusion parser is run into a temp handoff dir rather than the project's
+    target dir so that (a) we can detect "parser exited 0 without writing"
+    instead of silently loading a stale manifest from a prior run, and (b)
+    `--no-write-json` doesn't leak a manifest.json into the user's target dir.
     """
     from dbt.parser.manifest import (
         assert_no_get_nodes_plugins,
@@ -66,7 +66,7 @@ def parse_with_fusion(
         manifest_path = handoff / "manifest.json"
         if not manifest_path.exists():
             raise FusionParserError(
-                f"fs parse exited successfully but did not produce {manifest_path.name} "
+                f"Fusion parser exited successfully but did not produce {manifest_path.name} "
                 f"in the handoff directory."
             )
 
@@ -97,19 +97,21 @@ def parse_with_fusion(
 
 
 def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
-    """Translate dbt-core flags into fs CLI args.
+    """Translate dbt-core flags into fusion parser CLI args.
 
-    The base command is taken from flags.V2_PARSER (default 'fs parse')
-    and split with shlex so users can configure subcommands or wrappers.
+    The base command is taken from flags.V2_PARSER (default
+    'dbt-core-experimental-parser parse') and split with shlex so users can
+    configure subcommands or wrappers.
 
     Forwarded flags (must affect manifest output):
       --project-dir, --profiles-dir, --profile, --target,
       --target-path, --vars, --packages-install-path
 
     When target_path_override is provided, it replaces the user's --target-path
-    so fs writes its handoff manifest where dbt expects it (a temp dir).
+    so the fusion parser writes its handoff manifest where dbt expects it (a
+    temp dir).
     """
-    # posix=False on Windows so backslashes in paths (e.g. C:\path\to\fs.exe)
+    # posix=False on Windows so backslashes in paths (e.g. C:\path\to\parser.exe)
     # aren't stripped as shell escapes.
     base = shlex.split(
         getattr(flags, "V2_PARSER", "dbt-core-experimental-parser parse"),
@@ -171,22 +173,23 @@ def _resolve_engine_command(command: str) -> str:
 
 
 def _run_fusion(argv: List[str]) -> None:
-    # Passthrough mode: fs inherits dbt's stdout/stderr so users see progress
-    # and errors live. This bypasses dbt's event system (no log-file capture,
-    # no --log-format json, no level filtering), but is the only way to get
-    # streaming output without re-parsing fs's free-form text.
+    # Passthrough mode: the fusion parser inherits dbt's stdout/stderr so users
+    # see progress and errors live. This bypasses dbt's event system (no
+    # log-file capture, no --log-format json, no level filtering), but is the
+    # only way to get streaming output without re-parsing the parser's
+    # free-form text.
     #
     # TODO: replace with Popen + line-by-line streaming and re-emit through
-    # fire_event once fs ships its structured (JSON) log stream and the
-    # Python parsing library lands. Sketch:
+    # fire_event once the fusion parser ships its structured (JSON) log stream
+    # and the Python parsing library lands. Sketch:
     #   proc = subprocess.Popen(argv, stdout=PIPE, stderr=PIPE, text=True, bufsize=1)
     #   - read stdout/stderr concurrently (threads or selectors; a single
     #     blocking readline() on one stream deadlocks if the other fills its pipe)
-    #   - parse each line as a fs structured log record
+    #   - parse each line as a structured log record
     #   - map level/message to a dbt event type and fire_event(...)
     #   - proc.wait() and check returncode
-    # Until then, capturing-then-printing-at-end would lose streaming (fs parse
-    # can take minutes on large projects), so we inherit fds instead.
+    # Until then, capturing-then-printing-at-end would lose streaming (fusion
+    # parsing can take minutes on large projects), so we inherit fds instead.
     try:
         result = subprocess.run(argv, check=False)
     except FileNotFoundError as e:
@@ -198,7 +201,7 @@ def _run_fusion(argv: List[str]) -> None:
 
     if result.returncode != 0:
         raise FusionParserError(
-            f"Fusion parser failed (exit {result.returncode}); see fs output above."
+            f"Fusion parser failed (exit {result.returncode}); see parser output above."
         )
 
 
@@ -217,11 +220,12 @@ def _load_writable_manifest(path: Path) -> WritableManifest:
 
 
 def _serialize_vars(cli_vars) -> str:
-    """Serialize the resolved --vars dict to a YAML string for fs.
+    """Serialize the resolved --vars dict to a YAML string for the fusion parser.
 
     dbt-core's --vars is parsed into a dict by click via the YAML param type
-    (cli/params.py vars). Forward as a compact YAML string so fs receives a
-    single canonical value rather than re-resolving env vars or layered configs.
+    (cli/params.py vars). Forward as a compact YAML string so the fusion
+    parser receives a single canonical value rather than re-resolving env
+    vars or layered configs.
     """
     import yaml
 

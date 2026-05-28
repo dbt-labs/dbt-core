@@ -525,9 +525,12 @@ class TestFusionParserFlags:
         assert flags.USE_V2_PARSER is True
 
     def test_cli_arg_command(self):
-        ctx = self.make_dbt_context("run", ["--v2-parser", "/opt/fs/bin/fs parse", "run"])
+        ctx = self.make_dbt_context(
+            "run",
+            ["--v2-parser", "/opt/parser/bin/dbt-core-experimental-parser parse", "run"],
+        )
         flags = Flags(ctx)
-        assert flags.V2_PARSER == "/opt/fs/bin/fs parse"
+        assert flags.V2_PARSER == "/opt/parser/bin/dbt-core-experimental-parser parse"
 
     def test_env_var_enables(self, monkeypatch):
         monkeypatch.setenv("DBT_ENGINE_USE_V2_PARSER", "True")
@@ -536,10 +539,10 @@ class TestFusionParserFlags:
         assert flags.USE_V2_PARSER is True
 
     def test_env_var_command(self, monkeypatch):
-        monkeypatch.setenv("DBT_ENGINE_V2_PARSER", "fs parse --foo")
+        monkeypatch.setenv("DBT_ENGINE_V2_PARSER", "dbt-core-experimental-parser parse --foo")
         ctx = self.make_dbt_context("run", ["run"])
         flags = Flags(ctx)
-        assert flags.V2_PARSER == "fs parse --foo"
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse --foo"
 
     def test_project_flags_set_use_v2_parser(self):
         project_flags = ProjectFlags(use_v2_parser=True)
@@ -548,10 +551,10 @@ class TestFusionParserFlags:
         assert flags.USE_V2_PARSER is True
 
     def test_project_flags_set_command(self):
-        project_flags = ProjectFlags(v2_parser="fs parse --strict")
+        project_flags = ProjectFlags(v2_parser="dbt-core-experimental-parser parse --strict")
         ctx = self.make_dbt_context("run", ["run"])
         flags = Flags(ctx, project_flags)
-        assert flags.V2_PARSER == "fs parse --strict"
+        assert flags.V2_PARSER == "dbt-core-experimental-parser parse --strict"
 
     def test_cli_overrides_project_flags(self):
         project_flags = ProjectFlags(use_v2_parser=True)

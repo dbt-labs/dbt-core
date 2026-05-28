@@ -23,7 +23,7 @@ from dbt.parser.fusion import (
 
 def _flags(**overrides):
     base = {
-        "V2_PARSER": "fs parse",
+        "V2_PARSER": "dbt-core-experimental-parser parse",
         "PROJECT_DIR": None,
         "PROFILES_DIR": None,
         "PROFILE": None,
@@ -37,9 +37,9 @@ def _flags(**overrides):
     return SimpleNamespace(**base)
 
 
-def _fake_fs(manifest_text: Optional[str], returncode: int = 0, stderr: str = ""):
+def _fake_parser(manifest_text: Optional[str], returncode: int = 0, stderr: str = ""):
     """Build a subprocess.run side_effect that writes manifest.json into the
-    --target-path argv slot. Pass manifest_text=None to simulate an fs run
+    --target-path argv slot. Pass manifest_text=None to simulate a parser run
     that exits successfully without writing a manifest."""
 
     def _run(argv, *args, **kwargs):
@@ -56,7 +56,7 @@ def _fake_fs(manifest_text: Optional[str], returncode: int = 0, stderr: str = ""
 
 class TestBuildArgv:
     def test_default_command_no_forwards(self):
-        assert _build_argv(_flags()) == ["fs", "parse"]
+        assert _build_argv(_flags()) == ["dbt-core-experimental-parser", "parse"]
 
     def test_forwards_all_known_flags(self):
         argv = _build_argv(
@@ -70,7 +70,7 @@ class TestBuildArgv:
                 VARS={"k": "v"},
             )
         )
-        assert argv[:2] == ["fs", "parse"]
+        assert argv[:2] == ["dbt-core-experimental-parser", "parse"]
         for pair in [
             ("--project-dir", "/proj"),
             ("--profiles-dir", "/profiles"),
@@ -85,8 +85,8 @@ class TestBuildArgv:
         assert "k" in argv[i + 1] and "v" in argv[i + 1]
 
     def test_custom_command_split_with_shlex(self):
-        argv = _build_argv(_flags(V2_PARSER="uv run fs parse"))
-        assert argv == ["uv", "run", "fs", "parse"]
+        argv = _build_argv(_flags(V2_PARSER="uv run dbt-core-experimental-parser parse"))
+        assert argv == ["uv", "run", "dbt-core-experimental-parser", "parse"]
 
     def test_target_path_override_replaces_user_value(self):
         argv = _build_argv(_flags(TARGET_PATH="user/target"), target_path_override="/tmp/handoff")
@@ -119,7 +119,7 @@ class TestDeleteStalePartialParse:
 def _patch_fusion_deps():
     """parse_with_fusion now resolves flags via get_flags() and calls
     assert_no_get_nodes_plugins / enrich_manifest_with_plugin_artifacts on the
-    real plugin manager. Stub them so tests focus on fs invocation behavior.
+    real plugin manager. Stub them so tests focus on parser invocation behavior.
     """
     with mock.patch("dbt.parser.fusion.get_flags", return_value=_flags()), mock.patch(
         "dbt.parser.manifest.assert_no_get_nodes_plugins"
@@ -140,36 +140,36 @@ class TestParseWithFusion:
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_nonzero_exit_raises(self, tmp_path: Path, _patch_fusion_deps):
-        # Passthrough mode: fs's stderr streams directly to the user, so the
-        # exception only carries the exit code, not the captured stderr.
+        # Passthrough mode: the parser's stderr streams directly to the user,
+        # so the exception only carries the exit code, not the captured stderr.
         with mock.patch(
             "dbt.parser.fusion.subprocess.run",
-            side_effect=_fake_fs(manifest_text=None, returncode=2),
+            side_effect=_fake_parser(manifest_text=None, returncode=2),
         ):
             with pytest.raises(FusionParserError, match="exit 2"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_missing_manifest_after_success_raises(self, tmp_path: Path, _patch_fusion_deps):
-        """fs exits 0 but writes nothing — must raise, not silently load a stale file."""
+        """Parser exits 0 but writes nothing — must raise, not silently load a stale file."""
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(manifest_text=None)
+            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_stale_target_manifest_not_loaded(self, tmp_path: Path, _patch_fusion_deps):
         """A stale manifest left in target/ from a prior run must not satisfy
-        the fusion handoff — fs writes into a fresh temp dir."""
+        the fusion handoff — parser writes into a fresh temp dir."""
         (tmp_path / "manifest.json").write_text(json.dumps({"stale": True}))
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(manifest_text=None)
+            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(manifest_text=None)
         ):
             with pytest.raises(FusionParserError, match="did not produce"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
     def test_invalid_json_raises_schema_error(self, tmp_path: Path, _patch_fusion_deps):
         with mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_fake_fs("{ not valid json")
+            "dbt.parser.fusion.subprocess.run", side_effect=_fake_parser("{ not valid json")
         ):
             with pytest.raises(FusionParserSchemaError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
@@ -180,7 +180,7 @@ class TestParseWithFusion:
         bad_version = json.dumps(
             {"metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v1.json"}}
         )
-        with mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_fake_fs(bad_version)):
+        with mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_fake_parser(bad_version)):
             with pytest.raises(FusionParserVersionError):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
@@ -192,7 +192,7 @@ class TestParseWithFusion:
         target.mkdir()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run",
-            side_effect=_fake_fs(json.dumps({"metadata": {}})),
+            side_effect=_fake_parser(json.dumps({"metadata": {}})),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest",
             return_value=mock.MagicMock(),
@@ -208,7 +208,7 @@ class TestParseWithFusion:
         target.mkdir()
         with mock.patch(
             "dbt.parser.fusion.subprocess.run",
-            side_effect=_fake_fs(json.dumps({"metadata": {}})),
+            side_effect=_fake_parser(json.dumps({"metadata": {}})),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest",
             return_value=mock.MagicMock(),

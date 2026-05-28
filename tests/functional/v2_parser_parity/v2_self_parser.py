@@ -1,13 +1,14 @@
 """Use dbt-core itself as the 'v2 parser' to surface hidden parse-phase state.
 
-parse_with_fusion shells out to `fs parse`, then loads manifest.json and
-hands it off to later phases. If any phase depends on in-memory state that
-ManifestLoader populates but manifest.json doesn't carry, that phase will
-misbehave under the fusion flow. To detect this without a real fs binary,
-we monkeypatch dbt.parser.fusion._run_fusion so it invokes an in-process
-`dbt parse` whose manifest.json lands in the same handoff dir parse_with_fusion
-created. The rest of parse_with_fusion (WritableManifest load, build_flat_graph,
-partial_parse cleanup) runs unchanged.
+parse_with_fusion shells out to the fusion parser, then loads
+manifest.json and hands it off to later phases. If any phase depends on
+in-memory state that ManifestLoader populates but manifest.json doesn't
+carry, that phase will misbehave under the fusion flow. To detect this
+without a real fusion parser binary, we monkeypatch
+dbt.parser.fusion._run_fusion so it invokes an in-process `dbt parse`
+whose manifest.json lands in the same handoff dir parse_with_fusion
+created. The rest of parse_with_fusion (WritableManifest load,
+build_flat_graph, partial_parse cleanup) runs unchanged.
 
 This trades subprocess fidelity for breadth: it won't catch bugs in
 _build_argv flag translation. Pair with a small set of real subprocess

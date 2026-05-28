@@ -1,10 +1,11 @@
 """End-to-end tests for the --use-v2-parser branch.
 
-We don't depend on the real `fs` binary. Instead, we run dbt-core's own
-parser once to produce a real manifest.json, stash it, then inject a fake
-"fs" script that copies the stash into target/manifest.json on demand.
-That gives us a known-good fusion-shaped artifact and lets us assert
-that dbt-core's load + dispatch logic round-trips through it correctly.
+We don't depend on a real fusion parser binary. Instead, we run dbt-core's
+own parser once to produce a real manifest.json, stash it, then inject a
+fake parser script that copies the stash into target/manifest.json on
+demand. That gives us a known-good fusion-shaped artifact and lets us
+assert that dbt-core's load + dispatch logic round-trips through it
+correctly.
 """
 
 import shutil
@@ -17,8 +18,8 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
-FAKE_FS_PY = '''\
-"""Tiny stand-in for `fs parse`. Writes a stashed manifest.json into
+FAKE_PARSER_PY = '''\
+"""Tiny stand-in for the fusion parser. Writes a stashed manifest.json into
 whatever --target-path argument we receive (defaults to ./target)."""
 import os
 import shutil
@@ -82,10 +83,10 @@ class FusionParserFixture:
         }
 
     @pytest.fixture(scope="class")
-    def fake_fs(self, project, tmp_path_factory):
+    def fake_parser(self, project, tmp_path_factory):
         """Seed a real manifest.json via core's parser, then build a fake
-        `fs` binary (Python script + thin platform-specific wrapper) that
-        copies the stash into <target>/manifest.json on invocation."""
+        fusion parser binary (Python script + thin platform-specific wrapper)
+        that copies the stash into <target>/manifest.json on invocation."""
         run_dbt(["parse"])
         seed_path = Path(project.project_root) / "target" / "manifest.json"
         assert seed_path.exists(), "core parse failed to produce manifest.json"
@@ -98,26 +99,26 @@ class FusionParserFixture:
         seed_path.unlink()
 
         bin_dir = tmp_path_factory.mktemp("fusion_bin")
-        py_script = bin_dir / "fake_fs.py"
-        py_script.write_text(FAKE_FS_PY.format(stash=str(stash)))
+        py_script = bin_dir / "fake_parser.py"
+        py_script.write_text(FAKE_PARSER_PY.format(stash=str(stash)))
 
         python = sys.executable
         if sys.platform == "win32":
-            wrapper = bin_dir / "fake_fs.cmd"
+            wrapper = bin_dir / "fake_parser.cmd"
             wrapper.write_text(f'@"{python}" "{py_script}" %*\r\n')
         else:
-            wrapper = bin_dir / "fake_fs.sh"
+            wrapper = bin_dir / "fake_parser.sh"
             wrapper.write_text(f'#!/usr/bin/env bash\nexec "{python}" "{py_script}" "$@"\n')
             wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         return wrapper
 
 
 class TestFusionParserBranch(FusionParserFixture):
-    def test_fusion_branch_loads_manifest(self, project, fake_fs):
+    def test_fusion_branch_loads_manifest(self, project, fake_parser):
         results = run_dbt(
             [
                 "--use-v2-parser",
-                f"--v2-parser={fake_fs}",
+                f"--v2-parser={fake_parser}",
                 "parse",
             ]
         )
@@ -126,7 +127,7 @@ class TestFusionParserBranch(FusionParserFixture):
         assert "model.test.model_a" in results.nodes
         assert "model.test.model_b" in results.nodes
 
-    def test_fusion_branch_deletes_stale_partial_parse(self, project, fake_fs):
+    def test_fusion_branch_deletes_stale_partial_parse(self, project, fake_parser):
         target = Path(project.project_root) / "target"
         target.mkdir(exist_ok=True)
         stale = target / "partial_parse.msgpack"
@@ -134,13 +135,13 @@ class TestFusionParserBranch(FusionParserFixture):
         run_dbt(
             [
                 "--use-v2-parser",
-                f"--v2-parser={fake_fs}",
+                f"--v2-parser={fake_parser}",
                 "parse",
             ]
         )
         assert not stale.exists(), "stale partial_parse.msgpack should be deleted"
 
-    def test_missing_fs_binary_raises(self, project):
+    def test_missing_parser_binary_raises(self, project):
         with pytest.raises(Exception, match="(?i)fusion parser|not found"):
             run_dbt(
                 [
