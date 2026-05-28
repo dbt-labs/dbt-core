@@ -478,14 +478,29 @@ class TestManageStateClickIntegration:
         """Run a minimal Click command that applies the @p.manage_state decorator,
         construct the Flags object from the resulting context (with the supplied
         ProjectFlags injected, bypassing disk I/O), and return what
-        `_plugin_is_managed("MANAGE_STATE")` would see."""
+        `_plugin_is_managed("MANAGE_STATE")` would see.
+
+        Defaults `project_flags` to an empty `ProjectFlags()` when not provided.
+        Without this, `Flags.__init__` would fall through to `read_project_flags()`
+        and read the developer's actual `~/.dbt/profiles.yml` / `dbt_project.yml`,
+        making the test non-hermetic (a local `config.manage_state: true` would
+        break the "nothing set" cases).
+
+        Saves and restores `dbt.flags.GLOBAL_FLAGS` around the invocation so this
+        test's globally-set Flags object doesn't leak into later tests that read
+        `get_flags()`."""
         import click
         from click.testing import CliRunner
 
         import dbt.flags
         from dbt.cli import params as p
         from dbt.cli.flags import Flags
+        from dbt.contracts.project import ProjectFlags
         from dbt.plugins.manager import _plugin_is_managed
+
+        # Hermetic: never let Flags read disk for the project / profile YAML.
+        if project_flags is None:
+            project_flags = ProjectFlags()
 
         results = {}
 
@@ -499,9 +514,15 @@ class TestManageStateClickIntegration:
             results["flags_attr"] = getattr(flags, "MANAGE_STATE", None)
             results["plugin_is_managed"] = _plugin_is_managed("MANAGE_STATE")
 
-        runner = CliRunner()
-        result = runner.invoke(probe, argv, env=env, catch_exceptions=False)
-        assert result.exit_code == 0, result.output
+        # Don't leak the test's GLOBAL_FLAGS into subsequent tests that call
+        # `dbt.flags.get_flags()`.
+        previous_global_flags = dbt.flags.get_flags()
+        try:
+            runner = CliRunner()
+            result = runner.invoke(probe, argv, env=env, catch_exceptions=False)
+            assert result.exit_code == 0, result.output
+        finally:
+            dbt.flags.set_flags(previous_global_flags)
         return results
 
     def test_cli_flag_alone_enables_plugin(self, monkeypatch):

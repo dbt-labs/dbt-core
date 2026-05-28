@@ -302,42 +302,57 @@ class PluginManager:
 
     @classmethod
     def get_prefixed_modules(cls):
-        # First pass: get the list of candidate module names without importing them.
-        # The walk is cached process-wide via `_walk_prefixed_module_names` so
-        # repeated PluginManager construction (e.g. multiple dbtRunner invocations
-        # in the same process) doesn't re-scan sys.path each time.
+        # Get the list of candidate module names without importing them. The walk
+        # is cached process-wide via `_walk_prefixed_module_names` so repeated
+        # PluginManager construction (e.g. multiple dbtRunner invocations in the
+        # same process) doesn't re-scan sys.path each time.
         names_on_path = list(_walk_prefixed_module_names(cls.PLUGIN_MODULE_PREFIX))
 
-        # For each bundled plugin on disk, check whether the user has opted in via
-        # `--manage-state` / `DBT_ENGINE_MANAGE_STATE=true` / `manage_state: true`.
-        # If not opted in, the module is filtered out before any import.
-        disabled: Set[str] = set()
-        for name in names_on_path:
-            if name in cls.BUNDLED_PLUGIN_MODULES:
-                signal = cls.BUNDLED_PLUGIN_MODULES[name]
-                if not _plugin_is_managed(signal.flag_attr):
-                    _notify_bundled_plugin_skipped(name, signal.cli_flag)
-                    disabled.add(name)
-
-        # Second pass: dedupe within conflict groups so we don't load two copies of
-        # the same plugin under different package names. Only matters when both modules
-        # are opted in -- the disabled-by-default path has already filtered them out.
+        # Filter out bundled plugins the user hasn't opted into, then dedupe
+        # within conflict groups so we don't load two copies of the same plugin
+        # under different package names.
+        disabled = cls._not_opted_in_bundled_modules(names_on_path)
         candidates = [n for n in names_on_path if n not in disabled]
         conflict_skips = cls._resolve_bundled_plugin_conflicts(candidates)
         to_import = [n for n in candidates if n not in conflict_skips]
 
-        # Bridge the resolved Click value to the plugin's own internal gating.
-        # Bundled plugins (e.g. dbt-state) typically read their env var directly
-        # in initialize() rather than calling `get_flags()`. If a user passes
-        # `--manage-state` while the env var is set to "false", PluginManager
-        # decides to load (CLI > env), but the plugin then self-disables when
-        # its own check reads the env var. Normalize `os.environ` to "true" for
-        # bundled plugins we're about to load so the plugin's view agrees.
-        for name in to_import:
-            if name in cls.BUNDLED_PLUGIN_MODULES:
-                os.environ[cls.BUNDLED_PLUGIN_MODULES[name].env_var] = "true"
+        # Bridge the Click-resolved value to the plugin's own gating before
+        # import. See `_sync_bundled_plugin_env_vars` for the rationale.
+        cls._sync_bundled_plugin_env_vars(to_import)
 
         return {name: importlib.import_module(name) for name in to_import}
+
+    @classmethod
+    def _not_opted_in_bundled_modules(cls, names_on_path: Sequence[str]) -> Set[str]:
+        """Return bundled module names that are present on disk but should be skipped
+        because the user hasn't opted in via --manage-state /
+        DBT_ENGINE_MANAGE_STATE=true / manage_state: true. Also emits the one-time
+        DEBUG notice naming the CLI flag to flip."""
+        disabled: Set[str] = set()
+        for name in names_on_path:
+            signal = cls.BUNDLED_PLUGIN_MODULES.get(name)
+            if signal is None:
+                continue
+            if _plugin_is_managed(signal.flag_attr):
+                continue
+            _notify_bundled_plugin_skipped(name, signal.cli_flag)
+            disabled.add(name)
+        return disabled
+
+    @classmethod
+    def _sync_bundled_plugin_env_vars(cls, to_import: Sequence[str]) -> None:
+        """Normalize `os.environ[<env_var>]` to "true" for each bundled plugin
+        we're about to import. Bundled plugins (e.g. dbt-state) typically read
+        their env var directly in initialize() rather than going through
+        `get_flags()`. If a user passes `--manage-state` while the env var is
+        set to "false", PluginManager decides to load (CLI > env) but the plugin
+        would otherwise self-disable when its own check reads "false". Bridging
+        the value here keeps the two views consistent."""
+        for name in to_import:
+            signal = cls.BUNDLED_PLUGIN_MODULES.get(name)
+            if signal is None:
+                continue
+            os.environ[signal.env_var] = "true"
 
     def get_manifest_artifacts(self, manifest: Manifest) -> PluginArtifacts:
         all_plugin_artifacts = {}
