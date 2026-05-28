@@ -6,6 +6,8 @@ pub(crate) mod initialize;
 pub(crate) use initialize::InitializeLoader;
 pub(crate) mod refresh_mode;
 pub(crate) use refresh_mode::RefreshModeLoader;
+pub(crate) mod refresh_warehouse;
+pub(crate) use refresh_warehouse::RefreshWarehouseLoader;
 pub(crate) mod row_access_policy;
 pub(crate) use row_access_policy::RowAccessPolicyLoader;
 pub(crate) mod scheduler;

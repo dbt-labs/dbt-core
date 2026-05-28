@@ -297,6 +297,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 snowflake_initialization_warehouse: None,
                 immutable_where: None,
                 snowflake_warehouse: None,
+                refresh_warehouse: None,
                 refresh_mode: None,
                 initialize: None,
                 scheduler: None,

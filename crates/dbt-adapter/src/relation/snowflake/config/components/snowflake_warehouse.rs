@@ -11,7 +11,19 @@ use crate::relation::snowflake::config::{
 
 pub(crate) const TYPE_NAME: &str = "snowflake_warehouse";
 
-/// Component for Snowflake dynamic table warehouse.
+/// Component for the warehouse stamped into a Snowflake dynamic table's `WAREHOUSE =`
+/// clause — i.e. the warehouse Snowflake uses to perform the table's self-refresh.
+///
+/// The local-config loader picks `refresh_warehouse` first and falls back to
+/// `snowflake_warehouse`, so the user can split the DDL-execution warehouse from
+/// the self-refresh warehouse:
+///
+/// * `snowflake_warehouse` — still drives DDL execution via the pre-model
+///   `USE WAREHOUSE` hook in materialize.rs (unchanged).
+/// * `refresh_warehouse` — when set, becomes the value of this component, i.e.
+///   what Snowflake stamps into the table's `WAREHOUSE =` clause.
+///
+/// Reference: <https://github.com/dbt-labs/dbt-adapters/pull/1788>
 pub(crate) type SnowflakeWarehouse = SimpleComponentConfigImpl<String>;
 
 fn to_jinja(v: &String) -> Value {
@@ -68,8 +80,9 @@ fn from_local_config(
             )
         })?;
     let warehouse = snowflake_config
-        .snowflake_warehouse
+        .refresh_warehouse
         .clone()
+        .or_else(|| snowflake_config.snowflake_warehouse.clone())
         .ok_or_else(|| {
             AdapterError::new(
                 dbt_common::AdapterErrorKind::Configuration,
@@ -104,5 +117,31 @@ mod tests {
         });
         let loaded = from_local_config(&local_state).unwrap();
         assert_eq!(loaded.value, "warehouse");
+    }
+
+    #[test]
+    fn from_local_state_falls_back_to_snowflake_warehouse() {
+        // refresh_warehouse not set → effective WAREHOUSE = is snowflake_warehouse
+        let local_state = test_helpers::make_local_config(test_helpers::TestDynamicTableConfig {
+            snowflake_warehouse: "MY_EXECUTION_WH",
+            refresh_warehouse: None,
+            ..Default::default()
+        });
+        let loaded = from_local_config(&local_state).unwrap();
+        assert_eq!(loaded.value, "MY_EXECUTION_WH");
+    }
+
+    #[test]
+    fn from_local_state_prefers_refresh_warehouse() {
+        // refresh_warehouse set → it becomes the effective WAREHOUSE = value;
+        // snowflake_warehouse still drives DDL execution via the pre-model hook
+        // (which reads SnowflakeAttr.snowflake_warehouse directly, not this component).
+        let local_state = test_helpers::make_local_config(test_helpers::TestDynamicTableConfig {
+            snowflake_warehouse: "MY_EXECUTION_WH",
+            refresh_warehouse: Some("MY_SMALL_REFRESH_WH"),
+            ..Default::default()
+        });
+        let loaded = from_local_config(&local_state).unwrap();
+        assert_eq!(loaded.value, "MY_SMALL_REFRESH_WH");
     }
 }

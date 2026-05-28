@@ -44,7 +44,7 @@ fn get_bool_by_name_from_record_batch(batch: &Arc<RecordBatch>, col_name: &str) 
     col.is_valid(0).then(|| col.value(0))
 }
 
-// Helper function to get a string value from an Record Batch by column name
+// Helper function to get a string value from a Record Batch by column name
 fn get_string_by_name_from_record_batch(
     batch: &Arc<RecordBatch>,
     col_name: &str,

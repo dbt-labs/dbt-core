@@ -1,4 +1,4 @@
-//! Testing utilities for bigquery relation configs
+//! Testing utilities for Snowflake relation configs
 #![cfg(test)]
 
 use arrow_array::record_batch;
@@ -21,6 +21,7 @@ pub(crate) struct TestDynamicTableConfig {
     pub scheduler: Option<&'static str>,
     pub snowflake_initialization_warehouse: Option<&'static str>,
     pub snowflake_warehouse: &'static str,
+    pub refresh_warehouse: Option<&'static str>,
     pub table_tag: Option<&'static str>,
     pub target_lag: Option<&'static str>,
     pub transient: Option<bool>,
@@ -90,6 +91,7 @@ pub(crate) fn make_local_config(cfg: TestDynamicTableConfig) -> DbtModel {
             .snowflake_initialization_warehouse
             .map(|s| s.to_owned()),
         snowflake_warehouse: Some(cfg.snowflake_warehouse.to_owned()),
+        refresh_warehouse: cfg.refresh_warehouse.map(|s| s.to_owned()),
         table_tag: cfg.table_tag.map(|s| s.to_owned()),
         target_lag: cfg.target_lag.map(|s| s.to_owned()),
         transient: cfg.transient,

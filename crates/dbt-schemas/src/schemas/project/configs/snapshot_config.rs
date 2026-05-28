@@ -173,6 +173,8 @@ pub struct ProjectSnapshotConfig {
     pub immutable_where: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
+    #[serde(rename = "+refresh_warehouse")]
+    pub refresh_warehouse: Option<String>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
     #[serde(rename = "+tmp_relation_type")]
@@ -576,6 +578,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
                 immutable_where: config.immutable_where,
                 snowflake_warehouse: config.snowflake_warehouse,
+                refresh_warehouse: config.refresh_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
                 scheduler: config.scheduler,
@@ -703,6 +706,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
                 .snowflake_initialization_warehouse,
             immutable_where: config.__warehouse_specific_config__.immutable_where,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
+            refresh_warehouse: config.__warehouse_specific_config__.refresh_warehouse,
             refresh_mode: config.__warehouse_specific_config__.refresh_mode,
             initialize: config.__warehouse_specific_config__.initialize,
             scheduler: config.__warehouse_specific_config__.scheduler,

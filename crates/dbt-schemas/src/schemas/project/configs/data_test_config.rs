@@ -93,6 +93,8 @@ pub struct ProjectDataTestConfig {
     pub snowflake_initialization_warehouse: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
+    #[serde(rename = "+refresh_warehouse")]
+    pub refresh_warehouse: Option<String>,
     #[serde(rename = "+immutable_where")]
     pub immutable_where: Option<String>,
     #[serde(rename = "+refresh_mode")]
@@ -398,6 +400,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 target_lag: config.target_lag,
                 snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
                 snowflake_warehouse: config.snowflake_warehouse,
+                refresh_warehouse: config.refresh_warehouse,
                 immutable_where: config.immutable_where,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
@@ -517,6 +520,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
                 .__warehouse_specific_config__
                 .snowflake_initialization_warehouse,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
+            refresh_warehouse: config.__warehouse_specific_config__.refresh_warehouse,
             immutable_where: config.__warehouse_specific_config__.immutable_where,
             refresh_mode: config.__warehouse_specific_config__.refresh_mode,
             initialize: config.__warehouse_specific_config__.initialize,

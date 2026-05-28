@@ -87,6 +87,8 @@ pub struct ProjectSeedConfig {
     pub immutable_where: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
+    #[serde(rename = "+refresh_warehouse")]
+    pub refresh_warehouse: Option<String>,
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
@@ -378,6 +380,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 snowflake_initialization_warehouse: config.snowflake_initialization_warehouse,
                 immutable_where: config.immutable_where,
                 snowflake_warehouse: config.snowflake_warehouse,
+                refresh_warehouse: config.refresh_warehouse,
                 refresh_mode: config.refresh_mode,
                 initialize: config.initialize,
                 scheduler: config.scheduler,
@@ -490,6 +493,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
                 .snowflake_initialization_warehouse,
             immutable_where: config.__warehouse_specific_config__.immutable_where,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
+            refresh_warehouse: config.__warehouse_specific_config__.refresh_warehouse,
             transient: config.__warehouse_specific_config__.transient,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             copy_tags: config.__warehouse_specific_config__.copy_tags,

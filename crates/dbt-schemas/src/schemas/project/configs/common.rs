@@ -386,6 +386,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub target_lag: Option<String>,
     pub snowflake_initialization_warehouse: Option<String>,
     pub snowflake_warehouse: Option<String>,
+    pub refresh_warehouse: Option<String>,
     pub immutable_where: Option<String>,
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
@@ -532,6 +533,7 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
             target_lag,
             snowflake_initialization_warehouse,
             snowflake_warehouse,
+            refresh_warehouse,
             immutable_where,
             refresh_mode,
             initialize,
@@ -636,6 +638,7 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
                 target_lag,
                 snowflake_initialization_warehouse,
                 snowflake_warehouse,
+                refresh_warehouse,
                 immutable_where,
                 refresh_mode,
                 initialize,
@@ -813,6 +816,7 @@ pub fn same_warehouse_config(
     let target_lag_eq = self_wh.target_lag == other_wh.target_lag;
     let snowflake_initialization_warehouse_eq =
         self_wh.snowflake_initialization_warehouse == other_wh.snowflake_initialization_warehouse;
+    let refresh_warehouse_eq = self_wh.refresh_warehouse == other_wh.refresh_warehouse;
     let immutable_where_eq = self_wh.immutable_where == other_wh.immutable_where;
     let refresh_mode_eq = self_wh.refresh_mode == other_wh.refresh_mode;
     let initialize_eq = self_wh.initialize == other_wh.initialize;
@@ -882,6 +886,7 @@ pub fn same_warehouse_config(
         && base_location_subpath_eq
         && target_lag_eq
         && snowflake_initialization_warehouse_eq
+        && refresh_warehouse_eq
         && immutable_where_eq
         && refresh_mode_eq
         && initialize_eq
@@ -1269,6 +1274,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.snowflake_initialization_warehouse),
                         format!("{:?}", &other_wh.snowflake_initialization_warehouse),
+                    )),
+                ),
+                (
+                    "refresh_warehouse",
+                    refresh_warehouse_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refresh_warehouse),
+                        format!("{:?}", &other_wh.refresh_warehouse),
                     )),
                 ),
                 (
