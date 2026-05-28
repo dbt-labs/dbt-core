@@ -63,12 +63,7 @@ static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
 // ----------------------------------------------------------------------------------------------
 // Cli and its subcommands
 
-static ABOUT: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "dbt-fusion {}: A fast and enriched dbt compiler and runner",
-        env!("CARGO_PKG_VERSION")
-    )
-});
+const ABOUT: &str = "A fast and enriched dbt compiler and runner";
 static AFTER_HELP: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{}",
@@ -138,7 +133,7 @@ impl CliParser {
         app.author("dbt Labs <info@getdbt.com>")
             .version(env!("CARGO_PKG_VERSION"))
             .long_about(None)
-            .about(&**ABOUT)
+            .about(ABOUT)
             .after_help(&**AFTER_HELP)
             .help_template(CLI_HELP_TEMPLATE)
     }
