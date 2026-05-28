@@ -8,8 +8,8 @@ use dbt_adapter::adapter::{AdapterFactory, backend_of};
 use dbt_adapter::auth::Auth;
 use dbt_adapter::cache::RelationCache;
 use dbt_adapter::config::AdapterConfig;
+use dbt_adapter::engine::XdbcEngine;
 use dbt_adapter::engine::query_comment::QueryCommentConfig;
-use dbt_adapter::engine::{SidecarClient, XdbcEngine};
 use dbt_adapter::query_cache::QueryCache;
 use dbt_adapter::sql_types::{DefaultTypeOpsImpl, TypeOps, TypeOpsFactory};
 use dbt_adapter::stmt_splitter::StmtSplitter;
@@ -22,23 +22,19 @@ use dbt_common::collections::DashMap;
 use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::ReplayMode;
 use dbt_common::{FsError, FsResult};
-use dbt_compilation::config::CompilationConfig;
-use dbt_compilation::schema_hydration::{SchemaHydrator, SchemaHydratorFactory};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
 };
 use dbt_schema_store::SchemaStoreTrait;
-use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::properties::UnitTestOverrides;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
-    InternalDbtNodeAttributes, Nodes, PreviousState,
-    ResolvedCloudConfig as SchemasResolvedCloudConfig,
+    InternalDbtNodeAttributes, Nodes, ResolvedCloudConfig as SchemasResolvedCloudConfig,
 };
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::CompiledSqlCache;
@@ -60,7 +56,7 @@ use crate::cli_extension::{
 };
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::{IndexFeature, IndexHooks};
-use crate::metricflow::{MetricflowClient, MetricflowFeature};
+use crate::metricflow::MetricflowFeature;
 use crate::sidecar::SidecarFeature;
 use crate::task_runner::TaskRunnerFeature;
 use crate::tracing::TracingFeature;
@@ -177,24 +173,6 @@ impl AdapterFactory for DefaultAdapterFactoryImpl {
     }
 }
 
-struct UnimplementedSchemaHydratorFactory;
-impl SchemaHydratorFactory for UnimplementedSchemaHydratorFactory {
-    fn create(
-        &self,
-        _adapter: Arc<Adapter>,
-        _execute_mode: Execute,
-        _compilation_config: CompilationConfig,
-        _cloud_config: Option<&ResolvedCloudConfig>,
-        _previous_state: Option<Arc<PreviousState>>,
-        _root_project_quoting: ResolvedQuoting,
-        _schema_store: Arc<SchemaStore>,
-        _sidecar_client: Option<Arc<dyn SidecarClient>>,
-        _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
-    ) -> Box<dyn SchemaHydrator> {
-        unimplemented!()
-    }
-}
-
 struct UnimplementedTasksForNodeFactory;
 impl TasksForNodeFactory for UnimplementedTasksForNodeFactory {
     fn tasks_for_node(
@@ -294,7 +272,9 @@ impl FeatureStackBuilder {
             ))) as Arc<dyn TaskRunnerCtxFactory>;
 
             TaskRunnerFeature {
-                schema_hydrator_factory: Arc::new(UnimplementedSchemaHydratorFactory),
+                schema_hydrator_factory: Arc::new(
+                    dbt_tasks_sa::schema_hydrator::NoopSchemaHydratorFactory,
+                ),
                 tasks_for_node_factory: Arc::new(UnimplementedTasksForNodeFactory),
                 compare_task_graph_builder: None,
                 rendering_listener_factory,

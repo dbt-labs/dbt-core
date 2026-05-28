@@ -14,7 +14,9 @@ pub trait StaticAnalysisBuckets: Send + Sync {
     fn in_off_closure(&self, node_id: &str) -> bool;
     fn in_baseline_closure(&self, node_id: &str) -> bool;
     fn in_dynamic_closure(&self, node_id: &str) -> bool;
-    fn in_baseline_or_off_closure(&self, node_id: &str) -> bool;
+    fn in_baseline_or_off_closure(&self, node_id: &str) -> bool {
+        self.in_baseline_closure(node_id) || self.in_off_closure(node_id)
+    }
 
     fn dynamic_node(&self, node_id: &str) -> Option<IntrospectionKind>;
     fn has_dynamic_closure(&self) -> bool;
