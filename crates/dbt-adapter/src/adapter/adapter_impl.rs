@@ -13,9 +13,10 @@ use crate::macro_exec::{
     convert_macro_result_to_record_batch, execute_macro, execute_macro_with_package,
     execute_macro_wrapper_with_package,
 };
-use crate::metadata::bigquery::BigqueryMetadataAdapter;
-use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::bigquery::nested_projection::render_struct_projection;
+use crate::metadata::bigquery::{
+    BIGQUERY_PSEUDOCOLUMNS, BigqueryMetadataAdapter, nest_column_data_types,
+};
 use crate::metadata::clickhouse::ClickHouseMetadataAdapter;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
@@ -134,6 +135,51 @@ fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColum
         }
 
         emit_warn_log_message(ErrorCode::DuplicateColumns, msg, None);
+    }
+}
+
+#[cfg(debug_assertions)]
+fn debug_compare_column_types(
+    state: &State,
+    relation: &dyn BaseRelation,
+    adapter_impl: &AdapterImpl,
+    mut from_local: Vec<Column>,
+) {
+    if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
+        match adapter_impl.get_columns_in_relation_uncached(state, relation) {
+            Ok(mut from_remote) => {
+                from_remote.sort_by(|a, b| a.name().cmp(b.name()));
+
+                from_local.sort_by(|a, b| a.name().cmp(b.name()));
+
+                println!("local vs remote mismatches");
+                if !from_remote.is_empty() {
+                    assert_eq!(from_local.len(), from_remote.len());
+                    for (local, remote) in from_local.iter().zip(from_remote.iter()) {
+                        let mismatch =
+                            (local.dtype() != remote.dtype()) || (local.name() != remote.name());
+                        if mismatch {
+                            println!(
+                                "adapter.get_columns_in_relation for {}",
+                                relation.semantic_fqn()
+                            );
+                            println!(
+                                "{}:{}  {}:{}",
+                                local.name(),
+                                local.dtype(),
+                                remote.name(),
+                                remote.dtype()
+                            );
+                        }
+                    }
+                } else {
+                    println!("WARNING: from_remote is empty");
+                }
+            }
+            Err(e) => {
+                println!("Error getting columns in relation from remote: {e}");
+            }
+        }
     }
 }
 
@@ -1533,6 +1579,8 @@ impl AdapterImpl {
         }
     }
 
+    /// get_columns_in_relation for adapters whose ADBC driver implements
+    /// a good enough `AdbcConnectionGetTableSchema()`
     fn get_columns_in_relation_via_adbc(
         &self,
         state: &State,
@@ -1555,6 +1603,193 @@ impl AdapterImpl {
         // `schema_to_columns()` will first try to parse the type from the
         // `PLATFORM:type` metadata key returned by the driver.
         self.schema_to_columns(None, &Arc::new(schema))
+    }
+
+    /// get_columns_in_relation for adapters whose use a `<adapter>__get_table_schema()`
+    /// macro returing a list of `Column`
+    fn get_columns_in_relation_via_macro(
+        &self,
+        state: &State,
+        relation: &dyn BaseRelation,
+    ) -> AdapterResult<Vec<Column>> {
+        // Run a Jinja macro to fetch columns
+        let macro_result: AdapterResult<Value> = match self.adapter_type() {
+            Bigquery => unreachable!(),
+            Databricks => {
+                // use DESCRIBE TABLE EXTENDED ... AS JSON for full type strings
+                // Plain DESCRIBE TABLE truncates long data types server-side
+                //
+                // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L439-L452
+                //
+                // Note: is_hive_metastore() returns false for Unity Catalog temporary tables (matching Python semantics).
+                // The `temporary` field only tracks UC temporary tables, not HMS temporary views.
+                let use_legacy = relation.is_hive_metastore()
+                    || relation.is_materialized_view()
+                    || relation.is_streaming_table();
+
+                if !use_legacy {
+                    let json_result = execute_macro_with_package(
+                        state,
+                        &[RelationObject::new(relation.to_owned()).into_value()],
+                        "get_columns_comments_as_json",
+                        "dbt_databricks",
+                    );
+                    match json_result {
+                        Ok(ref val) => {
+                            if let Some(columns) = self.try_columns_from_json_describe(val) {
+                                return columns;
+                            }
+                        }
+                        Err(ref e) => {
+                            if e.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
+                                return Ok(Vec::new());
+                            }
+                            // PARSE_SYNTAX_ERROR / UNSUPPORTED_FEATURE -> DBR < 16.2;
+                            // fall through to legacy DESCRIBE TABLE
+                        }
+                    }
+                }
+
+                execute_macro_with_package(
+                    state,
+                    &[RelationObject::new(relation.to_owned()).into_value()],
+                    "get_columns_comments",
+                    "dbt_databricks",
+                )
+            }
+            // NOTE: This is the default behavior. If said adapter type does not
+            // have a get_columns_in_relation() macro, it will fail with a
+            // "macro does not exist" error
+            Athena | ClickHouse | Datafusion | Dremio | DuckDB | Exasol | Fabric | Oracle
+            | Postgres | Redshift | Salesforce | Snowflake | Spark | Starburst | Trino => {
+                execute_macro(
+                    state,
+                    &[RelationObject::new(relation.to_owned()).into_value()],
+                    "get_columns_in_relation",
+                )
+            }
+        };
+
+        macro_result
+            // Ignore certain macro errors
+            .or_else(|err| {
+                // TODO: switch to checking the vendor error code when available.
+                // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
+                let ignored_error = match self.adapter_type() {
+                    Snowflake => Some("does not exist or not authorized"),
+                    Databricks => Some("[TABLE_OR_VIEW_NOT_FOUND]"),
+                    _ => None,
+                };
+
+                if let Some(ignored_error) = ignored_error
+                    && err.message().contains(ignored_error)
+                {
+                    Ok(Value::from(Vec::<()>::default()))
+                } else {
+                    Err(err)
+                }
+            })
+            // Post-process macro results
+            .and_then(|macro_columns| {
+                match self.adapter_type() {
+                    Databricks => {
+                        // Databricks inherits the implementation from the Spark adapter.
+                        //
+                        // The DESCRIBE TABLE output includes metadata sections (e.g. "# Partition Information",
+                        // "# Clustering Information") that must be filtered out. This matches the Python
+                        // Spark adapter behavior which filters rows where col_name starts with '#'.
+                        //
+                        // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-spark/src/dbt/adapters/spark/impl.py#L317-L336
+                        // https://github.com/dbt-labs/dbt-fusion/issues/1230
+                        let record_batch = convert_macro_result_to_record_batch(&macro_columns)?;
+                        let name_string_array =
+                            record_batch.column_values::<StringArray>("col_name")?;
+                        let dtype_string_array =
+                            record_batch.column_values::<StringArray>("data_type")?;
+                        let comment_string_array =
+                            record_batch.column_values::<StringArray>("comment").ok();
+
+                        // Filter out metadata rows (like "# Partition Information", "# Clustering Information")
+                        // These are section headers in DESCRIBE TABLE output, not actual columns.
+                        let columns = (0..name_string_array.len())
+                            .filter(|&i| !name_string_array.value(i).starts_with('#'))
+                            .map(|i| {
+                                let comment = comment_string_array.as_ref().and_then(|arr| {
+                                    if arr.is_null(i) {
+                                        None
+                                    } else {
+                                        let s = arr.value(i);
+                                        if s.is_empty() {
+                                            None
+                                        } else {
+                                            Some(s.to_string())
+                                        }
+                                    }
+                                });
+
+                                Column::new(
+                                    Databricks,
+                                    name_string_array.value(i).to_string(),
+                                    dtype_string_array.value(i).to_string(),
+                                    None, // char_size
+                                    None, // numeric_precision
+                                    None, // numeric_scale
+                                )
+                                .with_comment(comment)
+                            })
+                            .collect::<Vec<_>>();
+                        Ok(columns)
+                    }
+                    _ => Column::vec_from_jinja_value(ClickHouse, macro_columns).map_err(|e| {
+                        AdapterError::new(
+                            AdapterErrorKind::UnexpectedResult,
+                            e.detail().map(|d| d.to_string()).unwrap_or_else(|| {
+                                "Could not convert columns from jinja value".to_string()
+                            }),
+                        )
+                    }),
+                }
+            })
+    }
+
+    /// get_columns_in_relation via the schema cache
+    ///
+    /// This is totally offline, and returns Ok(None) if there was no cache hit.
+    pub(crate) fn get_columns_in_relation_via_cache(
+        &self,
+        state: &State,
+        relation: &dyn BaseRelation,
+    ) -> AdapterResult<Option<Vec<Column>>> {
+        // NOTE: We have to check if the relation being queried is the same as the one currently
+        // being rendered and skip local compilation results for the current relation since the
+        // compiled sql may represent a schema that the model will have when the run is done,
+        // not the current state
+        if matches_current_relation(state, relation) {
+            return Ok(None);
+        };
+
+        let Some(from_cache) = self.get_schema_from_cache(relation) else {
+            return Ok(None);
+        };
+
+        let cached_columns = self.schema_to_columns(from_cache.original(), from_cache.inner())?;
+        #[cfg(debug_assertions)]
+        debug_compare_column_types(state, relation, self, cached_columns.clone());
+        Ok(Some(cached_columns))
+    }
+
+    /// get_columns_in_relation via the remote warehouse, without checking the schema cache
+    fn get_columns_in_relation_uncached(
+        &self,
+        state: &State,
+        relation: &dyn BaseRelation,
+    ) -> AdapterResult<Vec<Column>> {
+        match self.adapter_type() {
+            // TODO: Should we add the schema that was fetched here to the schema cache
+            // to avoid further remote lookups?
+            Bigquery => self.get_columns_in_relation_via_adbc(state, relation),
+            _ => self.get_columns_in_relation_via_macro(state, relation),
+        }
     }
 
     /// Get columns in relation
@@ -1605,157 +1840,28 @@ impl AdapterImpl {
             return Ok(columns);
         }
 
-        if self.adapter_type() == Bigquery {
-            return self.get_columns_in_relation_via_adbc(state, relation);
-        }
-
-        let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
-            // Bigquery early returns from `get_columns_in_relation_via_adbc()`
-            Bigquery => unreachable!(),
-            Databricks => {
-                // use DESCRIBE TABLE EXTENDED ... AS JSON for full type strings
-                // Plain DESCRIBE TABLE truncates long data types server-side
-                //
-                // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L439-L452
-                //
-                // Note: is_hive_metastore() returns false for Unity Catalog temporary tables (matching Python semantics).
-                // The `temporary` field only tracks UC temporary tables, not HMS temporary views.
-                let use_legacy = relation.is_hive_metastore()
-                    || relation.is_materialized_view()
-                    || relation.is_streaming_table();
-
-                if !use_legacy {
-                    let json_result = execute_macro_with_package(
-                        state,
-                        &[RelationObject::new(relation.to_owned()).into_value()],
-                        "get_columns_comments_as_json",
-                        "dbt_databricks",
-                    );
-                    match json_result {
-                        Ok(ref val) => {
-                            if let Some(columns) = self.try_columns_from_json_describe(val) {
-                                return columns;
-                            }
-                        }
-                        Err(ref e) => {
-                            if e.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
-                                return Ok(Vec::new());
-                            }
-                            // PARSE_SYNTAX_ERROR / UNSUPPORTED_FEATURE -> DBR < 16.2;
-                            // fall through to legacy DESCRIBE TABLE
-                        }
-                    }
-                }
-
-                execute_macro_with_package(
-                    state,
-                    &[RelationObject::new(relation.to_owned()).into_value()],
-                    "get_columns_comments",
-                    "dbt_databricks",
-                )
-            }
-            Postgres | Snowflake | Redshift | DuckDB | Fabric | Spark | ClickHouse => {
-                execute_macro(
-                    state,
-                    &[RelationObject::new(relation.to_owned()).into_value()],
-                    "get_columns_in_relation",
-                )
-            }
-            Salesforce | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
-                unimplemented!("get_columns_in_relation not implemented")
-            }
+        // Check local schema cache first before reaching out to the warehouse
+        let mut columns = if let Some(from_cache) =
+            // TODO: should we gracefully fallback to the cold path if there is an error
+            // fetching from the schema cache? I didn't do it now because IMO it could swallow bugs
+            self.get_columns_in_relation_via_cache(state, relation)?
+        {
+            from_cache
+        } else {
+            self.get_columns_in_relation_uncached(state, relation)?
         };
 
-        match self.adapter_type() {
-            // Bigquery early returns from `get_columns_in_relation_via_adbc()`
-            Bigquery => unreachable!(),
-            adapter_type @ (Postgres | Redshift | Fabric | DuckDB | Spark) => {
-                let result = macro_execution_result?;
-                Ok(Column::vec_from_jinja_value(adapter_type, result)?)
+        // Post-process columns (regardless of how they've been fetched), or whether they've
+        // been cached or not
+        let columns = match self.adapter_type() {
+            Bigquery => {
+                columns.retain(|c| !BIGQUERY_PSEUDOCOLUMNS.contains(&c.name()));
+                columns
             }
-            Snowflake => {
-                let result = match macro_execution_result {
-                    Ok(result) => result,
-                    Err(err) => {
-                        // TODO: switch to checking the vendor error code when available.
-                        // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
-                        if err.message().contains("does not exist or not authorized") {
-                            return Ok(Vec::new());
-                        }
-                        return Err(err);
-                    }
-                };
+            _ => columns,
+        };
 
-                Ok(Column::vec_from_jinja_value(Snowflake, result)?)
-            }
-            Databricks => {
-                // Databricks inherits the implementation from the Spark adapter.
-                //
-                // The DESCRIBE TABLE output includes metadata sections (e.g. "# Partition Information",
-                // "# Clustering Information") that must be filtered out. This matches the Python
-                // Spark adapter behavior which filters rows where col_name starts with '#'.
-                //
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-spark/src/dbt/adapters/spark/impl.py#L317-L336
-                // https://github.com/dbt-labs/dbt-fusion/issues/1230
-                let result = match macro_execution_result
-                    .and_then(|r| convert_macro_result_to_record_batch(&r))
-                {
-                    Ok(result) => result,
-                    Err(err) => {
-                        // TODO: switch to checking the vendor error code when available.
-                        // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
-                        // Only checks for the observed Databricks error message, avoiding
-                        // all messages in the reference python Spark adapter.
-                        if err.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
-                            return Ok(Vec::new());
-                        }
-                        return Err(err);
-                    }
-                };
-
-                let name_string_array = result.column_values::<StringArray>("col_name")?;
-                let dtype_string_array = result.column_values::<StringArray>("data_type")?;
-                let comment_string_array = result.column_values::<StringArray>("comment").ok();
-
-                // Filter out metadata rows (like "# Partition Information", "# Clustering Information")
-                // These are section headers in DESCRIBE TABLE output, not actual columns.
-                let columns = (0..name_string_array.len())
-                    .filter(|&i| !name_string_array.value(i).starts_with('#'))
-                    .map(|i| {
-                        let comment = comment_string_array.as_ref().and_then(|arr| {
-                            if arr.is_null(i) {
-                                None
-                            } else {
-                                let s = arr.value(i);
-                                if s.is_empty() {
-                                    None
-                                } else {
-                                    Some(s.to_string())
-                                }
-                            }
-                        });
-
-                        Column::new(
-                            Databricks,
-                            name_string_array.value(i).to_string(),
-                            dtype_string_array.value(i).to_string(),
-                            None, // char_size
-                            None, // numeric_precision
-                            None, // numeric_scale
-                        )
-                        .with_comment(comment)
-                    })
-                    .collect::<Vec<_>>();
-                Ok(columns)
-            }
-            ClickHouse => {
-                let result = macro_execution_result?;
-                Ok(Column::vec_from_jinja_value(ClickHouse, result)?)
-            }
-            Salesforce | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
-                unimplemented!("get_columns_in_relation not implemented")
-            }
-        }
+        Ok(columns)
     }
 
     /// Try to parse columns from a `DESCRIBE TABLE EXTENDED ... AS JSON` result.

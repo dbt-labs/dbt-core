@@ -1,9 +1,6 @@
-use crate::adapter::adapter_impl::matches_current_relation;
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-#[cfg(debug_assertions)]
-use crate::column::Column;
 use crate::engine::XdbcEngine;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::macro_exec::*;
@@ -1440,53 +1437,19 @@ impl Adapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                // Check if the relation being queried is the same as the one currently being rendered
-                // Skip local compilation results for the current relation since the compiled sql
-                // may represent a schema that the model will have when the run is done, not the current state
-                let is_current_relation = matches_current_relation(state, relation);
-
-                let maybe_from_cache = if !is_current_relation {
-                    adapter.get_schema_from_cache(relation)
-                } else {
-                    None
-                };
-
-                // Convert Arrow schemas to dbt Columns
-                let maybe_from_local = if let Some(schema) = &maybe_from_cache {
-                    let from_local =
-                        adapter.schema_to_columns(schema.original(), schema.inner())?;
-
-                    #[cfg(debug_assertions)]
-                    debug_compare_column_types(
-                        state,
-                        relation,
-                        adapter.as_ref(),
-                        from_local.clone(),
-                    );
-
-                    Some(from_local)
-                } else {
-                    None
-                };
-
                 // Replay Mode: Re-use recordings and compare with cache result
                 if let Some(replay_adapter) = adapter.as_replay() {
-                    return replay_adapter.replay_get_columns_in_relation(
+                    let cached = adapter.get_columns_in_relation_via_cache(state, relation)?;
+                    replay_adapter.replay_get_columns_in_relation(
                         state,
                         &relation.to_owned(),
-                        maybe_from_local,
-                    );
+                        cached,
+                    )
+                } else {
+                    Ok(Value::from(
+                        adapter.get_columns_in_relation(state, relation)?,
+                    ))
                 }
-
-                // Cache Hit: Re-use values
-                if let Some(from_local) = maybe_from_local {
-                    return Ok(Value::from(from_local));
-                }
-
-                // Cache Miss: Issue warehouse specific behavior to fetch columns
-                let from_remote = adapter.get_columns_in_relation(state, relation)?;
-
-                Ok(Value::from(from_remote))
             }
             Parse(parse_adapter_state) => {
                 parse_adapter_state.record_get_columns_in_relation_call(state, relation)?;
@@ -4001,51 +3964,6 @@ impl Adapter {
             Some(none_value())
         } else {
             None
-        }
-    }
-}
-
-#[cfg(debug_assertions)]
-fn debug_compare_column_types(
-    state: &State,
-    relation: &dyn BaseRelation,
-    adapter_impl: &AdapterImpl,
-    mut from_local: Vec<Column>,
-) {
-    if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
-        match adapter_impl.get_columns_in_relation(state, relation) {
-            Ok(mut from_remote) => {
-                from_remote.sort_by(|a, b| a.name().cmp(b.name()));
-
-                from_local.sort_by(|a, b| a.name().cmp(b.name()));
-
-                println!("local  remote mismatches");
-                if !from_remote.is_empty() {
-                    assert_eq!(from_local.len(), from_remote.len());
-                    for (local, remote) in from_local.iter().zip(from_remote.iter()) {
-                        let mismatch =
-                            (local.dtype() != remote.dtype()) || (local.name() != remote.name());
-                        if mismatch {
-                            println!(
-                                "adapter.get_columns_in_relation for {}",
-                                relation.semantic_fqn()
-                            );
-                            println!(
-                                "{}:{}  {}:{}",
-                                local.name(),
-                                local.dtype(),
-                                remote.name(),
-                                remote.dtype()
-                            );
-                        }
-                    }
-                } else {
-                    println!("WARNING: from_remote is empty");
-                }
-            }
-            Err(e) => {
-                println!("Error getting columns in relation from remote: {e}");
-            }
         }
     }
 }

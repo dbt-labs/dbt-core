@@ -33,6 +33,16 @@ pub mod object_options;
 
 pub mod nested_projection;
 
+pub(crate) const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
+    "_PARTITIONTIME",
+    "_PARTITIONDATE",
+    "_FILE_NAME",
+    "_TABLE_SUFFIX",
+    "_CHANGE_TYPE",
+    "_CHANGE_TIMESTAMP",
+    "_CHANGE_SEQUENCE_NUMBER",
+];
+
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
