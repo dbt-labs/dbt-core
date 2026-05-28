@@ -172,9 +172,7 @@ class TestParseWithFusion:
 
         with mock.patch.dict(
             "os.environ", {"DBT_INVOCATION_ENV": "dbt-cloud-prod__host:cloud"}, clear=False
-        ), mock.patch(
-            "dbt.parser.fusion.subprocess.run", side_effect=_capture
-        ), mock.patch(
+        ), mock.patch("dbt.parser.fusion.subprocess.run", side_effect=_capture), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
         ), mock.patch(
             "dbt.parser.fusion.Manifest.from_writable_manifest", return_value=mock.MagicMock()
