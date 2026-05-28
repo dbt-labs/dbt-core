@@ -1,6 +1,7 @@
 import pytest
 
-from dbt.tests.util import check_relations_equal, copy_file, read_file, run_dbt
+from dbt.tests.util import check_relations_equal, copy_file, read_file
+from tests.functional.v2_parser_parity.v2_self_parser import run_dbt_for_mode
 
 ephemeral_copy_sql = """
 {{
@@ -159,12 +160,13 @@ def project_config_update():
 
 # This test checks that with different materializations we get the right
 # tables copied or built.
-def test_simple_reference(project):
-    results = run_dbt(["seed"])
+@pytest.mark.v2_parser_parity
+def test_simple_reference(project, parser_mode):
+    results = run_dbt_for_mode(parser_mode, ["seed"])
     assert len(results) == 2
 
     # Now run dbt
-    results = run_dbt()
+    results = run_dbt_for_mode(parser_mode, ["run"])
     assert len(results) == 8
 
     # Copies should match
@@ -195,10 +197,10 @@ def test_simple_reference(project):
         project.project_root,
         ["seeds", "summary_expected.csv"],
     )
-    results = run_dbt(["seed"])
+    results = run_dbt_for_mode(parser_mode, ["seed"])
     assert len(results) == 2
 
-    results = run_dbt()
+    results = run_dbt_for_mode(parser_mode, ["run"])
     assert len(results) == 8
 
     # Copies should match
@@ -220,12 +222,15 @@ def test_simple_reference(project):
     )
 
 
-def test_simple_reference_with_models_and_children(project):
-    results = run_dbt(["seed"])
+@pytest.mark.v2_parser_parity
+def test_simple_reference_with_models_and_children(project, parser_mode):
+    results = run_dbt_for_mode(parser_mode, ["seed"])
     assert len(results) == 2
 
     # Run materialized_copy, ephemeral_copy, and their dependents
-    results = run_dbt(["run", "--models", "materialized_copy+", "ephemeral_copy+"])
+    results = run_dbt_for_mode(
+        parser_mode, ["run", "--models", "materialized_copy+", "ephemeral_copy+"]
+    )
     assert len(results) == 3
 
     # Copies should match
@@ -255,13 +260,16 @@ def test_simple_reference_with_models_and_children(project):
     assert created_tables["ephemeral_summary"] == "table"
 
 
-def test_simple_ref_with_models(project):
-    results = run_dbt(["seed"])
+@pytest.mark.v2_parser_parity
+def test_simple_ref_with_models(project, parser_mode):
+    results = run_dbt_for_mode(parser_mode, ["seed"])
     assert len(results) == 2
 
     # Run materialized_copy, ephemeral_copy, and their dependents
     # ephemeral_copy should not actually be materialized b/c it is ephemeral
-    results = run_dbt(["run", "--models", "materialized_copy", "ephemeral_copy"])
+    results = run_dbt_for_mode(
+        parser_mode, ["run", "--models", "materialized_copy", "ephemeral_copy"]
+    )
     assert len(results) == 1
 
     # Copies should match

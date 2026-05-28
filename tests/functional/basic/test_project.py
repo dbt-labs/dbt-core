@@ -7,6 +7,7 @@ import yaml
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError, ProjectContractError
 from dbt.tests.util import run_dbt, update_config_file, write_config_file
+from tests.functional.v2_parser_parity.v2_self_parser import run_dbt_for_mode
 
 simple_model_sql = """
 select true as my_column
@@ -27,8 +28,9 @@ class TestSchemaYmlVersionMissing:
     def models(self):
         return {"simple_model.sql": simple_model_sql, "simple_model.yml": simple_model_yml}
 
-    def test_empty_version(self, project):
-        run_dbt(["run"], expect_pass=True)
+    @pytest.mark.v2_parser_parity
+    def test_empty_version(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["run"], expect_pass=True)
 
 
 class TestProjectConfigVersionMissing:
@@ -37,15 +39,17 @@ class TestProjectConfigVersionMissing:
     def project_config_remove(self):
         return ["config-version"]
 
-    def test_empty_version(self, project):
-        run_dbt(["run"], expect_pass=True)
+    @pytest.mark.v2_parser_parity
+    def test_empty_version(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["run"], expect_pass=True)
 
 
 class TestProjectYamlVersionMissing:
     # default dbt_project.yml does not fill version
 
-    def test_empty_version(self, project):
-        run_dbt(["run"], expect_pass=True)
+    @pytest.mark.v2_parser_parity
+    def test_empty_version(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["run"], expect_pass=True)
 
 
 class TestProjectYamlVersionValid:
@@ -53,8 +57,9 @@ class TestProjectYamlVersionValid:
     def project_config_update(self):
         return {"version": "1.0.0"}
 
-    def test_valid_version(self, project):
-        run_dbt(["run"], expect_pass=True)
+    @pytest.mark.v2_parser_parity
+    def test_valid_version(self, project, parser_mode):
+        run_dbt_for_mode(parser_mode, ["run"], expect_pass=True)
 
 
 class TestProjectYamlVersionInvalid:
