@@ -76,12 +76,9 @@ impl RunCacheServiceConfig {
     where
         F: FnMut(&str) -> Option<String>,
     {
-        let api_url_set = config_value(&mut get_env, "API_URL").is_some();
-        let enabled_set = state_config_value(&mut get_env, STATE_MANAGE_ENV, "ENABLED")
+        state_config_value(&mut get_env, STATE_MANAGE_ENV, "ENABLED")
             .map(|config| parse_bool(config.name, &config.value).unwrap_or(true))
-            .unwrap_or(false);
-
-        api_url_set || enabled_set
+            .unwrap_or(false)
     }
 
     pub fn from_env_getter<F>(mut get_env: F) -> Result<Self, RunCacheServiceConfigError>
@@ -483,6 +480,28 @@ mod tests {
         assert!(
             RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
                 (name == "RUN_CACHE_ENABLED").then(|| "not-a-bool".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn service_config_env_does_not_request_service() {
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "RUN_CACHE_API_URL").then(|| "localhost:50051".to_string())
+            })
+        );
+
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENGINE_STATE_OAUTH_CLIENT_ID").then(|| "state-client-id".to_string())
+            })
+        );
+
+        assert!(
+            !RunCacheServiceConfig::is_explicitly_requested_from_env_getter(|name| {
+                (name == "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET")
+                    .then(|| "state-client-secret".to_string())
             })
         );
     }

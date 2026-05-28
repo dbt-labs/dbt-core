@@ -55,9 +55,11 @@ async fn initialize_run_cache_service(
     arg: &RunTasksArgs,
     execute: Execute,
 ) -> RunCacheServiceLifecycle {
-    let service_requested =
-        arg.run_cache_service || RunCacheServiceConfig::is_explicitly_requested_from_env();
-    if !service_requested || execute != Execute::Remote {
+    if !should_initialize_run_cache_service(
+        arg,
+        execute,
+        RunCacheServiceConfig::is_explicitly_requested_from_env(),
+    ) {
         increment_metric(
             FusionMetricKey::RunCacheService(RunCacheServiceMetricKey::Disabled),
             1,
@@ -200,6 +202,14 @@ async fn initialize_run_cache_service(
     }
 }
 
+fn should_initialize_run_cache_service(
+    arg: &RunTasksArgs,
+    execute: Execute,
+    env_requested: bool,
+) -> bool {
+    execute == Execute::Remote && (arg.run_cache_service || env_requested)
+}
+
 pub fn run_cache_auto_defer_command(command: FsCommand) -> bool {
     matches!(
         command,
@@ -210,4 +220,63 @@ pub fn run_cache_auto_defer_command(command: FsCommand) -> bool {
             | FsCommand::Seed
             | FsCommand::Snapshot
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use dbt_schemas::schemas::profiles::Execute;
+
+    use super::{RunTasksArgs, should_initialize_run_cache_service};
+
+    fn args() -> RunTasksArgs {
+        RunTasksArgs::default()
+    }
+
+    #[test]
+    fn lifecycle_does_not_request_service_without_explicit_request() {
+        assert!(!should_initialize_run_cache_service(
+            &args(),
+            Execute::Remote,
+            false
+        ));
+    }
+
+    #[test]
+    fn lifecycle_requests_service_from_explicit_env_opt_in() {
+        assert!(should_initialize_run_cache_service(
+            &args(),
+            Execute::Remote,
+            true
+        ));
+    }
+
+    #[test]
+    fn lifecycle_requests_service_from_cli_flag() {
+        let mut args = args();
+        args.run_cache_service = true;
+
+        assert!(should_initialize_run_cache_service(
+            &args,
+            Execute::Remote,
+            false
+        ));
+    }
+
+    #[test]
+    fn lifecycle_requires_remote_compute() {
+        assert!(!should_initialize_run_cache_service(
+            &args(),
+            Execute::Local,
+            true
+        ));
+
+        let mut args = args();
+        args.run_cache_service = true;
+
+        assert!(!should_initialize_run_cache_service(
+            &args,
+            Execute::Local,
+            false
+        ));
+    }
 }
