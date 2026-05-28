@@ -20,6 +20,7 @@ pub mod run_adhoc;
 pub mod run_operation;
 pub mod runnable;
 pub mod schema_hydrator;
+pub mod showable;
 pub mod task;
 pub mod task_runner;
 pub mod task_runner_hooks;

@@ -12,6 +12,7 @@ pub mod render_task_hooks;
 pub mod run_cache_lifecycle;
 pub mod run_task_hooks;
 mod run_tasks_args;
+pub mod show_task_hooks;
 pub mod span_manager;
 mod stats_to_results;
 pub mod task;
