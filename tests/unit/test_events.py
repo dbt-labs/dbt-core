@@ -481,6 +481,14 @@ sample_values = [
         total_overloads=0,
         execution_time=0,
     ),
+    core_types.V2ParserStart(v2_parser_command="", project_name=""),
+    core_types.V2ParserEnd(
+        status="",
+        execution_time=0,
+        error_class="",
+        exit_code=0,
+        project_name="",
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),

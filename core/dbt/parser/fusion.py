@@ -17,12 +17,14 @@ import shutil
 import subprocess
 import sysconfig
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.manifest import WritableManifest
 from dbt.contracts.graph.manifest import Manifest
+from dbt.events.types import V2ParserEnd, V2ParserStart
 from dbt.exceptions import (
     FusionParserError,
     FusionParserMissingError,
@@ -30,7 +32,7 @@ from dbt.exceptions import (
     FusionParserVersionError,
 )
 from dbt.flags import get_flags
-from dbt_common.events.functions import get_invocation_id
+from dbt_common.events.functions import fire_event, get_invocation_id
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
@@ -57,31 +59,62 @@ def parse_with_fusion(
 
     flags = get_flags()
     project_target_path = Path(runtime_config.project_target_path)
+    v2_parser_command = getattr(flags, "V2_PARSER", "dbt-core-experimental-parser parse")
+    project_name = runtime_config.project_name
 
-    with tempfile.TemporaryDirectory(prefix="dbt-fusion-") as handoff_dir:
-        handoff = Path(handoff_dir)
-        argv = _build_argv(flags, target_path_override=str(handoff))
+    fire_event(V2ParserStart(v2_parser_command=v2_parser_command, project_name=project_name))
+    start_time = time.monotonic()
+    try:
+        with tempfile.TemporaryDirectory(prefix="dbt-fusion-") as handoff_dir:
+            handoff = Path(handoff_dir)
+            argv = _build_argv(flags, target_path_override=str(handoff))
 
-        _run_fusion(argv)
+            _run_fusion(argv)
 
-        manifest_path = handoff / "manifest.json"
-        if not manifest_path.exists():
-            raise FusionParserError(
-                f"Fusion parser exited successfully but did not produce {manifest_path.name} "
-                f"in the handoff directory."
-            )
-
-        writable_manifest = _load_writable_manifest(manifest_path)
-
-        if write and write_json:
-            # Copy v2 parser artifacts rather than re-serializing through write_manifest
-            project_target_path.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(manifest_path, project_target_path / "manifest.json")
-            semantic_manifest_path = handoff / "semantic_manifest.json"
-            if semantic_manifest_path.exists():
-                shutil.copyfile(
-                    semantic_manifest_path, project_target_path / "semantic_manifest.json"
+            manifest_path = handoff / "manifest.json"
+            if not manifest_path.exists():
+                raise FusionParserError(
+                    f"Fusion parser exited successfully but did not produce {manifest_path.name} "
+                    f"in the handoff directory."
                 )
+
+            writable_manifest = _load_writable_manifest(manifest_path)
+
+            if write and write_json:
+                # Copy v2 parser artifacts rather than re-serializing through write_manifest
+                project_target_path.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(manifest_path, project_target_path / "manifest.json")
+                semantic_manifest_path = handoff / "semantic_manifest.json"
+                if semantic_manifest_path.exists():
+                    shutil.copyfile(
+                        semantic_manifest_path, project_target_path / "semantic_manifest.json"
+                    )
+    except (
+        FusionParserMissingError,
+        FusionParserVersionError,
+        FusionParserSchemaError,
+        FusionParserError,
+    ) as e:
+        fire_event(
+            V2ParserEnd(
+                status="failure",
+                execution_time=time.monotonic() - start_time,
+                error_class=type(e).__name__,
+                exit_code=getattr(e, "returncode", -1),
+                project_name=project_name,
+            )
+        )
+        raise
+
+    fire_event(
+        V2ParserEnd(
+            status="success",
+            execution_time=time.monotonic() - start_time,
+            error_class="",
+            exit_code=-1,
+            project_name=project_name,
+        )
+    )
 
     manifest = Manifest.from_writable_manifest(writable_manifest)
     # build_flat_graph is normally called by ManifestLoader.get_full_manifest;
@@ -222,7 +255,8 @@ def _run_fusion(argv: List[str]) -> None:
 
     if result.returncode != 0:
         raise FusionParserError(
-            f"Fusion parser failed (exit {result.returncode}); see parser output above."
+            f"Fusion parser failed (exit {result.returncode}); see parser output above.",
+            returncode=result.returncode,
         )
 
 
