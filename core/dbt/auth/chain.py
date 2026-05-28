@@ -8,6 +8,7 @@ from dbt.auth.resolvers import (
     EnvVarResolver,
     OAuthInteractiveResolver,
     OAuthPassiveResolver,
+    ResolverKind,
 )
 from dbt.exceptions import AuthError, NotAuthenticated
 
@@ -58,6 +59,21 @@ class AuthChain:
         for resolver in self._resolvers:
             try:
                 return resolver.resolve()
+            except NotAuthenticated:
+                continue
+            except AuthError as e:
+                if first_error is None:
+                    first_error = e
+                continue
+
+        raise first_error if first_error is not None else NotAuthenticated()
+
+    def resolve_with_source(self) -> tuple[Credential, ResolverKind]:
+        first_error: Optional[AuthError] = None
+
+        for resolver in self._resolvers:
+            try:
+                return resolver.resolve(), resolver.kind
             except NotAuthenticated:
                 continue
             except AuthError as e:

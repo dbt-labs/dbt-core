@@ -323,8 +323,7 @@ class OAuthInteractiveResolver:
         from dbt.flags import get_flags
 
         skip_browser = getattr(get_flags(), "SKIP_BROWSER_AUTH", False) or False
-        fire_event(Note(msg="Opening your browser to complete login..."))
-        fire_event(Note(msg=auth_url))
+        fire_event(Note(msg=f"Opening your browser to complete login...\n{auth_url}"))
         if not skip_browser:
             try:
                 self.opener(auth_url)

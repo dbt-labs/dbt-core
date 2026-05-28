@@ -503,18 +503,31 @@ def init(ctx, **kwargs):
 
 
 # dbt login
-@cli.command("login")
+@cli.group(invoke_without_command=True)
 @click.pass_context
 @global_flags
 @p.profiles_dir_exists_false
 @p.skip_browser_auth
-@requires.postflight
 @requires.preflight
 def login(ctx, **kwargs):
     """Authenticate to dbt platform."""
+    if ctx.invoked_subcommand is not None:
+        return
     from dbt.task.login import LoginTask
 
     with LoginTask(ctx.obj["flags"]) as task:
+        results = task.run()
+        success = task.interpret_results(results)
+    return results, success
+
+
+@login.command("status")
+@click.pass_context
+def status(ctx, **kwargs):
+    """Show current authentication status."""
+    from dbt.task.login import LoginStatusTask
+
+    with LoginStatusTask(ctx.obj["flags"]) as task:
         results = task.run()
         success = task.interpret_results(results)
     return results, success
