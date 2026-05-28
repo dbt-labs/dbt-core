@@ -211,3 +211,5 @@ The dbt Fusion engine is a monorepo and contains more than one License. Most cod
 *To the DataFusion Community:* The intermediate representation of the SQL compiler is the DataFusion logical plan which has proven to be pragmatic, extensible, and easy to work with in all the right ways.
 
 Thank you all. dbt, Arrow, and DataFusion have become truly global software projects. dbt Labs is committed to contributing meaningfully to these efforts over the coming months and years.
+
+<!-- copybara test marker: 2026-05-28 tauhid-test sync -->
