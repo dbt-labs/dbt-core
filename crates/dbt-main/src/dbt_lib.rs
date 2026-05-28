@@ -11,7 +11,7 @@ use dbt_adapter::{
 };
 use dbt_clap_core::{
     Cli, Command, CompileArgs, CoreCommand, DocsServeArgs as ClapDocsServeArgs, DocsSubcommand,
-    ProjectTemplate, ShowArgs, SystemCommand,
+    LoginSubcommand, ProjectTemplate, ShowArgs, SystemCommand,
 };
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{
@@ -53,6 +53,7 @@ use dbt_jinja_utils::{
 use dbt_loader::{
     clean::execute_clean_command, execute_deps_command, upload_artifacts_ingest_if_enabled,
 };
+use dbt_login::{execute_login, execute_login_status};
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::{
     man::execute_man_command,
@@ -273,6 +274,11 @@ async fn do_execute_fs(
         };
     } else if let Command::Core(Man(_)) = &cli.command {
         return execute_man_command(eval_arg).await;
+    } else if let Command::Core(Login(login_args)) = &cli.command {
+        return match login_args.subcommand {
+            Some(LoginSubcommand::Status) => execute_login_status().await,
+            None => execute_login(Arc::clone(&feature_stack.license_fetcher)).await,
+        };
     } else if let Command::Core(Docs(docs_args)) = cli.command {
         return match docs_args.subcommand {
             Some(DocsSubcommand::Serve(serve_args)) => {

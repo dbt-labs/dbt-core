@@ -1,8 +1,10 @@
 use std::fmt;
+use std::sync::Arc;
 
 use dbt_common::DiscreteEventEmitter;
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::fail_fast::FailFast;
+use dbt_login::LicenseFetcher;
 
 use crate::adapter::AdapterFeature;
 use crate::antlr_parser::AntlrParserFeature;
@@ -31,6 +33,7 @@ pub struct FeatureStack {
     pub sidecar: SidecarFeature,
     pub metricflow: MetricflowFeature,
     pub task_runner: TaskRunnerFeature,
+    pub license_fetcher: Arc<dyn LicenseFetcher>,
     // TODO: add more features here
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).

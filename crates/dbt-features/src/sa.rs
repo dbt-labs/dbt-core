@@ -2,6 +2,8 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use dbt_login::NoOpLicenseFetcher;
+
 use async_trait::async_trait;
 use dbt_common::FsResult;
 use dbt_common::cancellation::{CancellationToken, CancellationTokenSource};
@@ -200,6 +202,7 @@ impl SourceAvailableFeatureStackBuilder {
             sidecar: SidecarFeature::default(),
             metricflow: MetricflowFeature::default(),
             task_runner: self.task_runner,
+            license_fetcher: Arc::new(NoOpLicenseFetcher),
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

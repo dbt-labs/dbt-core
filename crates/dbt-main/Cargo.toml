@@ -38,6 +38,7 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-init = { workspace = true }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
+dbt-login = { workspace = true }
 dbt-metadata = { workspace = true }
 dbt-metadata-parquet = { workspace = true }
 dbt-parser = { workspace = true }

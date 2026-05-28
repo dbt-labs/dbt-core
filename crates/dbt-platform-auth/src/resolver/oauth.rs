@@ -24,10 +24,10 @@ pub const LOOPBACK_PORT: u16 = 29527;
 pub const INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Default OAuth scopes requested from dbt platform.
-pub const OAUTH_SCOPES: &str = "account:read offline_access";
+pub const OAUTH_SCOPES: &str = "account:read identity:read offline_access";
 
 /// dbt platform registration endpoint. Users are redirected here to start login.
-/// TODO: support DBT_CLOUD_STAGING_URL env override for staging environments.
+/// Override with `DBT_CLOUD_REGISTER_URL` for testing against non-production environments.
 pub const REGISTER_URL: &str = "https://us1.dbt.com/register";
 
 // ── Opener / abort handle ─────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ impl OAuthInteractiveResolver {
             }
         };
 
-        let redirect_uri = format!("http://127.0.0.1:{}/", self.redirect_port);
+        let redirect_uri = format!("http://localhost:{}/", self.redirect_port);
 
         // If a session already exists for this client, include its scopes in the new
         // request so that a re-auth never silently drops previously-granted scopes.
@@ -316,18 +316,28 @@ impl OAuthInteractiveResolver {
             &pkce.challenge,
         )?;
 
-        eprintln!("Opening browser for dbt platform login: {auth_url}");
         (self.opener)(&auth_url);
 
         let abort_rx = self.abort_signal.lock().unwrap().take();
         let redirect = accept_one_redirect(&listener, &state, self.timeout, abort_rx).await?;
+
+        // The dbt platform appends account_url to the callback URL. The server validates
+        // the token exchange redirect_uri against this full callback URL (minus code/state),
+        // not the bare redirect_uri from the auth request. Mirror VSCE's buildRedirectUriFromCallback.
+        let exchange_redirect_uri = {
+            let mut url = Url::parse(&redirect_uri)
+                .map_err(|e| AuthError::Interactive(format!("malformed redirect URI: {e}")))?;
+            url.query_pairs_mut()
+                .append_pair("account_url", &redirect.account_url);
+            url.to_string()
+        };
 
         let token = exchange_code(
             &self.http,
             &redirect.account_url,
             &self.client_id,
             &redirect.code,
-            &redirect_uri,
+            &exchange_redirect_uri,
             &pkce.verifier,
         )
         .await?;
@@ -438,14 +448,19 @@ impl OAuthInteractiveResolverBuilder {
     }
 
     pub fn build(self) -> OAuthInteractiveResolver {
+        let client_id = std::env::var("DBT_OAUTH_CLIENT_ID").unwrap_or(self.client_id);
+        let register_url = self
+            .register_url
+            .or_else(|| std::env::var("DBT_CLOUD_REGISTER_URL").ok())
+            .unwrap_or_else(|| REGISTER_URL.to_owned());
         OAuthInteractiveResolver {
-            client_id: self.client_id,
+            client_id,
             opener: self
                 .opener
                 .unwrap_or_else(OAuthInteractiveResolver::default_opener),
             timeout: self.timeout.unwrap_or(INTERACTIVE_TIMEOUT),
             redirect_port: self.redirect_port.unwrap_or(LOOPBACK_PORT),
-            register_url: self.register_url.unwrap_or_else(|| REGISTER_URL.to_owned()),
+            register_url,
             scopes: self.scopes.unwrap_or_else(|| OAUTH_SCOPES.to_owned()),
             http: self.http.unwrap_or_default(),
             cache_path: self.cache_path,
@@ -517,13 +532,14 @@ fn build_register_url(
     let mut url = Url::parse(base)
         .map_err(|e| AuthError::Interactive(format!("invalid register URL '{base}': {e}")))?;
     url.query_pairs_mut()
-        .append_pair("redirect_url", redirect_url)
+        .append_pair("redirect_uri", redirect_url)
         .append_pair("client_id", client_id)
         .append_pair("code_challenge", code_challenge)
         .append_pair("state", state)
         .append_pair("scope", scope)
         .append_pair("response_type", "code")
-        .append_pair("code_challenge_method", "S256");
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("_dbtsrc", "core_v2");
     Ok(url.to_string())
 }
 
@@ -598,11 +614,7 @@ async fn handle_redirect(
         } else {
             format!("{error}: {description}")
         };
-        let body = format!(
-            "{ERROR_HTML_PREFIX}{}{ERROR_HTML_SUFFIX}",
-            html_escape(&message)
-        );
-        let _ = write_http_response(&mut write_half, 500, &body).await;
+        let _ = write_http_response(&mut write_half, 500, &error_html(&message)).await;
         return Err(AuthError::Interactive(message));
     }
 
@@ -611,12 +623,7 @@ async fn handle_redirect(
         .cloned()
         .ok_or_else(|| AuthError::Interactive("redirect missing state parameter".into()))?;
     if state != expected_state {
-        let _ = write_http_response(
-            &mut write_half,
-            500,
-            &format!("{ERROR_HTML_PREFIX}invalid state{ERROR_HTML_SUFFIX}"),
-        )
-        .await;
+        let _ = write_http_response(&mut write_half, 500, &error_html("invalid state")).await;
         return Err(AuthError::Interactive(
             "invalid OAuth state parameter".into(),
         ));
@@ -632,7 +639,7 @@ async fn handle_redirect(
         .cloned()
         .ok_or_else(|| AuthError::Interactive("redirect missing account_url parameter".into()))?;
 
-    let _ = write_http_response(&mut write_half, 200, SUCCESS_HTML).await;
+    let _ = write_http_response(&mut write_half, 200, &success_html()).await;
     Ok(RedirectResult {
         code,
         state,
@@ -684,9 +691,88 @@ async fn write_http_response(
     stream.shutdown().await
 }
 
-const SUCCESS_HTML: &str = "<!doctype html><html><head><meta charset=\"UTF-8\"/><title>dbt - Login</title></head><body style=\"text-align:center;font-family:sans-serif\"><h1>Success</h1><p>You have logged in. You can close this window.</p></body></html>";
-const ERROR_HTML_PREFIX: &str = "<!doctype html><html><head><meta charset=\"UTF-8\"/><title>dbt - Login</title></head><body style=\"text-align:center;font-family:sans-serif\"><h1>Error</h1><p>";
-const ERROR_HTML_SUFFIX: &str = "</p></body></html>";
+// Shared page chrome: full <head>, styles, body open, .main open, logo.
+// Does NOT close .main — page-specific tail does that.
+const PAGE_START: &str = r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>dbt - Login</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1c1c1c;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+    }
+    .main { padding: 80px 0 0 170px; }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 56px; }
+    .logo-text { font-size: 22px; font-weight: 600; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
+    .subtitle { font-size: 16px; color: #c8c8c8; margin-bottom: 40px; }
+    .links { text-align: center; }
+    .links p { color: #c8c8c8; font-size: 15px; margin-bottom: 20px; }
+    .links a { color: #fff; }
+    .banner {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: rgba(220,38,38,0.10);
+      border: 1px solid rgba(220,38,38,0.35);
+      border-left: 3px solid #dc2626;
+      border-radius: 6px;
+      padding: 14px 16px;
+      max-width: 480px;
+    }
+    .banner-icon { flex-shrink: 0; color: #f87171; margin-top: 1px; }
+    .banner-title { font-size: 14px; font-weight: 600; color: #fca5a5; margin-bottom: 4px; }
+    .banner-message { font-size: 14px; color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="main">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.9764 0.341745C26.2996 -0.423111 27.7247 0.188774 28.7935 1.25957C29.9132 2.38136 30.3712 3.60513 29.6587 4.98187C29.4042 5.49177 26.4014 10.6928 25.4853 12.1715C24.9764 12.9874 24.7219 14.0072 24.7219 14.976C24.7219 15.9448 24.9764 16.9646 25.4853 17.8315C26.4014 19.2592 29.4042 24.5112 29.6587 25.0211C30.3712 26.4488 29.8623 27.5196 28.8444 28.6414C27.6738 29.8142 26.5032 30.4261 25.0782 29.6612C24.5692 29.3553 10.3186 21.1458 10.3186 21.1458C10.5731 22.8285 11.4892 24.3582 12.6598 25.276C12.5071 25.327 5.45938 29.405 4.97461 29.6612C3.63859 30.3673 2.4203 29.8952 1.36105 28.8964C0.164945 27.7684 -0.420273 26.4488 0.343153 25.0721C0.597628 24.5622 3.60044 19.3102 4.46565 17.8824C4.97461 17.0156 5.27998 16.0468 5.27998 15.027C5.27998 14.0072 4.97461 13.0384 4.46565 12.2225C3.60044 10.6928 0.597628 5.38979 0.343153 4.93088C-0.420273 3.55414 0.192658 2.07531 1.25926 1.1066C2.46833 0.00850936 3.60044 -0.32113 4.97461 0.341745C5.38177 0.494716 19.5815 8.90813 19.5815 8.90813C19.4288 7.27644 18.6145 5.79772 17.2912 4.77791C17.393 4.72692 24.4674 0.545706 24.9764 0.341745ZM15.5099 17.5255L17.5457 15.4859C17.8002 15.2309 17.8002 14.823 17.5457 14.5171L15.5099 12.4775C15.2045 12.1715 14.7974 12.1715 14.492 12.4775L12.4562 14.5171C12.2017 14.772 12.2017 15.2309 12.4562 15.4859L14.492 17.5255C14.7465 17.7805 15.2045 17.7805 15.5099 17.5255Z" fill="#FE6702"/></svg>
+      <span class="logo-text">dbt</span>
+    </div>"##;
+
+const SUCCESS_TAIL: &str = r#"
+    <h1>You&#8217;re all set</h1>
+    <p class="subtitle">Your account is ready. You can close this tab and return to the CLI</p>
+  </div>
+  <div class="links">
+    <p>Need a service token for authentication? <a href="https://cloud.getdbt.com/settings">Go to Account settings</a></p>
+    <p>Still need help? <a href="https://docs.getdbt.com">Contact us</a></p>
+  </div>
+</body>
+</html>"#;
+
+const ERROR_BANNER_START: &str = r#"
+    <div class="banner">
+      <svg class="banner-icon" width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+      <div>
+        <div class="banner-title">Authentication failed</div>
+        <div class="banner-message">"#;
+
+const ERROR_BANNER_END: &str = r#"</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"#;
+
+fn success_html() -> String {
+    [PAGE_START, SUCCESS_TAIL].concat()
+}
+
+fn error_html(message: &str) -> String {
+    [
+        PAGE_START,
+        ERROR_BANNER_START,
+        &html_escape(message),
+        ERROR_BANNER_END,
+    ]
+    .concat()
+}
 
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -722,13 +808,17 @@ async fn exchange_code(
         .form(&form)
         .send()
         .await
-        .map_err(|e| AuthError::Interactive(format!("token exchange request failed: {e}")))?
-        .error_for_status()
-        .map_err(|e| AuthError::Interactive(format!("token exchange failed: {e}")))?;
+        .map_err(|e| AuthError::Interactive(format!("token exchange request failed: {e}")))?;
+    let status = response.status();
     let body = response
         .text()
         .await
         .map_err(|e| AuthError::Interactive(format!("reading token response failed: {e}")))?;
+    if !status.is_success() {
+        return Err(AuthError::Interactive(format!(
+            "token exchange failed ({status}): {body}"
+        )));
+    }
     serde_json::from_str::<TokenResponse>(&body)
         .map_err(|e| AuthError::Interactive(format!("invalid token response: {e}")))
 }
@@ -769,6 +859,11 @@ async fn exchange_refresh_token(
         .map_err(|e| AuthError::RefreshFailed(format!("invalid token response: {e}")))
 }
 
+fn jwt_claim_as_u64(payload: &serde_json::Value, key: &str) -> Option<u64> {
+    let v = &payload[key];
+    v.as_u64().or_else(|| v.as_str()?.parse().ok())
+}
+
 fn decode_access_token(token: &str) -> Result<(u64, u64, String), AuthError> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {
@@ -784,20 +879,12 @@ fn decode_access_token(token: &str) -> Result<(u64, u64, String), AuthError> {
 
     let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
         .map_err(|e| AuthError::Interactive(format!("failed to parse JWT payload: {e}")))?;
+    let user_id = jwt_claim_as_u64(&payload, "sub")
+        .ok_or_else(|| AuthError::Interactive("JWT missing or invalid 'sub' claim".into()))?;
 
-    let user_id = payload["sub"]
-        .as_str()
-        .ok_or_else(|| AuthError::Interactive("JWT missing 'sub' claim".into()))?
-        .parse::<u64>()
-        .map_err(|e| AuthError::Interactive(format!("invalid 'sub' claim: {e}")))?;
-
-    let account_id = payload["https://dbt.com/account_id"]
-        .as_str()
-        .ok_or_else(|| {
-            AuthError::Interactive("JWT missing 'https://dbt.com/account_id' claim".into())
-        })?
-        .parse::<u64>()
-        .map_err(|e| AuthError::Interactive(format!("invalid account_id claim: {e}")))?;
+    let account_id = jwt_claim_as_u64(&payload, "https://dbt.com/account_id").ok_or_else(|| {
+        AuthError::Interactive("JWT missing or invalid 'https://dbt.com/account_id' claim".into())
+    })?;
 
     let iss = payload["iss"]
         .as_str()
@@ -1289,7 +1376,7 @@ mod tests {
     fn register_url_includes_all_required_params() {
         let url = build_register_url(
             REGISTER_URL,
-            "http://127.0.0.1:29527/",
+            "http://localhost:29527/",
             "client-id-x",
             "account:read offline_access",
             "state-abc",
@@ -1299,8 +1386,8 @@ mod tests {
         let parsed = Url::parse(&url).unwrap();
         let pairs: HashMap<_, _> = parsed.query_pairs().into_owned().collect();
         assert_eq!(
-            pairs.get("redirect_url").map(String::as_str),
-            Some("http://127.0.0.1:29527/")
+            pairs.get("redirect_uri").map(String::as_str),
+            Some("http://localhost:29527/")
         );
         assert_eq!(
             pairs.get("client_id").map(String::as_str),

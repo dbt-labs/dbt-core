@@ -271,6 +271,7 @@ got {:?}, expected an instance of {}",
                 | Command::Core(Man(_))
                 | Command::Core(Init(_))
                 | Command::Core(Docs(_))
+                | Command::Core(Login(_))
                 | Command::Core(Completions(_)) => {
                     // These commands do not require a project directory
                     (PathBuf::from("."), PathBuf::from("."))
@@ -310,6 +311,7 @@ got {:?}, expected an instance of {}",
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Retry(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Docs(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Login(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Completions(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             },
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
@@ -367,6 +369,7 @@ got {:?}, expected an instance of {}",
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
                 Retry(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
                 Docs(_args) => unreachable!("Docs command does not need a phase"),
+                Login(_args) => unreachable!("Login command does not need a phase"),
                 Completions(_args) => unreachable!("Completions command does not need a phase"),
             },
             Command::Extension(ext_cmd) => ext_cmd.stage(),
@@ -1242,6 +1245,27 @@ pub struct ManArgs {
     pub pre_schema: Vec<ClapSchemaTypes>,
 }
 // dbt man --schema selector --schema project
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct LoginArgs {
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    #[command(subcommand)]
+    pub subcommand: Option<LoginSubcommand>,
+}
+
+impl LoginArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args.to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum LoginSubcommand {
+    /// Show current authentication status
+    Status,
+}
 
 impl ManArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {

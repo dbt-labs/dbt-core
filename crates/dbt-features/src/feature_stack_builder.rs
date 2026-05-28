@@ -3,6 +3,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use dbt_login::{LicenseFetcher, NoOpLicenseFetcher};
+
 use async_trait::async_trait;
 use dbt_adapter::adapter::{AdapterFactory, backend_of};
 use dbt_adapter::auth::Auth;
@@ -247,6 +249,7 @@ pub struct FeatureStackBuilder {
     sidecar: SidecarFeature,
     cli_extension: CliExtensionFeature,
     task_runner: TaskRunnerFeature,
+    license_fetcher: Arc<dyn LicenseFetcher>,
 }
 
 impl FeatureStackBuilder {
@@ -294,7 +297,13 @@ impl FeatureStackBuilder {
             sidecar: SidecarFeature::default(),
             cli_extension,
             task_runner,
+            license_fetcher: Arc::new(NoOpLicenseFetcher),
         }
+    }
+
+    pub fn license_fetcher(mut self, fetcher: Arc<dyn LicenseFetcher>) -> Self {
+        self.license_fetcher = fetcher;
+        self
     }
 
     pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
@@ -339,6 +348,7 @@ impl FeatureStackBuilder {
             sidecar: self.sidecar,
             metricflow: MetricflowFeature::default(),
             task_runner: self.task_runner,
+            license_fetcher: self.license_fetcher,
             cancellation_token_source: CancellationTokenSource::new(),
             fail_fast: FailFast::new(),
         };

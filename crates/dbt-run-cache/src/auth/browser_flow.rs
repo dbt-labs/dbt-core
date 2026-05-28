@@ -297,7 +297,6 @@ impl InteractiveFlow for BrowserFlow {
             &pkce.challenge,
         )?;
 
-        eprintln!("Opening browser for dbt State login: {authorize_url}");
         (self.opener)(&authorize_url);
 
         let abort_rx = self

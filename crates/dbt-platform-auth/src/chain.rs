@@ -11,6 +11,11 @@ use std::collections::HashSet;
 /// See lsp/src/registration/webAuth/constants.ts
 pub const OAUTH_CLIENT_ID: &str = "854ad54c885f03bbe6ca7eb1e75593fb";
 
+/// Returns the effective OAuth client ID, preferring `DBT_OAUTH_CLIENT_ID` if set.
+fn effective_client_id() -> String {
+    std::env::var("DBT_OAUTH_CLIENT_ID").unwrap_or_else(|_| OAUTH_CLIENT_ID.to_owned())
+}
+
 /// An ordered chain of credential resolvers tried in sequence.
 ///
 /// `resolve` walks the chain until a resolver returns credentials. `NotAuthenticated`
@@ -34,21 +39,27 @@ impl AuthChain {
     /// Use this when the caller can prompt the user — e.g. a CLI `login` command.
     /// For headless contexts, use [`AuthChain::default`] instead.
     pub fn interactive() -> Self {
+        let client_id = effective_client_id();
         AuthChain {
             resolvers: vec![
                 AuthResolver::EnvVar(EnvVarResolver),
-                AuthResolver::OAuthPassive(OAuthPassiveResolver::new(OAUTH_CLIENT_ID)),
+                AuthResolver::OAuthPassive(OAuthPassiveResolver::new(&client_id)),
                 AuthResolver::CloudYaml(CloudYamlResolver::default()),
-                AuthResolver::OAuthInteractive(OAuthInteractiveResolver::new(OAUTH_CLIENT_ID)),
+                AuthResolver::OAuthInteractive(OAuthInteractiveResolver::new(client_id)),
             ],
         }
     }
 
     pub async fn resolve(&self) -> Result<Credential, AuthError> {
+        self.resolve_with_source().await.map(|(c, _)| c)
+    }
+
+    /// Like [`resolve`], but also returns which resolver produced the credential.
+    pub async fn resolve_with_source(&self) -> Result<(Credential, ResolverKind), AuthError> {
         let mut first_error: Option<AuthError> = None;
         for resolver in &self.resolvers {
             match resolver.resolve().await {
-                Ok(cred) => return Ok(cred),
+                Ok(cred) => return Ok((cred, resolver.kind())),
                 Err(AuthError::NotAuthenticated) => {}
                 Err(e) => {
                     if first_error.is_none() {
@@ -71,7 +82,7 @@ pub struct AuthChainBuilder {
 
 impl Default for AuthChainBuilder {
     fn default() -> Self {
-        Self::new(OAUTH_CLIENT_ID)
+        Self::new(effective_client_id())
     }
 }
 

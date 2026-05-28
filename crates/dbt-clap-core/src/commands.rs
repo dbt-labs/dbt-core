@@ -8,8 +8,8 @@ use strum_macros::Display;
 
 use crate::{
     BuildArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, CompletionsArgs, DebugArgs, DepsArgs,
-    DocsArgs, InitArgs, ListArgs, ManArgs, ParseArgs, RetryArgs, RunArgs, RunOperationArgs,
-    SeedArgs, ShowArgs, SnapshotArgs, SourceArgs, SystemMgmtArgs, TestArgs,
+    DocsArgs, InitArgs, ListArgs, LoginArgs, ManArgs, ParseArgs, RetryArgs, RunArgs,
+    RunOperationArgs, SeedArgs, ShowArgs, SnapshotArgs, SourceArgs, SystemMgmtArgs, TestArgs,
 };
 
 #[derive(clap::Subcommand, Debug, Clone, Display)]
@@ -56,6 +56,8 @@ pub enum CoreCommand {
     Retry(RetryArgs),
     /// Generate and serve documentation (deprecated in Fusion - use `dbt compile --write-catalog`)
     Docs(DocsArgs),
+    /// Authenticate with dbt platform
+    Login(LoginArgs),
     /// Generate shell completion scripts
     Completions(CompletionsArgs),
 }
@@ -85,6 +87,7 @@ impl CoreCommand {
             Debug(..) => FsCommand::Debug,
             Retry(..) => FsCommand::Retry,
             Docs(..) => FsCommand::Docs,
+            Login(..) => FsCommand::Login,
             Completions(..) => FsCommand::Completions,
         }
     }
@@ -117,6 +120,7 @@ impl CoreCommand {
             Debug(args) => &args.common_args,
             Retry(args) => &args.common_args,
             Docs(args) => &args.common_args,
+            Login(args) => &args.common_args,
             Completions(args) => &args.common_args,
         }
     }
@@ -145,6 +149,7 @@ impl CoreCommand {
             Debug(_) => None,
             Retry(retry_args) => retry_args.static_analysis,
             Docs(_) => None,
+            Login(_) => None,
             Completions(_) => None,
         }
     }

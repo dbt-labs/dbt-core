@@ -1,10 +1,13 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
+use crate::auth::browser_flow::TokenResponse;
+use crate::auth::scope::{Scope, determine_org_id, jwt_claims};
 use crate::service_client::RunCacheServiceError;
 
 const AUTH_DIR_NAME: &str = ".dbt";
@@ -23,6 +26,53 @@ pub struct StoredToken {
     pub access_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
+}
+
+impl StoredToken {
+    /// Build a `StoredToken` from a raw OAuth `TokenResponse`.
+    ///
+    /// Decodes the JWT claims to extract the scope and derives the org ID via
+    /// `determine_org_id`. Pass `configured_org_id` when a specific org must be
+    /// selected; pass `None` to let the scope determine the org.
+    pub fn from_token_response(
+        response: TokenResponse,
+        configured_org_id: Option<&str>,
+    ) -> Result<Self, RunCacheServiceError> {
+        let claims = jwt_claims(&response.id_token)?;
+        let scope_str = claims.scope.ok_or_else(|| {
+            RunCacheServiceError::Auth("OAuth token is missing scope".to_string())
+        })?;
+        let scope = Scope::from_string(&scope_str)?;
+        let org_id = determine_org_id(&scope, configured_org_id)?;
+
+        let expires_at = expires_at_from(&response);
+
+        Ok(Self {
+            scope: scope_str,
+            token_type: "Bearer".to_string(),
+            id_token: response.id_token,
+            org_id,
+            expires_at,
+            access_token: response.access_token,
+            refresh_token: response.refresh_token,
+        })
+    }
+}
+
+fn expires_at_from(response: &TokenResponse) -> Option<f64> {
+    if let Some(secs) = response.expires_at {
+        return Some(secs);
+    }
+    response.expires_in.and_then(|secs| {
+        if secs.is_finite() && secs > 0.0 {
+            (SystemTime::now() + std::time::Duration::from_secs_f64(secs))
+                .duration_since(UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_secs_f64())
+        } else {
+            None
+        }
+    })
 }
 
 #[derive(Debug, Clone)]
