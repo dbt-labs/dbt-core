@@ -7,7 +7,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
     ca-certificates=20210119 \
-    libpq-dev=13.23-0+deb11u3 \
+    # libpq-dev is intentionally not pinned: Debian removes old patch versions when publishing
+    # security updates, which breaks builds. The apt-mark hold below prevents dist-upgrade drift.
+    libpq-dev \
     make=4.3-4.1 \
     openssh-client=1:8.4p1-5+deb11u3 \
     software-properties-common=0.96.20.2-2.1 \
@@ -85,7 +87,7 @@ FROM dbt-core AS dbt-third-party
 ARG dbt_third_party
 
 RUN if [ "$dbt_third_party" ]; then \
-        python -m pip install --no-cache-dir "${dbt_third_party}"; \
-    else \
-        echo "No third party adapter provided"; \
-    fi \
+    python -m pip install --no-cache-dir "${dbt_third_party}"; \
+  else \
+    echo "No third party adapter provided"; \
+  fi \
