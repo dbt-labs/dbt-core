@@ -25,6 +25,7 @@ commands_to_skip = {
     "server",
     "init",
     "list",
+    "login",
     "run-operation",
     "show",
     "snapshot",
