@@ -1,5 +1,4 @@
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::pretty_string::{GREEN, RED};
 use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::tracing::formatters::deps::get_package_display_name;
 use dbt_common::tracing::span_info::{
@@ -8,9 +7,7 @@ use dbt_common::tracing::span_info::{
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, INSTALLING},
-    create_info_span, fs_err,
-    pretty_string::BLUE,
-    stdfs, tokiofs,
+    create_info_span, fs_err, stdfs, tokiofs,
 };
 use dbt_schemas::schemas::packages::{DbtPackageLock, DbtPackagesLock};
 use dbt_telemetry::{DepsAllPackagesInstalled, DepsPackageInstalled, PackageType};
@@ -169,11 +166,8 @@ pub async fn install_packages(
     if dbt_packages_lock.packages.is_empty() {
         return Ok(());
     }
-    let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone())
+    let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
-
-    // Collect fusion-schema-compat upgrade suggestions
-    let mut fusion_compat_suggestions: Vec<(String, String, String)> = Vec::new();
     package_listing.hydrate_dbt_packages_lock(dbt_packages_lock, ctx.jinja_env)?;
 
     // Update telemetry with resolved package count
@@ -199,46 +193,15 @@ pub async fn install_packages(
         }
 
         // Install package within that span and capture result
-        install_package(
-            ctx,
-            packages_install_path,
-            package,
-            &mut fusion_compat_suggestions,
-            &pspan,
-        )
-        .instrument(pspan.clone())
-        .await
-        .record_status(&pspan)?;
+        install_package(ctx, packages_install_path, package, &pspan)
+            .instrument(pspan.clone())
+            .await
+            .record_status(&pspan)?;
 
         // Finally update set the closing legacy dbt core code if we managed to install
         update_span_attrs(&pspan, |ev: &mut DepsPackageInstalled| {
             ev.dbt_core_event_code = "M016".to_string();
         });
-    }
-
-    // Display fusion-schema-compat upgrade suggestions at the end
-    if !fusion_compat_suggestions.is_empty() {
-        // TODO: we should not apply color at the site where we emit event. The "proper"
-        // way would be to introduce a dedicated event type or error code and apply formatting
-        // in tracing formatters.
-        let suggestions: Vec<String> = fusion_compat_suggestions
-            .iter()
-            .map(|(name, current_version, latest_version)| {
-                format!(
-                    "   {} -> {}",
-                    RED.apply_to(format!("{name}@{current_version}")),
-                    GREEN.apply_to(latest_version)
-                )
-            })
-            .collect();
-
-        let msg = format!(
-            "\n{} The following packages have fusion schema compatible versions available.\n{}\n",
-            BLUE.apply_to("suggestion:"),
-            suggestions.join("\n"),
-        );
-
-        emit_info_log_message(msg);
     }
 
     Ok(())
@@ -248,53 +211,19 @@ async fn install_package(
     ctx: &DepsOperationContext<'_>,
     packages_install_path: &Path,
     package: &UnpinnedPackage,
-    fusion_compat_suggestions: &mut Vec<(String, String, String)>,
     pspan: &Span,
 ) -> FsResult<()> {
     match package {
         UnpinnedPackage::Hub(hub_unpinned_package) => {
-            let pinned_package = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
+            let resolved = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
+            let pinned = &resolved.pinned;
+            let metadata = &resolved.version;
 
-            if pinned_package.version != pinned_package.version_latest
-                && (std::env::var("NEXTEST").is_err()
-                    || (std::env::var("NEXTEST").is_ok()
-                        && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
-            {
-                emit_info_log_message(format!(
-                    "Updated version available for {}@{}: {}",
-                    pinned_package.name, pinned_package.version, pinned_package.version_latest,
-                ));
-            }
+            ctx.notices.collect(pinned);
 
-            // Store resolved package version
             update_span_attrs(pspan, |ev: &mut DepsPackageInstalled| {
-                ev.package_version = Some(pinned_package.version.clone());
+                ev.package_version = Some(pinned.version.clone());
             });
-
-            // Check fusion-schema-compat and suggest upgrade if needed
-            let hub_package = ctx
-                .hub_registry
-                .get_hub_package(&pinned_package.package)
-                .await?;
-
-            let metadata = hub_package
-                .versions
-                .get(&pinned_package.version)
-                .expect("Version should exist in package metadata");
-
-            // Collect fusion-schema-compat upgrade suggestions
-            if metadata.fusion_schema_compat != Some(true)
-                && hub_package.latest_fusion_schema_compat == Some(true)
-                && (std::env::var("NEXTEST").is_err()
-                    || (std::env::var("NEXTEST").is_ok()
-                        && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
-            {
-                fusion_compat_suggestions.push((
-                    pinned_package.name.clone(),
-                    pinned_package.version.clone(),
-                    pinned_package.version_latest.clone(),
-                ));
-            }
 
             // try to substitute fusion compatible version if requested
             let tarball_url = if ctx.use_v2_compatible_package_downloads
@@ -306,7 +235,7 @@ async fn install_package(
             {
                 emit_info_log_message(format!(
                     "Installing the v2-compatible download from Package Hub for {}@{}",
-                    pinned_package.name, pinned_package.version,
+                    pinned.name, pinned.version,
                 ));
                 fusion_compatible_download_url.clone()
             } else {
@@ -329,8 +258,8 @@ async fn install_package(
             if ctx.io.send_anonymous_usage_stats {
                 package_install_event(
                     ctx.io.invocation_id.to_string(),
-                    pinned_package.name.clone(),
-                    pinned_package.version.clone(),
+                    pinned.name.clone(),
+                    pinned.version.clone(),
                     "hub".to_string(),
                 );
             }

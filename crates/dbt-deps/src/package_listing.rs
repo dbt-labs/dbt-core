@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
+use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,
@@ -16,6 +16,7 @@ use dbt_schemas::schemas::packages::{
 };
 
 use crate::{
+    notices::{NoticeBuffer, PackageNotice, PackageNoticeKind},
     private_package::get_resolved_url,
     utils::{get_local_package_full_path, read_and_validate_dbt_project},
 };
@@ -70,22 +71,28 @@ impl UnpinnedPackage {
     }
 }
 
-pub struct PackageListing {
+pub struct PackageListing<'a> {
     pub io_args: IoArgs,
     pub vars: BTreeMap<String, dbt_yaml::Value>,
     pub packages: HashMap<String, UnpinnedPackage>,
     pub skip_private_deps: bool,
     pub cloud_config: Option<ResolvedCloudConfig>,
+    notices: &'a NoticeBuffer,
 }
 
-impl PackageListing {
-    pub fn new(io_args: IoArgs, vars: BTreeMap<String, dbt_yaml::Value>) -> Self {
+impl<'a> PackageListing<'a> {
+    pub fn new(
+        io_args: IoArgs,
+        vars: BTreeMap<String, dbt_yaml::Value>,
+        notices: &'a NoticeBuffer,
+    ) -> Self {
         Self {
             io_args,
             vars,
             packages: HashMap::new(),
             skip_private_deps: false,
             cloud_config: None,
+            notices,
         }
     }
 
@@ -250,15 +257,10 @@ impl PackageListing {
                 let package_key = full_path.to_string_lossy().to_string();
                 match self.packages.entry(package_key) {
                     Entry::Occupied(_) => {
-                        emit_warn_log_message(
-                            ErrorCode::DepsDuplicatePackage,
-                            format!(
-                                "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
-                                 This will be an error in a future version of Fusion.",
-                                dbt_project.name
-                            ),
-                            self.io_args.status_reporter.as_ref(),
-                        );
+                        self.notices.record(PackageNotice {
+                            key: dbt_project.name,
+                            kind: PackageNoticeKind::DuplicatePackageName,
+                        });
                     }
                     Entry::Vacant(entry) => {
                         entry.insert(UnpinnedPackage::Local(LocalUnpinnedPackage {
@@ -580,7 +582,8 @@ mod tests {
     #[test]
     fn test_handle_remote_package_with_subdirectory() {
         let io_args = IoArgs::default();
-        let mut package_listing = PackageListing::new(io_args, BTreeMap::new());
+        let notices = NoticeBuffer::default();
+        let mut package_listing = PackageListing::new(io_args, BTreeMap::new(), &notices);
 
         // Create two git packages with the same URL but different subdirectories
         let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {
@@ -650,7 +653,8 @@ mod tests {
     #[test]
     fn test_handle_remote_package_same_url_no_subdirectory() {
         let io_args = IoArgs::default();
-        let mut package_listing = PackageListing::new(io_args, BTreeMap::new());
+        let notices = NoticeBuffer::default();
+        let mut package_listing = PackageListing::new(io_args, BTreeMap::new(), &notices);
 
         // Create two git packages with the same URL and no subdirectory
         let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {

@@ -3,10 +3,12 @@ use std::collections::BTreeMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::schemas::packages::DbtPackagesLock;
 
 use crate::git_client::GitClientContext;
 use crate::hub_client::{DBT_HUB_URL, HubClient};
 use crate::network_client::retrying_http_client;
+use crate::notices::{EmitPolicy, NoticeBuffer, prepare_for_emit};
 use crate::tarball_client::TarballClient;
 
 /// Shared runtime dependencies for deps resolve/install flows.
@@ -19,8 +21,11 @@ pub struct DepsOperationContext<'a> {
     pub tarball_client: TarballClient,
     pub git_client: GitClientContext,
     pub skip_private_deps: bool,
+    /// Captured into the `notices` buffer's [`EmitPolicy`] at construction.
+    #[allow(dead_code)]
     pub version_check: bool,
     pub use_v2_compatible_package_downloads: bool,
+    pub notices: NoticeBuffer,
 }
 
 impl<'a> DepsOperationContext<'a> {
@@ -59,6 +64,13 @@ impl<'a> DepsOperationContext<'a> {
             skip_private_deps,
             version_check,
             use_v2_compatible_package_downloads,
+            notices: NoticeBuffer::new(EmitPolicy::from_inputs(version_check)),
+        }
+    }
+
+    pub(crate) fn flush_notices(&self, lock: &DbtPackagesLock) {
+        for n in prepare_for_emit(self.notices.drain(), lock) {
+            n.emit(self);
         }
     }
 }

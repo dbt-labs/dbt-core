@@ -1,5 +1,4 @@
-use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_common::{ErrorCode, FsResult, stdfs};
+use dbt_common::{FsResult, stdfs};
 use dbt_schemas::schemas::packages::{
     DbtPackageLock, DbtPackages, DbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
     PackageVersion, PrivatePackageLock, TarballPackageLock,
@@ -8,13 +7,11 @@ use std::collections::HashSet;
 
 use crate::{
     git_client::download_git_like_package,
+    notices::{PackageNotice, PackageNoticeKind},
     package_listing::UnpinnedPackage,
     tarball_client::download_tarball_package,
     types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
-    utils::{
-        emit_scrubbed_package_name_warnings, ensure_dir, fusion_sha1_hash_packages, make_tempdir,
-        read_and_validate_dbt_project, scrubbed_package_names_from_package_def,
-    },
+    utils::{ensure_dir, fusion_sha1_hash_packages, make_tempdir, read_and_validate_dbt_project},
 };
 
 use crate::package_listing::PackageListing;
@@ -33,22 +30,25 @@ pub async fn compute_package_lock(
     );
     // First step, is to flatten into a single list of packages
     let mut dbt_packages_lock = DbtPackagesLock::default();
-    let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone())
+    let mut package_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
     package_listing.hydrate_dbt_packages(dbt_packages, ctx.jinja_env)?;
-    let mut final_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone())
+    let mut final_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(ctx.skip_private_deps);
     resolve_packages(ctx, &mut final_listing, &mut package_listing).await?;
     for package in final_listing.packages.values() {
         match package {
             UnpinnedPackage::Hub(hub_unpinned_package) => {
-                let pinned_package = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
+                let pinned = hub_unpinned_package
+                    .resolved(&ctx.hub_registry)
+                    .await?
+                    .pinned;
                 dbt_packages_lock
                     .packages
                     .push(DbtPackageLock::Hub(HubPackageLock {
-                        package: pinned_package.package,
-                        name: pinned_package.name,
-                        version: PackageVersion::String(pinned_package.version),
+                        package: pinned.package,
+                        name: pinned.name,
+                        version: PackageVersion::String(pinned.version),
                     }));
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
@@ -124,16 +124,10 @@ pub async fn compute_package_lock(
     dbt_packages_lock.packages.retain(|package| {
         let lookup_name = package.package_name();
         if seen.contains(&lookup_name) {
-            // Warn about duplicate package - keeping the first occurrence
-            emit_warn_log_message(
-                ErrorCode::DepsDuplicatePackage,
-                format!(
-                    "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
-                     This will be an error in a future version of Fusion.",
-                    lookup_name
-                ),
-                ctx.io.status_reporter.as_ref(),
-            );
+            ctx.notices.record(PackageNotice {
+                key: lookup_name,
+                kind: PackageNoticeKind::DuplicatePackageName,
+            });
             false
         } else {
             seen.insert(lookup_name);
@@ -145,35 +139,18 @@ pub async fn compute_package_lock(
 
 async fn resolve_packages(
     ctx: &DepsOperationContext<'_>,
-    final_listing: &mut PackageListing,
-    package_listing: &mut PackageListing,
+    final_listing: &mut PackageListing<'_>,
+    package_listing: &mut PackageListing<'_>,
 ) -> FsResult<()> {
-    let mut next_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone())
+    let mut next_listing = PackageListing::new(ctx.io.clone(), ctx.vars.clone(), &ctx.notices)
         .with_skip_private_deps(package_listing.skip_private_deps);
     for unpinned_package in package_listing.packages.values_mut() {
         ctx.cancellation.check_cancellation()?;
         match unpinned_package {
             UnpinnedPackage::Hub(hub_unpinned_package) => {
-                let pinned_package = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
-                let hub_package = ctx
-                    .hub_registry
-                    .get_hub_package(&pinned_package.package)
-                    .await?;
-                ctx.hub_registry
-                    .check_package_deprecation(&package_listing.io_args, &hub_package);
-                let metadata = hub_package
-                    .versions
-                    .get(&pinned_package.version)
-                    .expect("Version should exist in package metadata");
-
-                if std::env::var("NEXTEST").is_err() && ctx.version_check {
-                    ctx.hub_registry.check_require_dbt_version(
-                        &package_listing.io_args,
-                        &hub_package.name,
-                        metadata,
-                    );
-                }
-                next_listing.update_from(&metadata.packages, ctx.jinja_env)?;
+                let resolved = hub_unpinned_package.resolved(&ctx.hub_registry).await?;
+                ctx.notices.collect(&resolved);
+                next_listing.update_from(&resolved.version.packages, ctx.jinja_env)?;
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
                 let tmp_dir = make_tempdir(None)?;
@@ -198,7 +175,7 @@ async fn resolve_packages(
                 )?;
                 git_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
-                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
+                    ctx.notices.collect(&dbt_packages);
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -207,7 +184,7 @@ async fn resolve_packages(
             UnpinnedPackage::Local(local_unpinned_package) => {
                 let (dbt_packages, _) = load_dbt_packages(ctx.io, &local_unpinned_package.local)?;
                 if let Some(dbt_packages) = dbt_packages {
-                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
+                    ctx.notices.collect(&dbt_packages);
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
             }
@@ -234,7 +211,7 @@ async fn resolve_packages(
                 )?;
                 private_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
-                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
+                    ctx.notices.collect(&dbt_packages);
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -257,7 +234,7 @@ async fn resolve_packages(
                 )?;
                 tarball_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(ctx.io, &checkout_path)?.0 {
-                    emit_nested_scrubbed_package_name_warnings(ctx, &dbt_packages)?;
+                    ctx.notices.collect(&dbt_packages);
                     next_listing.update_from(&dbt_packages.packages, ctx.jinja_env)?;
                 }
             }
@@ -267,14 +244,5 @@ async fn resolve_packages(
     if !next_listing.packages.is_empty() {
         Box::pin(resolve_packages(ctx, final_listing, &mut next_listing)).await?;
     }
-    Ok(())
-}
-
-fn emit_nested_scrubbed_package_name_warnings(
-    ctx: &DepsOperationContext<'_>,
-    dbt_packages: &DbtPackages,
-) -> FsResult<()> {
-    let scrubbed_package_names = scrubbed_package_names_from_package_def(dbt_packages);
-    emit_scrubbed_package_name_warnings(ctx.io, &scrubbed_package_names);
     Ok(())
 }
