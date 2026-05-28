@@ -485,7 +485,9 @@ pub async fn resolve_data_tests(
                 name_span: dbt_common::Span::default(),
                 // original_file_path is a misnomer for tests, it's the path to the generated sql file
                 original_file_path: generated_file_path,
-                patch_path: Some(patch_path.to_path_buf()),
+                // The patch-path is always set to None in Core:
+                // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/parser/schema_generic_tests.py#L119
+                patch_path: None,
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''
