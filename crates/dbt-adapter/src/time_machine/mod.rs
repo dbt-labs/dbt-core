@@ -75,7 +75,7 @@ pub mod semantic;
 pub mod serde;
 pub mod serializable;
 pub(crate) mod serializable_impls;
-mod validation;
+pub(crate) mod validation;
 pub mod writer;
 
 // Re-export commonly used types

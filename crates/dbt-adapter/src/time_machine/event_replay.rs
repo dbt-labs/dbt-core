@@ -33,6 +33,7 @@ use super::event::{
 };
 use super::semantic::SemanticCategory;
 use super::serde::values_match;
+use super::validation::{SqlSanitizer, UuidSanitizer};
 use crate::AdapterType;
 use crate::sql::diff::compare_sql;
 
@@ -108,6 +109,16 @@ pub(crate) fn adapter_args_match(
             (Ok(recorded), Ok(actual)) => recorded == actual,
             _ => values_match(recorded, actual),
         },
+        "get_column_schema_from_query" | "get_columns_in_select_sql" => {
+            extract_sql_from_args(recorded)
+                .zip(extract_sql_from_args(actual))
+                .map_or_else(
+                    || values_match(recorded, actual),
+                    |(rec_sql, act_sql)| {
+                        UuidSanitizer.sanitize(rec_sql) == UuidSanitizer.sanitize(act_sql)
+                    },
+                )
+        }
         _ => values_match(recorded, actual),
     }
 }
