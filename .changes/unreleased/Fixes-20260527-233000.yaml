@@ -1,0 +1,14 @@
+kind: Fixes
+body: >-
+    Honor `--manage-state` when DBT_ENGINE_MANAGE_STATE is set to false. The
+    bundled dbt-state plugin reads DBT_ENGINE_MANAGE_STATE directly in its
+    initialize(), so a CLI override of an opt-out env var was previously dropped
+    silently: PluginManager loaded the plugin but the plugin self-disabled on
+    import. PluginManager now normalizes os.environ to the Click-resolved value
+    before importing each bundled plugin, so all three opt-in surfaces
+    (--manage-state CLI, DBT_ENGINE_MANAGE_STATE env var, manage_state in
+    dbt_project.yml / profiles.yml) behave consistently end-to-end.
+time: 2026-05-27T23:30:00.000000000Z
+custom:
+    Author: colin-rogers-dbt
+    Issue: "13014"
