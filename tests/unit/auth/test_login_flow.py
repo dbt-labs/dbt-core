@@ -169,25 +169,25 @@ class TestPostPlatformLogin:
 
         return mock_set_flag, fired_messages
 
-    def test_configured_and_enabled_is_silent(self):
+    def test_configured_and_enabled_is_noop(self):
         mock_set_flag, messages = self._run_post_login(configured=True, enabled=True)
         mock_set_flag.assert_not_called()
-        assert not any("dbt State" in m for m in messages if "Logged in" not in m)
+        assert any("Sign in successful" in m for m in messages)
 
-    def test_configured_and_not_enabled_writes_manage_state(self):
+    def test_configured_and_not_enabled_enables_locally(self):
         mock_set_flag, messages = self._run_post_login(configured=True, enabled=False)
         mock_set_flag.assert_called_once_with("manage_state", True)
         assert any("enabled locally" in m for m in messages)
 
-    def test_not_configured_and_not_enabled_is_silent(self):
+    def test_not_configured_and_not_enabled_is_noop(self):
         mock_set_flag, messages = self._run_post_login(configured=False, enabled=False)
         mock_set_flag.assert_not_called()
-        assert not any("dbt State" in m for m in messages if "Logged in" not in m)
+        assert any("Sign in successful" in m for m in messages)
 
-    def test_not_configured_but_enabled_fires_warning(self):
+    def test_not_configured_but_enabled_fires_info(self):
         mock_set_flag, messages = self._run_post_login(configured=False, enabled=True)
         mock_set_flag.assert_not_called()
-        assert any("not configured for your account" in m for m in messages)
+        assert any("not in your dbt platform" in m for m in messages)
 
 
 class TestTokenRefreshFlow:

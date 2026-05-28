@@ -210,26 +210,22 @@ def on_platform_login_success(credential: PlatformCredential) -> None:
 
     client = DbtPlatformAPIClient(credential)
     client.warm_license_cache()
-    fire_event(
-        Note(msg=f"Logged in as {credential.account_host} (account {credential.account_id}).")
-    )
 
     state_enabled_locally = getattr(get_flags(), "MANAGE_STATE", False) or False
     configured = client.is_state_configured()
-    if configured and state_enabled_locally:
-        return
-    if not configured and not state_enabled_locally:
-        return
+
     if configured and not state_enabled_locally:
         set_user_setting_flag("manage_state", True)
         fire_event(Note(msg="dbt State is available for your account — enabled locally."))
-        return
-    fire_event(
-        Note(
-            msg=(
-                "dbt State is enabled locally but is not configured for your account.\n"
-                "Contact your account administrator to set up dbt State, "
-                "or visit https://docs.getdbt.com/docs/deploy/dbt-state-about"
+    elif not configured and state_enabled_locally:
+        fire_event(
+            Note(
+                msg=(
+                    "Looks like dbt State is enabled on this machine but not in your dbt platform "
+                    "account. To enable State in your platform account, see docs: "
+                    "https://docs.getdbt.com/docs/deploy/dbt-state-setup"
+                )
             )
         )
-    )
+
+    fire_event(Note(msg="Sign in successful."))

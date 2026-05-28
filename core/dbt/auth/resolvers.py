@@ -40,10 +40,10 @@ from dbt.exceptions import (
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
-AUTH_SERVER_URL = None
+AUTH_SERVER_URL = "https://us2.staging.dbt.com/register"
 INTERACTIVE_TIMEOUT = 600  # 10 minutes
-OAUTH_CLIENT_ID = None
-OAUTH_SCOPES = "user_access offline_access"
+OAUTH_CLIENT_ID = "854ad54c885f03bbe6ca7eb1e75593fb"
+OAUTH_SCOPES = "identity:read offline_access"
 
 
 class ResolverKind(Enum):
@@ -88,7 +88,7 @@ class OAuthPassiveResolver:
 
     def __init__(
         self,
-        client_id: Optional[str] = OAUTH_CLIENT_ID,
+        client_id: str = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         token_endpoint_override: Optional[str] = None,
     ) -> None:
@@ -97,9 +97,6 @@ class OAuthPassiveResolver:
         self.token_endpoint_override = token_endpoint_override
 
     def resolve(self) -> Credential:
-        if not self.client_id:
-            raise NotAuthenticated()
-
         cache = read_session_cache(self.cache_path)
         matching = [s for s in cache.sessions if s.client_id == self.client_id]
 
@@ -126,7 +123,6 @@ class OAuthPassiveResolver:
         return f"{base}/oauth/token"
 
     def _refresh(self, session: OAuthSession) -> Credential:
-        assert self.client_id is not None
         url = self._refresh_token_url(session.account_host)
         form = {
             "grant_type": "refresh_token",
@@ -266,7 +262,7 @@ class OAuthInteractiveResolver:
 
     def __init__(
         self,
-        client_id: Optional[str] = OAUTH_CLIENT_ID,
+        client_id: str = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         auth_server_url: Optional[str] = None,
         scopes: str = OAUTH_SCOPES,
@@ -279,6 +275,7 @@ class OAuthInteractiveResolver:
             auth_server_url
             or os.environ.get("DBT_CLOUD_STAGING_URL", "").strip()
             or self._auth_server_from_cloud_yaml()
+            or AUTH_SERVER_URL
         )
         self.scopes = scopes
         self.timeout = timeout
@@ -302,13 +299,6 @@ class OAuthInteractiveResolver:
         return None
 
     def resolve(self) -> PlatformCredential | StateCredential:
-        if not self.client_id:
-            raise InteractiveAuthError("OAuth client_id is required but not configured")
-        if not self.auth_server_url:
-            raise InteractiveAuthError(
-                "auth server URL is required; set DBT_CLOUD_STAGING_URL or configure active-host in ~/.dbt/dbt_cloud.yml"
-            )
-
         server = OAuthCallbackServer()
         port = server.server_address[1]
         redirect_url = f"http://localhost:{port}/"
@@ -333,11 +323,22 @@ class OAuthInteractiveResolver:
         from dbt.flags import get_flags
 
         skip_browser = getattr(get_flags(), "SKIP_BROWSER_AUTH", False) or False
-        if skip_browser:
-            fire_event(Note(msg=f"Open this URL to authenticate:\n{auth_url}"))
-        else:
-            fire_event(Note(msg="Opening browser for dbt platform login..."))
-            self.opener(auth_url)
+        fire_event(Note(msg="Opening your browser to complete login..."))
+        fire_event(Note(msg=auth_url))
+        if not skip_browser:
+            try:
+                self.opener(auth_url)
+            except Exception:
+                fire_event(
+                    Note(
+                        msg="Cannot open browser. Please paste the URL above into your browser to authorize the dbt CLI."
+                    )
+                )
+        fire_event(
+            Note(
+                msg="If you need to reset your password, complete the reset, then re-run dbt login to finish authenticating."
+            )
+        )
 
         server.handle_request()
         server.server_close()

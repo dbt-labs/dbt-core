@@ -99,3 +99,4 @@ def resolve_from_callback(result: dict, ctx: dict) -> StateCredential:
 def on_state_login_success(credential: StateCredential) -> None:
     set_user_setting_flag("manage_state", True)
     fire_event(Note(msg="dbt State login successful."))
+    fire_event(Note(msg="dbt State enabled. Configuration written to ~/.dbt/user_settings.yml."))

@@ -13,12 +13,11 @@ class LoginTask(BaseTask):
         super().__init__(args)
 
     def run(self):
-        fire_event(Note(msg="Starting dbt login..."))
         try:
             chain = AuthChain.interactive()
             credential = chain.resolve()
         except AuthError as e:
-            fire_event(Note(msg=f"Login failed: {e}"))
+            fire_event(Note(msg=f"Authentication failed. Re-run dbt login to try again.\n\n{e}"))
             return False
 
         if isinstance(credential, StateCredential):
