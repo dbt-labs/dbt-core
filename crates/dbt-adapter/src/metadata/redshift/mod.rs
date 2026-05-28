@@ -332,36 +332,6 @@ AND table_name = '{identifier}'"
     }
 }
 
-/// Builds and returns ([WhereClausesByDb], [RelationsByDb]) from a list of [BaseRelation]
-/// [WhereClausesByDb] maps databases to statements that select their schema+tables in the relation
-/// [RelationsByDb] keys the database to the cloned [BaseRelation]
-/// We expect a fqn from the relation in format <database>.<schema>.<table>
-fn build_relation_clauses_redshift(
-    relations: &[Arc<dyn BaseRelation>],
-) -> AdapterResult<(WhereClausesByDb, RelationsByDb)> {
-    // Build the where clause for all relations grouped by databases
-    let mut where_clauses_by_database = BTreeMap::new();
-    let mut relations_by_database = BTreeMap::new();
-    for relation in relations {
-        let (input_schema, database, input_table) = get_input_schema_database_and_table(relation)?;
-
-        where_clauses_by_database
-            .entry(database.to_owned())
-            .or_insert_with(Vec::new)
-            .push(format!(
-                "(
-                    upper(ns.nspname) = upper('{input_schema}')
-                and upper(c.relname) = upper('{input_table}')
-                )"
-            ));
-        relations_by_database
-            .entry(database.to_owned())
-            .or_insert_with(Vec::new)
-            .push(relation.clone());
-    }
-    Ok((where_clauses_by_database, relations_by_database))
-}
-
 // This list was created using brute force since I can't find docs for which tables support it
 const TABLES_WITH_OID: [&str; 10] = [
     "pg_cast",
@@ -392,15 +362,20 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         relations: &[Arc<dyn BaseRelation>],
         token: CancellationToken,
     ) -> AsyncAdapterResult<'static, BTreeMap<String, MetadataFreshness>> {
-        let (where_clauses_by_database, relations_by_database) =
-            match build_relation_clauses_redshift(relations) {
-                Ok(result) => result,
-                Err(e) => {
-                    let future = async move { Err(Cancellable::Error(e)) };
-                    return Box::pin(future);
-                }
-            };
+        // Group relations by (catalog, schema) to batch one query per schema.
+        let mut by_schema: BTreeMap<(String, String), Vec<Arc<dyn BaseRelation>>> = BTreeMap::new();
+        for relation in relations {
+            let catalog = relation.database_as_str().unwrap_or_default().to_string();
+            let schema = relation.schema_as_str().unwrap_or_default().to_string();
+            by_schema
+                .entry((catalog, schema))
+                .or_default()
+                .push(relation.clone());
+        }
+
         type Acc = BTreeMap<String, MetadataFreshness>;
+        // name → (epoch_ms, is_view)
+        type MapResult = HashMap<String, (i64, bool)>;
 
         let factory = Box::new(AdapterConnectionFactory::new(
             self.adapter.engine().clone(),
@@ -409,66 +384,115 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          database_and_where_clauses: &(String, Vec<String>)|
-              -> AdapterResult<Arc<RecordBatch>> {
-            let (_, where_clauses) = &database_and_where_clauses;
-            // Query to get last modified times.
-            // Sourced from dbt-core at https://github.com/dbt-labs/dbt-adapters/blob/0d2ad15e54bbb0da1ecadcea661e3338e148a558/dbt-redshift/src/dbt/include/redshift/macros/metadata/relation_last_modified.sql
-            // Note that the trim is necessary to remove
-            // the trailing whitespace from the schema and identifier columns. During testing
-            // it was discovered that these fields are of type `name` which is a kind of padded
-            // char type. See the Special Character Types section of the PostgreSQL documentation
-            // for more details: https://www.postgresql.org/docs/current/datatype-character.html
-            // With this padding, the function find_matching_relation was unable to
-            // find the correct relation and ended up causing a "no freshness data available" error.
-            let sql = format!(
-                "select
-                 trim(trailing from ns.nspname) as schema,
-                 trim(trailing from c.relname) as identifier,
-                 max(qd.start_time) as last_modified,
-                 getdate() as snapshotted_at
-                 from pg_class c
-                 join pg_namespace ns
-                     on ns.oid = c.relnamespace
-                 join sys_query_detail qd
-                     on qd.table_id = c.oid
-                 where qd.step_name = 'insert'
-                 and (
-                 {}
-                 )
-                 group by 1, 2, 4",
-                where_clauses.join(" OR ")
-            );
 
-            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) =
-                adapter.query(&ctx, &mut *conn, &sql, None, token_clone.clone())?;
-            let batch = agate_table.original_record_batch();
-            Ok(batch)
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          group: &((String, String), Vec<Arc<dyn BaseRelation>>)|
+              -> AdapterResult<MapResult> {
+            let ((_, schema), _) = group;
+
+            // Primary: stl_insert tracks INSERT/COPY/CTAS, batched by schema.
+            // ~1s vs ~10s for sys_query_detail on this cluster.
+            // Not available on Redshift Serverless — falls back to pg_class_info only.
+            let stl_sql = format!(
+                "SELECT trim(trailing from c.relname) AS table_name, \
+                        MAX(i.endtime) AS last_modified \
+                 FROM stl_insert i \
+                 JOIN pg_class c ON c.oid = i.tbl \
+                 JOIN pg_namespace ns ON ns.oid = c.relnamespace \
+                 WHERE upper(ns.nspname) = upper('{schema}') \
+                 GROUP BY c.relname"
+            );
+            let ctx = QueryCtx::default().with_desc("Extracting freshness via stl_insert");
+            let stl_result = adapter.query(&ctx, conn, &stl_sql, None, token_clone.clone());
+
+            let mut epoch_by_name: MapResult = HashMap::new();
+            match stl_result {
+                Ok((_, agate)) => {
+                    let stl_batch = agate.original_record_batch();
+                    if stl_batch.num_rows() > 0 {
+                        let names = stl_batch.column_values::<StringArray>("table_name")?;
+                        let ts = stl_batch
+                            .column_values::<TimestampMicrosecondArray>("last_modified")?;
+                        for i in 0..stl_batch.num_rows() {
+                            if !ts.is_null(i) {
+                                let name = names.value(i).trim().to_lowercase();
+                                // stl_insert returns microseconds; convert to millis
+                                epoch_by_name.insert(name, (ts.value(i) / 1_000, false));
+                            }
+                        }
+                    }
+                }
+                Err(_) => {
+                    // stl_insert is unavailable (e.g. Redshift Serverless permission denied).
+                    // pg_class_info below will supply creation_time as the epoch for all relations.
+                }
+            }
+
+            // Fallback: pg_class_info.relcreationtime for relations with no insert history
+            // (newly created empty tables, pure-DELETE tables, views).
+            // Also provides is_view detection via relkind.
+            let pci_sql = format!(
+                "SELECT trim(trailing from c.relname) AS table_name, \
+                        pci.relcreationtime AS creation_time, \
+                        CASE WHEN c.relkind = 'v' THEN 1 ELSE 0 END AS is_view \
+                 FROM pg_class c \
+                 JOIN pg_namespace ns ON ns.oid = c.relnamespace \
+                 JOIN pg_class_info pci ON pci.reloid = c.oid \
+                 WHERE upper(ns.nspname) = upper('{schema}') \
+                 AND pci.relcreationtime IS NOT NULL"
+            );
+            let ctx2 =
+                QueryCtx::default().with_desc("Redshift freshness fallback via pg_class_info");
+            let (_, agate2) = adapter.query(&ctx2, conn, &pci_sql, None, token_clone.clone())?;
+            let pci_batch = agate2.original_record_batch();
+
+            if pci_batch.num_rows() > 0 {
+                let names = pci_batch.column_values::<StringArray>("table_name")?;
+                let cts = pci_batch.column_values::<TimestampMicrosecondArray>("creation_time")?;
+                let is_view_col = pci_batch.column_values::<Int32Array>("is_view")?;
+                for i in 0..pci_batch.num_rows() {
+                    let name = names.value(i).trim().to_lowercase();
+                    let is_view = is_view_col.value(i) != 0;
+                    epoch_by_name
+                        .entry(name)
+                        .and_modify(|(_, v)| *v = is_view) // patch is_view for tables with stl epoch
+                        .or_insert_with(|| {
+                            // No stl_insert entry — use creation_time as fallback epoch
+                            let ms = if cts.is_null(i) {
+                                0
+                            } else {
+                                cts.value(i) / 1_000
+                            };
+                            (ms, is_view)
+                        });
+                }
+            }
+
+            Ok(epoch_by_name)
         };
 
         let reduce_f = move |acc: &mut Acc,
-                             database_and_where_clauses: (String, Vec<String>),
-                             batch_res: AdapterResult<Arc<RecordBatch>>|
+                             group: ((String, String), Vec<Arc<dyn BaseRelation>>),
+                             result: AdapterResult<MapResult>|
               -> Result<(), Cancellable<AdapterError>> {
-            let batch = batch_res?;
-            let schemas = batch.column_values::<StringArray>("schema")?;
-            let tables = batch.column_values::<StringArray>("identifier")?;
-            let timestamps = batch.column_values::<TimestampMicrosecondArray>("last_modified")?;
-
-            let (database, _where_clauses) = &database_and_where_clauses;
-            for i in 0..batch.num_rows() {
-                let schema = schemas.value(i);
-                let table = tables.value(i);
-                let timestamp = timestamps.value(i);
-                let relations = &relations_by_database[database];
-                let is_view = false; // TODO: figure out if we can get this from the query
-
-                for table_name in find_matching_relation(schema, table, relations)? {
+            let epoch_by_name = result?;
+            let (_, group_relations) = group;
+            for relation in &group_relations {
+                let identifier = relation
+                    .identifier_as_str()
+                    .map_err(|e| {
+                        Cancellable::Error(AdapterError::new(
+                            AdapterErrorKind::UnexpectedResult,
+                            e.to_string(),
+                        ))
+                    })?
+                    .trim()
+                    .to_lowercase();
+                if let Some(&(epoch_ms, is_view)) = epoch_by_name.get(&identifier) {
                     acc.insert(
-                        table_name,
-                        MetadataFreshness::from_micros(timestamp, is_view)?,
+                        relation.semantic_fqn(),
+                        MetadataFreshness::from_millis(epoch_ms, is_view)
+                            .map_err(Cancellable::Error)?,
                     );
                 }
             }
@@ -476,7 +500,7 @@ impl FreshnessStrategy for RedshiftFreshnessStrategy {
         };
 
         let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
+        let keys: Vec<_> = by_schema.into_iter().collect();
         map_reduce.run(Arc::new(keys), token)
     }
 }
@@ -1013,6 +1037,97 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         let strategy = RedshiftFreshnessStrategy::new(self.adapter.clone());
         strategy.run(relations, token)
+    }
+
+    fn fetch_view_definitions_inner<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        if relations.is_empty() {
+            return Box::pin(async { Ok(vec![]) });
+        }
+
+        // Build a single WHERE clause covering all requested relations.
+        // information_schema.views returns rows only for views; tables are silently absent.
+        let mut conditions: Vec<String> = Vec::with_capacity(relations.len());
+        for relation in relations {
+            let schema = relation.schema_as_str().unwrap_or_default();
+            let name = relation.identifier_as_str().unwrap_or_default();
+            conditions.push(format!(
+                "(upper(table_schema) = upper('{schema}') AND upper(table_name) = upper('{name}'))"
+            ));
+        }
+        let sql = format!(
+            "SELECT table_schema, table_name, view_definition \
+             FROM information_schema.views \
+             WHERE {}",
+            conditions.join(" OR ")
+        );
+
+        let adapter = self.adapter.clone();
+        let relations_owned: Vec<Arc<dyn BaseRelation>> = relations.to_vec();
+        let token_clone = token.clone();
+
+        let factory = Box::new(AdapterConnectionFactory::new(
+            self.adapter.engine().clone(),
+            self.adapter.engine().threads(),
+        ));
+
+        // Use MapReduce with a single item to get a managed connection.
+        let map_f =
+            move |conn: &'_ mut dyn Connection, _key: &()| -> AdapterResult<Arc<RecordBatch>> {
+                let ctx = QueryCtx::default().with_desc("Fetch Redshift view definitions");
+                let (_, table) = adapter.query(&ctx, conn, &sql, None, token_clone.clone())?;
+                Ok(table.original_record_batch())
+            };
+
+        let reduce_f = move |acc: &mut Vec<ViewDefinition>,
+                             _key: (),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            if batch.num_rows() == 0 {
+                return Ok(());
+            }
+
+            let schemas = batch.column_values::<StringArray>("table_schema")?;
+            let names = batch.column_values::<StringArray>("table_name")?;
+            let defs = batch.column_values::<StringArray>("view_definition")?;
+
+            for i in 0..batch.num_rows() {
+                if defs.is_null(i) {
+                    continue;
+                }
+                let row_schema = schemas.value(i).trim().to_lowercase();
+                let row_name = names.value(i).trim().to_lowercase();
+                let definition = defs.value(i).to_string();
+
+                let Some(rel) = relations_owned.iter().find(|r| {
+                    r.schema_as_str()
+                        .map(|s| s.to_lowercase() == row_schema)
+                        .unwrap_or(false)
+                        && r.identifier_as_str()
+                            .map(|n| n.to_lowercase() == row_name)
+                            .unwrap_or(false)
+                }) else {
+                    continue;
+                };
+
+                acc.push(ViewDefinition {
+                    fqn: rel.semantic_fqn(),
+                    definition,
+                    dialect: dbt_frontend_common::Dialect::Redshift,
+                    default_catalog: rel.database_as_str().unwrap_or_default().to_string(),
+                    default_schema: rel.schema_as_str().unwrap_or_default().to_string(),
+                });
+            }
+
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(vec![()]), token)
     }
 
     fn list_relations_in_parallel_inner(
