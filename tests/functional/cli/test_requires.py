@@ -136,12 +136,14 @@ class TestKnownEngineEnvVarsExplicit:
             "DBT_ENGINE_DEBUG",
             "DBT_ENGINE_PRINT",
             "DBT_ENGINE_SAMPLE",
+            "DBT_ENGINE_MANAGE_STATE",
             "DBT_ENGINE_STATE_EMIT_REUSED_STATUS",
             "DBT_ENGINE_STATE_OAUTH_CLIENT_ID",
             "DBT_ENGINE_STATE_AUTH_URL",
             "DBT_ENGINE_STATE_TOKEN_URL",
             "DBT_ENGINE_STATE_API_URL",
             "DBT_ENGINE_MANAGE_STATE",
+            "DBT_ENGINE_SKIP_BROWSER_AUTH",
         }
         from dbt.env_vars import _ALLOWED_ENV_VARS
 

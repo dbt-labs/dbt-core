@@ -418,6 +418,13 @@ macro_debugging = _create_option_and_track_env_var(
     hidden=True,
 )
 
+skip_browser_auth = _create_option_and_track_env_var(
+    "--skip-browser-auth/--no-skip-browser-auth",
+    envvar="DBT_ENGINE_SKIP_BROWSER_AUTH",
+    help="Skip opening the browser and print the authentication URL instead.",
+    default=False,
+)
+
 
 manage_state = _create_option_and_track_env_var(
     "--manage-state/--no-manage-state",

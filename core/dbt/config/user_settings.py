@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-from dbt.cli.resolvers import default_dbt_home_dir
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.constants import USER_SETTINGS_FILE_NAME
 from dbt.contracts.user_settings import UserSettings
@@ -14,6 +13,10 @@ from dbt_common.exceptions import DbtValidationError
 
 
 def _default_path() -> Path:
+    # Lazy import: dbt.cli.__init__ pulls in the full CLI stack including
+    # dbt.cli.flags, which imports this module — top-level import creates a cycle.
+    from dbt.cli.resolvers import default_dbt_home_dir
+
     return default_dbt_home_dir() / USER_SETTINGS_FILE_NAME
 
 
