@@ -4807,6 +4807,11 @@ pub struct DbtSourceAttr {
     pub loader: String,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
+    /// User-supplied quoting (source-level merged with table-level), with no
+    /// project/adapter defaults applied. Mirrors `source.quoting.merged(table.quoting)`
+    /// in dbt-core and is what gets serialized to the manifest. The resolved
+    /// quoting used for SQL generation lives on `NodeBaseAttributes.quoting`.
+    pub user_quoting: Option<crate::schemas::common::DbtQuoting>,
     #[serialize_always]
     pub freshness: Option<FreshnessDefinition>,
     /// Specifies where the schema metadata originates: 'remote' (default) or 'local'

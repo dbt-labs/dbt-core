@@ -566,6 +566,23 @@ impl DbtQuoting {
         self.identifier = self.identifier.or(other.identifier);
         self.schema = self.schema.or(other.schema);
     }
+
+    /// Shallow last-non-None-wins merge of two user-supplied quoting layers.
+    /// Returns `None` only when both inputs are `None` so callers can preserve
+    /// "user set nothing" on the manifest (no adapter defaults folded in).
+    /// Mirrors dbt-core's `source.quoting.merged(table.quoting)`.
+    pub fn merge_user(source: Option<&Self>, table: Option<&Self>) -> Option<Self> {
+        match (source, table) {
+            (None, None) => None,
+            _ => {
+                let mut q = table.copied().unwrap_or_default();
+                if let Some(s) = source {
+                    q.default_to(s);
+                }
+                Some(q)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

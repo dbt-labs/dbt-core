@@ -14,8 +14,8 @@ use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
-    DbtChecksum, DbtMaterialization, FreshnessDefinition, FreshnessRules, NodeDependsOn,
-    merge_meta, merge_tags, normalize_quoting,
+    DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
+    NodeDependsOn, merge_meta, merge_tags, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::SourceConfig;
@@ -360,8 +360,10 @@ pub async fn resolve_sources(
                         table_name
                     )
                 })?;
-                c.loaded_at_field = Some(merged.field);
-                c.loaded_at_query = Some(merged.query).into();
+                // Empty strings indicate "neither source nor table set this peer".
+                // Core represents this as null on the manifest, so collapse `""` → `None`.
+                c.loaded_at_field = Some(merged.field).filter(|s| !s.is_empty());
+                c.loaded_at_query = Some(merged.query).filter(|s| !s.is_empty()).into();
                 apply_freshness_loaded_at_override(c, &source_name, &table_name)?;
                 Ok(())
             },
@@ -375,14 +377,14 @@ pub async fn resolve_sources(
             arg.io.status_reporter.as_ref(),
         );
 
-        // This should be set due to propagation from the resolved root project
-        let properties_quoting = source_config.quoting;
+        // `user_quoting` is the raw source+table YAML merge (no defaults). It is
+        // serialized as `ManifestSource.quoting` and matches dbt-core's
+        // `source.quoting.merged(table.quoting)`. The resolved `table_quoting`
+        // below folds in project + adapter defaults and drives SQL generation.
+        let user_quoting = DbtQuoting::merge_user(source.quoting.as_ref(), table.quoting.as_ref());
 
-        let mut source_quoting = source.quoting.unwrap_or_default();
-        source_quoting.default_to(&properties_quoting);
-
-        let mut table_quoting = table.quoting.unwrap_or_default();
-        table_quoting.default_to(&source_quoting);
+        let mut table_quoting = user_quoting.unwrap_or_default();
+        table_quoting.default_to(&source_config.quoting);
         let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
         let (database, schema, identifier, quoting) = normalize_quoting(
@@ -536,6 +538,7 @@ pub async fn resolve_sources(
                 loader: source.loader.clone().unwrap_or_default(),
                 loaded_at_field: source_config.loaded_at_field.clone(),
                 loaded_at_query: source_config.loaded_at_query.0.clone(),
+                user_quoting,
                 schema_origin: source_config.schema_origin,
                 sync: source_config.sync.clone(),
                 unrendered_database,

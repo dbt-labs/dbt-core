@@ -681,12 +681,7 @@ impl From<DbtSource> for ManifestSource {
             source_name: source.__source_attr__.source_name,
             columns: source.__base_attr__.columns,
             config: source.deprecated_config,
-            quoting: Some(DbtQuoting {
-                database: Some(source.__base_attr__.quoting.database),
-                schema: Some(source.__base_attr__.quoting.schema),
-                identifier: Some(source.__base_attr__.quoting.identifier),
-                snowflake_ignore_case: None,
-            }),
+            quoting: source.__source_attr__.user_quoting,
             source_description: source.__source_attr__.source_description,
             unrendered_config: source.__base_attr__.unrendered_config,
             unrendered_database: source.__source_attr__.unrendered_database,

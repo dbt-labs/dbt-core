@@ -1003,6 +1003,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
         }
     }
     for (unique_id, source) in manifest.sources {
+        let user_quoting = source.quoting;
         nodes.sources.insert(
             unique_id,
             Arc::new(DbtSource {
@@ -1064,6 +1065,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     loader: source.loader,
                     loaded_at_field: source.loaded_at_field,
                     loaded_at_query: source.loaded_at_query,
+                    user_quoting,
                     freshness: source.freshness,
                     schema_origin: source.config.schema_origin.unwrap_or_default(),
                     sync: source.config.sync.clone(),
