@@ -618,19 +618,23 @@ pub fn model_metrics_props_to_metric_aggregation_params(
     model: &ModelProperties,
     metric: &MetricsProperties,
 ) -> Option<MetricAggregationParameters> {
-    // agg_params hydrated only for percentile
-    let mut agg_params: Option<MeasureAggregationParameters> = None;
-    if let Some(percentile) = metric.percentile {
+    let agg_params = if let Some(percentile) = metric.percentile {
         let use_discrete_percentile =
             matches!(metric.percentile_type, Some(PercentileType::Discrete));
         let use_approximate_percentile =
             matches!(metric.percentile_type, Some(PercentileType::Continuous));
-        agg_params = Some(MeasureAggregationParameters {
+        Some(MeasureAggregationParameters {
             percentile: Some(percentile),
             use_discrete_percentile: Some(use_discrete_percentile),
             use_approximate_percentile: Some(use_approximate_percentile),
-        });
-    }
+        })
+    } else {
+        Some(MeasureAggregationParameters {
+            percentile: None,
+            use_discrete_percentile: Some(false),
+            use_approximate_percentile: Some(false),
+        })
+    };
 
     let mut agg_time_dimension = metric.agg_time_dimension.clone();
     if agg_time_dimension.is_none() {
@@ -648,4 +652,81 @@ pub fn model_metrics_props_to_metric_aggregation_params(
             .map(NonAdditiveDimension::from),
         expr: metric.expr.clone().map(String::from),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
+
+    fn base_metric(agg: Option<AggregationType>) -> MetricsProperties {
+        MetricsProperties {
+            name: "test_metric".to_string(),
+            agg,
+            ..Default::default()
+        }
+    }
+
+    fn base_model() -> ModelProperties {
+        ModelProperties {
+            name: "test_model".to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_agg_params_defaults_when_no_percentile() {
+        let metric = base_metric(Some(AggregationType::Sum));
+        let result = model_metrics_props_to_metric_aggregation_params("sm", &base_model(), &metric);
+        let agg_params = result.unwrap().agg_params.unwrap();
+        assert_eq!(agg_params.percentile, None);
+        assert_eq!(agg_params.use_discrete_percentile, Some(false));
+        assert_eq!(agg_params.use_approximate_percentile, Some(false));
+    }
+
+    #[test]
+    fn test_agg_params_with_unspecified_percentile_type() {
+        let metric = MetricsProperties {
+            percentile: Some(0.95),
+            ..base_metric(Some(AggregationType::Percentile))
+        };
+        let result = model_metrics_props_to_metric_aggregation_params("sm", &base_model(), &metric);
+        let agg_params = result.unwrap().agg_params.unwrap();
+        assert_eq!(agg_params.percentile, Some(0.95));
+        assert_eq!(agg_params.use_discrete_percentile, Some(false));
+        assert_eq!(agg_params.use_approximate_percentile, Some(false));
+    }
+
+    #[test]
+    fn test_agg_params_with_discrete_percentile() {
+        let metric = MetricsProperties {
+            percentile: Some(0.5),
+            percentile_type: Some(PercentileType::Discrete),
+            ..base_metric(Some(AggregationType::Percentile))
+        };
+        let result = model_metrics_props_to_metric_aggregation_params("sm", &base_model(), &metric);
+        let agg_params = result.unwrap().agg_params.unwrap();
+        assert_eq!(agg_params.use_discrete_percentile, Some(true));
+        assert_eq!(agg_params.use_approximate_percentile, Some(false));
+    }
+
+    #[test]
+    fn test_agg_params_with_continuous_percentile() {
+        let metric = MetricsProperties {
+            percentile: Some(0.5),
+            percentile_type: Some(PercentileType::Continuous),
+            ..base_metric(Some(AggregationType::Percentile))
+        };
+        let result = model_metrics_props_to_metric_aggregation_params("sm", &base_model(), &metric);
+        let agg_params = result.unwrap().agg_params.unwrap();
+        assert_eq!(agg_params.use_discrete_percentile, Some(false));
+        assert_eq!(agg_params.use_approximate_percentile, Some(true));
+    }
+
+    #[test]
+    fn test_returns_none_when_no_agg() {
+        let metric = base_metric(None);
+        let result = model_metrics_props_to_metric_aggregation_params("sm", &base_model(), &metric);
+        assert!(result.is_none());
+    }
 }

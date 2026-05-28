@@ -329,13 +329,9 @@ impl From<MetricsProperties> for MetricTypeParams {
             };
 
         let metric_type = props.type_.unwrap_or_default();
-        let window: Option<MetricTimeWindow> = match &metric_type {
-            MetricType::Cumulative => None,
-            MetricType::Conversion => None,
-            _ => props
-                .window
-                .and_then(|w| MetricTimeWindow::from_string(w).ok()),
-        };
+        let window: Option<MetricTimeWindow> = props
+            .window
+            .and_then(|w| MetricTimeWindow::from_string(w).ok());
 
         let mut type_params = MetricTypeParams {
             numerator: numerator.clone(),
@@ -408,5 +404,96 @@ impl From<MetricsProperties> for MetricTypeParams {
         type_params.fill_nulls_with = fill_nulls_with;
 
         type_params
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schemas::properties::metrics_properties::MetricType;
+
+    // Previously window was forced to None for cumulative and conversion metrics; these unit tests guard against future regressions
+    fn props_with_window(metric_type: MetricType, window: Option<&str>) -> MetricsProperties {
+        MetricsProperties {
+            name: "test".to_string(),
+            type_: Some(metric_type),
+            window: window.map(|s| s.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_window_populated_for_simple_metric() {
+        let params = MetricTypeParams::from(props_with_window(MetricType::Simple, Some("28 days")));
+        assert_eq!(
+            params.window,
+            Some(MetricTimeWindow {
+                count: 28,
+                granularity: "day".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn test_window_populated_for_cumulative_metric() {
+        let params =
+            MetricTypeParams::from(props_with_window(MetricType::Cumulative, Some("7 days")));
+        assert_eq!(
+            params.window,
+            Some(MetricTimeWindow {
+                count: 7,
+                granularity: "day".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn test_window_populated_for_conversion_metric() {
+        let params =
+            MetricTypeParams::from(props_with_window(MetricType::Conversion, Some("14 days")));
+        assert_eq!(
+            params.window,
+            Some(MetricTimeWindow {
+                count: 14,
+                granularity: "day".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn test_window_populated_for_ratio_metric() {
+        let params = MetricTypeParams::from(props_with_window(MetricType::Ratio, Some("30 days")));
+        assert_eq!(
+            params.window,
+            Some(MetricTimeWindow {
+                count: 30,
+                granularity: "day".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn test_window_populated_for_derived_metric() {
+        let params =
+            MetricTypeParams::from(props_with_window(MetricType::Derived, Some("90 days")));
+        assert_eq!(
+            params.window,
+            Some(MetricTimeWindow {
+                count: 90,
+                granularity: "day".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn test_window_none_when_not_set() {
+        let params = MetricTypeParams::from(props_with_window(MetricType::Simple, None));
+        assert_eq!(params.window, None);
+    }
+
+    #[test]
+    fn test_window_none_for_invalid_format() {
+        let params = MetricTypeParams::from(props_with_window(MetricType::Simple, Some("invalid")));
+        assert_eq!(params.window, None);
     }
 }
