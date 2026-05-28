@@ -65,6 +65,14 @@ async fn serve(args: Arc<DocsServeArgs>, state: Arc<AppState>) -> io::Result<()>
         .route("/api/v1/seeds/facets", get(seeds::list_seed_facets))
         .route("/api/v1/seeds/{unique_id}", get(seeds::get_seed))
         .route(
+            "/api/v1/semantic_models",
+            get(semantic_models::list_semantic_models),
+        )
+        .route(
+            "/api/v1/semantic_models/facets",
+            get(semantic_models::list_semantic_model_facets),
+        )
+        .route(
             "/api/v1/semantic_models/{unique_id}",
             get(semantic_models::get_semantic_model),
         )

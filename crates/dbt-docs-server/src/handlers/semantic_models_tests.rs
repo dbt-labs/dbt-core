@@ -1,4 +1,5 @@
-//! Tests for `GET /api/v1/semantic_models/:id`.
+//! Tests for `GET /api/v1/semantic_models/:id`,
+//! `GET /api/v1/semantic_models`, and `GET /api/v1/semantic_models/facets`.
 //!
 //! Schema anchoring (#10255): the `RecordBatch` fixtures below are hand-
 //! rolled and not enforced against the production parquet schemas. A column
@@ -9,13 +10,14 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use arrow_array::builder::{ListBuilder, StringBuilder};
+use arrow_array::builder::{ListBuilder, StringBuilder, StructBuilder};
 use arrow_array::{BooleanArray, Float64Array, ListArray, RecordBatch, StringArray};
-use arrow_schema::{DataType, Field, Schema};
-use axum::extract::{Path, State};
+use arrow_schema::{DataType, Field, Fields, Schema};
+use axum::extract::{Path, Query, State};
 use axum::response::Response;
 
 use super::*;
+use crate::handlers::pagination::Cursor;
 use crate::providers::{Backend, BackendError, Providers};
 use crate::state::AppState;
 
@@ -656,5 +658,419 @@ async fn depends_on_edge_type_derived_from_prefix() {
     assert_eq!(
         body["depends_on"][0]["unique_id"],
         "model.jaffle_shop.fct_orders"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mock backend: list_semantic_models / list_semantic_model_facets
+// ---------------------------------------------------------------------------
+
+// TODO(#10255): replace hand-rolled RecordBatch schemas with typed row
+// builders once dbt-index ships them.
+
+struct SemanticModelListMockBackend {
+    total_count: u64,
+    row_batches: Vec<RecordBatch>,
+}
+
+impl SemanticModelListMockBackend {
+    fn new(total: u64, rows: Vec<RecordBatch>) -> Self {
+        Self {
+            total_count: total,
+            row_batches: rows,
+        }
+    }
+}
+
+impl Backend for SemanticModelListMockBackend {
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn query_scalar(&self, sql: &str) -> Option<String> {
+        if sql.contains("count(*)") {
+            Some(self.total_count.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn query_arrow(&self, _sql: &str) -> Result<Vec<RecordBatch>, BackendError> {
+        Ok(self.row_batches.clone())
+    }
+}
+
+fn make_list_state(backend: SemanticModelListMockBackend) -> Arc<AppState> {
+    let providers = Providers {
+        backend: Arc::new(backend),
+        ..Providers::default()
+    };
+    Arc::new(AppState {
+        index_dir: PathBuf::from("/tmp"),
+        providers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Batch builders: list rows
+// ---------------------------------------------------------------------------
+
+/// Build a `RecordBatch` for the semantic model list query.
+///
+/// `entities` is a `List<Struct<name: Utf8, entity_type: Utf8>>` — the DuckDB
+/// aggregation result shape.
+#[allow(clippy::too_many_arguments)]
+fn semantic_model_list_row(
+    unique_id: &str,
+    name: &str,
+    package_name: Option<&str>,
+    group_name: Option<&str>,
+    primary_entity: Option<&str>,
+    description: Option<&str>,
+    created_at: Option<f64>,
+    entities: &[(&str, Option<&str>)],
+) -> RecordBatch {
+    // Build the struct array for entities.
+    let entity_fields = Fields::from(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("entity_type", DataType::Utf8, true),
+    ]);
+    let _entity_struct_field = Field::new_list_field(DataType::Struct(entity_fields.clone()), true);
+    let mut list_builder = ListBuilder::new(StructBuilder::from_fields(entity_fields, 0));
+    {
+        let sb = list_builder.values();
+        for (ename, etype) in entities {
+            sb.field_builder::<StringBuilder>(0)
+                .expect("name builder")
+                .append_value(ename);
+            match etype {
+                Some(t) => sb
+                    .field_builder::<StringBuilder>(1)
+                    .expect("entity_type builder")
+                    .append_value(t),
+                None => sb
+                    .field_builder::<StringBuilder>(1)
+                    .expect("entity_type builder")
+                    .append_null(),
+            }
+            sb.append(true);
+        }
+        list_builder.append(true); // always append (even empty)
+    }
+    let entities_arr = list_builder.finish();
+    let entities_list_field = Field::new("entities", entities_arr.data_type().clone(), true);
+
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("unique_id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+        Field::new("package_name", DataType::Utf8, true),
+        Field::new("group_name", DataType::Utf8, true),
+        Field::new("primary_entity", DataType::Utf8, true),
+        Field::new("description", DataType::Utf8, true),
+        Field::new("created_at", DataType::Float64, true),
+        entities_list_field,
+    ]));
+
+    RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(vec![unique_id])),
+            Arc::new(StringArray::from(vec![name])),
+            Arc::new(StringArray::from(vec![package_name])),
+            Arc::new(StringArray::from(vec![group_name])),
+            Arc::new(StringArray::from(vec![primary_entity])),
+            Arc::new(StringArray::from(vec![description])),
+            Arc::new(Float64Array::from(vec![created_at])),
+            Arc::new(entities_arr),
+        ],
+    )
+    .expect("valid semantic model list row batch")
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests: SQL builder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sort_default_is_name_asc() {
+    let params = SemanticModelListParams::default();
+    let (_, rows) = build_semantic_model_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY sm.name ASC NULLS LAST"));
+}
+
+#[test]
+fn sort_name_desc_accepted() {
+    let params = SemanticModelListParams {
+        sort: Some("name:desc".into()),
+        ..Default::default()
+    };
+    let (_, rows) = build_semantic_model_list_sql(&params, 10, None).unwrap();
+    assert!(rows.contains("ORDER BY sm.name DESC NULLS LAST"));
+}
+
+#[test]
+fn sort_unknown_column_returns_err() {
+    let params = SemanticModelListParams {
+        sort: Some("package_name:asc".into()),
+        ..Default::default()
+    };
+    assert!(build_semantic_model_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn sort_unknown_direction_returns_err() {
+    let params = SemanticModelListParams {
+        sort: Some("name:random".into()),
+        ..Default::default()
+    };
+    assert!(build_semantic_model_list_sql(&params, 10, None).is_err());
+}
+
+#[test]
+fn count_sql_excludes_cursor_rows_sql_includes_cursor() {
+    let c = Cursor {
+        sort_value: Some("orders".into()),
+        unique_id: "semantic_model.jaffle_shop.orders".into(),
+    };
+    let params = SemanticModelListParams::default();
+    let (count, rows) = build_semantic_model_list_sql(&params, 10, Some(&c)).unwrap();
+    assert!(
+        !count.contains("orders"),
+        "count must exclude cursor predicate"
+    );
+    assert!(
+        rows.contains("orders"),
+        "rows must include cursor predicate"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_semantic_models
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_semantic_models_empty_catalog() {
+    let state = make_list_state(SemanticModelListMockBackend::new(0, vec![]));
+    let r = list_semantic_models(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["page_info"]["total_count"], 0);
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+    assert_eq!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_semantic_models_all_fields_hydrated() {
+    let row = semantic_model_list_row(
+        "semantic_model.jaffle_shop.orders",
+        "orders",
+        Some("jaffle_shop"),
+        Some("finance"),
+        Some("order"),
+        Some("Semantic model over orders."),
+        Some(1_747_432_300.5),
+        &[("customer", Some("foreign")), ("order", Some("primary"))],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(1, vec![row]));
+    let r = list_semantic_models(State(state), Query(Default::default())).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    let row = &body["data"][0];
+    assert_eq!(row["unique_id"], "semantic_model.jaffle_shop.orders");
+    assert_eq!(row["name"], "orders");
+    assert_eq!(row["package_name"], "jaffle_shop");
+    assert_eq!(row["group_name"], "finance");
+    assert_eq!(row["primary_entity"], "order");
+    assert_eq!(row["description"], "Semantic model over orders.");
+    assert_eq!(row["created_at"], 1_747_432_300.5);
+    assert_eq!(row["truncated"], false);
+    assert_eq!(row["entities"][0]["name"], "customer");
+    assert_eq!(row["entities"][0]["type"], "foreign");
+    assert_eq!(row["entities"][1]["name"], "order");
+    assert_eq!(row["entities"][1]["type"], "primary");
+    assert_eq!(body["page_info"]["total_count"], 1);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page"
+    );
+    assert_ne!(body["page_info"]["start_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_semantic_models_nullable_fields() {
+    let row = semantic_model_list_row(
+        "semantic_model.pkg.x",
+        "x",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(1, vec![row]));
+    let r = list_semantic_models(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    let row = &body["data"][0];
+    assert_eq!(row["package_name"], serde_json::Value::Null);
+    assert_eq!(row["group_name"], serde_json::Value::Null);
+    assert_eq!(row["primary_entity"], serde_json::Value::Null);
+    assert_eq!(row["description"], serde_json::Value::Null);
+    assert_eq!(row["created_at"], serde_json::Value::Null);
+    assert_eq!(row["entities"], serde_json::json!([]));
+    assert_eq!(row["truncated"], false);
+}
+
+#[tokio::test]
+async fn list_semantic_models_sort_unknown_column_returns_400() {
+    let state = make_list_state(SemanticModelListMockBackend::new(0, vec![]));
+    let params = SemanticModelListParams {
+        sort: Some("package_name:asc".into()),
+        ..Default::default()
+    };
+    let r = list_semantic_models(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_semantic_models_invalid_cursor_returns_400() {
+    let state = make_list_state(SemanticModelListMockBackend::new(0, vec![]));
+    let params = SemanticModelListParams {
+        after: Some("not-valid-base64!!!".into()),
+        ..Default::default()
+    };
+    let r = list_semantic_models(State(state), Query(params)).await;
+    assert_eq!(r.status(), 400);
+}
+
+#[tokio::test]
+async fn list_semantic_models_multi_page_has_next_page_true() {
+    let row_a = semantic_model_list_row(
+        "semantic_model.pkg.alpha",
+        "alpha",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+    );
+    let row_b = semantic_model_list_row(
+        "semantic_model.pkg.beta",
+        "beta",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(2, vec![row_a, row_b]));
+    let params = SemanticModelListParams {
+        first: Some(1),
+        ..Default::default()
+    };
+    let r = list_semantic_models(State(state), Query(params)).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], true);
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_ne!(body["page_info"]["end_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_semantic_models_last_page_end_cursor_null() {
+    let row = semantic_model_list_row(
+        "semantic_model.pkg.z",
+        "z",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(1, vec![row]));
+    let r = list_semantic_models(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(body["page_info"]["has_next_page"], false);
+    assert_eq!(
+        body["page_info"]["end_cursor"],
+        serde_json::Value::Null,
+        "end_cursor must be null on last page"
+    );
+}
+
+#[tokio::test]
+async fn list_semantic_models_cursor_advances_page() {
+    let after = Cursor {
+        sort_value: Some("alpha".into()),
+        unique_id: "semantic_model.pkg.alpha".into(),
+    }
+    .encode();
+    let row = semantic_model_list_row(
+        "semantic_model.pkg.beta",
+        "beta",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(1, vec![row]));
+    let params = SemanticModelListParams {
+        after: Some(after),
+        ..Default::default()
+    };
+    let r = list_semantic_models(State(state), Query(params)).await;
+    assert_eq!(r.status(), 200);
+    let body = response_body(r).await;
+    assert_eq!(body["data"][0]["name"], "beta");
+}
+
+#[tokio::test]
+async fn list_semantic_models_entity_type_null_allowed() {
+    let row = semantic_model_list_row(
+        "semantic_model.pkg.x",
+        "x",
+        None,
+        None,
+        None,
+        None,
+        None,
+        &[("entity_without_type", None)],
+    );
+    let state = make_list_state(SemanticModelListMockBackend::new(1, vec![row]));
+    let r = list_semantic_models(State(state), Query(Default::default())).await;
+    let body = response_body(r).await;
+    assert_eq!(
+        body["data"][0]["entities"][0]["name"],
+        "entity_without_type"
+    );
+    assert_eq!(
+        body["data"][0]["entities"][0]["type"],
+        serde_json::Value::Null
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: list_semantic_model_facets
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn list_semantic_model_facets_returns_empty_object() {
+    let r = list_semantic_model_facets().await;
+    assert_eq!(r.status(), 200);
+    let bytes = axum::body::to_bytes(r.into_body(), usize::MAX)
+        .await
+        .expect("body bytes");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
+    assert_eq!(
+        body,
+        serde_json::json!({}),
+        "facets must be empty object in v0"
     );
 }
