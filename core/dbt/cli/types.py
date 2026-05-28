@@ -16,6 +16,7 @@ class Command(Enum):
     INIT = "init"
     LIST = "list"
     LOGIN = "login"
+    LOGIN_STATUS = "status"
     PARSE = "parse"
     RUN = "run"
     RUN_OPERATION = "run-operation"
@@ -37,5 +38,6 @@ class Command(Enum):
         return {
             Command.DOCS_GENERATE: ["docs", "generate"],
             Command.DOCS_SERVE: ["docs", "serve"],
+            Command.LOGIN_STATUS: ["login", "status"],
             Command.SOURCE_FRESHNESS: ["source", "freshness"],
         }.get(self, [self.value])

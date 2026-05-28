@@ -581,6 +581,7 @@ def command_args(command: CliCommand) -> ArgsList:
         CliCommand.INIT: cli.init,
         CliCommand.LIST: cli.list,
         CliCommand.LOGIN: cli.login,
+        CliCommand.LOGIN_STATUS: cli.status,
         CliCommand.PARSE: cli.parse,
         CliCommand.RUN: cli.run,
         CliCommand.RUN_OPERATION: cli.run_operation,

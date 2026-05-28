@@ -9,6 +9,7 @@ EXCLUDED_COMMANDS = {
     "init",
     "list",
     "login",
+    "status",
     "parse",
     "retry",
     "show",
