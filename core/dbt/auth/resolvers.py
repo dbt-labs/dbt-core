@@ -14,14 +14,14 @@ from dbt.auth.credentials import (
     Credential,
     OAuthSession,
     PlatformCredential,
-    RuncacheCredential,
+    StateCredential,
 )
 from dbt.auth.oauth.callback_server import OAuthCallbackServer
 from dbt.auth.oauth.platform import build_context as build_platform_oauth_context
 from dbt.auth.oauth.platform import decode_access_token
 from dbt.auth.oauth.platform import resolve_from_callback as resolve_platform_auth
-from dbt.auth.oauth.runcache import build_context as build_runcache_oauth_context
-from dbt.auth.oauth.runcache import resolve_from_callback as resolve_runcache_auth
+from dbt.auth.oauth.state import build_context as build_state_oauth_context
+from dbt.auth.oauth.state import resolve_from_callback as resolve_state_auth
 from dbt.auth.session_cache import (
     DBT_HOME_DIR,
     DEFAULT_CACHE_PATH,
@@ -301,7 +301,7 @@ class OAuthInteractiveResolver:
             return f"https://{host}"
         return None
 
-    def resolve(self) -> PlatformCredential | RuncacheCredential:
+    def resolve(self) -> PlatformCredential | StateCredential:
         if not self.client_id:
             raise InteractiveAuthError("OAuth client_id is required but not configured")
         if not self.auth_server_url:
@@ -321,12 +321,10 @@ class OAuthInteractiveResolver:
         )
         server.platform_oauth_state = platform_ctx["state"]
 
-        runcache_ctx = build_runcache_oauth_context(redirect_url)
-        server.runcache_oauth_state = runcache_ctx["state"]
+        state_ctx = build_state_oauth_context(redirect_url)
+        server.state_oauth_state = state_ctx["state"]
 
-        auth_url = (
-            platform_ctx["authorize_url"] + f"&dbt_state_oauth={runcache_ctx['encoded_param']}"
-        )
+        auth_url = platform_ctx["authorize_url"] + f"&dbt_state_oauth={state_ctx['encoded_param']}"
 
         server.timeout = self.timeout
 
@@ -352,7 +350,7 @@ class OAuthInteractiveResolver:
             )
 
         if "dbt_state_oauth" in server.result:
-            return resolve_runcache_auth(server.result, runcache_ctx)
+            return resolve_state_auth(server.result, state_ctx)
 
         return resolve_platform_auth(
             server.result,

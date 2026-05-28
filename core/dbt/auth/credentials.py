@@ -62,7 +62,7 @@ class PlatformCredential(Credential):
 
 
 @dataclass
-class RuncacheCredential(Credential):
+class StateCredential(Credential):
     refresh_token: Optional[str] = None
     id_token: Optional[str] = None
     scopes: list[str] = field(default_factory=list)
@@ -72,9 +72,9 @@ class RuncacheCredential(Credential):
     name: str = ""
 
     @staticmethod
-    def from_token_response(token_data: dict) -> RuncacheCredential:
+    def from_token_response(token_data: dict) -> StateCredential:
         expires_in = token_data.get("expires_in", 900)
-        return RuncacheCredential(
+        return StateCredential(
             token=token_data["access_token"],
             expires_at=time.time() + expires_in,
             refresh_token=token_data.get("refresh_token"),

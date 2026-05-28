@@ -9,7 +9,7 @@ class OAuthCallbackServer(HTTPServer):
     def __init__(self):
         super().__init__(("localhost", 0), _OAuthCallbackHandler)
         self.platform_oauth_state: str = ""
-        self.runcache_oauth_state: str = ""
+        self.state_oauth_state: str = ""
         self.result: Optional[dict] = None
         self.error: Optional[str] = None
 
@@ -34,7 +34,7 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
 
         callback_state = params.get("state", [None])[0]
 
-        if callback_state == self.server.runcache_oauth_state:
+        if callback_state == self.server.state_oauth_state:
             code = params.get("code", [None])[0]
             if not code:
                 self.server.error = "redirect missing code parameter"

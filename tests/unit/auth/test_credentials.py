@@ -1,6 +1,6 @@
 import time
 
-from dbt.auth.credentials import OAuthSession, PlatformCredential, RuncacheCredential
+from dbt.auth.credentials import OAuthSession, PlatformCredential, StateCredential
 
 
 class TestPlatformCredentialFromToken:
@@ -42,7 +42,7 @@ class TestPlatformCredentialFromOAuth:
         assert not cred.valid
 
 
-class TestRuncacheCredential:
+class TestStateCredential:
     def test_from_token_response(self):
         token_data = {
             "access_token": "rc_tok",
@@ -51,7 +51,7 @@ class TestRuncacheCredential:
             "expires_in": 900,
             "scope": "runcache:scope:orgs",
         }
-        cred = RuncacheCredential.from_token_response(token_data)
+        cred = StateCredential.from_token_response(token_data)
         assert cred.token == "rc_tok"
         assert cred.refresh_token == "rc_ref"
         assert cred.scopes == ["runcache:scope:orgs"]
@@ -59,7 +59,7 @@ class TestRuncacheCredential:
 
     def test_apply_headers(self):
         token_data = {"access_token": "rc_tok", "expires_in": 900}
-        cred = RuncacheCredential.from_token_response(token_data)
+        cred = StateCredential.from_token_response(token_data)
         headers = {}
         cred.apply(headers)
         assert headers["Authorization"] == "Bearer rc_tok"

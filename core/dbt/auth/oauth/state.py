@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from dbt.auth.credentials import RuncacheCredential
+from dbt.auth.credentials import StateCredential
 from dbt.auth.oauth.platform import generate_pkce
 from dbt.auth.session_cache import write_state_auth
 from dbt.config.user_settings import set_user_setting_flag
@@ -15,20 +15,20 @@ from dbt.exceptions import InteractiveAuthError
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
 
-RUNCACHE_OAUTH_AUTH_URL = "https://auth.runcache.com"
-RUNCACHE_OAUTH_TOKEN_URL = "https://auth.runcache.com/token"
-RUNCACHE_OAUTH_CLIENT_ID = "2fd87cd5-69a6-4c5f-9097-747a58f0edf6"
-RUNCACHE_OAUTH_SCOPE = "runcache:scope:orgs"
+STATE_OAUTH_AUTH_URL = "https://auth.runcache.com"
+STATE_OAUTH_TOKEN_URL = "https://auth.runcache.com/token"
+STATE_OAUTH_CLIENT_ID = "2fd87cd5-69a6-4c5f-9097-747a58f0edf6"
+STATE_OAUTH_SCOPE = "runcache:scope:orgs"
 
 
 def build_context(redirect_url: str) -> dict:
     client_id = (
-        os.environ.get("DBT_ENGINE_RUNCACHE_OAUTH_CLIENT_ID", "").strip()
+        os.environ.get("DBT_ENGINE_STATE_OAUTH_CLIENT_ID", "").strip()
         or os.environ.get("RUN_CACHE_OAUTH_CLIENT_ID", "").strip()
-        or RUNCACHE_OAUTH_CLIENT_ID
+        or STATE_OAUTH_CLIENT_ID
     )
-    auth_url = os.environ.get("RUN_CACHE_AUTH_URL", "").strip() or RUNCACHE_OAUTH_AUTH_URL
-    token_url = os.environ.get("RUN_CACHE_TOKEN_URL", "").strip() or RUNCACHE_OAUTH_TOKEN_URL
+    auth_url = os.environ.get("RUN_CACHE_AUTH_URL", "").strip() or STATE_OAUTH_AUTH_URL
+    token_url = os.environ.get("RUN_CACHE_TOKEN_URL", "").strip() or STATE_OAUTH_TOKEN_URL
     verifier, challenge = generate_pkce()
     state = secrets.token_urlsafe(16)
 
@@ -36,7 +36,7 @@ def build_context(redirect_url: str) -> dict:
         "response_type": "code",
         "client_id": client_id,
         "redirect_uri": redirect_url,
-        "scope": RUNCACHE_OAUTH_SCOPE,
+        "scope": STATE_OAUTH_SCOPE,
         "state": state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
@@ -83,7 +83,7 @@ def exchange_code(
         raise InteractiveAuthError(f"invalid dbt State token response: {e}")
 
 
-def resolve_from_callback(result: dict, ctx: dict) -> RuncacheCredential:
+def resolve_from_callback(result: dict, ctx: dict) -> StateCredential:
     token_data = exchange_code(
         token_url=ctx["token_url"],
         client_id=ctx["client_id"],
@@ -93,9 +93,9 @@ def resolve_from_callback(result: dict, ctx: dict) -> RuncacheCredential:
         state=ctx["state"],
     )
     write_state_auth(token_data)
-    return RuncacheCredential.from_token_response(token_data)
+    return StateCredential.from_token_response(token_data)
 
 
-def on_runcache_login_success(credential: RuncacheCredential) -> None:
+def on_state_login_success(credential: StateCredential) -> None:
     set_user_setting_flag("manage_state", True)
     fire_event(Note(msg="dbt State login successful."))

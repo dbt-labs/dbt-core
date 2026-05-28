@@ -12,12 +12,12 @@ import time
 from argparse import Namespace
 from unittest import mock
 
-from dbt.auth.credentials import OAuthSession, PlatformCredential, RuncacheCredential
+from dbt.auth.credentials import OAuthSession, PlatformCredential, StateCredential
 from dbt.auth.oauth.platform import exchange_code as platform_exchange_code
 from dbt.auth.oauth.platform import on_platform_login_success
 from dbt.auth.oauth.platform import resolve_from_callback as platform_resolve
-from dbt.auth.oauth.runcache import on_runcache_login_success
-from dbt.auth.oauth.runcache import resolve_from_callback as runcache_resolve
+from dbt.auth.oauth.state import on_state_login_success
+from dbt.auth.oauth.state import resolve_from_callback as state_resolve
 from dbt.auth.resolvers import OAuthPassiveResolver
 from dbt.auth.session_cache import read_session_cache, upsert_session
 
@@ -55,7 +55,7 @@ def _platform_token_response(**overrides) -> dict:
     return defaults
 
 
-def _runcache_token_response(**overrides) -> dict:
+def _state_token_response(**overrides) -> dict:
     defaults = {
         "access_token": "rc_access_tok",
         "refresh_token": "rc_refresh_tok",
@@ -269,12 +269,12 @@ class TestTokenRefreshFlow:
         assert call_data["grant_type"] == "refresh_token"
 
 
-class TestRuncacheLoginFlow:
-    """Runcache token exchange → state_auth.json persistence → post-login callback."""
+class TestStateLoginFlow:
+    """State token exchange → state_auth.json persistence → post-login callback."""
 
     def test_resolve_from_callback_exchanges_and_persists(self):
-        token_resp = _runcache_token_response()
-        callback_result = {"dbt_state_oauth": "runcache_code_123"}
+        token_resp = _state_token_response()
+        callback_result = {"dbt_state_oauth": "state_code_123"}
         ctx = {
             "token_url": "https://auth.runcache.com/token",
             "client_id": "rc_client",
@@ -284,11 +284,11 @@ class TestRuncacheLoginFlow:
         }
 
         with mock.patch(
-            "dbt.auth.oauth.runcache.requests.post", return_value=_mock_post(token_resp)
-        ), mock.patch("dbt.auth.oauth.runcache.write_state_auth") as mock_write:
-            cred = runcache_resolve(callback_result, ctx)
+            "dbt.auth.oauth.state.requests.post", return_value=_mock_post(token_resp)
+        ), mock.patch("dbt.auth.oauth.state.write_state_auth") as mock_write:
+            cred = state_resolve(callback_result, ctx)
 
-        assert isinstance(cred, RuncacheCredential)
+        assert isinstance(cred, StateCredential)
         assert cred.token == "rc_access_tok"
         assert cred.refresh_token == "rc_refresh_tok"
         assert cred.scopes == ["runcache:scope:orgs"]
@@ -298,24 +298,24 @@ class TestRuncacheLoginFlow:
         assert persisted_data["access_token"] == "rc_access_tok"
 
     def test_post_login_sets_manage_state(self):
-        cred = RuncacheCredential(
+        cred = StateCredential(
             token="rc_tok",
             expires_at=time.time() + 900,
             refresh_token="rc_ref",
             scopes=["runcache:scope:orgs"],
         )
 
-        with mock.patch("dbt.auth.oauth.runcache.set_user_setting_flag") as mock_set:
-            on_runcache_login_success(cred)
+        with mock.patch("dbt.auth.oauth.state.set_user_setting_flag") as mock_set:
+            on_state_login_success(cred)
 
         mock_set.assert_called_once_with("manage_state", True)
 
     def test_exchange_sends_correct_form_data(self):
-        token_resp = _runcache_token_response()
+        token_resp = _state_token_response()
         with mock.patch(
-            "dbt.auth.oauth.runcache.requests.post", return_value=_mock_post(token_resp)
+            "dbt.auth.oauth.state.requests.post", return_value=_mock_post(token_resp)
         ) as mock_post:
-            from dbt.auth.oauth.runcache import exchange_code
+            from dbt.auth.oauth.state import exchange_code
 
             exchange_code(
                 token_url="https://auth.runcache.com/token",

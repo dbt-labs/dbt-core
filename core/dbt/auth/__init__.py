@@ -3,7 +3,7 @@ from dbt.auth.credentials import (  # noqa: F401
     Credential,
     OAuthSession,
     PlatformCredential,
-    RuncacheCredential,
+    StateCredential,
 )
 from dbt.auth.resolvers import (  # noqa: F401
     CloudYamlResolver,
