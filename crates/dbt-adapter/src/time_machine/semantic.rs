@@ -103,6 +103,7 @@ impl SemanticCategory {
             | "standardize_grants_dict"
             | "verify_database"
             | "nest_column_data_types"
+            | "get_struct_select_expression"
             | "add_time_ingestion_partition_column"
             | "parse_partition_by"
             | "valid_incremental_strategies"

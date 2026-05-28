@@ -31,6 +31,8 @@ use std::sync::Arc;
 
 pub mod object_options;
 
+pub mod nested_projection;
+
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,

@@ -1716,6 +1716,24 @@ impl Adapter {
         }
     }
 
+    /// Re-project a column's STRUCT fields in the declared YAML order.
+    ///
+    /// Only available with BigQuery adapter.
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    pub fn get_struct_select_expression(
+        &self,
+        state: &State,
+        col_name: &str,
+        data_type: &str,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                adapter.get_struct_select_expression(state, col_name, data_type)
+            }
+            Parse(_) => Ok(Value::from(col_name.to_string())),
+        }
+    }
+
     #[tracing::instrument(skip(self), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
     pub fn get_bq_table(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
@@ -3533,6 +3551,16 @@ impl Adapter {
             // columns: dict
             "nest_column_data_types" => self.nest_column_data_types(state, args),
             // partition_by: dict, columns: List[Column]
+            // only available for BigQuery
+            "get_struct_select_expression" => {
+                // col_name: string, data_type: string
+                let iter = ArgsIter::new(name, &["col_name", "data_type"], args);
+                let col_name = iter.next_arg::<&str>()?;
+                let data_type = iter.next_arg::<&str>()?;
+                iter.finish()?;
+
+                self.get_struct_select_expression(state, col_name, data_type)
+            }
             "add_time_ingestion_partition_column" => {
                 self.add_time_ingestion_partition_column(state, args)
             }

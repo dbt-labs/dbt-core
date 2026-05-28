@@ -15,6 +15,7 @@ use crate::macro_exec::{
 };
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
+use crate::metadata::bigquery::nested_projection::render_struct_projection;
 use crate::metadata::clickhouse::ClickHouseMetadataAdapter;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
@@ -2451,6 +2452,22 @@ impl AdapterImpl {
         );
 
         Ok(Value::from_object(result))
+    }
+
+    /// BigQueryColumn https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L233
+    pub fn get_struct_select_expression(
+        &self,
+        _state: &State,
+        col_name: &str,
+        data_type: &str,
+    ) -> Result<Value, minijinja::Error> {
+        match self.adapter_type() {
+            Bigquery => Ok(Value::from(render_struct_projection(col_name, data_type))),
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Fabric
+            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+                unimplemented!("only available with BigQuery adapter")
+            }
+        }
     }
 
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L1187
